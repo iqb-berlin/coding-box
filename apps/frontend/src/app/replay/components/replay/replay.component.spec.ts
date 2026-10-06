@@ -26,6 +26,7 @@ import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
+import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import {
   CODING_JOB_WORKSPACE_TOKEN_SCOPES,
   REPLAY_WORKSPACE_TOKEN_SCOPES
@@ -782,9 +783,9 @@ describe('ReplayComponent', () => {
       replayAttempt: ReplayAttemptContext;
     };
     const previousAttempt = replayState.replayAttempt;
-    component.unitPlayerComponent = {
+    jest.spyOn(component, 'unitPlayerComponent').mockReturnValue({
       navigateToPage
-    } as unknown as UnitPlayerComponent;
+    } as unknown as UnitPlayerComponent);
 
     await component.handleUnitChanged({
       id: 1,
@@ -869,9 +870,9 @@ describe('ReplayComponent', () => {
 
   it('should fall back to a full payload when the loaded player is not ready to navigate', async () => {
     replayBackendService.getReplayPayload.mockClear();
-    component.unitPlayerComponent = {
+    jest.spyOn(component, 'unitPlayerComponent').mockReturnValue({
       navigateToPage: jest.fn().mockReturnValue(false)
-    } as unknown as UnitPlayerComponent;
+    } as unknown as UnitPlayerComponent);
 
     await component.handleUnitChanged({
       id: 1,
@@ -889,15 +890,12 @@ describe('ReplayComponent', () => {
 
   it('should not change coding units when the code selector blocks leaving the current case', async () => {
     const canLeaveCurrentUnit = jest.fn().mockReturnValue(false);
-    const privateComponent = component as unknown as {
-      codeSelectorComponent: { canLeaveCurrentUnit: jest.Mock };
-    };
 
     component.isCodingMode.set(true);
     component.unitId.set('UNIT_1');
     component.page.set('0');
     component.codingService.currentVariableId = 'VAR_1';
-    privateComponent.codeSelectorComponent = { canLeaveCurrentUnit };
+    jest.spyOn(component, 'codeSelectorComponent').mockReturnValue({ canLeaveCurrentUnit } as unknown as CodeSelectorComponent);
 
     await component.handleUnitChanged({
       id: 2,
@@ -924,11 +922,9 @@ describe('ReplayComponent', () => {
       .mockReturnValueOnce([highlightedSection]);
     const scrollSpy = jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
     component.anchor.set('VAR1');
-    component.unitPlayerComponent = {
-      hostingIframe: {
-        nativeElement: iframe
-      }
-    } as unknown as typeof component.unitPlayerComponent;
+    jest.spyOn(component, 'unitPlayerComponent').mockReturnValue({
+      hostingIframe: () => ({ nativeElement: iframe })
+    } as unknown as ReturnType<typeof component.unitPlayerComponent>);
 
     component.onResponseVisible();
 
@@ -953,11 +949,9 @@ describe('ReplayComponent', () => {
       .mockReturnValue([]);
     component.anchor.set('VAR1');
     component.page.set('0');
-    component.unitPlayerComponent = {
-      hostingIframe: {
-        nativeElement: iframe
-      }
-    } as unknown as typeof component.unitPlayerComponent;
+    jest.spyOn(component, 'unitPlayerComponent').mockReturnValue({
+      hostingIframe: () => ({ nativeElement: iframe })
+    } as unknown as ReturnType<typeof component.unitPlayerComponent>);
     (component as unknown as {
       unitsData: WritableSignal<{
         currentUnitIndex: number;
@@ -1028,11 +1022,9 @@ describe('ReplayComponent', () => {
     const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
       .mockReturnValue([]);
     component.anchor.set('VAR1');
-    component.unitPlayerComponent = {
-      hostingIframe: {
-        nativeElement: iframe
-      }
-    } as unknown as typeof component.unitPlayerComponent;
+    jest.spyOn(component, 'unitPlayerComponent').mockReturnValue({
+      hostingIframe: () => ({ nativeElement: iframe })
+    } as unknown as ReturnType<typeof component.unitPlayerComponent>);
 
     component.onResponseVisible();
     (component as unknown as { resetUnitData: () => void }).resetUnitData();
@@ -1040,6 +1032,45 @@ describe('ReplayComponent', () => {
 
     expect(highlightSpy).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
+  });
+
+  it('does not mark a failed progress load as loaded and allows a later retry', async () => {
+    const unitsData = {
+      id: 77,
+      name: 'Coding job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 1, name: 'unit-123', alias: 'Unit 123', bookletId: 0, variableId: 'VAR1'
+      }]
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      workspaceId: '47',
+      mode: 'coding',
+      unitsData: utf8ToBase64(JSON.stringify(unitsData))
+    };
+    codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({ saved: { id: 7, label: 'SAVED' } }));
+    codingJobBackendServiceMock.getCodingNotes
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })))
+      .mockReturnValue(of({}));
+    const updateStatus = jest.spyOn(component.codingService, 'updateCodingJobStatus');
+    const privateComponent = component as unknown as {
+      unitsData: WritableSignal<typeof unitsData | null>;
+      codingProgressLoadedForJobKey: string | null;
+    };
+
+    component.subscribeRouter();
+    await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+    expect(privateComponent.unitsData()).toBeNull();
+    expect(privateComponent.codingProgressLoadedForJobKey).toBeNull();
+    expect(updateStatus).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalled();
+
+    component.subscribeRouter();
+    await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+    expect(codingJobBackendServiceMock.getCodingNotes).toHaveBeenCalledTimes(2);
+    expect(privateComponent.codingProgressLoadedForJobKey).toBe('47:77');
+    expect(component.codingService.selectedCodes.get('saved')?.label).toBe('SAVED');
   });
 
   it('should load units data for booklet-view mode without coding job side effects', async () => {

@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, Inject, Optional, inject, signal, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, Inject, Optional, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -68,7 +69,7 @@ import {
   DoubleCodedReviewSortDirection
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
-import { DoubleCodedReviewFacade } from './double-coded-review.facade';
+import { DoubleCodedReviewFacade, ManagerDraftUpdate } from './double-coded-review.facade';
 import {
   ConflictType,
   CoderResult,
@@ -133,6 +134,8 @@ interface DoubleCodedReviewDialogData {
   ]
 })
 export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private testPersonCodingService = inject(TestPersonCodingService);
   private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private appService: AppService = inject(AppService);
@@ -215,6 +218,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   ngOnInit(): void {
+    this.reviewFacade.managerDraftUpdates$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(update => this.applyManagerDraftUpdate(update));
     this.reviewFacade.connectRecovery(() => this.allData());
     this.setupFilters();
     this.loadCoders();
@@ -225,9 +231,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.reviewFacade.destroy(this.allData());
     this.destroy$.next();
     this.destroy$.complete();
+    this.reviewFacade.destroy(this.allData());
   }
 
   private setupFilters(): void {
@@ -270,7 +276,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           name: user.username || `User ${user.userId}`
         }))
         )
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(coders => {
         this.availableCoders.set(coders);
       });
@@ -790,7 +796,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.replayLoadingByResponseId.update(value => ({ ...value, [responseId]: false }));
         })
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (!result.replayUrl) {
@@ -1034,7 +1040,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     if (!workspaceId) {
       this.translateService
-        .get('double-coded-review.errors.no-workspace-selected')
+        .get('double-coded-review.errors.no-workspace-selected').pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(message => {
           this.showError(message);
         });
@@ -1065,7 +1071,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           jobDefinitionIds: this.getSelectedJobDefinitionIds(),
           coderTrainingIds: this.getSelectedCoderTrainingIds()
         }
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           this.allData.set(response.data.map(item => ({
@@ -1088,7 +1094,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         error: () => {
           this.updateDisplayedColumns([]);
           this.translateService
-            .get('double-coded-review.errors.failed-to-load')
+            .get('double-coded-review.errors.failed-to-load').pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe(message => {
               this.showError(message);
             });
@@ -1119,6 +1125,22 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.refreshReviewRows(item);
   }
 
+  private applyManagerDraftUpdate(update: ManagerDraftUpdate): void {
+    if (update.workspaceId !== this.appService.selectedWorkspaceId ||
+      update.managerUserId !== this.appService.userId) return;
+
+    const item = this.allData().find(candidate => candidate.responseId === update.responseId);
+    if (!item || item.isResolved) return;
+
+    // A queued response may belong to an older row object. Merge its draft into
+    // the current row so newer selections and other managers' decisions survive.
+    const retainedDrafts = item.managerDrafts.filter(draft => draft.managerUserId !== update.managerUserId);
+    this.refreshReviewRows({
+      ...item,
+      managerDrafts: update.savedDraft ? [...retainedDrafts, update.savedDraft] : retainedDrafts
+    });
+  }
+
   private refreshReviewRows(item: DoubleCodedItem): void {
     const refreshedItem = { ...item };
     this.allData.set(this.allData().map(candidate => (candidate.responseId === item.responseId ? refreshedItem : candidate)));
@@ -1130,7 +1152,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.translateService
-        .get('double-coded-review.errors.no-workspace-selected')
+        .get('double-coded-review.errors.no-workspace-selected').pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(message => {
           this.showError(message);
         });
@@ -1155,7 +1177,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     if (decisions.length === 0) {
       this.translateService
-        .get('double-coded-review.errors.no-decisions')
+        .get('double-coded-review.errors.no-decisions').pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(message => {
           this.showError(message);
         });
@@ -1173,7 +1195,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.translateService
-        .get('double-coded-review.errors.no-workspace-selected')
+        .get('double-coded-review.errors.no-workspace-selected').pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(message => {
           this.showError(message);
         });
@@ -1184,7 +1206,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     if (!decision) {
       this.translateService
-        .get('double-coded-review.errors.no-decision-for-item')
+        .get('double-coded-review.errors.no-decision-for-item').pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(message => {
           this.showError(message);
         });
@@ -1215,7 +1237,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.sendDecisions(workspaceId, decisions);
       }
@@ -1270,7 +1292,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   ): void {
     this.isLoading.set(true);
     this.doubleCodedReviewApi
-      .applyDoubleCodedResolutions(workspaceId, { decisions })
+      .applyDoubleCodedResolutions(workspaceId, { decisions }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           if (response.failedCount > 0 || response.skippedCount > 0) {
@@ -1279,13 +1301,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
                 applied: response.appliedCount,
                 skipped: response.skippedCount,
                 failed: response.failedCount
-              })
+              }).pipe(takeUntilDestroyed(this.destroyRef))
               .subscribe(message => this.showError(message));
           } else {
             this.translateService
               .get('double-coded-review.success.resolutions-applied', {
                 count: response.appliedCount
-              })
+              }).pipe(takeUntilDestroyed(this.destroyRef))
               .subscribe(message => this.showSuccess(message));
           }
           if (response.appliedCount > 0) {
@@ -1299,7 +1321,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.translateService
-            .get('double-coded-review.errors.failed-to-apply')
+            .get('double-coded-review.errors.failed-to-apply').pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe(message => {
               this.showError(message);
             });
@@ -1309,7 +1331,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   private showError(message: string): void {
-    this.translateService.get('close').subscribe(closeText => {
+    this.translateService.get('close').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(closeText => {
       this.snackBar.open(message, closeText, {
         duration: 5000,
         panelClass: ['error-snackbar']
@@ -1318,7 +1340,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   private showSuccess(message: string): void {
-    this.translateService.get('close').subscribe(closeText => {
+    this.translateService.get('close').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(closeText => {
       this.snackBar.open(message, closeText, {
         duration: 5000,
         panelClass: ['success-snackbar']

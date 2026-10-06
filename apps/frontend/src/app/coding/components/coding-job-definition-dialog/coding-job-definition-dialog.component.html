@@ -212,7 +212,7 @@
               <div class="count-item">
                 <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.variables' | translate
                   }}</span>
-                <span class="count-value">{{ selectedVariables().selected.length }}</span>
+                <span class="count-value">{{ selectedVariableValues().length }}</span>
               </div>
               <div class="count-item">
                 <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.variable-bundles' |
@@ -258,7 +258,7 @@
             </div>
             }
 
-            @if (selectedVariables().selected.length > 0 || selectedVariableBundles.selected.length > 0) {
+            @if (selectedVariableValues().length > 0 || selectedVariableBundles.selected.length > 0) {
             <mat-expansion-panel class="selection-details">
               <mat-expansion-panel-header>
                 <mat-panel-title>
@@ -266,11 +266,11 @@
                 </mat-panel-title>
               </mat-expansion-panel-header>
 
-              @if (selectedVariables().selected.length > 0) {
+              @if (selectedVariableValues().length > 0) {
               <div class="selection-section">
                 <h5>Ausgewählte Variablen</h5>
                 <div class="chip-container">
-                  @for (variable of selectedVariables().selected.slice(0, 10); track variable.unitName +
+                  @for (variable of selectedVariableValues().slice(0, 10); track variable.unitName +
                   variable.variableId) {
                   <span class="selection-chip">
                     {{ variable.unitName }}: {{ variable.variableId }}
@@ -279,8 +279,8 @@
                     }
                   </span>
                   }
-                  @if (selectedVariables().selected.length > 10) {
-                  <span class="more-chip">+{{ selectedVariables().selected.length - 10 }} weitere</span>
+                  @if (selectedVariableValues().length > 10) {
+                  <span class="more-chip">+{{ selectedVariableValues().length - 10 }} weitere</span>
                   }
                 </div>
               </div>
@@ -335,7 +335,11 @@
                   @for (coder of availableCoders(); track coder.id) {
                   <div class="coder-card" [class.selected]="selectedCoders.isSelected(coder)"
                     [class.read-only]="isReadOnly"
-                    (click)="!isReadOnly && selectedCoders.toggle(coder)">
+                    (click)="!isReadOnly && selectedCoders.toggle(coder)"
+                    role="button"
+                    tabindex="0"
+                    (keydown.enter)="onActionKeydown($event)"
+                    (keydown.space)="onActionKeydown($event)">
                     <div class="coder-avatar">
                       <mat-icon class="avatar-icon">person</mat-icon>
                     </div>
@@ -351,9 +355,9 @@
                       <mat-form-field appearance="outline" class="coder-capacity-field"
                         (click)="$event.stopPropagation()">
                         <mat-label>Kapazität</mat-label>
-                        <input matInput type="number" min="10" max="300" step="10"
-                          [(ngModel)]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
-                          [disabled]="isReadOnly" (blur)="updateCoderCapacityPercent(coder, coder.capacityPercent)"
+                        <input #coderCapacityInput matInput type="number" min="10" max="300" step="10"
+                          [ngModel]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
+                          [disabled]="isReadOnly" (blur)="updateCoderCapacityPercent(coder, coderCapacityInput.value)"
                           matTooltip="100 % = normale Last">
                         <span matSuffix>%</span>
                       </mat-form-field>
@@ -462,16 +466,20 @@
                 {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
               </button>
               <div class="selection-count">
-                {{ selectedVariables().selected.length }} von {{ dataSource.data.length }} Variablen ausgewählt
+                {{ selectedVariableValues().length }} von {{ dataSource.data.length }} Variablen ausgewählt
               </div>
             </div>
 
             <div class="variables-grid-container">
               <div class="variables-grid">
                 @for (variable of dataSource.data; track variable.unitName + variable.variableId) {
-                <div class="variable-card" [class.selected]="selectedVariables().isSelected(variable)"
+                <div class="variable-card" [class.selected]="isVariableSelected(variable)"
                   [class.disabled]="isVariableDisabled(variable)" [class.read-only]="isReadOnly" [class.clickable]="!isReadOnly && !isVariableDisabled(variable)"
-                  (click)="!isReadOnly && !isVariableDisabled(variable) && selectedVariables().toggle(variable)">
+                  (click)="!isReadOnly && !isVariableDisabled(variable) && selectedVariables().toggle(variable)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <div class="variable-card-header">
                     <div class="variable-identifiers">
                       <div class="variable-id-row">
@@ -480,7 +488,7 @@
                         <mat-chip class="availability-chip" [class]="getAvailabilityClass(variable)">
                           {{ getAvailabilityText(variable) }} verfügbar
                         </mat-chip>
-                        } @else if (variable.responseCount != null) {
+                        } @else if (variable.responseCount !== null && variable.responseCount !== undefined) {
                         <span class="response-count">({{ variable.responseCount }})</span>
                         }
 
@@ -506,10 +514,10 @@
 	                      </div>
 	                      }
                         @if (data.mode === 'definition' && hasDeriveErrorResponses(variable)) {
-                        <div class="derive-error-option" (click)="$event.stopPropagation()">
+                        <div class="derive-error-option" (click)="$event.stopPropagation()" role="presentation">
                           <mat-checkbox
                             [checked]="isDeriveErrorIncluded(variable)"
-                            [disabled]="isReadOnly || isVariableDisabled(variable) || !selectedVariables().isSelected(variable)"
+                            [disabled]="isReadOnly || isVariableDisabled(variable) || !isVariableSelected(variable)"
                             (change)="setDeriveErrorIncluded(variable, $event.checked)">
                             DERIVE_ERROR einbeziehen
                           </mat-checkbox>
@@ -573,7 +581,11 @@
                 @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
                 <div class="bundle-card" [class.selected]="selectedVariableBundles.isSelected(bundle)"
                   [class.read-only]="isReadOnly"
-                  (click)="toggleBundleSelection(bundle)">
+                  (click)="toggleBundleSelection(bundle)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <div class="bundle-card-header">
                     <h3 class="bundle-name">
                       {{ bundle.name }}
@@ -610,7 +622,7 @@
                         }
                       </div>
                       @if (selectedVariableBundles.isSelected(bundle) && data.mode === 'definition') {
-                      <div class="bundle-case-ordering-mode-section" (click)="$event.stopPropagation()">
+                      <div class="bundle-case-ordering-mode-section" (click)="$event.stopPropagation()" role="presentation">
                         <mat-form-field appearance="fill" class="full-width">
                           <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate
                             }}</mat-label>
@@ -660,12 +672,12 @@
 
     @if (data.mode === 'definition' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()"
-      [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables().selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)">
       {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
     </button>
     @if (!data.isEdit) {
     <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
-      [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables().selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)">
       <mat-icon>send</mat-icon>
       Zur Prüfung einreichen
     </button>
@@ -674,7 +686,7 @@
 
     @if (data.mode === 'job' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()"
-      [disabled]="isSaving() || codingJobForm.invalid || (!data.isEdit && (selectedCoders.selected.length === 0 || (selectedVariables().selected.length === 0 && selectedVariableBundles.selected.length === 0)))">
+      [disabled]="isSaving() || codingJobForm.invalid || (!data.isEdit && (selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)))">
       {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
     </button>
     }

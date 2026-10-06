@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal, ChangeDetectionStrategy, OnChanges
+  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect, ChangeDetectionStrategy, OnChanges
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -42,6 +42,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
 
   private destroyRef = inject(DestroyRef);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   protected userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   protected displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
@@ -50,7 +51,11 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
   readonly filteredUserWorkspaces = signal<WorkspaceInListDto[]>([]);
 
-  @ViewChild(MatSort) sort = new MatSort();
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.userObjectsDatasource.sort = this.sort() ?? null;
+  });
+
   readonly userSelectionChanged = output<UserFullDto[]>();
   readonly selectedUserIds = input.required<number[]>();
 
@@ -73,7 +78,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.userObjectsDatasource.sort = this.sort;
+    this.userObjectsDatasource.sort = this.sort() ?? null;
   }
 
   updateUserList(): void {
@@ -88,6 +93,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
             this.tableSelectionCheckboxes.clear();
             this.tableSelectionRow.clear();
           }
+          this.changeDetectorRef.markForCheck();
         }
       );
   }

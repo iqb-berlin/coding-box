@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, signal, computed, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, signal, computed, input, output, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -119,10 +119,13 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   ]
 })
 export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  readonly paginator = viewChild(MatPaginator);
+  private readonly synchronizePaginator = effect(() => {
+    this.paginatedMissingPersons.paginator = this.paginator() ?? null;
+  });
 
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input(false);
+  readonly validate = output<void>();
 
   protected readonly isRunning = signal(false);
   readonly wasRun = signal(false);
@@ -185,7 +188,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   protected readonly errorCount = computed(() => this.result()?.missingPersons.length || 0);
 
   onValidate(): void {
-    if (this.isRunning() || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 
@@ -214,7 +217,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
 
     if (resultSnapshot?.missingPersons) {
       this.paginatedMissingPersons.data = resultSnapshot.missingPersons;
-      this.paginatedMissingPersons.paginator = this.paginator;
+      this.paginatedMissingPersons.paginator = this.paginator() ?? null;
     }
   }
 

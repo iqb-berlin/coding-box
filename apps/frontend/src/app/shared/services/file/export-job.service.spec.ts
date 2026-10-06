@@ -1,5 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import {
   ExportJobService,
@@ -19,8 +21,10 @@ describe('ExportJobService', () => {
   let codingJobBackendServiceMock: jest.Mocked<CodingJobBackendService>;
   let appServiceMock: jest.Mocked<AppService>;
   let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
+  let snackOpen: jest.Mock;
 
   beforeEach(() => {
+    snackOpen = jest.fn();
     codingJobBackendServiceMock = {
       startExportJob: jest.fn(),
       getExportJobStatus: jest.fn(),
@@ -53,7 +57,9 @@ describe('ExportJobService', () => {
         ExportJobService,
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: AppService, useValue: appServiceMock },
-        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock }
+        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock },
+        { provide: MatSnackBar, useValue: { open: snackOpen } },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } }
       ]
     });
 
@@ -111,6 +117,62 @@ describe('ExportJobService', () => {
   });
 
   describe('startJob', () => {
+    it('reports a shared start failure once and preserves its error for current subscribers', () => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      const request = service.startJob(47, { exportType: 'aggregated' });
+      const firstError = jest.fn();
+      const secondError = jest.fn();
+      request.subscribe({ error: firstError });
+      request.subscribe({ error: secondError });
+      const error = new HttpErrorResponse({ status: 503 });
+
+      accepted.error(error);
+
+      expect(firstError).toHaveBeenCalledWith(error);
+      expect(secondError).toHaveBeenCalledWith(error);
+      expect(snackOpen).toHaveBeenCalledTimes(1);
+      expect(snackOpen).toHaveBeenCalledWith(
+        'ws-admin.export.errors.start-failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(service.activeJobs).toHaveLength(0);
+      expect(codingJobBackendServiceMock.getExportJobStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not report root teardown as a failed start', () => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      const onError = jest.fn();
+      service.startJob(47, { exportType: 'aggregated' }).subscribe({ error: onError });
+      service.ngOnDestroy();
+      expect(accepted.observed).toBe(false);
+      accepted.error(new HttpErrorResponse({ status: 503 }));
+      expect(onError).not.toHaveBeenCalled();
+      expect(snackOpen).not.toHaveBeenCalled();
+    });
+
+    it('registers and polls an accepted job after the starting view unsubscribes', fakeAsync(() => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+      const request = service.startJob(47, { exportType: 'aggregated', userId: 1 });
+      request.subscribe().unsubscribe();
+      expect(accepted.observed).toBe(true);
+
+      accepted.next({ jobId: 'accepted', message: 'started' });
+      accepted.complete();
+      expect(service.activeJobs).toEqual([expect.objectContaining({ jobId: 'accepted', workspaceId: 47 })]);
+      request.subscribe();
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledTimes(1);
+      expect(service.activeJobs).toHaveLength(1);
+      tick(2000);
+      expect(codingJobBackendServiceMock.getExportJobStatus).toHaveBeenCalledWith(47, 'accepted');
+      expect(service.completedJobs).toHaveLength(1);
+      service.ngOnDestroy();
+    }));
+
     it('should start job and poll', fakeAsync(() => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
       codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
@@ -359,6 +421,12 @@ describe('ExportJobService', () => {
 
       expect(codingJobBackendServiceMock.startExportJob).not.toHaveBeenCalled();
       expect(service.activeJobs.length).toBe(0);
+      expect(snackOpen).toHaveBeenCalledTimes(1);
+      expect(snackOpen).toHaveBeenCalledWith(
+        'coding-management-manual.errors.replay-auth-token-failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
     });
   });
 

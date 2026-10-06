@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnDestroy, OnInit, signal,
+  Component, DestroyRef, inject, signal,
   computed, ChangeDetectionStrategy
 } from '@angular/core';
 
@@ -11,8 +11,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject } from 'rxjs';
-import { take, takeUntil } from 'rxjs/operators';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { take } from 'rxjs/operators';
+import { activateOnKeyboard } from '../../shared/utils/keyboard-activation.util';
 import {
   ExportJob,
   ExportJobService
@@ -44,13 +45,15 @@ import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-
   templateUrl: './export-toast.component.html',
   styleUrls: ['./export-toast.component.scss']
 })
-export class ExportToastComponent implements OnInit, OnDestroy {
+export class ExportToastComponent {
+  protected readonly onActionKeydown = activateOnKeyboard;
+
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
-  private destroy$ = new Subject<void>();
+  private readonly destroyRef = inject(DestroyRef);
   private readonly exportTypeLabelKeys: Record<string, string> = {
     aggregated: 'export-toast.types.aggregated',
     'by-coder': 'export-toast.types.by-coder',
@@ -63,21 +66,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     psychometrics: 'export-toast.types.psychometrics'
   };
 
-  readonly jobs = signal<ExportJob[]>([]);
+  readonly jobs = toSignal(this.exportJobService.jobs$, { requireSync: true });
   readonly isCollapsed = signal(false);
-
-  ngOnInit(): void {
-    this.exportJobService.jobs$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(jobs => {
-        this.jobs.set(jobs);
-      });
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
 
   readonly hasJobs = computed<boolean>(() => this.jobs().length > 0);
 
@@ -235,7 +225,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   removeJob(job: ExportJob): void {
     this.exportJobService
       .removeJob(job.jobId)
-      .pipe(take(1), takeUntil(this.destroy$))
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
       .subscribe(removed => {
         if (!removed) {
           this.snackBar.open(
@@ -274,7 +264,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   openItemMatrixDiagnostics(job: ExportJob): void {
     this.exportJobService
       .getItemMatrixDiagnostics(job)
-      .pipe(take(1), takeUntil(this.destroy$))
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: diagnostics => this.dialog.open(ItemMatrixDiagnosticsDialogComponent, {
           data: diagnostics,
@@ -313,12 +303,12 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     });
     dialogRef
       .afterClosed()
-      .pipe(take(1), takeUntil(this.destroy$))
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef))
       .subscribe(confirmed => {
         if (confirmed === true) {
           this.exportJobService
             .downloadIncompleteItemMatrix(job)
-            .pipe(take(1), takeUntil(this.destroy$))
+            .pipe(take(1), takeUntilDestroyed(this.destroyRef))
             .subscribe({
               error: () => this.snackBar.open(
                 this.translateService.instant(

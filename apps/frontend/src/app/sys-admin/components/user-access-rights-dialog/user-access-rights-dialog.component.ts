@@ -1,6 +1,7 @@
 import {
-  Component, inject, signal, ChangeDetectionStrategy
+  Component, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -26,6 +27,8 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 })
 
 export class UserAccessRightsDialogComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   data = inject<{
     selectedWorkspace: number[];
   }>(MAT_DIALOG_DATA);
@@ -40,7 +43,7 @@ export class UserAccessRightsDialogComponent {
   constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
       this.isLoadingWorkspaceUsers.set(true);
-      this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0])
+      this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0]).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: users => {
             if (Array.isArray(users)) {

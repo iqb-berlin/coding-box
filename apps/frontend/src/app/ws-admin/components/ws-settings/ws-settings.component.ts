@@ -1,7 +1,8 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, inject, OnDestroy, OnInit, signal, ChangeDetectionStrategy
+  Component, inject, OnDestroy, OnInit, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -84,6 +85,8 @@ interface DatabaseExportJobState {
   ]
 })
 export class WsSettingsComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private appService: AppService = inject(AppService);
   private http = inject(HttpClient);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
@@ -121,17 +124,17 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.loadWorkspaceTokenPolicy(workspaceId);
     if (workspaceId) {
       this.workspaceSettingsService
-        .getReplayUrlExportMode(workspaceId)
+        .getReplayUrlExportMode(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(mode => {
           this.replayUrlExportMode.set(mode);
         });
       this.workspaceSettingsService
-        .getAuthSessionIdleTimeoutMinutes(workspaceId)
+        .getAuthSessionIdleTimeoutMinutes(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(timeoutMinutes => {
           this.authSessionIdleTimeoutMinutes.set(timeoutMinutes);
         });
       this.workspaceSettingsService
-        .getEvaluationMode(workspaceId)
+        .getEvaluationMode(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.evaluationMode.set(enabled);
           if (enabled) {
@@ -139,31 +142,31 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         });
       this.workspaceSettingsService
-        .getAutoFetchCodingStatistics(workspaceId)
+        .getAutoFetchCodingStatistics(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.autoFetchCodingStatistics.set(this.evaluationMode() ?
             false :
             enabled);
         });
       this.workspaceSettingsService
-        .getAutoRefreshManualCodingJobs(workspaceId)
+        .getAutoRefreshManualCodingJobs(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.autoRefreshManualCodingJobs.set(this.evaluationMode() ?
             false :
             enabled);
         });
       this.workspaceSettingsService
-        .getIncludeDeriveErrorInManualCoding(workspaceId)
+        .getIncludeDeriveErrorInManualCoding(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.includeDeriveErrorInManualCoding.set(enabled);
         });
       this.workspaceSettingsService
-        .getEnableRegexSearch(workspaceId)
+        .getEnableRegexSearch(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.enableRegexSearch.set(enabled);
         });
       this.workspaceSettingsService
-        .getShowTestResultsLogAnomalies(workspaceId)
+        .getShowTestResultsLogAnomalies(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(enabled => {
           this.showTestResultsLogAnomalies.set(enabled);
         });
@@ -214,7 +217,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         this.appService.selectedWorkspaceId,
         Number(this.duration()),
         this.externalReplayTokenScopes
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (authToken: string) => {
           this.authToken.set(authToken);
@@ -260,7 +263,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   private loadWorkspaceTokenPolicy(workspaceId?: number): void {
-    this.appService.getWorkspaceTokenPolicy().subscribe({
+    this.appService.getWorkspaceTokenPolicy().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: policy => {
         this.maxTokenDurationDays.set(this.getMaxTokenDurationDaysForScopes(policy, this.externalReplayTokenScopes));
         if (Number(this.duration()) > this.maxTokenDurationDays()) {
@@ -278,7 +281,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .getReplayUrlExportTokenDurationDays(
         workspaceId,
         this.maxTokenDurationDays()
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(durationDays => {
         this.replayUrlExportTokenDurationDays.set(durationDays);
       });
@@ -321,7 +324,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
     if (workspaceId) {
       this.workspaceSettingsService
-        .setReplayUrlExportMode(workspaceId, mode)
+        .setReplayUrlExportMode(workspaceId, mode).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -367,7 +370,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         workspaceId,
         Number(this.replayUrlExportTokenDurationDays()),
         this.maxTokenDurationDays()
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -410,7 +413,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .setAuthSessionIdleTimeoutMinutes(
         workspaceId,
         Number(this.authSessionIdleTimeoutMinutes())
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -463,7 +466,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
     if (workspaceId) {
       this.workspaceSettingsService
-        .setEvaluationMode(workspaceId, enabled)
+        .setEvaluationMode(workspaceId, enabled).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -508,7 +511,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setAutoFetchCodingStatistics(
           workspaceId,
           this.autoFetchCodingStatistics()
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -551,7 +554,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setAutoRefreshManualCodingJobs(
           workspaceId,
           this.autoRefreshManualCodingJobs()
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -596,7 +599,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setIncludeDeriveErrorInManualCoding(
           workspaceId,
           this.includeDeriveErrorInManualCoding()
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -632,7 +635,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
     if (workspaceId) {
       this.workspaceSettingsService
-        .setEnableRegexSearch(workspaceId, this.enableRegexSearch())
+        .setEnableRegexSearch(workspaceId, this.enableRegexSearch()).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -671,7 +674,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setShowTestResultsLogAnomalies(
           workspaceId,
           this.showTestResultsLogAnomalies()
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -725,7 +728,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
 
     this.http
-      .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders })
+      .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({ jobId }) => {
           this.startExportPolling(workspaceId, jobId, authHeaders);
@@ -775,7 +778,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           `${apiUrl}/job/${jobId}`,
           { headers }
         ))
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: state => {
           this.databaseExportStatus.set(state.status);
@@ -827,7 +830,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .get(`${apiUrl}/job/${jobId}/download`, {
         headers,
         responseType: 'blob'
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(

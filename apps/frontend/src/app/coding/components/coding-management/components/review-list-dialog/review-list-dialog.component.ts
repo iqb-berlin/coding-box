@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, Inject, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +40,9 @@ interface ReviewItem {
   ]
 })
 export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
   private uiService = inject(CodingManagementUiService);
 
@@ -47,7 +51,8 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
   private inViewIndices = new Set<number>();
   private isAnyItemLoading = false;
 
-  @ViewChildren('reviewItemRef') reviewItemRefs!: QueryList<ElementRef>;
+  readonly reviewItemRefs = viewChildren<ElementRef<HTMLElement>>('reviewItemRef');
+  private readonly synchronizeObserver = afterRenderEffect(() => this.updateObserver());
 
   constructor(
     public dialogRef: MatDialogRef<ReviewListDialogComponent>,
@@ -113,16 +118,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
       });
     }, options);
 
-    this.reviewItemRefs.changes.subscribe(() => {
-      this.updateObserver();
-    });
-
     this.updateObserver();
   }
 
   private updateObserver(): void {
+    const items = this.reviewItemRefs();
     if (this.observer) {
-      this.reviewItemRefs.forEach(ref => {
+      this.observer.disconnect();
+      items.forEach(ref => {
         this.observer?.observe(ref.nativeElement);
       });
     }
@@ -156,8 +159,9 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
     item.isLoading = true;
     this.isAnyItemLoading = true;
+    this.changeDetectorRef.markForCheck();
 
-    this.uiService.openReplayForResponse(item.response).subscribe({
+    this.uiService.openReplayForResponse(item.response).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: url => {
         item.isLoading = false;
         if (url) {
@@ -167,12 +171,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
           item.hasError = true;
         }
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue(); // Check if next visible item can start loading
       },
       error: () => {
         item.isLoading = false;
         item.hasError = true;
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue();
       }
     });

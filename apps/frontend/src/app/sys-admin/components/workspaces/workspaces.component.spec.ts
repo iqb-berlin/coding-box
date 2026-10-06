@@ -6,12 +6,11 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { UntypedFormControl, UntypedFormGroup } from '@angular/forms';
+import { FormControl, FormGroup } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule } from '@angular/material/dialog';
 
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WorkspacesComponent } from './workspaces.component';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -53,7 +52,6 @@ describe('WorkspaceGroupsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -75,8 +73,16 @@ describe('WorkspaceGroupsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('derives selection IDs and names from the same snapshot', () => {
+    const selection = [{ id: 3, name: 'Selected workspace' }];
+    component.workspaceSelectionChanged(selection);
+    selection.push({ id: 9, name: 'Later selection' });
+    expect(component.selectedWorkspaces()).toEqual([3]);
+    expect(component.selectedWorkspaceRows()).toEqual([{ id: 3, name: 'Selected workspace' }]);
+  });
+
   it('should refresh auth data after creating a workspace', () => {
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
@@ -86,7 +92,7 @@ describe('WorkspaceGroupsComponent', () => {
   });
 
   it('should refresh auth data after renaming a workspace', () => {
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('Renamed') });
+    const form = new FormGroup({ name: new FormControl('Renamed', { nonNullable: true }) });
 
     component.editWorkspace({ selection: [3], formData: form });
 
@@ -105,7 +111,7 @@ describe('WorkspaceGroupsComponent', () => {
   }));
 
   it('should refresh auth data after changing workspace users', () => {
-    component.selectedWorkspaces.set([3]);
+    component.workspaceSelectionChanged([{ id: 3, name: 'Selected workspace' }]);
 
     component.setWorkspaceUsersAccessRight([7, 8]);
 
@@ -115,7 +121,7 @@ describe('WorkspaceGroupsComponent', () => {
 
   it('should not refresh auth data after a failed workspace mutation', () => {
     workspaceBackendService.addWorkspace.mockReturnValueOnce(of(null));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
@@ -125,7 +131,7 @@ describe('WorkspaceGroupsComponent', () => {
 
   it('should keep a successful mutation while reporting a failed auth data refresh', () => {
     appService.refreshAuthData.mockReturnValueOnce(of('failed'));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
@@ -139,7 +145,7 @@ describe('WorkspaceGroupsComponent', () => {
 
   it('should not show an obsolete message after the auth context changed', () => {
     appService.refreshAuthData.mockReturnValueOnce(of('invalidated'));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 

@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { of, Subject } from 'rxjs';
 import {
   DownloadCodingResultsDialogComponent,
@@ -17,11 +18,12 @@ describe('DownloadCodingResultsDialogComponent', () => {
       workspaceId: 5,
       currentVersion
     };
-    const component = new DownloadCodingResultsDialogComponent(
+    const component = TestBed.runInInjectionContext(() => new DownloadCodingResultsDialogComponent(
       dialogRef as never,
       data,
-      missingsProfileService as never
-    );
+      missingsProfileService as never,
+      { markForCheck: jest.fn() } as never
+    ));
 
     return { component, dialogRef, missingsProfileService };
   };

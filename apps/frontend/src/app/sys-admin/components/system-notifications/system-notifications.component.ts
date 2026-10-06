@@ -1,7 +1,9 @@
+import { Subscription } from 'rxjs';
 import { DatePipe } from '@angular/common';
 import {
-  Component, OnInit, inject, signal, ChangeDetectionStrategy
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
@@ -70,6 +72,10 @@ function trimmedRequiredValidator(control: AbstractControl): ValidationErrors | 
   styleUrl: './system-notifications.component.scss'
 })
 export class SystemNotificationsComponent implements OnInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly service = inject(SystemNotificationService);
 
   private readonly snackBar = inject(MatSnackBar);
@@ -110,8 +116,9 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   load(): void {
+    this.loadRequest?.unsubscribe();
     this.loading.set(true);
-    this.service.getAll().subscribe({
+    this.loadRequest = this.service.getAll().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: notifications => {
         this.notifications.set(notifications);
         this.loading.set(false);
@@ -175,7 +182,7 @@ export class SystemNotificationsComponent implements OnInit {
     const request = editingIdSnapshot === null ?
       this.service.create(input) :
       this.service.update(editingIdSnapshot, input);
-    request.subscribe({
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showMessage('system-notifications.saved');
         this.cancelEdit();
@@ -197,13 +204,13 @@ export class SystemNotificationsComponent implements OnInit {
         showCancel: true
       }
     });
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (confirmed) this.deleteConfirmed(notification);
     });
   }
 
   private deleteConfirmed(notification: SystemNotificationDto): void {
-    this.service.delete(notification.id).subscribe({
+    this.service.delete(notification.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showMessage('system-notifications.deleted');
         if (this.editingId() === notification.id) this.cancelEdit();

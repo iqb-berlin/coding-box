@@ -518,10 +518,10 @@
               Sie den Filter zurück.
             </p>
             <div class="empty-state-actions">
-              <a mat-raised-button color="primary" (click)="clearSearch()">
+              <button type="button" mat-raised-button color="primary" (click)="clearSearch()">
                 <mat-icon>clear</mat-icon>
                 Filter zurücksetzen
-              </a>
+              </button>
             </div>
           </div>
           }
@@ -879,7 +879,7 @@
                 </button>
                 <button
                   mat-icon-button
-                  (click)="response.expanded = !response.expanded"
+                  (click)="toggleResponseExpansion(response.id)"
                   class="expand-button"
                 >
                   <mat-icon>{{

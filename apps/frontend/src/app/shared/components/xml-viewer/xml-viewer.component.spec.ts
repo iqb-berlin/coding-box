@@ -2,7 +2,6 @@ import { Clipboard } from '@angular/cdk/clipboard';
 import {
   ComponentFixture, fakeAsync, TestBed, tick
 } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { XmlViewerComponent } from './xml-viewer.component';
 
@@ -15,7 +14,7 @@ describe('XmlViewerComponent', () => {
     clipboard = { copy: jest.fn().mockReturnValue(true) };
 
     await TestBed.configureTestingModule({
-      imports: [XmlViewerComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      imports: [XmlViewerComponent, TranslateModule.forRoot()],
       providers: [
         { provide: Clipboard, useValue: clipboard }
       ]

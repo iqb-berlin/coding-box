@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit, ViewChild, inject, HostListener, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
 } from 'rxjs';
@@ -118,8 +119,10 @@ interface MissingPreviewLookup {
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator?: MatPaginator;
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly sort = viewChild(MatSort);
+  readonly paginator = viewChild(MatPaginator);
 
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
@@ -196,9 +199,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.refreshSubject.next();
   }
 
+  private readonly synchronizeTable = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+    this.dataSource.paginator = this.paginator() ?? null;
+  });
+
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator || null;
     this.dataSource.sortingDataAccessor = this.createSortingDataAccessor();
     this.dataSource.filterPredicate = this.createFilterPredicate();
     this.applyFilters();
@@ -238,7 +244,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         ));
         this.isMissingProfileUnavailable.set(this.getUnresolvedMissingCount() > 0);
         this.applyFilters();
-        this.paginator?.firstPage();
+        this.paginator()?.firstPage();
       },
       error: () => {
         this.dataSource.data = [];
@@ -492,7 +498,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       testPerson: this.testPersonFilter()
     };
     this.dataSource.filter = JSON.stringify(filterObj);
-    this.paginator?.firstPage();
+    this.paginator()?.firstPage();
   }
 
   protected onUnitNameFilterChange(): void {
@@ -626,7 +632,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }
     });
 
-    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
       if (!dialogResult) {
         return;
       }
@@ -635,7 +641,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
       this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
         overwriteExisting: dialogResult.overwriteExisting
-      }).subscribe({
+      }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: result => {
           this.isLoading.set(false);
 
@@ -983,7 +989,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
           this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
@@ -1004,7 +1010,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           }
         });
 
-        dialogRef.afterClosed().subscribe(dialogResult => {
+        dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(dialogResult => {
           if (dialogResult === true) {
             this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
             this.loadCodingResults();

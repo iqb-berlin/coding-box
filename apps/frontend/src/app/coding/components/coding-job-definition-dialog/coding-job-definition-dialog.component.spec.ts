@@ -1,3 +1,6 @@
+import { MAT_TABS_CONFIG } from '@angular/material/tabs';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { MatTabGroupHarness } from '@angular/material/tabs/testing';
 import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
@@ -8,7 +11,6 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
@@ -176,8 +178,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       imports: [
         CodingJobDefinitionDialogComponent,
         ReactiveFormsModule,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         FormBuilder,
@@ -783,6 +784,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('preserves the Space default of the nested DERIVE_ERROR checkbox', async () => {
+    TestBed.overrideProvider(MAT_TABS_CONFIG, { useValue: { animationDuration: '0ms' } });
+    createComponent(undefined, true);
+    component.selectedVariables().select(mockVariables[0]);
+    const tabs = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatTabGroupHarness);
+    await tabs.selectTab({ label: 'Einzelne Variablen' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const checkbox = fixture.nativeElement.querySelector('.derive-error-option input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    expect(checkbox.disabled).toBe(false);
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    checkbox.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(component.isVariableSelected(mockVariables[0])).toBe(true);
+    checkbox.click();
+    await fixture.whenStable();
+    expect(component.isDeriveErrorIncluded(component.variables()[0])).toBe(true);
+  });
+
   it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
     createComponent(undefined, true);
 
@@ -826,7 +848,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.selectedVariables().select(variable);
     component.setDeriveErrorIncluded(variable, true);
 
-    expect(component.getAvailabilityText(variable)).toBe('3/3');
+    expect(component.getAvailabilityText(component.variables()[0])).toBe('3/3');
     expect(component.getTotalCodingCases()).toBe(3);
 
     await component.onSubmit();
@@ -1724,7 +1746,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       missingsProfileId: 9
     });
     component.updateCoderCapacityPercent(selectedCoder, 150);
-    component.selectedCoders.select(selectedCoder);
+    component.selectedCoders.select(component.availableCoders()[0]);
     component.selectedVariables().select(selectedVariable);
     component.toggleBundleSelection(selectedBundle);
     component.setBundleOrderingMode(selectedBundle, 'alternating');

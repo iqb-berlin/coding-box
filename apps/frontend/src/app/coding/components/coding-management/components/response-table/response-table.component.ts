@@ -1,11 +1,5 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  ChangeDetectionStrategy,
-  OnChanges,
-  SimpleChanges
+  Component, ChangeDetectionStrategy, OnChanges, SimpleChanges, input, output
 } from '@angular/core';
 
 import {
@@ -34,6 +28,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDivider } from '@angular/material/divider';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { activateOnKeyboard } from '../../../../../shared/utils/keyboard-activation.util';
 import { Success } from '../../../../models/success.model';
 import { extractGeoGebraBase64 } from '../../../../utils/geogebra-value.util';
 import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
@@ -69,27 +64,29 @@ import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
   ]
 })
 export class ResponseTableComponent implements OnChanges {
-  @Input() data: Success[] = [];
-  @Input() displayedColumns: string[] = [];
-  @Input() totalRecords = 0;
-  @Input() pageSize = 100;
-  @Input() pageIndex = 0;
-  @Input() pageSizeOptions: number[] = [100, 200, 500, 1000];
-  @Input() isLoading = false;
-  @Input() currentStatusFilter: string | null = null;
-  @Input() selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
-  @Input() isGeogebraFilterActive = false;
-  @Input() isDerivedFilterActive = false;
-  @Input() isReviewLoading = false;
-  @Input() sortBy: CodingResponseSortBy | '' = '';
-  @Input() sortDirection: SortDirection = '';
+  protected readonly onActionKeydown = activateOnKeyboard;
 
-  @Output() pageChange = new EventEmitter<PageEvent>();
-  @Output() replayClick = new EventEmitter<Success>();
-  @Output() showCodingScheme = new EventEmitter<number>();
-  @Output() showUnitXml = new EventEmitter<number>();
-  @Output() reviewClick = new EventEmitter<void>();
-  @Output() sortChange = new EventEmitter<Sort>();
+  readonly data = input<Success[]>([]);
+  readonly displayedColumns = input<string[]>([]);
+  readonly totalRecords = input(0);
+  readonly pageSize = input(100);
+  readonly pageIndex = input(0);
+  readonly pageSizeOptions = input<number[]>([100, 200, 500, 1000]);
+  readonly isLoading = input(false);
+  readonly currentStatusFilter = input<string | null>(null);
+  readonly selectedVersion = input<'v1' | 'v2' | 'v3'>('v1');
+  readonly isGeogebraFilterActive = input(false);
+  readonly isDerivedFilterActive = input(false);
+  readonly isReviewLoading = input(false);
+  readonly sortBy = input<CodingResponseSortBy | ''>('');
+  readonly sortDirection = input<SortDirection>('');
+
+  readonly pageChange = output<PageEvent>();
+  readonly replayClick = output<Success>();
+  readonly showCodingScheme = output<number>();
+  readonly showUnitXml = output<number>();
+  readonly reviewClick = output<void>();
+  readonly sortChange = output<Sort>();
 
   dataSource = new MatTableDataSource<Success>([]);
 
@@ -97,7 +94,7 @@ export class ResponseTableComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.data) {
-      this.dataSource.data = this.data;
+      this.dataSource.data = this.data();
     }
   }
 
@@ -124,7 +121,7 @@ export class ResponseTableComponent implements OnChanges {
       v2: 'coding-management.statistics.manual-coding-run',
       v3: 'coding-management.statistics.second-autocode-run'
     };
-    return this.translateService.instant(labels[this.selectedVersion]);
+    return this.translateService.instant(labels[this.selectedVersion()]);
   }
 
   getStatusString(status: string): string {
@@ -189,10 +186,11 @@ export class ResponseTableComponent implements OnChanges {
   }
 
   getFilterStatusLabel(): string {
-    if (!this.currentStatusFilter || this.currentStatusFilter === 'null') {
+    const currentStatusFilter = this.currentStatusFilter();
+    if (!currentStatusFilter || currentStatusFilter === 'null') {
       return '';
     }
-    return this.mapStatusToString(this.currentStatusFilter);
+    return this.mapStatusToString(currentStatusFilter);
   }
 
   private toSafeFileName(value: string): string {

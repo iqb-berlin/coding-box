@@ -8,7 +8,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting
 } from '@angular/common/http/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
+// Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
@@ -95,8 +95,7 @@ describe('SysAdminSettingsComponent', () => {
         {
           provide: SystemSettingsService,
           useValue: systemSettingsService
-        },
-        provideNoopAnimations() // Hier hinzufügen
+        } // Hier hinzufügen
       ],
       imports: [TranslateModule.forRoot()]
     }).compileComponents();

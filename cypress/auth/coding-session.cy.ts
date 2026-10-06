@@ -847,8 +847,8 @@ describe('real Keycloak coding session', () => {
         cy.get('coding-box-search-filter .regex-filter-error').should('be.visible');
         cy.then(() => { releaseConfig?.(); });
         cy.wait('@realRoleConfig').its('response.statusCode').should('equal', 200);
-        cy.get('coding-box-test-files').contains('a', 'ACP aus Content Pool').should('not.have.attr', 'aria-disabled', 'true');
-        cy.get('coding-box-test-files').contains('a', 'Auswahl zu Content Pool').should('not.have.attr', 'aria-disabled', 'true');
+        cy.get('coding-box-test-files').contains('button', 'ACP aus Content Pool').should('be.enabled');
+        cy.get('coding-box-test-files').contains('button', 'Auswahl zu Content Pool').should('be.enabled');
         cy.then(() => {
           expect(fileRequests).to.equal(1);
           expect(configRequests).to.equal(1);

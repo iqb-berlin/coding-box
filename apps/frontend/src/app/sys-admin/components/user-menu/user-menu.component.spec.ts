@@ -3,7 +3,6 @@ import { KeycloakProfile } from 'keycloak-js';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { BehaviorSubject, of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { UserMenuComponent } from './user-menu.component';
@@ -37,7 +36,6 @@ describe('UserMenuComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         UserMenuComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         HttpClientTestingModule
       ],

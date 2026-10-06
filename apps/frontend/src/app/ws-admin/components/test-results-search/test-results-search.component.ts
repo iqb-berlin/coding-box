@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, OnInit, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -67,6 +68,10 @@ interface QuickSearchTypeOption {
   ]
 })
 export class TestResultsSearchComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   protected searchText = '';
   protected isLoading = false;
   protected hasSearched = false;
@@ -185,7 +190,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, responseId)
+      .getReplayUrl(this.appService.selectedWorkspaceId, responseId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result?.replayUrl) {
@@ -218,21 +223,25 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
       this.results = this.createEmptyResult(trimmedQuery);
       this.hasSearched = false;
       this.isLoading = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
     this.isLoading = true;
     this.hasSearched = true;
+    this.changeDetectorRef.markForCheck();
     this.testResultService
-      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8)
+      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: results => {
           this.results = results || this.createEmptyResult(trimmedQuery);
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.results = this.createEmptyResult(trimmedQuery);
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }

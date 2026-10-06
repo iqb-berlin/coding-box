@@ -1,7 +1,7 @@
 import {
-  AfterViewInit, Component, Inject, OnInit, ViewChild, signal,
-  computed, WritableSignal, ChangeDetectionStrategy
+  AfterViewInit, Component, Inject, OnInit, signal, computed, WritableSignal, viewChild, effect, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 import {
@@ -24,7 +24,8 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { forkJoin } from 'rxjs';
+import { finalize, forkJoin } from 'rxjs';
+import { activateOnKeyboard } from '../../shared/utils/keyboard-activation.util';
 import { FileService } from '../../shared/services/file/file.service';
 import {
   FileBackendService,
@@ -89,6 +90,10 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
+  protected readonly onActionKeydown = activateOnKeyboard;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
   protected displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
 
@@ -104,7 +109,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   protected availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
   protected readonly isLoading = signal(false);
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+  });
 
   constructor(
     public dialogRef: MatDialogRef<CodingVariablesDialogComponent>,
@@ -121,7 +129,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
+    this.dataSource.sort = this.sort() ?? null;
   }
 
   get hasVariables(): boolean {
@@ -215,7 +223,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     forkJoin({
       unitVariableDetails: this.fileBackendService.getUnitVariables(this.data.workspaceId),
       replayAnchorOverrides: this.fileBackendService.getReplayAnchorOverrides(this.data.workspaceId)
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ unitVariableDetails, replayAnchorOverrides }) => {
         const replayAnchorByVariable = this.toReplayAnchorMap(replayAnchorOverrides);
         const flattenedData: FlattenedVariable[] = [];
@@ -258,8 +266,9 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         });
 
         this.dataSource.data = flattenedData;
-        if (this.sort) {
-          this.dataSource.sort = this.sort;
+        const sort = this.sort();
+        if (sort) {
+          this.dataSource.sort = sort;
         }
         this.applyFilter();
         this.isLoading.set(false);
@@ -286,7 +295,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       unitName: variable.unitName,
       variableId: variable.variableId,
       replayAnchor
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: saved => {
         variable.replayAnchor.set(saved.replayAnchor);
         variable.savedReplayAnchor.set(saved.replayAnchor);
@@ -311,7 +320,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       this.data.workspaceId,
       variable.unitName,
       variable.variableId
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         variable.replayAnchor.set('');
         variable.savedReplayAnchor.set('');
@@ -412,10 +421,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       { duration: 0 }
     );
 
-    this.fileService.getUnitInfo(this.data.workspaceId, unitId).subscribe({
+    this.fileService.getUnitInfo(this.data.workspaceId, unitId).pipe(
+      takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss())
+    ).subscribe({
       next: (unitInfo: UnitInfoDto) => {
-        loadingSnackBar.dismiss();
-
         this.dialog.open(UnitInfoDialogComponent, {
           width: '1200px',
           height: '80vh',
@@ -440,10 +449,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       { duration: 0 }
     );
 
-    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(
+      takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss())
+    ).subscribe({
       next: (schemeFile: FileDownloadDto | null) => {
-        loadingSnackBar.dismiss();
-
         if (!schemeFile) {
           this.snackBar.open(
             'Kodierungsschema-Datei nicht gefunden',

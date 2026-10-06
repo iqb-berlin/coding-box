@@ -1,5 +1,5 @@
 import {
-  afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, Input, OnChanges, output, SecurityContext, signal, SimpleChanges, viewChild
+  afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, OnChanges, output, SecurityContext, signal, SimpleChanges, viewChild, linkedSignal
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import {
   BundleContext,
   BundleVariableContext,
@@ -72,38 +73,41 @@ interface IndexedReplayUnit {
   }
 })
 export class CodeSelectorComponent implements OnChanges {
+  protected readonly onActionKeydown = activateOnKeyboard;
+
   private readonly injector = inject(Injector);
 
   private readonly sanitizer = inject(DomSanitizer);
   private readonly translateService = inject(TranslateService);
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  @Input() codingScheme!: string | CodingScheme;
-  @Input() variableId!: string;
-  @Input() codingCaseKey: string = '';
-  @Input() preSelectedCodeId: number | null = null;
-  @Input() preSelectedCodingIssueOptionId: number | null = null;
-  @Input() coderNotes: string = '';
-  @Input() showProgress: boolean = false;
-  @Input() completedCount: number = 0;
-  @Input() totalUnits: number = 0;
-  @Input() progressPercentage: number = 0;
-  @Input() openCount: number = 0;
-  @Input() isCodingActive: boolean = false;
-  @Input() hasCodingJob: boolean = false;
-  @Input() isCodingJobCompleted: boolean = false;
-  @Input() isCompletedJobReview: boolean = false;
-  @Input() isPausingJob: boolean = false;
-  @Input() unitsData: UnitsReplay | null = null;
-  @Input() codingService!: ReplayCodingService;
-  @Input() showScore: boolean = true;
+  readonly codingScheme = input<string | CodingScheme>('');
+  readonly variableId = input('');
+  readonly codingCaseKey = input<string>('');
+  readonly preSelectedCodeId = input<number | null>(null);
+  readonly preSelectedCodingIssueOptionId = input<number | null>(null);
+  readonly coderNotes = input('');
+  protected readonly draftCoderNotes = linkedSignal(() => this.coderNotes());
+  readonly showProgress = input<boolean>(false);
+  readonly completedCount = input<number>(0);
+  readonly totalUnits = input<number>(0);
+  readonly progressPercentage = input<number>(0);
+  readonly openCount = input<number>(0);
+  readonly isCodingActive = input<boolean>(false);
+  readonly hasCodingJob = input<boolean>(false);
+  readonly isCodingJobCompleted = input<boolean>(false);
+  readonly isCompletedJobReview = input<boolean>(false);
+  readonly isPausingJob = input<boolean>(false);
+  readonly unitsData = input<UnitsReplay | null>(null);
+  readonly codingService = input<ReplayCodingService>();
+  readonly showScore = input<boolean>(true);
   readonly allowComments = input(true);
-  @Input() suppressGeneralInstructions: boolean = false;
-  @Input() isReadOnly: boolean = false;
-  @Input() isNavigationDisabled: boolean = false;
-  @Input() hasSaveError: boolean = false;
-  @Input() clearCodingIssueOnRegularSelection: boolean = false;
-  @Input() reviewCodeSelections: ReviewCodeSelection[] = [];
+  readonly suppressGeneralInstructions = input<boolean>(false);
+  readonly isReadOnly = input<boolean>(false);
+  readonly isNavigationDisabled = input<boolean>(false);
+  readonly hasSaveError = input<boolean>(false);
+  readonly clearCodingIssueOnRegularSelection = input<boolean>(false);
+  readonly reviewCodeSelections = input<ReviewCodeSelection[]>([]);
 
   readonly codeSelected = output<CodeSelectedEvent>();
   readonly notesChanged = output<string>();
@@ -183,7 +187,9 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private loadCodes(): void {
-    if (!this.codingScheme || !this.variableId) {
+    const codingScheme = this.codingScheme();
+    const variableId = this.variableId();
+    if (!codingScheme || !variableId) {
       this.selectableItems.set([]);
       this.allRegularCodeItems = [];
       this.hasResolvedCodingScheme = false;
@@ -193,9 +199,9 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     let scheme: CodingScheme;
-    if (typeof this.codingScheme === 'string') {
+    if (typeof codingScheme === 'string') {
       try {
-        scheme = JSON.parse(this.codingScheme);
+        scheme = JSON.parse(codingScheme);
       } catch (e) {
         this.selectableItems.set([]);
         this.allRegularCodeItems = [];
@@ -205,11 +211,11 @@ export class CodeSelectorComponent implements OnChanges {
         return;
       }
     } else {
-      scheme = this.codingScheme;
+      scheme = codingScheme;
     }
     this.hasResolvedCodingScheme = true;
 
-    const variableCoding = findVariableCodingByPublicId(scheme, this.variableId);
+    const variableCoding = findVariableCodingByPublicId(scheme, variableId);
     if (variableCoding) {
       this.variableManualInstruction.set(variableCoding.manualInstruction || null);
       this.allRegularCodeItems = variableCoding.codes
@@ -265,34 +271,36 @@ export class CodeSelectorComponent implements OnChanges {
       return;
     }
 
-    if (this.preSelectedCodeId !== null) {
-      const preSelectedItem = this.selectableItems().find(item => item.id === this.preSelectedCodeId);
+    const preSelectedCodeId = this.preSelectedCodeId();
+    if (preSelectedCodeId !== null) {
+      const preSelectedItem = this.selectableItems().find(item => item.id === this.preSelectedCodeId());
       if (preSelectedItem) {
         if (preSelectedItem.type === 'codingIssueOption') {
           if (this.isCodingIssueOptionAvailable(preSelectedItem)) {
-            this.selectedCodingIssueOption.set(this.preSelectedCodeId);
+            this.selectedCodingIssueOption.set(preSelectedCodeId);
           }
         } else {
-          this.selectedCode.set(this.preSelectedCodeId);
+          this.selectedCode.set(preSelectedCodeId);
         }
       } else {
         const legacyCodeInScheme = this.allRegularCodeItems.find(
-          item => item.id === this.preSelectedCodeId && !hasManualInstruction(item)
+          item => item.id === this.preSelectedCodeId() && !hasManualInstruction(item)
         );
-        this.legacySelectedCode.set(legacyCodeInScheme || this.createMissingLegacyCode(this.preSelectedCodeId));
+        this.legacySelectedCode.set(legacyCodeInScheme || this.createMissingLegacyCode(preSelectedCodeId));
       }
     }
 
-    if (this.preSelectedCodingIssueOptionId !== null) {
-      const codingIssueItem = this.selectableItems().find(item => item.id === this.preSelectedCodingIssueOptionId);
+    const preSelectedCodingIssueOptionId = this.preSelectedCodingIssueOptionId();
+    if (preSelectedCodingIssueOptionId !== null) {
+      const codingIssueItem = this.selectableItems().find(item => item.id === this.preSelectedCodingIssueOptionId());
       if (
         codingIssueItem &&
         codingIssueItem.type === 'codingIssueOption' &&
         this.isCodingIssueOptionAvailable(codingIssueItem)
       ) {
-        this.selectedCodingIssueOption.set(this.preSelectedCodingIssueOptionId);
+        this.selectedCodingIssueOption.set(preSelectedCodingIssueOptionId);
         // Clear regular code selection when pre-selecting -3 or -4
-        if (this.preSelectedCodingIssueOptionId === -3 || this.preSelectedCodingIssueOptionId === -4) {
+        if (preSelectedCodingIssueOptionId === -3 || preSelectedCodingIssueOptionId === -4) {
           this.selectedCode.set(null);
           this.legacySelectedCode.set(null);
         }
@@ -339,7 +347,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onSelect(codeId: number): void {
-    if (this.isReadOnly) return;
+    if (this.isReadOnly()) return;
     const selectedItem = this.selectableItems().find(item => item.id === codeId);
     if (!selectedItem) return;
 
@@ -357,7 +365,7 @@ export class CodeSelectorComponent implements OnChanges {
     } else {
       this.selectedCode.set(codeId);
       this.legacySelectedCode.set(null);
-      if (this.clearCodingIssueOnRegularSelection) {
+      if (this.clearCodingIssueOnRegularSelection()) {
         this.selectedCodingIssueOption.set(null);
       }
     }
@@ -369,7 +377,7 @@ export class CodeSelectorComponent implements OnChanges {
       this.selectableItems().find(item => item.id === this.selectedCodingIssueOption())!
     ) as CodingIssueDto : null;
     this.codeSelected.emit({
-      variableId: this.variableId,
+      variableId: this.variableId(),
       code: codeDto,
       codingIssueOption: codingIssueOption
     });
@@ -395,25 +403,25 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private getReviewCodeSelection(codeId: number): ReviewCodeSelection | undefined {
-    return this.reviewCodeSelections.find(selection => (
+    return this.reviewCodeSelections().find(selection => (
       selection.code === codeId &&
       selection.coderNames.length > 0
     ));
   }
 
   protected get hasVariableManualInstruction(): boolean {
-    return !this.suppressGeneralInstructions && !!this.variableManualInstruction()?.trim();
+    return !this.suppressGeneralInstructions() && !!this.variableManualInstruction()?.trim();
   }
 
   protected readonly isRegularSelectionDisabled = computed<boolean>(() => this.selectedCodingIssueOption() === -3 || this.selectedCodingIssueOption() === -4);
 
   protected isCodingIssueOptionDisabled(item: SelectableItem): boolean {
-    if (this.isReadOnly) return true;
+    if (this.isReadOnly()) return true;
     return item.id === this.codeAssignmentUncertainOptionId && this.selectedCode() === null;
   }
 
   getCodingIssueOptionTooltip(item: SelectableItem): string {
-    if (!this.isReadOnly && item.id === this.codeAssignmentUncertainOptionId && this.selectedCode() === null) {
+    if (!this.isReadOnly() && item.id === this.codeAssignmentUncertainOptionId && this.selectedCode() === null) {
       return this.translateService.instant('code-selector.code-assignment-uncertain-requires-code');
     }
 
@@ -438,36 +446,37 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private hasSavedCurrentSelection(): boolean {
-    const data = this.unitsData;
+    const data = this.unitsData();
     const currentUnit = data?.units[data.currentUnitIndex];
-    if (!currentUnit || !this.codingService) {
+    const codingService = this.codingService();
+    if (!currentUnit || !codingService) {
       return this.hasCurrentSelection();
     }
 
-    return this.codingService.isUnitCoded(currentUnit) &&
-      !this.codingService.isUnitSavePending?.(currentUnit);
+    return codingService.isUnitCoded(currentUnit) &&
+      !codingService.isUnitSavePending?.(currentUnit);
   }
 
   deselectAll(): void {
-    if (this.isReadOnly) return;
+    if (this.isReadOnly()) return;
     this.selectedCode.set(null);
     this.selectedCodingIssueOption.set(null);
     this.legacySelectedCode.set(null);
     this.newCodeCommentValidationError.set(false);
     this.codeSelected.emit({
-      variableId: this.variableId,
+      variableId: this.variableId(),
       code: null,
       codingIssueOption: null
     });
   }
 
   onNavigateClick(): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     this.openNavigateDialog.emit();
   }
 
   protected onCommentClick(): void {
-    if (this.isReadOnly) return;
+    if (this.isReadOnly()) return;
     this.openCommentDialog.emit();
   }
 
@@ -476,19 +485,19 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onPauseClick(): void {
-    if (this.isReadOnly) return;
+    if (this.isReadOnly()) return;
     this.pauseCodingJob.emit();
   }
 
   onNotesChanged(): void {
-    if (this.isReadOnly) return;
+    if (this.isReadOnly()) return;
     this.updateNewCodeCommentValidationState();
-    this.notesChanged.emit(this.coderNotes);
+    this.notesChanged.emit(this.draftCoderNotes());
   }
 
   protected onNotesCommitted(): void {
-    if (this.isReadOnly) return;
-    this.notesCommitted.emit(this.coderNotes);
+    if (this.isReadOnly()) return;
+    this.notesCommitted.emit(this.draftCoderNotes());
   }
 
   canLeaveCurrentUnit(showValidationMessage = true): boolean {
@@ -514,7 +523,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private hasNewCodeComment(): boolean {
-    return this.coderNotes.trim().length > 0;
+    return this.draftCoderNotes().trim().length > 0;
   }
 
   private updateNewCodeCommentValidationState(): void {
@@ -524,13 +533,14 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   nextUnit(): void {
-    const data = this.unitsData;
+    const data = this.unitsData();
     if (!data) return;
 
-    if (this.isNavigationDisabled) return;
-    if (this.hasSaveError) return;
-    if (!this.isReadOnly && !this.hasSavedCurrentSelection()) return;
-    if (!this.isReadOnly && !this.canLeaveCurrentUnit()) return;
+    if (this.isNavigationDisabled()) return;
+    if (this.hasSaveError()) return;
+    const isReadOnly = this.isReadOnly();
+    if (!isReadOnly && !this.hasSavedCurrentSelection()) return;
+    if (!isReadOnly && !this.canLeaveCurrentUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
@@ -540,8 +550,8 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   previousUnit(): void {
-    const data = this.unitsData;
-    if (this.isNavigationDisabled) return;
+    const data = this.unitsData();
+    if (this.isNavigationDisabled()) return;
     if (!data || !this.hasPreviousUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -552,27 +562,27 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   hasNextUnit(): boolean {
-    const data = this.unitsData;
-    if (this.isNavigationDisabled) return false;
+    const data = this.unitsData();
+    if (this.isNavigationDisabled()) return false;
     if (!data || !data.units.length) return false;
 
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
-    if (this.isReadOnly) return hasNext;
-    return hasNext && this.hasSavedCurrentSelection() && !this.hasSaveError;
+    if (this.isReadOnly()) return hasNext;
+    return hasNext && this.hasSavedCurrentSelection() && !this.hasSaveError();
   }
 
   protected hasPreviousUnit(): boolean {
-    const data = this.unitsData;
-    if (this.isNavigationDisabled) return false;
+    const data = this.unitsData();
+    if (this.isNavigationDisabled()) return false;
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
   }
 
   handleKeyboardEvent(event: KeyboardEvent): void {
-    if (this.isReadOnly || this.selectableItems().length === 0) {
+    if (this.isReadOnly() || this.selectableItems().length === 0) {
       return;
     }
 
@@ -625,15 +635,15 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   protected get progressSummary(): string {
-    return `${this.completedCount}/${this.totalUnits} (${this.progressPercentage}%)`;
+    return `${this.completedCount()}/${this.totalUnits()} (${this.progressPercentage()}%)`;
   }
 
   protected get progressTooltip(): string {
     return this.translateService.instant('code-selector.progress-tooltip', {
-      completed: this.completedCount,
-      total: this.totalUnits,
-      percentage: this.progressPercentage,
-      open: this.openCount
+      completed: this.completedCount(),
+      total: this.totalUnits(),
+      percentage: this.progressPercentage(),
+      open: this.openCount()
     });
   }
 
@@ -667,18 +677,18 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   protected get totalNavigationUnits(): number {
-    return this.unitsData?.units.length || 0;
+    return this.unitsData()?.units.length || 0;
   }
 
   protected get currentNavigationIndex(): number {
-    return (this.unitsData?.currentUnitIndex || 0) + 1;
+    return (this.unitsData()?.currentUnitIndex || 0) + 1;
   }
 
   readonly isVariablePanelOpen = signal(false);
   readonly isBundleVariablePanelOpen = signal(false);
 
   toggleVariablePanel(): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     this.isVariablePanelOpen.set(!this.isVariablePanelOpen());
     if (this.isVariablePanelOpen()) {
       this.isBundleVariablePanelOpen.set(false);
@@ -691,7 +701,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   protected toggleBundleVariablePanel(): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     this.isBundleVariablePanelOpen.set(!this.isBundleVariablePanelOpen());
     if (this.isBundleVariablePanelOpen()) {
       this.isVariablePanelOpen.set(false);
@@ -707,13 +717,13 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   selectVariable(key: string): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     this.closeVariablePanel();
     this.jumpToVariable(key);
   }
 
   protected selectNavigationItem(key: string): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     this.closeVariablePanel();
     this.jumpToNavigationItem(key);
   }
@@ -731,7 +741,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   /** Returns coded/total/percentage for any unit+variable key. */
   getProgressForKey(key: string): { coded: number; total: number; percentage: number } {
-    if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
+    if (!this.unitsData()?.units || !this.codingService()) return { coded: 0, total: 0, percentage: 0 };
     this.ensureUnitIndexes();
     const units = (this.indexedUnitsByVariable.get(key) || [])
       .map(entry => entry.unit);
@@ -739,7 +749,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   protected getProgressForNavigationItem(item: NavigationItem): { coded: number; total: number; percentage: number } {
-    if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
+    if (!this.unitsData()?.units || !this.codingService()) return { coded: 0, total: 0, percentage: 0 };
     if (item.type === 'bundle') {
       this.ensureUnitIndexes();
       const units = item.bundleId === undefined ?
@@ -754,17 +764,18 @@ export class CodeSelectorComponent implements OnChanges {
 
   private getProgressForUnits(units: UnitsReplayUnit[]): { coded: number; total: number; percentage: number } {
     const total = units.length;
-    const coded = units.filter(u => this.codingService.isUnitCoded(u)).length;
+    const coded = units.filter(u => this.codingService()?.isUnitCoded(u)).length;
     const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
     return { coded, total, percentage };
   }
 
   get navigationItems(): NavigationItem[] {
-    if (!this.unitsData?.units) return [];
+    const unitsData = this.unitsData();
+    if (!unitsData?.units) return [];
     const seen = new Set<string>();
     const result: NavigationItem[] = [];
 
-    for (const unit of this.unitsData.units) {
+    for (const unit of unitsData.units) {
       if (unit.variableBundleId !== null && unit.variableBundleId !== undefined) {
         const key = this.getBundleNavigationKey(unit.variableBundleId);
         if (!seen.has(key)) {
@@ -801,10 +812,11 @@ export class CodeSelectorComponent implements OnChanges {
 
   /** Unique unit+variable combinations available in the current coding job, preserving order of first appearance. */
   get availableVariables(): { key: string; variableId: string; unitName: string }[] {
-    if (!this.unitsData?.units) return [];
+    const unitsData = this.unitsData();
+    if (!unitsData?.units) return [];
     const seen = new Set<string>();
     const result: { key: string; variableId: string; unitName: string }[] = [];
-    for (const unit of this.unitsData.units) {
+    for (const unit of unitsData.units) {
       if (unit.variableId) {
         const key = `${unit.alias || unit.name}::${unit.variableId}`;
         if (!seen.has(key)) {
@@ -847,7 +859,7 @@ export class CodeSelectorComponent implements OnChanges {
       const key = `${unitName}::${variable.variableId}`;
       const progress = this.getProgressForKey(key);
       const disabled =
-        this.isNavigationDisabled ||
+        this.isNavigationDisabled() ||
         !targetUnit ||
         variable.status === 'auto-coded' ||
         variable.status === 'not-available';
@@ -871,9 +883,10 @@ export class CodeSelectorComponent implements OnChanges {
     context: BundleContext,
     variable: BundleVariableContext
   ): UnitsReplayUnit | undefined {
-    if (!this.unitsData?.units) return undefined;
+    const unitsData = this.unitsData();
+    if (!unitsData?.units) return undefined;
     this.ensureUnitIndexes();
-    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const currentUnit = unitsData.units[unitsData.currentUnitIndex];
     const candidates = variable.responseId !== null ?
       [this.indexedUnitsByResponseId.get(variable.responseId)]
         .filter((entry): entry is IndexedReplayUnit => !!entry) :
@@ -913,11 +926,12 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private get currentBundleContext() {
-    const currentUnit = this.unitsData?.units[this.unitsData.currentUnitIndex];
+    const unitsData = this.unitsData();
+    const currentUnit = unitsData?.units[unitsData.currentUnitIndex];
     if (currentUnit?.bundleContext) return currentUnit.bundleContext;
     if (currentUnit?.variableBundleId === null || currentUnit?.variableBundleId === undefined) return null;
 
-    return this.unitsData?.units.find(unit => (
+    return unitsData?.units.find(unit => (
       unit.variableBundleId === currentUnit.variableBundleId && !!unit.bundleContext
     ))?.bundleContext || null;
   }
@@ -937,15 +951,17 @@ export class CodeSelectorComponent implements OnChanges {
 
   /** Composite key (unitName::variableId) for the unit currently being displayed. */
   get activeVariableKey(): string {
-    if (!this.unitsData?.units) return '';
-    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const unitsData = this.unitsData();
+    if (!unitsData?.units) return '';
+    const unit = unitsData.units[unitsData.currentUnitIndex];
     if (!unit?.variableId) return '';
     return `${unit.alias || unit.name}::${unit.variableId}`;
   }
 
   protected get activeNavigationKey(): string {
-    if (!this.unitsData?.units) return '';
-    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const unitsData = this.unitsData();
+    if (!unitsData?.units) return '';
+    const unit = unitsData.units[unitsData.currentUnitIndex];
     if (!unit) return '';
     if (unit.variableBundleId !== null && unit.variableBundleId !== undefined) {
       return this.getBundleNavigationKey(unit.variableBundleId);
@@ -962,8 +978,9 @@ export class CodeSelectorComponent implements OnChanges {
 
   /** Progress (coded / total) for the unit+variable of the current unit. */
   get currentVariableProgress(): { coded: number; total: number; percentage: number } | null {
-    if (!this.unitsData?.units || !this.codingService) return null;
-    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const unitsData = this.unitsData();
+    if (!unitsData?.units || !this.codingService()) return null;
+    const currentUnit = unitsData.units[unitsData.currentUnitIndex];
     if (!currentUnit?.variableId) return null;
     const unitName = currentUnit.alias || currentUnit.name;
     const varId = currentUnit.variableId;
@@ -975,22 +992,22 @@ export class CodeSelectorComponent implements OnChanges {
    * Falls back to the first matching unit if all are coded.
    */
   jumpToVariable(key: string): void {
-    if (this.isNavigationDisabled) return;
-    if (!this.unitsData?.units) return;
+    if (this.isNavigationDisabled()) return;
+    if (!this.unitsData()?.units) return;
     this.ensureUnitIndexes();
     const variableUnits = this.indexedUnitsByVariable.get(key) || [];
     if (variableUnits.length === 0) return;
 
     // Prefer first uncoded unit
     const firstUncoded = variableUnits.find(
-      ({ unit }) => !this.codingService.isUnitCoded(unit)
+      ({ unit }) => !this.codingService()?.isUnitCoded(unit)
     );
     const target = firstUncoded ?? variableUnits[0];
     this.unitChanged.emit(target.unit);
   }
 
   jumpToNavigationItem(key: string): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     const item = this.navigationItems.find(navItem => navItem.key === key);
     if (!item) return;
 
@@ -999,13 +1016,13 @@ export class CodeSelectorComponent implements OnChanges {
       return;
     }
 
-    if (!this.unitsData?.units || item.bundleId === undefined) return;
+    if (!this.unitsData()?.units || item.bundleId === undefined) return;
     this.ensureUnitIndexes();
     const bundleUnits = (this.indexedUnitsByBundle.get(item.bundleId) || [])
       .map(entry => entry.unit);
     if (bundleUnits.length === 0) return;
 
-    const firstUncoded = bundleUnits.find(unit => !this.codingService.isUnitCoded(unit));
+    const firstUncoded = bundleUnits.find(unit => !this.codingService()?.isUnitCoded(unit));
     const target = firstUncoded ?? bundleUnits[0];
     this.unitChanged.emit(target);
   }
@@ -1017,7 +1034,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private jumpToBundleVariable(key: string): void {
-    if (this.isNavigationDisabled) return;
+    if (this.isNavigationDisabled()) return;
     const target = this.bundleVariableNavigationItems.find(item => item.key === key)?.targetUnit;
     if (!target) return;
     this.unitChanged.emit(target);
@@ -1032,7 +1049,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private ensureUnitIndexes(): void {
-    const units = this.unitsData?.units || null;
+    const units = this.unitsData()?.units || null;
     if (units === this.indexedUnitsSource) {
       return;
     }

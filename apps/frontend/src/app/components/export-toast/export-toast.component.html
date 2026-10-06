@@ -1,7 +1,11 @@
 @if (hasJobs()) {
   <div class="export-toast-container">
     <mat-card class="export-toast-card">
-      <div class="toast-header" (click)="toggleCollapse()">
+      <div class="toast-header" (click)="toggleCollapse()"
+        role="button"
+        tabindex="0"
+        (keydown.enter)="onActionKeydown($event)"
+        (keydown.space)="onActionKeydown($event)">
         <div class="header-left">
           <mat-icon>download</mat-icon>
           <span class="title">{{ 'export-toast.title' | translate }}</span>

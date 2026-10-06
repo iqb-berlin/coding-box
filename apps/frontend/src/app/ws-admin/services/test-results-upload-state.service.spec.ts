@@ -3,7 +3,7 @@ import {
 } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { FileService } from '../../shared/services/file/file.service';
@@ -12,7 +12,7 @@ import { TestPersonCodingService } from '../../coding/services/test-person-codin
 
 describe('TestResultsUploadStateService', () => {
   let service: TestResultsUploadStateService;
-  let fileServiceMock: { getUploadJobStatus: jest.Mock };
+  let fileServiceMock: { getUploadJobStatus: jest.Mock; uploadTestResultsChunked: jest.Mock };
   let testResultServiceMock: {
     invalidateCache: jest.Mock;
     getWorkspaceOverview: jest.Mock;
@@ -27,10 +27,22 @@ describe('TestResultsUploadStateService', () => {
   };
   let dialogMock: { open: jest.Mock };
   let snackBarMock: { open: jest.Mock };
+  const uploadStartOverview: TestResultsOverviewResponse = {
+    testPersons: 10,
+    testGroups: 2,
+    uniqueBooklets: 5,
+    uniqueUnits: 20,
+    uniqueResponses: 100,
+    responseStatusCounts: {},
+    sessionBrowserCounts: {},
+    sessionOsCounts: {},
+    sessionScreenCounts: {}
+  };
 
   beforeEach(() => {
     fileServiceMock = {
-      getUploadJobStatus: jest.fn()
+      getUploadJobStatus: jest.fn(),
+      uploadTestResultsChunked: jest.fn()
     };
     testResultServiceMock = {
       invalidateCache: jest.fn(),
@@ -101,6 +113,57 @@ describe('TestResultsUploadStateService', () => {
 
     // Clear localStorage before each test
     localStorage.clear();
+  });
+
+  it('shares one upload and registers its accepted batch after view unsubscription', fakeAsync(() => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    const accepted = new Subject<unknown[]>();
+    const status = new Subject<unknown>();
+    const progressRef = { close: jest.fn() };
+    fileServiceMock.uploadTestResultsChunked.mockReturnValue(accepted);
+    fileServiceMock.getUploadJobStatus.mockReturnValue(status);
+    dialogMock.open.mockReturnValue(progressRef);
+    const registerBatch = jest.spyOn(service, 'registerBatch');
+    const request = service.startChunkedUpload(47, new File(['data'], 'responses.json'), 'responses', { overwriteMode: 'skip', scope: 'person' }, uploadStartOverview);
+    request.subscribe().unsubscribe();
+    request.subscribe().unsubscribe();
+    expect(accepted.observed).toBe(true);
+    expect(fileServiceMock.uploadTestResultsChunked).toHaveBeenCalledTimes(1);
+    expect(dialogMock.open).toHaveBeenCalledTimes(1);
+
+    accepted.next([{ jobId: 'job-1' }]);
+    accepted.complete();
+    request.subscribe();
+    expect(registerBatch).toHaveBeenCalledTimes(1);
+    expect(registerBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 47, jobIds: ['job-1'] }),
+      expect.objectContaining({ dialogRef: progressRef })
+    );
+    expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledWith(47, 'job-1');
+    TestBed.resetTestingModule();
+    expect(status.observed).toBe(false);
+    expect(progressRef.close).toHaveBeenCalledTimes(1);
+    tick(2000);
+    expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(1);
+  }));
+
+  it('cancels an unfinished upload and closes progress when its root provider is destroyed', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    const accepted = new Subject<unknown[]>();
+    const progressRef = { close: jest.fn() };
+    fileServiceMock.uploadTestResultsChunked.mockReturnValue(accepted);
+    dialogMock.open.mockReturnValue(progressRef);
+    const registerBatch = jest.spyOn(service, 'registerBatch');
+    service.startChunkedUpload(47, new File(['data'], 'responses.json'), 'responses', { overwriteMode: 'skip', scope: 'person' }, uploadStartOverview).subscribe();
+    const state = dialogMock.open.mock.calls[0][1].data.state$;
+
+    TestBed.resetTestingModule();
+    expect(accepted.observed).toBe(false);
+    expect(progressRef.close).toHaveBeenCalledTimes(1);
+    expect(state.isStopped).toBe(true);
+    accepted.next([{ jobId: 'too-late' }]);
+    expect(registerBatch).not.toHaveBeenCalled();
+    expect(snackBarMock.open).not.toHaveBeenCalled();
   });
 
   it('should show explicit feedback when log anomaly summary loading fails', () => {

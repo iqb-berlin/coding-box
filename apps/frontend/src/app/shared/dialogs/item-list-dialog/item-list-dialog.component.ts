@@ -1,6 +1,10 @@
 import {
-  Component, OnInit, inject, signal, ChangeDetectionStrategy
+  Subscription, firstValueFrom, Subject, takeUntil
+} from 'rxjs';
+import {
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,13 +13,14 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { MetadataResolver } from '@iqb/metadata-resolver';
-import { firstValueFrom } from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { activateOnKeyboard } from '../../utils/keyboard-activation.util';
 import { MetadataDialogComponent, MetadataDialogData } from '../metadata-dialog/metadata-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { FileService } from '../../services/file/file.service';
 import { base64ToUtf8 } from '../../utils/common-utils';
+import { takeUntilWorkspaceChanged } from '../../utils/workspace-request.operator';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,11 +40,34 @@ import { base64ToUtf8 } from '../../utils/common-utils';
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
+  protected readonly onActionKeydown = activateOnKeyboard;
+
+  private itemsRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private fileService = inject(FileService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
   private dialogRef = inject(MatDialogRef<ItemListDialogComponent>);
   private snackBar = inject(MatSnackBar);
+  private metadataRequestId = 0;
+  private readonly metadataCancelled = new Subject<void>();
+  private metadataLoadingSnackBar?: ReturnType<MatSnackBar['open']>;
+  private metadataDialogRef?: MatDialogRef<MetadataDialogComponent>;
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.cancelMetadataRequest());
+  }
+
+  private cancelMetadataRequest(): void {
+    this.metadataRequestId += 1;
+    this.metadataCancelled.next();
+    this.metadataLoadingSnackBar?.dismiss();
+    const metadataDialogRef = this.metadataDialogRef;
+    this.metadataDialogRef = undefined;
+    metadataDialogRef?.close();
+  }
 
   protected readonly itemGroups = signal<{
     fileId: string;
@@ -51,10 +79,16 @@ export class ItemListDialogComponent implements OnInit {
   protected readonly error = signal('');
 
   ngOnInit(): void {
+    this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.cancelMetadataRequest());
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.cancelMetadataRequest();
+      this.dialogRef.close();
+    });
     this.loadItemIds();
   }
 
   protected loadItemIds(): void {
+    this.itemsRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.error.set('Kein Workspace ausgewählt.');
@@ -65,7 +99,11 @@ export class ItemListDialogComponent implements OnInit {
     this.isLoading.set(true);
     this.error.set('');
 
-    this.fileService.getItemIdsFromMetadata(workspaceId).subscribe({
+    this.itemsRequest = this.fileService.getItemIdsFromMetadata(workspaceId).pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
       next: groups => {
         this.itemGroups.set(groups);
         this.isLoading.set(false);
@@ -77,12 +115,23 @@ export class ItemListDialogComponent implements OnInit {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
+    this.cancelMetadataRequest();
+    const requestId = this.metadataRequestId;
+    const isCurrent = (): boolean => !this.destroyRef.destroyed && requestId === this.metadataRequestId &&
+      workspaceId === this.appService.selectedWorkspaceId;
     const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+    this.metadataLoadingSnackBar = loadingSnackBar;
 
     try {
       const fileDownload = await firstValueFrom(
-        this.fileService.downloadFile(workspaceId, group.id)
+        this.fileService.downloadFile(workspaceId, group.id).pipe(
+          takeUntil(this.metadataCancelled),
+          takeUntilWorkspaceChanged(this.appService, workspaceId),
+          takeUntil(this.dialogRef.beforeClosed()),
+          takeUntilDestroyed(this.destroyRef)
+        )
       );
+      if (!isCurrent()) return;
 
       const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
@@ -107,6 +156,7 @@ export class ItemListDialogComponent implements OnInit {
       const resolver = new MetadataResolver();
       const unitProfileUrl = unitProfile.profileId;
       const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+      if (!isCurrent()) return;
 
       let itemProfileData = null;
       const firstItem = vomdData.items?.[0];
@@ -115,6 +165,7 @@ export class ItemListDialogComponent implements OnInit {
       if (itemProfile) {
         const itemProfileUrl = itemProfile.profileId;
         const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        if (!isCurrent()) return;
         itemProfileData = itemProfileWithVocabs.profile;
       }
 
@@ -128,7 +179,7 @@ export class ItemListDialogComponent implements OnInit {
         }
       }
 
-      this.dialog.open(MetadataDialogComponent, {
+      this.metadataDialogRef = this.dialog.open(MetadataDialogComponent, {
         width: '1200px',
         maxWidth: '95vw',
         maxHeight: '95vh',
@@ -144,8 +195,9 @@ export class ItemListDialogComponent implements OnInit {
         } as unknown as MetadataDialogData
       });
     } catch (error) {
+      if (isCurrent()) this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+    } finally {
       loadingSnackBar.dismiss();
-      this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
     }
   }
 

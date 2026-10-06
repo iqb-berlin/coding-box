@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, Inject, inject
+  Component, Inject, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
@@ -142,13 +142,13 @@ export class CodingJobBulkCreationDialogComponent {
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   protected displayOptionsForm!: FormGroup;
-  jobPreviews: JobPreview[] = [];
-  protected distributionMatrix: DistributionMatrixRow[] = [];
-  protected doubleCodingPreview?: DoubleCodingPreview;
-  warnings: JobCreationWarning[] = [];
-  showWarningsPanel = false;
-  protected warningsConfirmed = false;
-  isLoading = false;
+  readonly jobPreviews = signal<JobPreview[]>([]);
+  protected readonly distributionMatrix = signal<DistributionMatrixRow[]>([]);
+  protected readonly doubleCodingPreview = signal<DoubleCodingPreview | undefined>(undefined);
+  readonly warnings = signal<JobCreationWarning[]>([]);
+  readonly showWarningsPanel = signal(false);
+  protected readonly warningsConfirmed = signal(false);
+  readonly isLoading = signal(false);
   private readonly defaultCoderCapacityPercent = 100;
   private readonly minCoderCapacityPercent = 10;
   private readonly maxCoderCapacityPercent = 300;
@@ -169,12 +169,11 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   private async calculateDistributionWithBackend(): Promise<void> {
-    this.isLoading = true;
+    this.isLoading.set(true);
     try {
       const workspaceId = this.appService.selectedWorkspaceId;
       if (!workspaceId) {
         this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
-        this.isLoading = false;
         return;
       }
 
@@ -203,13 +202,11 @@ export class CodingJobBulkCreationDialogComponent {
 
       if (!result || Object.keys(result.distribution || {}).length === 0) {
         this.snackBar.open('No distribution calculated', 'Close', { duration: 3000 });
-        this.isLoading = false;
-      } else {
-        this.isLoading = false;
       }
     } catch (error) {
       this.snackBar.open(`Failed to calculate distribution: ${error instanceof Error ? error.message : error}`, 'Close', { duration: 5000 });
-      this.isLoading = false;
+    } finally {
+      this.isLoading.set(false);
     }
   }
 
@@ -229,16 +226,16 @@ export class CodingJobBulkCreationDialogComponent {
   private initializeFromData(): void {
     if (!this.data.distribution || !this.data.doubleCodingInfo) return;
 
-    this.warnings = this.data.warnings || [];
-    this.showWarningsPanel = this.warnings.length > 0;
-    this.distributionMatrix = [];
+    this.warnings.set([...(this.data.warnings || [])]);
+    this.showWarningsPanel.set(this.warnings().length > 0);
+    const distributionMatrix: DistributionMatrixRow[] = [];
     for (const [variableKey, coderCases] of Object.entries(this.data.distribution)) {
       const coderCasesById = this.data.distributionByCoderId?.[variableKey];
       const totalCases = Object.values(coderCasesById || coderCases).reduce((sum, count) => sum + count, 0);
 
       if (this.isVariableItemKey(variableKey)) {
         const [unitName, variableId] = variableKey.split('::');
-        this.distributionMatrix.push({
+        distributionMatrix.push({
           variable: { unitName, variableId },
           variableKey,
           totalCases,
@@ -247,7 +244,7 @@ export class CodingJobBulkCreationDialogComponent {
         });
       } else {
         const bundle = this.findBundleForItemKey(variableKey);
-        this.distributionMatrix.push({
+        distributionMatrix.push({
           bundle,
           variableKey,
           totalCases,
@@ -257,11 +254,10 @@ export class CodingJobBulkCreationDialogComponent {
       }
     }
 
-    if (Object.keys(this.data.doubleCodingInfo).length > 0) {
-      this.doubleCodingPreview = { doubleCodingInfo: this.data.doubleCodingInfo };
-    }
-
-    this.jobPreviews = this.createJobPreviews();
+    this.distributionMatrix.set(distributionMatrix);
+    this.doubleCodingPreview.set(Object.keys(this.data.doubleCodingInfo).length > 0 ?
+      { doubleCodingInfo: this.data.doubleCodingInfo } : undefined);
+    this.jobPreviews.set(this.createJobPreviews());
   }
 
   private initializeFromCreationResults(): void {
@@ -458,7 +454,7 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   getCoderTotal(coderName: string): number {
-    return this.distributionMatrix.reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
+    return this.distributionMatrix().reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
   }
 
   protected getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
@@ -466,7 +462,7 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   protected getCoderTotalById(coder: Coder): number {
-    return this.distributionMatrix.reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
+    return this.distributionMatrix().reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
   }
 
   protected getDoubleCodedCasesForCoder(
@@ -482,12 +478,12 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   protected getGrandTotal(): number {
-    return this.distributionMatrix.reduce((total, row) => total + row.totalCases, 0);
+    return this.distributionMatrix().reduce((total, row) => total + row.totalCases, 0);
   }
 
   private getActiveDoubleCodingInfo(): BulkCreationData['doubleCodingInfo'] | undefined {
     return this.data.creationResults?.doubleCodingInfo ||
-      this.doubleCodingPreview?.doubleCodingInfo ||
+      this.doubleCodingPreview()?.doubleCodingInfo ||
       this.data.doubleCodingInfo;
   }
 
@@ -583,8 +579,8 @@ export class CodingJobBulkCreationDialogComponent {
     }
 
     // If there are warnings and user hasn't confirmed, just mark warnings as confirmed and return
-    if (this.warnings.length > 0 && !this.warningsConfirmed) {
-      this.warningsConfirmed = true;
+    if (this.warnings().length > 0 && !this.warningsConfirmed()) {
+      this.warningsConfirmed.set(true);
       return;
     }
 

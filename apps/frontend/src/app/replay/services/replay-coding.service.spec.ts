@@ -1,3 +1,4 @@
+import { computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -46,6 +47,86 @@ describe('ReplayCodingService', () => {
     });
 
     service = TestBed.inject(ReplayCodingService);
+  });
+
+  describe('reactive coding state readers', () => {
+    it('invalidates derived notes when local drafts change or are cleared', () => {
+      const notes = computed(() => service.getNotes('p1', 'u1', 'v1'));
+      expect(notes()).toBe('');
+
+      service.updateLocalNotes('p1', 'u1', 'v1', 'First draft');
+      expect(notes()).toBe('First draft');
+      service.updateLocalNotes('p1', 'u1', 'v1', 'Latest draft');
+      expect(notes()).toBe('Latest draft');
+      service.updateLocalNotes('p1', 'u1', 'v1', '   ');
+      expect(notes()).toBe('');
+    });
+
+    it('invalidates derived code and issue selections independently of progress readers', async () => {
+      const codeId = computed(() => service.getPreSelectedCodeId('p1', 'u1', 'v1'));
+      const issueId = computed(() => service.getPreSelectedCodingIssueOptionId('p1', 'u1', 'v1'));
+      expect(codeId()).toBeNull();
+      expect(issueId()).toBeNull();
+
+      await service.handleCodeSelected({
+        variableId: 'v1',
+        code: { id: 7, label: 'Code 7' } as never,
+        codingIssueOption: { id: 'uncertain', code: -1, label: 'Uncertain' }
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBe(7);
+      expect(issueId()).toBe(-1);
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: { id: 7, label: 'Code 7' } as never, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBe(7);
+      expect(issueId()).toBeNull();
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: null, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBeNull();
+      expect(issueId()).toBeNull();
+    });
+
+    it('invalidates total and unit-scoped open counts after recovery and coding', async () => {
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      const otherKey = service.generateCompositeKey('p2', 'u2', 'v2');
+      const unitsData = {
+        id: 1,
+        name: 'Replay',
+        currentUnitIndex: 0,
+        units: [{
+          id: 1, name: 'u1', alias: 'u1', bookletId: 0, testPerson: 'p1', variableId: 'v1'
+        }]
+      };
+      const total = computed(() => service.getOpenCount());
+      const scoped = computed(() => service.getOpenCount(unitsData));
+      expect(total()).toBe(0);
+      expect(scoped()).toBe(0);
+
+      service.restoreRecoverySnapshot({
+        codingJobId: null,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [key, otherKey],
+        notes: [],
+        codingJobComment: ''
+      });
+      expect(total()).toBe(2);
+      expect(scoped()).toBe(1);
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: { id: 7, label: 'Code 7' } as never, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(total()).toBe(1);
+      expect(scoped()).toBe(0);
+
+      service.resetCodingData();
+      expect(total()).toBe(0);
+      expect(scoped()).toBe(0);
+    });
   });
 
   it.each([true, false])('persists new-code-needed during a progress save (with regular code: %s)', async withRegularCode => {
@@ -277,10 +358,14 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.getCodingJob).toHaveBeenCalledWith(1, 100, 'replay-token');
     });
 
-    it('should handle errors gracefully', async () => {
-      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
-      await service.loadSavedCodingProgress(1, 100);
+    it('propagates read failures so the replay view can report and retry them', async () => {
+      const failure = new Error('Progress request failed');
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(throwError(() => failure));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({} as CodingJob));
+      await expect(service.loadSavedCodingProgress(1, 100)).rejects.toBe(failure);
       expect(service.selectedCodes.size).toBe(0);
+      expect(service.notes.size).toBe(0);
     });
   });
 

@@ -1,0 +1,49 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chart-scroll,
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+canvas {
+  display: block;
+  color: inherit;
+}
+
+.chart-data {
+  margin-top: 8px;
+}
+
+summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 12px;
+}
+
+caption {
+  text-align: left;
+  font-weight: 500;
+  padding-bottom: 8px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+}
+
+tbody th {
+  font-weight: normal;
+  overflow-wrap: anywhere;
+}

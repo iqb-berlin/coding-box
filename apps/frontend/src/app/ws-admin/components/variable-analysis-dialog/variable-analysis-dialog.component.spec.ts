@@ -10,7 +10,6 @@ import {
   MatDialog
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, Subject, throwError } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -124,7 +123,6 @@ describe('VariableAnalysisDialogComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         VariableAnalysisDialogComponent
       ],
