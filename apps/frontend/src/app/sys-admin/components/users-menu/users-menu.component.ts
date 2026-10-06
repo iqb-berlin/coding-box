@@ -1,14 +1,15 @@
 import {
   Component, inject,
   input,
-  output, ChangeDetectionStrategy
+  output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
-import { UntypedFormGroup } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { EditUserComponent } from '../edit-user/edit-user.component';
+import { EditUserComponent, EditUserData } from '../edit-user/edit-user.component';
+import { CreateUserForm, EditUserForm } from '../../models/user-form.model';
 
 import {
   WorkspaceAccessRightsDialogComponent
@@ -32,6 +33,8 @@ import {
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private editUserDialog = inject(MatDialog);
   private messageDialog = inject(MatDialog);
   private editUserAccessRightsDialog = inject(MatDialog);
@@ -41,11 +44,11 @@ export class UsersMenuComponent {
   readonly selectedUser = input.required<number[]>();
   readonly selectedRows = input.required<UserFullDto[]>();
   readonly checkedRows = input.required<UserFullDto[]>();
-  readonly userAdded = output<UntypedFormGroup>();
+  readonly userAdded = output<CreateUserForm>();
   readonly usersDeleted = output<UserFullDto[]>();
   readonly userEdited = output<{
     selection: UserFullDto[];
-    user: UntypedFormGroup;
+    user: EditUserForm;
   }>();
 
   readonly setUserWorkspaceAccessRights = output<number[]>();
@@ -65,7 +68,7 @@ export class UsersMenuComponent {
         }
       });
     } else {
-      const dialogRef = this.editUserDialog.open(EditUserComponent, {
+      const dialogRef = this.editUserDialog.open<EditUserComponent, EditUserData, EditUserForm | false>(EditUserComponent, {
         width: '600px',
         data: {
           username: selectedRows[0].username,
@@ -73,11 +76,9 @@ export class UsersMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe(result => {
-        if (typeof result !== 'undefined') {
-          if (result !== false) {
-            this.userEdited.emit({ selection: selectedRows, user: result as UntypedFormGroup });
-          }
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+        if (result) {
+          this.userEdited.emit({ selection: selectedRows, user: result });
         }
       });
     }
@@ -111,7 +112,7 @@ export class UsersMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe((result: boolean) => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: boolean) => {
         if (result) {
           this.usersDeleted.emit(selectedRows);
         }
@@ -141,7 +142,7 @@ export class UsersMenuComponent {
           selectedUser: this.selectedRows()
         }
       });
-      dialogRef.afterClosed().subscribe((result: number[]) => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: number[]) => {
         if (result) {
           this.setUserWorkspaceAccessRights.emit(result);
         }

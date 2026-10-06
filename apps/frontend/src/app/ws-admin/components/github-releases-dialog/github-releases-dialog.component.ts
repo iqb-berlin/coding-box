@@ -1,6 +1,8 @@
+import { Subscription } from 'rxjs';
 import {
-  Component, Inject, OnInit, inject, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CommonModule, DatePipe } from '@angular/common';
@@ -33,6 +35,10 @@ export interface GithubReleasesDialogData {
   ]
 })
 export class GithubReleasesDialogComponent implements OnInit {
+  private releasesRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private fileService = inject(FileService);
   private snackBar = inject(MatSnackBar);
   translate = inject(TranslateService);
@@ -57,8 +63,9 @@ export class GithubReleasesDialogComponent implements OnInit {
   }
 
   loadReleases(): void {
+    this.releasesRequest?.unsubscribe();
     this.isLoading.set(true);
-    this.fileService.getGithubReleases(this.data.workspaceId, this.selectedType())
+    this.releasesRequest = this.fileService.getGithubReleases(this.data.workspaceId, this.selectedType()).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: releases => {
           this.releases.set(releases);
@@ -73,7 +80,7 @@ export class GithubReleasesDialogComponent implements OnInit {
 
   protected install(release: GithubReleaseShort): void {
     this.isLoading.set(true);
-    this.fileService.installGithubRelease(this.data.workspaceId, release.url)
+    this.fileService.installGithubRelease(this.data.workspaceId, release.url).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: success => {
           this.isLoading.set(false);

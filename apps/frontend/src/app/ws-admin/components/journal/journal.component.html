@@ -5,7 +5,7 @@
         <mat-label>{{ 'journal.event-type' | translate }}</mat-label>
         <mat-select
           [ngModel]="filters().eventType || ''"
-          (ngModelChange)="filters().eventType = $event || undefined">
+          (ngModelChange)="updateFilter('eventType', $event || undefined)">
           <mat-option value="">{{ 'journal.all' | translate }}</mat-option>
           @for (eventType of eventTypes; track eventType) {
             <mat-option [value]="eventType">{{ eventType }}</mat-option>
@@ -17,7 +17,7 @@
         <mat-label>{{ 'journal.result' | translate }}</mat-label>
         <mat-select
           [ngModel]="filters().result || ''"
-          (ngModelChange)="filters().result = $event || undefined">
+          (ngModelChange)="updateFilter('result', $event || undefined)">
           <mat-option value="">{{ 'journal.all' | translate }}</mat-option>
           @for (result of resultTypes; track result) {
             <mat-option [value]="result">{{ 'journal.result-' + result | translate }}</mat-option>
@@ -31,7 +31,7 @@
           matInput
           type="date"
           [ngModel]="filters().fromDate || ''"
-          (ngModelChange)="filters().fromDate = $event || undefined">
+          (ngModelChange)="updateFilter('fromDate', $event || undefined)">
       </mat-form-field>
 
       <mat-form-field appearance="outline">
@@ -40,7 +40,7 @@
           matInput
           type="date"
           [ngModel]="filters().toDate || ''"
-          (ngModelChange)="filters().toDate = $event || undefined">
+          (ngModelChange)="updateFilter('toDate', $event || undefined)">
       </mat-form-field>
 
       <button mat-stroked-button color="primary" (click)="applyFilters()">

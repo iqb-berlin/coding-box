@@ -39,17 +39,17 @@
   </div>
   }
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-    <a mat-raised-button color="primary" (click)="testCenterImport()">
+    <button type="button" mat-raised-button color="primary" (click)="testCenterImport()">
       <mat-icon>upload</mat-icon>
       Testcenter Import
-    </a>
-    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="hiddenFileInput.click()"
       [matTooltip]="'file-upload.upload-test-files-tooltip' | translate">
       <mat-icon>upload</mat-icon>
       {{ 'file-upload.upload-test-files' | translate }}
-    </a>
+    </button>
     @if (contentPoolSettings().enabled) {
-      <a
+      <button type="button"
         mat-raised-button
         color="accent"
         [disabled]="isBusy() || isLoadingContentPoolConfig() || !contentPoolSettings().hasApplicationToken"
@@ -57,8 +57,8 @@
         matTooltip="Importiert alle Dateien eines Content-Pool-ACP in diese Testdateien-Abteilung">
         <mat-icon>cloud_download</mat-icon>
         ACP aus Content Pool
-      </a>
-      <a
+      </button>
+      <button type="button"
         mat-raised-button
         color="accent"
         [disabled]="isBusy() || !canUploadSelectedFilesToContentPool()"
@@ -66,31 +66,31 @@
         matTooltip="Ersetzt gleichnamige Dateien im gewählten Content-Pool-ACP durch die ausgewählten Testdateien">
         <mat-icon>cloud_upload</mat-icon>
         Auswahl zu Content Pool
-      </a>
+      </button>
     }
-    <a mat-raised-button color="primary" [disabled]="isBusy() || tableCheckboxSelection.selected.length === 0"
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy() || tableCheckboxSelection.selected.length === 0"
       (click)="deleteFiles()">
       <mat-icon>delete</mat-icon>
       Test Datei(en) löschen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="isBusy()" (click)="validateFiles()">
+    </button>
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy()" (click)="validateFiles()">
       <mat-icon>fact_check</mat-icon>
       Validieren
-    </a>
-    <a mat-raised-button color="primary" [disabled]="isBusy()" (click)="downloadAllFilesAsZip()">
+    </button>
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy()" (click)="downloadAllFilesAsZip()">
       <mat-icon>download</mat-icon>
       Exportieren
-    </a>
-    <a mat-raised-button color="primary" (click)="openResourcePackagesDialog()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="openResourcePackagesDialog()"
       matTooltip="{{ 'file-upload.upload-packages-tooltip' | translate }}">
       <mat-icon>archive</mat-icon>
       Ressourcenpakete
-    </a>
-    <a mat-raised-button color="primary" (click)="openGithubReleasesDialog()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="openGithubReleasesDialog()"
       matTooltip="Aspect-Player und Schemer von GitHub laden">
       <mat-icon>cloud_download</mat-icon>
       GitHub
-    </a>
+    </button>
   </div>
 
   <input #hiddenFileInput type="file" name="files" accept=".xml,.voud,.vocs,.vomd,.zip,.html" multiple [hidden]="true"

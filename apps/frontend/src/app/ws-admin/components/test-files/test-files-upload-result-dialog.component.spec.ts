@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -46,7 +45,6 @@ describe('TestFilesUploadResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestFilesUploadResultDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -148,7 +146,6 @@ describe('TestFilesUploadResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestFilesUploadResultDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -180,7 +177,6 @@ describe('TestFilesUploadResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestFilesUploadResultDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

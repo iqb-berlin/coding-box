@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -30,6 +31,8 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   protected readonly isLoading = signal(true);
   protected readonly errorMessage = signal<string | null>(null);
 
@@ -59,7 +62,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     const unitId = this.data.unitId.toUpperCase();
 
-    this.fileService.getUnit(workspaceId, unitId).subscribe({
+    this.fileService.getUnit(workspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
           this.errorMessage.set(`Aufgabe ${unitId} wurde nicht gefunden.`);
@@ -99,7 +102,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
             this.isLoading.set(false);
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
-        ).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
           if (this.errorMessage()) {
             return;
           }

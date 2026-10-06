@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, inject, DestroyRef, Input, OnChanges, ViewChild, signal, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, inject, DestroyRef, OnChanges, signal, input, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -140,19 +140,14 @@ implements OnInit, OnDestroy, OnChanges {
   private workspaceToggleInProgress = false;
   private workspaceSelectionInitialized = false;
   private initialWorkspaceFilterId: number | null = null;
-  private paginator?: MatPaginator;
   private readonly jobNameFilterChanges = new Subject<string>();
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
 
-  @Input() workspaceId: number | null = null;
+  readonly workspaceId = input<number | null>(null);
 
-  @ViewChild(MatPaginator) set paginatorRef(
-    paginator: MatPaginator | undefined
-  ) {
-    this.paginator = paginator;
-    this.configureClientPaginator();
-  }
+  readonly paginatorRef = viewChild(MatPaginator);
+  private readonly synchronizePaginator = effect(() => this.configureClientPaginator());
 
   private handleWindowFocus = () => {
     if (!this.isAuthorized() || this.isLoading()) {
@@ -288,18 +283,18 @@ implements OnInit, OnDestroy, OnChanges {
 
   private configureClientPaginator(): void {
     this.dataSource.paginator = !this.serverPagingEnabled() ?
-      this.paginator ?? null :
+      this.paginatorRef() ?? null :
       null;
   }
 
   private getTargetWorkspaces(
     workspaces: WorkspaceFullDto[]
   ): WorkspaceFullDto[] {
-    if (!this.workspaceId) {
+    if (!this.workspaceId()) {
       return workspaces;
     }
 
-    return workspaces.filter(workspace => workspace.id === this.workspaceId);
+    return workspaces.filter(workspace => workspace.id === this.workspaceId());
   }
 
   private getSelectedWorkspaces(): WorkspaceFullDto[] {
@@ -316,7 +311,7 @@ implements OnInit, OnDestroy, OnChanges {
   }
 
   private getDefaultSelectedWorkspaceIds(): number[] {
-    const requestedWorkspaceId = this.workspaceId || this.initialWorkspaceFilterId;
+    const requestedWorkspaceId = this.workspaceId() || this.initialWorkspaceFilterId;
     if (
       requestedWorkspaceId &&
       this.currentWorkspaces().some(workspace => workspace.id === requestedWorkspaceId)
@@ -467,7 +462,7 @@ implements OnInit, OnDestroy, OnChanges {
       ) :
       this.codingJobBackendService.startCodingJob(job.workspace_id, job.id);
 
-    replayRequest
+    replayRequest.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           loadingSnack.dismiss();
@@ -580,13 +575,13 @@ implements OnInit, OnDestroy, OnChanges {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (!confirmed) {
         return;
       }
 
       this.codingJobBackendService
-        .submitCodingJobForReview(job.workspace_id, job.id)
+        .submitCodingJobForReview(job.workspace_id, job.id).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(

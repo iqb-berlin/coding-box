@@ -1,7 +1,7 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { EMPTY, Observable } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { Observable, Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 import { SERVER_URL } from '../../../injection-tokens';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
@@ -137,12 +137,13 @@ export interface VariableAnalysisExportOptions {
 @Injectable({
   providedIn: 'root'
 })
-export class VariableAnalysisService {
+export class VariableAnalysisService implements OnDestroy {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private testPersonCodingService = inject(TestPersonCodingService);
   private variableAnalysisGuardPollTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private readonly variableAnalysisGuardRequests = new Map<number, Subscription>();
   private readonly variableAnalysisGuardJobId = 'variable-analysis-dialog';
   private readonly variableAnalysisGuardPollIntervalMs = 5000;
   private readonly activeJobStatuses = new Set<VariableAnalysisJobDto['status']>([
@@ -304,7 +305,7 @@ export class VariableAnalysisService {
   }
 
   private scheduleVariableAnalysisGuardPoll(workspaceId: number): void {
-    if (this.variableAnalysisGuardPollTimers.has(workspaceId)) {
+    if (this.variableAnalysisGuardPollTimers.has(workspaceId) || this.variableAnalysisGuardRequests.has(workspaceId)) {
       return;
     }
 
@@ -316,33 +317,53 @@ export class VariableAnalysisService {
   }
 
   private pollVariableAnalysisGuard(workspaceId: number): void {
-    this.getAllJobs(workspaceId)
-      .pipe(catchError(() => {
-        this.scheduleVariableAnalysisGuardPoll(workspaceId);
-        return EMPTY;
-      }))
-      .subscribe(jobs => {
-        const hasActiveAnalysisJob = jobs.some(job => (
-          job.type === 'variable-analysis' &&
+    const request = new Subscription();
+    this.variableAnalysisGuardRequests.set(workspaceId, request);
+    const finishRequest = (): boolean => {
+      if (this.variableAnalysisGuardRequests.get(workspaceId) !== request) return false;
+      this.variableAnalysisGuardRequests.delete(workspaceId);
+      return true;
+    };
+    request.add(this.getAllJobs(workspaceId)
+      .pipe(finalize(() => { finishRequest(); }))
+      .subscribe({
+        next: jobs => {
+          if (!finishRequest()) return;
+          const hasActiveAnalysisJob = jobs.some(job => (
+            job.type === 'variable-analysis' &&
           this.activeJobStatuses.has(job.status)
-        ));
+          ));
 
-        if (hasActiveAnalysisJob) {
-          this.scheduleVariableAnalysisGuardPoll(workspaceId);
-          return;
+          if (hasActiveAnalysisJob) {
+            this.scheduleVariableAnalysisGuardPoll(workspaceId);
+            return;
+          }
+
+          this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+          this.setVariableAnalysisGuardRunning(workspaceId, false);
+        },
+        error: () => {
+          if (finishRequest()) this.scheduleVariableAnalysisGuardPoll(workspaceId);
         }
-
-        this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
-        this.setVariableAnalysisGuardRunning(workspaceId, false);
-      });
+      }));
   }
 
   private clearVariableAnalysisGuardPolling(workspaceId: number): void {
+    const request = this.variableAnalysisGuardRequests.get(workspaceId);
+    this.variableAnalysisGuardRequests.delete(workspaceId);
+    request?.unsubscribe();
     const timeoutId = this.variableAnalysisGuardPollTimers.get(workspaceId);
     if (timeoutId) {
       clearTimeout(timeoutId);
       this.variableAnalysisGuardPollTimers.delete(workspaceId);
     }
+  }
+
+  ngOnDestroy(): void {
+    this.variableAnalysisGuardPollTimers.forEach(timeout => clearTimeout(timeout));
+    this.variableAnalysisGuardPollTimers.clear();
+    this.variableAnalysisGuardRequests.forEach(request => request.unsubscribe());
+    this.variableAnalysisGuardRequests.clear();
   }
 
   cancelJob(

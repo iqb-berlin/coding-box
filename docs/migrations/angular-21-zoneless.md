@@ -11,6 +11,72 @@ The production artifact from PR #1039 was validated on the test instance on
 retain the previous frontend image and restore it without changing the backend
 or database; no database migration is involved.
 
+## Signal state
+
+Mutable view state in the coding, replay, validation, export and administration
+components is now stored in writable signals. Pure state-derived getters use
+`computed()`. Templates read the signals and write through `set()` or `update()`;
+array, object, Map and Set updates replace the affected value. Missing profiles
+retain their DTO prototype when updated, including its serialization methods.
+Component code no longer calls `markForCheck()` or `detectChanges()`.
+
+Shared application state and replay job status also use signals. Existing service
+getters and setters retain their API while tracking the underlying signal reads.
+Validation task, result and batch records update immutably so the dialog can track
+service state directly. RxJS remains responsible for HTTP requests, cancellation,
+ordered events and background-job streams. Their existing synchronous workspace
+notifications are preserved. Form controls and Material table data sources retain
+their own supported update APIs.
+
+Tests assign writable signal values with `set()` and verify the derived values and
+views. Native zoneless tests wait for Angular stability after delayed results,
+progress, timer callbacks and context changes. The inventory records source
+changes; test execution and CI remain separate validation requirements.
+
+### Local signal migration validation (2026-10-02)
+
+The signal conversion covers 667 state fields in 60 components and 77 pure
+getters converted to computed signals, plus shared application, replay and
+validation state and per-row replay-anchor signals. It was checked locally
+against PR #1039 at `45cf2e09`.
+
+| Check | Result |
+| --- | --- |
+| `npx nx run frontend:lint --fix` | Passed |
+| `npx nx run frontend:test --maxWorkers=2` | 2,518 tests, 225 suites passed |
+| `npx nx run frontend:test-zoneless --maxWorkers=2` | 756 tests, 30 suites passed |
+| `npx nx run frontend:build --configuration=production` | Passed |
+| `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e --configuration=zoneless --spec=cypress/zoneless/file-validation-info.cy.ts` | 14 tests, 1 affected spec passed |
+| `npx nx run frontend:zoneless-approval` | Current inventory and risk coverage references passed |
+
+The browser checks use fixture responses for backend and identity endpoints.
+Global HTTP errors now render immediately; information-dialog retry tests close
+that visible error through its button before trying the table action again.
+Regression tests also verify derived service state, immutable workspace snapshots
+and preservation of missing-profile DTO methods. CI and deployment verification
+remain separate release steps.
+
+The subsequent review found two remaining asynchronous view-state regressions.
+Replay-anchor drafts, saved values and save/reset status now use per-row signals.
+Note presence and response frequencies use signals containing immutable Set and
+Map updates. Six native zoneless regression cases failed before these fixes and
+passed afterwards: save/reset success and errors, delayed note indicators and
+delayed frequencies. They assert the rendered controls and cells without manual
+change-detection calls. A browser case separately gates note and frequency
+responses until after the result rows have rendered.
+
+A further review found quadratic Map copying when the file-validation dialog
+initialized or refreshed duplicate selections. Duplicate-selection and file
+expansion maps now build locally and publish one signal value after the loop.
+Three regression cases cover large duplicate lists in both entry paths and
+preservation of expansion states. Before the fix, each large-list case copied
+1,999,000 entries for 2,000 logins; the corrected implementation avoids those
+copies. An isolated benchmark of the duplicate-selection initializer with
+10,000 logins measured 4,556 ms before and 1 ms afterwards with identical results.
+This measures Map construction, excluding browser rendering.
+The full 85-test, 13-spec browser run passed before this performance fix;
+the affected file-validation spec was rerun afterwards.
+
 ## Run and validate
 
 - `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live --configuration=production`
@@ -103,7 +169,7 @@ before a production deployment:
    production-scale background job on the deployed test instance remains a
    release gate before production rollout.
 3. Known visible timer and subscription updates in these workflows use
-   signals, AsyncPipe, bound events or `markForCheck()` to notify Angular.
+   signals, AsyncPipe or bound events to notify Angular.
    The live tests exercise representative status changes without a second
    user action; untested views remain a rollout risk.
 4. The default entry point now uses zoneless change detection and has no ZoneJS

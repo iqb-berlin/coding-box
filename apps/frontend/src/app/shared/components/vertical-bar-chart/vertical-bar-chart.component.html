@@ -1,0 +1,25 @@
+<div class="chart-scroll">
+  <div class="canvas-container" [style.width.px]="width()" [style.height.px]="height()">
+    <canvas #canvas [attr.width]="width()" [attr.height]="height()" role="img"
+      [attr.aria-label]="xAxisLabel() + ': ' + yAxisLabel()"
+      [attr.aria-describedby]="tableToggleId">
+      {{ 'charts.show-data-table' | translate }}
+    </canvas>
+  </div>
+</div>
+<details class="chart-data">
+  <summary [id]="tableToggleId" tabindex="0">{{ 'charts.show-data-table' | translate }}</summary>
+  <div class="table-scroll">
+    <table>
+      <caption>{{ xAxisLabel() }}: {{ yAxisLabel() }}</caption>
+      <thead>
+        <tr><th scope="col">{{ xAxisLabel() }}</th><th scope="col">{{ yAxisLabel() }}</th></tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track $index) {
+          <tr><th scope="row">{{ row.name }}</th><td>{{ row.value }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</details>

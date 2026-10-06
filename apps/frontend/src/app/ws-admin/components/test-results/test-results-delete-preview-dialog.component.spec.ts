@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import {
   TestResultsDeletePreviewDialogComponent,
   TestResultsDeletePreviewDialogData
@@ -36,7 +35,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     dialogRef = { close: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [TestResultsDeletePreviewDialogComponent, NoopAnimationsModule],
+      imports: [TestResultsDeletePreviewDialogComponent],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data }

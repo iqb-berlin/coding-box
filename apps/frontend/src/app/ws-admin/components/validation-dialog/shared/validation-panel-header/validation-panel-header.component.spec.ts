@@ -27,36 +27,36 @@ describe('ValidationPanelHeaderComponent', () => {
   });
 
   it('should display the title', () => {
-    component.title = 'Test Title';
+    fixture.componentRef.setInput('title', 'Test Title');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.title-text')?.textContent).toContain('Test Title');
   });
 
   it('should display error count when status is failed', () => {
-    component.status = 'failed';
-    component.errorCount = 5;
+    fixture.componentRef.setInput('status', 'failed');
+    fixture.componentRef.setInput('errorCount', 5);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.validation-badge')?.textContent).toContain('5');
   });
 
   it('should show check circle icon when status is success', () => {
-    component.status = 'success';
+    fixture.componentRef.setInput('status', 'success');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('mat-icon')?.textContent).toContain('check_circle');
   });
 
   it('should show error icon when status is failed', () => {
-    component.status = 'failed';
+    fixture.componentRef.setInput('status', 'failed');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('mat-icon')?.textContent).toContain('error');
   });
 
   it('should show hourglass icon when status is running', () => {
-    component.status = 'running';
+    fixture.componentRef.setInput('status', 'running');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('mat-icon')?.textContent).toContain('hourglass_empty');

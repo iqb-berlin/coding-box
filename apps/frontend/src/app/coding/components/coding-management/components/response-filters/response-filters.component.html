@@ -1,7 +1,7 @@
 <div class="filter-controls">
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.response-source' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.responseSource" (selectionChange)="onInstantFilterChange()">
+        <mat-select [ngModel]="draftFilterParams().responseSource" (ngModelChange)="setFilterValue('responseSource', $event)" (selectionChange)="onInstantFilterChange()">
             @for (option of responseSourceOptions; track option.value) {
             <mat-option [value]="option.value">
                 {{ option.label | translate }}
@@ -12,9 +12,9 @@
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.coded-status' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onInstantFilterChange()">
+        <mat-select [ngModel]="draftFilterParams().codedStatus" (ngModelChange)="setFilterValue('codedStatus', $event)" (selectionChange)="onInstantFilterChange()">
             <mat-option></mat-option>
-            @for (status of availableStatuses; track status) {
+            @for (status of availableStatuses(); track status) {
             <mat-option [value]="status">
                 @if (status === 'null') {
                 {{ 'coding-management.statistics.uncoded-responses' | translate }}
@@ -28,7 +28,7 @@
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('unitName')">
         <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.unitName" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().unitName" (ngModelChange)="setFilterValue('unitName', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
         @if (isRegexFilterInvalid('unitName')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
@@ -37,25 +37,25 @@
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.value' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.value" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().value" (ngModelChange)="setFilterValue('value', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.value-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.coding-code' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.codingCode" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().codingCode" (ngModelChange)="setFilterValue('codingCode', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.coding-code-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.score' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.score" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().score" (ngModelChange)="setFilterValue('score', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.score-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('code')">
         <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.code" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().code" (ngModelChange)="setFilterValue('code', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">
         @if (isRegexFilterInvalid('code')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
@@ -64,7 +64,7 @@
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('personLogin')">
         <mat-label>{{ 'coding-management.filters.person-login' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.personLogin" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().personLogin" (ngModelChange)="setFilterValue('personLogin', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-login-placeholder' | translate }}">
         @if (isRegexFilterInvalid('personLogin')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
@@ -73,7 +73,7 @@
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('group')">
         <mat-label>{{ 'coding-management.filters.person-group' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.group" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().group" (ngModelChange)="setFilterValue('group', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-group-placeholder' | translate }}">
         @if (isRegexFilterInvalid('group')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
@@ -82,7 +82,7 @@
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('bookletName')">
         <mat-label>{{ 'coding-management.filters.booklet-name' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.bookletName" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().bookletName" (ngModelChange)="setFilterValue('bookletName', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
         @if (isRegexFilterInvalid('bookletName')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
@@ -91,20 +91,20 @@
 
     <mat-form-field appearance="outline" class="filter-field" [class.regex-filter-invalid]="isRegexFilterInvalid('variableId')">
         <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.variableId" (input)="onTextFilterChange()"
+        <input matInput [ngModel]="draftFilterParams().variableId" (ngModelChange)="setFilterValue('variableId', $event)" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
         @if (isRegexFilterInvalid('variableId')) {
         <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
         }
     </mat-form-field>
 
-    @if (isGeogebraAvailable) {
-    <mat-checkbox [(ngModel)]="filterParams.geogebra" (change)="onGeoGebraFilterChange()" class="filter-checkbox">
+    @if (isGeogebraAvailable()) {
+    <mat-checkbox [ngModel]="draftFilterParams().geogebra" (ngModelChange)="setFilterValue('geogebra', $event)" (change)="onGeoGebraFilterChange()" class="filter-checkbox">
         {{ 'coding-management.filters.geogebra' | translate }}
     </mat-checkbox>
     }
 
-    <button mat-button (click)="onClearFilters()" [disabled]="isLoading">
+    <button mat-button (click)="onClearFilters()" [disabled]="isLoading()">
         <mat-icon>clear</mat-icon>
         {{ 'coding-management.filters.clear' | translate }}
     </button>

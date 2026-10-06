@@ -4,7 +4,6 @@ import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ValidationDataTableComponent, ValidationTableColumn } from './validation-data-table.component';
 
 interface TestData {
@@ -36,15 +35,14 @@ describe('ValidationDataTableComponent', () => {
         MatPaginatorModule,
         MatCheckboxModule,
         MatIconModule,
-        NoopAnimationsModule,
         ValidationDataTableComponent
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ValidationDataTableComponent<TestData>);
     component = fixture.componentInstance;
-    component.data = mockData;
-    component.columns = mockColumns;
+    fixture.componentRef.setInput('data', mockData);
+    fixture.componentRef.setInput('columns', mockColumns);
     fixture.detectChanges();
   });
 
@@ -69,6 +67,20 @@ describe('ValidationDataTableComponent', () => {
       item: mockData[0],
       columnKey: 'name'
     });
+  });
+
+  it.each(['Enter', ' '])('opens a table action with %p and blocks it while loading', key => {
+    const emit = jest.spyOn(component.linkClick, 'emit');
+    const link = fixture.nativeElement.querySelector('a') as HTMLElement;
+    link.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith({ item: mockData[0], columnKey: 'name' });
+
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+    link.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(link.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('should emit selectionChange when selection changes', () => {

@@ -4,7 +4,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import {
@@ -67,7 +66,6 @@ describe('CodingManagementManualComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
-        provideNoopAnimations(),
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
@@ -922,15 +920,15 @@ describe('CodingManagementManualComponent', () => {
         codedUnits: 5
       }
     ]);
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       canApplyResults: signal(false)
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
 
     expect(component.canShowCompletedJobApplyActions()).toBe(false);
 
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       canApplyResults: signal(true)
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
 
     expect(component.canShowCompletedJobApplyActions()).toBe(true);
   });
@@ -1057,7 +1055,7 @@ describe('CodingManagementManualComponent', () => {
         codedUnits: 5
       }
     ]);
-    component.codingJobsComponent = undefined;
+    jest.spyOn(component, 'codingJobsComponent').mockReturnValue(undefined);
 
     component.canApplyManualCodingResults.set(false);
     expect(component.canShowCompletedJobApplyActions()).toBe(false);
@@ -1116,9 +1114,9 @@ describe('CodingManagementManualComponent', () => {
     (snackBar.open as jest.Mock).mockClear();
     component.canApplyManualCodingResults.set(false);
     component.canManageManualCodingJobs.set(false);
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       openTransferCodingCasesDialog
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
 
     component.openExecutionTransferCases();
 
@@ -1155,9 +1153,9 @@ describe('CodingManagementManualComponent', () => {
     (snackBar.open as jest.Mock).mockClear();
     component.canManageManualCodingJobs.set(true);
     component.canApplyManualCodingResults.set(false);
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       openTransferCodingCasesDialog
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
 
     component.openExecutionTransferCases();
 
@@ -2105,9 +2103,9 @@ describe('CodingManagementManualComponent', () => {
       loadJobDefinitionsForExport(): void;
     };
     const refreshJobDefinitionsSpy = jest.fn();
-    component.codingJobDefinitionsComponent = {
+    jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue({
       refresh: refreshJobDefinitionsSpy
-    } as unknown as CodingManagementManualComponent['codingJobDefinitionsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['codingJobDefinitionsComponent']>);
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
     expect(component.shouldShowPlanningOverview()).toBe(true);
@@ -2396,15 +2394,15 @@ describe('CodingManagementManualComponent', () => {
     const productiveLoadCodingJobs = jest.fn();
     const trainingLoadCodingJobs = jest.fn();
     const loadCoderTrainings = jest.fn();
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       loadCodingJobs: productiveLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
-    component.trainingCodingJobsComponent = {
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
+    jest.spyOn(component, 'trainingCodingJobsComponent').mockReturnValue({
       loadCodingJobs: trainingLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['trainingCodingJobsComponent'];
-    component.coderTrainingsListComponent = {
+    } as unknown as ReturnType<CodingManagementManualComponent['trainingCodingJobsComponent']>);
+    jest.spyOn(component, 'coderTrainingsListComponent').mockReturnValue({
       loadCoderTrainings
-    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['coderTrainingsListComponent']>);
 
     component.reloadCodingJobsList('productive');
 
@@ -2424,12 +2422,12 @@ describe('CodingManagementManualComponent', () => {
   it('should reload only the active coding jobs table by default', () => {
     const productiveLoadCodingJobs = jest.fn();
     const trainingLoadCodingJobs = jest.fn();
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       loadCodingJobs: productiveLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
-    component.trainingCodingJobsComponent = {
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
+    jest.spyOn(component, 'trainingCodingJobsComponent').mockReturnValue({
       loadCodingJobs: trainingLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['trainingCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['trainingCodingJobsComponent']>);
 
     component.selectedManualTabIndex.set(3);
     component.reloadCodingJobsList();
@@ -2450,12 +2448,12 @@ describe('CodingManagementManualComponent', () => {
     component.selectedManualTabIndex.set(1);
     const productiveLoadCodingJobs = jest.fn();
     const trainingLoadCodingJobs = jest.fn();
-    component.productiveCodingJobsComponent = {
+    jest.spyOn(component, 'productiveCodingJobsComponent').mockReturnValue({
       loadCodingJobs: productiveLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['productiveCodingJobsComponent'];
-    component.trainingCodingJobsComponent = {
+    } as unknown as ReturnType<CodingManagementManualComponent['productiveCodingJobsComponent']>);
+    jest.spyOn(component, 'trainingCodingJobsComponent').mockReturnValue({
       loadCodingJobs: trainingLoadCodingJobs
-    } as unknown as CodingManagementManualComponent['trainingCodingJobsComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['trainingCodingJobsComponent']>);
     const componentInternals = component as unknown as {
       refreshAggregationDependentViews(includeResponseAnalysis?: boolean): void;
       loadManualTabData(tab: 'execution' | 'training'): void;
@@ -2605,11 +2603,11 @@ describe('CodingManagementManualComponent', () => {
     const dialog = { open: jest.fn() };
     (component as unknown as { dialog: typeof dialog }).dialog = dialog;
     const training = { id: 7 };
-    component.coderTrainingsListComponent = {
+    jest.spyOn(component, 'coderTrainingsListComponent').mockReturnValue({
       originalData: signal([training]),
       coderTrainings: signal([]),
       openResultsComparison: jest.fn()
-    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['coderTrainingsListComponent']>);
 
     component.openTrainingReliability();
 
@@ -2650,7 +2648,7 @@ describe('CodingManagementManualComponent', () => {
     ];
     componentInternals.jobDefinitionsForExportWorkspaceId = 5;
     componentInternals.hasLoadedJobDefinitionsForExport = true;
-    component.codingJobDefinitionsComponent = undefined;
+    jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionReliability();
 
@@ -2708,7 +2706,7 @@ describe('CodingManagementManualComponent', () => {
     componentInternals.hasLoadedJobDefinitionsForExport = true;
     componentInternals.codersForExportWorkspaceId = 5;
     componentInternals.hasLoadedCodersForExport = true;
-    component.codingJobDefinitionsComponent = undefined;
+    jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionExport();
 
@@ -2927,7 +2925,7 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
-  it('should show a specific error when replay export auth token creation fails', () => {
+  it('releases manual export startup without duplicating replay token error feedback', () => {
     const exportJobService = TestBed.inject(ExportJobService) as unknown as {
       startJob: jest.Mock;
     };
@@ -2960,14 +2958,8 @@ describe('CodingManagementManualComponent', () => {
       jobDefinitionIds: [11]
     });
 
-    expect(snackBar.open).toHaveBeenCalledWith(
-      'Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet.',
-      'Schließen',
-      {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      }
-    );
+    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(component.isStartingManualExport()).toBe(false);
   });
 
   it('should wait for coder scope before opening execution export dialog', () => {
@@ -3004,7 +2996,7 @@ describe('CodingManagementManualComponent', () => {
     componentInternals.codersForExportWorkspaceId = 5;
     componentInternals.hasLoadedCodersForExport = false;
     componentInternals.isLoadingCodersForExport.set(false);
-    component.codingJobDefinitionsComponent = undefined;
+    jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionExport();
 
@@ -3014,11 +3006,11 @@ describe('CodingManagementManualComponent', () => {
 
   it('should open training discussion in within-training mode', () => {
     const openResultsComparison = jest.fn();
-    component.coderTrainingsListComponent = {
+    jest.spyOn(component, 'coderTrainingsListComponent').mockReturnValue({
       originalData: [],
       coderTrainings: signal([]),
       openResultsComparison
-    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['coderTrainingsListComponent']>);
 
     component.openTrainingDiscussion();
 
@@ -3030,9 +3022,9 @@ describe('CodingManagementManualComponent', () => {
 
   it('should open training comparison in between-trainings mode', () => {
     const openResultsComparison = jest.fn();
-    component.coderTrainingsListComponent = {
+    jest.spyOn(component, 'coderTrainingsListComponent').mockReturnValue({
       openResultsComparison
-    } as unknown as CodingManagementManualComponent['coderTrainingsListComponent'];
+    } as unknown as ReturnType<CodingManagementManualComponent['coderTrainingsListComponent']>);
 
     component.openTrainingComparison();
 

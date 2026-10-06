@@ -1,12 +1,10 @@
 import {
-  Component, DestroyRef, OnDestroy, OnInit, ViewChild, inject, signal,
-  computed, ChangeDetectionStrategy
+  Component, DestroyRef, OnDestroy, OnInit, inject, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
-import { UntypedFormGroup, FormsModule } from '@angular/forms';
-import { MatSort } from '@angular/material/sort';
+import { FormsModule } from '@angular/forms';
 import {
   MatCell,
   MatCellDef,
@@ -231,7 +229,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   });
 
   readonly textFilterValue = signal<string>('');
-  @ViewChild(MatSort) sort!: MatSort;
 
   private textFilterChanged: Subject<string> = new Subject<string>();
   private textFilterSubscription: Subscription | undefined;
@@ -278,13 +275,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       maxWidth: '95vw',
       data
     });
-  }
-
-  get matSort(): MatSort {
-    if (this.dataSource) {
-      this.dataSource.sort = this.sort;
-    }
-    return this.sort;
   }
 
   readonly isBusy = computed<boolean>(() => (
@@ -503,7 +493,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    ref.afterClosed().subscribe(
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       (payload?: ContentPoolUploadDialogResult | { success: false }) => {
         if (!payload?.success) {
           return;
@@ -551,7 +541,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    ref.afterClosed().subscribe(
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       (payload?: ContentPoolImportDialogResult | { success: false }) => {
         if (!payload?.success) {
           return;
@@ -595,7 +585,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       data: { conflicts }
     });
 
-    ref.afterClosed().subscribe(resultChoice => {
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
         this.isLoading.set(true);
         this.isUploading.set(true);
@@ -612,7 +602,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.isLoading.set(false);
               this.isUploading.set(false);
             })
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
@@ -756,7 +746,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       data: { conflicts }
     });
 
-    ref.afterClosed().subscribe(resultChoice => {
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
         this.isLoading.set(true);
         this.isUploading.set(true);
@@ -774,7 +764,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.isLoading.set(false);
               this.isUploading.set(false);
             })
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
@@ -844,7 +834,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             this.isLoading.set(false);
             this.isUploading.set(false);
           })
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: result => {
             this.handleUploadResult(workspaceId, files, result);
@@ -878,7 +868,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         importType: 'testFiles'
       }
     });
-    dialogRef.afterClosed().subscribe((result: unknown) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: unknown) => {
       const maybePayload = result as
         | {
           didImport?: boolean;
@@ -887,7 +877,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           overwriteSelectedCount?: number;
         }
         | boolean
-        | UntypedFormGroup
         | undefined;
 
       if (
@@ -927,7 +916,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (result instanceof UntypedFormGroup || result) {
+      if (result) {
         this.loadTestFiles();
       }
     });
@@ -942,7 +931,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isDeleting.set(false);
         })
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.handleDeleteResponse(result.success, result.requestHandled);
@@ -959,7 +948,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   protected downloadFile(row: FilesInListDto): void {
     this.fileService
-      .downloadFile(this.appService.selectedWorkspaceId, row.id)
+      .downloadFile(this.appService.selectedWorkspaceId, row.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res: FileDownloadDto) => {
           const decodedString = base64ToUtf8(res.base64Data);
@@ -992,7 +981,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    ref.afterClosed().subscribe((result?: TestFilesZipExportOptions) => {
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result?: TestFilesZipExportOptions) => {
       if (!result) {
         return;
       }
@@ -1012,7 +1001,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         .downloadWorkspaceFilesAsZipWithProgress(
           this.appService.selectedWorkspaceId,
           result.fileTypes
-        )
+        ).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: event => {
             if (event.type === HttpEventType.DownloadProgress) {
@@ -1368,7 +1357,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result === true) {
         this.resourcePackagesModified.set(true);
       }
@@ -1384,7 +1373,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result === true) {
         this.loadTestFiles();
       }
@@ -1400,7 +1389,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   showFileContent(file: FilesInListDto): void {
     this.fileService
-      .downloadFile(this.appService.selectedWorkspaceId, file.id)
+      .downloadFile(this.appService.selectedWorkspaceId, file.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(fileData => {
         const decodedContent = base64ToUtf8(fileData.base64Data);
 
@@ -1421,7 +1410,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             panelClass: 'scheme-editor-dialog-container'
           });
 
-          dialogRef.afterClosed().subscribe(result => {
+          dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
             if (result === true) {
               this.loadTestFiles();
             }
@@ -1512,7 +1501,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         }
       });
 
-      dialogRef.afterClosed().subscribe(result => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result) {
           this.saveMetadata(file, result);
         }
@@ -1546,7 +1535,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       finalize(() => {
         this.isLoading.set(false);
       })
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.snackBar.open('Metadaten erfolgreich gespeichert.', 'OK', { duration: 3000 });
         this.loadTestFiles();

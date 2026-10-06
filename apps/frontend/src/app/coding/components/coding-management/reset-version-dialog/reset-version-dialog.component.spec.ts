@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   ResetVersionDialogComponent,
@@ -19,8 +18,7 @@ describe('ResetVersionDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ResetVersionDialogComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRefMock },

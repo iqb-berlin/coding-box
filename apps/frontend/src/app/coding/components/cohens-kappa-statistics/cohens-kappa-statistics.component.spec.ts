@@ -4,7 +4,6 @@ import {
   MatDialogRef
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -135,7 +134,6 @@ describe('CohensKappaStatisticsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        provideNoopAnimations(),
         {
           provide: MatDialogRef,
           useValue: { close: jest.fn() }
@@ -175,7 +173,7 @@ describe('CohensKappaStatisticsComponent', () => {
       availableCoderTrainings: [trainings[0]]
     });
 
-    expect(component.selectedCoderTrainingId).toBe(7);
+    expect(component.selectedCoderTrainingId()).toBe(7);
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenCalledWith(
       1,
       true,
@@ -193,9 +191,9 @@ describe('CohensKappaStatisticsComponent', () => {
       availableCoderTrainings: trainings
     });
 
-    expect(component.selectedCoderTrainingId).toBeNull();
+    expect(component.selectedCoderTrainingId()).toBeNull();
     expect(testPersonCodingService.getCohensKappaStatistics).not.toHaveBeenCalled();
-    expect(component.canLoadKappaStatistics).toBe(false);
+    expect(component.canLoadKappaStatistics()).toBe(false);
   });
 
   it('reloads kappa statistics with the selected coder training', async () => {
@@ -204,7 +202,7 @@ describe('CohensKappaStatisticsComponent', () => {
       availableCoderTrainings: trainings
     });
 
-    component.selectedCoderTrainingId = 9;
+    component.selectedCoderTrainingId.set(9);
     component.onCoderTrainingSelectionChange();
 
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenCalledWith(
@@ -227,14 +225,14 @@ describe('CohensKappaStatisticsComponent', () => {
       createKappaResponseWithCoderPairs()
     );
 
-    expect(component.availableCoders).toEqual([
+    expect(component.availableCoders()).toEqual([
       { id: 1, name: 'Coder 1' },
       { id: 2, name: 'Coder 2' },
       { id: 3, name: 'Coder 3' }
     ]);
-    expect(component.selectedCoderIds).toEqual([1, 2, 3]);
+    expect(component.selectedCoderIds()).toEqual([1, 2, 3]);
 
-    component.selectedCoderIds = [1, 2];
+    component.selectedCoderIds.set([1, 2]);
     component.onCoderSelectionChange();
 
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
@@ -246,8 +244,8 @@ describe('CohensKappaStatisticsComponent', () => {
       { coderTrainingIds: [7], coderIds: [1, 2] },
       'code'
     );
-    expect(component.availableCoders).toHaveLength(3);
-    expect(component.selectedCoderIds).toEqual([1, 2]);
+    expect(component.availableCoders()).toHaveLength(3);
+    expect(component.selectedCoderIds()).toEqual([1, 2]);
   });
 
   it('keeps coder controls visible after clearing the coder selection', async () => {
@@ -263,8 +261,8 @@ describe('CohensKappaStatisticsComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(component.workspaceKappaSummary).toBeNull();
-    expect(component.canLoadKappaStatistics).toBe(false);
+    expect(component.workspaceKappaSummary()).toBeNull();
+    expect(component.canLoadKappaStatistics()).toBe(false);
     expect(element.querySelector('.workspace-kappa-card')).not.toBeNull();
     expect(element.querySelector('.coder-selection')).not.toBeNull();
   });
@@ -275,7 +273,7 @@ describe('CohensKappaStatisticsComponent', () => {
       availableCoderTrainings: [trainings[0]]
     });
 
-    component.useCodeLevel = false;
+    component.useCodeLevel.set(false);
     component.toggleCalculationLevel();
 
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
@@ -297,9 +295,9 @@ describe('CohensKappaStatisticsComponent', () => {
       },
       createKappaResponseWithCoderPairs()
     );
-    component.selectedCoderIds = [1, 2];
+    component.selectedCoderIds.set([1, 2]);
 
-    component.useCodeLevel = false;
+    component.useCodeLevel.set(false);
     component.toggleCalculationLevel();
 
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
@@ -320,9 +318,9 @@ describe('CohensKappaStatisticsComponent', () => {
       },
       createKappaResponseWithCoderPairs()
     );
-    component.selectedCoderIds = [1, 2];
+    component.selectedCoderIds.set([1, 2]);
 
-    component.excludeTrainings = false;
+    component.excludeTrainings.set(false);
     component.toggleExcludeTrainings();
 
     expect(testPersonCodingService.getCohensKappaStatistics).toHaveBeenLastCalledWith(
@@ -348,15 +346,15 @@ describe('CohensKappaStatisticsComponent', () => {
       .mockReturnValueOnce(firstTrainingResponse$.asObservable())
       .mockReturnValueOnce(secondTrainingResponse$.asObservable());
 
-    component.selectedCoderTrainingId = 7;
+    component.selectedCoderTrainingId.set(7);
     component.onCoderTrainingSelectionChange();
-    component.selectedCoderTrainingId = 9;
+    component.selectedCoderTrainingId.set(9);
     component.onCoderTrainingSelectionChange();
 
     secondTrainingResponse$.next(createKappaResponse('CURRENT'));
     firstTrainingResponse$.next(createKappaResponse('STALE'));
 
-    expect(component.kappaStatistics[0].variableId).toBe('CURRENT');
+    expect(component.kappaStatistics()[0].variableId).toBe('CURRENT');
   });
 
   it('exports with the selected coder training scope', async () => {

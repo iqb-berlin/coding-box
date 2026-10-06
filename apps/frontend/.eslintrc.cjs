@@ -9,9 +9,9 @@ module.exports = {
       ...typescriptConfig,
       extends: [
         baseConfig,
+        'plugin:@angular-eslint/recommended',
         'plugin:@angular-eslint/template/process-inline-templates'
       ],
-      plugins: ['@angular-eslint'],
       rules: {
         ...typescriptConfig.rules,
         // Constructor injection remains supported; do not turn lint setup into a DI migration.
@@ -44,8 +44,10 @@ module.exports = {
     },
     {
       files: ['*.html'],
-      parser: '@angular-eslint/template-parser',
-      plugins: ['@angular-eslint/template'],
+      extends: [
+        'plugin:@angular-eslint/template/recommended',
+        'plugin:@angular-eslint/template/accessibility'
+      ],
       rules: {
         '@angular-eslint/template/prefer-class-binding': 'error'
       }

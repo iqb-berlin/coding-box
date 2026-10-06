@@ -36,10 +36,10 @@ describe('EditMissingsProfilesDialogComponent', () => {
     }> = {},
     snackBar = { open: jest.fn() }
   ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
-    { close: jest.fn() } as never,
+    { close: jest.fn(), beforeClosed: () => of() } as never,
     { workspaceId: 1 },
     missingsProfileService as never,
-    {} as never,
+    { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } as never,
     snackBar as never,
     { instant: jest.fn(key => key) } as never
   ));
@@ -167,6 +167,35 @@ describe('EditMissingsProfilesDialogComponent', () => {
     component.createProfile();
 
     expect(component.editMissings()).toEqual(createValidMissings());
+  });
+
+  it('publishes missing field and score edits without mutating the previous signal value', () => {
+    const component = createComponent();
+    const profile = new MissingsProfilesDto();
+    const originalMissings = createValidMissings();
+    profile.missings = originalMissings;
+    component.selectedProfile.set(profile);
+    component.editProfile();
+    const previousRows = component.editMissings();
+    const label = computed(() => component.editMissings()[0].label);
+    const score = computed(() => component.editMissings()[0].score);
+    expect(label()).toBe(originalMissings[0].label);
+    expect(score()).toBe(0);
+
+    component.setMissingField(previousRows[0], 'label', 'Changed');
+    expect(label()).toBe('Changed');
+    expect(component.editMissings()).not.toBe(previousRows);
+    expect(previousRows[0].label).toBe(originalMissings[0].label);
+    expect(originalMissings[0].label).toBe('missing invalid response');
+
+    component.setMissingScoreNa(component.editMissings()[0], true);
+    expect(score()).toBeNull();
+    component.setMissingScore(component.editMissings()[0], '3');
+    expect(score()).toBe(3);
+    component.setMissingScore(component.editMissings()[0], '');
+    expect(score()).toBe('');
+    expect(previousRows[0].score).toBe(0);
+    expect(originalMissings[0].score).toBe(0);
   });
 
   it('adds new missing rows with an editable score value', () => {

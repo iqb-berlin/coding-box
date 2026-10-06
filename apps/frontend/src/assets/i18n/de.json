@@ -1,4 +1,7 @@
 {
+  "charts": {
+    "show-data-table": "Daten als Tabelle anzeigen"
+  },
   "metadata-duration": { "minutes": "Minuten", "seconds": "Sekunden" },
   "next": "Weiter",
   "back": "Zurück",

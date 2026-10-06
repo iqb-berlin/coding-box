@@ -1,11 +1,12 @@
-import { Injectable, inject } from '@angular/core';
+import { DestroyRef, Injectable, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  BehaviorSubject, interval, Subscription, forkJoin, of, Observable
+  BehaviorSubject, defer, interval, Subscription, forkJoin, of, Observable
 } from 'rxjs';
 import {
-  filter, startWith, switchMap, takeWhile, map, catchError
+  filter, finalize, shareReplay, startWith, switchMap, take, takeWhile, tap, map, catchError
 } from 'rxjs/operators';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
 import {
@@ -14,11 +15,13 @@ import {
 } from '../components/test-results/test-results-log-anomaly-details-dialog.component';
 import {
   TestResultsImportProgressHandle,
+  TestResultsImportProgressDialogComponent,
   TestResultsImportProgressState
 } from '../components/test-results/test-results-import-progress-dialog.component';
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
 import {
@@ -81,6 +84,7 @@ type UploadCodingContext = {
   providedIn: 'root'
 })
 export class TestResultsUploadStateService {
+  private readonly destroyRef = inject(DestroyRef);
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -100,7 +104,81 @@ export class TestResultsUploadStateService {
   readonly uploadsFinished$ = this.uploadsFinishedSubject.asObservable().pipe(filter(wsId => wsId !== null));
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      this.pollingSubscriptions.forEach(subscription => subscription.unsubscribe());
+      this.pollingSubscriptions.clear();
+      this.progressHandles.forEach(handle => {
+        handle.dialogRef.close();
+        handle.state$.complete();
+      });
+      this.progressHandles.clear();
+    });
     this.resumeFromLocalStorage();
+  }
+
+  startChunkedUpload(
+    workspaceId: number,
+    file: File,
+    resultType: 'logs' | 'responses',
+    options: Parameters<FileService['uploadTestResultsChunked']>[3],
+    beforeOverview: TestResultsOverviewResponse
+  ): Observable<TestResultsUploadJobDto[]> {
+    return defer(() => {
+      const title = resultType === 'logs' ? 'Upload-Ergebnis (Logs)' : 'Upload-Ergebnis (Antworten)';
+      const icon = resultType === 'logs' ? 'article' : 'upload_file';
+      const uploadState = (percent: number): TestResultsImportProgressState => ({
+        title,
+        icon,
+        phase: 'uploading',
+        phaseLabel: 'Datei wird hochgeladen',
+        message: resultType === 'logs' ?
+          'Die Log-Datei wird in Teilen übertragen.' : 'Die Antwortdatei wird in Teilen übertragen.',
+        percent,
+        mode: 'determinate'
+      });
+      const state$ = new BehaviorSubject(uploadState(0));
+      const dialogRef = this.dialog.open(TestResultsImportProgressDialogComponent, {
+        width: '560px',
+        maxWidth: '95vw',
+        disableClose: true,
+        closeOnNavigation: false,
+        data: { state$ }
+      });
+      let registered = false;
+      return defer(() => this.fileService.uploadTestResultsChunked(
+        workspaceId, file, resultType, options, percent => state$.next(uploadState(percent))
+      )).pipe(
+        take(1),
+        tap(jobs => {
+          this.registerBatch({
+            workspaceId,
+            jobIds: jobs.map(job => job.jobId),
+            resultType,
+            beforeOverview,
+            initialIssues: [],
+            progress: 0,
+            completedCount: 0,
+            totalJobs: jobs.length
+          }, { dialogRef, state$ });
+          registered = true;
+        }),
+        finalize(() => {
+          if (!registered) {
+            dialogRef.close();
+            state$.complete();
+          }
+        })
+      );
+    }).pipe(
+      tap({
+        error: error => this.snackBar.open(
+          `Fehler beim Upload-Start: ${error.message}`, 'Fehler', { duration: 5000 }
+        )
+      }),
+      takeUntilDestroyed(this.destroyRef),
+      // Upload, progress UI and accepted-job handoff belong to this root provider.
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
   }
 
   private getStorageKey(workspaceId: number): string {

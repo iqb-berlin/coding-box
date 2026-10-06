@@ -7,10 +7,9 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, Subject } from 'rxjs';
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, input, output
 } from '@angular/core';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { SchemerConfig } from '../schemer/schemer-config.interface';
@@ -27,11 +26,11 @@ import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.componen
   standalone: true
 })
 class MockStandaloneUnitSchemerComponent {
-  @Input() schemerHtml = '';
-  @Input() unitScheme?: UnitScheme;
-  @Input() schemerConfig?: SchemerConfig;
-  @Output() schemeChanged = new EventEmitter<UnitScheme>();
-  @Output() error = new EventEmitter<string>();
+  readonly schemerHtml = input('');
+  readonly unitScheme = input<UnitScheme>();
+  readonly schemerConfig = input<SchemerConfig>();
+  readonly schemeChanged = output<UnitScheme>();
+  readonly schemerError = output<string>();
 }
 
 describe('SchemeEditorDialogComponent', () => {
@@ -69,7 +68,8 @@ describe('SchemeEditorDialogComponent', () => {
     snackBarAction$ = new Subject<void>();
     mockSnackBar = {
       open: jest.fn().mockReturnValue({
-        onAction: () => snackBarAction$.asObservable()
+        onAction: () => snackBarAction$.asObservable(),
+        afterDismissed: () => new Subject<void>().asObservable()
       })
     };
 
@@ -90,8 +90,7 @@ describe('SchemeEditorDialogComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        SchemeEditorDialogComponent,
-        NoopAnimationsModule
+        SchemeEditorDialogComponent
       ],
       providers: [
         { provide: FileService, useValue: mockFileService },

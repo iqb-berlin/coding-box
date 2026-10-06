@@ -553,7 +553,7 @@ test-main-pr-backend:
 test-main-pr-frontend:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -575,8 +575,23 @@ test-main-pr-frontend:
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
     - docker pull --quiet ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
-    - docker run ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test frontend
+    - docker run --rm ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run frontend:test-quality-gates
+    - docker run --name frontend-unit-${CI_JOB_ID} ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test frontend --configuration=ci --maxWorkers=2
+  coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - coverage/apps/frontend/
+    reports:
+      junit: coverage/apps/frontend/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/frontend/cobertura-coverage.xml
   after_script:
+    - mkdir -p coverage/apps
+    - docker cp frontend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/coverage/apps/frontend coverage/apps/frontend
+    - docker rm frontend-unit-${CI_JOB_ID}
     - docker logout ${CI_REGISTRY}
 
 lint-main-pr-backend:
@@ -611,7 +626,7 @@ lint-main-pr-backend:
 lint-main-pr-frontend:
   stage: lint
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:

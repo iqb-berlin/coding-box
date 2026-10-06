@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ManualCodingExportDialogComponent } from './manual-coding-export-dialog.component';
 
@@ -216,7 +215,6 @@ describe('ManualCodingExportDialogComponent', () => {
       await TestBed.configureTestingModule({
         imports: [
           ManualCodingExportDialogComponent,
-          NoopAnimationsModule,
           TranslateModule.forRoot()
         ],
         providers: [

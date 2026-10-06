@@ -34,7 +34,7 @@
               <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}"
                 placeholder="Filter nach Aufgaben-ID">
               @if (unitNameFilter) {
-                <button matSuffix mat-icon-button aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" aria-label="Clear"
                   (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -46,7 +46,7 @@
               <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter"
                 [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
               @if (variableIdFilter) {
-                <button matSuffix mat-icon-button aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" aria-label="Clear"
                   (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -54,29 +54,29 @@
             </mat-form-field>
 
             <!-- Filter button is now optional since filtering happens automatically with debounce -->
-            <button mat-raised-button color="primary" (click)="applyFilter()">
+            <button mat-raised-button color="primary" type="button" (click)="applyFilter()">
               <mat-icon>filter_list</mat-icon>
               Filter anwenden
             </button>
 
-            <button mat-raised-button (click)="clearFilters()">
+            <button mat-raised-button type="button" (click)="clearFilters()">
               <mat-icon>clear</mat-icon>
               Filter zurücksetzen
             </button>
           </div>
         </div>
 
-        @if (isLoadingVariableAnalysis) {
+        @if (isLoadingVariableAnalysis()) {
           <div class="loading-container">
             <mat-spinner diameter="40"></mat-spinner>
             <p class="loading-text">Lade Variablen...</p>
           </div>
         }
 
-        @if (!isLoadingVariableAnalysis && availableVariables.length > 0) {
+        @if (!isLoadingVariableAnalysis() && availableVariables().length > 0) {
           <div class="quick-selection-tools">
             <div class="selection-count">
-              {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
+              {{ selectedVariables.selected.length }} von {{ filteredVariables().length }} Variablen ausgewählt
             </div>
             <div class="selection-actions">
               <button mat-button color="primary" type="button" (click)="selectAll()">
@@ -94,9 +94,13 @@
           <!-- Variables grid view -->
           <div class="variables-grid-container">
             <div class="variables-grid">
-              @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
+              @for (variable of filteredVariables(); track variable.unitName + variable.variableId) {
                 <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
-                  (click)="selectedVariables.toggle(variable)">
+                  (click)="selectedVariables.toggle(variable)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <div class="variable-card-header">
                     <mat-checkbox [checked]="selectedVariables.isSelected(variable)" (click)="$event.stopPropagation()"
                       (change)="$event ? selectedVariables.toggle(variable) : null">
@@ -113,7 +117,7 @@
           </div>
         }
 
-        @if (!isLoadingVariableAnalysis && availableVariables.length === 0) {
+        @if (!isLoadingVariableAnalysis() && availableVariables().length === 0) {
           <div class="empty-state">
             <mat-icon class="empty-icon">analytics</mat-icon>
             <h3>Keine Variablen verfügbar</h3>

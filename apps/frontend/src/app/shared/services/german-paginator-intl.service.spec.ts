@@ -47,6 +47,13 @@ describe('GermanPaginatorIntl', () => {
     });
   });
 
+  it('stops listening for language changes after destruction', () => {
+    service.ngOnDestroy();
+    translateServiceMock.instant.mockClear();
+    translateServiceMock.onLangChange.emit();
+    expect(translateServiceMock.instant).not.toHaveBeenCalled();
+  });
+
   it('should update labels on lang change', () => {
     translateServiceMock.onLangChange.emit();
     // Re-verification of call to instant is sufficient typically,

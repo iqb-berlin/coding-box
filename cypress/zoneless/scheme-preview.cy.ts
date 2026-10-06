@@ -7,6 +7,13 @@ const schemerHtml = `<html lang="de"><body><script>
 window.addEventListener('message', event => {
   if (event.data.type === 'vosStartCommand') {
     document.body.textContent = 'Schemer 2.5.0: ' + event.data.codingSchemeType;
+    const edit = document.createElement('button');
+    edit.textContent = 'Schema ändern';
+    edit.onclick = () => window.parent.postMessage({
+      type: 'vosSchemeChangedNotification', sessionId: event.data.sessionId,
+      codingScheme: '{"variableCodings":[],"version":"3.0","label":"updated"}'
+    }, '*');
+    document.body.append(edit);
   }
 });
 window.parent.postMessage({type: 'vosReadyNotification'}, '*');
@@ -56,7 +63,8 @@ describe('VOCS preview without Zone.js', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/files/variable-info/DLB004.vocs', { body: [] });
     cy.intercept('GET', '**/api/admin/workspace/5/files/25/download', request => {
       request.reply(failDownload ? { delay: 300, statusCode: 500, body: {} } : {
-        delay: 300, body: { filename: 'iqb-schemer@2.5.0.html', base64Data: btoa(schemerHtml), mimeType: 'text/html' }
+        delay: 300, body: { filename: 'iqb-schemer@2.5.0.html',
+          base64Data: Cypress.Buffer.from(schemerHtml, 'utf8').toString('base64'), mimeType: 'text/html' }
       });
     }).as('schemerDownload');
     cy.visit('/');
@@ -95,6 +103,42 @@ describe('VOCS preview without Zone.js', () => {
     cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
     cy.get('coding-box-scheme-editor-dialog iframe').should('not.exist');
     cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
+  });
+
+  it('navigates through the coding status snackbar after saving closes the editor', () => {
+    cy.intercept('POST', '**/api/admin/workspace/5/upload?*', {
+      body: { total: 1, uploaded: 1, failed: 0, conflicts: [], issues: [] }
+    }).as('saveScheme');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/reset-version/active', {
+      body: { hasActiveJob: false }
+    });
+    cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/readiness' }, { body: null });
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/statistics/job?*', {
+      body: { jobId: '', message: 'Use cached statistics' }
+    }).as('refreshStatistics');
+    cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/statistics' }, {
+      body: { totalResponses: 0, statusCounts: {} }
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/applied-results-overview', {
+      body: {
+        totalIncompleteResponses: 0, appliedResponses: 0, remainingResponses: 0, completionPercentage: 100,
+        rawTotalIncompleteResponses: 0, rawAppliedResponses: 0, rawCompletionPercentage: 100,
+        aggregationActive: false, aggregationThreshold: null, aggregatedDuplicateCases: 0
+      }
+    });
+    openPreview();
+    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should($iframe => {
+      expect($iframe[0].contentDocument?.body.textContent).to.contain('Schema ändern');
+    }).then($iframe => {
+      cy.wrap($iframe[0].contentDocument!.body).contains('button', 'Schema ändern').click();
+    });
+    cy.contains('coding-box-scheme-editor-dialog button', 'Speichern').should('not.be.disabled').click();
+    cy.wait('@saveScheme');
+    cy.get('coding-box-scheme-editor-dialog').should('not.exist');
+    cy.contains('mat-snack-bar-container button', 'Kodierstand prüfen').click();
+    cy.location('hash').should('contain', '/workspace-admin/5/coding/management?refreshCodingFreshness=1');
+    cy.wait('@refreshStatistics');
+    cy.get('coding-box-coding-management .action-buttons-toolbar').should('be.visible');
   });
 
   it('ends loading with a readable explanation after a failed Schemer download', () => {

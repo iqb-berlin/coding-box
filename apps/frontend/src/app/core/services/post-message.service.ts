@@ -1,4 +1,4 @@
-import { Injectable, NgZone } from '@angular/core';
+import { Injectable, NgZone, OnDestroy } from '@angular/core';
 import {
   Observable,
   Subject,
@@ -21,7 +21,14 @@ export type PostMessageEvent<T extends PostMessage = PostMessage> = {
 @Injectable({
   providedIn: 'root'
 })
-export class PostMessageService {
+export class PostMessageService implements OnDestroy {
+  private readonly messageListener = (event: MessageEvent): void => {
+    this.zone.run(() => {
+      const message = event.data as PostMessage;
+      this.messageSubject.next({ message, source: event.source, origin: event.origin });
+    });
+  };
+
   private readonly messageSubject: Subject<PostMessageEvent> =
     new Subject<PostMessageEvent>();
 
@@ -35,22 +42,13 @@ export class PostMessageService {
   private setupMessageListener(): void {
     // Use NgZone.runOutsideAngular to avoid unnecessary change detection
     this.zone.runOutsideAngular(() => {
-      window.addEventListener('message', (event: MessageEvent) => {
-        // Run inside Angular zone when a message is received
-        this.zone.run(() => {
-          try {
-            const message = event.data as PostMessage;
-            this.messageSubject.next({
-              message,
-              source: event.source,
-              origin: event.origin
-            });
-          } catch (error) {
-            // Error processing postMessage: ${JSON.stringify(error)}
-          }
-        });
-      });
+      window.addEventListener('message', this.messageListener);
     });
+  }
+
+  ngOnDestroy(): void {
+    window.removeEventListener('message', this.messageListener);
+    this.messageSubject.complete();
   }
 
   sendMessage(

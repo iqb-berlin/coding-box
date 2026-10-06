@@ -4,7 +4,6 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, EMPTY } from 'rxjs';
 import { TestTakersValidationPanelComponent } from './test-takers-validation-panel.component';
 import { TestTakersValidationService } from '../../../../services/validation';
@@ -47,7 +46,6 @@ describe('TestTakersValidationPanelComponent', () => {
         MatProgressSpinnerModule,
         MatIconModule,
         MatSnackBarModule,
-        NoopAnimationsModule,
         TestTakersValidationPanelComponent,
         ValidationPanelHeaderComponent,
         ValidationGuidanceComponent

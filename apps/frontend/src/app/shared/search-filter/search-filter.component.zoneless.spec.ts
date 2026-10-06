@@ -42,13 +42,13 @@ describe('Search filter view initialization without Zone.js', () => {
     fixture.componentInstance.valueChange.subscribe(changed);
     const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
     input.value = 'Queued';
-    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'd', bubbles: true }));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     fixture.destroy();
     jest.advanceTimersByTime(500);
     expect(changed).not.toHaveBeenCalled();
   });
 
-  it('updates the clear button after a debounced keyboard event without another interaction', async () => {
+  it('emits a typed value after debouncing without another interaction', async () => {
     const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
     const clear = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
     clear.click();
@@ -57,6 +57,7 @@ describe('Search filter view initialization without Zone.js', () => {
     const changed = jest.fn();
     fixture.componentInstance.valueChange.subscribe(changed);
     input.value = 'Delayed filter';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { key: 'r', bubbles: true }));
     const deadline = Date.now() + 2000;
     while (!changed.mock.calls.length && Date.now() < deadline) {
@@ -65,5 +66,69 @@ describe('Search filter view initialization without Zone.js', () => {
     await fixture.whenStable();
     expect(changed).toHaveBeenCalledWith('Delayed filter');
     expect(clear.disabled).toBe(false);
+  });
+
+  it('enables clearing pasted text immediately and emits it after the debounce without keyup', async () => {
+    const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    const clear = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+    clear.click();
+    await fixture.whenStable();
+    const changed = jest.fn();
+    fixture.componentInstance.valueChange.subscribe(changed);
+
+    input.value = 'Pasted text';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(input.value).toBe('Pasted text');
+    expect(clear.disabled).toBe(false);
+    expect(changed).not.toHaveBeenCalled();
+
+    await new Promise(resolve => { setTimeout(resolve, 400); });
+    await fixture.whenStable();
+    expect(changed.mock.calls).toEqual([['Pasted text']]);
+  });
+
+  it('clears pasted text and cancels its pending filter output', async () => {
+    const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    const clear = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+    clear.click();
+    await fixture.whenStable();
+    const changed = jest.fn();
+    fixture.componentInstance.valueChange.subscribe(changed);
+
+    input.value = 'Pending paste';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    clear.click();
+    await fixture.whenStable();
+    expect(input.value).toBe('');
+    expect(clear.disabled).toBe(true);
+    expect(changed.mock.calls).toEqual([['']]);
+
+    await new Promise(resolve => { setTimeout(resolve, 400); });
+    await fixture.whenStable();
+    expect(changed.mock.calls).toEqual([['']]);
+  });
+
+  it('debounces consecutive input events and immediately disables clearing an empty input', async () => {
+    const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    const clear = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+    const changed = jest.fn();
+    fixture.componentInstance.valueChange.subscribe(changed);
+    input.value = 'Older input';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.value = 'Latest input';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(resolve => { setTimeout(resolve, 400); });
+    await fixture.whenStable();
+    expect(changed.mock.calls).toEqual([['Latest input']]);
+
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(clear.disabled).toBe(true);
+    await new Promise(resolve => { setTimeout(resolve, 400); });
+    await fixture.whenStable();
+    expect(changed.mock.calls).toEqual([['Latest input'], ['']]);
   });
 });

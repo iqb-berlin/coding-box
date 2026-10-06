@@ -22,9 +22,9 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 export class UnitsReplayComponent {
   private codingService = inject(ReplayCodingService);
 
-  unitsData = input<UnitsReplay | null>(null);
-  freeNavigation = input<boolean>(false);
-  unitChanged = output<UnitsReplayUnit>();
+  readonly unitsData = input<UnitsReplay | null>(null);
+  readonly freeNavigation = input<boolean>(false);
+  readonly unitChanged = output<UnitsReplayUnit>();
 
   protected nextUnit(): void {
     const data = this.unitsData();

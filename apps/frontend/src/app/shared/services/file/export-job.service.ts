@@ -1,5 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import {
   BehaviorSubject,
   defer,
@@ -13,7 +15,7 @@ import {
   throwError
 } from 'rxjs';
 import {
-  finalize, map, switchMap, takeUntil, tap
+  finalize, map, shareReplay, switchMap, take, takeUntil, tap
 } from 'rxjs/operators';
 import {
   CodingExportEstimate,
@@ -118,7 +120,9 @@ export class ExportJobService implements OnDestroy {
   constructor(
     private codingJobBackendService: CodingJobBackendService,
     private appService: AppService,
-    private workspaceSettingsService: WorkspaceSettingsService
+    private workspaceSettingsService: WorkspaceSettingsService,
+    private snackBar: MatSnackBar,
+    private translateService: TranslateService
   ) {}
 
   get activeJobs(): ExportJob[] {
@@ -168,7 +172,20 @@ export class ExportJobService implements OnDestroy {
       tap(job => {
         this.addJob(job);
         this.startPollingForJob(workspaceId, job.jobId);
-      })
+      }),
+      take(1),
+      tap({
+        error: error => this.snackBar.open(
+          this.translateService.instant(isReplayAuthTokenError(error) ?
+            'coding-management-manual.errors.replay-auth-token-failed' :
+            'ws-admin.export.errors.start-failed'),
+          this.translateService.instant('close'),
+          { duration: 5000, panelClass: ['error-snackbar'] }
+        )
+      }),
+      takeUntil(this.stopPolling$),
+      // The submitted operation registers its job even after its starting view closes.
+      shareReplay({ bufferSize: 1, refCount: false })
     );
   }
 

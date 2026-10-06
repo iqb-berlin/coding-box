@@ -141,9 +141,19 @@ describe('ExportToastComponent', () => {
     Object.assign(component, { dialog });
   });
 
-  it('summarizes jobs and delegates user actions', () => {
-    component.ngOnInit();
+  it.each(['Enter', ' '])('preserves the collapse button keyboard default with %p', key => {
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('.collapse-btn') as HTMLButtonElement;
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
 
+    expect(event.defaultPrevented).toBe(false);
+    expect(component.isCollapsed()).toBe(false);
+    button.click();
+    expect(component.isCollapsed()).toBe(true);
+  });
+
+  it('summarizes jobs and delegates user actions', () => {
     expect(component.hasJobs()).toBe(true);
     expect(component.activeJobCount()).toBe(2);
     expect(component.completedJobCount()).toBe(1);
@@ -197,13 +207,12 @@ describe('ExportToastComponent', () => {
   });
 
   it('updates from the jobs stream and tears down subscriptions', () => {
-    component.ngOnInit();
     jobs$.next([]);
 
     expect(component.jobs()).toEqual([]);
     expect(component.hasJobs()).toBe(false);
 
-    component.ngOnDestroy();
+    fixture.destroy();
     jobs$.next(jobs);
     expect(component.jobs()).toEqual([]);
   });
