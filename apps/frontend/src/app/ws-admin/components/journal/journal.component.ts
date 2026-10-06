@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, signal
+  Component, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -24,6 +24,7 @@ import {
 } from '../../../../../../../api-dto/audit-journal/audit-journal.dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-journal',
   templateUrl: './journal.component.html',
   styleUrls: ['./journal.component.scss'],

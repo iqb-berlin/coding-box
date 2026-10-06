@@ -1,4 +1,6 @@
-import { Component, Inject, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, Inject, inject
+} from '@angular/core';
 
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
@@ -114,6 +116,7 @@ interface DistributionMatrixRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-bulk-creation-dialog',
   templateUrl: './coding-job-bulk-creation-dialog.component.html',
   styleUrls: ['./coding-job-bulk-creation-dialog.component.scss'],

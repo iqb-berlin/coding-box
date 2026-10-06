@@ -5,7 +5,7 @@ import {
   OnDestroy,
   OnInit,
   ViewChild,
-  inject
+  inject, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -26,6 +26,7 @@ interface ReplayFrequencyData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-replay-statistics-dialog',
   standalone: true,
   imports: [

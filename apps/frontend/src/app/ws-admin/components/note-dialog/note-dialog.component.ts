@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, OnInit, inject
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -20,6 +22,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/create-unit-note.dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-note-dialog',
   template: `
     <div class="dialog-header">

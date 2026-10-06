@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, inject, input, output
+  Component, inject, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -21,6 +21,7 @@ import {
 } from './double-coded-review.models';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-double-coded-decision-cell',
   templateUrl: './double-coded-decision-cell.component.html',
   styleUrls: ['./double-coded-decision-cell.component.scss'],

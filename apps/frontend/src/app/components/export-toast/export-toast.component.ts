@@ -1,6 +1,6 @@
 import {
   Component, inject, OnDestroy, OnInit, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatCardModule } from '@angular/material/card';
@@ -28,6 +28,7 @@ import {
 import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-toast',
   standalone: true,
   imports: [

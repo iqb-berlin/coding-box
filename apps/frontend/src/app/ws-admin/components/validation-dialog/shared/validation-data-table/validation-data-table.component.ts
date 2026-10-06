@@ -5,7 +5,7 @@ import {
   EventEmitter,
   AfterViewInit,
   OnChanges,
-  SimpleChanges
+  SimpleChanges, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -25,6 +25,7 @@ export interface ValidationTableColumn {
  * Reusable component for displaying validation data in a table with pagination and selection
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-data-table',
   standalone: true,
   imports: [

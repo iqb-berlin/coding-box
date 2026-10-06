@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal
+  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -173,6 +173,7 @@ interface VariableComboSummary {
 type VariableAnalysisExportFormat = 'csv' | 'xlsx';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-analysis-dialog',
   templateUrl: './variable-analysis-dialog.component.html',
   styleUrls: ['./variable-analysis-dialog.component.scss'],

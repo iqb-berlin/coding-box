@@ -1,6 +1,6 @@
 import {
   AfterViewInit, Component, Inject, OnInit, ViewChild, signal,
-  computed, WritableSignal
+  computed, WritableSignal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -65,6 +65,7 @@ export interface FlattenedVariable {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-variables-dialog',
   templateUrl: './coding-variables-dialog.component.html',
   styleUrls: ['./coding-variables-dialog.component.scss'],

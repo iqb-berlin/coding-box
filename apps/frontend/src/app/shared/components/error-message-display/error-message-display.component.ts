@@ -1,5 +1,5 @@
 import {
-  Component, inject, signal
+  Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
@@ -14,6 +14,7 @@ import {
 } from '../../../core/interceptors/app-http-error.class';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-error-message-display',
   standalone: true,
   imports: [CommonModule, MatButtonModule, MatIconModule, TranslateModule],

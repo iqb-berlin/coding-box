@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject, signal
+  Component, OnInit, ViewChild, AfterViewInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -31,6 +31,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-bundle-manager',
   templateUrl: './variable-bundle-manager.component.html',
   styleUrls: ['./variable-bundle-manager.component.scss'],

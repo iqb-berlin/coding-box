@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy
+  Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -25,6 +25,7 @@ interface ReviewItem {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-review-list-dialog',
   templateUrl: './review-list-dialog.component.html',
   styleUrls: ['./review-list-dialog.component.scss'],

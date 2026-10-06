@@ -1,7 +1,7 @@
 import {
   Component,
   inject,
-  OnInit
+  OnInit, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -21,6 +21,7 @@ import { TestPersonCodingService } from '../../services/test-person-coding.servi
 import { AppService } from '../../../core/services/app.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-validation-results-dialog',
   templateUrl: './coding-validation-results-dialog.component.html',
   styleUrls: ['./coding-validation-results-dialog.component.scss'],

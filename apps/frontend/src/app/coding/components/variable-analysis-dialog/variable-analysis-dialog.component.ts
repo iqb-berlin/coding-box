@@ -2,7 +2,7 @@ import {
   Component,
   Inject,
   OnInit,
-  ViewChild
+  ViewChild, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -64,6 +64,7 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-analysis-dialog',
   templateUrl: './variable-analysis-dialog.component.html',
   styleUrls: ['./variable-analysis-dialog.component.scss'],

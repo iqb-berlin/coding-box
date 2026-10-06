@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnChanges, OnInit, inject, Input, Output, EventEmitter, SimpleChanges, signal
+  Component, OnDestroy, OnChanges, OnInit, inject, Input, Output, EventEmitter, SimpleChanges, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -42,6 +42,7 @@ interface TrainingNameFilterOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coder-trainings-list',
   standalone: true,
   imports: [

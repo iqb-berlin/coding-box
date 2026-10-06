@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, inject, OnDestroy, OnInit, signal
+  Component, inject, OnDestroy, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -61,6 +61,7 @@ interface DatabaseExportJobState {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-ws-settings',
   templateUrl: './ws-settings.component.html',
   styleUrls: ['./ws-settings.component.scss'],

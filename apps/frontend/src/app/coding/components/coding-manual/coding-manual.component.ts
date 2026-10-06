@@ -1,10 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { CodingManualNavigationComponent } from '../coding-manual-navigation/coding-manual-navigation.component';
 import { ReplayComponent } from '../../../replay/components/replay/replay.component';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-manual',
   templateUrl: './coding-manual.component.html',
   styleUrls: ['./coding-manual.component.scss'],
