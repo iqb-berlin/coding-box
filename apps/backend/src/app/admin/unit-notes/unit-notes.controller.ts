@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   UseGuards
@@ -60,7 +61,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitNoteDto)) createUnitNoteDto: CreateUnitNoteDto
   ): Promise<UnitNoteDto> {
-    return this.unitNoteService.create(createUnitNoteDto);
+    return this.unitNoteService.create(workspaceId, createUnitNoteDto);
   }
 
   @Get('unit/:unitId')
@@ -91,9 +92,9 @@ export class UnitNotesController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<UnitNoteDto[]> {
-    return this.unitNoteService.findAllByUnitId(unitId);
+    return this.unitNoteService.findAllByUnitId(workspaceId, unitId);
   }
 
   @Post('units/notes')
@@ -120,7 +121,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UnitNotesController_findAllByUnitIds)) { unitIds }: { unitIds: number[] }
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
-    return this.unitNoteService.findAllByUnitIds(unitIds);
+    return this.unitNoteService.findAllByUnitIds(workspaceId, unitIds);
   }
 
   @Get(':id')
@@ -151,9 +152,9 @@ export class UnitNotesController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<UnitNoteDto> {
-    return this.unitNoteService.findOne(id);
+    return this.unitNoteService.findOne(workspaceId, id);
   }
 
   @Patch(':id')
@@ -187,10 +188,10 @@ export class UnitNotesController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
+      @Param('id', ParseIntPipe) id: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitNoteDto)) updateUnitNoteDto: UpdateUnitNoteDto
   ): Promise<UnitNoteDto> {
-    return this.unitNoteService.update(id, updateUnitNoteDto);
+    return this.unitNoteService.update(workspaceId, id, updateUnitNoteDto);
   }
 
   @Delete(':id')
@@ -221,8 +222,8 @@ export class UnitNotesController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<boolean> {
-    return this.unitNoteService.remove(id);
+    return this.unitNoteService.remove(workspaceId, id);
   }
 }
