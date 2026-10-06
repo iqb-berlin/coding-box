@@ -140,7 +140,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly anchor = signal<string | undefined>(undefined);
   /* eslint-disable  @typescript-eslint/no-explicit-any */
   readonly responses = signal<any | undefined>(undefined);
-  readonly isPrintMode = signal<boolean>(false);
+  protected readonly isPrintMode = signal<boolean>(false);
   readonly testPerson = signal<string>('');
   readonly unitId = signal<string>('');
   readonly isCodingMode = signal<boolean>(false);
@@ -151,7 +151,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly isCodingIssueReviewMode = signal<boolean>(false);
   readonly currentUnitIndex = signal<number>(0);
   readonly totalUnits = signal<number>(0);
-  readonly isWatermarkTruncated = signal<boolean>(false);
+  protected readonly isWatermarkTruncated = signal<boolean>(false);
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -206,8 +206,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayNotesCommitDedupeTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Resize handle state
-  readonly codePanelWidth = signal<number>(350);
-  readonly isResizing = signal<boolean>(false);
+  protected readonly codePanelWidth = signal<number>(350);
+  protected readonly isResizing = signal<boolean>(false);
   private resizeStartX: number = 0;
   private resizeStartWidth: number = 0;
   private readonly MIN_PANEL_WIDTH = 250;
@@ -862,7 +862,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  readonly watermarkText = computed<string>(() => {
+  protected readonly watermarkText = computed<string>(() => {
     if (!this.testPerson() || !this.unitId()) {
       return '';
     }
@@ -1184,7 +1184,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  onPlayerReady(): void {
+  protected onPlayerReady(): void {
     this.replayAttempt.recordPlayerReady(performance.now());
   }
 
@@ -1758,7 +1758,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getCoderNotes(): string {
+  protected getCoderNotes(): string {
     return this.codingService.getNotes(this.testPerson(), this.unitId(), this.codingService.currentVariableId);
   }
 
@@ -1824,15 +1824,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getCompletedCount(): number {
+  protected getCompletedCount(): number {
     return this.codingService.getCompletedCount(this.unitsData());
   }
 
-  getOpenCount(): number {
+  protected getOpenCount(): number {
     return this.codingService.getOpenCount(this.unitsData());
   }
 
-  getProgressPercentage(): number {
+  protected getProgressPercentage(): number {
     return this.codingService.getProgressPercentage(this.unitsData());
   }
 
@@ -1851,19 +1851,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.appService.needsReAuthentication;
   }
 
-  isSubmitCodingJobDisabled(): boolean {
+  protected isSubmitCodingJobDisabled(): boolean {
     return this.codingService.isSubmittingJob || this.isCodingInteractionBlockedByReAuthentication();
   }
 
-  hasCodingJobPanelContent(): boolean {
+  protected hasCodingJobPanelContent(): boolean {
     return !!this.codingService.codingScheme && !!this.codingService.currentVariableId;
   }
 
-  getPreSelectedCodeId(variableId: string): number | null {
+  protected getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson(), this.unitId(), variableId);
   }
 
-  getCurrentCodingCaseKey(): string {
+  protected getCurrentCodingCaseKey(): string {
     const variableId = this.codingService.currentVariableId;
     if (!this.testPerson() || !this.unitId() || !variableId) {
       return '';
@@ -1872,11 +1872,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.generateCompositeKey(this.testPerson(), this.unitId(), variableId);
   }
 
-  getPreSelectedCodingIssueOptionId(variableId: string): number | null {
+  protected getPreSelectedCodingIssueOptionId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson(), this.unitId(), variableId);
   }
 
-  async pauseCodingJob(): Promise<void> {
+  protected async pauseCodingJob(): Promise<void> {
     if (
       this.codingService.codingJobId &&
       !this.isCodingInteractionBlockedByReAuthentication() &&
@@ -1888,7 +1888,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  async resumeCodingJob(): Promise<void> {
+  protected async resumeCodingJob(): Promise<void> {
     if (this.codingService.codingJobId && !this.isReviewMode() && !this.isCodingInteractionBlockedByReAuthentication()) {
       await this.codingService.resumeCodingJob(this.workspaceId(), this.codingService.codingJobId);
     }
@@ -1923,12 +1923,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  dismissCompletionOverlay(): void {
+  protected dismissCompletionOverlay(): void {
     // Allow users to continue navigating through cases even after job completion
     this.codingService.isCodingJobCompleted = false;
   }
 
-  openCommentDialog(): void {
+  protected openCommentDialog(): void {
     if (this.isCodingReadOnly()) return;
 
     const dialogRef = this.dialog.open(CodingJobCommentDialogComponent, {
@@ -1943,7 +1943,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     });
   }
 
-  openNavigateDialog(): void {
+  protected openNavigateDialog(): void {
     const unitsDataSnapshot = this.unitsData();
 
     if (!unitsDataSnapshot || this.isCodingInteractionBlockedByReAuthentication()) return;
@@ -2083,7 +2083,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   // --- Resize handle ---
-  onResizeStart(event: MouseEvent): void {
+  protected onResizeStart(event: MouseEvent): void {
     event.preventDefault();
     this.isResizing.set(true);
     this.resizeStartX = event.clientX;

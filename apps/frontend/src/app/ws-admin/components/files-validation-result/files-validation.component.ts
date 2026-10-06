@@ -160,7 +160,7 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
 };
 
 @Component({
-  selector: 'files-validation-dialog',
+  selector: 'coding-box-files-validation-dialog',
   templateUrl: './files-validation.component.html',
   imports: [
     MatDialogModule,
@@ -196,27 +196,27 @@ export class FilesValidationDialogComponent implements OnInit {
 
   readonly expandedFilesLists = signal<Map<string, ExpandedFilesLists>>(new Map());
 
-  readonly filteredTestTakers = signal<FilteredTestTaker[]>([]);
-  readonly duplicateTestTakers = signal<DuplicateTestTaker[]>([]);
+  protected readonly filteredTestTakers = signal<FilteredTestTaker[]>([]);
+  protected readonly duplicateTestTakers = signal<DuplicateTestTaker[]>([]);
   readonly unusedTestFiles = signal<UnusedTestFile[]>([]);
-  readonly geogebra = signal<GeoGebraValidationResult | undefined>(undefined);
-  readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
-  readonly validationResults = signal<FilesValidationView[]>([]);
+  protected readonly geogebra = signal<GeoGebraValidationResult | undefined>(undefined);
+  protected readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
+  protected readonly validationResults = signal<FilesValidationView[]>([]);
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
   readonly duplicateSelection = signal(new Map<string, string>()); // Maps login to selected testTaker file
 
   unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
-  readonly allUnusedFilesSelected = signal(false);
-  readonly isDeletingUnusedFiles = signal(false);
+  protected readonly allUnusedFilesSelected = signal(false);
+  protected readonly isDeletingUnusedFiles = signal(false);
 
-  readonly modeGroups = signal<{
+  protected readonly modeGroups = signal<{
     mode: string;
     count: number;
   }[]>([]);
 
-  readonly allSelected = signal(false);
-  readonly isResolvingDuplicates = signal(false);
+  protected readonly allSelected = signal(false);
+  protected readonly isResolvingDuplicates = signal(false);
 
   readonly ignoredUnits = signal(new Set<string>());
   readonly ignoredBooklets = signal(new Set<string>());
@@ -225,11 +225,11 @@ export class FilesValidationDialogComponent implements OnInit {
     testletId: string;
   }[]>([]);
 
-  readonly bookletData = signal<Map<string, BookletInfoDto>>(new Map());
-  readonly expandedBooklets = signal<Set<string>>(new Set());
-  readonly loadingBooklets = signal<Set<string>>(new Set());
-  readonly isApplyingTestletBulk = signal(false);
-  readonly selectedTabIndex = signal(0);
+  protected readonly bookletData = signal<Map<string, BookletInfoDto>>(new Map());
+  protected readonly expandedBooklets = signal<Set<string>>(new Set());
+  protected readonly loadingBooklets = signal<Set<string>>(new Set());
+  protected readonly isApplyingTestletBulk = signal(false);
+  protected readonly selectedTabIndex = signal(0);
 
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -238,15 +238,15 @@ export class FilesValidationDialogComponent implements OnInit {
   private validationService = inject(ValidationService);
   private translate = inject(TranslateService);
 
-  readonly isExcluding = signal(false);
-  readonly excludingProgress = signal(0);
+  protected readonly isExcluding = signal(false);
+  protected readonly excludingProgress = signal(0);
 
-  readonly isConsidering = signal(false);
-  readonly consideringProgress = signal(0);
-  readonly isRefreshingValidation = signal(false);
-  readonly refreshValidationProgress = signal(0);
-  readonly refreshValidationProgressMessage = signal('');
-  readonly isInstallingCompatibleAspectPlayer = signal(false);
+  protected readonly isConsidering = signal(false);
+  protected readonly consideringProgress = signal(0);
+  protected readonly isRefreshingValidation = signal(false);
+  protected readonly refreshValidationProgress = signal(0);
+  protected readonly refreshValidationProgressMessage = signal('');
+  protected readonly isInstallingCompatibleAspectPlayer = signal(false);
 
   readonly summary = signal<ValidationSummary>({
     totalTestTakers: 0,
@@ -278,7 +278,7 @@ export class FilesValidationDialogComponent implements OnInit {
   readonly expandedSummaryLists = signal<Set<string>>(new Set());
   private readonly relationPreviewLimit = 3;
 
-  toggleSummaryList(section: string): void {
+  protected toggleSummaryList(section: string): void {
     if (this.expandedSummaryLists().has(section)) {
       this.expandedSummaryLists.update(value => {
         const next = new Set(value);
@@ -294,7 +294,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  isSummaryListExpanded(section: string): boolean {
+  protected isSummaryListExpanded(section: string): boolean {
     return this.expandedSummaryLists().has(section);
   }
 
@@ -549,7 +549,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  openGeoGebraResourcePackagesDialog(): void {
+  protected openGeoGebraResourcePackagesDialog(): void {
     if (!this.data.workspaceId) {
       this.snackBar.open('Fehler: Kein Workspace ausgewählt', 'OK', { duration: 3000 });
       return;
@@ -571,7 +571,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
   }
 
-  installCompatibleAspectPlayer(): void {
+  protected installCompatibleAspectPlayer(): void {
     if (!this.data.workspaceId || this.isInstallingCompatibleAspectPlayer()) {
       return;
     }
@@ -681,7 +681,7 @@ export class FilesValidationDialogComponent implements OnInit {
     return item.consider === true || item.consider === false;
   }
 
-  openAffectedUnitsDialog(title: string, units: string[], onSelect: (unitId: string) => void): void {
+  protected openAffectedUnitsDialog(title: string, units: string[], onSelect: (unitId: string) => void): void {
     if (!units || units.length === 0) {
       return;
     }
@@ -714,9 +714,9 @@ export class FilesValidationDialogComponent implements OnInit {
     return this.knownFilteredTestTakers.length;
   }
 
-  readonly filteredTotalCount = computed<number>(() => this.filteredTestTakers().length);
+  protected readonly filteredTotalCount = computed<number>(() => this.filteredTestTakers().length);
 
-  readonly filteredExcludedCount = computed<number>(() => this.filteredTestTakers().filter(item => item.consider === false).length);
+  protected readonly filteredExcludedCount = computed<number>(() => this.filteredTestTakers().filter(item => item.consider === false).length);
 
   constructor() {
     if (this.data) {
@@ -789,7 +789,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
   }
 
-  isUnitIgnored(unit: string, parents?: string[]): boolean {
+  protected isUnitIgnored(unit: string, parents?: string[]): boolean {
     if (!unit) return false;
     const normalizedUnit = unit.toUpperCase();
 
@@ -815,18 +815,18 @@ export class FilesValidationDialogComponent implements OnInit {
     return false;
   }
 
-  isBookletIgnored(booklet: string): boolean {
+  protected isBookletIgnored(booklet: string): boolean {
     return !!booklet && this.ignoredBooklets().has(booklet.toUpperCase());
   }
 
-  isTestletIgnored(bookletId: string, testletId: string): boolean {
+  protected isTestletIgnored(bookletId: string, testletId: string): boolean {
     if (!bookletId || !testletId) return false;
     const normBooklet = bookletId.toUpperCase();
     const normTestlet = testletId.toUpperCase();
     return this.ignoredTestlets().some(t => t.bookletId === normBooklet && t.testletId === normTestlet);
   }
 
-  hasIgnoredTestlets(bookletId: string): boolean {
+  protected hasIgnoredTestlets(bookletId: string): boolean {
     if (!bookletId) return false;
     const normBooklet = bookletId.toUpperCase();
     return this.ignoredTestlets().some(t => t.bookletId === normBooklet);
@@ -940,7 +940,7 @@ export class FilesValidationDialogComponent implements OnInit {
     };
   }
 
-  toggleBookletExpand(bookletId: string): void {
+  protected toggleBookletExpand(bookletId: string): void {
     if (!bookletId) return;
     const normalized = bookletId.toUpperCase();
 
@@ -1019,7 +1019,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
   }
 
-  toggleUnitIgnore(unit: string): void {
+  protected toggleUnitIgnore(unit: string): void {
     if (!unit || !this.data.workspaceId) return;
     const normalized = unit.toUpperCase();
 
@@ -1048,7 +1048,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  toggleBookletIgnore(booklet: string): void {
+  protected toggleBookletIgnore(booklet: string): void {
     if (!booklet || !this.data.workspaceId) return;
     const normalized = booklet.toUpperCase();
 
@@ -1077,7 +1077,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  toggleTestletIgnore(bookletId: string, testletId: string): void {
+  protected toggleTestletIgnore(bookletId: string, testletId: string): void {
     if (!bookletId || !testletId || !this.data.workspaceId) return;
     const normBooklet = bookletId.toUpperCase();
     const normTestlet = testletId.toUpperCase();
@@ -1158,12 +1158,12 @@ export class FilesValidationDialogComponent implements OnInit {
 
   readonly filesDeleted = signal(false);
 
-  toggleUnusedFilesSelection(file: UnusedTestFile): void {
+  protected toggleUnusedFilesSelection(file: UnusedTestFile): void {
     this.unusedFilesSelection.toggle(file);
     this.checkIfAllUnusedFilesSelected();
   }
 
-  toggleAllUnusedFilesSelection(): void {
+  protected toggleAllUnusedFilesSelection(): void {
     if (this.allUnusedFilesSelected()) {
       this.unusedFilesSelection.clear();
       this.allUnusedFilesSelected.set(false);
@@ -1214,7 +1214,7 @@ export class FilesValidationDialogComponent implements OnInit {
       });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(this.filesDeleted());
   }
 
@@ -1258,7 +1258,7 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   // Select which occurrence of a duplicate test taker to keep
-  selectDuplicateOccurrence(login: string, testTaker: string): void {
+  protected selectDuplicateOccurrence(login: string, testTaker: string): void {
     this.duplicateSelection.update(value => {
       const next = new Map(value);
       next.set(login, testTaker);
@@ -1267,12 +1267,12 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   // Get the selected occurrence for a duplicate test taker
-  getSelectedOccurrence(login: string): string | undefined {
+  protected getSelectedOccurrence(login: string): string | undefined {
     return this.duplicateSelection().get(login);
   }
 
   // Resolve duplicate test takers by keeping only the selected occurrences
-  resolveDuplicateTestTakers(): void {
+  protected resolveDuplicateTestTakers(): void {
     if (!this.data.workspaceId || this.duplicateTestTakers().length === 0 || this.isResolvingDuplicates()) {
       return;
     }
@@ -1305,7 +1305,7 @@ export class FilesValidationDialogComponent implements OnInit {
       });
   }
 
-  toggleSelection(testTaker: FilteredTestTaker): void {
+  protected toggleSelection(testTaker: FilteredTestTaker): void {
     if (!this.isKnownTestTaker(testTaker)) {
       return;
     }
@@ -1313,7 +1313,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.checkIfAllSelected();
   }
 
-  toggleAllSelection(): void {
+  protected toggleAllSelection(): void {
     if (this.allSelected()) {
       this.selection.clear();
       this.allSelected.set(false);
@@ -1346,7 +1346,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  toggleModeSelection(mode: string): void {
+  protected toggleModeSelection(mode: string): void {
     const testTakersWithMode = this.filteredTestTakers().filter(item => item.mode === mode && this.isKnownTestTaker(item));
 
     if (testTakersWithMode.length === 0) {
@@ -1399,13 +1399,13 @@ export class FilesValidationDialogComponent implements OnInit {
     this.selection.selected.length === this.knownFilteredCount);
   }
 
-  isModeSelected(mode: string): boolean {
+  protected isModeSelected(mode: string): boolean {
     return this.filteredTestTakers()
       .filter(item => item.mode === mode && this.isKnownTestTaker(item))
       .every(item => this.selection.isSelected(item));
   }
 
-  markTestTakersAsConsidered(): void {
+  protected markTestTakersAsConsidered(): void {
     if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isConsidering()) {
       return;
     }
@@ -1485,7 +1485,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
   }
 
-  markTestTakersAsExcluded(): void {
+  protected markTestTakersAsExcluded(): void {
     if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isExcluding()) {
       return;
     }
@@ -1591,7 +1591,7 @@ export class FilesValidationDialogComponent implements OnInit {
     return sections ? sections[section] : false;
   }
 
-  trackByFn(index: number, item: FilteredTestTaker): string {
+  protected trackByFn(index: number, item: FilteredTestTaker): string {
     return `${item.testTaker}-${item.login}-${item.mode}`;
   }
 
@@ -1742,7 +1742,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
   }
 
-  openDefinitionFile(definitionRef: string): void {
+  protected openDefinitionFile(definitionRef: string): void {
     if (!this.data.workspaceId || !definitionRef) {
       return;
     }

@@ -26,7 +26,7 @@ export class UnitsReplayComponent {
   freeNavigation = input<boolean>(false);
   unitChanged = output<UnitsReplayUnit>();
 
-  nextUnit(): void {
+  protected nextUnit(): void {
     const data = this.unitsData();
     if (!data) {
       return;
@@ -46,7 +46,7 @@ export class UnitsReplayComponent {
     }
   }
 
-  previousUnit(): void {
+  protected previousUnit(): void {
     const data = this.unitsData();
     if (!data || !this.hasPreviousUnit()) {
       return;
@@ -59,7 +59,7 @@ export class UnitsReplayComponent {
     }
   }
 
-  hasNextUnit(): boolean {
+  protected hasNextUnit(): boolean {
     const data = this.unitsData();
     if (!data || !data.units.length) return false;
 
@@ -81,14 +81,14 @@ export class UnitsReplayComponent {
     return hasSelection && nextJumpableIndex >= 0;
   }
 
-  hasPreviousUnit(): boolean {
+  protected hasPreviousUnit(): boolean {
     const data = this.unitsData();
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
   }
 
-  get totalUnits(): number {
+  protected get totalUnits(): number {
     return this.unitsData()?.units.length || 0;
   }
 }

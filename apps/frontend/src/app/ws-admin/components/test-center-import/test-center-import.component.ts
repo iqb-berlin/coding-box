@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, inject, OnInit, OnDestroy
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -120,11 +122,11 @@ export interface ImportFormValues {
     MatTooltip
   ]
 })
-export class TestCenterImportComponent {
+export class TestCenterImportComponent implements OnInit, OnDestroy {
   private userBackendService = inject(UserBackendService);
   private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
-  data = inject<{
+  protected data = inject<{
     importType: string;
   }>(MAT_DIALOG_DATA);
 
@@ -133,7 +135,7 @@ export class TestCenterImportComponent {
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
 
-  testCenters: Testcenter[] = [
+  protected testCenters: Testcenter[] = [
     {
       id: 1,
       label: 'Testcenter 1'
@@ -157,7 +159,7 @@ export class TestCenterImportComponent {
   ];
 
   authToken: string = '';
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'select',
     'groupName',
     'groupLabel',
@@ -175,25 +177,25 @@ export class TestCenterImportComponent {
   loginForm: UntypedFormGroup;
   importFilesForm: UntypedFormGroup;
   authenticationError: boolean = false;
-  filesSelectionError: boolean = false;
-  testGroupsLoadError: string | null = null;
-  uploadError: string | null = null;
+  protected filesSelectionError: boolean = false;
+  protected testGroupsLoadError: string | null = null;
+  protected uploadError: string | null = null;
   authenticated: boolean = false;
   isLoadingTestGroups: boolean = false;
-  isUploadingTestFiles: boolean = false;
+  protected isUploadingTestFiles: boolean = false;
   isUploadingTestResults: boolean = false;
   uploadData: Result | null = null;
   private firstTestFilesImportData: Result | null = null;
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
   importingTestGroups: string[] = [];
-  importProgressPercent: number = 0;
-  totalUploadsExpected: number = 0;
-  completedUploads: number = 0;
+  protected importProgressPercent: number = 0;
+  protected totalUploadsExpected: number = 0;
+  protected completedUploads: number = 0;
   importRunId: string | null = null;
-  uploadProgressDetails: ImportWorkspaceFilesProgressDto | null = null;
-  testGroupsLoadProgress: TestGroupsLoadProgressDto | null = null;
-  testGroupsLoadElapsedSeconds: number = 0;
+  protected uploadProgressDetails: ImportWorkspaceFilesProgressDto | null = null;
+  protected testGroupsLoadProgress: TestGroupsLoadProgressDto | null = null;
+  protected testGroupsLoadElapsedSeconds: number = 0;
   private progressPollingSub?: Subscription;
   private testGroupsProgressPollingSub?: Subscription;
   private testGroupsLoadStartedAt: number | null = null;
@@ -222,7 +224,7 @@ export class TestCenterImportComponent {
     });
   }
 
-  selectAllImportOptions(): void {
+  protected selectAllImportOptions(): void {
     let optionControls: string[];
 
     if (this.data.importType === 'testResults') {
@@ -248,7 +250,7 @@ export class TestCenterImportComponent {
     this.filesSelectionError = false;
   }
 
-  clearAllImportOptions(): void {
+  protected clearAllImportOptions(): void {
     const optionControls: string[] = [
       'responses',
       'definitions',
@@ -306,7 +308,7 @@ export class TestCenterImportComponent {
     }
   }
 
-  isAllSelected(): boolean {
+  protected isAllSelected(): boolean {
     return this.testGroups.length > 0 &&
       this.selectedRows.length === this.testGroups.length;
   }
@@ -431,7 +433,7 @@ export class TestCenterImportComponent {
       });
   }
 
-  goBackToOptions(): void {
+  protected goBackToOptions(): void {
     this.showTestGroups = false;
     this.selectedRows = [];
   }
@@ -535,9 +537,9 @@ export class TestCenterImportComponent {
     }
   }
 
-  loadingMessage = 'Testresultate werden hochgeladen...';
+  protected loadingMessage = 'Testresultate werden hochgeladen...';
 
-  readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
+  protected readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
     definitions: 'Aufgabendefinitionen',
     units: 'Aufgaben (Units-XML)',
     player: 'Player',
@@ -841,7 +843,7 @@ export class TestCenterImportComponent {
     return detail ? `${fallback} (${detail})` : fallback;
   }
 
-  get uploadProgressPercent(): number {
+  protected get uploadProgressPercent(): number {
     if (this.totalUploadsExpected <= 0) return 0;
     return Math.round((this.completedUploads / this.totalUploadsExpected) * 100);
   }
@@ -863,7 +865,7 @@ export class TestCenterImportComponent {
       'Testgruppen werden vom Testcenter abgerufen.';
   }
 
-  get testGroupsLoadElapsedText(): string {
+  protected get testGroupsLoadElapsedText(): string {
     if (this.testGroupsLoadElapsedSeconds < 60) {
       return `${this.testGroupsLoadElapsedSeconds} s`;
     }
@@ -968,7 +970,7 @@ export class TestCenterImportComponent {
     this.progressPollingSub = undefined;
   }
 
-  get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
+  protected get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
     return (this.uploadProgressDetails?.options || []).filter(option => option.planned > 0);
   }
 }

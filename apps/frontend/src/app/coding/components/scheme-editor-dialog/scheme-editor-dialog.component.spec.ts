@@ -22,7 +22,7 @@ import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.c
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 
 @Component({
-  selector: 'unit-schemer-standalone',
+  selector: 'coding-box-unit-schemer',
   template: '',
   standalone: true
 })

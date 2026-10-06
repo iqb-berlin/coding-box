@@ -37,7 +37,7 @@ export interface SchemeEditorDialogData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-scheme-editor-dialog',
+  selector: 'coding-box-scheme-editor-dialog',
   standalone: true,
   imports: [
     MatDialogTitle,
@@ -55,13 +55,13 @@ export interface SchemeEditorDialogData {
       @if (isLoading()) {
         <mat-spinner diameter="40" [attr.aria-label]="'coding.schemer.loading' | translate"></mat-spinner>
       } @else if (schemerHtml()) {
-        <unit-schemer-standalone
+        <coding-box-unit-schemer
           [schemerHtml]="schemerHtml()"
           [unitScheme]="unitScheme()"
           [schemerConfig]="{ definitionReportPolicy: 'eager', role: data.readOnly ? 'viewer' : 'editor' }"
           (schemeChanged)="onSchemeChanged($event)"
           (error)="onError($event)">
-        </unit-schemer-standalone>
+        </coding-box-unit-schemer>
       } @else {
         @if (loadError()) {
           <p role="alert">{{ loadError() }}</p>
@@ -93,7 +93,7 @@ export interface SchemeEditorDialogData {
       overflow: hidden !important;
     }
 
-    unit-schemer-standalone {
+    coding-box-unit-schemer {
       display: block;
       height: 100%;
       width: 100%;
@@ -126,7 +126,7 @@ export interface SchemeEditorDialogData {
 })
 export class SchemeEditorDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
-  readonly loadError = signal('');
+  protected readonly loadError = signal('');
   readonly schemerHtml = signal('');
   readonly isLoading = signal(true);
   readonly hasChanges = signal(false);
@@ -149,7 +149,7 @@ export class SchemeEditorDialogComponent implements OnInit {
 
   constructor(
     public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
+    @Inject(MAT_DIALOG_DATA) protected data: SchemeEditorDialogData,
     private snackBar: MatSnackBar,
     private fileService: FileService,
     private translate: TranslateService,

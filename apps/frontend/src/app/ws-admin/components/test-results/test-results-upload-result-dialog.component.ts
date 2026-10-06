@@ -337,7 +337,7 @@ export class TestResultsUploadResultDialogComponent {
       .sort((a, b) => a.status.localeCompare(b.status));
   }
 
-  get hasZeroDelta(): boolean {
+  protected get hasZeroDelta(): boolean {
     const delta = this.result.delta;
     return (delta.testPersons || 0) === 0 &&
       (delta.testGroups || 0) === 0 &&
@@ -398,7 +398,7 @@ export class TestResultsUploadResultDialogComponent {
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
-  get codingFreshnessExplanationText(): string {
+  protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
@@ -509,7 +509,7 @@ export class TestResultsUploadResultDialogComponent {
     return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
   }
 
-  exportIssues(): void {
+  protected exportIssues(): void {
     const issuesToExport = this.filteredIssues;
     if (issuesToExport.length === 0) {
       return;
@@ -548,7 +548,7 @@ export class TestResultsUploadResultDialogComponent {
     );
   }
 
-  detailView: 'booklets' | 'units' = 'booklets';
+  protected detailView: 'booklets' | 'units' = 'booklets';
   detailStatusFilter: 'all' | 'withLogs' | 'withoutLogs' = 'all';
   detailFilterText = '';
 
@@ -650,7 +650,7 @@ export class TestResultsUploadResultDialogComponent {
     this.scheduleIssueViewportRefresh(true);
   }
 
-  onTabChange(): void {
+  protected onTabChange(): void {
     this.scheduleIssueViewportRefresh();
   }
 

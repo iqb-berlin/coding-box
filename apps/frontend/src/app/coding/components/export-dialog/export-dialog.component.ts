@@ -27,7 +27,7 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-export-dialog',
+  selector: 'coding-box-export-dialog',
   templateUrl: './export-dialog.component.html',
   styleUrls: ['./export-dialog.component.scss'],
   standalone: true,
@@ -56,13 +56,13 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   private matDialog = inject(MatDialog);
   private destroy$ = new Subject<void>();
 
-  selectedFormat: ExportFormat = 'json';
-  trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
+  protected selectedFormat: ExportFormat = 'json';
+  protected trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
-  validationResults: ValidateCodingCompletenessResponseDto | null = null;
-  validationProgress: ValidationProgress | null = null;
+  protected validationResults: ValidateCodingCompletenessResponseDto | null = null;
+  protected validationProgress: ValidationProgress | null = null;
   isValidating = false;
-  validationCacheKey: string | null = null;
+  protected validationCacheKey: string | null = null;
   validationCurrentPage = 1;
   expectedCombinations: ExpectedCombinationDto[] = [];
   private readonly maxDisplayedMappingErrors = 5;
@@ -101,11 +101,11 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close();
   }
 
-  onExport(): void {
+  protected onExport(): void {
     const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
     this.dialogRef.close({
       format: this.selectedFormat,
@@ -114,7 +114,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   }
 
   // Validation methods
-  onValidationFileSelected(event: Event): void {
+  protected onValidationFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
 
     if (!input.files || input.files.length === 0) {
@@ -335,7 +335,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  downloadValidationExcel(): void {
+  protected downloadValidationExcel(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId || !this.validationCacheKey) {
@@ -366,7 +366,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
+  protected openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
     this.matDialog.open(CodingValidationResultsDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',

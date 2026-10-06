@@ -49,8 +49,8 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
   data = inject<NavigateCodingCasesDialogData>(MAT_DIALOG_DATA);
   private translateService = inject(TranslateService);
 
-  displayedColumns: string[] = ['position', 'caseNumberVariable', 'testPerson', 'givenCode', 'codingIssue', 'comments'];
-  dataSource = new MatTableDataSource<NavigationUnit>([]);
+  protected displayedColumns: string[] = ['position', 'caseNumberVariable', 'testPerson', 'givenCode', 'codingIssue', 'comments'];
+  protected dataSource = new MatTableDataSource<NavigationUnit>([]);
 
   ngOnInit(): void {
     this.loadNavigationUnits();
@@ -145,11 +145,11 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
     return '';
   }
 
-  onRowClicked(selectedUnit: NavigationUnit): void {
+  protected onRowClicked(selectedUnit: NavigationUnit): void {
     this.dialogRef.close(selectedUnit.unit);
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 }

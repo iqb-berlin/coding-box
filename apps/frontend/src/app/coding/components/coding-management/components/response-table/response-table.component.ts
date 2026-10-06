@@ -40,7 +40,7 @@ import { getResponseStatusLabel } from '../../../../../shared/utils/response-sta
 import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
 
 @Component({
-  selector: 'app-response-table',
+  selector: 'coding-box-response-table',
   templateUrl: './response-table.component.html',
   styleUrls: ['./response-table.component.scss'],
   standalone: true,
@@ -101,7 +101,7 @@ export class ResponseTableComponent implements OnChanges {
     }
   }
 
-  getColumnHeader(column: string): string {
+  protected getColumnHeader(column: string): string {
     const headers: Record<string, string> = {
       unitname: 'coding-management.columns.unitname',
       variableid: 'coding-management.columns.variableid',
@@ -156,7 +156,7 @@ export class ResponseTableComponent implements OnChanges {
     this.showUnitXml.emit(unitName);
   }
 
-  onReviewClick(): void {
+  protected onReviewClick(): void {
     this.reviewClick.emit();
   }
 

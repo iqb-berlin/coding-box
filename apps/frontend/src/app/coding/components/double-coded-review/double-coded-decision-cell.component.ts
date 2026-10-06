@@ -48,15 +48,15 @@ export class DoubleCodedDecisionCellComponent {
   readonly selectionChanged = output<string>();
   readonly applyDecision = output<void>();
 
-  get itemControl() {
+  protected get itemControl() {
     return this.facade.getItemControl(this.item());
   }
 
-  get commentControl() {
+  protected get commentControl() {
     return this.facade.getCommentControl(this.item());
   }
 
-  get selectedDecision(): DecisionResult | undefined {
+  protected get selectedDecision(): DecisionResult | undefined {
     return this.facade.getSelectedDecisionResult(this.item());
   }
 
@@ -65,38 +65,38 @@ export class DoubleCodedDecisionCellComponent {
     return selected && this.isReplayDecision(selected) ? selected : undefined;
   }
 
-  get replayControlValue(): string {
+  protected get replayControlValue(): string {
     return `replay:${this.item().responseId}`;
   }
 
-  get appliedResult(): AppliedReviewResult | null {
+  protected get appliedResult(): AppliedReviewResult | null {
     return this.facade.getAppliedReviewResult(this.item());
   }
 
-  get schemaCodes(): DoubleCodedReviewCodeDto[] {
+  protected get schemaCodes(): DoubleCodedReviewCodeDto[] {
     return this.item().availableCodes.filter(
       option => option.source === 'schema'
     );
   }
 
-  get generalCodes(): DoubleCodedReviewCodeDto[] {
+  protected get generalCodes(): DoubleCodedReviewCodeDto[] {
     return this.item().availableCodes.filter(
       option => option.source === 'general'
     );
   }
 
-  get completionStates(): boolean[] {
+  protected get completionStates(): boolean[] {
     return this.facade.getCoderCompletionStates(this.item());
   }
 
-  get statusClass(): string {
+  protected get statusClass(): string {
     const item = this.item();
     if (item.isResolved) return 'resolved';
     if (this.facade.getConflictType(item) !== 'none') return 'conflict';
     return this.completionStates.every(Boolean) ? 'match' : 'incomplete';
   }
 
-  get statusIcon(): string {
+  protected get statusIcon(): string {
     return (
       {
         resolved: 'check_circle',
@@ -119,7 +119,7 @@ export class DoubleCodedDecisionCellComponent {
     );
   }
 
-  get statusTooltip(): string {
+  protected get statusTooltip(): string {
     if (this.item().isResolved) {
       return this.translateService.instant('double-coded-review.applied');
     }
@@ -130,20 +130,20 @@ export class DoubleCodedDecisionCellComponent {
       `${this.translateService.instant(`double-coded-review.decision.tooltip-${conflictType}-conflict`)} - ${progress}`;
   }
 
-  get showComment(): boolean {
+  protected get showComment(): boolean {
     return (
       this.facade.getConflictType(this.item()) !== 'none' ||
       !!this.commentControl.value
     );
   }
 
-  get appliedSourceLabel(): string {
+  protected get appliedSourceLabel(): string {
     return this.translateService.instant(
       'double-coded-review.applied-result.final-source'
     );
   }
 
-  get appliedTooltip(): string {
+  protected get appliedTooltip(): string {
     const result = this.appliedResult;
     if (!result) return '';
     const code =
@@ -170,22 +170,22 @@ export class DoubleCodedDecisionCellComponent {
       coderName;
   }
 
-  getDecisionDisplayCode(result: DecisionResult): string {
+  protected getDecisionDisplayCode(result: DecisionResult): string {
     return this.isCatalogDecision(result) && result.code < 0 ?
       '' :
       this.getCodeDisplay(result.code);
   }
 
-  getCatalogControlValue(code: number): string {
+  protected getCatalogControlValue(code: number): string {
     return this.facade.getCatalogDecisionControlValue(code);
   }
 
-  getCodeDisplay(code: number | null): string {
+  protected getCodeDisplay(code: number | null): string {
     if (code === null || code === undefined) return 'N/A';
     return code === -1 || code === -2 ? '' : code.toString();
   }
 
-  getCodeLabel(code: number | null): string {
+  protected getCodeLabel(code: number | null): string {
     const keys: Record<number, string> = {
       [-1]: 'code-selector.coding-issue-options.code-assignment-uncertain',
       [-2]: 'code-selector.coding-issue-options.new-code-needed',

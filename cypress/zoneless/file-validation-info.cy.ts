@@ -27,7 +27,7 @@ describe('Zoneless information from file validation', () => {
     cy.wait('@files');
     cy.get('coding-box-test-files').contains('a', 'Validieren').click();
     cy.wait('@validation');
-    cy.get('files-validation-dialog').contains('[role="tab"]', 'TESTTAKER_ZL').click();
+    cy.get('coding-box-files-validation-dialog').contains('[role="tab"]', 'TESTTAKER_ZL').click();
   });
   afterEach(() => {
     cy.window().should('not.have.property', 'Zone');
@@ -35,8 +35,8 @@ describe('Zoneless information from file validation', () => {
   });
 
   it('shows validation progress and creates one task after a double click', () => {
-    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
-    cy.get('files-validation-dialog').should('not.exist');
+    cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-files-validation-dialog').should('not.exist');
     let starts = 0;
     let polls = 0;
     cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
@@ -57,15 +57,15 @@ describe('Zoneless information from file validation', () => {
     cy.wait('@progressPoll');
     cy.get('.validation-busy-percent').should('contain.text', '100%');
     cy.wait('@validation');
-    cy.get('files-validation-dialog').should('be.visible');
+    cy.get('coding-box-files-validation-dialog').should('be.visible');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.then(() => { expect(starts).to.equal(1); });
   });
 
   for (const phase of ['creation', 'results']) {
     it(`keeps the returned file view clear after leaving during validation ${phase}`, () => {
-      cy.get('files-validation-dialog').contains('button', 'Schließen').click();
-      cy.get('files-validation-dialog').should('not.exist');
+      cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+      cy.get('coding-box-files-validation-dialog').should('not.exist');
       let pendingStarted = false;
       let resultRequests = 0;
       cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
@@ -86,15 +86,15 @@ describe('Zoneless information from file validation', () => {
       cy.wait('@files');
       cy.get('coding-box-test-files').should('be.visible');
       cy.wait(phase === 'creation' ? '@oldTask' : '@oldResults');
-      cy.get('files-validation-dialog').should('not.exist');
+      cy.get('coding-box-files-validation-dialog').should('not.exist');
       cy.get('coding-box-test-files .busy-overlay').should('not.exist');
       cy.then(() => { expect(resultRequests).to.equal(phase === 'creation' ? 0 : 1); });
     });
   }
 
   it('retries dummy testtaker creation after an error and validates the refreshed files', () => {
-    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
-    cy.get('files-validation-dialog').should('not.exist');
+    cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-files-validation-dialog').should('not.exist');
     let jobs = 0;
     let results = 0;
     let creations = 0;
@@ -115,20 +115,20 @@ describe('Zoneless information from file validation', () => {
     }).as('dummyRefresh');
     cy.get('coding-box-test-files').contains('a', 'Validieren').click();
     cy.wait('@dummyValidation');
-    cy.get('tc-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
+    cy.get('coding-box-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Erstellen');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.get('coding-box-test-files').contains('a', 'Validieren').click();
     cy.wait('@dummyValidation');
-    cy.get('tc-confirm-dialog').contains('button', 'Ja').click();
+    cy.get('coding-box-confirm-dialog').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 200);
     cy.get('coding-box-test-files .busy-overlay').should('be.visible');
     cy.wait('@dummyRefresh');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.wait('@dummyValidation');
-    cy.get('files-validation-dialog').should('be.visible');
-    cy.get('tc-confirm-dialog').should('not.exist');
+    cy.get('coding-box-files-validation-dialog').should('be.visible');
+    cy.get('coding-box-confirm-dialog').should('not.exist');
     cy.then(() => {
       expect(creations).to.equal(2);
       expect(jobs).to.equal(3);
@@ -137,8 +137,8 @@ describe('Zoneless information from file validation', () => {
   });
 
   it('does not create a testtaker when the confirmation is declined', () => {
-    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
-    cy.get('files-validation-dialog').should('not.exist');
+    cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-files-validation-dialog').should('not.exist');
     let creations = 0;
     cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/701/results', {
       delay: 150, body: { testTakersFound: false, validationResults: [] }
@@ -149,8 +149,8 @@ describe('Zoneless information from file validation', () => {
     });
     cy.get('coding-box-test-files').contains('a', 'Validieren').click();
     cy.wait('@missingTesttakers');
-    cy.get('tc-confirm-dialog').contains('button', 'Abbrechen').click();
-    cy.get('tc-confirm-dialog').should('not.exist');
+    cy.get('coding-box-confirm-dialog').contains('button', 'Abbrechen').click();
+    cy.get('coding-box-confirm-dialog').should('not.exist');
     cy.get('mat-snack-bar-container').should('contain.text', 'Keine Testtaker-Dateien vorhanden.');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.then(() => { expect(creations).to.equal(0); });
@@ -161,10 +161,10 @@ describe('Zoneless information from file validation', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/files/testtakers/TESTTAKER_ZL/content', request => {
       request.reply(++attempts === 1 ? { delay: 250, statusCode: 500 } : { delay: 250, body: { content: '<TestTakers id="TESTTAKER_ZL"/>' } });
     }).as('xml');
-    cy.get('files-validation-dialog button[aria-label="TestTaker XML anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="TestTaker XML anzeigen"]').click();
     cy.wait('@xml').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Keine XML-Daten');
-    cy.get('files-validation-dialog button[aria-label="TestTaker XML anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="TestTaker XML anzeigen"]').click();
     cy.wait('@xml').its('response.statusCode').should('equal', 200);
     cy.get('coding-box-xml-viewer').should('contain.text', 'TESTTAKER_ZL');
   });
@@ -175,11 +175,11 @@ describe('Zoneless information from file validation', () => {
         delay: 250, body: { metadata: { id: 'BOOKLET_ZL', label: 'Booklet validation metadata' }, units: [], restrictions: [], rawXml: '<Booklet/>' }
       });
     }).as('booklet');
-    cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').first().click();
-    cy.get('files-validation-dialog button[aria-label="Testheft anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').first().click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Testheft anzeigen"]').click();
     cy.wait('@booklet').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Laden');
-    cy.get('files-validation-dialog button[aria-label="Testheft anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Testheft anzeigen"]').click();
     cy.wait('@booklet').its('response.statusCode').should('equal', 200);
     cy.get('coding-box-booklet-info-dialog').contains('[role="tab"]', 'Metadaten').click();
     cy.get('coding-box-booklet-info-dialog .mat-mdc-tab-body-active').should('contain.text', 'Booklet validation metadata');
@@ -196,16 +196,16 @@ describe('Zoneless information from file validation', () => {
     cy.intercept('GET', '**/api/zoneless-metadata-profile', {
       delay: 150, body: { id: profileId, label: [{ lang: 'de', value: 'Metadaten ZL' }], target: ['UNIT'], groups: [{ label: [{ lang: 'de', value: 'Gruppe ZL' }], entries: [{ id: 'comment', label: [{ lang: 'de', value: 'Kommentar ZL' }], type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }] }] }
     }).as('profile');
-    cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
     cy.wait('@profile');
-    cy.get('app-metadata-dialog h2').should('be.visible').and('contain.text', 'metadata.vomd');
-    cy.get('app-metadata-dialog mat-progress-spinner').should('not.exist');
-    cy.get('app-metadata-dialog mat-select').should('be.visible').and('contain.text', 'Unit (Aufgabe)');
-    cy.get('app-metadata-dialog metadata-profile-form input').should('be.visible').and('be.disabled');
-    cy.get('app-metadata-dialog mat-slide-toggle button').click();
-    cy.get('app-metadata-dialog metadata-profile-form input').should('be.enabled').type('synthetic metadata');
-    cy.get('app-metadata-dialog').contains('button', 'Speichern').should('be.visible');
+    cy.get('coding-box-metadata-dialog h2').should('be.visible').and('contain.text', 'metadata.vomd');
+    cy.get('coding-box-metadata-dialog mat-progress-spinner').should('not.exist');
+    cy.get('coding-box-metadata-dialog mat-select').should('be.visible').and('contain.text', 'Unit (Aufgabe)');
+    cy.get('coding-box-metadata-dialog metadata-profile-form input').should('be.visible').and('be.disabled');
+    cy.get('coding-box-metadata-dialog mat-slide-toggle button').click();
+    cy.get('coding-box-metadata-dialog metadata-profile-form input').should('be.enabled').type('synthetic metadata');
+    cy.get('coding-box-metadata-dialog').contains('button', 'Speichern').should('be.visible');
   });
 
   for (const delays of [[150, 150], [300, 150], [150, 300]]) {
@@ -224,21 +224,21 @@ describe('Zoneless information from file validation', () => {
       cy.intercept('GET', '**/api/zoneless-metadata-profile', {
         delay: 150, body: { id: profileId, label: [{ lang: 'de', value: 'Metadaten ZL' }], target: ['UNIT'], groups: [{ label: [{ lang: 'de', value: 'Gruppe ZL' }], entries: [{ id: 'comment', label: [{ lang: 'de', value: 'Kommentar ZL' }], type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }] }] }
       }).as('profile');
-      cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-      cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
+      cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
+      cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
       cy.wait(['@profile', '@profile']);
-      cy.get('app-metadata-dialog').should('have.length', 2);
-      cy.get('app-metadata-dialog metadata-profile-form input').should(inputs => {
+      cy.get('coding-box-metadata-dialog').should('have.length', 2);
+      cy.get('coding-box-metadata-dialog metadata-profile-form input').should(inputs => {
         expect(Array.from(inputs, input => (input as HTMLInputElement).value).sort()).to.deep.equal(['instance-1', 'instance-2']);
       });
-      cy.get('app-metadata-dialog').first().find('metadata-profile-form input').should('be.disabled').invoke('val').as('firstValue');
-      cy.get('app-metadata-dialog').last().find('metadata-profile-form input').should('be.disabled');
-      cy.get('app-metadata-dialog').last().find('mat-slide-toggle button').click();
-      cy.get('app-metadata-dialog').last().find('metadata-profile-form input').should('be.enabled').clear().type('second changed');
-      cy.get('app-metadata-dialog').last().contains('button', 'Speichern').should('be.visible');
-      cy.get('app-metadata-dialog').first().contains('button', 'Speichern').should('not.exist');
+      cy.get('coding-box-metadata-dialog').first().find('metadata-profile-form input').should('be.disabled').invoke('val').as('firstValue');
+      cy.get('coding-box-metadata-dialog').last().find('metadata-profile-form input').should('be.disabled');
+      cy.get('coding-box-metadata-dialog').last().find('mat-slide-toggle button').click();
+      cy.get('coding-box-metadata-dialog').last().find('metadata-profile-form input').should('be.enabled').clear().type('second changed');
+      cy.get('coding-box-metadata-dialog').last().contains('button', 'Speichern').should('be.visible');
+      cy.get('coding-box-metadata-dialog').first().contains('button', 'Speichern').should('not.exist');
       cy.get('@firstValue').then(value => {
-        cy.get('app-metadata-dialog').first().find('metadata-profile-form input').should('have.value', value).and('be.disabled');
+        cy.get('coding-box-metadata-dialog').first().find('metadata-profile-form input').should('have.value', value).and('be.disabled');
       });
   });
   }
@@ -274,42 +274,42 @@ describe('Zoneless information from file validation', () => {
         { id: 'comment', label: label('Comment'), type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }
       ] }] }
     }).as('itemProfile');
-    const form = 'app-metadata-dialog metadata-profile-form';
+    const form = 'coding-box-metadata-dialog metadata-profile-form';
     const selectItem = (name: string) => {
-      cy.get('app-metadata-dialog .selection-container mat-select').click();
+      cy.get('coding-box-metadata-dialog .selection-container mat-select').click();
       cy.contains('mat-option', name).click();
     };
-    cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
     cy.wait('@itemProfile');
     cy.get(`${form} input[type="number"]`).should('have.value', '12').and('be.disabled');
     cy.get(`${form} textarea`).should('have.value', 'initial notes').and('be.disabled');
     cy.get(`${form} iqb-formly-toggle button`).should('have.attr', 'aria-checked', 'false').and('be.disabled');
-    cy.get('app-metadata-dialog .dialog-header mat-slide-toggle button').click();
+    cy.get('coding-box-metadata-dialog .dialog-header mat-slide-toggle button').click();
     cy.get(`${form} input[type="number"]`).clear().type('34');
     cy.get(`${form} textarea`).clear().type('changed notes');
     cy.get(`${form} iqb-formly-toggle button`).click().should('have.attr', 'aria-checked', 'true');
     selectItem('Item ITEM-ZL');
     cy.get(`${form} input`).should('have.value', 'initial comment').clear().type('changed comment');
-    cy.get('app-metadata-dialog .item-info input').first().clear().type('ITEM-CHANGED');
-    cy.get('app-metadata-dialog .item-info input').last().clear().type('v2');
-    cy.get('app-metadata-dialog .item-info textarea').clear().type('changed item');
+    cy.get('coding-box-metadata-dialog .item-info input').first().clear().type('ITEM-CHANGED');
+    cy.get('coding-box-metadata-dialog .item-info input').last().clear().type('v2');
+    cy.get('coding-box-metadata-dialog .item-info textarea').clear().type('changed item');
     selectItem('Unit (Aufgabe)');
     cy.get(`${form} input[type="number"]`).should('have.value', '34');
     cy.get(`${form} textarea`).should('have.value', 'changed notes');
     cy.get(`${form} iqb-formly-toggle button`).should('have.attr', 'aria-checked', 'true');
     selectItem('Item ITEM-CHANGED');
     cy.get(`${form} input`).should('have.value', 'changed comment');
-    cy.get('app-metadata-dialog .item-info input').last().should('have.value', 'v2');
-    cy.get('app-metadata-dialog .item-info textarea').should('have.value', 'changed item');
-    cy.get('app-metadata-dialog').contains('button', 'Abbrechen').click();
-    cy.get('app-metadata-dialog').should('not.exist');
-    cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    cy.get('coding-box-metadata-dialog .item-info input').last().should('have.value', 'v2');
+    cy.get('coding-box-metadata-dialog .item-info textarea').should('have.value', 'changed item');
+    cy.get('coding-box-metadata-dialog').contains('button', 'Abbrechen').click();
+    cy.get('coding-box-metadata-dialog').should('not.exist');
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
     cy.wait('@itemProfile');
     cy.get(`${form} input[type="number"]`).should('have.value', '12').and('be.disabled');
     selectItem('Item ITEM-ZL');
     cy.get(`${form} input`).should('have.value', 'initial comment').and('be.disabled');
-    cy.get('app-metadata-dialog .item-info input').last().should('have.value', 'v1');
+    cy.get('coding-box-metadata-dialog .item-info input').last().should('have.value', 'v1');
   });
 
   it('updates duration and both vocabulary controls with the actual metadata library', () => {
@@ -342,13 +342,13 @@ describe('Zoneless information from file validation', () => {
         { id: 'B', notation: ['B'], prefLabel: { de: 'Begriff B' } }
       ] }
     });
-    cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
-    const form = 'app-metadata-dialog metadata-profile-form';
+    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    const form = 'coding-box-metadata-dialog metadata-profile-form';
     cy.get(`${form} iqb-formly-duration input`).first().should('have.value', '01').and('be.disabled');
     cy.get(`${form} iqb-formly-duration input`).last().should('have.value', '30').and('be.disabled');
     cy.get(`${form} iqb-formly-inline`).first().contains('mat-checkbox', 'Begriff A').find('input').should('be.disabled');
-    cy.get('app-metadata-dialog .dialog-header mat-slide-toggle button').click();
+    cy.get('coding-box-metadata-dialog .dialog-header mat-slide-toggle button').click();
     const durationEvents: string[] = [];
     cy.get(`${form} iqb-formly-duration input`).first().then(input => {
       ['input', 'change', 'blur', 'focus'].forEach(type => input[0].addEventListener(type, () => {
@@ -377,7 +377,7 @@ describe('Zoneless information from file validation', () => {
     cy.get(`${form} mat-chip-row`).should('not.exist');
     cy.get(`${form} iqb-formly-duration input`).first().should('have.value', '02');
     cy.get(`${form} iqb-formly-duration input`).last().should('have.value', '15');
-    cy.get('app-metadata-dialog').contains('button', 'Speichern').should('be.visible');
+    cy.get('coding-box-metadata-dialog').contains('button', 'Speichern').should('be.visible');
   });
 
   it('keeps different vocabulary providers isolated across simultaneous dialogs', () => {
@@ -410,23 +410,23 @@ describe('Zoneless information from file validation', () => {
         hasTopConcept: [{ id: `term-${instance}`, notation: [`${instance}`], prefLabel: { de: `Term ${instance}` } }]
       } }).as(`vocabulary${instance}`);
     }
-    cy.get('files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
+    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
     cy.wait(['@vocabulary1', '@vocabulary2']);
-    cy.get('app-metadata-dialog').should('have.length', 2);
-    cy.get('app-metadata-dialog').first().find('iqb-formly-inline').should('contain.text', 'Term 1').and('not.contain.text', 'Term 2');
-    cy.get('app-metadata-dialog').last().find('iqb-formly-inline').should('contain.text', 'Term 2').and('not.contain.text', 'Term 1');
-    cy.get('app-metadata-dialog').last().find('.dialog-header mat-slide-toggle button').click();
-    cy.get('app-metadata-dialog').last().contains('mat-checkbox', 'Term 2').click().find('input').should('be.checked');
-    cy.get('app-metadata-dialog').last().contains('button', 'Abbrechen').click();
-    cy.get('app-metadata-dialog').should('have.length', 1);
-    cy.get('app-metadata-dialog').find('.dialog-header mat-slide-toggle button').click();
-    cy.get('app-metadata-dialog').contains('mat-checkbox', 'Term 1').click().find('input').should('be.checked');
-    cy.get('app-metadata-dialog iqb-formly-chips mat-chip-grid').click();
+    cy.get('coding-box-metadata-dialog').should('have.length', 2);
+    cy.get('coding-box-metadata-dialog').first().find('iqb-formly-inline').should('contain.text', 'Term 1').and('not.contain.text', 'Term 2');
+    cy.get('coding-box-metadata-dialog').last().find('iqb-formly-inline').should('contain.text', 'Term 2').and('not.contain.text', 'Term 1');
+    cy.get('coding-box-metadata-dialog').last().find('.dialog-header mat-slide-toggle button').click();
+    cy.get('coding-box-metadata-dialog').last().contains('mat-checkbox', 'Term 2').click().find('input').should('be.checked');
+    cy.get('coding-box-metadata-dialog').last().contains('button', 'Abbrechen').click();
+    cy.get('coding-box-metadata-dialog').should('have.length', 1);
+    cy.get('coding-box-metadata-dialog').find('.dialog-header mat-slide-toggle button').click();
+    cy.get('coding-box-metadata-dialog').contains('mat-checkbox', 'Term 1').click().find('input').should('be.checked');
+    cy.get('coding-box-metadata-dialog iqb-formly-chips mat-chip-grid').click();
     cy.get('iqb-nested-tree').should('contain.text', 'Term 1').and('not.contain.text', 'Term 2');
     cy.get('iqb-nested-tree').contains('mat-tree-node', 'Term 1').find('mat-checkbox').click();
     cy.get('[data-cy="metadata-nested-tree-confirm-button"]').click();
-    cy.get('app-metadata-dialog mat-chip-row').should('contain.text', 'Term 1');
+    cy.get('coding-box-metadata-dialog mat-chip-row').should('contain.text', 'Term 1');
   });
 
 });

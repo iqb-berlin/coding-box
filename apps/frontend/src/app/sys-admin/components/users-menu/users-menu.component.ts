@@ -50,7 +50,7 @@ export class UsersMenuComponent {
 
   readonly setUserWorkspaceAccessRights = output<number[]>();
 
-  editUser(): void {
+  protected editUser(): void {
     let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
       selectedRows = this.checkedRows();
@@ -83,7 +83,7 @@ export class UsersMenuComponent {
     }
   }
 
-  deleteUsers(): void {
+  protected deleteUsers(): void {
     let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
       selectedRows = this.checkedRows();
@@ -119,7 +119,7 @@ export class UsersMenuComponent {
     }
   }
 
-  setUserWorkspaceAccessRight(): void {
+  protected setUserWorkspaceAccessRight(): void {
     let selectedRows = this.selectedRows();
     if (!selectedRows.length) {
       selectedRows = this.checkedRows();
