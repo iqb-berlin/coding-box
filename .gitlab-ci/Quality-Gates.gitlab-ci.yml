@@ -27,6 +27,7 @@ quality-checks:
     - npx nx lint frontend --skipNxCache
     - JEST_JUNIT_OUTPUT_NAME=frontend.xml npx nx test frontend --configuration=ci --skipNxCache
     - npx nx lint backend --skipNxCache
+    - npx nx run backend:typecheck --skipNxCache
     - JEST_JUNIT_OUTPUT_NAME=backend.xml npx nx test backend --configuration=ci --skipNxCache
   artifacts:
     when: always
