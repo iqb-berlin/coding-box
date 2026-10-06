@@ -101,6 +101,38 @@ test('both browser targets reject a discovered spec that executes zero tests', (
   }
 });
 
+test('image builds authenticate with the Dependency Proxy only when it is used', () => {
+  const yaml = require('js-yaml');
+  const schema = yaml.DEFAULT_SCHEMA.extend([
+    new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
+  ]);
+  const config = yaml.load(readFileSync(join(workspace,
+    '.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml'), 'utf8'), { schema });
+  const logins = Object.values(config).flatMap(job => job?.before_script || [])
+    .filter(command => typeof command === 'string' &&
+      command.includes('docker login') && command.includes('CI_DEPENDENCY_PROXY_SERVER'));
+  assert.ok(logins.length > 0);
+  for (const command of logins) {
+    for (const proxy of ['', 'proxy.example/containers/']) {
+      const result = spawnSync('sh', ['-eu', '-c',
+        `docker() { printf '%s\\n' "$*"; }\n${command}`], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH,
+          DOCKER_HUB_PROXY: proxy,
+          ...(proxy ? {
+            CI_DEPENDENCY_PROXY_USER: 'probe-user',
+            CI_DEPENDENCY_PROXY_PASSWORD: 'probe-password',
+            CI_DEPENDENCY_PROXY_SERVER: 'proxy.example'
+          } : {})
+        }
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout, proxy ? 'login -u probe-user -p probe-password proxy.example\n' : '');
+    }
+  }
+});
+
 test('CI selects coverage, rejects empty suites, and publishes reports as a required job', () => {
   const project = JSON.parse(readFileSync(join(workspace, 'apps/frontend/project.json'), 'utf8'));
   assert.equal(project.targets.test.configurations.ci.codeCoverage, true);
