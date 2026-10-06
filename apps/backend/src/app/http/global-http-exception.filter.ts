@@ -9,6 +9,7 @@ import {
   PayloadTooLargeException
 } from '@nestjs/common';
 import { Response } from 'express';
+import { MulterError } from 'multer';
 import {
   REQUEST_ID_HEADER,
   RequestWithRequestId,
@@ -29,7 +30,7 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalHttpExceptionFilter.name);
 
   catch(caughtException: unknown, host: ArgumentsHost): void {
-    const exception = this.normalizeBodyParserError(caughtException);
+    const exception = this.normalizeRequestParsingError(caughtException);
     const context = host.switchToHttp();
     const request = context.getRequest<RequestWithRequestId>();
     const response = context.getResponse<Response>();
@@ -52,7 +53,14 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(this.createResponseBody(exception, request, status, requestId));
   }
 
-  private normalizeBodyParserError(exception: unknown): unknown {
+  private normalizeRequestParsingError(exception: unknown): unknown {
+    // Nest's adapter does not yet map these newer Multer field parsing errors.
+    if (exception instanceof MulterError && [
+      'INVALID_FIELD_NAME',
+      'LIMIT_FIELD_ARRAY_INDEX'
+    ].includes(exception.code)) {
+      return new BadRequestException('Invalid multipart field name');
+    }
     if (!(exception instanceof Error)) {
       return exception;
     }
