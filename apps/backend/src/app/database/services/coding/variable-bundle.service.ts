@@ -62,7 +62,9 @@ export class VariableBundleService {
     data: { name: string; description?: string; variables: Array<{ unitName: string; variableId: string }> }
   ): Promise<VariableBundle> {
     const variableBundle = this.variableBundleRepository.create({
-      ...data,
+      name: data.name,
+      description: data.description,
+      variables: data.variables,
       workspace_id: workspaceId,
       codingJobVariableBundles: []
     });
@@ -73,10 +75,14 @@ export class VariableBundleService {
   async updateVariableBundle(
     id: number,
     workspaceId: number,
-    data: Partial<Omit<VariableBundle, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>
+    data: Partial<Pick<VariableBundle, 'name' | 'description' | 'variables'>>
   ): Promise<VariableBundle> {
     const variableBundle = await this.getVariableBundle(id, workspaceId);
-    Object.assign(variableBundle, data);
+    // TypeScript DTO types do not remove additional properties from JSON.
+    // Never copy workspace ownership, primary keys or cascading relations.
+    if (data.name !== undefined) variableBundle.name = data.name;
+    if (data.description !== undefined) variableBundle.description = data.description;
+    if (data.variables !== undefined) variableBundle.variables = data.variables;
     return this.variableBundleRepository.save(variableBundle);
   }
 
