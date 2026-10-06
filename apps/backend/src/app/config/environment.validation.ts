@@ -17,6 +17,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     }
   }
 
+  function isConfigured(key: string): boolean {
+    const value = config[key];
+    // Compose supplies empty optional overrides; auth resolvers use their fallbacks.
+    return value !== undefined && !(typeof value === 'string' && !value.trim());
+  }
+
   function port(key: string, fallback?: string): void {
     const value = config[key] ?? fallback;
     if ((typeof value !== 'string' && typeof value !== 'number') ||
@@ -43,11 +49,11 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
     requireString('JWT_SECRET');
     const oidcKeys = ['KEYCLOAK_URL', 'KEYCLOAK_REALM', 'KEYCLOAK_CLIENT_ID',
       'OIDC_PROVIDER_URL', 'OIDC_ISSUER', 'OIDC_JWKS_URI'];
-    const oidcConfigured = oidcKeys.some(key => config[key] !== undefined);
+    const oidcConfigured = oidcKeys.some(isConfigured);
     if (oidcConfigured) {
       requireString('KEYCLOAK_CLIENT_ID');
       for (const key of ['KEYCLOAK_URL', 'OIDC_PROVIDER_URL', 'OIDC_ISSUER', 'OIDC_JWKS_URI']) {
-        if (config[key] !== undefined) {
+        if (isConfigured(key)) {
           requireString(key);
           try {
             const url = new URL(String(config[key]));
@@ -59,12 +65,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
           }
         }
       }
-      if (!config.OIDC_ISSUER) {
+      if (!isConfigured('OIDC_ISSUER')) {
         requireString('KEYCLOAK_URL');
         requireString('KEYCLOAK_REALM');
       }
-      if (!config.OIDC_JWKS_URI) {
-        if (!config.KEYCLOAK_URL) requireString('OIDC_PROVIDER_URL');
+      if (!isConfigured('OIDC_JWKS_URI')) {
+        if (!isConfigured('KEYCLOAK_URL')) requireString('OIDC_PROVIDER_URL');
         requireString('KEYCLOAK_REALM');
       }
     }

@@ -22,6 +22,9 @@ trusted issuer and the JWKS endpoint. `OIDC_PROVIDER_URL` is an existing fallbac
 for the JWKS base URL; it does not replace issuer configuration. All configured
 auth URLs must use HTTP(S) and must not embed credentials. The backend does not
 use `KEYCLOAK_CLIENT_SECRET`, so startup validation does not require it.
+Blank optional Keycloak/OIDC values are treated as absent, matching the existing
+issuer and JWKS fallback rules and Compose's unset variable handling. Required
+values for the selected configuration must still be non-empty.
 
 Unknown environment variables remain available. An unknown `APP_ROLE`, an
 explicitly blank required field, or an invalid port fails startup rather than
