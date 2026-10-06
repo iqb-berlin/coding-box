@@ -7,10 +7,26 @@ Die Prüfung jedes einzelnen UI-Elements und aller zehn Szenarien pro Bindung
 ist kein Abschlusskriterium mehr. Maßgeblich sind die sechs Fachbereiche,
 sieben asynchronen Mechanismen und die Regressionen bestätigter Fehler in
 `zoneless-risk-coverage.json`. Die Freigabe ist noch nicht erteilt:
-Abschlussläufe und erfolgreicher CI-Nachweis des endgültigen Commits fehlen.
+Die lokalen Abschlussläufe sind erfolgreich; der CI-Nachweis des endgültigen
+Commits steht für den unten dokumentierten Stand noch aus.
 Ausgangspunkt: PR #1039, Commit `aaae7be16c7aeadb2abbb8d1001e367d7bccf598`.
 Prüfschritte, Korrekturen und zugehörige Testergebnisse sind unten dokumentiert.
 Lokale Nachweise, gepushte Änderungen und entfernte CI-Ergebnisse werden getrennt ausgewiesen.
+
+## Zusammengeführte Testumgebung (06.10.2026)
+
+Alle Frontend-Jest-Tests laufen nun über `frontend:test` mit nativer Zoneless-TestBed-Umgebung.
+Die bisherigen `fakeAsync`-Fälle verwenden Jest-Timer. `test-frontend` führt die Unit-Tests,
+Coverage und Freigabeprüfungen gemeinsam aus; `test-browser` prüft das Produktionsartefakt
+einmal. Die folgenden datierten Abschnitte dokumentieren die früheren Job- und Target-Namen.
+Aktuelle Befehle und Gates stehen in `frontend-quality-gates.md`.
+
+Lokale Abschlussläufe unter Node 22.23.1: 2.809 Jest-Tests in 267 Dateien,
+140 E2E-Tests in 27 Spec-Dateien und sechs Component-Tests mit nativen
+Zoneless-Testumgebungen sind erfolgreich, jeweils ohne übersprungene Fälle.
+Die Coverage liegt bei 78,97 % Statements/Zeilen, 78,15 % Branches und 77,58 % Funktionen.
+Die sechs Component-Specs verwenden `cypress/angular-zoneless`; ihre vorhandenen
+Mock-Provider und Daten sind an die aktuellen Dienste und Dialogabläufe angepasst.
 
 ## Prüfinfrastruktur
 

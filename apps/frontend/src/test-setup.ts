@@ -1,4 +1,12 @@
-import { setupZoneTestEnv } from 'jest-preset-angular/setup-env/zone';
+import { setupZonelessTestEnv } from 'jest-preset-angular/setup-env/zoneless';
 import './test-mocks';
 
-setupZoneTestEnv();
+setupZonelessTestEnv();
+
+beforeEach(() => {
+  expect('Zone' in globalThis).toBe(false);
+});
+
+afterEach(() => {
+  expect('Zone' in globalThis).toBe(false);
+});

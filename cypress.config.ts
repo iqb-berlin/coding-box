@@ -1,7 +1,13 @@
 import { defineConfig } from 'cypress';
 
 export default defineConfig({
+  retries: 0,
   component: {
+    setupNodeEvents(_on, config) {
+      config.screenshotsFolder = 'cypress/component-screenshots';
+      config.videosFolder = 'cypress/component-videos';
+      return config;
+    },
     devServer: {
       framework: 'angular',
       bundler: 'webpack',
@@ -13,7 +19,7 @@ export default defineConfig({
             outputPath: 'dist/apps/frontend',
             index: 'apps/frontend/src/index.html',
             main: 'apps/frontend/src/main.ts',
-            polyfills: 'apps/frontend/src/polyfills.ts',
+            polyfills: [],
             tsConfig: 'apps/frontend/tsconfig.app.json',
             inlineStyleLanguage: 'scss',
             assets: ['apps/frontend/src/assets'],
@@ -31,7 +37,7 @@ export default defineConfig({
   },
   e2e: {
     baseUrl: 'http://localhost:4200',
-    specPattern: 'cypress/e2e/**/*.cy.ts',
+    specPattern: ['cypress/e2e/**/*.cy.ts', 'cypress/zoneless/**/*.cy.ts'],
     // Live suites need the disposable backend and tasks in cypress.replay.config.ts.
     excludeSpecPattern: 'cypress/e2e/*-live.cy.ts',
     supportFile: 'cypress/support/e2e.ts'

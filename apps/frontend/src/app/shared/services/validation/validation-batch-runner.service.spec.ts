@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { ValidationBatchRunnerService } from './validation-batch-runner.service';
 import { ValidationService } from './validation.service';
@@ -49,52 +49,62 @@ describe('ValidationBatchRunnerService', () => {
   });
 
   describe('startBatch', () => {
-    it('should run all steps sequentially', fakeAsync(() => {
-      const mockTaskId = 123;
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: mockTaskId } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationResults.mockReturnValue(
-        of({ total: 0 })
-      );
+    it('should run all steps sequentially', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const mockTaskId = 123;
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: mockTaskId } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationResults.mockReturnValue(
+          of({ total: 0 })
+        );
 
-      service.startBatch(1);
-      tick(500 * 6); // Trigger all 6 steps intervals
-      tick();
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(500 * 6); // Trigger all 6 steps intervals
+        await jest.advanceTimersByTimeAsync(0);
 
-      // All 6 steps should be called
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
-        6
-      );
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ status: 'running' })
-      );
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ status: 'completed' })
-      );
-    }));
+        // All 6 steps should be called
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+          6
+        );
+        expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ status: 'running' })
+        );
+        expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ status: 'completed' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should handle step failure and set batch state to failed', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(
-        throwError(() => new Error('Step failed'))
-      );
+    it('should handle step failure and set batch state to failed', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        validationServiceMock.createValidationTask.mockReturnValue(
+          throwError(() => new Error('Step failed'))
+        );
 
-      service.startBatch(1);
-      tick();
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
-        1,
-        expect.objectContaining({ status: 'failed', error: 'Step failed' })
-      );
-    }));
+        expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ status: 'failed', error: 'Step failed' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should not start if already running (batch state status is running)', () => {
       stateServiceMock.getBatchState.mockReturnValue({ status: 'running' });
@@ -102,143 +112,168 @@ describe('ValidationBatchRunnerService', () => {
       expect(validationServiceMock.createValidationTask).not.toHaveBeenCalled();
     });
 
-    it('should skip step if results exist and not forced', fakeAsync(() => {
-      stateServiceMock.getAllValidationResults.mockReturnValue({
-        testTakers: { status: 'success', timestamp: 123 }
-      });
+    it('should skip step if results exist and not forced', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        stateServiceMock.getAllValidationResults.mockReturnValue({
+          testTakers: { status: 'success', timestamp: 123 }
+        });
 
-      // Should skip testTakers, but run others
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: 1 } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationResults.mockReturnValue(
-        of({ total: 0 })
-      );
+        // Should skip testTakers, but run others
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: 1 } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationResults.mockReturnValue(
+          of({ total: 0 })
+        );
 
-      service.startBatch(1);
-      tick(500 * 5); // 5 steps
-      tick();
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(500 * 5); // 5 steps
+        await jest.advanceTimersByTimeAsync(0);
 
-      // 6 steps total, 1 skipped = 5 called
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
-        5
-      );
-    }));
+        // 6 steps total, 1 skipped = 5 called
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+          5
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should run step if results exist but forced', fakeAsync(() => {
-      stateServiceMock.getAllValidationResults.mockReturnValue({
-        testTakers: { status: 'success', timestamp: 123 }
-      });
+    it('should run step if results exist but forced', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        stateServiceMock.getAllValidationResults.mockReturnValue({
+          testTakers: { status: 'success', timestamp: 123 }
+        });
 
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: 1 } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationResults.mockReturnValue(
-        of({ total: 0 })
-      );
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: 1 } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationResults.mockReturnValue(
+          of({ total: 0 })
+        );
 
-      service.startBatch(1, { force: true });
-      tick(500 * 6);
-      tick();
+        service.startBatch(1, { force: true });
+        await jest.advanceTimersByTimeAsync(500 * 6);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
-        6
-      );
-    }));
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+          6
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should handle failed task from polling', fakeAsync(() => {
-      const mockTaskId = 123;
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: mockTaskId } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({
-          id: mockTaskId,
-          status: 'failed',
-          error: 'Task error'
-        } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({
-          id: mockTaskId,
-          status: 'failed',
-          error: 'Task error'
-        } as ValidationTaskDto)
-      );
+    it('should handle failed task from polling', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const mockTaskId = 123;
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: mockTaskId } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({
+            id: mockTaskId,
+            status: 'failed',
+            error: 'Task error'
+          } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({
+            id: mockTaskId,
+            status: 'failed',
+            error: 'Task error'
+          } as ValidationTaskDto)
+        );
 
-      service.startBatch(1);
-      tick(500); // Trigger first interval
-      tick();
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(500); // Trigger first interval
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
-        1,
-        'testTakers',
-        expect.objectContaining({ status: 'failed' })
-      );
-    }));
+        expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+          1,
+          'testTakers',
+          expect.objectContaining({ status: 'failed' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should evaluate variables result as failed if total > 0', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: 1 } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationResults.mockReturnValue(
-        of({ total: 5 })
-      );
+    it('should evaluate variables result as failed if total > 0', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: 1 } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationResults.mockReturnValue(
+          of({ total: 5 })
+        );
 
-      // We only want to test one step, but startBatch runs all.
-      // We can check if setValidationResult was called with 'failed' for 'variables'
-      service.startBatch(1);
-      tick(500 * 2); // testTakers + variables
-      tick();
+        // We only want to test one step, but startBatch runs all.
+        // We can check if setValidationResult was called with 'failed' for 'variables'
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(500 * 2); // testTakers + variables
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
-        1,
-        'variables',
-        expect.objectContaining({ status: 'failed' })
-      );
-    }));
+        expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+          1,
+          'variables',
+          expect.objectContaining({ status: 'failed' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should evaluate testTakers result as failed if testTakersFound is false', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(
-        of({ id: 1 } as ValidationTaskDto)
-      );
-      validationServiceMock.pollValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationTask.mockReturnValue(
-        of({ id: 1, status: 'completed' } as ValidationTaskDto)
-      );
-      validationServiceMock.getValidationResults.mockReturnValue(
-        of({ testTakersFound: false })
-      );
+    it('should evaluate testTakers result as failed if testTakersFound is false', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        validationServiceMock.createValidationTask.mockReturnValue(
+          of({ id: 1 } as ValidationTaskDto)
+        );
+        validationServiceMock.pollValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationTask.mockReturnValue(
+          of({ id: 1, status: 'completed' } as ValidationTaskDto)
+        );
+        validationServiceMock.getValidationResults.mockReturnValue(
+          of({ testTakersFound: false })
+        );
 
-      service.startBatch(1);
-      tick(500);
-      tick();
+        service.startBatch(1);
+        await jest.advanceTimersByTimeAsync(500);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
-        1,
-        'testTakers',
-        expect.objectContaining({ status: 'failed' })
-      );
-    }));
+        expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+          1,
+          'testTakers',
+          expect.objectContaining({ status: 'failed' })
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });

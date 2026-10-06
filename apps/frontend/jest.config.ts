@@ -4,6 +4,8 @@
  */
 export default {
   displayName: 'frontend',
+  // Recycle large Angular workers between files to bound CI memory usage.
+  workerIdleMemoryLimit: '1GB',
   preset: '../../jest.preset.js',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   globals: {
