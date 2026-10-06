@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
-  mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync,
   symlinkSync, utimesSync, writeFileSync
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -211,6 +211,80 @@ test('the actual lint job checks earlier commits and rejects frontend failures',
   }
 });
 
+test('the actual backend job checks earlier commits, excludes frontend, and rejects test failures', () => {
+  const yaml = require('js-yaml');
+  const schema = yaml.DEFAULT_SCHEMA.extend([
+    new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
+  ]);
+  const config = yaml.load(readFileSync(join(workspace,
+    '.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml'), 'utf8'), { schema });
+  assert.equal(config['test-backend'].allow_failure, false);
+  const directory = mkdtempSync(join(tmpdir(), 'backend-commit-gate-'));
+  const env = {
+    ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true', NX_TUI: 'false',
+    NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
+  };
+  const run = (command, args) => spawnSync(command, args, {
+    cwd: directory, env, encoding: 'utf8', timeout: 30000
+  });
+  const succeed = (command, args) => {
+    const result = run(command, args);
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return result;
+  };
+  try {
+    symlinkSync(join(workspace, 'node_modules'), join(directory, 'node_modules'), 'junction');
+    writeFileSync(join(directory, 'package.json'), '{"name":"backend-gate-fixture","private":true}');
+    writeFileSync(join(directory, 'nx.json'), '{"plugins":[],"targetDefaults":{"test":{"cache":false}}}');
+    writeFileSync(join(directory, '.gitignore'), 'node_modules/\n.nx/\n*.tested\nfail-backend\n');
+    writeFileSync(join(directory, 'test.cjs'), `
+      const fs = require('node:fs');
+      const project = process.argv[2];
+      fs.writeFileSync(project + '.tested', 'checked');
+      if (project === 'frontend' || fs.existsSync('fail-backend')) process.exitCode = 1;
+    `);
+    for (const project of ['frontend', 'backend']) {
+      const root = join(directory, 'apps', project);
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, 'project.json'), JSON.stringify({
+        name: project,
+        targets: { test: { executor: 'nx:run-commands', options: {
+          command: `node test.cjs ${project}`
+        } } }
+      }));
+      writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
+    }
+    succeed('git', ['init', '-b', 'backend-fixture']);
+    const commit = message => {
+      succeed('git', ['add', '.']);
+      succeed('git', ['-c', 'user.name=Quality Gate', '-c', 'user.email=qa@example.invalid',
+        '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-m', message]);
+    };
+    commit('initial projects');
+    writeFileSync(join(directory, 'apps/backend/source.ts'), 'export const value = 2;\n');
+    commit('change backend');
+    writeFileSync(join(directory, 'README.md'), 'Documentation only.\n');
+    commit('update documentation');
+    const affected = succeed('npx', ['nx', 'show', 'projects', '--affected', '--base=HEAD~1',
+      '--withTarget=test', '--json']);
+    assert.deepEqual(JSON.parse(affected.stdout), []);
+
+    const script = config['test-backend'].script.join('\n');
+    succeed('sh', ['-eu', '-c', script]);
+    assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+    writeFileSync(join(directory, 'fail-backend'), 'fail');
+    const failed = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failed.error);
+    assert.equal(failed.status, 1, failed.stdout + failed.stderr);
+    assert.match(failed.stdout + failed.stderr, /backend:test/);
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('artifact fingerprints follow served bytes and paths, not timestamps or directory order', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'frontend-artifact-gate-'));
   const artifact = join(directory, 'dist');
@@ -271,6 +345,7 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   const backend = ci.split('\ntest-backend:\n')[1].split('\ntest-frontend:\n')[0];
   assert.match(backend, /--target=test --exclude=frontend/);
   assert.match(backend, /allow_failure: false/);
+  assert.match(backend, /--passWithNoTests=false/);
   const browser = ci.split('\ntest-browser:\n')[1].split('\ntest-replay-live:\n')[0];
   assert.match(browser, /- build-app/);
   assert.match(browser, /frontend:e2e --configuration=ci/);

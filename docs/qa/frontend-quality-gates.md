@@ -6,7 +6,9 @@ one native zoneless environment, with coverage, quality-gate regression tests,
 and the existing risk-based inventory approval. It rejects failures and publishes
 JUnit and Cobertura reports even when tests fail.
 
-`test-backend` excludes the frontend and rejects backend test failures. `lint-app`
+`test-backend` runs every test target except the frontend, independently of the
+last commit. It rejects backend test failures and empty suites; valid Nx task
+results can still be reused from cache. `lint-app`
 runs every project's lint target once and rejects failures, including frontend
 changes preceding a final documentation or CI commit. `build-app` builds the
 production frontend once and builds affected backend projects separately.
@@ -89,7 +91,10 @@ other project configurations without setting `TS_NODE_COMPILER_OPTIONS`.
 `frontend:test-quality-gates` tests invalid templates, inaccessible external and
 inline controls, configuration loading, and CI wiring. An isolated Nx/Git fixture
 executes the actual lint job after a frontend change followed by a docs-only
-commit, and verifies that frontend lint failures reject the job. Artifact hashing
+commit, and verifies that frontend lint failures reject the job. A second Nx/Git
+fixture executes the actual backend job after a backend change followed by a
+docs-only commit: backend tests must run, frontend tests must stay excluded, and
+a backend failure must reject the job. Artifact hashing
 regressions cover content changes, additions, deletions, renames, and timestamps.
 It also runs an isolated
 Jest fixture twice using the actual workspace thresholds: full coverage passes,
