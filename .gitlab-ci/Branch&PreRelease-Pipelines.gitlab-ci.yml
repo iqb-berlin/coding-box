@@ -465,7 +465,7 @@ test-backend:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=test --exclude=frontend --parallel=1 -- --maxWorkers=2
+    - npx nx run-many --target=test --exclude=frontend --parallel=1 -- --maxWorkers=2 --passWithNoTests=false
 
 test-frontend:
   stage: test-units
