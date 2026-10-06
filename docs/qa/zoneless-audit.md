@@ -28,6 +28,14 @@ Die Coverage liegt bei 78,97 % Statements/Zeilen, 78,15 % Branches und 77,58 % F
 Die sechs Component-Specs verwenden `cypress/angular-zoneless`; ihre vorhandenen
 Mock-Provider und Daten sind an die aktuellen Dienste und Dialogabläufe angepasst.
 
+Pipeline #102989 auf `151cddda` bestand alle elf Jobs. Die anschließende Prüfung
+des Browser-Protokolls zeigte jedoch einen leeren Lauf der ersten Component-Spec:
+Nur fünf der sechs Fälle wurden ausgeführt. Deshalb lehnen beide Browser-Targets
+über `after:spec` einen Lauf ohne Tests ab. Für den kalten Angular-Compiler erlaubt
+die Component-Konfiguration 120 Sekunden Seitenladezeit; Retries bleiben aus.
+Die acht Quality-Gate-Tests prüfen auch, dass ein leerer Spec-Lauf fehlschlägt.
+Der abschließende CI-Nachweis muss diesen zusätzlichen Schutz enthalten.
+
 ## Prüfinfrastruktur
 
 ### Zusätzliche Regressionen vom 03.10.2026
