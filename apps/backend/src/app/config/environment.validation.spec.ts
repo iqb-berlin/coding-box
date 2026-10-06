@@ -70,6 +70,49 @@ describe('startup environment validation', () => {
     })).not.toThrow();
   });
 
+  it.each(['', '  '])('uses Keycloak fallbacks for blank optional OIDC overrides: %s', blank => {
+    expect(() => validateEnvironment({
+      ...api,
+      KEYCLOAK_URL: 'https://login.example',
+      KEYCLOAK_REALM: 'coding',
+      KEYCLOAK_CLIENT_ID: 'coding',
+      OIDC_ISSUER: blank,
+      OIDC_JWKS_URI: blank,
+      OIDC_PROVIDER_URL: blank
+    })).not.toThrow();
+  });
+
+  it('accepts explicit OIDC configuration with unused blank Keycloak settings', () => {
+    expect(() => validateEnvironment({
+      ...api,
+      KEYCLOAK_URL: '',
+      KEYCLOAK_REALM: '',
+      KEYCLOAK_CLIENT_ID: 'coding',
+      OIDC_ISSUER: 'https://login.example/issuer',
+      OIDC_JWKS_URI: 'https://login.example/certs'
+    })).not.toThrow();
+  });
+
+  it('does not select OIDC when all optional auth settings are blank', () => {
+    expect(() => validateEnvironment({
+      ...api,
+      KEYCLOAK_URL: '',
+      KEYCLOAK_REALM: '',
+      KEYCLOAK_CLIENT_ID: '',
+      OIDC_ISSUER: '',
+      OIDC_JWKS_URI: ''
+    })).not.toThrow();
+  });
+
+  it('rejects blank overrides when the required issuer and JWKS fallbacks are missing', () => {
+    expect(() => validateEnvironment({
+      ...api,
+      KEYCLOAK_CLIENT_ID: 'coding',
+      OIDC_ISSUER: '  ',
+      OIDC_JWKS_URI: ''
+    })).toThrow('KEYCLOAK_URL');
+  });
+
   it('rejects partial OIDC configuration that would skip issuer or audience verification', () => {
     expect(() => validateEnvironment({ ...api, OIDC_JWKS_URI: 'https://login.example/certs' }))
       .toThrow('KEYCLOAK_CLIENT_ID');
