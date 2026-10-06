@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -18,10 +17,8 @@ import {
   ApiOperation,
   ApiTags
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { LogoService } from './logo.service';
+import { LogoUploadInterceptor } from './logo-upload.interceptor';
 import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -31,37 +28,13 @@ import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 @Controller('admin/logo')
 @ApiTags('admin')
 export class LogoController {
+  constructor(private readonly logoService: LogoService) {}
+
   @Post('upload')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Upload logo', description: 'Uploads a new logo to replace the default one' })
-  @UseInterceptors(
-    FileInterceptor('logo', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
-          if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-          }
-          cb(null, uploadPath);
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          cb(null, `logo${ext}`);
-        }
-      }),
-      limits: {
-        fileSize: 4 * 1024 * 1024 // 4MB
-      },
-      fileFilter: (req, file, cb) => {
-        if (!['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'].includes(file.mimetype)) {
-          return cb(new BadRequestException('Only image files are allowed'), false);
-        }
-
-        return cb(null, true);
-      }
-    })
-  )
+  @UseInterceptors(LogoUploadInterceptor)
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -77,11 +50,7 @@ export class LogoController {
   })
   @ApiOkResponse({ description: 'Logo uploaded successfully', type: String })
   async uploadLogo(@UploadedFile() file: Express.Multer.File): Promise<{ path: string }> {
-    if (!file) {
-      throw new BadRequestException('No file uploaded');
-    }
-
-    return { path: `assets/images/logo${path.extname(file.originalname)}` };
+    return this.logoService.uploadedLogo(file);
   }
 
   @Delete()
@@ -90,23 +59,7 @@ export class LogoController {
   @ApiOperation({ summary: 'Delete logo', description: 'Deletes the custom logo and reverts to the default one' })
   @ApiOkResponse({ description: 'Logo deleted successfully', type: Boolean })
   async deleteLogo(): Promise<{ success: boolean }> {
-    const assetsDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
-    const files = fs.readdirSync(assetsDir);
-
-    let deleted = false;
-    for (const file of files) {
-      if (file.startsWith('logo')) {
-        fs.unlinkSync(path.join(assetsDir, file));
-        deleted = true;
-      }
-    }
-
-    const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
-    if (fs.existsSync(settingsPath)) {
-      fs.unlinkSync(settingsPath);
-    }
-
-    return { success: deleted };
+    return this.logoService.deleteLogo();
   }
 
   @Put('settings')
@@ -116,14 +69,7 @@ export class LogoController {
   @ApiBody({ type: AppLogoDto })
   @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
   async saveLogoSettings(@Body(new JsonSchemaValidationPipe(requestBodySchemas.AppLogoDto)) logoSettings: AppLogoDto): Promise<{ success: boolean }> {
-    const dataDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data');
-    const settingsPath = path.join(dataDir, 'logo-settings.json');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    fs.writeFileSync(settingsPath, JSON.stringify(logoSettings, null, 2));
-
-    return { success: true };
+    return this.logoService.saveLogoSettings(logoSettings);
   }
 
   @Get('settings')
@@ -132,17 +78,6 @@ export class LogoController {
   @ApiOperation({ summary: 'Get logo settings', description: 'Gets logo settings like background color' })
   @ApiOkResponse({ description: 'Logo settings retrieved successfully', type: AppLogoDto })
   async getLogoSettings(): Promise<AppLogoDto> {
-    const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
-    if (fs.existsSync(settingsPath)) {
-      const settingsJson = fs.readFileSync(settingsPath, 'utf8');
-      return JSON.parse(settingsJson);
-    }
-
-    return {
-      data: 'assets/images/IQB-LogoA.png',
-      alt: 'Zur Startseite',
-      bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
-      boxBackground: 'lightgray'
-    };
+    return this.logoService.getLogoSettings();
   }
 }
