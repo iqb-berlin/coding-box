@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { createCodingJobService } from './coding-job-test.factory';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
@@ -144,7 +145,7 @@ describe('CodingJobService distribution from job definitions', () => {
       assertUsersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
     };
 
-    service = new CodingJobService(
+    service = createCodingJobService(
       codingJobRepository as never,
       codingJobCoderRepository as never,
       codingJobVariableRepository as never,
