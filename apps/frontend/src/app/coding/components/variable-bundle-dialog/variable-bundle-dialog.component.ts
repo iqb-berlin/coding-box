@@ -4,7 +4,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 
 import {
-  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators
+  FormsModule, ReactiveFormsModule, NonNullableFormBuilder, FormGroup, FormControl, Validators
 } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -73,12 +73,16 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
   protected readonly unitNameFilterInput = viewChild.required<ElementRef>('unitNameFilterInput');
   protected readonly variableIdFilterInput = viewChild.required<ElementRef>('variableIdFilterInput');
 
-  private fb = inject(FormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
   private appService = inject(AppService);
   private destroy$ = new Subject<void>();
 
-  bundleGroupForm!: FormGroup;
+  bundleGroupForm!: FormGroup<{
+    name: FormControl<string>;
+    description: FormControl<string>;
+  }>;
+
   readonly isLoading = signal(false);
 
   // Variables
@@ -305,7 +309,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
 
     const bundleGroup: VariableBundle = {
       id: this.data.bundleGroup?.id || 0,
-      ...this.bundleGroupForm.value,
+      ...this.bundleGroupForm.getRawValue(),
       createdAt: this.data.bundleGroup?.createdAt || new Date(),
       updatedAt: new Date(),
       variables: selectedVars

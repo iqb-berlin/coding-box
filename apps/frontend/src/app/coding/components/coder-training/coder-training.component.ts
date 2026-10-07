@@ -18,7 +18,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatRadioModule } from '@angular/material/radio';
 import {
-  FormBuilder,
+  NonNullableFormBuilder,
   FormGroup,
   ReactiveFormsModule,
   Validators,
@@ -52,9 +52,26 @@ export interface VariableConfig {
   includeDeriveError?: boolean;
 }
 
+type TrainingVariableForm = FormGroup<{
+  variableId: FormControl<string>;
+  unitId: FormControl<string>;
+  sampleCount: FormControl<number>;
+  bundleId: FormControl<number | null>;
+  bundleName: FormControl<string>;
+  overlapWarning: FormControl<boolean>;
+  bundleCaseOrderingMode: FormControl<'continuous' | 'alternating' | null>;
+  includeDeriveError: FormControl<boolean>;
+}>;
+
+type CoderTrainingForm = FormGroup<{
+  [Key in keyof CoderTrainingRecoveryFormValue]: FormControl<CoderTrainingRecoveryFormValue[Key]>;
+} & {
+  variables: FormArray<TrainingVariableForm>;
+}>;
+
 export interface VariableGrouping {
-  manual: { control: FormGroup; index: number }[];
-  bundles: { bundle: VariableBundle; variables: { control: FormGroup; index: number }[] }[];
+  manual: { control: TrainingVariableForm; index: number }[];
+  bundles: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] }[];
 }
 
 export const CODER_TRAINING_RECOVERY_KEY = 'coder-training-active-state';
@@ -148,7 +165,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private readonly codingTrainingBackendService = inject(CodingTrainingBackendService);
   private readonly appService = inject(AppService);
   private readonly sessionRecoveryService = inject(SessionRecoveryService);
-  private readonly fb = inject(FormBuilder);
+  private readonly fb = inject(NonNullableFormBuilder);
   private readonly backendMessageTranslator = inject(BackendMessageTranslatorService);
   private unregisterRecoveryProvider?: () => void;
   private hasRestoredRecoveryDraft = false;
@@ -178,7 +195,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
 
-  trainingForm: FormGroup;
+  trainingForm: CoderTrainingForm;
   variableFilterCtrl = new FormControl('');
   bundleFilterCtrl = new FormControl('');
   bundleSelection$ = new BehaviorSubject<number[]>([]);
@@ -195,7 +212,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   constructor() {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
-      caseOrderingMode: ['continuous'],
+      caseOrderingMode: ['continuous' as 'continuous' | 'alternating'],
       caseSelectionMode: ['oldest_first' as CaseSelectionMode],
       showScore: [false],
       allowComments: [true],
@@ -203,7 +220,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       includeDerivedVariables: [true],
       referenceTrainingIds: [[] as number[]],
       referenceMode: [null as ReferenceMode | null],
-      variables: this.fb.array([])
+      variables: this.fb.array<TrainingVariableForm>([])
     });
 
     // Initialize grouped variables
@@ -222,8 +239,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         if (this.isSyncing) return;
 
         const manualVarKeys = this.variablesFormArray.controls
-          .filter(c => !c.get('bundleId')?.value)
-          .map(c => `${c.get('unitId')?.value}::${c.get('variableId')?.value}`)
+          .filter(c => !c.controls.bundleId.value)
+          .map(c => `${c.controls.unitId.value}::${c.controls.variableId.value}`)
           .filter(key => key !== '::');
 
         const currentSelectedKeys = this.manualVariablesSelectControl.value || [];
@@ -280,7 +297,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private setupDerivedVariableSync(): void {
-    this.trainingForm.get('includeDerivedVariables')?.valueChanges
+    this.trainingForm.controls.includeDerivedVariables.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(includeDerivedVariables => {
         this.syncDerivedVariableSelection(!!includeDerivedVariables);
@@ -426,7 +443,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             'continuous';
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
           this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
-          if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
+          if (this.variablesFormArray.controls.some(control => control.controls.bundleId.value === b.id)) {
             this.selectedBundleIds.update(value => {
               const next = new Set(value);
               next.add(b.id);
@@ -447,8 +464,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.unregisterRecoveryProvider = undefined;
   }
 
-  get variablesFormArray(): FormArray {
-    return this.trainingForm.get('variables') as FormArray;
+  get variablesFormArray(): FormArray<TrainingVariableForm> {
+    return this.trainingForm.controls.variables;
   }
 
   private registerRecoveryProvider(): void {
@@ -473,15 +490,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       selectedBundleIds: Array.from(this.selectedBundleIds()),
       manualVariableKeys: this.manualVariablesSelectControl.value || [],
       variables: this.variablesFormArray.controls.map(control => ({
-        variableId: control.get('variableId')?.value || '',
-        unitId: control.get('unitId')?.value || '',
-        sampleCount: Number(control.get('sampleCount')?.value) || 10,
-        ...(control.get('bundleId')?.value ? { bundleId: control.get('bundleId')?.value } : {}),
-        ...(control.get('bundleName')?.value ? { bundleName: control.get('bundleName')?.value } : {}),
-        ...(control.get('bundleCaseOrderingMode')?.value ?
-          { bundleCaseOrderingMode: control.get('bundleCaseOrderingMode')?.value } :
+        variableId: control.controls.variableId.value || '',
+        unitId: control.controls.unitId.value || '',
+        sampleCount: Number(control.controls.sampleCount.value) || 10,
+        ...(control.controls.bundleId.value ? { bundleId: control.controls.bundleId.value } : {}),
+        ...(control.controls.bundleName.value ? { bundleName: control.controls.bundleName.value } : {}),
+        ...(control.controls.bundleCaseOrderingMode.value ?
+          { bundleCaseOrderingMode: control.controls.bundleCaseOrderingMode.value } :
           {}),
-        ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+        ...(control.controls.includeDeriveError.value === true ? { includeDeriveError: true } : {})
       })),
       variableFilter: this.variableFilterCtrl.value || '',
       bundleFilter: this.bundleFilterCtrl.value || ''
@@ -663,7 +680,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   get includeDerivedVariables(): boolean {
-    return !!this.trainingForm.get('includeDerivedVariables')?.value;
+    return !!this.trainingForm.controls.includeDerivedVariables.value;
   }
 
   getDialogTitle(): string {
@@ -681,7 +698,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   getDuplicateTrainingLabelMatches(): CoderTraining[] {
     return getDuplicateTrainingLabelMatches(
       this.availableTrainings(),
-      this.trainingForm.get('trainingLabel')?.value,
+      this.trainingForm.controls.trainingLabel.value,
       this.editTraining()?.id
     );
   }
@@ -717,9 +734,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.isDerivedVariableKey(variable.unitName, variable.variableId);
   }
 
-  isControlDerived(control: FormGroup): boolean {
-    const unitId = control.get('unitId')?.value;
-    const variableId = control.get('variableId')?.value;
+  isControlDerived(control: TrainingVariableForm): boolean {
+    const unitId = control.controls.unitId.value;
+    const variableId = control.controls.variableId.value;
     return this.isDerivedVariableKey(unitId, variableId);
   }
 
@@ -728,7 +745,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getSelectedDerivedVariablesCount(): number {
-    return this.variablesFormArray.controls.filter(control => this.isControlDerived(control as FormGroup)).length;
+    return this.variablesFormArray.controls.filter(control => this.isControlDerived(control)).length;
   }
 
   getBundleDerivedVariablesCount(bundle: VariableBundle): number {
@@ -799,7 +816,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       if (!bundle) return;
 
       const bundleSampleCount = this.getBundleSampleCount(bundleId);
-      const bundleCaseOrderingMode = bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+      const bundleCaseOrderingMode = bundle.caseOrderingMode || this.trainingForm.controls.caseOrderingMode.value || 'continuous';
       bundle.variables
         .filter(variable => this.isVariableDerived(variable))
         .forEach(variable => {
@@ -823,7 +840,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private removeSelectedDerivedVariables(): number {
     const indexesToRemove = this.variablesFormArray.controls
-      .map((control, index) => ({ control: control as FormGroup, index }))
+      .map((control, index) => ({ control: control, index }))
       .filter(item => this.isControlDerived(item.control))
       .map(item => item.index);
 
@@ -849,7 +866,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private pruneSelectedBundlesWithoutVariables(): void {
     const bundleIdsWithVariables = new Set(
       this.variablesFormArray.controls
-        .map(control => control.get('bundleId')?.value as number | null)
+        .map(control => control.controls.bundleId.value as number | null)
         .filter((bundleId): bundleId is number => !!bundleId)
     );
     const selectedBundleIds = Array.from(this.selectedBundleIds());
@@ -945,12 +962,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const maxAvailable = variableData ? this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError) : 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
 
-    const variableGroup = this.fb.group({
+    const variableGroup: TrainingVariableForm = this.fb.group({
       variableId: [variableId, [Validators.required]],
       unitId: [unitId, [Validators.required]],
       sampleCount: [defaultSampleCount, [Validators.required, Validators.min(1), Validators.max(maxAvailable)]],
-      bundleId: [bundleId],
-      bundleName: [bundleName],
+      bundleId: [bundleId ?? null],
+      bundleName: [bundleName ?? ''],
       overlapWarning: [false],
       bundleCaseOrderingMode: [bundleCaseOrderingMode || null],
       includeDeriveError: [includeDeriveError]
@@ -1012,7 +1029,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     let addedCount = 0;
     const duplicateVariables: string[] = [];
-    const effectiveCaseOrderingMode = caseOrderingMode || bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+    const effectiveCaseOrderingMode = caseOrderingMode || bundle.caseOrderingMode || this.trainingForm.controls.caseOrderingMode.value || 'continuous';
 
     const variablesToAdd = this.includeDerivedVariables ?
       bundle.variables :
@@ -1062,13 +1079,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ): void {
     variables.forEach(variable => {
       const bundleVariableControl = this.variablesFormArray.controls.find(control => (
-        control.get('bundleId')?.value === bundleId &&
-        control.get('unitId')?.value === variable.unitName &&
-        control.get('variableId')?.value === variable.variableId
+        control.controls.bundleId.value === bundleId &&
+        control.controls.unitId.value === variable.unitName &&
+        control.controls.variableId.value === variable.variableId
       ));
       if (bundleVariableControl) {
         this.setDeriveErrorIncludedForControl(
-          bundleVariableControl as FormGroup,
+          bundleVariableControl,
           variable.includeDeriveError === true
         );
       }
@@ -1077,8 +1094,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private isVariableAlreadyAdded(variable: { unitName: string; variableId: string }): boolean {
     return this.variablesFormArray.controls.some(control => {
-      const existingVariableId = control.get('variableId')?.value;
-      const existingUnitId = control.get('unitId')?.value;
+      const existingVariableId = control.controls.variableId.value;
+      const existingUnitId = control.controls.unitId.value;
       return existingVariableId === variable.variableId && existingUnitId === variable.unitName;
     });
   }
@@ -1090,9 +1107,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
-        const defaultMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+        const defaultMode = this.trainingForm.controls.caseOrderingMode.value || 'continuous';
         this.addBundleVariables(bundleId, undefined, defaultMode);
-        if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === bundleId)) {
+        if (this.variablesFormArray.controls.some(control => control.controls.bundleId.value === bundleId)) {
           this.selectedBundleIds.update(value => {
             const next = new Set(value);
             next.add(bundleId);
@@ -1111,8 +1128,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onVariablesSelectionChange(selectedVarKeys: string[]): void {
     const currentManualKeys = this.variablesFormArray.controls
-      .filter(c => !c.get('bundleId')?.value)
-      .map(c => `${c.get('unitId')?.value}::${c.get('variableId')?.value}`)
+      .filter(c => !c.controls.bundleId.value)
+      .map(c => `${c.controls.unitId.value}::${c.controls.variableId.value}`)
       .filter(key => key !== '::');
 
     const newKeys = selectedVarKeys.filter(key => !currentManualKeys.includes(key));
@@ -1131,9 +1148,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     removedKeys.forEach(key => {
       const [unitId, variableId] = key.split('::');
-      const index = this.variablesFormArray.controls.findIndex(c => !c.get('bundleId')?.value &&
-        c.get('variableId')?.value === variableId &&
-        c.get('unitId')?.value === unitId
+      const index = this.variablesFormArray.controls.findIndex(c => !c.controls.bundleId.value &&
+        c.controls.variableId.value === variableId &&
+        c.controls.unitId.value === unitId
       );
       if (index !== -1) {
         this.removeVariable(index, true);
@@ -1146,8 +1163,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   get selectedManualVariableIds(): string[] {
     return this.variablesFormArray.controls
-      .filter(c => !c.get('bundleId')?.value)
-      .map(c => c.get('variableId')?.value as string)
+      .filter(c => !c.controls.bundleId.value)
+      .map(c => c.controls.variableId.value as string)
       .filter(id => !!id);
   }
 
@@ -1157,7 +1174,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const variablesToRemove: number[] = [];
     this.variablesFormArray.controls.forEach((control, index) => {
-      if (control.get('bundleId')?.value === bundleId) {
+      if (control.controls.bundleId.value === bundleId) {
         variablesToRemove.push(index);
       }
     });
@@ -1223,7 +1240,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasTrainingLabel(): boolean {
-    const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
+    const trainingLabel = this.trainingForm.controls.trainingLabel.value;
     return typeof trainingLabel === 'string' && trainingLabel.trim().length > 0;
   }
 
@@ -1236,8 +1253,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasValidReferenceMode(): boolean {
-    const referenceTrainingIds = (this.trainingForm.get('referenceTrainingIds')?.value as number[]) || [];
-    return referenceTrainingIds.length === 0 || !!this.trainingForm.get('referenceMode')?.value;
+    const referenceTrainingIds = this.trainingForm.controls.referenceTrainingIds.value || [];
+    return referenceTrainingIds.length === 0 || !!this.trainingForm.controls.referenceMode.value;
   }
 
   hasValidCaseCounts(): boolean {
@@ -1262,14 +1279,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private hasAnyInsufficientCases(): boolean {
     return this.variablesFormArray.controls.some(control => {
-      const unitId = control.get('unitId')?.value;
-      const variableId = control.get('variableId')?.value;
-      const requestedCount = control.get('sampleCount')?.value || 0;
+      const unitId = control.controls.unitId.value;
+      const variableId = control.controls.variableId.value;
+      const requestedCount = control.controls.sampleCount.value || 0;
       const variableData = this.getAvailableVariable(unitId, variableId);
       const effectiveCount = this.getEffectiveAvailableCount(
         unitId,
         variableId,
-        control.get('includeDeriveError')?.value === true
+        control.controls.includeDeriveError.value === true
       );
       return !!variableData && effectiveCount < requestedCount;
     });
@@ -1289,7 +1306,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   getSelectedVariablesCount(): number {
     return this.variablesFormArray.controls.filter(control => {
-      const variableId = control.get('variableId')?.value;
+      const variableId = control.controls.variableId.value;
       return typeof variableId === 'string' && variableId.trim() !== '';
     }).length;
   }
@@ -1299,20 +1316,20 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getTotalSamples(): number {
-    return this.variablesFormArray.controls.reduce((total, control) => total + (Number(control.get('sampleCount')?.value) || 0), 0);
+    return this.variablesFormArray.controls.reduce((total, control) => total + (Number(control.controls.sampleCount.value) || 0), 0);
   }
 
   isVariableSelected(variableId: string): boolean {
-    return this.variablesFormArray.controls.some(control => control.get('variableId')?.value === variableId);
+    return this.variablesFormArray.controls.some(control => control.controls.variableId.value === variableId);
   }
 
   private checkForOverlaps(): void {
     const bundleVariables = new Set<string>();
 
     this.variablesFormArray.controls.forEach(control => {
-      if (control.get('bundleId')?.value) {
-        const varId = control.get('variableId')?.value;
-        const unitId = control.get('unitId')?.value;
+      if (control.controls.bundleId.value) {
+        const varId = control.controls.variableId.value;
+        const unitId = control.controls.unitId.value;
         if (varId && unitId) {
           bundleVariables.add(`${unitId}::${varId}`);
         }
@@ -1320,13 +1337,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     this.variablesFormArray.controls.forEach(control => {
-      if (!control.get('bundleId')?.value) {
-        const varId = control.get('variableId')?.value;
-        const unitId = control.get('unitId')?.value;
+      if (!control.controls.bundleId.value) {
+        const varId = control.controls.variableId.value;
+        const unitId = control.controls.unitId.value;
         const key = `${unitId}::${varId}`;
         const isOverlapping = bundleVariables.has(key);
 
-        const currentWarning = control.get('overlapWarning')?.value;
+        const currentWarning = control.controls.overlapWarning.value;
         if (currentWarning !== isOverlapping) {
           control.get('overlapWarning')?.setValue(isOverlapping);
         }
@@ -1350,15 +1367,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getVariablesGroupedByBundle(): VariableGrouping {
-    const manualVariables: { control: FormGroup; index: number }[] = [];
-    const bundleGroups: { [bundleId: number]: { bundle: VariableBundle; variables: { control: FormGroup; index: number }[] } } = {};
+    const manualVariables: { control: TrainingVariableForm; index: number }[] = [];
+    const bundleGroups: { [bundleId: number]: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] } } = {};
 
     this.variablesFormArray.controls.forEach((control, index) => {
-      const bundleId = control.get('bundleId')?.value;
-      const bundleName = control.get('bundleName')?.value;
+      const bundleId = control.controls.bundleId.value;
+      const bundleName = control.controls.bundleName.value;
 
       if (bundleId && bundleName) {
-        const bundleModeFromControl = control.get('bundleCaseOrderingMode')?.value as 'continuous' | 'alternating' | null;
+        const bundleModeFromControl = control.controls.bundleCaseOrderingMode.value as 'continuous' | 'alternating' | null;
         if (!bundleGroups[bundleId]) {
           const bundle = this.availableBundles().find(b => b.id === bundleId);
           bundleGroups[bundleId] = {
@@ -1369,7 +1386,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
               updatedAt: bundle?.updatedAt || new Date(),
               description: bundle?.description,
               variables: bundle?.variables || [],
-              caseOrderingMode: bundleModeFromControl || bundle?.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
+              caseOrderingMode: bundleModeFromControl || bundle?.caseOrderingMode || this.trainingForm.controls.caseOrderingMode.value || 'continuous'
             },
             variables: []
           };
@@ -1377,9 +1394,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         if (!bundleGroups[bundleId].bundle.caseOrderingMode && bundleModeFromControl) {
           bundleGroups[bundleId].bundle.caseOrderingMode = bundleModeFromControl;
         }
-        bundleGroups[bundleId].variables.push({ control: control as FormGroup, index });
+        bundleGroups[bundleId].variables.push({ control: control, index });
       } else {
-        manualVariables.push({ control: control as FormGroup, index });
+        manualVariables.push({ control: control, index });
       }
     });
 
@@ -1408,7 +1425,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     this.variablesFormArray.controls.forEach(control => {
-      if (control.get('bundleId')?.value === bundleId) {
+      if (control.controls.bundleId.value === bundleId) {
         control.get('sampleCount')?.setValue(parsedSampleCount, {
           emitEvent: false
         });
@@ -1419,14 +1436,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getBundleSampleCount(bundleId: number): number {
-    const firstVariable = this.variablesFormArray.controls.find(control => control.get('bundleId')?.value === bundleId);
+    const firstVariable = this.variablesFormArray.controls.find(control => control.controls.bundleId.value === bundleId);
     return firstVariable?.get('sampleCount')?.value || 10;
   }
 
   updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
     this.setAvailableBundleCaseOrderingMode(bundleId, mode);
     this.variablesFormArray.controls.forEach(control => {
-      if (control.get('bundleId')?.value === bundleId) {
+      if (control.controls.bundleId.value === bundleId) {
         control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
       }
     });
@@ -1438,43 +1455,43 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       { ...bundle, caseOrderingMode } : bundle)));
   }
 
-  hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {
+  hasInsufficientCases(bundleGroup: { variables: { control: TrainingVariableForm }[] }): boolean {
     if (bundleGroup.variables.length === 0) return false;
-    const requestedCount = bundleGroup.variables[0].control.get('sampleCount')?.value || 0;
+    const requestedCount = bundleGroup.variables[0].control.controls.sampleCount.value || 0;
 
     return bundleGroup.variables.some(v => {
-      const unitId = v.control.get('unitId')?.value;
-      const variableId = v.control.get('variableId')?.value;
+      const unitId = v.control.controls.unitId.value;
+      const variableId = v.control.controls.variableId.value;
       const variableData = this.getAvailableVariable(unitId, variableId);
       const effectiveCount = this.getEffectiveAvailableCount(
         unitId,
         variableId,
-        v.control.get('includeDeriveError')?.value === true
+        v.control.controls.includeDeriveError.value === true
       );
       return !!variableData && effectiveCount < requestedCount;
     });
   }
 
-  isManualVariableInsufficient(item: { control: FormGroup }): boolean {
-    const unitId = item.control.get('unitId')?.value;
-    const variableId = item.control.get('variableId')?.value;
-    const requestedCount = item.control.get('sampleCount')?.value || 0;
+  isManualVariableInsufficient(item: { control: TrainingVariableForm }): boolean {
+    const unitId = item.control.controls.unitId.value;
+    const variableId = item.control.controls.variableId.value;
+    const requestedCount = item.control.controls.sampleCount.value || 0;
     const variableData = this.getAvailableVariable(unitId, variableId);
     const effectiveCount = this.getEffectiveAvailableCount(
       unitId,
       variableId,
-      item.control.get('includeDeriveError')?.value === true
+      item.control.controls.includeDeriveError.value === true
     );
     return !!variableData && effectiveCount < requestedCount;
   }
 
-  getAvailableCount(item: { control: FormGroup }): number {
-    const unitId = item.control.get('unitId')?.value;
-    const variableId = item.control.get('variableId')?.value;
+  getAvailableCount(item: { control: TrainingVariableForm }): number {
+    const unitId = item.control.controls.unitId.value;
+    const variableId = item.control.controls.variableId.value;
     return this.getEffectiveAvailableCount(
       unitId,
       variableId,
-      item.control.get('includeDeriveError')?.value === true
+      item.control.controls.includeDeriveError.value === true
     );
   }
 
@@ -1497,34 +1514,34 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.availableVariables().find(avail => avail.unitName === unitId && avail.variableId === variableId);
   }
 
-  protected hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
-    const unitId = control.get('unitId')?.value;
-    const variableId = control.get('variableId')?.value;
+  protected hasDeriveErrorResponsesForControl(control: TrainingVariableForm): boolean {
+    const unitId = control.controls.unitId.value;
+    const variableId = control.controls.variableId.value;
     const variable = this.getAvailableVariable(unitId, variableId);
-    return (variable?.deriveErrorResponseCount ?? 0) > 0 || control.get('includeDeriveError')?.value === true;
+    return (variable?.deriveErrorResponseCount ?? 0) > 0 || control.controls.includeDeriveError.value === true;
   }
 
-  protected getDeriveErrorResponseCountForControl(control: FormGroup): number {
-    const unitId = control.get('unitId')?.value;
-    const variableId = control.get('variableId')?.value;
+  protected getDeriveErrorResponseCountForControl(control: TrainingVariableForm): number {
+    const unitId = control.controls.unitId.value;
+    const variableId = control.controls.variableId.value;
     return this.getAvailableVariable(unitId, variableId)?.deriveErrorResponseCount ?? 0;
   }
 
-  protected isDeriveErrorIncludedForControl(control: FormGroup): boolean {
-    return control.get('includeDeriveError')?.value === true;
+  protected isDeriveErrorIncludedForControl(control: TrainingVariableForm): boolean {
+    return control.controls.includeDeriveError.value === true;
   }
 
-  setDeriveErrorIncludedForControl(control: FormGroup, includeDeriveError: boolean): void {
+  setDeriveErrorIncludedForControl(control: TrainingVariableForm, includeDeriveError: boolean): void {
     control.get('includeDeriveError')?.setValue(includeDeriveError);
-    const unitId = control.get('unitId')?.value;
-    const variableId = control.get('variableId')?.value;
+    const unitId = control.controls.unitId.value;
+    const variableId = control.controls.variableId.value;
     const maxAvailable = this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError);
     control.get('sampleCount')?.setValidators([
       Validators.required,
       Validators.min(1),
       Validators.max(maxAvailable)
     ]);
-    if (includeDeriveError && (Number(control.get('sampleCount')?.value) || 0) < 1 && maxAvailable > 0) {
+    if (includeDeriveError && (Number(control.controls.sampleCount.value) || 0) < 1 && maxAvailable > 0) {
       control.get('sampleCount')?.setValue(maxAvailable);
     }
     control.get('sampleCount')?.updateValueAndValidity();
@@ -1533,12 +1550,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   protected getSelectedDeriveErrorOptInCount(): number {
     return this.variablesFormArray.controls.filter(control => (
-      control.get('includeDeriveError')?.value === true
+      control.controls.includeDeriveError.value === true
     )).length;
   }
 
   getBundleOrderingOverrides(): BundleOrderingOverride[] {
-    const globalMode = (this.trainingForm.get('caseOrderingMode')?.value || 'continuous') as 'continuous' | 'alternating';
+    const globalMode = (this.trainingForm.controls.caseOrderingMode.value || 'continuous') as 'continuous' | 'alternating';
     return this.groupedVariables.bundles
       .map(bundleGroup => ({
         name: bundleGroup.bundle.name,
@@ -1561,7 +1578,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  protected getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
+  protected getBundleDeriveErrorControls(bundleGroup: { variables: { control: TrainingVariableForm; index: number }[] }): { control: TrainingVariableForm; index: number }[] {
     return bundleGroup.variables.filter(item => this.hasDeriveErrorResponsesForControl(item.control));
   }
 
@@ -1578,12 +1595,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
     const selectedCoders = this.getSelectedCoders();
     const variableConfigs: VariableConfig[] = this.variablesFormArray.controls.map(control => {
-      const variableId = control.get('variableId')?.value || '';
+      const variableId = control.controls.variableId.value || '';
       return {
         variableId,
-        unitId: control.get('unitId')?.value || '',
-        sampleCount: control.get('sampleCount')?.value || 10,
-        ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+        unitId: control.controls.unitId.value || '',
+        sampleCount: control.controls.sampleCount.value || 10,
+        ...(control.controls.includeDeriveError.value === true ? { includeDeriveError: true } : {})
       };
     });
 
@@ -1595,16 +1612,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
+    const trainingLabel = this.trainingForm.controls.trainingLabel.value || '';
 
     const assignedVariables: { unitName: string; variableId: string; sampleCount: number; includeDeriveError?: boolean }[] =
       this.variablesFormArray.controls
-        .filter(c => !c.get('bundleId')?.value)
+        .filter(c => !c.controls.bundleId.value)
         .map(c => ({
-          variableId: c.get('variableId')?.value,
-          unitName: c.get('unitId')?.value,
-          sampleCount: c.get('sampleCount')?.value,
-          ...(c.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+          variableId: c.controls.variableId.value,
+          unitName: c.controls.unitId.value,
+          sampleCount: c.controls.sampleCount.value,
+          ...(c.controls.includeDeriveError.value === true ? { includeDeriveError: true } : {})
         }));
 
     const assignedVariableBundles: {
@@ -1616,32 +1633,32 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }[] = [];
     const seenBundleIds = new Set<number>();
     this.variablesFormArray.controls.forEach(c => {
-      const bundleId = c.get('bundleId')?.value;
+      const bundleId = c.controls.bundleId.value;
       if (bundleId && !seenBundleIds.has(bundleId)) {
         seenBundleIds.add(bundleId);
         const bundle = this.availableBundles().find(b => b.id === bundleId);
-        const bundleCaseOrderingMode = c.get('bundleCaseOrderingMode')?.value || bundle?.caseOrderingMode;
+        const bundleCaseOrderingMode = c.controls.bundleCaseOrderingMode.value || bundle?.caseOrderingMode;
         assignedVariableBundles.push({
           id: bundleId,
-          name: c.get('bundleName')?.value,
-          sampleCount: c.get('sampleCount')?.value || 10,
-          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous',
+          name: c.controls.bundleName.value,
+          sampleCount: c.controls.sampleCount.value || 10,
+          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.controls.caseOrderingMode.value || 'continuous',
           variables: this.variablesFormArray.controls
-            .filter(control => control.get('bundleId')?.value === bundleId)
+            .filter(control => control.controls.bundleId.value === bundleId)
             .map(control => ({
-              unitName: control.get('unitId')?.value,
-              variableId: control.get('variableId')?.value,
-              sampleCount: control.get('sampleCount')?.value || 10,
-              ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+              unitName: control.controls.unitId.value,
+              variableId: control.controls.variableId.value,
+              sampleCount: control.controls.sampleCount.value || 10,
+              ...(control.controls.includeDeriveError.value === true ? { includeDeriveError: true } : {})
             }))
         });
       }
     });
 
-    const caseOrderingMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
-    const caseSelectionMode = this.trainingForm.get('caseSelectionMode')?.value as CaseSelectionMode || 'oldest_first';
-    const referenceTrainingIds = (this.trainingForm.get('referenceTrainingIds')?.value as number[]) || [];
-    const referenceMode = this.trainingForm.get('referenceMode')?.value as ReferenceMode | null;
+    const caseOrderingMode = this.trainingForm.controls.caseOrderingMode.value || 'continuous';
+    const caseSelectionMode = this.trainingForm.controls.caseSelectionMode.value || 'oldest_first';
+    const referenceTrainingIds = this.trainingForm.controls.referenceTrainingIds.value || [];
+    const referenceMode = this.trainingForm.controls.referenceMode.value;
 
     const request$ = this.isEditMode ?
       this.codingTrainingBackendService.updateCoderTraining(
@@ -1657,9 +1674,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseSelectionMode,
         referenceTrainingIds,
         referenceMode ?? undefined,
-        this.trainingForm.get('showScore')?.value ?? false,
-        this.trainingForm.get('allowComments')?.value ?? true,
-        this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
+        this.trainingForm.controls.showScore.value ?? false,
+        this.trainingForm.controls.allowComments.value ?? true,
+        this.trainingForm.controls.suppressGeneralInstructions.value ?? false
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
         workspaceId,
@@ -1673,9 +1690,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseSelectionMode,
         referenceTrainingIds.length ? referenceTrainingIds : undefined,
         referenceMode ?? undefined,
-        this.trainingForm.get('showScore')?.value ?? false,
-        this.trainingForm.get('allowComments')?.value ?? true,
-        this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
+        this.trainingForm.controls.showScore.value ?? false,
+        this.trainingForm.controls.allowComments.value ?? true,
+        this.trainingForm.controls.suppressGeneralInstructions.value ?? false
       );
 
     request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -1750,9 +1767,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           return;
         }
 
-        const isAlreadyAdded = this.variablesFormArray.controls.some(c => !c.get('bundleId')?.value &&
-          c.get('variableId')?.value === v.variableId &&
-          c.get('unitId')?.value === v.unitName
+        const isAlreadyAdded = this.variablesFormArray.controls.some(c => !c.controls.bundleId.value &&
+          c.controls.variableId.value === v.variableId &&
+          c.controls.unitId.value === v.unitName
         );
         if (!isAlreadyAdded) {
           const sampleCount = v.casesInJobs ?? defaultSampleCount;
@@ -1776,7 +1793,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
         if (!currentSelectedIds.includes(b.id)) {
           this.addBundleVariables(b.id, defaultSampleCount, b.caseOrderingMode);
-          if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
+          if (this.variablesFormArray.controls.some(control => control.controls.bundleId.value === b.id)) {
             this.selectedBundleIds.update(value => {
               const next = new Set(value);
               next.add(b.id);
