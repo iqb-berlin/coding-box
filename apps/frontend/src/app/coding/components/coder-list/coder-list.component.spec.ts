@@ -92,4 +92,11 @@ describe('CoderListComponent', () => {
 
     expect(snackBar.open).toHaveBeenCalled();
   });
+
+  it('resets typed text controls to empty strings when editing is cancelled', () => {
+    component.startEditCoder(coders[0] as never);
+    component.cancelEdit();
+    expect(component.coderForm.getRawValue()).toEqual({ name: '', displayName: '', email: '' });
+    expect(component.coderForm.invalid).toBe(true);
+  });
 });
