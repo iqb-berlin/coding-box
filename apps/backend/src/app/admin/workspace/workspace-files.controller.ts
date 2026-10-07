@@ -14,7 +14,8 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
-  Put
+  Put,
+  Req
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -554,12 +555,13 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { ignoredUnits: string[] }
+      @Body() body: { ignoredUnits: string[] },
+      @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
       throw new BadRequestException('ignoredUnits must be an array of strings');
     }
-    return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits);
+    return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits, request?.user.id);
   }
 
   @Get(':workspace_id/settings')
@@ -581,11 +583,12 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: WorkspaceSettingsDto
+      @Body() body: WorkspaceSettingsDto,
+      @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body) {
       throw new BadRequestException('Request body is required');
     }
-    return this.workspaceCoreService.setWorkspaceSettings(workspaceId, body);
+    return this.workspaceCoreService.setWorkspaceSettings(workspaceId, body, request?.user.id);
   }
 }

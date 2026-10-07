@@ -27,6 +27,7 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { Person } from '../shared';
+import { JournalService } from '../shared/journal.service';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
@@ -36,6 +37,7 @@ describe('UploadResultsService', () => {
   let codingAnalysisService: CodingAnalysisService;
 
   beforeEach(async () => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UploadResultsService,
@@ -88,6 +90,7 @@ describe('UploadResultsService', () => {
         {
           provide: DataSource,
           useValue: {
+            transaction: jest.fn(callback => callback({})),
             createQueryRunner: jest.fn().mockReturnValue({
               connect: jest.fn().mockResolvedValue(undefined),
               query: jest.fn().mockResolvedValue([]),
@@ -109,6 +112,38 @@ describe('UploadResultsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('passes the trusted initiating user to the queued import without storing file buffers', async () => {
+    const queue = (service as unknown as { jobQueueService: JobQueueService }).jobQueueService;
+    jest.mocked(queue.addUploadJob).mockResolvedValue({ id: '123' } as never);
+    await service.uploadTestResults(3, [{ buffer: Buffer.from('raw answers'), originalname: 'results.csv' } as FileIo], 'responses', false, 'strict', 'skip', 'person', undefined, 7);
+    expect(queue.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }));
+    expect(jest.mocked(queue.addUploadJob).mock.calls[0][0].file).not.toHaveProperty('buffer');
+  });
+
+  it('records failed import outcomes with trusted provenance and no file contents or names', async () => {
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+    await service.processUpload({
+      id: '123',
+      data: {
+        workspaceId: 3,
+        requestedByUserId: 7,
+        resultType: 'responses',
+        overwriteExisting: false,
+        file: { mimetype: 'application/invalid', originalname: 'private-person.csv' }
+      }
+    } as never);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 3,
+      actorUserId: 7,
+      actorType: 'job',
+      jobId: '123',
+      eventType: 'TEST_RESULTS_IMPORTED',
+      result: 'failure',
+      details: expect.objectContaining({ source: 'upload', savedResponses: 0, savedLogs: 0 })
+    }));
+    expect(JSON.stringify(jest.mocked(JournalService.recordEventInTransaction).mock.calls)).not.toContain('private-person.csv');
   });
 
   it('treats saved responses as response import mutations', () => {
@@ -814,7 +849,9 @@ existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content""
         [newPersonWithUnits],
         1,
         'merge',
-        'person'
+        'person',
+        expect.any(Array),
+        expect.objectContaining({ workspaceId: 1, actorType: 'job', source: 'upload' })
       );
       expect(result.expected).toMatchObject({
         testPersons: 1,
@@ -942,7 +979,9 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         [existingPersonWithNewUnit],
         1,
         'merge',
-        'person'
+        'person',
+        expect.any(Array),
+        expect.objectContaining({ workspaceId: 1, actorType: 'job', source: 'upload' })
       );
       expect(result.delta).toEqual({
         testPersons: 0,
@@ -1029,6 +1068,19 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
       jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
 
+      const transactionRepositories = new Map<unknown, unknown>([
+        [Unit, unitRepository], [UnitLastState, unitLastStateRepository],
+        [ChunkEntity, chunkRepository], [ResponseEntity, responseRepository],
+        [Persons, personsRepository], [Booklet, bookletRepository], [BookletInfo, bookletInfoRepository],
+        [BookletLog, bookletLogRepository], [Session, sessionRepository], [UnitLog, unitLogRepository]
+      ]);
+      jest.spyOn(unitRepository.manager, 'transaction').mockImplementation((async callback => callback({
+        query: jest.fn().mockResolvedValue([]), getRepository: entity => transactionRepositories.get(entity)
+      })) as never);
+      jest.spyOn(personsRepository.manager, 'transaction').mockImplementation((async callback => callback({
+        getRepository: entity => transactionRepositories.get(entity)
+      })) as never);
+
       const realPersonService = new PersonService(
         createMock<PersonQueryService>({
           getWorkspaceUploadStats: jest.fn()
@@ -1065,6 +1117,7 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         createMock<JobQueueService>(),
         realWorkspaceService,
         {
+          transaction: jest.fn(callback => callback({})),
           createQueryRunner: jest.fn().mockReturnValue({
             connect: jest.fn().mockResolvedValue(undefined),
             query: jest.fn().mockResolvedValue([]),
@@ -1405,7 +1458,9 @@ test-group;test-user;code;booklet1;unit1;[];""`;
         [personWithUnits],
         1,
         'skip',
-        'person'
+        'person',
+        expect.any(Array),
+        expect.objectContaining({ workspaceId: 1, actorType: 'job', source: 'upload' })
       );
       expect(result.importSummary).toMatchObject({
         totalRows: 1,

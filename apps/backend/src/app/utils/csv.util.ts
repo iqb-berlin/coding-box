@@ -1,4 +1,4 @@
-const CSV_FORMULA_PREFIX_PATTERN = /^\s*[=+\-@]/;
+const CSV_FORMULA_PREFIX_PATTERN = /^[\s\p{Cc}]*[=+\-@]/u;
 
 export function sanitizeCsvText(value: string | null | undefined): string {
   const text = value ?? '';

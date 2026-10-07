@@ -3,6 +3,7 @@ import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-works
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceCoreService } from './workspace-core.service';
+import { JournalService } from '../shared/journal.service';
 
 const createRepo = () => ({
   find: jest.fn(),
@@ -29,6 +30,7 @@ describe('WorkspaceCoreService', () => {
   let service: WorkspaceCoreService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     repo = createRepo();
     cacheService = {
       delete: jest.fn(),
@@ -160,35 +162,45 @@ describe('WorkspaceCoreService', () => {
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('flat_response_filter_options:1:*');
   });
 
+  it('audits settings before cache invalidation without persisting their contents', async () => {
+    queryRunner.manager.findOne.mockResolvedValue({ id: 3, settings: {} });
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+    await service.setWorkspaceSettings(3, { ignoredUnits: ['sensitive-unit'] }, 7);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 3, actorUserId: 7, eventType: 'WORKSPACE_SETTINGS_CHANGED', details: { changedKeys: ['ignoredUnits'] }
+    }));
+    expect(JSON.stringify(jest.mocked(JournalService.recordEventInTransaction).mock.calls)).not.toContain('sensitive-unit');
+    expect(jest.mocked(JournalService.recordEventInTransaction).mock.invocationCallOrder[0]).toBeLessThan(cacheService.delete.mock.invocationCallOrder[0]);
+  });
+
   it('unlocks Autocoder input before invalidating exclusion caches', async () => {
     const callOrder: string[] = [];
     queryRunner.manager.findOne.mockResolvedValueOnce({ id: 1, settings: {} });
-    queryRunner.manager.save.mockImplementationOnce(async () => {
-      callOrder.push('save');
-    });
+    queryRunner.manager.save.mockImplementationOnce(async () => { callOrder.push('save'); });
     queryRunner.query.mockImplementation(async (sql: string) => {
       callOrder.push(sql.includes('pg_advisory_unlock') ? 'unlock' : 'lock');
       return sql.includes('pg_try_advisory_lock') ? [{ locked: true }] : [];
     });
-    cacheService.delete.mockImplementation(async () => {
-      callOrder.push('cache');
-    });
-
+    cacheService.delete.mockImplementation(async () => { callOrder.push('cache'); });
     await service.setIgnoredUnits(1, ['U2']);
-
     expect(callOrder.slice(0, 4)).toEqual(['lock', 'save', 'unlock', 'cache']);
   });
 
   it('fails fast without mutating when Autocoder input locks are occupied', async () => {
     queryRunner.query.mockResolvedValue([{ locked: false }]);
-
-    await expect(service.setIgnoredUnits(1, ['U2']))
-      .rejects.toBeInstanceOf(ConflictException);
-    await expect(service.remove([1]))
-      .rejects.toBeInstanceOf(ConflictException);
-
+    await expect(service.setIgnoredUnits(1, ['U2'])).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.remove([1])).rejects.toBeInstanceOf(ConflictException);
     expect(queryRunner.manager.findOne).not.toHaveBeenCalled();
     expect(queryRunner.startTransaction).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
+  });
+
+  it('does not invalidate caches or return success when a settings audit write fails', async () => {
+    queryRunner.manager.findOne.mockResolvedValue({ id: 3, settings: {} });
+    jest.mocked(JournalService.recordEventInTransaction).mockRejectedValueOnce(new Error('audit unavailable'));
+    await expect(service.setIgnoredUnits(3, ['U'], 7)).rejects.toThrow('audit unavailable');
+    expect(cacheService.delete).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 });

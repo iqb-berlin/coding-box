@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 import { DatabaseExportService } from './database-export.service';
+import { JournalService } from '../../database/services/shared/journal.service';
 
 export interface DatabaseExportJobData {
   requestedByUserId: number;
@@ -28,7 +29,8 @@ export interface DatabaseExportJobResult {
 export class DatabaseExportProcessor {
   private readonly logger = new Logger(DatabaseExportProcessor.name);
 
-  constructor(private readonly databaseExportService: DatabaseExportService) {}
+  constructor(private readonly databaseExportService: DatabaseExportService,
+              private readonly journalService: JournalService) {}
 
   private async isJobCancelled(job: Job<DatabaseExportJobData>): Promise<boolean> {
     const latestJob = await job.queue.getJob(String(job.id));
@@ -91,6 +93,7 @@ export class DatabaseExportProcessor {
       };
 
       await job.progress(100);
+      await this.recordOutcome(job, 'success', { fileSize: stats.size });
       this.logger.log(`Database export job ${job.id} completed successfully`);
 
       return result;
@@ -115,7 +118,24 @@ export class DatabaseExportProcessor {
         }
       }
 
+      await this.recordOutcome(job, 'failure', { cancelled: error instanceof DatabaseExportCancelledError });
       throw error;
     }
+  }
+
+  private async recordOutcome(job: Job<DatabaseExportJobData>, result: 'success' | 'failure', details: Record<string, unknown>): Promise<void> {
+    if (job.data.scope !== 'workspace' || !job.data.workspaceId) return;
+    await this.journalService.recordEvent({
+      workspaceId: job.data.workspaceId,
+      actorUserId: job.data.requestedByUserId,
+      actorType: 'job',
+      eventType: result === 'success' ? 'DATABASE_EXPORT_COMPLETED' : 'DATABASE_EXPORT_FAILED',
+      entityType: 'workspace',
+      entityId: job.data.workspaceId,
+      result,
+      summary: result === 'success' ? 'Workspace database export completed' : 'Workspace database export failed',
+      jobId: job.id,
+      details
+    });
   }
 }

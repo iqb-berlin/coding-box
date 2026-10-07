@@ -29,7 +29,8 @@ import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
-import { TestResultsMutationSummary } from './person-persistence.service';
+import { TestResultsImportAuditContext, TestResultsMutationSummary } from './person-persistence.service';
+import { JournalService } from '../shared/journal.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export { Result };
@@ -352,7 +353,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     testGroups: string,
-    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip',
+    audit?: TestResultsImportAuditContext
   ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
     this.logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
@@ -437,33 +439,38 @@ export class TestcenterService {
             if (personBatches.length === 0) continue;
 
             let responseImportMutatedData = false;
-            await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
-              const mutationSummary = this.createMutationSummary();
-              for (const personBatch of personBatches) {
-                const batchSummary = await this.personService.processPersonBooklets(
-                  personBatch,
+            try {
+              await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
+                const mutationSummary = this.createMutationSummary();
+                try {
+                  for (const personBatch of personBatches) {
+                    const batchSummary = await this.personService.processPersonBooklets(
+                      personBatch,
+                      Number(workspace_id),
+                      responseOverwriteMode,
+                      'person',
+                      issues,
+                      audit
+                    );
+                    this.mergeMutationSummary(mutationSummary, batchSummary);
+                  }
+                } finally {
+                  responseImportMutatedData =
+                this.responseImportMutatedTestResults(mutationSummary);
+                  await this.updateCodingFreshnessAfterResponseImport(
+                    Number(workspace_id),
+                    mutationSummary,
+                    issues
+                  );
+                }
+              });
+            } finally {
+              if (responseImportMutatedData) {
+                await this.invalidateCodingCachesAfterResponsesImport(
                   Number(workspace_id),
-                  responseOverwriteMode,
-                  'person',
                   issues
                 );
-                this.mergeMutationSummary(mutationSummary, batchSummary);
               }
-
-              responseImportMutatedData =
-                this.responseImportMutatedTestResults(mutationSummary);
-              await this.updateCodingFreshnessAfterResponseImport(
-                Number(workspace_id),
-                mutationSummary,
-                issues
-              );
-            });
-
-            if (responseImportMutatedData) {
-              await this.invalidateCodingCachesAfterResponsesImport(
-                Number(workspace_id),
-                issues
-              );
             }
           }
 
@@ -483,7 +490,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     testGroups: string,
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    audit?: TestResultsImportAuditContext
   ): Promise<{ issues: TestResultsUploadIssueDto[] }> {
     this.logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
@@ -537,7 +545,8 @@ export class TestcenterService {
         persons,
         unitLogs,
         bookletLogs,
-        overwriteExistingLogs
+        overwriteExistingLogs,
+        audit
       );
 
       if (result.issues) {
@@ -1006,9 +1015,17 @@ export class TestcenterService {
     overwriteExistingLogs: boolean = true,
     overwriteFileIds?: string[],
     importRunId?: string,
-    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip',
+    actorUserId?: number
   ): Promise<Result> {
     const { responses, logs } = importOptions;
+    const audit: TestResultsImportAuditContext = {
+      workspaceId: Number(workspace_id),
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      correlationId: importRunId,
+      source: 'testcenter'
+    };
     const result: Result = {
       success: false,
       testFiles: 0,
@@ -1037,7 +1054,8 @@ export class TestcenterService {
           url,
           authToken,
           testGroups,
-          responseOverwriteMode
+          responseOverwriteMode,
+          audit
         );
         result.responses = responsePromises.length;
         const responseResults = await Promise.all(responsePromises);
@@ -1067,7 +1085,8 @@ export class TestcenterService {
           url,
           authToken,
           testGroups,
-          overwriteExistingLogs
+          overwriteExistingLogs,
+          audit
         );
         result.logs = 1; // Mark that log import was triggered
         appendIssues(logsIssues);
@@ -1137,6 +1156,26 @@ export class TestcenterService {
       }
       result.success = false;
       return result;
+    } finally {
+      if (responses === 'true' || logs === 'true') {
+        try {
+          await this.connection.transaction(manager => JournalService.recordEventInTransaction(manager, {
+            workspaceId: audit.workspaceId,
+            actorUserId: audit.actorUserId,
+            actorType: audit.actorType,
+            correlationId: audit.correlationId,
+            eventType: 'TEST_RESULTS_IMPORTED',
+            entityType: 'workspace',
+            entityId: audit.workspaceId,
+            result: result.success ? 'success' : 'failure',
+            summary: 'Testcenter import finished',
+            details: { source: audit.source, phase: 'summary', issueCount: result.issues?.length || 0 }
+          }));
+        } catch (error) {
+          this.logger.warn(`Could not record Testcenter import summary: ${error.message}`);
+          appendIssues([{ level: 'warning', category: 'other', message: 'Import summary could not be recorded in the audit journal.' }]);
+        }
+      }
     }
   }
 

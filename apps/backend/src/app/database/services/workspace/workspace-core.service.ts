@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import { JournalService } from '../shared/journal.service';
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -121,7 +122,7 @@ export class WorkspaceCoreService {
     }
   }
 
-  async patch(workspaceData: WorkspaceFullDto): Promise<void> {
+  async patch(workspaceData: WorkspaceFullDto, actorUserId?: number): Promise<void> {
     this.logger.log(`Updating workspace with id: ${workspaceData.id}`);
     if (workspaceData.id) {
       if (workspaceData.settings) {
@@ -132,17 +133,22 @@ export class WorkspaceCoreService {
               workspaceGroupToUpdate.name = workspaceData.name;
             }
             workspaceGroupToUpdate.settings = workspaceData.settings;
-          }
+          },
+          Object.keys(workspaceData),
+          actorUserId
         );
       } else {
-        const workspaceGroupToUpdate = await this.workspaceRepository.findOne({
-          where: { id: workspaceData.id }
+        await this.connection.transaction(async manager => {
+          const workspaceGroupToUpdate = await manager.findOne(Workspace, {
+            where: { id: workspaceData.id }
+          });
+          if (!workspaceGroupToUpdate) {
+            throw new AdminWorkspaceNotFoundException(workspaceData.id, 'PATCH');
+          }
+          if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
+          await manager.save(Workspace, workspaceGroupToUpdate);
+          await this.recordSettingsEvent(manager, workspaceData.id, Object.keys(workspaceData), actorUserId);
         });
-        if (!workspaceGroupToUpdate) {
-          throw new AdminWorkspaceNotFoundException(workspaceData.id, 'PATCH');
-        }
-        if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
-        await this.workspaceRepository.save(workspaceGroupToUpdate);
       }
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
       if (workspaceData.settings) {
@@ -204,13 +210,13 @@ export class WorkspaceCoreService {
     return Array.isArray(settings.ignoredUnits) ? settings.ignoredUnits : [];
   }
 
-  async setIgnoredUnits(workspaceId: number, ignoredUnits: string[]): Promise<void> {
+  async setIgnoredUnits(workspaceId: number, ignoredUnits: string[], actorUserId?: number): Promise<void> {
     await this.mutateAutocoderInputSettings(workspaceId, workspace => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const settings = { ...(workspace.settings || {}) } as any;
       settings.ignoredUnits = ignoredUnits;
       workspace.settings = settings;
-    });
+    }, ['ignoredUnits'], actorUserId);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
@@ -221,10 +227,10 @@ export class WorkspaceCoreService {
     return workspace.settings || {};
   }
 
-  async setWorkspaceSettings(workspaceId: number, newSettings: Partial<WorkspaceSettingsDto>): Promise<void> {
+  async setWorkspaceSettings(workspaceId: number, newSettings: Partial<WorkspaceSettingsDto>, actorUserId?: number): Promise<void> {
     await this.mutateAutocoderInputSettings(workspaceId, workspace => {
       workspace.settings = { ...(workspace.settings || {}), ...newSettings };
-    });
+    }, Object.keys(newSettings), actorUserId);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
@@ -232,21 +238,31 @@ export class WorkspaceCoreService {
 
   private async mutateAutocoderInputSettings(
     workspaceId: number,
-    mutate: (workspace: Workspace) => void
+    mutate: (workspace: Workspace) => void,
+    changedKeys: string[],
+    actorUserId?: number
   ): Promise<void> {
     const lockAttempt = await tryWithWorkspaceFilesMutationLock(
       this.connection,
       workspaceId,
       async queryRunner => {
-        const workspace = await queryRunner.manager.findOne(Workspace, {
-          where: { id: workspaceId }
-        });
-        if (!workspace) {
-          throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
-        }
+        await queryRunner.startTransaction();
+        try {
+          const workspace = await queryRunner.manager.findOne(Workspace, {
+            where: { id: workspaceId }
+          });
+          if (!workspace) {
+            throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
+          }
 
-        mutate(workspace);
-        await queryRunner.manager.save(Workspace, workspace);
+          mutate(workspace);
+          await queryRunner.manager.save(Workspace, workspace);
+          await this.recordSettingsEvent(queryRunner.manager, workspaceId, changedKeys, actorUserId);
+          await queryRunner.commitTransaction();
+        } catch (error) {
+          await queryRunner.rollbackTransaction();
+          throw error;
+        }
       }
     );
     if (!lockAttempt.acquired) {
@@ -254,6 +270,21 @@ export class WorkspaceCoreService {
         'Workspace settings cannot be changed while an Autocoder or file mutation is running.'
       );
     }
+  }
+
+  private recordSettingsEvent(manager: import('typeorm').EntityManager, workspaceId: number,
+                              changedKeys: string[], actorUserId?: number) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      eventType: 'WORKSPACE_SETTINGS_CHANGED',
+      entityType: 'workspace',
+      entityId: workspaceId,
+      result: 'success',
+      summary: 'Workspace settings changed',
+      details: { changedKeys }
+    });
   }
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {

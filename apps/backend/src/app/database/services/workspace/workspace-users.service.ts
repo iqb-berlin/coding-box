@@ -4,6 +4,7 @@ import { In, MoreThan, Repository } from 'typeorm';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
+import { JournalService } from '../shared/journal.service';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import {
@@ -56,7 +57,7 @@ export class WorkspaceUsersService {
     }));
   }
 
-  async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {
+  async setWorkspaceUsers(workspaceId: number, userIds: number[], actorUserId?: number): Promise<boolean> {
     this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
     const saved = await this.workspaceUsersRepository.manager.transaction(async manager => {
       const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
@@ -99,7 +100,9 @@ export class WorkspaceUsersService {
         });
       }
 
-      return workspaceUsersRepository.save(entries);
+      const savedEntries = await workspaceUsersRepository.save(entries);
+      await JournalService.recordAccessChangesInTransaction(manager, workspaceId, existingEntries, entries, actorUserId);
+      return savedEntries;
     });
     return !!saved;
   }

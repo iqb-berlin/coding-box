@@ -206,7 +206,7 @@ describe('ValidationTaskService', () => {
       validation_type: 'deleteResponses',
       status: 'pending',
       result: JSON.stringify({
-        responseIds: '1, 2, invalid, 3'
+        responseIds: '1, 2, invalid, 3', userId: 7
       })
     } as ValidationTask;
 
@@ -220,7 +220,8 @@ describe('ValidationTaskService', () => {
 
     expect(workspaceFilesService.deleteInvalidResponses).toHaveBeenCalledWith(
       7,
-      [1, 2, 3]
+      [1, 2, 3],
+      { actorUserId: 7, jobId: 4 }
     );
     expect(task.result).toBe(JSON.stringify({ deletedCount: 3 }));
     expect(task.progress_message).toBe('Löschung abgeschlossen.');
