@@ -87,7 +87,7 @@ export class WorkspaceFilesInfoController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getVocs(
     @Param('workspace_id') workspace_id: number,
-      @Param('vocs') vocs: string
+    @Param('vocs') vocs: string
   ): Promise<FilesDto[]> {
     return this.workspaceFilesService.getVocs(workspace_id, vocs);
   }
@@ -187,7 +187,7 @@ export class WorkspaceFilesInfoController {
   })
   async saveReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Body() override: CodingReplayAnchorOverride
+    @Body() override: CodingReplayAnchorOverride
   ): Promise<CodingReplayAnchorOverride> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
@@ -217,8 +217,8 @@ export class WorkspaceFilesInfoController {
   })
   async deleteReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Query('unitName') unitName: string,
-      @Query('variableId') variableId: string
+    @Query('unitName') unitName: string,
+    @Query('variableId') variableId: string
   ): Promise<{ deleted: boolean }> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
@@ -256,7 +256,7 @@ export class WorkspaceFilesInfoController {
   })
   async getVariableInfoForScheme(
     @Param('workspace_id') workspace_id: number,
-      @Param('scheme_file_id') scheme_file_id: string
+    @Param('scheme_file_id') scheme_file_id: string
   ): Promise<VariableInfo[]> {
     return this.workspaceFilesService.getVariableInfoForScheme(
       workspace_id,

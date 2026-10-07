@@ -11,21 +11,21 @@ export class SaveCodingNotesDto {
     example: 'testuser@123@g1@testbooklet'
   })
   @IsString()
-    testPerson: string;
+  testPerson: string;
 
   @ApiProperty({
     description: 'Unit name',
     example: 'UNIT1'
   })
   @IsString()
-    unitId: string;
+  unitId: string;
 
   @ApiProperty({
     description: 'Variable ID',
     example: 'var001'
   })
   @IsString()
-    variableId: string;
+  variableId: string;
 
   @ApiProperty({
     description: 'Coder notes for the unit',
@@ -34,7 +34,7 @@ export class SaveCodingNotesDto {
   })
   @IsString()
   @IsOptional()
-    notes?: string;
+  notes?: string;
 
   @ApiProperty({
     description: 'Save this note as part of a coding issue review by the current user.',
@@ -43,5 +43,5 @@ export class SaveCodingNotesDto {
   })
   @IsBoolean()
   @IsOptional()
-    issueReview?: boolean;
+  issueReview?: boolean;
 }

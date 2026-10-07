@@ -13,8 +13,8 @@ export interface CachedItemMatrixDiagnostics {
 }
 
 const diagnosticTexts: Record<
-ItemMatrixCellFailureReason,
-{ label: string; action: string }
+  ItemMatrixCellFailureReason,
+  { label: string; action: string }
 > = {
   'unresolved-cell': {
     label: 'Zelle konnte nicht aufgelöst werden',

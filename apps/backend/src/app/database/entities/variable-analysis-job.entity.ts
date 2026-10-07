@@ -13,11 +13,11 @@ export class VariableAnalysisJob extends Job {
    * Optional unit ID to filter by
    */
   @Column({ nullable: true })
-    unit_id?: number;
+  unit_id?: number;
 
   /**
    * Optional variable ID to filter by
    */
   @Column({ nullable: true })
-    variable_id?: string;
+  variable_id?: string;
 }

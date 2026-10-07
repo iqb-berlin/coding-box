@@ -61,7 +61,7 @@ export class WorkspaceService {
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
     return this.http
       .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
@@ -78,7 +78,7 @@ export class WorkspaceService {
   getWorkspaceUsers(workspaceId: number): Observable<PaginatedWorkspaceUserDto> {
     return this.http
       .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         catchError(() => of({
           data: [],
@@ -156,7 +156,7 @@ export class WorkspaceService {
 
     return this.http
       .get<AccessRightsMatrixDto>(`${this.serverUrl}admin/workspace/access-rights-matrix`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         tap(matrix => this.accessRightsMatrixCache$.next(matrix)),
         catchError(() => {

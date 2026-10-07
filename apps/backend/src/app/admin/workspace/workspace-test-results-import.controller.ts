@@ -172,17 +172,17 @@ export class WorkspaceTestResultsImportController {
   @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('resultType') resultType: 'logs' | 'responses',
-      @UploadedFiles() files: Express.Multer.File[],
-      @Query('overwriteExisting') overwriteExisting?: string,
-      @Query('personMatchMode') personMatchMode?: string,
-      @Query('overwriteMode') overwriteMode?: string,
-      @Query('scope') scope?: string,
-      @Query('groupName') groupName?: string,
-      @Query('bookletName') bookletName?: string,
-      @Query('unitNameOrAlias') unitNameOrAlias?: string,
-      @Query('variableId') variableId?: string,
-      @Query('subform') subform?: string
+    @Param('resultType') resultType: 'logs' | 'responses',
+    @UploadedFiles() files: Express.Multer.File[],
+    @Query('overwriteExisting') overwriteExisting?: string,
+    @Query('personMatchMode') personMatchMode?: string,
+    @Query('overwriteMode') overwriteMode?: string,
+    @Query('scope') scope?: string,
+    @Query('groupName') groupName?: string,
+    @Query('bookletName') bookletName?: string,
+    @Query('unitNameOrAlias') unitNameOrAlias?: string,
+    @Query('variableId') variableId?: string,
+    @Query('subform') subform?: string
   ): Promise<TestResultsUploadJobDto[]> {
     const startTime = Date.now();
 
@@ -331,7 +331,7 @@ export class WorkspaceTestResultsImportController {
     }
   })
   async getJobStatus(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @Param('job_id') jobId: string
   ) {
     const job = await this.jobQueueService.getUploadJob(jobId);
@@ -377,8 +377,8 @@ export class WorkspaceTestResultsImportController {
   @ApiOkResponse({ type: ChunkedUploadInitResponseDto })
   async initChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('resultType') resultType: 'logs' | 'responses',
-      @Body() body: ChunkedUploadInitRequestDto
+    @Param('resultType') resultType: 'logs' | 'responses',
+    @Body() body: ChunkedUploadInitRequestDto
   ): Promise<ChunkedUploadInitResponseDto> {
     if (!body.fileName || !body.fileSize || !body.mimeType) {
       throw new BadRequestException(
@@ -432,9 +432,9 @@ export class WorkspaceTestResultsImportController {
   @ApiOkResponse({ type: ChunkedUploadChunkResponseDto })
   async uploadChunk(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('uploadId') uploadId: string,
-      @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
-      @Req() req: Request
+    @Param('uploadId') uploadId: string,
+    @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
+    @Req() req: Request
   ): Promise<ChunkedUploadChunkResponseDto> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
@@ -502,8 +502,8 @@ export class WorkspaceTestResultsImportController {
   @ApiOkResponse({ type: TestResultsUploadJobDto, isArray: true })
   async completeChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('uploadId') uploadId: string,
-      @Body() body: ChunkedUploadCompleteRequestDto
+    @Param('uploadId') uploadId: string,
+    @Body() body: ChunkedUploadCompleteRequestDto
   ): Promise<TestResultsUploadJobDto[]> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)

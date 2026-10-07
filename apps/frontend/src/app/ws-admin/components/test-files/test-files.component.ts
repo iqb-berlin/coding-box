@@ -576,9 +576,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
 
     const ref = this.dialog.open<
-    TestFilesUploadConflictsDialogComponent,
-    { conflicts: typeof conflicts },
-    TestFilesUploadConflictsDialogResult
+      TestFilesUploadConflictsDialogComponent,
+      { conflicts: typeof conflicts },
+      TestFilesUploadConflictsDialogResult
     >(TestFilesUploadConflictsDialogComponent, {
       width: '800px',
       maxWidth: '95vw',
@@ -737,9 +737,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
 
     const ref = this.dialog.open<
-    TestFilesUploadConflictsDialogComponent,
-    { conflicts: typeof conflicts },
-    TestFilesUploadConflictsDialogResult
+      TestFilesUploadConflictsDialogComponent,
+      { conflicts: typeof conflicts },
+      TestFilesUploadConflictsDialogResult
     >(TestFilesUploadConflictsDialogComponent, {
       width: '800px',
       maxWidth: '95vw',

@@ -848,8 +848,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       const detection = await this.detectCodingImportFormat(file);
       const dialogResult = await firstValueFrom(
         this.dialog.open<
-        CodingImportFormatDialogComponent,
-        CodingImportFormatDialogData,
+          CodingImportFormatDialogComponent,
+          CodingImportFormatDialogData,
         CodingImportFormatDialogResult | undefined
         >(CodingImportFormatDialogComponent, {
           width: '720px',

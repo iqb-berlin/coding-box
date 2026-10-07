@@ -8,11 +8,11 @@ import {
 @Entity()
 class Workspace {
   @PrimaryGeneratedColumn({ type: 'int' })
-    id: number = 0;
+  id: number = 0;
 
   @Index()
   @Column({ type: 'varchar' })
-    name: string = '';
+  name: string = '';
 
   @Column({
     type: 'jsonb',
@@ -20,7 +20,7 @@ class Workspace {
     default: () => "'{}'",
     nullable: false
   })
-    settings = {};
+  settings = {};
 }
 
 export default Workspace;

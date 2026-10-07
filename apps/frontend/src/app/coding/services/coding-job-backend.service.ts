@@ -116,12 +116,12 @@ interface JobDefinitionApiResponse {
   planned_variable_usage?: Record<string, number>;
   plannedVariableUsage?: Record<string, number>;
   planned_variable_usage_by_status?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   plannedVariableUsageByStatus?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   duration_seconds?: number;
   max_coding_cases?: number | null;
@@ -166,19 +166,19 @@ export interface JobDefinitionDistributionSnapshot {
   };
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<
-  string,
-  {
-    totalCases: number;
-    distinctCases?: number;
-    codingTasksTotal?: number;
-    doubleCodedCases: number;
-    singleCodedCasesAssigned: number;
-    doubleCodedCasesPerCoderId: Record<string, number>;
-  }
+    string,
+    {
+      totalCases: number;
+      distinctCases?: number;
+      codingTasksTotal?: number;
+      doubleCodedCases: number;
+      singleCodedCasesAssigned: number;
+      doubleCodedCasesPerCoderId: Record<string, number>;
+    }
   >;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: string[];
   pairDistribution: Record<string, number>;
@@ -208,8 +208,8 @@ export interface JobDefinition {
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   plannedVariableUsageByStatus?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   durationSeconds?: number;
   maxCodingCases?: number | null;
@@ -508,9 +508,9 @@ export class CodingJobBackendService {
 
     return this.http
       .get<PaginatedResponse<unknown>>(url, {
-      params,
-      headers: this.authHeader
-    })
+        params,
+        headers: this.authHeader
+      })
       .pipe(
         map(response => ({
           ...response,
@@ -660,19 +660,19 @@ export class CodingJobBackendService {
     includeDeriveErrorOnly?: boolean,
     excludeJobDefinitionId?: number
   ): Observable<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      deriveErrorResponseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      availableCasesWithDeriveError?: number;
-      uniqueCasesAfterAggregationWithDeriveError?: number;
-      isDerived: boolean;
-      coderTrainingRequired?: boolean;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        deriveErrorResponseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
+        isDerived: boolean;
+        coderTrainingRequired?: boolean;
+      }[]
     > {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
@@ -696,19 +696,19 @@ export class CodingJobBackendService {
     }
     params = params.set('_t', Date.now().toString());
     return this.http.get<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      deriveErrorResponseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      availableCasesWithDeriveError?: number;
-      uniqueCasesAfterAggregationWithDeriveError?: number;
-      isDerived: boolean;
-      coderTrainingRequired?: boolean;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        deriveErrorResponseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
+        isDerived: boolean;
+        coderTrainingRequired?: boolean;
+      }[]
     >(url, { params, headers: this.authHeader });
   }
 
@@ -938,8 +938,8 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
     return this.http
       .post<ApplyCodingResultsResponse>(url, options, {
-      headers: this.authHeader
-    })
+        headers: this.authHeader
+      })
       .pipe(
         tap(result => {
           if (result.success) {
@@ -955,10 +955,10 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/bulk-apply-results`;
     return this.http
       .post<BulkApplyCodingResultsResponse>(
-      url,
-      {},
-      { headers: this.authHeader }
-    )
+        url,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(result => {
           if (result.success && result.totalUpdatedResponses > 0) {
@@ -1022,9 +1022,9 @@ export class CodingJobBackendService {
       undefined;
     return this.http
       .get<JobDefinitionApiResponse[]>(url, {
-      headers: this.authHeader,
-      params
-    })
+        headers: this.authHeader,
+        params
+      })
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
@@ -1128,10 +1128,10 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/refresh-apply`;
     return this.http
       .post<JobDefinitionRefreshApplyResultDto>(
-      url,
-      {},
-      { headers: this.authHeader }
-    )
+        url,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(result => {
           if (result.success) {
@@ -1160,8 +1160,8 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-apply`;
     return this.http
       .post<JobDefinitionRefreshApplyResultDto>(url, jobDefinition, {
-      headers: this.authHeader
-    })
+        headers: this.authHeader
+      })
       .pipe(
         tap(result => {
           if (result.success) {

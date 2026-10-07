@@ -33,17 +33,17 @@ describe('CodingResultsService', () => {
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
   let emptyResponseSelectionService: jest.Mocked<Pick<
-  EmptyResponseSelectionService,
+    EmptyResponseSelectionService,
   'createContext' | 'filterEffectivelyEmptyResponses'
   >>;
   let missingsProfilesService: jest.Mocked<Pick<
-  MissingsProfilesService,
+    MissingsProfilesService,
   'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
   >>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
   let workspaceExclusionService: jest.Mocked<Pick<
-  WorkspaceExclusionService,
-  'resolveExclusionsForQueries'
+    WorkspaceExclusionService,
+    'resolveExclusionsForQueries'
   >>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({

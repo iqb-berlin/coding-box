@@ -188,15 +188,15 @@ export class CodingProcessService {
   ) { }
 
   private codingSchemeCache: Map<
-  string,
-  { scheme: CodingScheme; timestamp: number }
+    string,
+    { scheme: CodingScheme; timestamp: number }
   > = new Map();
 
   private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
 
   private testFileCache: Map<
-  number,
-  { files: Map<string, FileUpload>; timestamp: number }
+    number,
+    { files: Map<string, FileUpload>; timestamp: number }
   > = new Map();
 
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL

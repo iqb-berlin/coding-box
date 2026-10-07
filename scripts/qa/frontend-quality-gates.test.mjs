@@ -19,6 +19,46 @@ const eslint = new ESLint({ cwd: workspace });
 const templatePath = 'apps/frontend/src/app/components/home/home.component.html';
 const componentPath = 'apps/frontend/src/app/components/home/home.component.ts';
 
+test('TypeScript-ESLint and migrated IQB formatting rules remain active', async () => {
+  const parserVersion = require('@typescript-eslint/parser/package.json').version;
+  assert.equal(parserVersion, require('@typescript-eslint/eslint-plugin/package.json').version);
+  assert.match(parserVersion, /^8\./);
+  const [result] = await eslint.lintText('export const values: any = [1, 2,];', {
+    filePath: componentPath
+  });
+  for (const rule of ['@typescript-eslint/no-explicit-any', '@stylistic/comma-dangle']) {
+    assert.ok(result.messages.some(message => message.ruleId === rule), JSON.stringify(result.messages));
+  }
+  assert.ok(!result.messages.some(message => /Definition for rule .* was not found/.test(message.message)),
+    JSON.stringify(result.messages));
+});
+
+test('CommonJS import-equals stays supported while variable require calls are rejected', async () => {
+  const filePath = 'apps/backend/src/app/database/services/coding/coding-list-stream.service.ts';
+  const [supported] = await eslint.lintText("import fs = require('fs');\nexport { fs };\n", { filePath });
+  assert.ok(!supported.messages.some(message => message.ruleId === '@typescript-eslint/no-require-imports'),
+    JSON.stringify(supported.messages));
+  const [unsupported] = await eslint.lintText("export const fs = require('fs');\n", { filePath });
+  assert.ok(unsupported.messages.some(message => message.ruleId === '@typescript-eslint/no-require-imports'),
+    JSON.stringify(unsupported.messages));
+});
+
+test('the vendored lint adapter is locked and available before Docker dependency installation', () => {
+  const manifest = JSON.parse(readFileSync(join(workspace, 'package.json'), 'utf8'));
+  const lock = JSON.parse(readFileSync(join(workspace, 'package-lock.json'), 'utf8'));
+  assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
+  assert.deepEqual(lock.packages[''].devDependencies, manifest.devDependencies);
+  assert.equal(manifest.devDependencies['@iqb/eslint-config'], 'file:vendor/eslint-config');
+  assert.equal(lock.packages['node_modules/@iqb/eslint-config'].link, true);
+  assert.equal(lock.packages['node_modules/@iqb/eslint-config'].resolved, 'vendor/eslint-config');
+  const replayDockerfile = readFileSync(join(workspace, 'scripts/e2e/replay/Dockerfile'), 'utf8');
+  assert.match(replayDockerfile.split('npm ci')[0], /COPY vendor \.\/vendor/);
+  const rootDockerfile = readFileSync(join(workspace, 'Dockerfile'), 'utf8');
+  assert.match(rootDockerfile.split('npm ci')[0], /COPY \. \./);
+  const dockerignore = readFileSync(join(workspace, '.dockerignore'), 'utf8');
+  assert.doesNotMatch(dockerignore, /^\/?vendor(?:\/|\s*$)/m);
+});
+
 test('external Angular templates report invalid syntax', async () => {
   const [result] = await eslint.lintText('<div>{{ ??? }}</div>', { filePath: templatePath });
   assert.ok(result.messages.some(message => message.fatal), JSON.stringify(result.messages));

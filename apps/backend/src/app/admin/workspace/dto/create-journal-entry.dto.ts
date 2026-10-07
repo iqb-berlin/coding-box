@@ -22,7 +22,7 @@ export class CreateJournalEntryDto {
   })
   @IsNotEmpty()
   @IsString()
-    action_type: string;
+  action_type: string;
 
   @ApiProperty({
     description: 'Canonical audit event type',
@@ -31,7 +31,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    eventType?: string;
+  eventType?: string;
 
   @ApiProperty({
     description: 'Type of entity that was affected (e.g., unit, response, file)',
@@ -39,7 +39,7 @@ export class CreateJournalEntryDto {
   })
   @IsNotEmpty()
   @IsString()
-    entity_type: string;
+  entity_type: string;
 
   @ApiProperty({
     description: 'Type of entity that was affected',
@@ -48,7 +48,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    entityType?: string;
+  entityType?: string;
 
   @ApiProperty({
     description: 'ID of the entity that was affected',
@@ -56,7 +56,7 @@ export class CreateJournalEntryDto {
   })
   @IsNotEmpty()
   @IsString()
-    entity_id: string;
+  entity_id: string;
 
   @ApiProperty({
     description: 'ID of the entity that was affected',
@@ -65,7 +65,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    entityId?: string;
+  entityId?: string;
 
   @ApiProperty({
     description: 'Actor category',
@@ -75,7 +75,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsIn(auditActorTypes)
-    actorType?: AuditActorType;
+  actorType?: AuditActorType;
 
   @ApiProperty({
     description: 'Result state of the audited event',
@@ -85,7 +85,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsIn(auditEventResults)
-    result?: AuditEventResult;
+  result?: AuditEventResult;
 
   @ApiProperty({
     description: 'Privacy-conscious human-readable summary',
@@ -94,14 +94,14 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    summary?: string;
+  summary?: string;
 
   @ApiProperty({
     description: 'Additional details about the action in JSON format',
     example: '{"method":"POST","url":"/api/units","requestBody":{"name":"Test Unit"}}'
   })
   @IsOptional()
-    details?: string | Record<string, unknown>;
+  details?: string | Record<string, unknown>;
 
   @ApiProperty({
     description: 'Optional request or job correlation ID',
@@ -110,7 +110,7 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    correlationId?: string;
+  correlationId?: string;
 
   @ApiProperty({
     description: 'Optional background job ID',
@@ -119,5 +119,5 @@ export class CreateJournalEntryDto {
   })
   @IsOptional()
   @IsString()
-    jobId?: string;
+  jobId?: string;
 }

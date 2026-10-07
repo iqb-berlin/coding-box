@@ -32,58 +32,58 @@ export type ReferenceMode = 'same' | 'different';
 @Entity({ name: 'coder_training' })
 export class CoderTraining {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
 
   @Column()
-    label: string;
+  label: string;
 
   @Column({
     type: 'enum',
     enum: ['continuous', 'alternating'],
     default: 'continuous'
   })
-    case_ordering_mode: CaseOrderingMode;
+  case_ordering_mode: CaseOrderingMode;
 
   @Column({
     type: 'varchar',
     length: 30,
     default: 'oldest_first'
   })
-    case_selection_mode: CaseSelectionMode;
+  case_selection_mode: CaseSelectionMode;
 
   @Column({ type: 'jsonb', nullable: true })
-    reference_training_ids: number[] | null;
+  reference_training_ids: number[] | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
-    reference_mode: ReferenceMode | null;
+  reference_mode: ReferenceMode | null;
 
   @Column({ type: 'boolean', default: false })
-    show_score: boolean;
+  show_score: boolean;
 
   @Column({ type: 'boolean', default: true })
-    allow_comments: boolean;
+  allow_comments: boolean;
 
   @Column({ type: 'boolean', default: false })
-    suppress_general_instructions: boolean;
+  suppress_general_instructions: boolean;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.training, { cascade: true })
-    codingJobs: CodingJob[];
+  codingJobs: CodingJob[];
 
   @OneToMany(() => CoderTrainingVariable, variable => variable.training, { cascade: true })
-    variables: CoderTrainingVariable[];
+  variables: CoderTrainingVariable[];
 
   @OneToMany(() => CoderTrainingBundle, bundle => bundle.training, { cascade: true })
-    bundles: CoderTrainingBundle[];
+  bundles: CoderTrainingBundle[];
 
   @OneToMany(() => CoderTrainingCoder, coder => coder.training, { cascade: true })
-    coders: CoderTrainingCoder[];
+  coders: CoderTrainingCoder[];
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 }

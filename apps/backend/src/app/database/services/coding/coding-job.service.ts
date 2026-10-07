@@ -293,8 +293,8 @@ type DistributionPlan = {
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: ResponseMatchingFlag[];
   warnings: JobCreationWarning[];
@@ -346,8 +346,8 @@ type DistributedCodingJobsResult = {
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: ResponseMatchingFlag[];
   warnings: JobCreationWarning[];
@@ -1205,14 +1205,14 @@ export class CodingJobService {
     jobIds: number[],
     workspaceId: number
   ): Promise<
-    Map<
-    number,
-    { progress: number; coded: number; total: number; open: number }
-    >
+      Map<
+        number,
+        { progress: number; coded: number; total: number; open: number }
+      >
     > {
     const progressByJobId = new Map<
-    number,
-    { progress: number; coded: number; total: number; open: number }
+      number,
+      { progress: number; coded: number; total: number; open: number }
     >();
     jobIds.forEach(jobId => progressByJobId.set(jobId, {
       progress: 0,
@@ -2364,8 +2364,8 @@ export class CodingJobService {
           [],
           [],
           new Map<
-          number,
-          { progress: number; coded: number; total: number; open: number }
+            number,
+            { progress: number; coded: number; total: number; open: number }
           >(),
           new Map<number, CodingJobIssueSummary>()
         ];
@@ -2379,8 +2379,8 @@ export class CodingJobService {
     });
 
     const variablesByJobId = new Map<
-    number,
-    { unitName: string; variableId: string }[]
+      number,
+      { unitName: string; variableId: string }[]
     >();
     allVariables.forEach(variable => {
       if (!variablesByJobId.has(variable.coding_job_id)) {
@@ -2393,8 +2393,8 @@ export class CodingJobService {
     });
 
     const variableBundlesByJobId = new Map<
-    number,
-    { name: string; variables: { unitName: string; variableId: string }[] }[]
+      number,
+      { name: string; variables: { unitName: string; variableId: string }[] }[]
     >();
     variableBundleEntities.forEach(bundleAssignment => {
       if (!variableBundlesByJobId.has(bundleAssignment.coding_job_id)) {
@@ -4688,7 +4688,7 @@ export class CodingJobService {
 
   private getCodingJobBundleUnitCaseKey(
     unit: Pick<
-    CodingJobUnit,
+      CodingJobUnit,
     | 'person_login'
     | 'person_code'
     | 'person_group'
@@ -5584,8 +5584,8 @@ export class CodingJobService {
     manager: EntityManager
   ): Promise<Map<string, number>> {
     const bundleVariablesById = new Map<
-    number,
-    Array<{ unitName: string; variableId: string }>
+      number,
+      Array<{ unitName: string; variableId: string }>
     >();
     const bundleIds = new Set<number>();
 
@@ -6379,7 +6379,7 @@ export class CodingJobService {
   private getDistributionSeed(
     workspaceId: number,
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'distributionSeed' | 'jobDefinitionId'
     >
   ): string {
@@ -6677,7 +6677,7 @@ export class CodingJobService {
 
   private buildDistributionItems(
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'selectedVariables' | 'selectedVariableBundles'
     >
   ): DistributionItem[] {
@@ -6887,7 +6887,7 @@ export class CodingJobService {
 
   private getDoubleCodingSettings(
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'doubleCodingAbsolute' | 'doubleCodingPercentage'
     >
   ): { doubleCodingAbsolute: number; doubleCodingPercentage: number } {
@@ -7035,8 +7035,8 @@ export class CodingJobService {
     const distributionByCoderId: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, DistributionDoubleCodingInfo> = {};
     const aggregationInfo: Record<
-    string,
-    { uniqueCases: number; totalResponses: number }
+      string,
+      { uniqueCases: number; totalResponses: number }
     > = {};
 
     for (const itemObj of items) {
@@ -7139,8 +7139,8 @@ export class CodingJobService {
       coders.map(coder => [coder.id, { tasks: 0, doubleTasks: 0 }])
     );
     const coderLoadsByItemKey = new Map<
-    string,
-    Map<number, DistributionCoderLoad>
+      string,
+      Map<number, DistributionCoderLoad>
     >(
       planItems.map(item => [
         item.itemKey,
@@ -7165,8 +7165,8 @@ export class CodingJobService {
       coder => coder.weight === coders[0]?.weight
     );
     const doubleCodingPairQuotasByItemKey = new Map<
-    string,
-    Map<string, number>
+      string,
+      Map<string, number>
     >();
     let plannedDoubleCoderAssignments = new Map(
       coders.map(coder => [coder.id, 0])
@@ -7211,11 +7211,11 @@ export class CodingJobService {
       return { selectedCase, isDoubleCoded };
     });
     const assignmentsByCaseGroup = new Map<
-    DistributionPlanCaseGroup,
-    {
-      isDoubleCoded: boolean;
-      assignedCoders: NormalizedDistributionCoder[];
-    }
+      DistributionPlanCaseGroup,
+      {
+        isDoubleCoded: boolean;
+        assignedCoders: NormalizedDistributionCoder[];
+      }
     >();
 
     [true, false].forEach(assignDoubleCodedCases => {
@@ -7727,8 +7727,8 @@ export class CodingJobService {
       distributionByCoderId: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
       aggregationInfo: Record<
-      string,
-      { uniqueCases: number; totalResponses: number }
+        string,
+        { uniqueCases: number; totalResponses: number }
       >;
       matchingFlags: ResponseMatchingFlag[];
       warnings: JobCreationWarning[];
@@ -8066,7 +8066,7 @@ export class CodingJobService {
     codingJobIds: number[],
     workspaceId: number
   ): Promise<
-    Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
+      Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
     > {
     if (codingJobIds.length === 0) {
       return {};
@@ -8084,8 +8084,8 @@ export class CodingJobService {
     }
 
     const progressMap: Record<
-    number,
-    Record<string, SaveCodingProgressDto['selectedCode']>
+      number,
+      Record<string, SaveCodingProgressDto['selectedCode']>
     > = {};
 
     await Promise.all(

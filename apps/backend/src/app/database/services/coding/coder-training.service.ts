@@ -958,7 +958,7 @@ export class CoderTrainingService {
 
   private matchesComparisonTextFilters(
     row: Pick<
-    TrainingCodingComparisonRowDto,
+      TrainingCodingComparisonRowDto,
     'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
     >,
     filters: TrainingComparisonFiltersDto
@@ -1125,7 +1125,7 @@ export class CoderTrainingService {
 
   private getComparisonSortValue(
     row: Pick<
-    TrainingCodingComparisonRowDto,
+      TrainingCodingComparisonRowDto,
     'responseId' | 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
     >,
     sortBy: TrainingComparisonSortBy
@@ -1141,7 +1141,7 @@ export class CoderTrainingService {
   }
 
   private sortComparisonRows<T extends Pick<
-  TrainingCodingComparisonRowDto,
+    TrainingCodingComparisonRowDto,
   'responseId' | 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName'
   >>(
     rows: T[],

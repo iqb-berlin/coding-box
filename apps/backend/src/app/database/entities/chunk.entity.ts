@@ -7,23 +7,23 @@ import { Unit } from './unit.entity';
 @Entity('chunk')
 export class ChunkEntity {
   @PrimaryColumn({ type: 'bigint' })
-    unitid: number;
+  unitid: number;
 
   @Column({ type: 'text' })
-    key: string;
+  key: string;
 
   @Column({ type: 'text', nullable: true })
-    type: string;
+  type: string;
 
   @Column({ type: 'text', nullable: true })
-    variables: string;
+  variables: string;
 
   @Column({ type: 'bigint', nullable: true })
-    ts: number;
+  ts: number;
 
   @ManyToOne(() => Unit, unit => unit.chunks, {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'unitid' })
-    unit: Unit;
+  unit: Unit;
 }

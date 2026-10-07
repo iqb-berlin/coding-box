@@ -45,8 +45,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
   private static readonly workingDirectoryPrefix = '.export-working-';
   private expiredFileCleanupTimer?: ReturnType<typeof setInterval>;
   private readonly workingDirectoryHeartbeatTimers = new Map<
-  string,
-  ReturnType<typeof setInterval>
+    string,
+    ReturnType<typeof setInterval>
   >();
 
   constructor(

@@ -392,14 +392,14 @@ export class PsychometricMetadataResolver {
     const mappingIssueCount = mapping.issues.length;
     const mappingFallbackCount = mapping.fallbacks.length;
     const candidates = new Map<
-    string,
-    {
-      scope: PsychometricMetadataScope;
-      profileId: string;
-      entryId: string;
-      label: string;
-      valuesByItem: Map<string, MetadataScalarValue[]>;
-    }
+      string,
+      {
+        scope: PsychometricMetadataScope;
+        profileId: string;
+        entryId: string;
+        label: string;
+        valuesByItem: Map<string, MetadataScalarValue[]>;
+      }
     >();
 
     mapping.items.forEach(item => {
@@ -623,14 +623,14 @@ export class PsychometricMetadataResolver {
 
   private addCandidateEntries(
     candidates: Map<
-    string,
-    {
-      scope: PsychometricMetadataScope;
-      profileId: string;
-      entryId: string;
-      label: string;
-      valuesByItem: Map<string, MetadataScalarValue[]>;
-    }
+      string,
+      {
+        scope: PsychometricMetadataScope;
+        profileId: string;
+        entryId: string;
+        label: string;
+        valuesByItem: Map<string, MetadataScalarValue[]>;
+      }
     >,
     item: PsychometricMappedItem,
     scope: PsychometricMetadataScope,

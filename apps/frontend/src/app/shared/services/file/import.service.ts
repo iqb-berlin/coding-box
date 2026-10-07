@@ -70,9 +70,9 @@ export class ImportService {
 
     return this.http
       .get<Result>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
+        { params }
+      );
   }
 
   getImportWorkspaceFilesProgress(
@@ -82,9 +82,9 @@ export class ImportService {
     const params = new HttpParams().set('importRunId', importRunId);
     return this.http
       .get<ImportWorkspaceFilesProgressDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
+        { params }
+      )
       .pipe(catchError(() => of(null)));
   }
 
@@ -108,9 +108,9 @@ export class ImportService {
 
     return this.http
       .get<TestGroupsInfoDto[]>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
+        { params }
+      );
   }
 
   getTestGroupsLoadProgress(
@@ -120,9 +120,9 @@ export class ImportService {
     const params = new HttpParams().set('importRunId', importRunId);
     return this.http
       .get<TestGroupsLoadProgressDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups/progress`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups/progress`,
+        { params }
+      )
       .pipe(catchError(() => of(null)));
   }
 }

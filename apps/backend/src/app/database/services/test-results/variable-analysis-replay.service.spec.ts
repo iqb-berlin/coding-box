@@ -88,7 +88,7 @@ const createQueryBuilder = (
   };
 
   const chainMethods: Array<keyof Pick<
-  MockQueryBuilder,
+    MockQueryBuilder,
   'select' | 'addSelect' | 'leftJoin' | 'groupBy' | 'addGroupBy' | 'orderBy' | 'addOrderBy'
   >> = ['select', 'addSelect', 'leftJoin', 'groupBy', 'addGroupBy', 'orderBy', 'addOrderBy'];
 

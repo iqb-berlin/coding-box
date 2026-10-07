@@ -58,7 +58,7 @@ export class UnitNotesController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitNoteDto: CreateUnitNoteDto
+    @Body() createUnitNoteDto: CreateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
       return await this.unitNoteService.create(createUnitNoteDto);
@@ -98,7 +98,7 @@ export class UnitNotesController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+    @Param('unitId') unitId: number
   ): Promise<UnitNoteDto[]> {
     try {
       return await this.unitNoteService.findAllByUnitId(unitId);
@@ -132,7 +132,7 @@ export class UnitNotesController {
   })
   async findAllByUnitIds(
     @WorkspaceId() workspaceId: number,
-      @Body() { unitIds }: { unitIds: number[] }
+    @Body() { unitIds }: { unitIds: number[] }
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
     try {
       return await this.unitNoteService.findAllByUnitIds(unitIds);
@@ -169,7 +169,7 @@ export class UnitNotesController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<UnitNoteDto> {
     try {
       return await this.unitNoteService.findOne(id);
@@ -212,8 +212,8 @@ export class UnitNotesController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateUnitNoteDto: UpdateUnitNoteDto
+    @Param('id') id: number,
+    @Body() updateUnitNoteDto: UpdateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
       return await this.unitNoteService.update(id, updateUnitNoteDto);
@@ -253,7 +253,7 @@ export class UnitNotesController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<boolean> {
     try {
       return await this.unitNoteService.remove(id);

@@ -66,8 +66,8 @@ export class JournalController {
   @RequireAccessLevel(3)
   async createJournalEntry(
     @WorkspaceId() workspaceId: number,
-      @Body() createJournalEntryDto: CreateJournalEntryDto,
-      @Req() request: RequestWithUser
+    @Body() createJournalEntryDto: CreateJournalEntryDto,
+    @Req() request: RequestWithUser
   ): Promise<AuditJournalEntryDto> {
     const details = this.parseDetails(createJournalEntryDto.details);
     const entityType = createJournalEntryDto.entityType || createJournalEntryDto.entity_type;
@@ -186,18 +186,18 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntries(
     @WorkspaceId() workspaceId: number,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string,
-      @Query('userId') userId?: string,
-      @Query('actorUserId') actorUserId?: string,
-      @Query('actorType') actorType?: string,
-      @Query('eventType') eventType?: string,
-      @Query('actionType') actionType?: string,
-      @Query('entityType') entityType?: string,
-      @Query('entityId') entityId?: string,
-      @Query('result') result?: string,
-      @Query('fromDate') fromDate?: string,
-      @Query('toDate') toDate?: string
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('userId') userId?: string,
+    @Query('actorUserId') actorUserId?: string,
+    @Query('actorType') actorType?: string,
+    @Query('eventType') eventType?: string,
+    @Query('actionType') actionType?: string,
+    @Query('entityType') entityType?: string,
+    @Query('entityId') entityId?: string,
+    @Query('result') result?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     const filters: {
       workspaceId: number;
@@ -292,10 +292,10 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByEntity(
     @WorkspaceId() workspaceId: number,
-      @Param('entityType') entityType: string,
-      @Param('entityId') entityId: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     return this.journalService.search(
       {
@@ -339,9 +339,9 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByUser(
     @WorkspaceId() workspaceId: number,
-      @Param('userId') userId: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     const userFilters: { actorUserId?: number; legacyUserId?: string } = {};
     this.applyUserIdFilter(userFilters, userId);
@@ -386,9 +386,9 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByAction(
     @WorkspaceId() workspaceId: number,
-      @Param('actionType') actionType: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('actionType') actionType: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     return this.journalService.search(
       {
@@ -427,7 +427,7 @@ export class JournalController {
   @RequireAccessLevel(3)
   async downloadJournalEntriesAsCsv(
     @WorkspaceId() workspaceId: number,
-      @Res() response: Response
+    @Res() response: Response
   ): Promise<void> {
     const csvData = await this.journalService.generateCsv(workspaceId);
     response.send(csvData);

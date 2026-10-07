@@ -102,7 +102,7 @@ export class CodingJobsController {
   })
   async getCodingJobById(
     @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     try {
       const result = await this.codingJobService.getCodingJobById(id);
@@ -177,7 +177,7 @@ export class CodingJobsController {
   })
   async getCodingJobsByCoder(
     @Param('coderId', ParseIntPipe) coderId: number,
-      @Req() req: Request
+    @Req() req: Request
   ): Promise<{ data: CodingJobDto[] }> {
     try {
       await this.assertCanQueryCoderJobs(coderId, req);
@@ -254,23 +254,23 @@ export class CodingJobsController {
   })
   async getResponsesForCodingJob(
     @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Req() req: Request
   ): Promise<{ data: {
+      id: number;
+      unitid: number;
+      variableid: string;
+      status: string;
+      value: string;
+      subform: string;
+      code_v1: number;
+      score_v1: number;
+      status_v1: string;
+      unit: {
         id: number;
-        unitid: number;
-        variableid: string;
-        status: string;
-        value: string;
-        subform: string;
-        code_v1: number;
-        score_v1: number;
-        status_v1: string;
-        unit: {
-          id: number;
-          name: string;
-          alias: string;
-        };
-      }[] }> {
+        name: string;
+        alias: string;
+      };
+    }[] }> {
     try {
       const codingJob = await this.codingJobService.getCodingJobById(id);
       await this.assertCanAccessDirectCodingJob(id, codingJob.workspace_id, req);

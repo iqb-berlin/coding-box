@@ -108,8 +108,8 @@ export class WorkspaceCodingController {
   })
   async codeTestPersons(
     @Query('testPersons') testPersons: string,
-      @WorkspaceId() workspace_id: number,
-      @Query('autoCoderRun') autoCoderRun: string | string[] | undefined
+    @WorkspaceId() workspace_id: number,
+    @Query('autoCoderRun') autoCoderRun: string | string[] | undefined
   ): Promise<CodingStatistics> {
     const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
@@ -135,8 +135,8 @@ export class WorkspaceCodingController {
   })
   async getManualTestPersons(
     @Query('testPersons') testPersons: string,
-      @Query('codedStatus') codedStatus: string,
-      @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+    @Query('codedStatus') codedStatus: string,
+    @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
                           workspace_id: number
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.codingResponseQueryService.getManualTestPersons(
@@ -230,18 +230,18 @@ export class WorkspaceCodingController {
   })
   async getResponsesByStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('status') status: string,
-                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
-                   @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 100,
-                   @Query('sortBy') sortBy?: CodingResponseSortBy,
-                   @Query('sortDirection') sortDirection?: CodingResponseSortDirection
+    @Param('status') status: string,
+    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 100,
+    @Query('sortBy') sortBy?: CodingResponseSortBy,
+    @Query('sortDirection') sortDirection?: CodingResponseSortDirection
   ): Promise<{
-        data: ResponseEntity[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      data: ResponseEntity[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
@@ -276,8 +276,8 @@ export class WorkspaceCodingController {
   })
   async getCodingJobNotes(
     @WorkspaceId() workspace_id: number,
-      @Param('codingJobId') codingJobId: number,
-      @Req() req: Request
+    @Param('codingJobId') codingJobId: number,
+    @Req() req: Request
   ): Promise<Record<string, string>> {
     const jobId = Number(codingJobId);
     await this.codingJobService.assertUserCanAccessCodingJob(
@@ -307,10 +307,10 @@ export class WorkspaceCodingController {
   async applyEmptyResponseCoding(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-        success: boolean;
-        updatedCount: number;
-        message: string;
-      }> {
+      success: boolean;
+      updatedCount: number;
+      message: string;
+    }> {
     return this.codingResultsService.applyEmptyResponseCoding(workspace_id);
   }
 }

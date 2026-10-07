@@ -15,14 +15,14 @@ import {
 @Index(['workspace_id', 'label'], { unique: true })
 export class MissingsProfile {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
 
   @Column('varchar', { length: 255 })
-    label: string;
+  label: string;
 
   @Column('text')
-    missings: string;
+  missings: string;
 }

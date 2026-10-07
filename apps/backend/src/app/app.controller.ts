@@ -37,7 +37,7 @@ export class AppController {
   @ApiTags('auth')
   async getUserAuthData(
     @Query('identity') identity: string | undefined,
-      @Req() req: AuthenticatedRequest
+    @Req() req: AuthenticatedRequest
   ): Promise<AuthDataDto> {
     const tokenIdentity = req.user?.identity;
     if (!tokenIdentity) {

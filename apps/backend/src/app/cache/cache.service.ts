@@ -216,18 +216,18 @@ export class CacheService {
     page: number,
     pageSize: number
   ): Promise<{
-      results: ValidationResultDto[];
-      metadata: {
-        total: number;
-        missing: number;
-        timestamp: number;
-        currentPage: number;
-        pageSize: number;
-        totalPages: number;
-        hasNextPage: boolean;
-        hasPreviousPage: boolean;
-      };
-    } | null> {
+    results: ValidationResultDto[];
+    metadata: {
+      total: number;
+      missing: number;
+      timestamp: number;
+      currentPage: number;
+      pageSize: number;
+      totalPages: number;
+      hasNextPage: boolean;
+      hasPreviousPage: boolean;
+    };
+  } | null> {
     try {
       const cachedData = await this.get<{
         results: ValidationResultDto[];

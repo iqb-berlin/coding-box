@@ -687,8 +687,8 @@ export class WorkspaceResponseValidationService {
     });
 
     const unitVariableTypes = new Map<
-    string,
-    Map<string, { type: string; multiple?: boolean; nullable?: boolean }>
+      string,
+      Map<string, { type: string; multiple?: boolean; nullable?: boolean }>
     >();
 
     for (const unitFile of unitFiles) {
@@ -704,8 +704,8 @@ export class WorkspaceResponseValidationService {
         ) {
           const unitName = parsedXml.Unit.Metadata.Id;
           const variableTypes = new Map<
-          string,
-          { type: string; multiple?: boolean; nullable?: boolean }
+            string,
+            { type: string; multiple?: boolean; nullable?: boolean }
           >();
 
           if (

@@ -190,24 +190,24 @@ export class WorkspaceCodingService {
   }
 
   async getBullJobs(workspaceId: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspaceId);
   }
@@ -267,14 +267,14 @@ export class WorkspaceCodingService {
     workspaceId: number,
     unitName?: string
   ): Promise<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+      }[]
     > {
     return this.codingValidationService.getCodingIncompleteVariables(
       workspaceId,
@@ -412,18 +412,18 @@ export class WorkspaceCodingService {
     }>,
     serverUrl: string
   ): Promise<
-    Array<{
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      replayUrl: string;
-    }>
+      Array<{
+        responseId: number;
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        variableAnchor: string;
+        bookletName: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        replayUrl: string;
+      }>
     > {
     return this.codingReplayService.generateReplayUrlsForItems(
       workspaceId,
@@ -484,13 +484,13 @@ export class WorkspaceCodingService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<
-      string,
-      {
-        totalCases: number;
-        doubleCodedCases: number;
-        singleCodedCasesAssigned: number;
-        doubleCodedCasesPerCoder: Record<string, number>;
-      }
+        string,
+        {
+          totalCases: number;
+          doubleCodedCases: number;
+          singleCodedCasesAssigned: number;
+          doubleCodedCasesPerCoder: Record<string, number>;
+        }
       >;
       jobs: {
         coderId: number;

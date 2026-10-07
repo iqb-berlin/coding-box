@@ -234,13 +234,13 @@ export class CodingJobOperationsService {
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<
-      string,
-      {
-        totalCases: number;
-        doubleCodedCases: number;
-        singleCodedCasesAssigned: number;
-        doubleCodedCasesPerCoder: Record<string, number>;
-      }
+        string,
+        {
+          totalCases: number;
+          doubleCodedCases: number;
+          singleCodedCasesAssigned: number;
+          doubleCodedCasesPerCoder: Record<string, number>;
+        }
       >;
       jobs: {
         coderId: number;

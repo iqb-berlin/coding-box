@@ -1138,8 +1138,8 @@ export class CodingProgressService {
       };
 
       const variableToDefinitions = new Map<
-      string,
-      Array<{ id: number; name?: string; status: string }>
+        string,
+        Array<{ id: number; name?: string; status: string }>
       >();
 
       for (const definition of jobDefinitions) {

@@ -24,7 +24,7 @@ export class UpdateCodingJobDto {
   })
   @IsString()
   @IsOptional()
-    name?: string;
+  name?: string;
 
   @ApiProperty({
     description: 'Description of the coding job',
@@ -33,7 +33,7 @@ export class UpdateCodingJobDto {
   })
   @IsString()
   @IsOptional()
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'Status of the coding job',
@@ -43,7 +43,7 @@ export class UpdateCodingJobDto {
   })
   @IsEnum(['pending', 'active', 'paused', 'open', 'completed', 'review'])
   @IsOptional()
-    status?: string;
+  status?: string;
 
   @ApiProperty({
     description: 'IDs of coders assigned to the coding job',
@@ -55,7 +55,7 @@ export class UpdateCodingJobDto {
   @ArrayUnique()
   @IsNumber({}, { each: true })
   @IsOptional()
-    assignedCoders?: number[];
+  assignedCoders?: number[];
 
   @ApiProperty({
     description: 'Variables assigned to the coding job',
@@ -66,7 +66,7 @@ export class UpdateCodingJobDto {
   @ValidateNested({ each: true })
   @Type(() => VariableDto)
   @IsOptional()
-    variables?: VariableDto[];
+  variables?: VariableDto[];
 
   @ApiProperty({
     description: 'IDs of variable bundles assigned to the coding job',
@@ -77,7 +77,7 @@ export class UpdateCodingJobDto {
   @IsArray()
   @IsNumber({}, { each: true })
   @IsOptional()
-    variableBundleIds?: number[];
+  variableBundleIds?: number[];
 
   @ApiProperty({
     description: 'Variable bundles assigned to the coding job',
@@ -88,7 +88,7 @@ export class UpdateCodingJobDto {
   @ValidateNested({ each: true })
   @Type(() => SimpleVariableBundleDto)
   @IsOptional()
-    variableBundles?: SimpleVariableBundleDto[];
+  variableBundles?: SimpleVariableBundleDto[];
 
   @ApiProperty({
     description: 'ID of the missings profile to assign to the coding job',
@@ -97,7 +97,7 @@ export class UpdateCodingJobDto {
   })
   @IsNumber()
   @IsOptional()
-    missingsProfileId?: number;
+  missingsProfileId?: number;
 
   @ApiProperty({
     description: 'Comment for the coding job',
@@ -106,7 +106,7 @@ export class UpdateCodingJobDto {
   })
   @IsString()
   @IsOptional()
-    comment?: string;
+  comment?: string;
 
   @ApiProperty({
     description: 'Duration in seconds for one coding task',
@@ -115,7 +115,7 @@ export class UpdateCodingJobDto {
   })
   @IsNumber()
   @IsOptional()
-    durationSeconds?: number;
+  durationSeconds?: number;
 
   @ApiProperty({
     description: 'Maximum number of coding cases for this job',
@@ -124,7 +124,7 @@ export class UpdateCodingJobDto {
   })
   @IsNumber()
   @IsOptional()
-    maxCodingCases?: number;
+  maxCodingCases?: number;
 
   @ApiProperty({
     description: 'Absolute number of cases that should be double coded',
@@ -133,7 +133,7 @@ export class UpdateCodingJobDto {
   })
   @IsNumber()
   @IsOptional()
-    doubleCodingAbsolute?: number;
+  doubleCodingAbsolute?: number;
 
   @ApiProperty({
     description: 'Percentage (0-100) of cases that should be double coded',
@@ -142,7 +142,7 @@ export class UpdateCodingJobDto {
   })
   @IsNumber()
   @IsOptional()
-    doubleCodingPercentage?: number;
+  doubleCodingPercentage?: number;
 
   @ApiProperty({
     description: 'Whether to show scores in the code selector',
@@ -151,7 +151,7 @@ export class UpdateCodingJobDto {
   })
   @IsBoolean()
   @IsOptional()
-    showScore?: boolean;
+  showScore?: boolean;
 
   @ApiProperty({
     description: 'Whether to allow comments in the code selector',
@@ -160,7 +160,7 @@ export class UpdateCodingJobDto {
   })
   @IsBoolean()
   @IsOptional()
-    allowComments?: boolean;
+  allowComments?: boolean;
 
   @ApiProperty({
     description: 'Whether to suppress general instructions in the code selector',
@@ -169,5 +169,5 @@ export class UpdateCodingJobDto {
   })
   @IsBoolean()
   @IsOptional()
-    suppressGeneralInstructions?: boolean;
+  suppressGeneralInstructions?: boolean;
 }

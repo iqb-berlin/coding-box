@@ -271,8 +271,8 @@ interface P {
 }
 
 const RESPONSE_STATUS_INFO: Record<
-string,
-{ numeric: number; description: string }
+  string,
+  { numeric: number; description: string }
 > = {
   UNSET: {
     numeric: 0,
@@ -1519,12 +1519,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           }
 
           const dialogRef = this.dialog.open<
-          TestResultsLogAnomalyDetailsDialogComponent,
-          {
-            affectedBooklets: number;
-            rows: LogAnomalyDetailRow[];
-            truncated: boolean;
-          },
+            TestResultsLogAnomalyDetailsDialogComponent,
+            {
+              affectedBooklets: number;
+              rows: LogAnomalyDetailRow[];
+              truncated: boolean;
+            },
           TestResultsLogAnomalyDetailsDialogResult | undefined
           >(TestResultsLogAnomalyDetailsDialogComponent, {
             width: '900px',
@@ -1661,8 +1661,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
     const map = (this.overview()?.responseStatusCounts || {}) as Record<
-    string,
-    number
+      string,
+      number
     >;
     const total = this.overviewResponseStatusTotal();
     return Object.entries(map)
@@ -2316,8 +2316,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         const optionsRef = this.dialog.open<
-        TestResultsUploadOptionsDialogComponent,
-        TestResultsUploadOptionsDialogData,
+          TestResultsUploadOptionsDialogComponent,
+          TestResultsUploadOptionsDialogData,
         TestResultsUploadOptionsDialogResult | undefined
         >(TestResultsUploadOptionsDialogComponent, {
           width: '600px',

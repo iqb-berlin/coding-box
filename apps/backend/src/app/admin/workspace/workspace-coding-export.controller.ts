@@ -285,10 +285,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsCsv(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -340,10 +340,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsExcel(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -409,10 +409,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsJson(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -489,16 +489,16 @@ export class WorkspaceCodingExportController {
   })
   async getCodingResultsByVersion(
     @WorkspaceId() workspace_id: number,
-      @Query('version') version: 'v1' | 'v2' | 'v3',
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('version') version: 'v1' | 'v2' | 'v3',
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
-      @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', {
-        transform: value => value === 'true'
-      })
+    @Query('includeGeoGebraResponseValues', {
+      transform: value => value === 'true'
+    })
                    includeGeoGebraResponseValues: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -627,18 +627,18 @@ export class WorkspaceCodingExportController {
   })
   async getCodingResultsByVersionAsExcel(
     @WorkspaceId() workspace_id: number,
-      @Query('version') version: 'v1' | 'v2' | 'v3',
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('version') version: 'v1' | 'v2' | 'v3',
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
-      @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', {
-        transform: value => value === 'true'
-      })
+    @Query('includeGeoGebraResponseValues', {
+      transform: value => value === 'true'
+    })
                    includeGeoGebraResponseValues: boolean,
-      @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
+    @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -756,9 +756,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsAggregated(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -868,9 +868,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsByCoder(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -985,12 +985,12 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsByVariable(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('includeModalValue') includeModalValue?: string,
-      @Query('includeDoubleCoded') includeDoubleCoded?: string,
-      @Query('includeComments') includeComments?: string,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('includeModalValue') includeModalValue?: string,
+    @Query('includeDoubleCoded') includeDoubleCoded?: string,
+    @Query('includeComments') includeComments?: string,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -1092,9 +1092,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsDetailed(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -1169,10 +1169,10 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingTimesReport(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+    @Res() res: Response,
+    @Query('anonymizeCoders') anonymizeCoders?: string,
+    @Query('usePseudoCoders') usePseudoCoders?: string,
+    @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     const anonymizeCodersParam = anonymizeCoders === 'true';
     const usePseudoCodersParam = usePseudoCoders === 'true';
@@ -1203,7 +1203,7 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: BackgroundExportRequest
+    @Body() body: BackgroundExportRequest
   ): Promise<ByVariableExportEstimateResponse> {
     if (
       body.exportType !== 'by-variable' &&
@@ -1348,8 +1348,8 @@ export class WorkspaceCodingExportController {
   })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
-      @Req() req: Request,
-      @Body() body: unknown
+    @Req() req: Request,
+    @Body() body: unknown
   ): Promise<{ jobId: string; message: string }> {
     let request: BackgroundExportRequest;
     try {
@@ -1479,7 +1479,7 @@ export class WorkspaceCodingExportController {
   })
   async getExportJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<ExportJobStatusResponseDto> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1560,8 +1560,8 @@ export class WorkspaceCodingExportController {
   })
   async downloadExport(
     @Param('jobId') jobId: string,
-      @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+    @WorkspaceId() workspace_id: number,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const metadata = await this.exportArtifactService.getArtifact(jobId);
@@ -1623,7 +1623,7 @@ export class WorkspaceCodingExportController {
   @ApiOkResponse({ description: 'Non-personal item matrix diagnostics' })
   async getItemMatrixExportDiagnostics(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<ItemMatrixExportDiagnosticsDto> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -1660,8 +1660,8 @@ export class WorkspaceCodingExportController {
   })
   async downloadIncompleteItemMatrix(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string,
-      @Res() res: Response
+    @Param('jobId') jobId: string,
+    @Res() res: Response
   ): Promise<void> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -1743,17 +1743,17 @@ export class WorkspaceCodingExportController {
     }
   })
   async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
-  Array<{
-    jobId: string;
-    status: ExportJobStateDto;
-    progress: number;
-    progressPhase?: ExportJobProgressPhaseDto;
-    processedRows?: number;
-    totalRows?: number;
-    progressMessage?: string;
-    exportType: string;
-    createdAt: number;
-  }>
+    Array<{
+      jobId: string;
+      status: ExportJobStateDto;
+      progress: number;
+      progressPhase?: ExportJobProgressPhaseDto;
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
+      exportType: string;
+      createdAt: number;
+    }>
   > {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
@@ -1802,7 +1802,7 @@ export class WorkspaceCodingExportController {
   })
   async deleteExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1865,7 +1865,7 @@ export class WorkspaceCodingExportController {
   })
   async cancelExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state

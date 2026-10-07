@@ -67,28 +67,28 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponses(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number = 50,
-                                         @Query('code') code?: string,
-                                         @Query('group') group?: string,
-                                         @Query('login') login?: string,
-                                         @Query('booklet') booklet?: string,
-                                         @Query('unit') unit?: string,
-                                         @Query('response') response?: string,
-                                         @Query('regexSearch') regexSearch?: string,
-                                         @Query('responseStatus') responseStatus?: string,
-                                         @Query('responseValue') responseValue?: string,
-                                         @Query('tags') tags?: string,
-                                         @Query('geogebra') geogebra?: string,
-                                         @Query('audioLow') audioLow?: string,
-                                         @Query('hasValue') hasValue?: string,
-                                         @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
-                                         @Query('shortProcessing') shortProcessing?: string,
-                                         @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
-                                         @Query('longLoading') longLoading?: string,
-                                         @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
-                                         @Query('processingDurations') processingDurations?: string,
-      @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number = 50,
+    @Query('code') code?: string,
+    @Query('group') group?: string,
+    @Query('login') login?: string,
+    @Query('booklet') booklet?: string,
+    @Query('unit') unit?: string,
+    @Query('response') response?: string,
+    @Query('regexSearch') regexSearch?: string,
+    @Query('responseStatus') responseStatus?: string,
+    @Query('responseValue') responseValue?: string,
+    @Query('tags') tags?: string,
+    @Query('geogebra') geogebra?: string,
+    @Query('audioLow') audioLow?: string,
+    @Query('hasValue') hasValue?: string,
+    @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
+    @Query('shortProcessing') shortProcessing?: string,
+    @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
+    @Query('longLoading') longLoading?: string,
+    @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+    @Query('processingDurations') processingDurations?: string,
+    @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
                                          processingDurationThresholdMs?: number,
                                          @Query('processingDurationMin') processingDurationMin?: string,
                                          @Query('processingDurationMax') processingDurationMax?: string,
@@ -167,10 +167,10 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async getLogAnomalySummary(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
-      @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
-      @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
-      @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
+    @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+    @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
+    @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
+    @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<unknown> {
     return this.workspaceTestResultsService.getLogAnomalySummary(workspace_id, {
       longLoadingThresholdMs,
@@ -197,11 +197,11 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async getLogAnomalyDetails(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
-      @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
-      @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
-      @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number,
-      @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit?: number
+    @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+    @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
+    @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
+    @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number,
+    @Query('limit', new DefaultValuePipe(200), ParseIntPipe) limit?: number
   ): Promise<unknown> {
     return this.workspaceTestResultsService.getLogAnomalyDetails(workspace_id, {
       longLoadingThresholdMs,
@@ -229,7 +229,7 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponseFrequencies(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: FlatResponseFrequenciesRequest
+    @Body() body: FlatResponseFrequenciesRequest
   ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
     try {
       return await this.workspaceTestResultsService.findFlatResponseFrequencies(
@@ -256,24 +256,24 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('code') code?: string,
-      @Query('group') group?: string,
-      @Query('login') login?: string,
-      @Query('booklet') booklet?: string,
-      @Query('unit') unit?: string,
-      @Query('response') response?: string,
-      @Query('responseStatus') responseStatus?: string,
-      @Query('responseValue') responseValue?: string,
-      @Query('tags') tags?: string,
-      @Query('geogebra') geogebra?: string,
-      @Query('audioLow') audioLow?: string,
-      @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
-      @Query('shortProcessing') shortProcessing?: string,
-      @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
-      @Query('longLoading') longLoading?: string,
-      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
-      @Query('processingDurations') processingDurations?: string,
-      @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
+    @Query('code') code?: string,
+    @Query('group') group?: string,
+    @Query('login') login?: string,
+    @Query('booklet') booklet?: string,
+    @Query('unit') unit?: string,
+    @Query('response') response?: string,
+    @Query('responseStatus') responseStatus?: string,
+    @Query('responseValue') responseValue?: string,
+    @Query('tags') tags?: string,
+    @Query('geogebra') geogebra?: string,
+    @Query('audioLow') audioLow?: string,
+    @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
+    @Query('shortProcessing') shortProcessing?: string,
+    @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
+    @Query('longLoading') longLoading?: string,
+    @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+    @Query('processingDurations') processingDurations?: string,
+    @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
                                          processingDurationThresholdMs?: number,
                                          @Query('unitProgress') unitProgress?: string,
                                          @Query('sessionBrowsers') sessionBrowsers?: string,

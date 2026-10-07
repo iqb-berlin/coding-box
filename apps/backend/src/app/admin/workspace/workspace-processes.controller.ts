@@ -40,8 +40,8 @@ export class WorkspaceProcessesController {
   @ApiParam({ name: 'id', required: true })
   async deleteProcess(
     @Param('workspace_id', ParseIntPipe) wsId: number,
-      @Param('queueName') queueName: string,
-      @Param('id') id: string
+    @Param('queueName') queueName: string,
+    @Param('id') id: string
   ): Promise<boolean> {
     try {
       return await this.jobQueueService.cancelWorkspaceJob(wsId, queueName, id);

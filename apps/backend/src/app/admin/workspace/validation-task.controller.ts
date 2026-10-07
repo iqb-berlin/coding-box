@@ -117,11 +117,11 @@ export class ValidationTaskController {
   @ApiQuery({ name: 'limit', description: 'Page size', required: false })
   async createValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Query('type') type: ValidationType,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string,
-      @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
-      @Body() body?: CreateValidationTaskRequestDto
+    @Query('type') type: ValidationType,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
+    @Body() body?: CreateValidationTaskRequestDto
   ): Promise<ValidationTaskDto> {
     this.logger.log(`Creating validation task of type ${type} for workspace ${workspaceId}`);
 
@@ -158,7 +158,7 @@ export class ValidationTaskController {
   @ApiParam({ name: 'id', description: 'Task ID' })
   async getValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) taskId: number
+    @Param('id', ParseIntPipe) taskId: number
   ): Promise<ValidationTaskDto> {
     const task = await this.validationTaskService.getValidationTask(taskId, workspaceId);
     return ValidationTaskDto.fromEntity(task);
@@ -170,7 +170,7 @@ export class ValidationTaskController {
   @ApiParam({ name: 'id', description: 'Task ID' })
   async getValidationResults(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) taskId: number
+    @Param('id', ParseIntPipe) taskId: number
   ): Promise<unknown> {
     return this.validationTaskService.getValidationResults(taskId, workspaceId);
   }

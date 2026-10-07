@@ -58,7 +58,7 @@ export class UnitTagsController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitTagDto: CreateUnitTagDto
+    @Body() createUnitTagDto: CreateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
       return await this.unitTagService.create(createUnitTagDto);
@@ -98,7 +98,7 @@ export class UnitTagsController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+    @Param('unitId') unitId: number
   ): Promise<UnitTagDto[]> {
     try {
       return await this.unitTagService.findAllByUnitId(unitId);
@@ -138,7 +138,7 @@ export class UnitTagsController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<UnitTagDto> {
     try {
       return await this.unitTagService.findOne(id);
@@ -181,8 +181,8 @@ export class UnitTagsController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateUnitTagDto: UpdateUnitTagDto
+    @Param('id') id: number,
+    @Body() updateUnitTagDto: UpdateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
       return await this.unitTagService.update(id, updateUnitTagDto);
@@ -222,7 +222,7 @@ export class UnitTagsController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<boolean> {
     try {
       return await this.unitTagService.remove(id);

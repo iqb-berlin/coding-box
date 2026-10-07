@@ -101,19 +101,19 @@ export class WorkspaceFilesController {
   @RequireAccessLevel(3)
   async findFiles(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20,
-                           @Query('fileType') fileType?: string,
-                           @Query('fileSize') fileSize?: string,
-                           @Query('searchText') searchText?: string,
-                           @Query('regexSearch') regexSearch?: string
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('fileType') fileType?: string,
+    @Query('fileSize') fileSize?: string,
+    @Query('searchText') searchText?: string,
+    @Query('regexSearch') regexSearch?: string
   ): Promise<{
-        data: FilesDto[];
-        total: number;
-        page: number;
-        limit: number;
-        fileTypes: string[];
-      }> {
+      data: FilesDto[];
+      total: number;
+      page: number;
+      limit: number;
+      fileTypes: string[];
+    }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
@@ -155,7 +155,7 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteTestFiles(
-  @Query() query: { fileIds: string },
+    @Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number
   ) {
     const fileIds = query.fileIds.split(/[,;]/).map(id => id.trim()).filter(id => id.length > 0);
@@ -185,7 +185,7 @@ export class WorkspaceFilesController {
   })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+    @Body() body: { logins: string[] }
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -233,7 +233,7 @@ export class WorkspaceFilesController {
   @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
   async considerPersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+    @Body() body: { logins: string[] }
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -289,9 +289,9 @@ export class WorkspaceFilesController {
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
-      @Query('overwriteExisting') overwriteExisting: string | undefined,
-      @Query('overwriteFileIds') overwriteFileIds: string | undefined,
-      @UploadedFiles() files: Express.Multer.File[]
+    @Query('overwriteExisting') overwriteExisting: string | undefined,
+    @Query('overwriteFileIds') overwriteFileIds: string | undefined,
+    @UploadedFiles() files: Express.Multer.File[]
   ): Promise<TestFilesUploadResultDto> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -356,7 +356,7 @@ export class WorkspaceFilesController {
   @ApiTags('workspace')
   async downloadFile(
     @Param('workspace_id') workspaceId: number,
-      @Param('fileId') fileId: number
+    @Param('fileId') fileId: number
   ): Promise<FileDownloadDto> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required.');
@@ -402,7 +402,7 @@ export class WorkspaceFilesController {
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id') workspaceId: string,
-      @Body() body?: { fileTypes?: string[] }
+    @Body() body?: { fileTypes?: string[] }
   ): Promise<StreamableFile> {
     const startTime = Date.now();
     const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
@@ -554,7 +554,7 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { ignoredUnits: string[] }
+    @Body() body: { ignoredUnits: string[] }
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
       throw new BadRequestException('ignoredUnits must be an array of strings');
@@ -581,7 +581,7 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: WorkspaceSettingsDto
+    @Body() body: WorkspaceSettingsDto
   ): Promise<void> {
     if (!body) {
       throw new BadRequestException('Request body is required');

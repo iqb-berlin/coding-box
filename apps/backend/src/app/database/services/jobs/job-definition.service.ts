@@ -392,7 +392,7 @@ export class JobDefinitionService {
 
   private getDeriveErrorVariableKeysFromUsageRequests(
     requests: Pick<
-    PlannedVariableUsageBatchRequest,
+      PlannedVariableUsageBatchRequest,
     'selectedVariables' | 'selectedVariableBundles'
     >[]
   ): Set<string> {
@@ -456,8 +456,8 @@ export class JobDefinitionService {
     usageByVariable: Map<string, DistributionVariableUsageByStatus>
   ): Map<string, DistributionVariableUsageByStatus> {
     const normalizedUsage = new Map<
-    string,
-    DistributionVariableUsageByStatus
+      string,
+      DistributionVariableUsageByStatus
     >();
 
     usageByVariable.forEach((usage, variableKey) => {

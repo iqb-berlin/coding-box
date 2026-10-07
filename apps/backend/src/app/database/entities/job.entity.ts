@@ -14,38 +14,38 @@ import {
 @TableInheritance({ column: { type: 'varchar', name: 'type' } })
 export class Job {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
 
   /**
    * Status of the job: 'pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'
    */
   @Column()
-    status: string;
+  status: string;
 
   /**
    * Progress of the job (0-100)
    */
   @Column({ nullable: true })
-    progress?: number;
+  progress?: number;
 
   @Column({ name: 'progress_message', type: 'text', nullable: true })
-    progress_message?: string;
+  progress_message?: string;
 
   @Column({ nullable: true })
-    error?: string;
+  error?: string;
 
   @Column({ type: 'text', nullable: true })
-    result?: string;
+  result?: string;
 
   // Type is added by TypeORM for inheritance discriminator column 'type'
   type?: string;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 }
