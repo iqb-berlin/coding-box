@@ -157,11 +157,11 @@ type QuickSearchResult = {
 };
 
 export type FlatFrequenciesResult = Record<
-string,
-{
-  total: number;
-  values: Array<{ value: string; count: number; p: number }>;
-}
+  string,
+  {
+    total: number;
+    values: Array<{ value: string; count: number; p: number }>;
+  }
 >;
 
 type LogAnomalySeverity = 'critical' | 'warning' | 'info';
@@ -2047,40 +2047,40 @@ export class WorkspaceTestResultsService {
     personId: number,
     workspaceId: number
   ): Promise<
-    {
-      id: number;
-      name: string;
-      logs: {
-        id: number;
-        bookletid: number;
-        ts: string;
-        parameter: string;
-        key: string;
-      }[];
-      units: {
+      {
         id: number;
         name: string;
-        alias: string | null;
-        results: {
+        logs: {
           id: number;
-          unitid: number;
-          variableid: string;
-          status: string;
-          value: string;
-          subform: string;
-          code?: number;
-          score?: number;
-          codedstatus?: string;
+          bookletid: number;
+          ts: string;
+          parameter: string;
+          key: string;
         }[];
-        tags: {
+        units: {
           id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
+          name: string;
+          alias: string | null;
+          results: {
+            id: number;
+            unitid: number;
+            variableid: string;
+            status: string;
+            value: string;
+            subform: string;
+            code?: number;
+            score?: number;
+            codedstatus?: string;
+          }[];
+          tags: {
+            id: number;
+            unitId: number;
+            tag: string;
+            color?: string;
+            createdAt: Date;
+          }[];
         }[];
-      }[];
-    }[]
+      }[]
     > {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
@@ -2145,18 +2145,18 @@ export class WorkspaceTestResultsService {
       const unitIds = units.map(unit => unit.id);
 
       const unitResultMap = new Map<
-      number,
-      {
-        id: number;
-        unitid: number;
-        variableid: string;
-        status: string;
-        value: string;
-        subform: string;
-        code?: number;
-        score?: number;
-        codedstatus?: string;
-      }[]
+        number,
+        {
+          id: number;
+          unitid: number;
+          variableid: string;
+          status: string;
+          value: string;
+          subform: string;
+          code?: number;
+          score?: number;
+          codedstatus?: string;
+        }[]
       >();
       units.forEach(unit => {
         if (unit.responses) {
@@ -2192,14 +2192,14 @@ export class WorkspaceTestResultsService {
         .getMany();
 
       const unitTagsMap = new Map<
-      number,
-      {
-        id: number;
-        unitId: number;
-        tag: string;
-        color?: string;
-        createdAt: Date;
-      }[]
+        number,
+        {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[]
       >();
 
       if (unitIds.length > 0) {
@@ -2214,14 +2214,14 @@ export class WorkspaceTestResultsService {
       }
 
       const bookletLogsMap = new Map<
-      number,
-      {
-        id: number;
-        bookletid: number;
-        ts: string;
-        key: string;
-        parameter: string;
-      }[]
+        number,
+        {
+          id: number;
+          bookletid: number;
+          ts: string;
+          key: string;
+          parameter: string;
+        }[]
       >();
       bookletLogs.forEach(log => {
         if (!bookletLogsMap.has(log.bookletid)) {
@@ -2682,25 +2682,25 @@ export class WorkspaceTestResultsService {
     },
     queryRunner?: QueryRunner
   ): Promise<
-    [
-      Array<{
-        bookletId: number;
-        responseId: number;
-        unitId: number;
-        personId: number;
-        code: string;
-        group: string;
-        login: string;
-        booklet: string;
-        unit: string;
-        response: string;
-        responseStatus: string;
-        responseValue: string;
-        tags: string[];
-        logAnomalies: LogAnomalySummary[];
-      }>,
-      number
-    ]
+      [
+        Array<{
+          bookletId: number;
+          responseId: number;
+          unitId: number;
+          personId: number;
+          code: string;
+          group: string;
+          login: string;
+          booklet: string;
+          unit: string;
+          response: string;
+          responseStatus: string;
+          responseValue: string;
+          tags: string[];
+          logAnomalies: LogAnomalySummary[];
+        }>,
+        number
+      ]
     > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -3466,13 +3466,13 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     combos: Array<{ unitKey: string; variableId: string; values: string[] }>
   ): Promise<
-    Record<
-    string,
-    {
-      total: number;
-      values: Array<{ value: string; count: number; p: number }>;
-    }
-    >
+      Record<
+        string,
+        {
+          total: number;
+          values: Array<{ value: string; count: number; p: number }>;
+        }
+      >
     > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -3506,8 +3506,8 @@ export class WorkspaceTestResultsService {
     }
 
     const uniqueMap = new Map<
-    string,
-    { unitKey: string; variableId: string; values: string[] }
+      string,
+      { unitKey: string; variableId: string; values: string[] }
     >();
     normalized.forEach(c => {
       const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
@@ -3621,11 +3621,11 @@ export class WorkspaceTestResultsService {
     });
 
     const result: Record<
-    string,
-    {
-      total: number;
-      values: Array<{ value: string; count: number; p: number }>;
-    }
+      string,
+      {
+        total: number;
+        values: Array<{ value: string; count: number; p: number }>;
+      }
     > = {};
     uniqueCombos.forEach(c => {
       const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
@@ -4246,7 +4246,7 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     unitId: number
   ): Promise<
-    { id: number; unitid: number; ts: string; key: string; parameter: string }[]
+      { id: number; unitid: number; ts: string; key: string; parameter: string }[]
     > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -7260,14 +7260,14 @@ export class WorkspaceTestResultsService {
       );
 
       const unitTagsMap = new Map<
-      number,
-      {
-        id: number;
-        unitId: number;
-        tag: string;
-        color?: string;
-        createdAt: Date;
-      }[]
+        number,
+        {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[]
       >();
       unitIds.forEach((unitId, index) => {
         unitTagsMap.set(unitId, allUnitTags[index]);
@@ -7609,8 +7609,8 @@ export class WorkspaceTestResultsService {
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
       const chunksByUnitId = new Map<number, ChunkEntity[]>();
       const lastStatesByUnitId = new Map<
-      number,
-      Array<{ key: string; value: unknown }>
+        number,
+        Array<{ key: string; value: unknown }>
       >();
 
       responses.forEach(r => {

@@ -14,30 +14,30 @@ import { CaseOrderingMode } from './job-definition.entity';
 @Entity({ name: 'coder_training_bundle' })
 export class CoderTrainingBundle {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
   @Index()
-    coder_training_id: number;
+  coder_training_id: number;
 
   @Column()
-    variable_bundle_id: number;
+  variable_bundle_id: number;
 
   @Column({ default: 10 })
-    sample_count: number;
+  sample_count: number;
 
   @Column({
     type: 'enum',
     enum: ['continuous', 'alternating'],
     nullable: true
   })
-    case_ordering_mode: CaseOrderingMode | null;
+  case_ordering_mode: CaseOrderingMode | null;
 
   @ManyToOne(() => CoderTraining, training => training.bundles, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-    training: CoderTraining;
+  training: CoderTraining;
 
   @ManyToOne(() => VariableBundle, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'variable_bundle_id' })
-    bundle: VariableBundle;
+  bundle: VariableBundle;
 }

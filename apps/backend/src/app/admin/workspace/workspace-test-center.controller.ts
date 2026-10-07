@@ -146,24 +146,24 @@ export class WorkspaceTestCenterController {
   @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
-      @Query('server') server: string,
-      @Query('url') url: string,
-      @Query('tc_workspace') tc_workspace: string,
-      @Query('token') token: string,
-      @Query('definitions') definitions: string,
-      @Query('responses') responses: string,
-      @Query('logs') logs: string,
-      @Query('player') player: string,
-      @Query('units') units: string,
-      @Query('codings') codings: string,
-      @Query('testTakers') testTakers: string,
-      @Query('testGroups') testGroups: string,
-      @Query('booklets') booklets: string,
-      @Query('metadata') metadata: string,
-      @Query('overwriteFileIds') overwriteFileIds: string,
-      @Query('overwriteExistingLogs') overwriteExistingLogs: string,
-      @Query('importRunId') importRunId: string,
-      @Query('responseOverwriteMode') responseOverwriteMode: string
+    @Query('server') server: string,
+    @Query('url') url: string,
+    @Query('tc_workspace') tc_workspace: string,
+    @Query('token') token: string,
+    @Query('definitions') definitions: string,
+    @Query('responses') responses: string,
+    @Query('logs') logs: string,
+    @Query('player') player: string,
+    @Query('units') units: string,
+    @Query('codings') codings: string,
+    @Query('testTakers') testTakers: string,
+    @Query('testGroups') testGroups: string,
+    @Query('booklets') booklets: string,
+    @Query('metadata') metadata: string,
+    @Query('overwriteFileIds') overwriteFileIds: string,
+    @Query('overwriteExistingLogs') overwriteExistingLogs: string,
+    @Query('importRunId') importRunId: string,
+    @Query('responseOverwriteMode') responseOverwriteMode: string
   ): Promise<Result> {
     const importOptions: ImportOptions = {
       definitions: definitions,
@@ -259,7 +259,7 @@ export class WorkspaceTestCenterController {
   @ApiOkResponse({ type: Object })
   async getImportWorkspaceFilesProgress(
     @Param('workspace_id') workspace_id: string,
-      @Query('importRunId') importRunId: string
+    @Query('importRunId') importRunId: string
   ): Promise<ImportWorkspaceFilesProgressDto> {
     return this.testCenterService.getImportWorkspaceFilesProgress(
       workspace_id,
@@ -287,7 +287,7 @@ export class WorkspaceTestCenterController {
   @ApiOkResponse({ type: Object })
   async getImportTestcenterGroupsProgress(
     @Param('workspace_id') workspace_id: string,
-      @Query('importRunId') importRunId: string
+    @Query('importRunId') importRunId: string
   ): Promise<TestGroupsLoadProgressDto> {
     return this.testCenterService.getTestGroupsLoadProgress(
       workspace_id,
@@ -334,11 +334,11 @@ export class WorkspaceTestCenterController {
   @ApiBadRequestResponse({ description: 'Failed to retrieve test groups' })
   async getImportTestcenterGroups(
     @Param('workspace_id') workspace_id: string,
-      @Query('server') server: string,
-      @Query('url') url: string,
-      @Query('tc_workspace') tc_workspace: string,
-      @Query('token') token: string,
-      @Query('importRunId') importRunId: string
+    @Query('server') server: string,
+    @Query('url') url: string,
+    @Query('tc_workspace') tc_workspace: string,
+    @Query('token') token: string,
+    @Query('importRunId') importRunId: string
   ): Promise<TestGroupsInfoDto[]> {
     try {
       return await this.testCenterService.getTestgroups(

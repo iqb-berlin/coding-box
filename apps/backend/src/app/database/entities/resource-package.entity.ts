@@ -3,16 +3,16 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 @Entity()
 class ResourcePackage {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspaceId: number;
+  workspaceId: number;
 
   @Column()
-    name: string;
+  name: string;
 
   @Column('text', { array: true })
-    elements: string[];
+  elements: string[];
 
   @Column({
     type: 'varchar',
@@ -20,14 +20,14 @@ class ResourcePackage {
     name: 'package_type',
     default: 'resource'
   })
-    packageType: 'resource' | 'geogebra';
+  packageType: 'resource' | 'geogebra';
 
   @Column({
     type: 'varchar',
     length: 20,
     default: 'workspace'
   })
-    scope: 'workspace' | 'global';
+  scope: 'workspace' | 'global';
 
   @Column({
     type: 'varchar',
@@ -35,7 +35,7 @@ class ResourcePackage {
     name: 'detected_version',
     nullable: true
   })
-    detectedVersion: string | null;
+  detectedVersion: string | null;
 
   @Column({
     type: 'varchar',
@@ -43,7 +43,7 @@ class ResourcePackage {
     name: 'content_hash',
     nullable: true
   })
-    contentHash: string | null;
+  contentHash: string | null;
 
   @Column({
     type: 'varchar',
@@ -51,20 +51,20 @@ class ResourcePackage {
     name: 'original_filename',
     nullable: true
   })
-    originalFilename: string | null;
+  originalFilename: string | null;
 
   @Column({
     type: 'bigint',
     name: 'package_size',
     default: 0
   })
-    packageSize: number;
+  packageSize: number;
 
   @Column({
     type: 'timestamp with time zone',
     name: 'created_at'
   })
-    createdAt: Date;
+  createdAt: Date;
 }
 
 export default ResourcePackage;

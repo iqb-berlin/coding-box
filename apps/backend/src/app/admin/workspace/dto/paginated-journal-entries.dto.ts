@@ -11,23 +11,23 @@ export class PaginatedJournalEntriesDto {
     type: AuditJournalEntryResponseDto,
     isArray: true
   })
-    data: AuditJournalEntryDto[];
+  data: AuditJournalEntryDto[];
 
   @ApiProperty({
     description: 'Total number of journal entries',
     example: 100
   })
-    total: number;
+  total: number;
 
   @ApiProperty({
     description: 'Current page number',
     example: 1
   })
-    page: number;
+  page: number;
 
   @ApiProperty({
     description: 'Number of items per page',
     example: 20
   })
-    limit: number;
+  limit: number;
 }

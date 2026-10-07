@@ -3226,8 +3226,8 @@ ${bookletRefs}
       const manualInstructionByUnit = new Map<string, Set<string>>();
       const trainingRequiredByUnit = new Map<string, Set<string>>();
       const derivedSourcesByUnit = new Map<
-      string,
-      Array<{ derivedId: string; derivedAlias?: string; sourceIds: string[] }>
+        string,
+        Array<{ derivedId: string; derivedAlias?: string; sourceIds: string[] }>
       >();
       for (const scheme of codingSchemes) {
         try {
@@ -3882,37 +3882,37 @@ ${bookletRefs}
       const codingSchemeAliasToIdMap = new Map<string, Map<string, string>>();
       const codingSchemeIdToAliasMap = new Map<string, Map<string, string>>();
       const codingSchemeVariableTypesMap = new Map<
-      string,
-      Map<string, UnitVariableType>
+        string,
+        Map<string, UnitVariableType>
       >();
       const codingSchemeCodesMap = new Map<
-      string,
-      Map<
-      string,
-      Array<{
-        id: string | number;
-        label: string;
-        score?: number;
-        manualInstruction?: string;
-        type?: string;
-      }>
-      >
+        string,
+        Map<
+          string,
+          Array<{
+            id: string | number;
+            label: string;
+            score?: number;
+            manualInstruction?: string;
+            type?: string;
+          }>
+        >
       >();
       const codingSchemeManualInstructionsMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeClosedCodingMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeTrainingRequiredMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeProcessingMap = new Map<
-      string,
-      Map<string, string[]>
+        string,
+        Map<string, string[]>
       >();
 
       for (const scheme of codingSchemes) {
@@ -3945,14 +3945,14 @@ ${bookletRefs}
             const variableIdToAlias = new Map<string, string>();
             const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
-            string,
-            Array<{
-              id: string | number;
-              label: string;
-              score?: number;
-              manualInstruction?: string;
-              type?: string;
-            }>
+              string,
+              Array<{
+                id: string | number;
+                label: string;
+                score?: number;
+                manualInstruction?: string;
+                type?: string;
+              }>
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
@@ -4297,7 +4297,7 @@ ${bookletRefs}
   private extractVariableMetadata(
     variable: ParsedVariableElement
   ): Pick<
-    VariableDetailDto,
+      VariableDetailDto,
     | 'multiple'
     | 'nullable'
     | 'values'

@@ -28,16 +28,16 @@ export class UserBackendService {
   saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/users/access/${workspaceId}`,
-      users,
-      {})
+        users,
+        {})
       .pipe(catchError(() => of(false)));
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
     return this.http
       .get<UserFullDto[]>(
-      `${this.serverUrl}admin/users/full`,
-      {})
+        `${this.serverUrl}admin/users/full`,
+        {})
       .pipe(
         catchError(() => of([]))
       );
@@ -92,7 +92,7 @@ export class UserBackendService {
   private requestWorkspacesByUserList(userId: number): Observable<number[]> {
     return this.http
       .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,
-      {});
+        {});
   }
 
   setUserWorkspaceAccessRight(userId: number, workspaceIds: number[]): Observable<boolean> {
@@ -106,10 +106,10 @@ export class UserBackendService {
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {
     return this.http
       .post<ServerResponse>(`${this.serverUrl}tc_authentication`, {
-      username,
-      password,
-      server,
-      url
-    });
+        username,
+        password,
+        server,
+        url
+      });
   }
 }

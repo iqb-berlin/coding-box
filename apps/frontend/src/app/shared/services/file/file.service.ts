@@ -173,9 +173,9 @@ export class FileService {
   ): Observable<boolean | FileValidationResultDto> {
     return this.http
       .get<FileValidationResultDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of(false)));
   }
 
@@ -205,8 +205,8 @@ export class FileService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload?overwriteExisting=${overwriteExisting}${overwriteIdsQuery}`;
     return this.http
       .post<TestFilesUploadResultDto>(url, formData, {
-      headers: this.authHeader
-    })
+        headers: this.authHeader
+      })
       .pipe(
         tap(() => {
           this.validationTaskStateService.invalidateWorkspace(workspaceId);
@@ -272,14 +272,14 @@ export class FileService {
 
     return this.http
       .post<ChunkedUploadInitResponseDto>(
-      initUrl,
-      {
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type || 'text/csv'
-      },
-      { headers: this.authHeader }
-    )
+        initUrl,
+        {
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || 'text/csv'
+        },
+        { headers: this.authHeader }
+      )
       .pipe(
         switchMap(initResp => {
           const { uploadId, chunkSize, totalChunks } = initResp;
@@ -292,11 +292,11 @@ export class FileService {
 
             return defer(() => this.http
               .put<ChunkedUploadChunkResponseDto>(chunkUrl, blob, {
-              headers: {
-                ...this.authHeader,
-                'Content-Type': 'application/octet-stream'
-              }
-            })
+                headers: {
+                  ...this.authHeader,
+                  'Content-Type': 'application/octet-stream'
+                }
+              })
               .pipe(
                 tap(() => {
                   if (onProgress) {
@@ -439,19 +439,19 @@ export class FileService {
   ): Observable<FileDownloadDto | null> {
     return this.http
       .get<FileDownloadDto | null>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${codingSchemeRef}`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${codingSchemeRef}`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of(null)));
   }
 
   createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
     return this.http
       .post<boolean>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/create-dummy-testtaker`,
-      {},
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/create-dummy-testtaker`,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(success => {
           if (success) {
@@ -483,9 +483,9 @@ export class FileService {
 
     return this.http
       .get<BookletUnit[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
-      { headers, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
+        { headers, params }
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -499,9 +499,9 @@ export class FileService {
       this.authHeader;
     return this.http
       .get<BookletInfoDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
-      { headers }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
+        { headers }
+      )
       .pipe(catchError(error => throwError(() => error)));
   }
 
@@ -515,20 +515,20 @@ export class FileService {
       this.authHeader;
     return this.http
       .get<UnitInfoDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
-      { headers }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
+        { headers }
+      )
       .pipe(catchError(error => throwError(() => error)));
   }
 
   getUnitsWithFileIds(
     workspaceId: number
   ): Observable<
-    { id: number; unitId: string; fileName: string; data: string }[]
+      { id: number; unitId: string; fileName: string; data: string }[]
     > {
     return this.http
       .get<
-    { id: number; unitId: string; fileName: string; data: string }[]
+      { id: number; unitId: string; fileName: string; data: string }[]
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`, { headers: this.authHeader })
       .pipe(catchError(() => of([])));
   }
@@ -539,7 +539,7 @@ export class FileService {
   ): Observable<VariableInfo[]> {
     return this.http
       .get<
-    VariableInfo[]
+      VariableInfo[]
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/variable-info/${schemeFileId}`, { headers: this.authHeader })
       .pipe(catchError(() => of([])));
   }
@@ -549,7 +549,7 @@ export class FileService {
   ): Observable<{ fileId: string; id: number; items: string[] }[]> {
     return this.http
       .get<
-    { fileId: string; id: number; items: string[] }[]
+      { fileId: string; id: number; items: string[] }[]
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/item-ids`, { headers: this.authHeader })
       .pipe(catchError(() => of([])));
   }

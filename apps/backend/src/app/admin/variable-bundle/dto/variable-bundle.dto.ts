@@ -7,44 +7,44 @@ export class VariableBundleDto {
     description: 'The ID of the variable bundle',
     example: 1
   })
-    id: number;
+  id: number;
 
   @ApiProperty({
     description: 'The ID of the workspace',
     example: 1
   })
-    workspace_id: number;
+  workspace_id: number;
 
   @ApiProperty({
     description: 'The name of the variable bundle',
     example: 'Mathematical Skills'
   })
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'The description of the variable bundle',
     example: 'Variables for assessing mathematical skills',
     required: false
   })
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'The variables in the bundle',
     type: [VariableDto]
   })
-    variables: VariableDto[];
+  variables: VariableDto[];
 
   @ApiProperty({
     description: 'The date the variable bundle was created',
     example: '2025-08-04T13:58:00.000Z'
   })
-    created_at: Date;
+  created_at: Date;
 
   @ApiProperty({
     description: 'The date the variable bundle was last updated',
     example: '2025-08-04T13:58:00.000Z'
   })
-    updated_at: Date;
+  updated_at: Date;
 
   /**
      * Static method to create a DTO from an entity

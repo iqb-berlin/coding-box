@@ -14,25 +14,25 @@ import { Unit } from './unit.entity';
 @Index(['unitId', 'tag']) // Composite index for common query patterns
 export class UnitTag {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Index()
   @Column({ type: 'int' })
-    unitId: number;
+  unitId: number;
 
   @Index()
   @Column({ type: 'text' })
-    tag: string;
+  tag: string;
 
   @Column({ type: 'text', nullable: true })
-    color: string;
+  color: string;
 
   @CreateDateColumn({ type: 'timestamp' })
-    createdAt: Date;
+  createdAt: Date;
 
   @ManyToOne(() => Unit, unit => unit.tags, {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'unitId' })
-    unit: Unit;
+  unit: Unit;
 }

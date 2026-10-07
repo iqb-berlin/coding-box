@@ -14,42 +14,42 @@ import { Booklet } from './booklet.entity';
 
 class Persons {
   @PrimaryGeneratedColumn()
-    id!: number;
+  id!: number;
 
   @Index()
   @Column({ type: 'varchar' })
-    login!: string;
+  login!: string;
 
   @Index()
   @Column({ type: 'varchar' })
-    code!: string;
+  code!: string;
 
   @Index()
   @Column({ type: 'varchar' })
-    group!: string;
+  group!: string;
 
   @Index()
   @Column({ type: 'integer' })
-    workspace_id!: number;
+  workspace_id!: number;
 
   @Column({ type: 'timestamp' })
-    uploaded_at!: Date;
+  uploaded_at!: Date;
 
   @Column({ type: 'jsonb' })
-    booklets: TcMergeBooklet[];
+  booklets: TcMergeBooklet[];
 
   @Column({ type: 'varchar' })
-    source!: string;
+  source!: string;
 
   @Column({ type: 'boolean', default: true })
-    consider!: boolean;
+  consider!: boolean;
 
   // Add explicit relationship to Booklet entity
   @OneToMany(() => Booklet, booklet => booklet.person, {
     // Cascade operations to booklets when person is modified
     cascade: true
   })
-    booklets_relation!: Booklet[];
+  booklets_relation!: Booklet[];
 }
 
 export default Persons;

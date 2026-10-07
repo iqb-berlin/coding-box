@@ -70,9 +70,9 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async createOwnToken(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('duration') duration: string,
-      @Query('scopes') scopes: string | string[] | undefined,
-      @Req() request: RequestWithUser
+    @Param('duration') duration: string,
+    @Query('scopes') scopes: string | string[] | undefined,
+    @Req() request: RequestWithUser
   ): Promise<string> {
     if (!workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
@@ -106,10 +106,10 @@ export class WorkspaceUsersController {
   @RequireAccessLevel(3)
   async createToken(
     @Param('identity') identity: string,
-      @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('duration') duration: string,
-      @Query('scopes') scopes: string | string[] | undefined,
-      @Req() request: RequestWithUser
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('duration') duration: string,
+    @Query('scopes') scopes: string | string[] | undefined,
+    @Req() request: RequestWithUser
   ): Promise<string> {
     if (!identity || !workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
@@ -199,8 +199,8 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
       const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
@@ -313,7 +313,7 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCodersByCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id', ParseIntPipe) jobId: number
+    @Param('job_id', ParseIntPipe) jobId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       // In a real implementation, this would filter coders by the specific job ID

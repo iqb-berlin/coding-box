@@ -213,25 +213,25 @@ export class WorkspaceCodingJobController {
     }
   })
   async getAllJobs(@WorkspaceId() workspace_id: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-    autoCoderRun?: number;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+      autoCoderRun?: number;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspace_id);
   }
@@ -310,24 +310,24 @@ export class WorkspaceCodingJobController {
     }
   })
   async getBullJobs(@WorkspaceId() workspace_id: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspace_id);
   }

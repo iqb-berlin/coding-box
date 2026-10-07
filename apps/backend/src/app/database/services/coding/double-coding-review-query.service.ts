@@ -545,40 +545,40 @@ export class DoubleCodingReviewQueryService {
       ));
 
       const responseGroups = new Map<
-      number,
-      {
-        responseId: number;
-        sourceUnitId: number;
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        givenAnswer: string;
-        isResolved: boolean;
-        appliedCode: number | null;
-        appliedScore: number | null;
-        appliedComment: string | null;
-        availableCodes: DoubleCodedReviewCodeDto[];
-        managerDrafts: DoubleCodedManagerDecisionDto[];
-        managerHistory: DoubleCodedManagerDecisionDto[];
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-          jobDefinitionId: number | null;
-          trainingId: number | null;
-          trainingLabel: string | null;
-          code: number | null;
-          codingIssueOption: number | null;
-          score: number | null;
-          notes: string | null;
-          supervisorComment: string | null;
-          codedAt: Date;
-        }>;
-      }
+        number,
+        {
+          responseId: number;
+          sourceUnitId: number;
+          unitName: string;
+          variableId: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          bookletName: string;
+          givenAnswer: string;
+          isResolved: boolean;
+          appliedCode: number | null;
+          appliedScore: number | null;
+          appliedComment: string | null;
+          availableCodes: DoubleCodedReviewCodeDto[];
+          managerDrafts: DoubleCodedManagerDecisionDto[];
+          managerHistory: DoubleCodedManagerDecisionDto[];
+          coderResults: Array<{
+            coderId: number;
+            coderName: string;
+            jobId: number;
+            jobName: string;
+            jobDefinitionId: number | null;
+            trainingId: number | null;
+            trainingLabel: string | null;
+            code: number | null;
+            codingIssueOption: number | null;
+            score: number | null;
+            notes: string | null;
+            supervisorComment: string | null;
+            codedAt: Date;
+          }>;
+        }
       >();
       const coderResultIndexByResponseId = new Map<number, Map<number, number>>();
       const manualMissingCache = new Map<string, Promise<ResolvedMissingValue>>();
@@ -1469,14 +1469,14 @@ export class DoubleCodingReviewQueryService {
       let hasMore = true;
 
       const coderPairData = new Map<
-      string,
-      {
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        codes: Array<{ code1: number | null; code2: number | null }>;
-      }
+        string,
+        {
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          codes: Array<{ code1: number | null; code2: number | null }>;
+        }
       >();
 
       const uniqueVariables = new Set<string>();

@@ -106,7 +106,7 @@ export class WorkspaceSettingsController {
 
   @Get(':key')
   async getWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('key') key: string
   ) {
     const settingKey = this.getWorkspaceSettingStorageKey(workspaceId, key);
@@ -154,7 +154,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async createWorkspaceSettings(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Body() createSettingsDto: WorkspaceSettingsBatchDto
   ) {
     const settings = this.validateWorkspaceSettingsBatch(createSettingsDto);
@@ -201,7 +201,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async createWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Body() createSettingDto: WorkspaceSettingWriteDto
   ) {
     const settingKey = this.getWorkspaceSettingStorageKey(
@@ -237,7 +237,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async updateWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
     @Body() updateSettingDto: { value: string }
   ) {
@@ -266,7 +266,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string
   ) {
     this.assertSettingIdBelongsToWorkspace(workspaceId, settingId);

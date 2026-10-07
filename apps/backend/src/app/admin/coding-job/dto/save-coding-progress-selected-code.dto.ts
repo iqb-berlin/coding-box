@@ -12,7 +12,7 @@ export class SaveCodingProgressSelectedCodeDto {
     example: 1
   })
   @IsNumber()
-    id: number;
+  id: number;
 
   @ApiProperty({
     description: 'Display code',
@@ -21,7 +21,7 @@ export class SaveCodingProgressSelectedCodeDto {
   })
   @IsString()
   @IsOptional()
-    code?: string;
+  code?: string;
 
   @ApiProperty({
     description: 'Display label',
@@ -30,7 +30,7 @@ export class SaveCodingProgressSelectedCodeDto {
   })
   @IsString()
   @IsOptional()
-    label?: string;
+  label?: string;
 
   @ApiProperty({
     description: 'Score assigned to the selected code',
@@ -39,7 +39,7 @@ export class SaveCodingProgressSelectedCodeDto {
   })
   @IsNumber()
   @IsOptional()
-    score?: number | null;
+  score?: number | null;
 
   @ApiProperty({
     description: 'Optional coding issue marker',
@@ -48,5 +48,5 @@ export class SaveCodingProgressSelectedCodeDto {
   })
   @IsIn([-1, -2, -3, -4])
   @IsOptional()
-    codingIssueOption?: number | null;
+  codingIssueOption?: number | null;
 }

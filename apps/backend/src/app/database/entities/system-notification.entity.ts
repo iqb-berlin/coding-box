@@ -15,41 +15,41 @@ import {
 @Index('idx_system_notification_visibility', ['enabled', 'visibleFrom', 'visibleUntil'])
 export class SystemNotification {
   @PrimaryGeneratedColumn()
-    id!: number;
+  id!: number;
 
   @Column({ type: 'varchar', length: 20 })
-    type!: SystemNotificationType;
+  type!: SystemNotificationType;
 
   @Column({ type: 'varchar', length: 20 })
-    severity!: SystemNotificationSeverity;
+  severity!: SystemNotificationSeverity;
 
   @Column({ type: 'varchar', length: 160 })
-    title!: string;
+  title!: string;
 
   @Column({ type: 'varchar', length: 2000 })
-    message!: string;
+  message!: string;
 
   @Column({ name: 'starts_at', type: 'timestamptz', nullable: true })
-    startsAt!: Date | null;
+  startsAt!: Date | null;
 
   @Column({ name: 'ends_at', type: 'timestamptz', nullable: true })
-    endsAt!: Date | null;
+  endsAt!: Date | null;
 
   @Column({ name: 'visible_from', type: 'timestamptz', nullable: true })
-    visibleFrom!: Date | null;
+  visibleFrom!: Date | null;
 
   @Column({ name: 'visible_until', type: 'timestamptz', nullable: true })
-    visibleUntil!: Date | null;
+  visibleUntil!: Date | null;
 
   @Column({ type: 'boolean', default: true })
-    enabled!: boolean;
+  enabled!: boolean;
 
   @Column({ type: 'boolean', default: false })
-    dismissible!: boolean;
+  dismissible!: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-    createdAt!: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-    updatedAt!: Date;
+  updatedAt!: Date;
 }

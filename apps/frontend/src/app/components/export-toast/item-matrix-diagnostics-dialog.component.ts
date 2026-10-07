@@ -48,7 +48,7 @@ export class ItemMatrixDiagnosticsDialogComponent {
   protected readonly data = inject<ItemMatrixExportDiagnosticsDto>(MAT_DIALOG_DATA);
 
   private readonly dialogRef = inject<
-  MatDialogRef<ItemMatrixDiagnosticsDialogComponent>
+    MatDialogRef<ItemMatrixDiagnosticsDialogComponent>
   >(MatDialogRef);
 
   private readonly translateService = inject(TranslateService);

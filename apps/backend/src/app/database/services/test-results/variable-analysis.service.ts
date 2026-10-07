@@ -93,8 +93,8 @@ type VariableAnalysisExportColumnKey =
 type VariableAnalysisExportCell = string | number;
 
 type VariableAnalysisExportRow = Record<
-VariableAnalysisExportColumnKey,
-VariableAnalysisExportCell
+  VariableAnalysisExportColumnKey,
+  VariableAnalysisExportCell
 >;
 
 @Injectable()
@@ -708,7 +708,7 @@ export class VariableAnalysisService {
 
     for (let index = 0; index < manifest.frequencyChunks; index += 1) {
       const chunk = await this.cacheService.get<
-      Array<[string, VariableFrequencyDto[]]>
+        Array<[string, VariableFrequencyDto[]]>
       >(this.getFrequencyChunkKey(cacheKey, index));
       if (!chunk) {
         return null;
@@ -875,7 +875,7 @@ export class VariableAnalysisService {
 
     for (let index = 0; index < manifest.frequencyChunks; index += 1) {
       const chunk = await this.cacheService.get<
-      Array<[string, VariableFrequencyDto[]]>
+        Array<[string, VariableFrequencyDto[]]>
       >(this.getFrequencyChunkKey(cacheKey, index));
       if (!chunk) {
         return null;
@@ -1340,7 +1340,7 @@ export class VariableAnalysisService {
     row: VariableAnalysisExportRow
   ): Record<string, VariableAnalysisExportCell> {
     return VARIABLE_ANALYSIS_EXPORT_COLUMNS.reduce<
-    Record<string, VariableAnalysisExportCell>
+      Record<string, VariableAnalysisExportCell>
     >((csvRow, column) => {
       const value = row[column.key];
       csvRow[column.header] = typeof value === 'string' ?

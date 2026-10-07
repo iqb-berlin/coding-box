@@ -131,8 +131,8 @@ export interface FlatResponseFrequencyItem {
 }
 
 export type FlatResponseFrequenciesResponse = Record<
-string,
-{ total: number; values: FlatResponseFrequencyItem[] }
+  string,
+  { total: number; values: FlatResponseFrequencyItem[] }
 >;
 
 export interface UnitLogRow {
@@ -268,9 +268,9 @@ export class TestResultService {
   ): Observable<TestResultsOverviewResponse | null> {
     return this.http
       .get<TestResultsOverviewResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
+        {}
+      )
       .pipe(catchError(() => of(null)));
   }
 
@@ -298,9 +298,9 @@ export class TestResultService {
 
     return this.http
       .get<LogAnomalyDashboardSummary>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-summary`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-summary`,
+        { params }
+      );
   }
 
   getLogAnomalyDetails(
@@ -329,9 +329,9 @@ export class TestResultService {
 
     return this.http
       .get<LogAnomalyDetailsResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-details`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-details`,
+        { params }
+      );
   }
 
   requestFlatResponseFilters(
@@ -358,9 +358,9 @@ export class TestResultService {
 
     return this.http
       .get<QuickSearchResult>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`,
+        { params }
+      )
       .pipe(
         catchError(() => of({
           query: trimmedQuery,
@@ -385,10 +385,10 @@ export class TestResultService {
   ): Observable<TestResultsDeletePreviewDto | null> {
     return this.http
       .post<TestResultsDeletePreviewDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-preview`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-preview`,
+        request,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -400,10 +400,10 @@ export class TestResultService {
   ): Observable<ValidationTaskDto> {
     return this.http
       .post<ValidationTaskDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-jobs`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-jobs`,
+        request,
+        {}
+      )
       .pipe(
         tap(() => {
           this.invalidateCache(workspaceId);
@@ -418,10 +418,10 @@ export class TestResultService {
   ): Observable<TestResultsDeletePreviewDto | null> {
     return this.http
       .post<TestResultsDeletePreviewDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-preview`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-preview`,
+        request,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -433,10 +433,10 @@ export class TestResultService {
   ): Observable<ValidationTaskDto> {
     return this.http
       .post<ValidationTaskDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-jobs`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/responses/delete-jobs`,
+        request,
+        {}
+      )
       .pipe(
         tap(() => {
           this.invalidateCache(workspaceId);
@@ -451,10 +451,10 @@ export class TestResultService {
   ): Observable<TestResultsDeletePreviewDto | null> {
     return this.http
       .post<TestResultsDeletePreviewDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-preview`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-preview`,
+        request,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -466,10 +466,10 @@ export class TestResultService {
   ): Observable<ValidationTaskDto> {
     return this.http
       .post<ValidationTaskDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-jobs`,
-      request,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-jobs`,
+        request,
+        {}
+      )
       .pipe(
         tap(() => {
           this.invalidateCache(workspaceId);
@@ -484,10 +484,10 @@ export class TestResultService {
   ): Observable<FlatResponseFrequenciesResponse> {
     return this.http
       .post<FlatResponseFrequenciesResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
-      { combos },
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
+        { combos },
+        {}
+      )
       .pipe(catchError(() => of({} as FlatResponseFrequenciesResponse)));
   }
 
@@ -654,9 +654,9 @@ export class TestResultService {
 
     return this.http
       .get<FlatResponseFilterOptionsResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
+        { params }
+      )
       .pipe(
         catchError(() => of({
           codes: [],
@@ -681,9 +681,9 @@ export class TestResultService {
   getUnitLogs(workspaceId: number, unitId: number): Observable<UnitLogRow[]> {
     return this.http
       .get<UnitLogRow[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
+        {}
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -693,9 +693,9 @@ export class TestResultService {
   ): Observable<BookletLogsForUnitResponse | null> {
     return this.http
       .get<BookletLogsForUnitResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
+        {}
+      )
       .pipe(catchError(() => of(null)));
   }
 
@@ -752,8 +752,8 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`, {
-      params
-    })
+        params
+      })
       .pipe(
         catchError(() => of({ data: [], total: 0 }))
       );
@@ -833,8 +833,8 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/search`, {
-      params
-    })
+        params
+      })
       .pipe(
         catchError(() => of({ data: [], total: 0 }))
       );
@@ -891,9 +891,9 @@ export class TestResultService {
         warnings: string[];
       };
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
+        {}
+      )
       .pipe(
         tap(result => {
           if (result.success) {

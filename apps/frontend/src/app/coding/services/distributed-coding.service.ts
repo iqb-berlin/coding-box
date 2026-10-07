@@ -104,22 +104,22 @@ export class DistributedCodingService {
   ): Observable<DistributedCodingJobsResponse> {
     return this.http
       .post<DistributedCodingJobsResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/create-distributed-jobs`,
-      {
-        selectedVariables,
-        selectedCoders,
-        doubleCodingAbsolute,
-        doubleCodingPercentage,
-        selectedVariableBundles,
-        caseOrderingMode,
-        maxCodingCases,
-        distributionSeed,
-        showScore: displayOptions?.showScore,
-        allowComments: displayOptions?.allowComments,
-        suppressGeneralInstructions: displayOptions?.suppressGeneralInstructions
-      },
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/create-distributed-jobs`,
+        {
+          selectedVariables,
+          selectedCoders,
+          doubleCodingAbsolute,
+          doubleCodingPercentage,
+          selectedVariableBundles,
+          caseOrderingMode,
+          maxCodingCases,
+          distributionSeed,
+          showScore: displayOptions?.showScore,
+          allowComments: displayOptions?.allowComments,
+          suppressGeneralInstructions: displayOptions?.suppressGeneralInstructions
+        },
+        {}
+      )
       .pipe(
         catchError(error => throwError(() => new Error(this.getErrorMessage(error))))
       );
@@ -171,10 +171,10 @@ export class DistributedCodingService {
       coderWeights?: Record<string, number>;
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
-      body,
-      { context: suppressGlobalHttpErrorContext() }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
+        body,
+        { context: suppressGlobalHttpErrorContext() }
+      )
       .pipe(
         catchError(error => throwError(() => new Error(this.getErrorMessage(error))))
       );

@@ -16,22 +16,22 @@ import User from './user.entity';
 @Entity({ name: 'coding_job_coder' })
 export class CodingJobCoder {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    coding_job_id: number;
+  coding_job_id: number;
 
   @Column()
-    user_id: number;
+  user_id: number;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-    coding_job: CodingJob;
+  coding_job: CodingJob;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
-    user: User;
+  user: User;
 }

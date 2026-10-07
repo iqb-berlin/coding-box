@@ -5,11 +5,11 @@ export class VariableDto {
     description: 'The unit name of the variable',
     example: 'math101'
   })
-    unitName: string;
+  unitName: string;
 
   @ApiProperty({
     description: 'The variable ID',
     example: 'addition'
   })
-    variableId: string;
+  variableId: string;
 }

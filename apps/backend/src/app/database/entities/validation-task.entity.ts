@@ -38,7 +38,7 @@ export class ValidationTask extends Job {
    * - 'deleteTestLogs': Delete test log data by selected scope
    */
   @Column()
-    validation_type: ValidationType;
+  validation_type: ValidationType;
 
   /**
    * Fingerprint used to reuse completed validation results when inputs are unchanged.
@@ -49,14 +49,14 @@ export class ValidationTask extends Job {
     length: 64,
     nullable: true
   })
-    cache_key?: string;
+  cache_key?: string;
 
   /**
    * Pagination parameters for paginated results
    */
   @Column({ nullable: true })
-    page?: number;
+  page?: number;
 
   @Column({ nullable: true })
-    limit?: number;
+  limit?: number;
 }

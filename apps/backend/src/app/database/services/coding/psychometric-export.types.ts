@@ -172,14 +172,14 @@ export interface PsychometricExportServiceOptions extends PsychometricExportOpti
 }
 
 export type NormalizedPsychometricExportServiceOptions = Required<
-Pick<
-PsychometricExportServiceOptions,
+  Pick<
+    PsychometricExportServiceOptions,
 | 'workspaceId'
 | 'version'
 | 'partWholeCorrection'
 | 'domain'
 | 'maxCategoryCount'
->
+  >
 > &
 PsychometricExportServiceOptions;
 

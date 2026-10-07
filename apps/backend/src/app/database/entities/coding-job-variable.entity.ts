@@ -14,21 +14,21 @@ import { CodingJob } from './coding-job.entity';
 @Entity({ name: 'coding_job_variable' })
 export class CodingJobVariable {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    coding_job_id: number;
+  coding_job_id: number;
 
   @Column()
-    unit_name: string;
+  unit_name: string;
 
   @Column()
-    variable_id: string;
+  variable_id: string;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-    coding_job: CodingJob;
+  coding_job: CodingJob;
 }

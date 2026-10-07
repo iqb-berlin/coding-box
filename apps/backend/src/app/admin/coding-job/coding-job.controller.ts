@@ -106,7 +106,7 @@ export class CodingJobController {
   })
   async getCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
     try {
       const result = await this.codingJobService.getCodingJob(id, workspaceId);
@@ -149,7 +149,7 @@ export class CodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+    @Body() createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -206,8 +206,8 @@ export class CodingJobController {
   })
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCodingJobDto: UpdateCodingJobDto
   ): Promise<CodingJobDto> {
     try {
       const codingJob = await this.codingJobService.updateCodingJob(
@@ -257,7 +257,7 @@ export class CodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<{ success: boolean }> {
     try {
       return await this.codingJobService.deleteCodingJob(id, workspaceId);
@@ -305,8 +305,8 @@ export class CodingJobController {
   })
   async assignCoders(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() assignCodersDto: AssignCodersDto
+    @Param('id', ParseIntPipe) id: number,
+    @Body() assignCodersDto: AssignCodersDto
   ): Promise<{ success: boolean }> {
     try {
       // Verify the coding job exists in this workspace

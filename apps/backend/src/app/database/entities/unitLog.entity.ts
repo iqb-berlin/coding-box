@@ -7,23 +7,23 @@ import { Unit } from './unit.entity';
 @Entity('unitlog')
 export class UnitLog {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'int' })
-    unitid: number;
+  unitid: number;
 
   @Column({ type: 'text' })
-    key: string;
+  key: string;
 
   @Column({ type: 'text', nullable: true })
-    parameter: string;
+  parameter: string;
 
   @Column({ type: 'bigint', nullable: true })
-    ts: number;
+  ts: number;
 
   @ManyToOne(() => Unit, unit => unit.unitLogs, {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'unitid' })
-    unit: Unit;
+  unit: Unit;
 }

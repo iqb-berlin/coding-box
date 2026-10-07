@@ -5,28 +5,28 @@ import {
 @Entity()
 class Logs {
   @PrimaryGeneratedColumn('increment')
-    id: number;
+  id: number;
 
   @Column({ type: 'varchar' })
-    test_group!: string;
+  test_group!: string;
 
   @Column({ type: 'varchar' })
-    unit_id!: string;
+  unit_id!: string;
 
   @Column({ type: 'integer' })
-    workspace_id!: number;
+  workspace_id!: number;
 
   @Column({ type: 'bigint' })
-    timestamp: number;
+  timestamp: number;
 
   @Column({ type: 'varchar' })
-    booklet_id: string;
+  booklet_id: string;
 
   @Column({ type: 'varchar' })
-    log_entry: string;
+  log_entry: string;
 
   @Column({ type: 'varchar' })
-    test_person: string;
+  test_person: string;
 }
 
 export default Logs;

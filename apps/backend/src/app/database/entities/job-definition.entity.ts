@@ -93,31 +93,31 @@ export interface JobDefinitionDistributionSnapshot {
 @Entity({ name: 'job_definitions' })
 export class JobDefinition {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'int' })
   @Index()
-    workspace_id: number;
+  workspace_id: number;
 
   @Column({ type: 'varchar', length: 255 })
-    name: string;
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-    description: string | null;
+  description: string | null;
 
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-    workspace: Workspace;
+  workspace: Workspace;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.jobDefinition, { cascade: false })
-    codingJobs: CodingJob[];
+  codingJobs: CodingJob[];
 
   @Column({ name: 'missings_profile_id', nullable: true })
-    missings_profile_id?: number;
+  missings_profile_id?: number;
 
   @ManyToOne(() => MissingsProfile)
   @JoinColumn({ name: 'missings_profile_id' })
-    missingsProfile?: MissingsProfile;
+  missingsProfile?: MissingsProfile;
 
   @Column({
     type: 'enum',
@@ -128,59 +128,59 @@ export class JobDefinition {
     ],
     default: 'draft'
   })
-    status: JobDefinitionStatus;
+  status: JobDefinitionStatus;
 
   @Column({ type: 'jsonb', nullable: true })
-    assigned_variables?: JobDefinitionVariable[];
+  assigned_variables?: JobDefinitionVariable[];
 
   @Column({ type: 'jsonb', nullable: true })
-    assigned_variable_bundles?: JobDefinitionVariableBundle[];
+  assigned_variable_bundles?: JobDefinitionVariableBundle[];
 
   @Column({ type: 'jsonb', nullable: true })
-    assigned_coders?: number[];
+  assigned_coders?: number[];
 
   @Column({ type: 'jsonb', nullable: true })
-    assigned_coder_configs?: JobDefinitionCoderConfig[];
+  assigned_coder_configs?: JobDefinitionCoderConfig[];
 
   @Column({ type: 'jsonb', nullable: true })
-    distribution_snapshots?: JobDefinitionDistributionSnapshot[];
+  distribution_snapshots?: JobDefinitionDistributionSnapshot[];
 
   @Column({ type: 'text' })
-    distribution_seed?: string;
+  distribution_seed?: string;
 
   @Column({ type: 'int', nullable: true })
-    duration_seconds?: number;
+  duration_seconds?: number;
 
   @Column({ type: 'int', nullable: true })
-    max_coding_cases?: number | null;
+  max_coding_cases?: number | null;
 
   @Column({ type: 'int', nullable: true })
-    double_coding_absolute?: number;
+  double_coding_absolute?: number;
 
   @Column({
     type: 'decimal', precision: 5, scale: 2, nullable: true
   })
-    double_coding_percentage?: number;
+  double_coding_percentage?: number;
 
   @Column({
     type: 'enum',
     enum: ['continuous', 'alternating'],
     default: 'continuous'
   })
-    case_ordering_mode: CaseOrderingMode;
+  case_ordering_mode: CaseOrderingMode;
 
   @Column({ type: 'boolean', default: false })
-    suppress_general_instructions: boolean;
+  suppress_general_instructions: boolean;
 
   @Column({ type: 'boolean', default: false })
-    show_score: boolean;
+  show_score: boolean;
 
   @Column({ type: 'boolean', default: true })
-    allow_comments: boolean;
+  allow_comments: boolean;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 }

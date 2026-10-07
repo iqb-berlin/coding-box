@@ -719,7 +719,7 @@ describe('CodingJobBackendService', () => {
   describe('createCodingJob', () => {
     it('should create coding job', () => {
       const job = { name: 'J', workspace_id: 1 } as unknown as Omit<
-      CodingJob,
+        CodingJob,
       'id' | 'createdAt' | 'updatedAt'
       >;
       service.createCodingJob(1, job).subscribe();

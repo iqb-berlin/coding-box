@@ -59,7 +59,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getUnitContent(
     @Param('workspace_id') workspace_id: number,
-      @Param('unit_id') unit_id: number
+    @Param('unit_id') unit_id: number
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -119,7 +119,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getTestTakerContent(
     @Param('workspace_id') workspace_id: number,
-      @Param('testtaker_id') testtaker_id: string
+    @Param('testtaker_id') testtaker_id: string
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -184,7 +184,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getCodingSchemeFile(
     @Param('workspace_id') workspace_id: number,
-      @Param('coding_scheme_ref') coding_scheme_ref: string
+    @Param('coding_scheme_ref') coding_scheme_ref: string
   ): Promise<FileDownloadDto> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(

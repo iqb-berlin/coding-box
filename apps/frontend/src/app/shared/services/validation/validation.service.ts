@@ -55,7 +55,7 @@ export class ValidationService {
 
     return this.http
       .get<
-    VariablesValidationResponse
+      VariablesValidationResponse
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`, { params })
       .pipe(
         catchError(error => throwError(() => error))
@@ -73,7 +73,7 @@ export class ValidationService {
 
     return this.http
       .get<
-    PaginatedResponse<InvalidVariableDto>
+      PaginatedResponse<InvalidVariableDto>
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`, { params })
       .pipe(
         catchError(error => throwError(() => error))
@@ -91,7 +91,7 @@ export class ValidationService {
 
     return this.http
       .get<
-    PaginatedResponse<InvalidVariableDto>
+      PaginatedResponse<InvalidVariableDto>
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`, { params })
       .pipe(
         catchError(error => throwError(() => error))
@@ -101,9 +101,9 @@ export class ValidationService {
   validateTestTakers(workspaceId: number): Observable<TestTakersValidationDto> {
     return this.http
       .get<TestTakersValidationDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
+        {}
+      )
       .pipe(
         catchError(error => throwError(() => error))
       );
@@ -136,9 +136,9 @@ export class ValidationService {
       page: number;
       limit: number;
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
+        { params }
+      )
       .pipe(
         catchError(error => throwError(() => error))
       );
@@ -155,9 +155,9 @@ export class ValidationService {
 
     return this.http
       .get<DuplicateResponsesResultDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-duplicate-responses`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-duplicate-responses`,
+        { params }
+      )
       .pipe(
         catchError(error => throwError(() => error))
       );
@@ -169,10 +169,10 @@ export class ValidationService {
   ): Observable<ResolveDuplicateResponsesResponseDto> {
     return this.http
       .post<ResolveDuplicateResponsesResponseDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/responses/resolve-duplicates`,
-      resolutionData,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/responses/resolve-duplicates`,
+        resolutionData,
+        {}
+      )
       .pipe(
         catchError(() => of({
           resolvedCount: 0,
@@ -189,9 +189,9 @@ export class ValidationService {
     const params = new HttpParams().set('responseIds', responseIds.join(','));
     return this.http
       .delete<number>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
+        { params }
+      )
       .pipe(catchError(() => of(0)));
   }
 
@@ -206,9 +206,9 @@ export class ValidationService {
     const params = new HttpParams().set('validationType', validationType);
     return this.http
       .delete<number>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
+        { params }
+      )
       .pipe(catchError(() => of(0)));
   }
 
@@ -243,10 +243,10 @@ export class ValidationService {
 
     return this.http
       .post<ValidationTaskDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
-      additionalData ? { additionalData } : null,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
+        additionalData ? { additionalData } : null,
+        { params }
+      )
       .pipe(
         catchError(error => {
           throw error;
@@ -290,9 +290,9 @@ export class ValidationService {
   ): Observable<ValidationTaskDto> {
     return this.http
       .get<ValidationTaskDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}`,
+        {}
+      )
       .pipe(
         catchError(error => {
           throw error;
@@ -303,7 +303,7 @@ export class ValidationService {
   getValidationTasks(workspaceId: number): Observable<ValidationTaskDto[]> {
     return this.http
       .get<
-    ValidationTaskDto[]
+      ValidationTaskDto[]
     >(`${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`, {})
       .pipe(
         catchError(error => {
@@ -319,9 +319,9 @@ export class ValidationService {
   ): Observable<unknown> {
     return this.http
       .get<unknown>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}/results`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}/results`,
+        {}
+      )
       .pipe(
         catchError(error => {
           throw error;
@@ -375,7 +375,7 @@ export class ValidationService {
         }
 
         const resultObservables: Array<
-        Observable<[string, { task: ValidationTaskDto; result: unknown }]>
+          Observable<[string, { task: ValidationTaskDto; result: unknown }]>
         > = [];
 
         for (const type in latestTasks) {
@@ -384,8 +384,8 @@ export class ValidationService {
             resultObservables.push(
               this.getValidationResults(workspaceId, task.id).pipe(
                 map<
-                unknown,
-                [string, { task: ValidationTaskDto; result: unknown }]
+                  unknown,
+                  [string, { task: ValidationTaskDto; result: unknown }]
                 >(
                   result => [type, { task, result }] as [
                     string,
@@ -404,20 +404,20 @@ export class ValidationService {
 
         if (resultObservables.length === 0) {
           return of<
-          Record<string, { task: ValidationTaskDto; result: unknown }>
+            Record<string, { task: ValidationTaskDto; result: unknown }>
           >({});
         }
 
         return forkJoin<
-        [string, { task: ValidationTaskDto; result: unknown }][]
+          [string, { task: ValidationTaskDto; result: unknown }][]
         >(resultObservables).pipe(
           map<
-          [string, { task: ValidationTaskDto; result: unknown }][],
-          Record<string, { task: ValidationTaskDto; result: unknown }>
+            [string, { task: ValidationTaskDto; result: unknown }][],
+            Record<string, { task: ValidationTaskDto; result: unknown }>
           >(results => {
             const resultMap: Record<
-            string,
-            { task: ValidationTaskDto; result: unknown }
+              string,
+              { task: ValidationTaskDto; result: unknown }
             > = {};
             for (const [type, data] of results) {
               resultMap[type] = data;

@@ -8,7 +8,7 @@ import {
 } from '../../auth/workspace-token';
 
 type ReplayStatisticsServiceMock = jest.Mocked<
-Pick<ReplayStatisticsService, 'storeReplayStatistics' | 'getReplaySourceSummary'>
+  Pick<ReplayStatisticsService, 'storeReplayStatistics' | 'getReplaySourceSummary'>
 >;
 
 describe('ReplayStatisticsController', () => {

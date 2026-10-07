@@ -71,16 +71,16 @@ export class WorkspaceTestResultsStatisticsController {
   async getOverview(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{
-        testPersons: number;
-        testGroups: number;
-        uniqueBooklets: number;
-        uniqueUnits: number;
-        uniqueResponses: number;
-        responseStatusCounts: Record<string, number>;
-        sessionBrowserCounts: Record<string, number>;
-        sessionOsCounts: Record<string, number>;
-        sessionScreenCounts: Record<string, number>;
-      }> {
+      testPersons: number;
+      testGroups: number;
+      uniqueBooklets: number;
+      uniqueUnits: number;
+      uniqueResponses: number;
+      responseStatusCounts: Record<string, number>;
+      sessionBrowserCounts: Record<string, number>;
+      sessionOsCounts: Record<string, number>;
+      sessionScreenCounts: Record<string, number>;
+    }> {
     try {
       return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
         workspaceId

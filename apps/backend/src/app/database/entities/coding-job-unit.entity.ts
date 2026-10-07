@@ -21,75 +21,75 @@ import { ResponseEntity } from './response.entity';
 @Index(['response_id', 'code'])
 export class CodingJobUnit {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    coding_job_id: number;
+  coding_job_id: number;
 
   @Index()
   @Column({ nullable: true })
-    workspace_id: number | null;
+  workspace_id: number | null;
 
   @Index()
   @Column()
-    response_id: number;
+  response_id: number;
 
   @Column()
-    unit_name: string;
+  unit_name: string;
 
   @Column({ nullable: true })
-    unit_alias: string | null;
+  unit_alias: string | null;
 
   @Column()
-    variable_id: string;
+  variable_id: string;
 
   @Column()
-    variable_anchor: string;
+  variable_anchor: string;
 
   @Column({ nullable: true })
-    variable_bundle_id: number | null;
+  variable_bundle_id: number | null;
 
   @Column()
-    booklet_name: string;
+  booklet_name: string;
 
   @Column()
-    person_login: string;
+  person_login: string;
 
   @Column()
-    person_code: string;
+  person_code: string;
 
   @Column()
-    person_group: string;
+  person_group: string;
 
   @Column({ nullable: true })
-    code: number | null;
+  code: number | null;
 
   @Column({ nullable: true })
-    score: number | null;
+  score: number | null;
 
   @Column({ default: false })
-    is_open: boolean;
+  is_open: boolean;
 
   @Column({ nullable: true, type: 'text' })
-    notes: string | null;
+  notes: string | null;
 
   @Column({ nullable: true, type: 'text' })
-    supervisor_comment: string | null;
+  supervisor_comment: string | null;
 
   @Column({ nullable: true })
-    coding_issue_option: number | null;
+  coding_issue_option: number | null;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-    coding_job: CodingJob;
+  coding_job: CodingJob;
 
   @ManyToOne(() => ResponseEntity)
   @JoinColumn({ name: 'response_id' })
-    response: ResponseEntity;
+  response: ResponseEntity;
 }

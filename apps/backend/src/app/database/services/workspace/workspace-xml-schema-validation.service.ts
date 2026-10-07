@@ -12,8 +12,8 @@ export class WorkspaceXmlSchemaValidationService {
   );
 
   private readonly xsdCache = new Map<
-  string,
-  { xsdDoc: libxmljs.Document; fetchedAt: number }
+    string,
+    { xsdDoc: libxmljs.Document; fetchedAt: number }
   >();
 
   private readonly XSD_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -27,8 +27,8 @@ export class WorkspaceXmlSchemaValidationService {
     workspaceId: number
   ): Promise<Map<string, { schemaValid: boolean; errors: string[] }>> {
     const results = new Map<
-    string,
-    { schemaValid: boolean; errors: string[] }
+      string,
+      { schemaValid: boolean; errors: string[] }
     >();
 
     const BATCH_SIZE = 200;

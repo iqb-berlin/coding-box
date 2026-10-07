@@ -62,24 +62,24 @@ export class DoubleCodedReviewQueryDto implements DoubleCodedReviewQuery {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    page?: number;
+  page?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-    limit?: number;
+  limit?: number;
 
   @IsOptional()
   @Transform(transformBoolean)
   @IsBoolean()
-    onlyConflicts?: boolean;
+  onlyConflicts?: boolean;
 
   @IsOptional()
   @Transform(transformBoolean)
   @IsBoolean()
-    excludeTrainings?: boolean;
+  excludeTrainings?: boolean;
 
   @IsOptional()
   @Transform(({ value }) => (
@@ -87,47 +87,47 @@ export class DoubleCodedReviewQueryDto implements DoubleCodedReviewQuery {
   ))
   @IsString()
   @MaxLength(255)
-    search?: string;
+  search?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    coderId?: number;
+  coderId?: number;
 
   @IsOptional()
   @IsIn(['all', 'done', 'pending'])
-    statusFilter?: 'all' | 'done' | 'pending';
+  statusFilter?: 'all' | 'done' | 'pending';
 
   @IsOptional()
   @IsIn(['all', 'resolved', 'unresolved'])
-    resolvedFilter?: 'all' | 'resolved' | 'unresolved';
+  resolvedFilter?: 'all' | 'resolved' | 'unresolved';
 
   @IsOptional()
   @IsIn(['all', 'match', 'differ'])
-    agreementFilter?: 'all' | 'match' | 'differ';
+  agreementFilter?: 'all' | 'match' | 'differ';
 
   @IsOptional()
   @IsIn(['unitVariable', 'personInfo'])
-    sortBy?: 'unitVariable' | 'personInfo';
+  sortBy?: 'unitVariable' | 'personInfo';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])
-    sortDirection?: 'asc' | 'desc';
+  sortDirection?: 'asc' | 'desc';
 
   @IsOptional()
   @Transform(transformIdList)
   @IsArray()
   @IsInt({ each: true })
   @Min(1, { each: true })
-    jobDefinitionIds?: number[];
+  jobDefinitionIds?: number[];
 
   @IsOptional()
   @Transform(transformIdList)
   @IsArray()
   @IsInt({ each: true })
   @Min(1, { each: true })
-    coderTrainingIds?: number[];
+  coderTrainingIds?: number[];
 }
 
 export class DoubleCodedResolutionDecisionRequestDto
@@ -138,28 +138,28 @@ implements DoubleCodedResolutionDecisionDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    responseId: number;
+  responseId: number;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    sourceUnitId: number;
+  sourceUnitId: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    selectedJobId?: number | null;
+  selectedJobId?: number | null;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-    code?: number | null;
+  code?: number | null;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ allowInfinity: false, allowNaN: false })
-    score?: number | null;
+  score?: number | null;
 
   @IsOptional()
   @Transform(({ value }) => (
@@ -167,7 +167,7 @@ implements DoubleCodedResolutionDecisionDto {
   ))
   @IsString()
   @MaxLength(4000)
-    resolutionComment?: string;
+  resolutionComment?: string;
 }
 
 export class ApplyDoubleCodedResolutionsRequestDto
@@ -177,14 +177,14 @@ implements ApplyDoubleCodedResolutionsRequestContract {
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => DoubleCodedResolutionDecisionRequestDto)
-    decisions: DoubleCodedResolutionDecisionRequestDto[];
+  decisions: DoubleCodedResolutionDecisionRequestDto[];
 }
 
 export class ReconcileDoubleCodedAggregationRequestDto {
   @IsOptional()
   @Transform(transformBoolean)
   @IsBoolean()
-    dryRun?: boolean = true;
+  dryRun?: boolean = true;
 
   @IsOptional()
   @IsArray()
@@ -193,7 +193,7 @@ export class ReconcileDoubleCodedAggregationRequestDto {
   @Type(() => Number)
   @IsInt({ each: true })
   @Min(1, { each: true })
-    responseIds?: number[];
+  responseIds?: number[];
 }
 
 export class SaveDoubleCodedReviewDraftRequestDto
@@ -201,16 +201,16 @@ implements SaveDoubleCodedReviewDraftContract {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-    sourceUnitId: number;
+  sourceUnitId: number;
 
   @Type(() => Number)
   @IsInt()
-    code: number;
+  code: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ allowInfinity: false, allowNaN: false })
-    score?: number | null;
+  score?: number | null;
 
   @IsOptional()
   @Transform(({ value }) => (
@@ -218,5 +218,5 @@ implements SaveDoubleCodedReviewDraftContract {
   ))
   @IsString()
   @MaxLength(4000)
-    comment?: string | null;
+  comment?: string | null;
 }

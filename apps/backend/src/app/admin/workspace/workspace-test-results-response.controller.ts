@@ -103,15 +103,15 @@ export class WorkspaceTestResultsResponseController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteResponse(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('responseId', ParseIntPipe) responseId: number,
-      @Req() req: RequestWithUser
+    @Param('responseId', ParseIntPipe) responseId: number,
+    @Req() req: RequestWithUser
   ): Promise<{
-        success: boolean;
-        report: {
-          deletedResponse: number | null;
-          warnings: string[];
-        };
-      }> {
+      success: boolean;
+      report: {
+        deletedResponse: number | null;
+        warnings: string[];
+      };
+    }> {
     const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
@@ -141,8 +141,8 @@ export class WorkspaceTestResultsResponseController {
   })
   async resolveDuplicateResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() body: ResolveDuplicateResponsesRequest,
-      @Req() req: RequestWithUser
+    @Body() body: ResolveDuplicateResponsesRequest,
+    @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     try {
       return await this.responseManagementService.resolveDuplicateResponses(
@@ -165,14 +165,14 @@ export class WorkspaceTestResultsResponseController {
   })
   async findWorkspaceResponse(
     @WorkspaceId() id: number,
-                   @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                   @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{
-        data: ResponseEntity[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      data: ResponseEntity[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     const [responses, total] =
       await this.workspaceTestResultsService.findWorkspaceResponses(id, {
         page,
@@ -192,14 +192,14 @@ export class WorkspaceTestResultsResponseController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(
     @WorkspaceId() id: number,
-      @Param('testPerson') testPerson: string,
-      @Param('unitId') unitId: string
+    @Param('testPerson') testPerson: string,
+    @Param('unitId') unitId: string
   ): Promise<{
-        responses: {
-          id: string;
-          content: string;
-        }[];
-      }> {
+      responses: {
+        id: string;
+        content: string;
+      }[];
+    }> {
     return this.workspaceTestResultsService.findUnitResponse(
       id,
       testPerson,
@@ -269,26 +269,26 @@ export class WorkspaceTestResultsResponseController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async searchResponses(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('value') value?: string,
-      @Query('variableId') variableId?: string,
-      @Query('unitName') unitName?: string,
-      @Query('bookletName') bookletName?: string,
-      @Query('status') status?: string,
-      @Query('codedStatus') codedStatus?: string,
-      @Query('group') group?: string,
-      @Query('code') code?: string,
-      @Query('codingCode') codingCode?: string,
-      @Query('score') score?: string,
-      @Query('version') version?: 'v1' | 'v2' | 'v3',
-      @Query('geogebra') geogebra?: string,
-      @Query('derivedOnly') derivedOnly?: string,
-      @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
-      @Query('personLogin') personLogin?: string,
-      @Query('sortBy') sortBy?: ResponseSearchSortBy,
-      @Query('sortDirection') sortDirection?: ResponseSearchSortDirection,
-      @Query('regexSearch') regexSearch?: string,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('value') value?: string,
+    @Query('variableId') variableId?: string,
+    @Query('unitName') unitName?: string,
+    @Query('bookletName') bookletName?: string,
+    @Query('status') status?: string,
+    @Query('codedStatus') codedStatus?: string,
+    @Query('group') group?: string,
+    @Query('code') code?: string,
+    @Query('codingCode') codingCode?: string,
+    @Query('score') score?: string,
+    @Query('version') version?: 'v1' | 'v2' | 'v3',
+    @Query('geogebra') geogebra?: string,
+    @Query('derivedOnly') derivedOnly?: string,
+    @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
+    @Query('personLogin') personLogin?: string,
+    @Query('sortBy') sortBy?: ResponseSearchSortBy,
+    @Query('sortDirection') sortDirection?: ResponseSearchSortDirection,
+    @Query('regexSearch') regexSearch?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');

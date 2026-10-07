@@ -35,8 +35,8 @@ export class CodingExecutionService {
       jobId?: string;
       message?: string;
     }>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
-      { params })
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
+        { params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
@@ -73,9 +73,9 @@ export class CodingExecutionService {
       };
       error?: string;
     }>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}`,
+        {}
+      )
       .pipe(
         catchError(() => of({
           status: 'failed' as const,
@@ -108,9 +108,9 @@ export class CodingExecutionService {
       };
       error?: string;
     }>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job/${jobId}`,
-      { context: suppressGlobalHttpErrorContext() }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job/${jobId}`,
+        { context: suppressGlobalHttpErrorContext() }
+      )
       .pipe(
         catchError(() => of({
           status: 'failed' as const,
@@ -124,9 +124,9 @@ export class CodingExecutionService {
     const params = new HttpParams().set('version', version);
     return this.http
       .post<{ jobId: string; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
-      {},
-      { params, context: suppressGlobalHttpErrorContext() }
-    );
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
+        {},
+        { params, context: suppressGlobalHttpErrorContext() }
+      );
   }
 }

@@ -133,16 +133,16 @@ export class WorkspaceFilesValidationController {
   })
   async validateGroupResponses(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10
   ): Promise<{
-        testTakersFound: boolean;
-        groupsWithResponses: { group: string; hasResponse: boolean }[];
-        allGroupsHaveResponses: boolean;
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     return this.workspaceFilesService.validateGroupResponses(
       workspace_id,
       page,
@@ -168,14 +168,14 @@ export class WorkspaceFilesValidationController {
   })
   async validateResponseStatus(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10
   ): Promise<{
-        data: InvalidVariableDto[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     return this.workspaceFilesService.validateResponseStatus(
       workspace_id,
       page,
@@ -201,8 +201,8 @@ export class WorkspaceFilesValidationController {
   })
   async validateDuplicateResponses(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10
   ): Promise<DuplicateResponsesResultDto> {
     return this.workspaceFilesService.validateDuplicateResponses(
       workspace_id,
@@ -228,15 +228,15 @@ export class WorkspaceFilesValidationController {
   })
   async validateVariables(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10
   ): Promise<{
-        data: InvalidVariableDto[];
-        total: number;
-        page: number;
-        limit: number;
-        summary: VariableValidationSummaryDto;
-      }> {
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+      summary: VariableValidationSummaryDto;
+    }> {
     return this.workspaceFilesService.validateVariables(
       workspace_id,
       page,
@@ -262,14 +262,14 @@ export class WorkspaceFilesValidationController {
   })
   async validateVariableTypes(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 10
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10
   ): Promise<{
-        data: InvalidVariableDto[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     return this.workspaceFilesService.validateVariableTypes(
       workspace_id,
       page,
@@ -296,7 +296,7 @@ export class WorkspaceFilesValidationController {
   })
   async deleteInvalidResponses(
     @Param('workspace_id') workspace_id: number,
-      @Query('responseIds') responseIds: string
+    @Query('responseIds') responseIds: string
   ): Promise<number> {
     const ids = responseIds.split(',').map(id => parseInt(id, 10));
     const count = await this.workspaceFilesService.deleteInvalidResponses(
@@ -329,7 +329,7 @@ export class WorkspaceFilesValidationController {
   })
   async deleteAllInvalidResponses(
     @Param('workspace_id') workspace_id: number,
-      @Query('validationType')
+    @Query('validationType')
                            validationType: 'variables' | 'variableTypes' | 'responseStatus'
   ): Promise<number> {
     const count = await this.workspaceFilesService.deleteAllInvalidResponses(

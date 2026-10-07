@@ -35,19 +35,19 @@ export type CodingJobType = 'regular' | 'coding_issue_review';
 @Entity({ name: 'coding_job' })
 export class CodingJob {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
 
   @Column()
-    name: string;
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-    description?: string;
+  description?: string;
 
   @Column({ type: 'text', nullable: true })
-    comment?: string;
+  comment?: string;
 
   @Column({
     name: 'job_type',
@@ -55,50 +55,50 @@ export class CodingJob {
     length: 32,
     default: 'regular'
   })
-    job_type: CodingJobType;
+  job_type: CodingJobType;
 
   @Column({ name: 'source_coding_job_id', type: 'int', nullable: true })
-    source_coding_job_id?: number | null;
+  source_coding_job_id?: number | null;
 
   @Column({ name: 'reviewer_user_id', type: 'int', nullable: true })
-    reviewer_user_id?: number | null;
+  reviewer_user_id?: number | null;
 
   @ManyToOne(() => CodingJob, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'source_coding_job_id' })
-    sourceCodingJob?: CodingJob | null;
+  sourceCodingJob?: CodingJob | null;
 
   @Column({ default: 'pending' })
-    status: string;
+  status: string;
 
   @Column({ name: 'show_score', default: false })
-    showScore: boolean;
+  showScore: boolean;
 
   @Column({ name: 'allow_comments', default: true })
-    allowComments: boolean;
+  allowComments: boolean;
 
   @Column({ name: 'suppress_general_instructions', default: false })
-    suppressGeneralInstructions: boolean;
+  suppressGeneralInstructions: boolean;
 
   @Column({ nullable: true })
-    training_id?: number;
+  training_id?: number;
 
   @ManyToOne(() => CoderTraining, coderTraining => coderTraining.codingJobs)
   @JoinColumn({ name: 'training_id' })
-    training?: CoderTraining;
+  training?: CoderTraining;
 
   @Column({ name: 'missings_profile_id', nullable: true })
-    missings_profile_id?: number;
+  missings_profile_id?: number;
 
   @ManyToOne(() => MissingsProfile)
   @JoinColumn({ name: 'missings_profile_id' })
-    missingsProfile?: MissingsProfile;
+  missingsProfile?: MissingsProfile;
 
   @Column({ name: 'job_definition_id', nullable: true })
-    job_definition_id?: number;
+  job_definition_id?: number;
 
   @ManyToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJobs, { nullable: true })
   @JoinColumn({ name: 'job_definition_id' })
-    jobDefinition?: JobDefinition;
+  jobDefinition?: JobDefinition;
 
   @Column({
     name: 'case_ordering_mode',
@@ -107,19 +107,19 @@ export class CodingJob {
     enum: ['continuous', 'alternating'],
     default: 'continuous'
   })
-    case_ordering_mode: CaseOrderingMode;
+  case_ordering_mode: CaseOrderingMode;
 
   @Column({ name: 'aggregation_enabled', default: true })
-    aggregation_enabled: boolean;
+  aggregation_enabled: boolean;
 
   @Column({ name: 'aggregation_threshold', nullable: true })
-    aggregation_threshold: number | null;
+  aggregation_threshold: number | null;
 
   @Column({ name: 'response_matching_flags', type: 'jsonb', nullable: true })
-    response_matching_flags: string[] | null;
+  response_matching_flags: string[] | null;
 
   @Column({ name: 'aggregation_settings_version', nullable: true })
-    aggregation_settings_version: number | null;
+  aggregation_settings_version: number | null;
 
   @Column({
     name: 'freshness_status',
@@ -127,7 +127,7 @@ export class CodingJob {
     length: 32,
     default: 'current'
   })
-    freshness_status: CodingJobFreshnessStatus;
+  freshness_status: CodingJobFreshnessStatus;
 
   @Column({
     name: 'freshness_reason',
@@ -135,29 +135,29 @@ export class CodingJob {
     length: 64,
     nullable: true
   })
-    freshness_reason: string | null;
+  freshness_reason: string | null;
 
   @Column({ name: 'freshness_updated_at', type: 'timestamp with time zone', nullable: true })
-    freshness_updated_at: Date | null;
+  freshness_updated_at: Date | null;
 
   @Column({ name: 'freshness_affected_units', type: 'int', default: 0 })
-    freshness_affected_units: number;
+  freshness_affected_units: number;
 
   @Column({ name: 'freshness_affected_responses', type: 'int', default: 0 })
-    freshness_affected_responses: number;
+  freshness_affected_responses: number;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 
   @OneToMany(() => CodingJobUnit, codingJobUnit => codingJobUnit.coding_job, { cascade: true })
-    codingJobUnits: CodingJobUnit[];
+  codingJobUnits: CodingJobUnit[];
 
   @OneToMany(() => CodingJobCoder, codingJobCoder => codingJobCoder.coding_job, { cascade: true })
-    codingJobCoders: CodingJobCoder[];
+  codingJobCoders: CodingJobCoder[];
 
   @OneToMany(() => CodingJobVariableBundle, codingJobVariableBundle => codingJobVariableBundle.coding_job, { cascade: true })
-    codingJobVariableBundles: CodingJobVariableBundle[];
+  codingJobVariableBundles: CodingJobVariableBundle[];
 }

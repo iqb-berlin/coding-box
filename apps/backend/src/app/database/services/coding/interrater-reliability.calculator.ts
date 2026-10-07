@@ -28,7 +28,7 @@ export interface FleissKappaResult {
 }
 
 export type KappaSummaryInput = Pick<
-RawKappaResult,
+  RawKappaResult,
 'kappa' | 'brennanPredigerKappa' | 'agreement' | 'validPairs'
 >;
 

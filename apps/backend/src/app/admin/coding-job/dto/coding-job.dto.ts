@@ -19,26 +19,26 @@ export class CodingJobDto {
     description: 'Unique identifier for the coding job',
     example: 1
   })
-    id: number;
+  id: number;
 
   @ApiProperty({
     description: 'Workspace ID the coding job belongs to',
     example: 1
   })
-    workspace_id: number;
+  workspace_id: number;
 
   @ApiProperty({
     description: 'Name of the coding job',
     example: 'Coding Job 1'
   })
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'Description of the coding job',
     example: 'This is a coding job for testing',
     required: false
   })
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'Status of the coding job',
@@ -53,28 +53,28 @@ export class CodingJobDto {
       'results_applied'
     ]
   })
-    status: string;
+  status: string;
 
   @ApiProperty({
     description: 'Comment for the coding job',
     example: 'This coding job requires special attention',
     required: false
   })
-    comment?: string;
+  comment?: string;
 
   @ApiProperty({
     description: 'Whether scores are shown in the code selector',
     example: true,
     required: false
   })
-    showScore?: boolean;
+  showScore?: boolean;
 
   @ApiProperty({
     description: 'Whether coder comments are allowed in the code selector',
     example: true,
     required: false
   })
-    allowComments?: boolean;
+  allowComments?: boolean;
 
   @ApiProperty({
     description:
@@ -82,19 +82,19 @@ export class CodingJobDto {
     example: false,
     required: false
   })
-    suppressGeneralInstructions?: boolean;
+  suppressGeneralInstructions?: boolean;
 
   @ApiProperty({
     description: 'Date and time when the coding job was created',
     example: '2025-08-06T10:05:00.000Z'
   })
-    created_at: Date;
+  created_at: Date;
 
   @ApiProperty({
     description: 'Date and time when the coding job was last updated',
     example: '2025-08-06T10:05:00.000Z'
   })
-    updated_at: Date;
+  updated_at: Date;
 
   @ApiProperty({
     description: 'IDs of coders assigned to the coding job',
@@ -102,7 +102,7 @@ export class CodingJobDto {
     example: [1, 2, 3],
     required: false
   })
-    assigned_coders?: number[];
+  assigned_coders?: number[];
 
   @ApiProperty({
     description:
@@ -114,7 +114,7 @@ export class CodingJobDto {
     ],
     required: false
   })
-    assigned_variables?: { unitName: string; variableId: string }[];
+  assigned_variables?: { unitName: string; variableId: string }[];
 
   @ApiProperty({
     description:
@@ -131,7 +131,7 @@ export class CodingJobDto {
     ],
     required: false
   })
-    assigned_variable_bundles?: {
+  assigned_variable_bundles?: {
     name: string;
     variables: { unitName: string; variableId: string }[];
   }[];
@@ -141,35 +141,35 @@ export class CodingJobDto {
     type: [VariableDto],
     required: false
   })
-    variables?: VariableDto[];
+  variables?: VariableDto[];
 
   @ApiProperty({
     description: 'Progress percentage for the coding job',
     example: 75,
     required: false
   })
-    progress?: number;
+  progress?: number;
 
   @ApiProperty({
     description: 'Number of coded units for the coding job',
     example: 15,
     required: false
   })
-    coded_units?: number;
+  coded_units?: number;
 
   @ApiProperty({
     description: 'Total number of units assigned to the coding job',
     example: 20,
     required: false
   })
-    total_units?: number;
+  total_units?: number;
 
   @ApiProperty({
     description: 'Number of open units for the coding job',
     example: 3,
     required: false
   })
-    open_units?: number;
+  open_units?: number;
 
   codedUnits?: number;
   totalUnits?: number;
@@ -180,41 +180,41 @@ export class CodingJobDto {
     example: 1,
     required: false
   })
-    missings_profile_id?: number;
+  missings_profile_id?: number;
 
   @ApiProperty({
     description: 'ID of the job definition this coding job was created from',
     example: 1,
     required: false
   })
-    job_definition_id?: number;
+  job_definition_id?: number;
 
   @ApiProperty({
     description: 'Missings profile assigned to the coding job',
     example: { id: 1, label: 'Default Profile', missings: '...' },
     required: false
   })
-    missings_profile?: MissingsProfile;
+  missings_profile?: MissingsProfile;
 
   @ApiProperty({
     description: 'ID of the training assigned to the coding job',
     example: 1,
     required: false
   })
-    training_id?: number;
+  training_id?: number;
 
   @ApiProperty({
     description: 'Training assigned to the coding job',
     required: false
   })
-    training?: { id: number; label: string };
+  training?: { id: number; label: string };
 
   @ApiProperty({
     description: 'Workspace ID the coding job belongs to (camelCase alias)',
     example: 1,
     required: false
   })
-    workspaceId?: number;
+  workspaceId?: number;
 
   @ApiProperty({
     description:
@@ -222,7 +222,7 @@ export class CodingJobDto {
     example: '2025-08-06T10:05:00.000Z',
     required: false
   })
-    createdAt?: Date;
+  createdAt?: Date;
 
   @ApiProperty({
     description:
@@ -230,7 +230,7 @@ export class CodingJobDto {
     example: '2025-08-06T10:05:00.000Z',
     required: false
   })
-    updatedAt?: Date;
+  updatedAt?: Date;
 
   @ApiProperty({
     description: 'IDs of coders assigned to the coding job (camelCase alias)',
@@ -238,7 +238,7 @@ export class CodingJobDto {
     example: [1, 2, 3],
     required: false
   })
-    assignedCoders?: number[];
+  assignedCoders?: number[];
 
   @ApiProperty({
     description:
@@ -247,7 +247,7 @@ export class CodingJobDto {
     example: [{ unitName: 'Unit1', variableId: 'var1' }],
     required: false
   })
-    assignedVariables?: { unitName: string; variableId: string }[];
+  assignedVariables?: { unitName: string; variableId: string }[];
 
   @ApiProperty({
     description:
@@ -261,7 +261,7 @@ export class CodingJobDto {
     ],
     required: false
   })
-    assignedVariableBundles?: {
+  assignedVariableBundles?: {
     name: string;
     variables: { unitName: string; variableId: string }[];
   }[];
@@ -272,7 +272,7 @@ export class CodingJobDto {
     example: 1,
     required: false
   })
-    jobDefinitionId?: number;
+  jobDefinitionId?: number;
 
   @ApiProperty({
     description:
@@ -280,7 +280,7 @@ export class CodingJobDto {
     example: true,
     required: false
   })
-    aggregationEnabled?: boolean;
+  aggregationEnabled?: boolean;
 
   @ApiProperty({
     description:
@@ -289,7 +289,7 @@ export class CodingJobDto {
     required: false,
     nullable: true
   })
-    aggregationThreshold?: number | null;
+  aggregationThreshold?: number | null;
 
   @ApiProperty({
     description:
@@ -298,7 +298,7 @@ export class CodingJobDto {
     required: false,
     type: [String]
   })
-    responseMatchingFlags?: string[] | null;
+  responseMatchingFlags?: string[] | null;
 
   @ApiProperty({
     description:
@@ -307,7 +307,7 @@ export class CodingJobDto {
     required: false,
     nullable: true
   })
-    aggregationSettingsVersion?: number | null;
+  aggregationSettingsVersion?: number | null;
 
   @ApiProperty({
     description:
@@ -316,7 +316,7 @@ export class CodingJobDto {
     enum: ['current', 'stale_source', 'review_required'],
     required: false
   })
-    freshnessStatus?: CodingJobFreshnessStatus;
+  freshnessStatus?: CodingJobFreshnessStatus;
 
   @ApiProperty({
     description:
@@ -325,35 +325,35 @@ export class CodingJobDto {
     required: false,
     nullable: true
   })
-    freshnessReason?: string | null;
+  freshnessReason?: string | null;
 
   @ApiProperty({
     description: 'When freshness status was last updated',
     required: false,
     nullable: true
   })
-    freshnessUpdatedAt?: Date | null;
+  freshnessUpdatedAt?: Date | null;
 
   @ApiProperty({
     description: 'Number of affected task results for this coding job',
     example: 2,
     required: false
   })
-    freshnessAffectedUnits?: number;
+  freshnessAffectedUnits?: number;
 
   @ApiProperty({
     description: 'Number of affected responses for this coding job',
     example: 6,
     required: false
   })
-    freshnessAffectedResponses?: number;
+  freshnessAffectedResponses?: number;
 
   @ApiProperty({
     description: 'Whether this coding job has coding issues requiring review',
     example: true,
     required: false
   })
-    hasIssues?: boolean;
+  hasIssues?: boolean;
 
   @ApiProperty({
     description: 'Aggregated coding issue summary for the job list',
@@ -365,7 +365,7 @@ export class CodingJobDto {
     },
     required: false
   })
-    issueSummary?: CodingJobIssueSummary;
+  issueSummary?: CodingJobIssueSummary;
 
   /**
    * Create a CodingJobDto from a CodingJob entity

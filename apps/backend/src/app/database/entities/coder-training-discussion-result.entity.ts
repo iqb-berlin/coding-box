@@ -11,35 +11,35 @@ import {
 @Index(['training_id', 'response_id'], { unique: true })
 export class CoderTrainingDiscussionResult {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
 
   @Column()
-    training_id: number;
+  training_id: number;
 
   @Column()
-    response_id: number;
+  response_id: number;
 
   @Column({ nullable: true })
-    code: number | null;
+  code: number | null;
 
   @Column({ nullable: true })
-    score: number | null;
+  score: number | null;
 
   @Column({ type: 'text', nullable: true })
-    notes: string | null;
+  notes: string | null;
 
   @Column({ nullable: true })
-    manager_user_id: number | null;
+  manager_user_id: number | null;
 
   @Column({ nullable: true })
-    manager_name: string | null;
+  manager_name: string | null;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 }

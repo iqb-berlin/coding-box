@@ -21,39 +21,39 @@ import {
 @Index(['workspace_id', 'version', 'state'])
 export class CodingUnitFreshness {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'int' })
-    workspace_id: number;
+  workspace_id: number;
 
   @Column({ type: 'int' })
-    unit_id: number;
+  unit_id: number;
 
   @Column({ type: 'varchar', length: 2 })
-    version: CodingFreshnessVersion;
+  version: CodingFreshnessVersion;
 
   @Column({ type: 'varchar', length: 32 })
-    state: CodingFreshnessState;
+  state: CodingFreshnessState;
 
   @Column({ type: 'varchar', length: 32 })
-    reason: CodingFreshnessReason;
+  reason: CodingFreshnessReason;
 
   @Column({ type: 'int', default: 0 })
-    affected_response_count: number;
+  affected_response_count: number;
 
   @Column({ type: 'int', default: 0 })
-    source_revision: number;
+  source_revision: number;
 
   @Column({ type: 'int', nullable: true })
-    coded_revision: number | null;
+  coded_revision: number | null;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ type: 'timestamp with time zone' })
-    updated_at: Date;
+  updated_at: Date;
 
   @ManyToOne(() => Unit, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'unit_id' })
-    unit: Unit;
+  unit: Unit;
 }
