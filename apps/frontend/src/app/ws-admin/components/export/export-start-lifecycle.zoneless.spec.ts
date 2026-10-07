@@ -7,7 +7,7 @@ import { Subject, of } from 'rxjs';
 import { ExportComponent } from './export.component';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { AppService } from '../../../core/services/app.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { MissingsProfileService } from '../../../coding/services/missings-profile.service';

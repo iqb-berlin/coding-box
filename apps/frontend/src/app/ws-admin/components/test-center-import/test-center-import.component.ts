@@ -45,6 +45,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { ImportService, ImportOptions, Result } from '../../../shared/services/file/import.service';
 import { AppService } from '../../../core/services/app.service';
+import { WorkspaceAdmin, Testcenter } from '../../../shared/models/test-center-authentication.model';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import {
@@ -62,20 +63,6 @@ import {
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 import { TestResultsOverwriteMode } from '../../../../../../../api-dto/files/import-options.dto';
-
-export type WorkspaceAdmin = {
-  label: string;
-  id: string;
-  type: string;
-  flags: {
-    mode: string;
-  };
-};
-
-export type Testcenter = {
-  id: number;
-  label: string;
-};
 
 export interface ImportFormValues {
   testCenter: number;
@@ -636,9 +623,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
               this.firstTestFilesImportData = data;
 
               const ref = this.dialog.open<
-              TestFilesUploadConflictsDialogComponent,
-              { conflicts: typeof initialConflicts },
-              TestFilesUploadConflictsDialogResult
+                TestFilesUploadConflictsDialogComponent,
+                { conflicts: typeof initialConflicts },
+                TestFilesUploadConflictsDialogResult
               >(TestFilesUploadConflictsDialogComponent, {
                 width: '800px',
                 maxWidth: '95vw',

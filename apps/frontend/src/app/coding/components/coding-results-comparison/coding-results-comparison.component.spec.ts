@@ -18,7 +18,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 

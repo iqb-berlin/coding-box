@@ -24,7 +24,7 @@ import { ValidationTaskStateService } from '../../../shared/services/validation/
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 import { SERVER_URL } from '../../../injection-tokens';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 
 describe('TestResultsComponent Polling', () => {
   let fixture: ComponentFixture<TestResultsComponent>;

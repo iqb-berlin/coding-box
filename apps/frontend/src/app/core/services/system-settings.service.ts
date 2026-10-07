@@ -7,7 +7,7 @@ import {
   ContentPoolConnectionTestResponse,
   ContentPoolSettings,
   ContentPoolSettingsUpdate
-} from '../../ws-admin/models/content-pool.model';
+} from '../../shared/models/content-pool.model';
 import { LegalNoticeDto, UpdateLegalNoticeDto } from '../../../../../../api-dto/legal-notice/legal-notice.dto';
 
 @Injectable({

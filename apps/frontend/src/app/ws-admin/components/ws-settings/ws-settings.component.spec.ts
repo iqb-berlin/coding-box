@@ -15,7 +15,7 @@ import { JournalComponent } from '../journal/journal.component';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { WsSettingsComponent } from './ws-settings.component';
 import { AppService } from '../../../core/services/app.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { SERVER_URL } from '../../../injection-tokens';
 
 @Component({

@@ -22,7 +22,7 @@ import {
   ContentPoolSettings,
   ContentPoolUploadFilesProgress,
   ContentPoolUploadFilesResult
-} from '../../models/content-pool.model';
+} from '../../../shared/models/content-pool.model';
 
 export interface ContentPoolUploadDialogFile {
   id: number;

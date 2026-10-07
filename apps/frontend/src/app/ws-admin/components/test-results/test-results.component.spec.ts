@@ -30,7 +30,7 @@ import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 
 describe('TestResultsComponent', () => {

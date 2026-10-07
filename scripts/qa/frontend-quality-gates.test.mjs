@@ -43,6 +43,40 @@ test('native buttons pass template accessibility rules', async () => {
   assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
 });
 
+test('Core rejects feature imports and accepts shared services', async () => {
+  const filePath = 'apps/frontend/src/app/core/services/authentication.service.ts';
+  for (const feature of [
+    'coding/services/coding-job-backend.service',
+    'ws-admin/services/workspace-admin.service',
+    'replay/services/replay-backend.service',
+    'sys-admin/components/system-notifications/system-notifications.component',
+    'workspace/services/workspace.service',
+    'coding-management/coding-variables-dialog/coding-variables-dialog.component'
+  ]) {
+    const [result] = await eslint.lintText(`import '../../${feature}';`, { filePath });
+    assert.ok(result.messages.some(message => message.ruleId === 'import/no-restricted-paths'),
+      `${feature}: ${JSON.stringify(result.messages)}`);
+  }
+  const [result] = await eslint.lintText(
+    "import '../../shared/services/workspace/workspace-settings.service';", { filePath }
+  );
+  assert.ok(!result.messages.some(message => message.ruleId === 'import/no-restricted-paths'),
+    JSON.stringify(result.messages));
+});
+
+test('Core also rejects inline import types and dynamic feature imports', async () => {
+  const filePath = 'apps/frontend/src/app/core/services/authentication.service.ts';
+  const source = '../../coding/services/coding-job-backend.service';
+  for (const code of [
+    `export type Probe = import('${source}').CodingJobBackendService;`,
+    `export const probe = import('${source}');`
+  ]) {
+    const [result] = await eslint.lintText(code, { filePath });
+    assert.ok(result.messages.some(message => message.ruleId === 'no-restricted-syntax'),
+      JSON.stringify(result.messages));
+  }
+});
+
 test('Jest configurations load through ts-node regardless of configuration order', () => {
   const env = { ...process.env };
   delete env.TS_NODE_COMPILER_OPTIONS;

@@ -36,7 +36,7 @@ import {
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
 import { SERVER_URL } from '../../../injection-tokens';
 
