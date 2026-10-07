@@ -28,7 +28,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   FormsModule,
   ReactiveFormsModule,
-  FormGroup,
+  FormRecord,
   FormControl
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -151,7 +151,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private reviewFacade = inject(DoubleCodedReviewFacade);
   private replayDecisionBridge = inject(ReplayDecisionBridgeService);
 
-  selectionForm: FormGroup = this.reviewFacade.selectionForm;
+  selectionForm: FormRecord<FormControl<string | null>> = this.reviewFacade.selectionForm;
 
   get canApplyReviewResults(): boolean {
     return (
@@ -480,11 +480,11 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return `comment_${item.responseId}`;
   }
 
-  getItemControl(item: DoubleCodedItem): FormControl {
+  getItemControl(item: DoubleCodedItem): FormControl<string | null> {
     return this.reviewFacade.getItemControl(item);
   }
 
-  getCommentControl(item: DoubleCodedItem): FormControl {
+  getCommentControl(item: DoubleCodedItem): FormControl<string | null> {
     return this.reviewFacade.getCommentControl(item);
   }
 
@@ -670,8 +670,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     decision: DoubleCodedManagerDecisionDto
   ): string {
     const fallbackByState: Record<
-    DoubleCodedManagerDecisionDto['state'],
-    string
+      DoubleCodedManagerDecisionDto['state'],
+      string
     > = {
       draft: 'Entwurf',
       applied: 'Angewendet',

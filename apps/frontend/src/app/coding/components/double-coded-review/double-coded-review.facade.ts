@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
+import { FormControl, FormRecord } from '@angular/forms';
 import {
   catchError,
   concatMap,
@@ -70,33 +70,32 @@ export interface ManagerDraftUpdate {
 
 @Injectable()
 export class DoubleCodedReviewFacade {
-  private readonly fb = inject(FormBuilder);
   private readonly appService = inject(AppService);
   private readonly doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private readonly sessionRecoveryService = inject(SessionRecoveryService);
 
-  readonly selectionForm: FormGroup = this.fb.group({});
+  readonly selectionForm = new FormRecord<FormControl<string | null>>({});
   private readonly managerDraftUpdatesSubject = new Subject<ManagerDraftUpdate>();
   readonly managerDraftUpdates$ = this.managerDraftUpdatesSubject.asObservable();
 
   private readonly replayDecisionByResponseId = new Map<
-  number,
-  ReplayDecisionResult
+    number,
+    ReplayDecisionResult
   >();
 
   private readonly defaultReviewValueByResponseId = new Map<
-  number,
-  { selectedValue: string; comment: string }
+    number,
+    { selectedValue: string; comment: string }
   >();
 
   private readonly managerDraftCommandQueues = new Map<
-  number,
-  Subject<ManagerDraftCommand>
+    number,
+    Subject<ManagerDraftCommand>
   >();
 
   private readonly lastManagerDraftCommandSignatureByResponseId = new Map<
-  number,
-  string
+    number,
+    string
   >();
 
   private readonly destroy$ = new Subject<void>();
@@ -196,11 +195,11 @@ export class DoubleCodedReviewFacade {
     return `comment_${item.responseId}`;
   }
 
-  getItemControl(item: DoubleCodedItem): FormControl {
+  getItemControl(item: DoubleCodedItem): FormControl<string | null> {
     return this.getOrCreateFormControl(this.getItemControlName(item));
   }
 
-  getCommentControl(item: DoubleCodedItem): FormControl {
+  getCommentControl(item: DoubleCodedItem): FormControl<string | null> {
     return this.getOrCreateFormControl(this.getCommentControlName(item));
   }
 
@@ -446,7 +445,7 @@ export class DoubleCodedReviewFacade {
     return remainingEntries.length !== draft.entries.length;
   }
 
-  private getOrCreateFormControl(controlName: string): FormControl {
+  private getOrCreateFormControl(controlName: string): FormControl<string | null> {
     const control = this.selectionForm.get(controlName);
     if (control instanceof FormControl) return control;
     const created = new FormControl('');
