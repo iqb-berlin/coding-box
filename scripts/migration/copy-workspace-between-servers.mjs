@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import readline from 'node:readline';
+import { pathToFileURL } from 'node:url';
 
 const CONFIG = {
   sshUser: 'julian',
@@ -757,7 +758,14 @@ async function apply() {
   }
 }
 
-const mode = process.argv[2];
-if (mode === '--preflight') await preflight();
-else if (mode === '--apply') await apply();
-else throw new Error('Use --preflight or --apply');
+export {
+  quoteIdentifier, quoteLiteral, transformExpression, transformLocalRow,
+  transformSnapshotJson, csvValue, validationSql, sequenceSql
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const mode = process.argv[2];
+  if (mode === '--preflight') await preflight();
+  else if (mode === '--apply') await apply();
+  else throw new Error('Use --preflight or --apply');
+}
