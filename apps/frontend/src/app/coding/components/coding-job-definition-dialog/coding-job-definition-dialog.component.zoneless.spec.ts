@@ -15,7 +15,7 @@ import { TestPersonCodingService } from '../../services/test-person-coding.servi
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 
 describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
   let fixture: ComponentFixture<CodingJobDefinitionDialogComponent>;

@@ -11,7 +11,7 @@ import { TestPersonCodingService } from '../../services/test-person-coding.servi
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { PostMessageService } from '../../../core/services/post-message.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import type { TrainingKappaStatisticsDto } from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
 

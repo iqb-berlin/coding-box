@@ -18,7 +18,7 @@ import { switchMap } from 'rxjs/operators';
 import { AppService, standardLogo } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
-import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
+import { ContentPoolSettings } from '../../../shared/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
 import { defaultLegalNoticeHtml } from '../../../../../../../api-dto/legal-notice/default-legal-notice-html';
 import { SERVER_URL } from '../../../injection-tokens';

@@ -14,7 +14,7 @@ import { AppService } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 
 describe('File validation without Zone', () => {
   let fixture: ComponentFixture<TestFilesComponent>;

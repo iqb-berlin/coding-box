@@ -45,7 +45,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 import {
   hasInvalidRegexFilter,

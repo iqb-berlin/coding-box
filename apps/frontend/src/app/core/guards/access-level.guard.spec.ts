@@ -2,12 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree, convertToParamMap
 } from '@angular/router';
-import { BehaviorSubject, of } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import { AppService, AuthBootstrapStatus } from '../services/app.service';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
-import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
+import { WorkspaceAccessService } from '../services/workspace-access.service';
 
 jest.mock('keycloak-angular', () => ({
   createAuthGuard: jest.fn((
@@ -26,7 +26,7 @@ describe('Access Level Guard', () => {
   let mockUserService: jest.Mocked<UserService>;
   let mockAppService: jest.Mocked<AppService>;
   let mockRouter: jest.Mocked<Router>;
-  let mockCodingJobBackendService: jest.Mocked<CodingJobBackendService>;
+  let mockWorkspaceAccessService: jest.Mocked<WorkspaceAccessService>;
   let authDataSubject: BehaviorSubject<AuthDataDto>;
 
   const defaultAuthData: AuthDataDto = {
@@ -50,9 +50,9 @@ describe('Access Level Guard', () => {
       getUsers: jest.fn()
     } as unknown as jest.Mocked<UserService>;
 
-    mockCodingJobBackendService = {
-      getCodingJobs: jest.fn()
-    } as unknown as jest.Mocked<CodingJobBackendService>;
+    mockWorkspaceAccessService = {
+      hasAssignedCodingJobs: jest.fn()
+    } as unknown as jest.Mocked<WorkspaceAccessService>;
 
     mockAppService = {
       authData$: authDataSubject.asObservable(),
@@ -73,12 +73,58 @@ describe('Access Level Guard', () => {
         { provide: UserService, useValue: mockUserService },
         { provide: AppService, useValue: mockAppService },
         { provide: Router, useValue: mockRouter },
-        { provide: CodingJobBackendService, useValue: mockCodingJobBackendService }
+        { provide: WorkspaceAccessService, useValue: mockWorkspaceAccessService }
       ]
     });
   });
 
   describe('Guard Implementation', () => {
+    it.each([true, false])('uses assignments when redirecting a coder from management: %s', async assigned => {
+      const { canActivateAccessLevel } = await import('./access-level.guard');
+      const denied = {} as UrlTree;
+      authDataSubject.next({ ...defaultAuthData, userId: 42 });
+      mockAuthService.getRoles.mockReturnValue([]);
+      mockUserService.getUsers.mockReturnValue(of([{
+        id: 42, name: 'Coder', isAdmin: false, accessLevel: 1, canCode: false
+      }]));
+      mockWorkspaceAccessService.hasAssignedCodingJobs.mockReturnValue(of(assigned));
+      mockRouter.createUrlTree.mockReturnValue(denied);
+
+      const result = await TestBed.runInInjectionContext(() => canActivateAccessLevel(3)(
+        { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot,
+        { url: '/workspace-admin/123/coding/my-jobs' } as RouterStateSnapshot
+      ));
+
+      expect(result).toBe(denied);
+      expect(mockWorkspaceAccessService.hasAssignedCodingJobs).toHaveBeenCalledWith(123);
+      if (assigned) {
+        expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/workspace-admin/123/coding/my-jobs']);
+      } else {
+        expect(mockRouter.createUrlTree).not.toHaveBeenCalledWith(['/workspace-admin/123/coding/my-jobs']);
+      }
+    });
+
+    it('denies access when the assignment query fails', async () => {
+      const { canActivateAccessLevel } = await import('./access-level.guard');
+      const denied = {} as UrlTree;
+      authDataSubject.next({ ...defaultAuthData, userId: 42 });
+      mockAuthService.getRoles.mockReturnValue([]);
+      mockUserService.getUsers.mockReturnValue(of([{
+        id: 42, name: 'Coder', isAdmin: false, accessLevel: 1, canCode: false
+      }]));
+      mockWorkspaceAccessService.hasAssignedCodingJobs.mockReturnValue(throwError(() => new Error('offline')));
+      mockRouter.createUrlTree.mockReturnValue(denied);
+
+      const result = await TestBed.runInInjectionContext(() => canActivateAccessLevel(3)(
+        { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot,
+        { url: '/workspace-admin/123/coding/my-jobs' } as RouterStateSnapshot
+      ));
+
+      expect(result).toBe(denied);
+      expect(mockWorkspaceAccessService.hasAssignedCodingJobs).toHaveBeenCalledWith(123);
+      expect(mockRouter.createUrlTree).not.toHaveBeenCalledWith(['/workspace-admin/123/coding/my-jobs']);
+    });
+
     it('should be defined and importable', async () => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       expect(canActivateAccessLevel).toBeDefined();
@@ -143,7 +189,7 @@ describe('Access Level Guard', () => {
       expect(mockRouter.createUrlTree).toHaveBeenCalledWith([
         '/workspace-admin/123/coding/statistics'
       ]);
-      expect(mockCodingJobBackendService.getCodingJobs).not.toHaveBeenCalled();
+      expect(mockWorkspaceAccessService.hasAssignedCodingJobs).not.toHaveBeenCalled();
     });
   });
 

@@ -9,7 +9,7 @@ import {
   AUTH_SESSION_IDLE_TIMEOUT_MS,
   getAuthSessionWarningDelayMs
 } from './auth-session.config';
-import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../shared/services/workspace/workspace-settings.service';
 
 @Injectable({
   providedIn: 'root'
