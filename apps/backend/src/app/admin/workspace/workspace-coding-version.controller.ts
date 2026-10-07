@@ -186,7 +186,8 @@ export class WorkspaceCodingVersionController {
     }
   })
   async getResetJobStatus(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspaceId: number,
+      @Param('jobId') jobId: string
   ): Promise<{
         status: string;
         progress: number;
@@ -198,7 +199,7 @@ export class WorkspaceCodingVersionController {
         };
         error?: string;
       }> {
-    const job = await this.jobQueueService.getResetCodingVersionJob(jobId);
+    const job = await this.jobQueueService.getWorkspaceJob(workspaceId, 'reset-coding-version', jobId);
     if (!job) {
       return { status: 'not_found', progress: 0, error: `Job with ID ${jobId} not found` };
     }
