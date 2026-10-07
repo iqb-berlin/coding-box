@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
@@ -37,6 +39,7 @@ export class WorkspaceExclusionService {
   private readonly logger = new Logger(WorkspaceExclusionService.name);
 
   constructor(
+    @Inject(forwardRef(() => WorkspaceCoreService))
     private readonly workspaceCoreService: WorkspaceCoreService,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,

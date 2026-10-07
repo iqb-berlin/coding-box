@@ -1222,9 +1222,10 @@ export class WorkspaceCodingStatisticsController {
     description: 'Coding statistics job status retrieved successfully.'
   })
   async getCodingStatisticsJobStatus(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspaceId: number,
+      @Param('jobId') jobId: string
   ): Promise<CodingStatisticsJobStatusResponse | { error: string }> {
-    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId);
+    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId, workspaceId);
     if (!status) {
       return { error: `Coding statistics job with ID ${jobId} not found` };
     }

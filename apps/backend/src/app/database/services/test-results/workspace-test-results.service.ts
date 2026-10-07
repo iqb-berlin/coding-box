@@ -549,9 +549,12 @@ export class WorkspaceTestResultsService {
     @Inject(forwardRef(() => CodingValidationService))
     private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
+    @Inject(forwardRef(() => WorkspaceCoreService))
     private readonly workspaceCoreService: WorkspaceCoreService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
+    @Inject(forwardRef(() => CodingFreshnessService))
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
     @Inject(forwardRef(() => CodingStatisticsService))

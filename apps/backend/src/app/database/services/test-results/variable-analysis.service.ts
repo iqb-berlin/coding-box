@@ -172,23 +172,13 @@ export class VariableAnalysisService {
 
   async getAnalysisJob(
     jobId: number | string,
-    workspaceId?: number
+    workspaceId: number
   ): Promise<VariableAnalysisJobDto> {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
     );
 
-    if (!job) {
-      if (workspaceId !== undefined) {
-        throw new NotFoundException(
-          `Job with ID ${jobId} not found in workspace ${workspaceId}`
-        );
-      } else {
-        throw new NotFoundException(`Job with ID ${jobId} not found`);
-      }
-    }
-
-    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+    if (!job || !Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
       throw new NotFoundException(
         `Job with ID ${jobId} not found in workspace ${workspaceId}`
       );
@@ -212,7 +202,7 @@ export class VariableAnalysisService {
 
   async getAnalysisResults(
     jobId: number | string,
-    workspaceId?: number,
+    workspaceId: number,
     options: VariableAnalysisResultOptions = {}
   ): Promise<VariableAnalysisResultDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
@@ -246,7 +236,7 @@ export class VariableAnalysisService {
 
   async getAnalysisResultsPage(
     jobId: number | string,
-    workspaceId?: number,
+    workspaceId: number,
     options: {
       page?: number | string;
       pageSize?: number | string;
@@ -404,8 +394,9 @@ export class VariableAnalysisService {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
     );
+    if (!job || !Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) return false;
     const deleted = await this.jobQueueService.deleteVariableAnalysisJob(
-      jobId.toString()
+      jobId.toString(), workspaceId
     );
 
     if (deleted) {
@@ -419,7 +410,7 @@ export class VariableAnalysisService {
     workspaceId: number,
     jobId: string | number
   ): Promise<boolean> {
-    return this.jobQueueService.cancelVariableAnalysisJob(jobId.toString());
+    return this.jobQueueService.cancelVariableAnalysisJob(jobId.toString(), workspaceId);
   }
 
   async deleteAllJobs(workspaceId: number): Promise<void> {
@@ -438,7 +429,7 @@ export class VariableAnalysisService {
 
   private async getCompletedAnalysisJob(
     jobId: number | string,
-    workspaceId?: number
+    workspaceId: number
   ) {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
@@ -448,7 +439,7 @@ export class VariableAnalysisService {
       throw new NotFoundException(`Job with ID ${jobId} not found`);
     }
 
-    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+    if (!Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
       throw new NotFoundException(
         `Job with ID ${jobId} not found in workspace ${workspaceId}`
       );

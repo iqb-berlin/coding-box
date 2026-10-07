@@ -5,6 +5,37 @@ import { JournalService } from '../../database/services/shared';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 describe('WorkspaceCodingVersionController', () => {
+  it('does not disclose the status of a reset job outside the requested workspace', async () => {
+    const getWorkspaceJob = jest.fn().mockResolvedValue(null);
+    const controller = new WorkspaceCodingVersionController(
+      {} as CodingStatisticsService,
+      {} as JournalService,
+      { getWorkspaceJob } as unknown as JobQueueService
+    );
+
+    await expect(controller.getResetJobStatus(7, '17')).resolves.toMatchObject({
+      status: 'not_found'
+    });
+    expect(getWorkspaceJob).toHaveBeenCalledWith(7, 'reset-coding-version', '17');
+  });
+
+  it('returns the owned reset job status', async () => {
+    const job = {
+      getState: jest.fn().mockResolvedValue('completed'),
+      progress: jest.fn().mockReturnValue(100),
+      returnvalue: { affectedResponseCount: 12 }
+    };
+    const controller = new WorkspaceCodingVersionController(
+      {} as CodingStatisticsService,
+      {} as JournalService,
+      { getWorkspaceJob: jest.fn().mockResolvedValue(job) } as unknown as JobQueueService
+    );
+
+    await expect(controller.getResetJobStatus(7, '17')).resolves.toMatchObject({
+      status: 'completed', progress: 100, result: { affectedResponseCount: 12 }
+    });
+  });
+
   it('still returns the queued reset job when audit event recording fails', async () => {
     const loggerSpy = jest
       .spyOn(Logger.prototype, 'error')

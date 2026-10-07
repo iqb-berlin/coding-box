@@ -567,9 +567,10 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteExportJob(
-    @Param('jobId') jobId: string
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+      @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    const success = await this.jobQueueService.deleteExportJob(jobId);
+    const success = await this.jobQueueService.deleteExportJob(jobId, workspace_id);
     if (!success) {
       throw new BadRequestException('Failed to delete job');
     }
@@ -617,8 +618,8 @@ export class WorkspaceTestResultsExportController {
       return { success: false, message: 'Job already failed' };
     }
 
-    const marked = await this.jobQueueService.markExportJobCancelled(jobId);
-    const cancelled = await this.jobQueueService.cancelExportJob(jobId);
+    const marked = await this.jobQueueService.markExportJobCancelled(jobId, workspace_id);
+    const cancelled = await this.jobQueueService.cancelExportJob(jobId, workspace_id);
 
     const stateAfterCancellationRequest = await job.getState();
     if (stateAfterCancellationRequest === 'completed') {

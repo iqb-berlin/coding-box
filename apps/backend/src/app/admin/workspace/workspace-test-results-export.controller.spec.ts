@@ -55,6 +55,24 @@ describe('WorkspaceTestResultsExportController', () => {
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(3);
   });
 
+  it('passes the workspace to export deletion and rejects a job outside that workspace', async () => {
+    const deleteExportJob = jest.fn().mockResolvedValue(false);
+    const controller = new WorkspaceTestResultsExportController(
+      {} as WorkspaceTestResultsService,
+      { deleteExportJob } as unknown as JobQueueService,
+      {} as CacheService,
+      {} as JournalService,
+      {} as Queue<DatabaseExportJobData>
+    );
+
+    await expect(controller.deleteExportJob(7, '17')).rejects.toThrow('Failed to delete job');
+    expect(deleteExportJob).toHaveBeenCalledWith('17', 7);
+
+    deleteExportJob.mockResolvedValue(true);
+    await expect(controller.deleteExportJob(7, '18')).resolves.toMatchObject({ success: true });
+    expect(deleteExportJob).toHaveBeenLastCalledWith('18', 7);
+  });
+
   it('does not expose server file paths in database export job status', async () => {
     const result: DatabaseExportJobResult = {
       filePath: '/server/temp/workspace-7-export.sqlite',
@@ -246,8 +264,8 @@ describe('WorkspaceTestResultsExportController', () => {
       success: true,
       message: 'Export job cancellation requested'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
     expect(cacheService.get).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
@@ -282,8 +300,8 @@ describe('WorkspaceTestResultsExportController', () => {
       success: false,
       message: 'Export job cancellation could not be requested'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
 
@@ -319,8 +337,8 @@ describe('WorkspaceTestResultsExportController', () => {
       success: true,
       message: 'Export job cancellation requested'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
 

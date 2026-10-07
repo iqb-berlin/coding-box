@@ -86,6 +86,49 @@ describe('JobQueueService', () => {
     await expect(service.getExternalCodingImportJob('job-1')).resolves.toHaveProperty('id', 'job-1');
   });
 
+  it('looks up the requested queue and rejects jobs owned by another workspace', async () => {
+    const foreignJob = createJob({ workspaceId: 2 });
+    const ownedJob = createJob({ workspaceId: 1 });
+    queues[0].getJob.mockResolvedValue(foreignJob);
+    queues[1].getJob.mockResolvedValue(ownedJob);
+
+    await expect(service.getWorkspaceJob(1, 'test-person-coding', '17')).resolves.toBeNull();
+    await expect(service.getWorkspaceJob(1, 'coding-statistics', '17')).resolves.toBe(ownedJob);
+    expect(foreignJob.getState).not.toHaveBeenCalled();
+    expect(foreignJob.progress).not.toHaveBeenCalled();
+    await expect(service.getWorkspaceJob(0, 'coding-statistics', '17')).resolves.toBeNull();
+    await expect(service.getWorkspaceJob(1, 'unknown', '17')).resolves.toBeNull();
+  });
+
+  it.each([
+    'cancelTestPersonCodingJob',
+    'deleteTestPersonCodingJob',
+    'cancelExportJob',
+    'markExportJobCancelled',
+    'deleteExportJob',
+    'cancelVariableAnalysisJob',
+    'deleteVariableAnalysisJob'
+  ] as const)('rejects foreign jobs before %s can read or mutate them', async operation => {
+    const foreignJob = createJob({ workspaceId: 2 }, 'active');
+    queues.forEach(queue => queue.getJob.mockResolvedValue(foreignJob));
+
+    await expect(service[operation]('17', 1)).resolves.toBe(false);
+    expect(foreignJob.getState).not.toHaveBeenCalled();
+    expect(foreignJob.remove).not.toHaveBeenCalled();
+    expect(foreignJob.update).not.toHaveBeenCalled();
+    expect(foreignJob.discard).not.toHaveBeenCalled();
+  });
+
+  it('rejects unowned jobs and scopes generic queue mutations', async () => {
+    const unownedJob = createJob({});
+    queues[0].getJob.mockResolvedValue(unownedJob);
+
+    await expect(service.getWorkspaceJob(1, 'test-person-coding', '17')).resolves.toBeNull();
+    await expect(service.cancelJob('test-person-coding', '17', 1)).resolves.toBe(false);
+    await expect(service.deleteJob('test-person-coding', '17', 1)).resolves.toBe(false);
+    expect(unownedJob.remove).not.toHaveBeenCalled();
+  });
+
   it('prevents duplicate active jobs where required', async () => {
     await expect(service.addTestPersonCodingJob({
       workspaceId: 1,
@@ -173,17 +216,17 @@ describe('JobQueueService', () => {
   });
 
   it('cancels and deletes jobs across queues', async () => {
-    await expect(service.cancelJob('test-person-coding', 'job-1')).resolves.toBe(true);
-    await expect(service.cancelJob('unknown', 'job-1')).resolves.toBe(false);
-    await expect(service.deleteJob('test-person-coding', 'job-1')).resolves.toBe(true);
-    await expect(service.cancelTestPersonCodingJob('job-1')).resolves.toBe(true);
-    await expect(service.deleteTestPersonCodingJob('job-1')).resolves.toBe(true);
-    await expect(service.cancelExportJob('job-1')).resolves.toBe(true);
-    await expect(service.markExportJobCancelled('job-1')).resolves.toBe(true);
+    await expect(service.cancelJob('test-person-coding', 'job-1', 1)).resolves.toBe(true);
+    await expect(service.cancelJob('unknown', 'job-1', 1)).resolves.toBe(false);
+    await expect(service.deleteJob('test-person-coding', 'job-1', 1)).resolves.toBe(true);
+    await expect(service.cancelTestPersonCodingJob('job-1', 1)).resolves.toBe(true);
+    await expect(service.deleteTestPersonCodingJob('job-1', 1)).resolves.toBe(true);
+    await expect(service.cancelExportJob('job-1', 1)).resolves.toBe(true);
+    await expect(service.markExportJobCancelled('job-1', 1)).resolves.toBe(true);
     await expect(service.isExportJobCancelled('job-1')).resolves.toBe(false);
-    await expect(service.deleteExportJob('job-1')).resolves.toBe(true);
-    await expect(service.deleteVariableAnalysisJob('job-1')).resolves.toBe(true);
-    await expect(service.cancelVariableAnalysisJob('job-1')).resolves.toBe(true);
+    await expect(service.deleteExportJob('job-1', 1)).resolves.toBe(true);
+    await expect(service.deleteVariableAnalysisJob('job-1', 1)).resolves.toBe(true);
+    await expect(service.cancelVariableAnalysisJob('job-1', 1)).resolves.toBe(true);
   });
 
   it('aborts registered export cancellation signals when an export job is marked cancelled', async () => {
@@ -191,7 +234,7 @@ describe('JobQueueService', () => {
     queues[2].getJob.mockResolvedValue(exportJob);
     const signal = service.createExportJobCancellationSignal('job-1');
 
-    await expect(service.markExportJobCancelled('job-1')).resolves.toBe(true);
+    await expect(service.markExportJobCancelled('job-1', 1)).resolves.toBe(true);
 
     expect(signal.aborted).toBe(true);
   });
@@ -201,7 +244,7 @@ describe('JobQueueService', () => {
     queues[2].getJob.mockResolvedValue(exportJob);
     const signal = service.createExportJobCancellationSignal('job-1');
 
-    await expect(service.cancelExportJob('job-1')).resolves.toBe(true);
+    await expect(service.cancelExportJob('job-1', 1)).resolves.toBe(true);
 
     expect(signal.aborted).toBe(true);
   });
@@ -284,16 +327,16 @@ describe('JobQueueService', () => {
   it('handles missing jobs and failing queue operations', async () => {
     queues.forEach(queue => queue.getJob.mockResolvedValue(null));
 
-    await expect(service.cancelJob('test-person-coding', 'missing')).resolves.toBe(false);
-    await expect(service.deleteJob('test-person-coding', 'missing')).resolves.toBe(false);
-    await expect(service.cancelTestPersonCodingJob('missing')).resolves.toBe(false);
-    await expect(service.deleteTestPersonCodingJob('missing')).resolves.toBe(false);
-    await expect(service.cancelExportJob('missing')).resolves.toBe(false);
-    await expect(service.markExportJobCancelled('missing')).resolves.toBe(false);
+    await expect(service.cancelJob('test-person-coding', 'missing', 1)).resolves.toBe(false);
+    await expect(service.deleteJob('test-person-coding', 'missing', 1)).resolves.toBe(false);
+    await expect(service.cancelTestPersonCodingJob('missing', 1)).resolves.toBe(false);
+    await expect(service.deleteTestPersonCodingJob('missing', 1)).resolves.toBe(false);
+    await expect(service.cancelExportJob('missing', 1)).resolves.toBe(false);
+    await expect(service.markExportJobCancelled('missing', 1)).resolves.toBe(false);
     await expect(service.isExportJobCancelled('missing')).resolves.toBe(false);
-    await expect(service.deleteExportJob('missing')).resolves.toBe(false);
-    await expect(service.deleteVariableAnalysisJob('missing')).resolves.toBe(false);
-    await expect(service.cancelVariableAnalysisJob('missing')).resolves.toBe(false);
+    await expect(service.deleteExportJob('missing', 1)).resolves.toBe(false);
+    await expect(service.deleteVariableAnalysisJob('missing', 1)).resolves.toBe(false);
+    await expect(service.cancelVariableAnalysisJob('missing', 1)).resolves.toBe(false);
   });
 
   it('lists workspace jobs and queue-specific jobs', async () => {

@@ -199,6 +199,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private unitRepository: Repository<Unit>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
+    @Inject(forwardRef(() => CodingStatisticsService))
     private codingStatisticsService: CodingStatisticsService,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceFileStorageService: WorkspaceFileStorageService,
@@ -208,8 +209,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
+    @Inject(forwardRef(() => CodingFreshnessService))
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
     private readonly codingFileCacheService?: CodingFileCacheService,
