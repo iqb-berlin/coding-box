@@ -94,12 +94,15 @@ gezielt in der Admin-Konsole aendern, statt den Realm erneut zu importieren.
 
 ## Pruefung Und Ruecknahme
 
-Lokal mit Keycloak 22.0.5 im Browser geprueft: Login mit/ohne
+Historische Pruefnotiz aus der Theme-Entwicklung, bei der Abtrennung dieses
+Pakets nicht erneut im Browser bestaetigt: Mit Keycloak 22.0.5 wurden Login mit/ohne
 Mehrsprachigkeit, Sprachwechsel Deutsch/Englisch, sichtbare Login- und
 Registrierungsfehler, erfolgreiche Registrierung und erneuter Login mit
 Autorisierungscode-Austausch sowie das Passwort-Reset-Formular. Die Ansichten
 wurden bei 1440, 375 und 320 Pixeln Breite geprueft. Ein E-Mail-Versand ist
-ohne SMTP-Konfiguration nicht Teil dieser Vorschau.
+ohne SMTP-Konfiguration nicht Teil dieser Vorschau. Aktuell erneut geprueft
+sind nur Compose-Konfiguration, Realm-JSON, Logo und schreibgeschuetzte
+Mounts. Der Docker-Daemon war fuer einen erneuten Login-Test nicht erreichbar.
 
 Vor einer produktiven Aktivierung die tatsaechlich eingesetzte
 Keycloak-Version pruefen und das Theme mit dieser Version lokal testen:
