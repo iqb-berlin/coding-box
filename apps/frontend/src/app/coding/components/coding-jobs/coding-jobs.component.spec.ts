@@ -763,6 +763,16 @@ describe('CodingJobsComponent', () => {
     ).toBe(false);
   });
 
+  it.each(['review', 'results_applied'])('hides restart for a protected %s job with open units', status => {
+    const job = {
+      ...mockCodingJobs[0],
+      status
+    } as CodingJob;
+
+    expect(component.canStartCodingJob(job)).toBe(true);
+    expect(component.canRestartCodingJob(job)).toBe(false);
+  });
+
   it('hides job management actions without coding-manager access', async () => {
     component.canManageCodingJobs = false;
     fixture.detectChanges();
@@ -1009,6 +1019,39 @@ describe('CodingJobsComponent', () => {
       'onlyOpen=true'
     );
   }));
+
+  it.each(['review', 'results_applied'])('does not restart a protected %s job programmatically', status => {
+    const job = {
+      ...mockCodingJobs[0],
+      status
+    } as CodingJob;
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of(true)
+    });
+
+    component.restartCodingJob(job);
+
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('does not restart a job that becomes protected while confirmation is open', () => {
+    const job = { ...mockCodingJobs[0] } as CodingJob;
+    const confirmation = new Subject<boolean>();
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => confirmation
+    });
+
+    component.restartCodingJob(job);
+    job.status = 'review';
+    confirmation.next(true);
+    confirmation.complete();
+
+    expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
+  });
 
   it('should calculate next id correctly', () => {
     expect(
