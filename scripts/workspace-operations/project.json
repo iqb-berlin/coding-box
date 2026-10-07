@@ -1,0 +1,19 @@
+{
+  "name": "workspace-operations",
+  "root": "scripts/workspace-operations",
+  "projectType": "application",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/**/*",
+        "{workspaceRoot}/scripts/migration/copy-workspace-between-servers.mjs",
+        "{workspaceRoot}/scripts/recovery/workspace-2-v2-recovery.mjs"
+      ],
+      "options": {
+        "command": "node --test scripts/workspace-operations/fixtures.test.mjs"
+      }
+    }
+  }
+}

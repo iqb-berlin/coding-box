@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 const CONFIG = Object.freeze({
   host: 'iqb-kodierbox.de',
@@ -879,7 +880,15 @@ async function main() {
   console.log(`Production apply completed for ${plan.length} response rows.`);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+export {
+  parseArguments, assertIntegerString, assertSignedIntegerString,
+  parseCopyRows, decodeCopyText, responseFromCopyRow, csvCell,
+  buildApplySql, buildRollbackSql
+};
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
