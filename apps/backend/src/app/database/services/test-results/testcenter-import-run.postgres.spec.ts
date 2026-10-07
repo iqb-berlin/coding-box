@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity';
 import Workspace from '../../entities/workspace.entity';
+import { JournalEntry } from '../../entities/journal-entry.entity';
 import { TestcenterService } from './testcenter.service';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
@@ -11,6 +12,28 @@ import { CacheService } from '../../../cache/cache.service';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ? describe : describe.skip;
+const integrationEntities = [Workspace, TestcenterImportRun, JournalEntry];
+
+class MetadataOnlyDataSource extends DataSource {
+  prepareMetadata(): Promise<void> {
+    return this.buildMetadatas();
+  }
+}
+
+describe('Testcenter import integration fixture metadata', () => {
+  it('registers journal metadata without connecting to PostgreSQL', async () => {
+    const source = new MetadataOnlyDataSource({
+      type: 'postgres', entities: integrationEntities, synchronize: false
+    });
+    const initialize = jest.spyOn(source, 'initialize');
+    await source.prepareMetadata();
+    expect(source.getMetadata(JournalEntry).tableName).toBe('journal_entries');
+    expect(source.getMetadata(Workspace).tableName).toBe('workspace');
+    expect(source.getMetadata(TestcenterImportRun).tableName).toBe('testcenter_import_run');
+    expect(initialize).not.toHaveBeenCalled();
+    expect(source.isInitialized).toBe(false);
+  });
+});
 
 describePostgres('Testcenter durable import runs Postgres integration', () => {
   let connection: DataSource;
@@ -24,7 +47,7 @@ describePostgres('Testcenter durable import runs Postgres integration', () => {
       username: process.env.POSTGRES_USER || 'root',
       password: process.env.POSTGRES_PASSWORD || 'root-password',
       database: process.env.POSTGRES_DB || 'coding-box',
-      entities: [Workspace, TestcenterImportRun],
+      entities: integrationEntities,
       synchronize: false
     });
     await connection.initialize();
@@ -36,7 +59,10 @@ describePostgres('Testcenter durable import runs Postgres integration', () => {
   });
 
   afterEach(async () => {
-    if (workspaceId) await connection.getRepository(Workspace).delete(workspaceId);
+    if (workspaceId) {
+      await connection.getRepository(JournalEntry).delete({ workspaceId });
+      await connection.getRepository(Workspace).delete(workspaceId);
+    }
   });
 
   afterAll(async () => {
