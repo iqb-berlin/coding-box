@@ -10,7 +10,7 @@ import {
 } from './export-job.service';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES

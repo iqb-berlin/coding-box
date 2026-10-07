@@ -116,7 +116,7 @@ import {
   UnitsReplay,
   UnitsReplayService
 } from '../../../replay/services/units-replay.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';

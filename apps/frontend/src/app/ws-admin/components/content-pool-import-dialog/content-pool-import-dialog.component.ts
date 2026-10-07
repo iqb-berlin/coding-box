@@ -22,7 +22,7 @@ import {
   ContentPoolAcpSummary,
   ContentPoolImportAcpProgress,
   ContentPoolSettings
-} from '../../models/content-pool.model';
+} from '../../../shared/models/content-pool.model';
 
 export interface ContentPoolImportDialogData {
   workspaceId: number;

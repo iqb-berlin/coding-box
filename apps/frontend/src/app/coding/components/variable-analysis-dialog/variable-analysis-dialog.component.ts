@@ -25,7 +25,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
 

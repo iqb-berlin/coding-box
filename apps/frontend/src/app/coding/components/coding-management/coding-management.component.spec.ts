@@ -17,7 +17,7 @@ import { CodingManagementComponent } from './coding-management.component';
 import { CodingManagementService } from '../../services/coding-management.service';
 import { CodingManagementUiService } from './services/coding-management-ui.service';
 import { AppService } from '../../../core/services/app.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import {
   TestPersonCodingService,
   TestResultsChangedEvent
