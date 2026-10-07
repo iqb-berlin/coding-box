@@ -846,6 +846,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!this.permissions.canEdit(job)) return false;
     return (
       this.canManageCodingJobs &&
+      !['review', 'results_applied'].includes(job.status) &&
       (job.totalUnits || 0) > 0 &&
       (job.openUnits || 0) > 0 &&
       this.canStartCodingJob(job) &&
@@ -1168,7 +1169,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.permissions.canEdit(job)) return;
+    if (!this.canRestartCodingJob(job)) {
+      return;
+    }
 
     const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich neu starten? Alle Einheiten werden für eine Aktualisierung geöffnet und die Kodierungsvorschau wird geöffnet.`;
 
@@ -1183,7 +1186,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result && this.permissions.canEdit(job)) {
+      if (result && this.canRestartCodingJob(job)) {
         this.codingJobBackendService
           .restartCodingJobWithOpenUnits(workspaceId, job.id)
           .subscribe({

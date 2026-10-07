@@ -2050,7 +2050,8 @@ describe('CodingJobService', () => {
     });
 
     expect(codingJobRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 1, workspace_id: 3 }
+      where: { id: 1, workspace_id: 3 },
+      lock: { mode: 'pessimistic_write' }
     });
     expect(codingJobRepository.save).toHaveBeenCalledWith({
       ...codingJob,
@@ -2096,6 +2097,42 @@ describe('CodingJobService', () => {
       NotFoundException
     );
     expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it.each(['review', 'results_applied'])('does not restart a protected %s job', async status => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status });
+    const progress = jest.spyOn(service, 'getCodingJobProgress');
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).rejects.toBeInstanceOf(BadRequestException);
+    expect(progress).not.toHaveBeenCalled();
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
+  });
+
+  it('does not restart a job without open units', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'active' });
+    jest.spyOn(service, 'getCodingJobProgress').mockResolvedValue({ total: 1, coded: 1, open: 0 } as never);
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).rejects.toThrow('without open units');
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('restarts an active job with open units using the same transaction', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'active' });
+    const progress = jest.spyOn(service, 'getCodingJobProgress')
+      .mockResolvedValue({ total: 1, coded: 0, open: 1 } as never);
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).resolves.toMatchObject({ status: 'open' });
+    expect(progress).toHaveBeenCalledWith(1, expect.any(Object));
+  });
+
+  it.each(['review', 'results_applied'])('preserves a %s status when a pause arrives late', async status => {
+    const job = { id: 1, workspace_id: 3, status };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    await expect(service.pauseCodingJob(1, 3)).resolves.toBe(job);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
   });
 
   it('validates updated coders before saving job fields or deleting existing assignments', async () => {

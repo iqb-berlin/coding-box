@@ -133,5 +133,23 @@ describe('CodingJobsComponent', () => {
     cy.get('[aria-label="Ergebnisse anwenden: Job Smoke"]').should('not.exist');
   });
 
+  it('offers restart for an active assigned non-training job with open units', () => {
+    mountCodingJob({ status: 'active' });
 
+    cy.get('button[aria-label="Weitere Aktionen: Job Smoke"]').click();
+    cy.get('[role="menu"]').should('be.visible').within(() => {
+      cy.get('button[aria-label="Offene Fälle ansehen: Job Smoke"]').should('be.visible');
+    });
+  });
+
+  (['review', 'results_applied'] as const).forEach(status => {
+    it(`does not offer restart for a ${status} job with open units`, () => {
+      mountCodingJob({ status });
+
+      cy.get('button[aria-label="Weitere Aktionen: Job Smoke"]').click();
+      cy.get('[role="menu"]').should('be.visible').within(() => {
+        cy.get('button[aria-label="Offene Fälle ansehen: Job Smoke"]').should('not.exist');
+      });
+    });
+  });
 });
