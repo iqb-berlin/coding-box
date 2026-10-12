@@ -63,6 +63,15 @@ describe('CodebookDocxGenerator integration', () => {
     consoleWarnSpy.mockRestore();
   });
 
+  it.each([' ', '\t\r\n', '\u00a0'])('does not add a paragraph for general instruction %p', async generalInstruction => {
+    const units = buildUnits('<p>Bewerten</p>');
+    const settings = { ...defaultSettings, hasGeneralInstructions: true };
+    const baseline = new AdmZip(await CodebookDocxGenerator.generateDocx(units, settings)).readAsText('word/document.xml');
+    units[0].variables[0].generalInstruction = generalInstruction;
+    const actual = new AdmZip(await CodebookDocxGenerator.generateDocx(units, settings)).readAsText('word/document.xml');
+    expect(actual).toBe(baseline);
+  });
+
   it('creates DOCX XML without undefined wrappers for formula spans', async () => {
     const description =
       '<p>Formel: ' +
