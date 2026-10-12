@@ -28,7 +28,7 @@ export interface CodeBookContentSetting extends SharedCodebookOptions {
  */
 export interface Missing {
   /** Missing code */
-  code: string;
+  code: string | number;
   /** Missing label */
   label: string;
   /** Missing description */
