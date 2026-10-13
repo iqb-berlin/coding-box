@@ -1,5 +1,7 @@
 # Kodierbox: Codebook-Abnahme vom 13.10.2026
 
+Dieser Bericht beschreibt den früheren Paketstand `dcee6cc…`. Die aktuelle Formatkorrektur und Aspect-Abnahme steht im [ergänzenden Bericht](codebook-aspect-acceptance-2026-10-13.md).
+
 58 Backend- und 60 Frontendtests; echte Redis-Jobs/Downloads, Jobdefinitionspicker, Missingprofil, Score-Abwahl, Doppelauslösung, Fehleranzeige, Retry, Polling-Ende und Workspace-Grenzen bestanden.
 
 Beide Host-Builds und Backend-Lint erfolgreich. Identischer gepackter 4.1.0-Tarball in beiden Hosts; SHA256: `dcee6cc39436baf91cf2558afedfbc202e044ca14dbf72c7bfdf4b381e5c0ccd`. Der Installationsvergleich über die echten Adapter besteht für 4.654 JSON-/DOCX-Exportpaare.
