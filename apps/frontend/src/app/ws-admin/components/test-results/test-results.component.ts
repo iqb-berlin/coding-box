@@ -740,20 +740,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
-    this.unitTagsMap.set(new Map());
+    const next = new Map<number, UnitTagDto[]>();
     this.booklets().forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
           if (unit.id && unit.tags) {
-            this.unitTagsMap.update(value => {
-              const next = new Map(value);
-              next.set(unit.id, unit.tags);
-              return next;
-            });
+            next.set(unit.id, unit.tags);
           }
         });
       }
     });
+    this.unitTagsMap.set(next);
   }
 
   loadAllUnitNotes(): void {
@@ -780,12 +777,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
         next: notesByUnitId => {
-          Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-            this.unitNotesMap.update(value => {
-              const next = new Map(value);
+          this.unitNotesMap.update(value => {
+            const next = new Map(value);
+            Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
               next.set(Number(unitId), notes as UnitNoteDto[]);
-              return next;
             });
+            return next;
           });
         },
         error: () => {
