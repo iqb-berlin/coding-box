@@ -24,11 +24,15 @@ jest.mock('@iqb/responses', () => ({
     code: jest.fn().mockReturnValue([]),
     validate: jest.fn().mockReturnValue([]),
     getVariableDependencyTree: jest.fn().mockImplementation(
-      variableCodings => jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      variableCodings => jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       ).CodingSchemeFactory.getVariableDependencyTree(variableCodings)
     )
   }
+}));
+
+jest.mock('./generated/autocoder-compatibility-engine', () => ({
+  CodingSchemeFactory: jest.requireMock('@iqb/responses').CodingSchemeFactory
 }));
 
 jest.mock('cheerio', () => ({
@@ -494,8 +498,8 @@ describe('CodingProcessService', () => {
       ]
     ) => {
       const actualAutocoder = jest.requireActual<
-      typeof import('@iqb/responses')
-      >('@iqb/responses');
+      typeof import('./generated/autocoder-compatibility-engine')
+      >('./generated/autocoder-compatibility-engine');
       (Autocoder.CodingSchemeFactory.code as jest.Mock).mockImplementation(
         actualAutocoder.CodingSchemeFactory.code
       );
@@ -3027,8 +3031,8 @@ describe('CodingProcessService', () => {
     });
 
     it('preserves legacy pending selection and Code 0 through the real current engine', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
@@ -3063,6 +3067,60 @@ describe('CodingProcessService', () => {
       expect(result).toEqual([input]);
       expect(input.status).toBe('CODE_SELECTION_PENDING');
       expect(input.codes).toEqual([{ id: 0, parameter: 'legacy selection' }]);
+    });
+
+    it.each([
+      ['ceil near zero', 1e-15, `ceil(${solverReference('A')})`, 'CODING_COMPLETE', 1, 1],
+      ['equality near zero', 1e-15, `${solverReference('A')} == 0 ? 1 : 0`, 'CODING_COMPLETE', 0, 0],
+      ['null branch', 1, `${solverReference('A')} > 0 ? null : ${solverReference('A')}`, 'DERIVE_ERROR', undefined, undefined]
+    ])('preserves legacy SOLVER %s through alias routing and coding', (
+      _name, value, expression, status, code, score
+    ) => {
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<Record<string, unknown>>,
+            variableCodings: VariableCodingData[]
+          ) => Array<Record<string, unknown>>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const result = codeResponses([{
+        id: 'A', value, status: 'VALUE_CHANGED', subform: 'part-a'
+      }], [
+        {
+          id: 'source', alias: 'A', sourceType: 'BASE', codes: []
+        },
+        {
+          id: 'derived',
+          alias: 'D',
+          sourceType: 'SOLVER',
+          deriveSources: ['source'],
+          sourceParameters: { processing: [], solverExpression: String(expression) },
+          codes: [
+            {
+              id: 9, type: 'FULL_CREDIT', score: 9, ruleSets: [{ rules: [{ method: 'IS_NULL' }] }]
+            },
+            ...[0, 1].map(id => ({
+              id,
+              type: 'FULL_CREDIT' as const,
+              score: id,
+              ruleSets: [{ rules: [{ method: 'NUMERIC_MATCH' as const, parameters: [String(id)] }] }]
+            }))
+          ]
+        }
+      ]);
+      expect(result.find(response => response.id === 'D')).toEqual({
+        id: 'D',
+        value: status === 'DERIVE_ERROR' ? null : code,
+        status,
+        subform: 'part-a',
+        ...(code === undefined ? {} : { code, score })
+      });
     });
 
     it('rejects genuinely duplicate output aliases before coding', () => {
@@ -3126,8 +3184,8 @@ describe('CodingProcessService', () => {
     });
 
     it('codes solver expressions after canonical namespace routing', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
@@ -3221,8 +3279,8 @@ describe('CodingProcessService', () => {
         }
       }
     ])('$caseName for SUM_SCORE', ({ sourceTuples, expected }) => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
@@ -3573,8 +3631,8 @@ describe('CodingProcessService', () => {
     });
 
     it('keeps a real response status instead of an alias-chain placeholder', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
@@ -3645,8 +3703,8 @@ describe('CodingProcessService', () => {
     });
 
     it('accepts generated output aliases from a previous run', async () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.validate as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.validate);
@@ -3777,8 +3835,8 @@ describe('CodingProcessService', () => {
     });
 
     it('resolves the supported base-to-derived shadow without first-wins behavior', async () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.validate as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.validate);
@@ -3866,8 +3924,8 @@ describe('CodingProcessService', () => {
     });
 
     it('updates the existing MMB102 target through its BASE_NO_VALUE shadow', async () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
@@ -3977,8 +4035,8 @@ describe('CodingProcessService', () => {
     });
 
     it('accepts a run-1-generated MMB102 target through its BASE_NO_VALUE shadow', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
@@ -4059,8 +4117,8 @@ describe('CodingProcessService', () => {
     });
 
     it('keeps partial MMB102 sources invalid without leaking the structural target', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
@@ -4130,8 +4188,8 @@ describe('CodingProcessService', () => {
     });
 
     it('derives MZV005 item 02 only from its own source pair', () => {
-      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
-        '@iqb/responses'
+      const actualAutocoder = jest.requireActual<typeof import('./generated/autocoder-compatibility-engine')>(
+        './generated/autocoder-compatibility-engine'
       );
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
