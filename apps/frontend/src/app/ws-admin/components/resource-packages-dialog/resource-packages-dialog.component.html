@@ -3,19 +3,19 @@
 
   <div mat-dialog-content>
     <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-      <a mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive"
+      <a mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive()"
         (click)="resourcePackageInput.click()">
         <mat-icon>upload</mat-icon>
         Ressourcenpaket hochladen
       </a>
-      <a mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive"
+      <a mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive()"
         (click)="installGeoGebraPackage()"
         matTooltip="Lädt das GeoGebra Math Apps Bundle herunter und installiert oder repariert es global">
         <mat-icon>add_circle</mat-icon>
-        {{ hasGeoGebraPackage ? 'GeoGebra prüfen/reparieren' : 'GeoGebra installieren' }}
+        {{ hasGeoGebraPackage() ? 'GeoGebra prüfen/reparieren' : 'GeoGebra installieren' }}
       </a>
       <a mat-raised-button color="primary"
-        [disabled]="isResourcePackageOperationActive || resourcePackageSelection.selected.length === 0"
+        [disabled]="isResourcePackageOperationActive() || resourcePackageSelection.selected.length === 0"
         (click)="deleteResourcePackages()">
         <mat-icon>delete</mat-icon>
         Ressourcenpaket(e) löschen
@@ -26,20 +26,20 @@
       {{ 'file-upload.resource-package-hint' | translate }}
     </div>
 
-    @if (isResourcePackageOperationActive) {
+    @if (isResourcePackageOperationActive()) {
     <div class="operation-progress" aria-live="polite">
       <div class="operation-progress-header">
-        <span>{{ resourcePackageOperationText }}</span>
-        @if (resourcePackageProgressMode === 'determinate') {
-        <span>{{ resourcePackageProgressPercent }}%</span>
+        <span>{{ resourcePackageOperationText() }}</span>
+        @if (resourcePackageProgressMode() === 'determinate') {
+        <span>{{ resourcePackageProgressPercent() }}%</span>
         }
       </div>
-      <mat-progress-bar [mode]="resourcePackageProgressMode" [value]="resourcePackageProgressPercent"></mat-progress-bar>
-      @if (resourcePackageProgressLoadedBytes > 0) {
+      <mat-progress-bar [mode]="resourcePackageProgressMode()" [value]="resourcePackageProgressPercent()"></mat-progress-bar>
+      @if (resourcePackageProgressLoadedBytes() > 0) {
       <p class="operation-progress-details">
-        {{ formatBytes(resourcePackageProgressLoadedBytes) }}
-        @if (resourcePackageProgressTotalBytes > 0) {
-        / {{ formatBytes(resourcePackageProgressTotalBytes) }}
+        {{ formatBytes(resourcePackageProgressLoadedBytes()) }}
+        @if (resourcePackageProgressTotalBytes() > 0) {
+        / {{ formatBytes(resourcePackageProgressTotalBytes()) }}
         }
       </p>
       }
@@ -49,7 +49,7 @@
     <input #resourcePackageInput type="file" name="resourcePackage" accept=".itcr.zip" [hidden]="true"
       (change)="onResourcePackageSelected($event.currentTarget)" />
 
-    @if (isLoadingResourcePackages) {
+    @if (isLoadingResourcePackages()) {
     <div class="loading-container">
       <mat-spinner class="mat-spinner"></mat-spinner>
       <p class="loading-text">Ressourcenpakete werden geladen...</p>
@@ -57,7 +57,7 @@
     }
 
     <!-- Resource Packages Table -->
-    @if (!isLoadingResourcePackages) {
+    @if (!isLoadingResourcePackages()) {
     <div class="data-card resource-packages-card">
       <div class="search-section">
         <div class="filter-container">
@@ -158,7 +158,7 @@
             <mat-cell *matCellDef="let element">
               <button mat-icon-button type="button" class="download-action-button"
                 aria-label="Ressourcenpaket herunterladen"
-                [disabled]="isResourcePackageOperationActive"
+                [disabled]="isResourcePackageOperationActive()"
                 (click)="downloadResourcePackage(element); $event.stopPropagation()"
                 matTooltip="Ressourcenpaket herunterladen">
                 @if (isResourcePackageDownloading(element)) {

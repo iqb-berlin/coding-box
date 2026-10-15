@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, inject
+  Component, Inject, OnInit, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -42,17 +42,15 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
-  private readonly changeDetector = inject(ChangeDetectorRef);
-
-  availableUnits: string[] = [];
+  readonly availableUnits = signal<string[]>([]);
   private variableOptions: VariableOption[] = [];
   selectedUnitNames: string[] = [];
-  selectedVariableIds: string[] = [];
-  answeredFrom = '';
-  answeredBefore = '';
-  subformsText = '';
-  isLoading = false;
-  loadFailed = false;
+  readonly selectedVariableIds = signal<string[]>([]);
+  readonly answeredFrom = signal('');
+  readonly answeredBefore = signal('');
+  readonly subformsText = signal('');
+  readonly isLoading = signal(false);
+  readonly loadFailed = signal(false);
 
   constructor(
     private dialogRef: MatDialogRef<
@@ -65,7 +63,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     forkJoin({
       exportOptions:
         this.testResultBackendService.getExportOptions(this.data.workspaceId),
@@ -74,17 +72,13 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       )
     }).subscribe({
       next: ({ exportOptions, unitVariables }) => {
-        this.changeDetector.markForCheck();
-        this.availableUnits = Array.from(
-          new Set((exportOptions.units || []).filter(Boolean))
-        ).sort((a, b) => a.localeCompare(b));
+        this.availableUnits.set(Array.from(new Set((exportOptions.units || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
         this.variableOptions = this.buildVariableOptions(unitVariables);
-        this.isLoading = false;
+        this.isLoading.set(false);
       },
       error: () => {
-        this.changeDetector.markForCheck();
-        this.loadFailed = true;
-        this.isLoading = false;
+        this.loadFailed.set(true);
+        this.isLoading.set(false);
       }
     });
   }
@@ -104,22 +98,20 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
 
   get canSubmit(): boolean {
     return this.selectedUnitNames.length > 0 &&
-      this.toTimestamp(this.answeredBefore) !== null &&
+      this.toTimestamp(this.answeredBefore()) !== null &&
       (
-        !this.answeredFrom ||
+        !this.answeredFrom() ||
         (
-          this.toTimestamp(this.answeredFrom) !== null &&
-          (this.toTimestamp(this.answeredFrom) || 0) <
-            (this.toTimestamp(this.answeredBefore) || 0)
+          this.toTimestamp(this.answeredFrom()) !== null &&
+          (this.toTimestamp(this.answeredFrom()) || 0) <
+            (this.toTimestamp(this.answeredBefore()) || 0)
         )
       );
   }
 
   onUnitsChanged(): void {
     const available = new Set(this.availableVariables.map(option => option.value));
-    this.selectedVariableIds = this.selectedVariableIds.filter(
-      variableId => available.has(variableId)
-    );
+    this.selectedVariableIds.set(this.selectedVariableIds().filter(variableId => available.has(variableId)));
   }
 
   submit(): void {
@@ -127,16 +119,16 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       return;
     }
 
-    const answeredBefore = this.toTimestamp(this.answeredBefore);
+    const answeredBefore = this.toTimestamp(this.answeredBefore());
     if (!answeredBefore) {
       return;
     }
 
-    const answeredFrom = this.toTimestamp(this.answeredFrom);
+    const answeredFrom = this.toTimestamp(this.answeredFrom());
     const request: TestResultsResponseCleanupRequestDto = {
       unitNames: this.selectedUnitNames,
       answeredBefore,
-      variableIds: this.selectedVariableIds,
+      variableIds: this.selectedVariableIds(),
       subforms: this.parseSubforms()
     };
 
@@ -178,7 +170,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
   private parseSubforms(): string[] {
     return Array.from(
       new Set(
-        this.subformsText
+        this.subformsText()
           .split(',')
           .map(value => value.trim())
           .filter(Boolean)

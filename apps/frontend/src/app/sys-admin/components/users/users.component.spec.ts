@@ -42,7 +42,7 @@ describe('UsersComponent', () => {
     });
 
     component = TestBed.runInInjectionContext(() => new UsersComponent());
-    component.selectedUsers = [7];
+    component.selectedUsers.set([7]);
   });
 
   it('should refresh auth data after assigning workspaces to a user', () => {

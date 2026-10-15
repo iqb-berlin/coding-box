@@ -1,4 +1,6 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import {
+  Component, inject, signal
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -23,44 +25,40 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 })
 
 export class UserAccessRightsDialogComponent {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
-
   data = inject<{
     selectedWorkspace: number[];
   }>(MAT_DIALOG_DATA);
 
   private workspaceBackendService = inject(WorkspaceBackendService);
 
-  selectedUserIds: number[] = [];
-  isLoadingWorkspaceUsers = false;
-  workspaceUsersLoadingFailed = false;
-  result: number[] = [];
+  readonly selectedUserIds = signal<number[]>([]);
+  readonly isLoadingWorkspaceUsers = signal(false);
+  readonly workspaceUsersLoadingFailed = signal(false);
+  readonly result = signal<number[]>([]);
 
   constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
-      this.isLoadingWorkspaceUsers = true;
+      this.isLoadingWorkspaceUsers.set(true);
       this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0])
         .subscribe({
           next: users => {
-            this.changeDetectorRef.markForCheck();
             if (Array.isArray(users)) {
-              this.selectedUserIds = users.map(user => user.userId);
-              this.result = [...this.selectedUserIds];
+              this.selectedUserIds.set(users.map(user => user.userId));
+              this.result.set([...this.selectedUserIds()]);
             }
-            this.isLoadingWorkspaceUsers = false;
+            this.isLoadingWorkspaceUsers.set(false);
           },
           error: () => {
-            this.changeDetectorRef.markForCheck();
-            this.selectedUserIds = [];
-            this.result = [];
-            this.workspaceUsersLoadingFailed = true;
-            this.isLoadingWorkspaceUsers = false;
+            this.selectedUserIds.set([]);
+            this.result.set([]);
+            this.workspaceUsersLoadingFailed.set(true);
+            this.isLoadingWorkspaceUsers.set(false);
           }
         });
     }
   }
 
   setUsersSelection(result: UserFullDto[]): void {
-    this.result = result.map(workspace => workspace.id);
+    this.result.set(result.map(workspace => workspace.id));
   }
 }

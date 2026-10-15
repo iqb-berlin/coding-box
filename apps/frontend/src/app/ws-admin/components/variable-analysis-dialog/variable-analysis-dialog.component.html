@@ -1,3 +1,4 @@
+@let activeJobValue = activeJob();
 <div class="dialog-container">
   <h2 class="dialog-title">{{ data.title }}</h2>
   <mat-divider></mat-divider>
@@ -6,19 +7,19 @@
     <!-- Analysis Results Tab -->
     <mat-tab label="{{ 'variable-analysis.analysis-results' | translate }}">
       <div class="dialog-content">
-        @if (isLoading) {
+        @if (isLoading()) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
           <p>{{ 'variable-analysis.analyzing-variables' | translate }}</p>
         </div>
         } @else {
         <div class="top-actions">
-          <button mat-button (click)="refreshJobs()" [disabled]="isJobsLoading || isInitializing">
+          <button mat-button (click)="refreshJobs()" [disabled]="isJobsLoading() || isInitializing()">
             <mat-icon>refresh</mat-icon>
             {{ 'variable-analysis.refresh' | translate }}
           </button>
           <button mat-raised-button color="primary" (click)="startNewAnalysis()"
-            [disabled]="isJobsLoading || !!activeJob || isStartingJob">
+            [disabled]="isJobsLoading() || !!activeJobValue || isStartingJob()">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
@@ -30,13 +31,13 @@
             <mat-icon>download</mat-icon>
             {{ 'variable-analysis.export-xlsx' | translate }}
           </button>
-          <button mat-button (click)="isInfoVisible = !isInfoVisible" class="info-toggle">
-            <mat-icon>{{ isInfoVisible ? 'expand_less' : 'help_outline' }}</mat-icon>
-            {{ (isInfoVisible ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
+          <button mat-button (click)="isInfoVisible.set(!isInfoVisible())" class="info-toggle">
+            <mat-icon>{{ isInfoVisible() ? 'expand_less' : 'help_outline' }}</mat-icon>
+            {{ (isInfoVisible() ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
           </button>
         </div>
 
-        @if (isInfoVisible) {
+        @if (isInfoVisible()) {
         <div class="info-block">
           <div class="info-header">
             <mat-icon color="primary">info</mat-icon>
@@ -60,16 +61,16 @@
         </div>
         }
 
-        @if (activeJob) {
+        @if (activeJobValue) {
         <div class="active-job-container">
           <h3>{{ 'variable-analysis.analysis-running' | translate }}</h3>
           <div class="progress-details">
-            <mat-progress-bar mode="determinate" [value]="activeJob.progress || 0"></mat-progress-bar>
-            <span>{{ activeJob.progress || 0 }}%</span>
+            <mat-progress-bar mode="determinate" [value]="activeJobValue.progress || 0"></mat-progress-bar>
+            <span>{{ activeJobValue.progress || 0 }}%</span>
           </div>
           <p class="job-info">
-            {{ 'variable-analysis.id-column' | translate }}: {{ activeJob.id }} |
-            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJob.created_at) }}
+            {{ 'variable-analysis.id-column' | translate }}: {{ activeJobValue.id }} |
+            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJobValue.created_at) }}
           </p>
         </div>
         }
@@ -81,7 +82,7 @@
             <input matInput type="text" [(ngModel)]="searchText" (input)="onSearchChange($event)"
               placeholder="{{ 'variable-analysis.search-placeholder' | translate }}">
             <mat-icon matSuffix>search</mat-icon>
-            @if (searchText) {
+            @if (searchText()) {
             <button mat-icon-button matSuffix (click)="clearSearch()" aria-label="Clear">
               <mat-icon>close</mat-icon>
             </button>
@@ -95,14 +96,14 @@
           </mat-slide-toggle>
         </div>
 
-        @if (analysisRows.length === 0) {
+        @if (analysisRows().length === 0) {
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
           <p>
             {{ getEmptyStateMessageKey() | translate }}
           </p>
           @if (shouldShowStartAnalysisButton()) {
-          <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading">
+          <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading()">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
@@ -124,8 +125,8 @@
           }
 
           <div class="table-container analysis-table-container">
-            <table mat-table [dataSource]="analysisRows" matSort matSortDisableClear
-              [matSortActive]="sortBy" [matSortDirection]="sortDirection"
+            <table mat-table [dataSource]="analysisRows()" matSort matSortDisableClear
+              [matSortActive]="sortBy()" [matSortDirection]="sortDirection()"
               (matSortChange)="onSortChange($event)" class="analysis-table">
               <ng-container matColumnDef="unitName">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
@@ -247,8 +248,8 @@
             </table>
           </div>
 
-          <mat-paginator [length]="getTotalFilteredVariables()" [pageSize]="pageSize"
-            [pageSizeOptions]="pageSizeOptions" [pageIndex]="currentPage" (page)="onPageChange($event)"
+          <mat-paginator [length]="getTotalFilteredVariables()" [pageSize]="pageSize()"
+            [pageSizeOptions]="pageSizeOptions" [pageIndex]="currentPage()" (page)="onPageChange($event)"
             [attr.aria-label]="'variable-analysis.table-page-label' | translate">
           </mat-paginator>
         </div>
@@ -261,53 +262,53 @@
     <mat-tab>
       <ng-template mat-tab-label>
         {{ 'variable-analysis.analysis-jobs' | translate }}
-        @if (activeJob) {
-        <span class="active-badge">({{ activeJob.progress || 0 }}%)</span>
+        @if (activeJobValue) {
+        <span class="active-badge">({{ activeJobValue.progress || 0 }}%)</span>
         }
       </ng-template>
       <div class="dialog-content">
         <div class="actions-container">
           <button mat-raised-button color="primary" (click)="startNewAnalysis()"
-            [disabled]="isJobsLoading || !!activeJob || isStartingJob">
+            [disabled]="isJobsLoading() || !!activeJobValue || isStartingJob()">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
 
-          @if (jobs.length > 0) {
-          <button mat-raised-button color="warn" (click)="deleteAllJobs()" [disabled]="isJobsLoading">
+          @if (jobs().length > 0) {
+          <button mat-raised-button color="warn" (click)="deleteAllJobs()" [disabled]="isJobsLoading()">
             <mat-icon>delete_sweep</mat-icon>
             {{ 'variable-analysis.delete-all-jobs' | translate }}
           </button>
           }
         </div>
 
-        @if (activeJob) {
+        @if (activeJobValue) {
         <div class="active-job-container">
           <h3>{{ 'variable-analysis.analysis-running' | translate }}</h3>
           <div class="progress-details">
-            <mat-progress-bar mode="determinate" [value]="activeJob.progress || 0"></mat-progress-bar>
-            <span>{{ activeJob.progress || 0 }}%</span>
+            <mat-progress-bar mode="determinate" [value]="activeJobValue.progress || 0"></mat-progress-bar>
+            <span>{{ activeJobValue.progress || 0 }}%</span>
           </div>
           <p class="job-info">
-            {{ 'variable-analysis.id-column' | translate }}: {{ activeJob.id }} |
-            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJob.created_at) }}
+            {{ 'variable-analysis.id-column' | translate }}: {{ activeJobValue.id }} |
+            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJobValue.created_at) }}
           </p>
         </div>
         }
 
-        @if (isJobsLoading) {
+        @if (isJobsLoading()) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
           <p>{{ 'variable-analysis.loading-jobs' | translate }}</p>
         </div>
-        } @else if (jobs.length === 0) {
+        } @else if (jobs().length === 0) {
         <div class="empty-state">
           <mat-icon class="empty-icon">info</mat-icon>
           <p>{{ 'variable-analysis.no-analysis-jobs-found' | translate }}</p>
         </div>
         } @else {
         <div class="table-container">
-          <table mat-table [dataSource]="jobs" class="jobs-table">
+          <table mat-table [dataSource]="jobs()" class="jobs-table">
             <!-- ID Column -->
             <ng-container matColumnDef="id">
               <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.id-column' | translate }}</th>

@@ -1,3 +1,4 @@
+@let selectedProfileValue = selectedProfile();
 <h2 mat-dialog-title>{{ 'workspace.edit-missings-profiles' | translate }}</h2>
 
 <mat-dialog-content class="dialog-content">
@@ -6,9 +7,9 @@
     <div class="profiles-list">
       <h3>{{ 'workspace.missings-profiles' | translate }}</h3>
       <mat-list>
-        @for (profile of missingsProfiles; track profile.id) {
+        @for (profile of missingsProfiles(); track profile.id) {
           <mat-list-item
-            [class.selected]="selectedProfile?.label === profile.label"
+            [class.selected]="selectedProfileValue?.label === profile.label"
             (click)="selectProfile(profile.label)"
             >
             {{ profile.label }}
@@ -24,25 +25,25 @@
     </div>
 
     <!-- Profile Details -->
-    @if (selectedProfile) {
+    @if (selectedProfileValue) {
       <div class="profile-details">
         <h3>
-          @if (editMode) {
+          @if (editMode()) {
             {{ 'workspace.edit-profile' | translate }}
           } @else {
-            {{ selectedProfile.label }}
+            {{ selectedProfileValue.label }}
           }
         </h3>
-        @if (editMode) {
+        @if (editMode()) {
           <div class="profile-form">
             <mat-form-field appearance="fill">
               <mat-label>{{ 'workspace.profile-name' | translate }}</mat-label>
-              <input matInput [(ngModel)]="selectedProfile.label" required />
+              <input matInput [ngModel]="selectedProfileValue.label" required  (ngModelChange)="setSelectedProfileField('label', $event)"/>
             </mat-form-field>
             <h4>{{ 'workspace.missing-values' | translate }}</h4>
             <table
               mat-table
-              [dataSource]="editMode ? editMissings : getMissings()"
+              [dataSource]="editMode() ? editMissings() : getMissings()"
               class="missings-table"
               >
               <!-- ID Column -->
@@ -197,12 +198,12 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  @if (selectedProfile) { @if (editMode) {
+  @if (selectedProfileValue) { @if (editMode()) {
     <button
       mat-raised-button
       color="primary"
       (click)="saveProfile()"
-      [disabled]="saving"
+      [disabled]="saving()"
       >
       <mat-icon>save</mat-icon>
       {{ 'workspace.save-profile' | translate }}

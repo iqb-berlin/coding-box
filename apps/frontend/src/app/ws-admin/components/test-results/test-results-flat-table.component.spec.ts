@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection, SimpleChange } from '@angular/core';
+import { provideZonelessChangeDetection, SimpleChange, WritableSignal } from '@angular/core';
 import { delay } from 'rxjs/operators';
 import {
   ComponentFixture, TestBed
@@ -115,19 +115,19 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should display response-value frequencies as proportions', () => {
     const frequencyState = component as unknown as {
-      frequenciesByComboKey: Map<string, {
+      frequenciesByComboKey: WritableSignal<Map<string, {
         total: number;
         values: Array<{ value: string; count: number; p: number }>;
-      }>;
+      }>>;
     };
-    frequencyState.frequenciesByComboKey.set('Unit%20A:variable-1', {
+    frequencyState.frequenciesByComboKey.set(new Map([['Unit%20A:variable-1', {
       total: 10,
       values: [{
         value: 'answer-a',
         count: 2,
         p: 0.2
       }]
-    });
+    }]]));
 
     const summary = component.getFrequencySummary({
       unit: 'Unit A',
@@ -146,7 +146,7 @@ describe('TestResultsFlatTableComponent', () => {
 
     component.ngOnInit();
 
-    expect(component.flatDisplayedColumns).not.toContain('logStatus');
+    expect(component.flatDisplayedColumns()).not.toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ includeLogAnomalies: '' }),
@@ -159,7 +159,7 @@ describe('TestResultsFlatTableComponent', () => {
 
     component.ngOnInit();
 
-    expect(component.flatDisplayedColumns).toContain('logStatus');
+    expect(component.flatDisplayedColumns()).toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ includeLogAnomalies: 'true' }),
@@ -174,23 +174,23 @@ describe('TestResultsFlatTableComponent', () => {
       initialFilters: new SimpleChange(null, component.initialFilters, true)
     });
 
-    expect(component.flatFilters.logAnomalies).toBe('any');
-    expect(component.mediaFilters).toContain('logAny');
+    expect(component.flatFilters().logAnomalies).toBe('any');
+    expect(component.mediaFilters()).toContain('logAny');
   });
 
   it('should keep the all-anomalies media filter exclusive', () => {
-    component.mediaFilters = [
+    component.mediaFilters.set([
       'geogebra',
       'logAny',
       'logCritical',
       'logTimer'
-    ];
+    ]);
 
     component.onMediaFiltersChanged();
 
-    expect(component.mediaFilters).toEqual(['geogebra', 'logAny']);
-    expect(component.flatFilters.geogebra).toBe(true);
-    expect(component.flatFilters.logAnomalies).toBe('any');
+    expect(component.mediaFilters()).toEqual(['geogebra', 'logAny']);
+    expect(component.flatFilters().geogebra).toBe(true);
+    expect(component.flatFilters().logAnomalies).toBe('any');
   });
 
   it('should replace external table filters instead of keeping stale log filters', () => {
@@ -204,9 +204,9 @@ describe('TestResultsFlatTableComponent', () => {
       initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters, false)
     });
 
-    expect(component.flatFilters.code).toBe('person-a');
-    expect(component.flatFilters.logAnomalies).toBe('');
-    expect(component.mediaFilters).not.toContain('logAny');
+    expect(component.flatFilters().code).toBe('person-a');
+    expect(component.flatFilters().logAnomalies).toBe('');
+    expect(component.mediaFilters()).not.toContain('logAny');
   });
 
   it('should send the regex flag when the workspace setting is enabled', () => {
@@ -222,7 +222,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should pass quoted exact filters unchanged in normal mode', () => {
-    component.flatFilters.response = '"01"';
+    component.flatFilters.update(value => ({ ...value, response: '"01"' }));
 
     component.ngOnInit();
 
@@ -240,7 +240,7 @@ describe('TestResultsFlatTableComponent', () => {
     component.enableRegexSearch = true;
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
-    component.flatFilters.response = 'a'.repeat(257);
+    component.flatFilters.update(value => ({ ...value, response: 'a'.repeat(257) }));
 
     component.onFlatFilterChanged();
     await new Promise<void>(resolve => { setTimeout(resolve, 401); });
@@ -253,7 +253,7 @@ describe('TestResultsFlatTableComponent', () => {
     component.enableRegexSearch = true;
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
-    component.flatFilters.response = '(?i)^var$';
+    component.flatFilters.update(value => ({ ...value, response: '(?i)^var$' }));
 
     component.onFlatFilterChanged();
     await new Promise<void>(resolve => { setTimeout(resolve, 401); });
@@ -268,8 +268,8 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should disable autocomplete suggestions in regex mode', () => {
     component.enableRegexSearch = true;
-    component.flatFilterOptions.codes = ['P-01'];
-    component.flatFilters.code = '^P-';
+    component.flatFilterOptions.update(value => ({ ...value, codes: ['P-01'] }));
+    component.flatFilters.update(value => ({ ...value, code: '^P-' }));
 
     expect(component.filteredCodes()).toEqual([]);
   });
@@ -296,7 +296,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should show a specific message when a response value search times out', () => {
-    component.flatFilters.responseValue = 'needle';
+    component.flatFilters.update(value => ({ ...value, responseValue: 'needle' }));
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
@@ -319,7 +319,7 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should use the structured invalid regex error code', () => {
     component.enableRegexSearch = true;
-    component.flatFilters.response = '[';
+    component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
@@ -344,7 +344,7 @@ describe('TestResultsFlatTableComponent', () => {
   it('should ignore an invalid-regex error for an edited filter', async () => {
     const staleResponse = new Subject<FlatTestResultResponsesResponse>();
     component.enableRegexSearch = true;
-    component.flatFilters.response = '[';
+    component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses
       .mockReturnValueOnce(staleResponse.asObservable())
       .mockReturnValueOnce(of({
@@ -355,7 +355,7 @@ describe('TestResultsFlatTableComponent', () => {
       }));
     fixture.detectChanges();
 
-    component.flatFilters.response = '[a]';
+    component.flatFilters.update(value => ({ ...value, response: '[a]' }));
     component.onFlatFilterChanged();
     staleResponse.error(new HttpErrorResponse({
       status: 400,
@@ -441,8 +441,8 @@ describe('TestResultsFlatTableComponent', () => {
       limit: 100
     });
 
-    expect(component.flatData[0].code).toBe('new');
-    expect(component.flatData[0].logAnomalies).toHaveLength(1);
+    expect(component.flatData()[0].code).toBe('new');
+    expect(component.flatData()[0].logAnomalies).toHaveLength(1);
   });
   it('renders a delayed server response without another user action', async () => {
     const backend = TestBed.inject(TestResultService);

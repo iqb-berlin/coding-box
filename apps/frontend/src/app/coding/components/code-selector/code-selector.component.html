@@ -1,3 +1,7 @@
+@let selectedCodeValue = selectedCode();
+@let selectedCodingIssueOptionValue = selectedCodingIssueOption();
+@let variableManualInstructionValue = variableManualInstruction();
+@let legacySelectedCodeValue = legacySelectedCode();
 <div class="selector-content">
   @if (showProgress) {
     <div class="progress-compact">
@@ -26,10 +30,10 @@
                   Variable wählen
                 }
               </span>
-              <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+              <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
             </button>
 
-            @if (isVariablePanelOpen) {
+            @if (isVariablePanelOpen()) {
               <div class="variable-panel" #variablePanel>
                 @for (item of navigationItems; track item.key) {
                   @let prog = getProgressForNavigationItem(item);
@@ -87,10 +91,10 @@
                   Variable wählen
                 }
               </span>
-              <mat-icon class="variable-trigger-icon">{{ isBundleVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+              <mat-icon class="variable-trigger-icon">{{ isBundleVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
             </button>
 
-            @if (isBundleVariablePanelOpen) {
+            @if (isBundleVariablePanelOpen()) {
               <div class="variable-panel" #bundleVariablePanel>
                 @for (item of bundleVariableNavigationItems; track item.key) {
                   <div
@@ -169,41 +173,41 @@
   }
 
   <div class="codes-section">
-    @if (hasVariableManualInstruction || regularCodes().length || legacySelectedCode) {
+    @if (hasVariableManualInstruction || regularCodes().length || legacySelectedCodeValue) {
       <div class="code-list scrollable-codes">
         @if (hasVariableManualInstruction) {
           <div class="code-row general-instruction-row">
-            <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction || '')"></div>
+            <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstructionValue || '')"></div>
           </div>
         }
-        @if (legacySelectedCode) {
+        @if (legacySelectedCodeValue) {
           <div class="code-row selected read-only legacy-code-row">
             <div class="code-content">
               <span class="code-info">
                 <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
                 <span class="code-token">
-                  <span class="code-id">{{ legacySelectedCode.id }}</span>
-                  @if (showScore && legacySelectedCode.score !== undefined) {
+                  <span class="code-id">{{ legacySelectedCodeValue.id }}</span>
+                  @if (showScore && legacySelectedCodeValue.score !== undefined) {
                     <span class="code-score">
-                      ({{ legacySelectedCode.score }})
+                      ({{ legacySelectedCodeValue.score }})
                     </span>
                   }
                 </span>
               </span>
             </div>
-            <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
+            <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey() | translate }}</div>
           </div>
         }
         @for (item of regularCodes(); track item.id) {
-          <div class="code-row" [class.selected]="item.id === selectedCode"
+          <div class="code-row" [class.selected]="item.id === selectedCodeValue"
             [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
             [class.with-score]="showScore && item.score !== undefined"
-            [class.read-only]="isReadOnly || isRegularSelectionDisabled"
+            [class.read-only]="isReadOnly || isRegularSelectionDisabled()"
             [attr.data-code-id]="item.id"
-            [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
+            [style.cursor]="(isReadOnly || isRegularSelectionDisabled()) ? 'not-allowed' : 'pointer'"
             [matTooltip]="getReviewCodeSelectionTooltip(item.id)"
             [matTooltipDisabled]="!hasReviewCodeSelection(item.id)"
-            (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
+            (click)="(isReadOnly || isRegularSelectionDisabled()) ? null : onSelect(item.id)">
             <div class="code-content">
               <span class="code-info">
                 <span class="code-token">
@@ -229,28 +233,28 @@
       </div>
     }
 
-    @if (!regularCodes().length && !legacySelectedCode) {
+    @if (!regularCodes().length && !legacySelectedCodeValue) {
       <div>
         <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
       </div>
     }
   </div>
 
-  <div class="support-section fixed-section" [class.collapsed]="!isSupportSectionExpanded">
+  <div class="support-section fixed-section" [class.collapsed]="!isSupportSectionExpanded()">
     <button
       mat-button
       type="button"
       class="support-toggle"
       (click)="toggleSupportSection()"
-      [attr.aria-expanded]="isSupportSectionExpanded">
-      <mat-icon>{{ isSupportSectionExpanded ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</mat-icon>
+      [attr.aria-expanded]="isSupportSectionExpanded()">
+      <mat-icon>{{ isSupportSectionExpanded() ? 'keyboard_arrow_up' : 'keyboard_arrow_down' }}</mat-icon>
       <span>{{ supportSectionTitle }}</span>
     </button>
 
-    @if (isSupportSectionExpanded) {
+    @if (isSupportSectionExpanded()) {
       <div class="uncertain-codes-section">
         @for (item of codingIssueOptionCodes(); track item.id) {
-          <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption"
+          <div class="code-row" [class.selected]="item.id === selectedCodingIssueOptionValue"
             [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
             [class.read-only]="isCodingIssueOptionDisabled(item)"
             [attr.data-code-id]="item.id"
@@ -282,10 +286,10 @@
       @if (allowComments()) {
         <mat-form-field appearance="outline" class="notes-field">
           <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()" (blur)="onNotesCommitted()"
-            [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
+            [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError() ? 'true' : null"
           placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
         </mat-form-field>
-        @if (newCodeCommentValidationError) {
+        @if (newCodeCommentValidationError()) {
           <div class="notes-validation-error" role="alert">
             {{ 'code-selector.new-code-comment-required' | translate }}
           </div>

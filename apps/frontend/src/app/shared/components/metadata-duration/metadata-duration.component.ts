@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, DestroyRef, inject
+  Component, DestroyRef, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -17,7 +17,7 @@ import { FormlyDurationComponent } from '@iqb/metadata-components';
         <input type="number" matInput [attr.aria-label]="'metadata-duration.minutes' | translate"
           [disabled]="props.readonly ?? false" [min]="minMinutes"
           [attr.max]="maxMinutes > 0 ? maxMinutes : null"
-          [value]="minutes" (focus)="editing = true" (input)="setMinutes($event)"
+          [value]="minutes()" (focus)="editing.set(true)" (input)="setMinutes($event)"
           (blur)="normalizeDuration()" />
       </mat-form-field>
       <span>:</span>
@@ -25,7 +25,7 @@ import { FormlyDurationComponent } from '@iqb/metadata-components';
         <input type="number" matInput [attr.aria-label]="'metadata-duration.seconds' | translate"
           [disabled]="props.readonly ?? false" [min]="minSeconds"
           [attr.max]="maxSeconds > 0 ? maxSeconds : null"
-          [value]="seconds" (focus)="editing = true" (input)="setSeconds($event)"
+          [value]="seconds()" (focus)="editing.set(true)" (input)="setSeconds($event)"
           (blur)="normalizeDuration()" />
       </mat-form-field>
     </div>
@@ -36,40 +36,38 @@ import { FormlyDurationComponent } from '@iqb/metadata-components';
   `]
 })
 export class MetadataDurationComponent extends FormlyDurationComponent {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
 
-  minutes = '';
-  seconds = '';
-  editing = false;
+  readonly minutes = signal('');
+  readonly seconds = signal('');
+  readonly editing = signal(false);
 
   override ngOnInit(): void {
     super.ngOnInit();
     this.syncInputValues();
     this.formControl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
-        if (!this.editing) this.syncInputValues();
-        this.changeDetectorRef.markForCheck();
+        if (!this.editing()) this.syncInputValues();
       });
   }
 
   setMinutes(event: Event): void {
-    this.minutes = (event.target as HTMLInputElement).value;
+    this.minutes.set((event.target as HTMLInputElement).value);
   }
 
   setSeconds(event: Event): void {
-    this.seconds = (event.target as HTMLInputElement).value;
+    this.seconds.set((event.target as HTMLInputElement).value);
   }
 
   private syncInputValues(): void {
-    this.minutes = this.duration.minutes;
-    this.seconds = this.duration.seconds;
+    this.minutes.set(this.duration.minutes);
+    this.seconds.set(this.duration.seconds);
   }
 
   // Normalize after editing, keeping library model echoes from moving the caret.
   normalizeDuration(): void {
-    this.editing = false;
-    this.duration = { minutes: this.minutes, seconds: this.seconds };
+    this.editing.set(false);
+    this.duration = { minutes: this.minutes(), seconds: this.seconds() };
     super.durationChange();
     this.syncInputValues();
   }

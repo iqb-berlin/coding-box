@@ -71,16 +71,16 @@ describe('WsAccessRightsComponent', () => {
 
   it('should load users on creation', () => {
     expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
-    expect(component.workspaceUsers.entries.length).toBe(2);
-    expect(component.workspaceUsers.entries[0].name).toBe('user1');
+    expect(component.workspaceUsers().entries.length).toBe(2);
+    expect(component.workspaceUsers().entries[0].name).toBe('user1');
   });
 
   it('should change access level correctly', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     expect(user.accessLevel).toBe(3);
     expect(user.isChecked).toBe(true);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
 
     component.changeAccessLevel(false, user, 3);
     expect(user.accessLevel).toBe(0);
@@ -89,7 +89,7 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should keep coding capability independent when changing workspace access', () => {
-    const user = component.workspaceUsers.entries[1];
+    const user = component.workspaceUsers().entries[1];
 
     component.changeAccessLevel(true, user, 3);
     expect(user.accessLevel).toBe(3);
@@ -107,27 +107,27 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should change coding capability independently from access level', () => {
-    const user = component.workspaceUsers.entries[1];
+    const user = component.workspaceUsers().entries[1];
 
     component.changeCanCode(true, user);
 
     expect(user.accessLevel).toBe(2);
     expect(user.canCode).toBe(true);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 
   it('should allow disabling coding capability for access level 1', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
 
     component.changeCanCode(false, user);
 
     expect(user.accessLevel).toBe(1);
     expect(user.canCode).toBe(false);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 
   it('should save access rights successfully', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
 
     component.save();
@@ -139,11 +139,11 @@ describe('WsAccessRightsComponent', () => {
       '',
       expect.any(Object)
     );
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
   });
 
   it('should send removed existing access rights when saving', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
 
     component.changeAccessLevel(false, user, 1);
     component.save();
@@ -158,14 +158,14 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should keep changes pending when saving access rights fails', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockUserBackendService.saveUsers as jest.Mock).mockReturnValueOnce(of(false));
 
     component.save();
 
     expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.workspace-access-right-not-set',
       'error',
@@ -174,13 +174,13 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should clear persisted changes and report a failed auth data refresh separately', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('failed'));
 
     component.save();
 
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
       'error',
@@ -189,13 +189,13 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should clear persisted changes without an obsolete message after the auth context changed', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('invalidated'));
 
     component.save();
 
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
     expect(mockSnackBar.open).not.toHaveBeenCalled();
   });
   it('renders a delayed server response without another user action', async () => {

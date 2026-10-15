@@ -21,7 +21,7 @@
         <mat-label>{{ 'process-overview.filters.type' | translate }}</mat-label>
         <mat-select [(ngModel)]="typeFilter" (selectionChange)="applyFilter()">
           <mat-option value="">{{ 'process-overview.filters.all-types' | translate }}</mat-option>
-          @for (type of availableTypes; track type) {
+          @for (type of availableTypes(); track type) {
             <mat-option [value]="type">
               {{ getQueueLabel(type) }}
             </mat-option>
@@ -40,7 +40,7 @@
       </mat-form-field>
 
       <div class="filter-actions">
-        <button mat-button (click)="clearFilters()" [disabled]="!statusFilter && !typeFilter && !searchFilter">
+        <button mat-button (click)="clearFilters()" [disabled]="!statusFilter() && !typeFilter() && !searchFilter()">
           <mat-icon>filter_list_off</mat-icon> {{ 'process-overview.filters.clear' | translate }}
         </button>
       </div>
@@ -53,14 +53,14 @@
     </div>
 
     <div class="table-container">
-      @if (isLoading) {
+      @if (isLoading()) {
         <div class="loading-overlay">
           <mat-spinner diameter="40"></mat-spinner>
         </div>
       }
 
       <div class="mat-elevation-z2 table-wrapper">
-        <table mat-table [dataSource]="processes" class="mat-table" [class.loading-table]="isLoading">
+        <table mat-table [dataSource]="processes" class="mat-table" [class.loading-table]="isLoading()">
 
           <ng-container matColumnDef="queueName">
             <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.type' | translate }}</th>
@@ -182,7 +182,7 @@
           aria-label="Seite der Prozesse auswählen">
         </mat-paginator>
 
-        @if (processes.filteredData.length === 0 && !isLoading) {
+        @if (processes.filteredData.length === 0 && !isLoading()) {
           <div class="no-data">
             {{
             processes.data.length === 0 ?

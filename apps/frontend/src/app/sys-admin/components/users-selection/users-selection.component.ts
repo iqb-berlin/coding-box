@@ -13,9 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, ChangeDetectorRef, DestroyRef, inject,
-  input,
-  output
+  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -41,15 +39,15 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 export class UsersSelectionComponent implements OnInit {
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
-  private changeDetectorRef = inject(ChangeDetectorRef);
+
   private destroyRef = inject(DestroyRef);
 
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces: WorkspaceInListDto[] = [];
-  filteredUserWorkspaces: WorkspaceInListDto[] = [];
+  readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
+  readonly filteredUserWorkspaces = signal<WorkspaceInListDto[]>([]);
 
   @ViewChild(MatSort) sort = new MatSort();
   readonly userSelectionChanged = output<UserFullDto[]>();
@@ -89,7 +87,6 @@ export class UsersSelectionComponent implements OnInit {
             this.tableSelectionCheckboxes.clear();
             this.tableSelectionRow.clear();
           }
-          this.changeDetectorRef.markForCheck();
         }
       );
   }
@@ -98,8 +95,7 @@ export class UsersSelectionComponent implements OnInit {
     this.workspaceBackendService.getAllWorkspacesList()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(workspaces => {
-        if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
-        this.changeDetectorRef.markForCheck();
+        if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
       });
   }
 
@@ -127,8 +123,7 @@ export class UsersSelectionComponent implements OnInit {
       this.userBackendService.getWorkspacesByUserList(userId)
         .pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(workspaces => {
-          this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
-          this.changeDetectorRef.markForCheck();
+          this.filteredUserWorkspaces.set(this.userWorkspaces().filter(workspace => workspaces.includes(workspace.id)));
         });
     }
   }
