@@ -1,4 +1,6 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, inject, OnInit
+} from '@angular/core';
 
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -33,6 +35,8 @@ interface MatrixRow {
   ]
 })
 export class AccessRightsMatrixDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private workspaceService = inject(WorkspaceService);
 
   matrix: AccessRightsMatrixDto | null = null;
@@ -43,6 +47,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.workspaceService.getAccessRightsMatrix().subscribe(matrix => {
+      this.changeDetectorRef.markForCheck();
       this.matrix = matrix;
       this.levels = matrix.levels;
       this.displayedColumns = ['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)];

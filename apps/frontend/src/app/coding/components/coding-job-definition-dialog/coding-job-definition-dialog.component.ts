@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, inject
+  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -214,6 +214,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private sessionRecoveryService = inject(SessionRecoveryService);
+  private changeDetector = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
   private unregisterRecoveryProvider?: () => void;
   private hasRestoredRecoveryDraft = false;
@@ -739,11 +740,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.queueDistributionPreviewRefresh();
         this.availableCodersLoadedForRecovery = true;
         this.restoreDefinitionRecoveryDraft();
+        this.changeDetector.markForCheck();
       },
       error: () => {
         this.isLoadingAvailableCoders = false;
         this.availableCodersLoadedForRecovery = true;
         this.restoreDefinitionRecoveryDraft();
+        this.changeDetector.markForCheck();
       }
     });
   }
@@ -970,6 +973,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.isLoadingVariableAnalysis = false;
       this.variablesLoadedForRecovery = true;
       this.restoreDefinitionRecoveryDraft();
+      this.changeDetector.markForCheck();
       return;
     }
 
@@ -1003,11 +1007,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.isLoadingVariableAnalysis = false;
         this.variablesLoadedForRecovery = true;
         this.restoreDefinitionRecoveryDraft();
+        this.changeDetector.markForCheck();
       },
       error: () => {
         this.isLoadingVariableAnalysis = false;
         this.variablesLoadedForRecovery = true;
         this.restoreDefinitionRecoveryDraft();
+        this.changeDetector.markForCheck();
       }
     });
   }

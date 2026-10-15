@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "scope": "risk-based",
+  "areas": [
+    {
+      "id": "management",
+      "name": "CodingManagement und ManualManagement",
+      "risk": "Verspätete Statistik, Fortschritt und Übernahme von Kodierergebnissen müssen sichtbar bleiben.",
+      "findings": [
+        "ZL-001",
+        "ZL-002",
+        "ZL-003",
+        "ZL-004"
+      ],
+      "tests": [
+        "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
+        "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    },
+    {
+      "id": "jobs",
+      "name": "Jobdefinitionen und Kodierjobs",
+      "risk": "Erstellung, Verteilung und Review dürfen keine veralteten oder ungespeicherten Ergebnisse zeigen.",
+      "findings": [],
+      "tests": [
+        "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coder-trainings-list/coder-trainings-list.component.spec.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    },
+    {
+      "id": "coding-replay",
+      "name": "Kodierung, Replay und Sitzungen",
+      "risk": "Kodierungen und Kommentare müssen gespeichert werden; Navigation und Sitzungswiederherstellung dürfen Eingaben nicht verlieren.",
+      "findings": [],
+      "tests": [
+        "apps/frontend/src/app/coding/components/code-selector/code-selector-reactivity.component.spec.ts",
+        "apps/frontend/src/app/replay/services/replay-coding.service.spec.ts",
+        "cypress/e2e/replay-live.cy.ts",
+        "cypress/e2e/item-matrix-live.cy.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    },
+    {
+      "id": "results-validation",
+      "name": "Testergebnisse und Validierung",
+      "risk": "Pagination, Hintergrundjobs und Fehler dürfen Tabellen und Mutationsaktionen nicht blockieren; Ergebnisse bleiben im richtigen Workspace.",
+      "findings": [
+        "ZL-005",
+        "ZL-006",
+        "ZL-007",
+        "ZL-008",
+        "ZL-011",
+        "ZL-013",
+        "ZL-014"
+      ],
+      "tests": [
+        "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/services/validation/validation-context.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component.spec.ts",
+        "cypress/zoneless/validation-dialog.cy.ts",
+        "cypress/zoneless/validation-access.cy.ts",
+        "cypress/zoneless/test-results-view.cy.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    },
+    {
+      "id": "files-exports-metadata",
+      "name": "Dateien, Exporte und Metadaten",
+      "risk": "Upload, Suche und Exporte müssen aktualisieren; unabhängige Ladezustände und gleichzeitig geöffnete Formulare dürfen sich nicht überschreiben.",
+      "findings": [
+        "ZL-012",
+        "ZL-015",
+        "ZL-016",
+        "ZL-017",
+        "ZL-018",
+        "ZL-019",
+        "ZL-020",
+        "ZL-021",
+        "ZL-022",
+        "ZL-023",
+        "ZL-024",
+        "ZL-025"
+      ],
+      "tests": [
+        "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-files/test-files-settings.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/scheme-editor-dialog/scheme-editor-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/utils/coding-scheme-reference.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+        "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/content-pool-import-dialog/content-pool-import-dialog.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/content-pool-upload-dialog/content-pool-upload-dialog.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/export/export.component.spec.ts",
+        "cypress/zoneless/file-list.cy.ts",
+        "cypress/zoneless/file-settings-access.cy.ts",
+        "cypress/zoneless/file-validation-info.cy.ts",
+        "cypress/zoneless/info-dialogs.cy.ts",
+        "cypress/zoneless/test-files-upload.cy.ts",
+        "cypress/zoneless/scheme-preview.cy.ts",
+        "cypress/zoneless/export-item-dataset.cy.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    },
+    {
+      "id": "administration",
+      "name": "Administration und gemeinsame UI",
+      "risk": "Verzögerte Rechte und Anmeldung dürfen nicht falsch weiterleiten; Einstellungen und Benachrichtigungen müssen nach Serverantworten sichtbar sein.",
+      "findings": [
+        "ZL-009",
+        "ZL-010"
+      ],
+      "tests": [
+        "apps/frontend/src/app/components/home/home.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-admin/ws-admin.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.spec.ts",
+        "apps/frontend/src/app/zoneless-dialog-responses.spec.ts",
+        "cypress/zoneless/app.cy.ts",
+        "cypress/zoneless/workspace-access-rights.cy.ts",
+        "cypress/e2e/zoneless-dialogs.cy.ts",
+        "cypress/auth/coding-session.cy.ts"
+      ]
+    }
+  ],
+  "mechanisms": [
+    {
+      "id": "http",
+      "areas": [
+        "management",
+        "results-validation",
+        "files-exports-metadata",
+        "administration"
+      ],
+      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template."
+    },
+    {
+      "id": "progress",
+      "areas": [
+        "management",
+        "results-validation",
+        "files-exports-metadata"
+      ],
+      "evidence": "Mehrere feste Fortschrittsfolgen, Job-Abschluss und Export-Download; Browser und isoliertes Backend."
+    },
+    {
+      "id": "ordering",
+      "areas": [
+        "management",
+        "files-exports-metadata"
+      ],
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen."
+    },
+    {
+      "id": "lifecycle",
+      "areas": [
+        "results-validation",
+        "files-exports-metadata",
+        "administration"
+      ],
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten."
+    },
+    {
+      "id": "timers-promises",
+      "areas": [
+        "coding-replay",
+        "files-exports-metadata"
+      ],
+      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Wiederherstellung abgelaufener Sitzungen."
+    },
+    {
+      "id": "browser-libraries",
+      "areas": [
+        "coding-replay",
+        "files-exports-metadata",
+        "administration"
+      ],
+      "evidence": "Echter Aspect-Player, Diagramme, Material-Overlays und Metadaten-Webkomponente; window.Zone fehlt."
+    },
+    {
+      "id": "roles-persistence",
+      "areas": [
+        "coding-replay",
+        "files-exports-metadata",
+        "administration"
+      ],
+      "evidence": "Synthetische Workspace-Rollen 0–3, persistierte und Realm-Administration; Keycloak, direkte API-Prüfung und erneutes Lesen gespeicherter Werte."
+    }
+  ],
+  "unresolvedFindings": [],
+  "residualLimits": [
+    "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
+    "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
+    "Der MetadataResolver unterstützt am verwendeten öffentlichen Aufruf kein AbortSignal; laufende interne Arbeit kann weitergehen, ihr Ergebnis wird nach Abbruch verworfen.",
+    "Ein bereits angenommener Backend-Job wird durch Schließen des Dialogs nicht zurückgerollt.",
+    "Historische Workspace-Stufe 4 ist nur synthetisch geprüft. Die aktuelle Rechte-API vergibt Stufen 0–3; ein echtes Backend-Szenario für historische Stufe 4 fehlt.",
+    "Produktionslast, reale externe Content-Pool-Verbindungen, Deployment und Produktionsdaten gehören nicht zur lokalen Freigabe.",
+    "Der vorhandene Live-Browser-Support filtert die bekannte Meldung ResizeObserver loop. Andere nicht abgefangene Browserfehler lassen Tests fehlschlagen; diese Freigabe beweist keine Fehlerfreiheit der Layout-Beobachtung.",
+    "Ein grüner Nachweisplan bestätigt Referenzen und Umfang. Freigabe benötigt zusätzlich erfolgreiche lokale Abschlussläufe und CI am selben Commit."
+  ]
+}

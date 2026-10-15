@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -105,7 +106,8 @@ describe('CodingManagementManualComponent', () => {
           provide: Router,
           useValue: { navigate: jest.fn() }
         },
-        provideHttpClient()
+        provideHttpClient(),
+        provideHttpClientTesting()
       ],
       imports: [CodingManagementManualComponent, TranslateModule.forRoot()]
     }).compileComponents();
@@ -4111,5 +4113,125 @@ describe('CodingManagementManualComponent', () => {
     expect(component.deriveErrorAppliedCases).toBe(1);
     expect(component.deriveErrorRemainingCases).toBe(1);
     expect(component.isCompletionComplete()).toBe(false);
+  });
+
+  it('renders a delayed coding-progress response in the execution tab', async () => {
+    const internals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: { getCodingProgressOverview: (id: number) => Observable<CodingProgressOverview | null> };
+      loadCodingProgressOverview: () => void;
+    };
+    const response = new Subject<CodingProgressOverview | null>();
+    jest.spyOn(internals.testPersonCodingService, 'getCodingProgressOverview').mockReturnValue(response);
+    setCompletePlanningState();
+    setCodingProgress(10, 1);
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('execution');
+    internals.appService.selectedWorkspaceId = 5;
+    internals.loadCodingProgressOverview();
+    fixture.changeDetectorRef.markForCheck();
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => { setTimeout(resolve, 30); });
+    const overview = { ...component.codingProgressOverview!, completedCases: 7, completionPercentage: 70 };
+    response.next(overview);
+    response.complete();
+    await fixture.whenStable();
+    const section: HTMLElement = fixture.nativeElement.querySelector('.coding-progress-section');
+    expect(section).not.toBeNull();
+    expect(section.classList.contains('blurred-content')).toBe(false);
+    expect(section.textContent).toContain('70');
+  });
+  it.each(['older-first', 'newer-first', 'old-error-last'] as const)(
+    'keeps the latest coding progress with response order %s', async order => {
+      const internals = component as unknown as {
+        appService: { selectedWorkspaceId: number };
+        testPersonCodingService: { getCodingProgressOverview: (id: number) => Observable<CodingProgressOverview | null> };
+        loadCodingProgressOverview: () => void;
+      };
+      const older = new Subject<CodingProgressOverview | null>();
+      const newer = new Subject<CodingProgressOverview | null>();
+      jest.spyOn(internals.testPersonCodingService, 'getCodingProgressOverview')
+        .mockReturnValueOnce(older).mockReturnValueOnce(newer);
+      setCompletePlanningState();
+      setCodingProgress(10, 1);
+      const initial = component.codingProgressOverview!;
+      component.selectedManualTabIndex = component.manualCodingTabs.indexOf('execution');
+      internals.appService.selectedWorkspaceId = 5;
+      internals.loadCodingProgressOverview();
+      internals.loadCodingProgressOverview();
+      fixture.changeDetectorRef.markForCheck();
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      if (order === 'older-first') {
+        older.next({ ...initial, completedCases: 2, completionPercentage: 20 });
+        older.complete();
+        await fixture.whenStable();
+      }
+      newer.next({ ...initial, completedCases: 7, completionPercentage: 70 });
+      newer.complete();
+      await fixture.whenStable();
+      if (order === 'newer-first') {
+        older.next({ ...initial, completedCases: 2, completionPercentage: 20 });
+        older.complete();
+      } else if (order === 'old-error-last') {
+        older.error(new Error('stale failure'));
+      }
+      await fixture.whenStable();
+      expect(fixture.nativeElement.querySelector('.coding-progress-section').textContent).toContain('70');
+      expect(component.codingProgressOverview?.completionPercentage).toBe(70);
+    });
+
+  it.each(['empty', 'error'] as const)('clears delayed %s progress and renders a retry', async outcome => {
+    const internals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: { getCodingProgressOverview: (id: number) => Observable<CodingProgressOverview | null> };
+      loadCodingProgressOverview: () => void;
+    };
+    const first = new Subject<CodingProgressOverview | null>();
+    const retry = new Subject<CodingProgressOverview | null>();
+    jest.spyOn(internals.testPersonCodingService, 'getCodingProgressOverview')
+      .mockReturnValueOnce(first).mockReturnValueOnce(retry);
+    setCompletePlanningState();
+    setCodingProgress(10, 1);
+    const initial = component.codingProgressOverview!;
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('execution');
+    internals.appService.selectedWorkspaceId = 5;
+    internals.loadCodingProgressOverview();
+    fixture.changeDetectorRef.markForCheck();
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    if (outcome === 'error') first.error(new Error('failed'));
+    else { first.next(null); first.complete(); }
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.coding-progress-section')).toBeNull();
+    expect(component.isLoadingCodingProgress).toBe(false);
+    internals.loadCodingProgressOverview();
+    retry.next({ ...initial, completedCases: 7, completionPercentage: 70 });
+    retry.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.coding-progress-section').textContent).toContain('70');
+  });
+
+  it.each(['workspace', 'destroy'] as const)('ignores progress after %s changes', async change => {
+    const internals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: { getCodingProgressOverview: (id: number) => Observable<CodingProgressOverview | null> };
+      loadCodingProgressOverview: () => void;
+      focusManualFreshnessTargetIfReady: () => void;
+    };
+    const response = new Subject<CodingProgressOverview | null>();
+    jest.spyOn(internals.testPersonCodingService, 'getCodingProgressOverview').mockReturnValue(response);
+    const focus = jest.spyOn(internals, 'focusManualFreshnessTargetIfReady');
+    setCompletePlanningState();
+    setCodingProgress(10, 1);
+    const initial = component.codingProgressOverview!;
+    internals.appService.selectedWorkspaceId = 5;
+    internals.loadCodingProgressOverview();
+    if (change === 'workspace') internals.appService.selectedWorkspaceId = 6;
+    else fixture.destroy();
+    response.next({ ...initial, completedCases: 7, completionPercentage: 70 });
+    response.complete();
+    expect(component.codingProgressOverview).toBe(initial);
+    expect(focus).not.toHaveBeenCalled();
   });
 });

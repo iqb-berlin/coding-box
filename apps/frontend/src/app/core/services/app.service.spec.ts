@@ -1,3 +1,4 @@
+import { computed } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
@@ -58,6 +59,30 @@ describe('AppService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('tracks shared authentication and grouped errors in derived signal state', () => {
+    const userId = computed(() => service.authData.userId);
+    const status = computed(() => service.authBootstrapStatus);
+    const errorCount = computed(() => service.errorMessages[0]?.requestCount || 0);
+    expect(userId()).toBe(0);
+    expect(status()).toBe('checking');
+    expect(errorCount()).toBe(0);
+
+    service.updateAuthData({ ...AppService.defaultAuthData, userId: 7 });
+    service.setAuthBootstrapStatus('ready');
+    expect(userId()).toBe(7);
+    expect(status()).toBe('ready');
+    const error = {
+      status: 400, message: 'Bad Request', method: 'GET', urlWithParams: '/api/items'
+    } as AppHttpError;
+    service.addErrorMessage(error);
+    const previousErrors = service.errorMessages;
+    expect(errorCount()).toBe(1);
+    service.addErrorMessage({ ...error, requestId: 'second' } as AppHttpError);
+    expect(errorCount()).toBe(2);
+    expect(previousErrors[0].requestCount).toBe(1);
+    expect(previousErrors[0].affectedRequests).toHaveLength(1);
   });
 
   describe('selectedWorkspaceId', () => {

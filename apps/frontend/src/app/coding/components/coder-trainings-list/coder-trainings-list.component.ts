@@ -1,5 +1,5 @@
 import {
-  Component,
+  ChangeDetectorRef, Component,
   OnDestroy,
   OnChanges,
   OnInit,
@@ -75,6 +75,8 @@ interface TrainingNameFilterOption {
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -180,6 +182,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (trainings: CoderTraining[]) => {
+          this.changeDetectorRef.markForCheck();
           if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
             resolveLoad();
             return;
@@ -195,6 +198,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
           resolveLoad();
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           if (requestId !== this.loadRequestId || this.getCurrentWorkspaceId() !== workspaceId) {
             resolveLoad();
             return;
@@ -421,6 +425,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {
+          this.changeDetectorRef.markForCheck();
           if (response.success) {
             const translatedMessage = response.message ?
               this.backendMessageTranslator.translateMessage(response.message) :

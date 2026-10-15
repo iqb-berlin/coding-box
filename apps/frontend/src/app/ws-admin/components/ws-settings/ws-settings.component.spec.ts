@@ -6,9 +6,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { Component } from '@angular/core';
+import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
@@ -101,6 +101,7 @@ describe('WsSettingsComponent', () => {
         WsSettingsComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: AppService, useValue: mockAppService },
@@ -131,6 +132,20 @@ describe('WsSettingsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('renders a delayed replay URL setting without another UI event', async () => {
+    const mode = new Subject<'auth' | 'workspaceId'>();
+    mockWorkspaceSettingsService.getReplayUrlExportMode.mockReturnValueOnce(mode.asObservable());
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    mode.next('workspaceId');
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.replay-url-export-token-duration')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.replay-url-export-mode').textContent)
+      .toContain('ws-settings.replay-url-export-mode-workspace');
   });
 
   describe('ngOnInit', () => {
@@ -530,6 +545,22 @@ describe('WsSettingsComponent', () => {
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
       createElementSpy.mockRestore();
+    }));
+
+    it('renders background export progress after polling without another UI event', fakeAsync(() => {
+      component.exportWorkspaceDatabase();
+      fixture.detectChanges();
+
+      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job')
+        .flush({ jobId: 'job-1', message: 'started' });
+      tick(0);
+      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1')
+        .flush({ status: 'running', progress: 42 });
+      tick(0);
+
+      expect(fixture.nativeElement.querySelector('.database-export-card .progress-text').textContent)
+        .toContain('42');
+      component.ngOnDestroy();
     }));
 
     it('should start export without a local token because auth is handled by the interceptor', () => {

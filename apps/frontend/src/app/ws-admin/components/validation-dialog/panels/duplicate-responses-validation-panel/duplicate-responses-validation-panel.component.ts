@@ -1,11 +1,15 @@
 import {
   Component,
+  ChangeDetectorRef,
+  DestroyRef,
+  inject,
   Input,
   Output,
   EventEmitter,
   OnInit,
   OnDestroy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
@@ -187,6 +191,9 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 })
 export class DuplicateResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
@@ -319,9 +326,11 @@ implements OnInit, OnDestroy {
           this.currentPage = result.page;
           this.pageSize = result.limit;
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -458,9 +467,11 @@ implements OnInit, OnDestroy {
     this.isResolvingDuplicates = true;
     this.duplicateResponsesValidationService
       .resolveDuplicateGroup(responseIdsToDelete)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.isResolvingDuplicates = false;
+          this.changeDetector.markForCheck();
           this.duplicateResponseSelections.delete(duplicate.key);
           this.duplicateResponseTouchedKeys.delete(duplicate.key);
           this.snackBar.open('Duplikate wurden aufgelöst', 'OK', {
@@ -470,6 +481,7 @@ implements OnInit, OnDestroy {
         },
         error: () => {
           this.isResolvingDuplicates = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
             duration: 5000
           });
@@ -483,9 +495,10 @@ implements OnInit, OnDestroy {
     }
 
     this.isResolvingDuplicates = true;
-    this.duplicateResponsesValidationService.resolveAllDuplicates().subscribe({
+    this.duplicateResponsesValidationService.resolveAllDuplicates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isResolvingDuplicates = false;
+        this.changeDetector.markForCheck();
         this.duplicateResponseSelections.clear();
         this.duplicateResponseTouchedKeys.clear();
         this.snackBar.open(
@@ -497,6 +510,7 @@ implements OnInit, OnDestroy {
       },
       error: () => {
         this.isResolvingDuplicates = false;
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
           duration: 5000
         });
@@ -532,9 +546,10 @@ implements OnInit, OnDestroy {
     if (resolveRequests.length === 0) return;
 
     this.isResolvingDuplicates = true;
-    forkJoin(resolveRequests).subscribe({
+    forkJoin(resolveRequests).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isResolvingDuplicates = false;
+        this.changeDetector.markForCheck();
         resolvedKeys.forEach(key => {
           this.duplicateResponseSelections.delete(key);
           this.duplicateResponseTouchedKeys.delete(key);
@@ -548,6 +563,7 @@ implements OnInit, OnDestroy {
       },
       error: () => {
         this.isResolvingDuplicates = false;
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
           duration: 5000
         });
@@ -598,9 +614,11 @@ implements OnInit, OnDestroy {
             duration: 3000
           });
           this.isExporting = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isExporting = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });

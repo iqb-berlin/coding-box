@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject
+  ChangeDetectorRef, Component, Inject, OnInit, inject
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -32,6 +32,8 @@ export interface GithubReleasesDialogData {
   ]
 })
 export class GithubReleasesDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private fileService = inject(FileService);
   private snackBar = inject(MatSnackBar);
   translate = inject(TranslateService);
@@ -60,10 +62,12 @@ export class GithubReleasesDialogComponent implements OnInit {
     this.fileService.getGithubReleases(this.data.workspaceId, this.selectedType)
       .subscribe({
         next: releases => {
+          this.changeDetectorRef.markForCheck();
           this.releases = releases;
           this.isLoading = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.isLoading = false;
           this.snackBar.open('Fehler beim Laden der Releases von GitHub.', 'OK', { duration: 3000 });
         }
@@ -75,6 +79,7 @@ export class GithubReleasesDialogComponent implements OnInit {
     this.fileService.installGithubRelease(this.data.workspaceId, release.url)
       .subscribe({
         next: success => {
+          this.changeDetectorRef.markForCheck();
           this.isLoading = false;
           if (success) {
             this.snackBar.open(`${release.name} erfolgreich installiert.`, 'OK', { duration: 3000 });
@@ -84,6 +89,7 @@ export class GithubReleasesDialogComponent implements OnInit {
           }
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.isLoading = false;
           this.snackBar.open('Fehler bei der Installation.', 'OK', { duration: 3000 });
         }

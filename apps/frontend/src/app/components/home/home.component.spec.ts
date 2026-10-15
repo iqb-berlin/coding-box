@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, NavigationStart, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   BehaviorSubject, Observable, Subject, of, throwError
@@ -74,6 +75,7 @@ describe('HomeComponent', () => {
   let snackBarOpen: jest.Mock;
   let routerNavigate: jest.Mock;
   let getUsers: jest.Mock;
+  let routerEvents: Subject<NavigationStart>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -83,6 +85,7 @@ describe('HomeComponent', () => {
     snackBarOpen = jest.fn();
     routerNavigate = jest.fn();
     getUsers = jest.fn();
+    routerEvents = new Subject<NavigationStart>();
     mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     mockAppService.authData$ = authDataSubject.asObservable();
@@ -113,10 +116,11 @@ describe('HomeComponent', () => {
             navigate: routerNavigate,
             createUrlTree: jest.fn().mockReturnValue({}),
             serializeUrl: jest.fn().mockReturnValue('/workspace-admin/11'),
-            events: of({})
+            events: routerEvents.asObservable()
           }
         },
-        provideHttpClient()
+        provideHttpClient(),
+        provideZonelessChangeDetection()
       ]
     }).compileComponents();
   });
@@ -127,10 +131,45 @@ describe('HomeComponent', () => {
     fixture.detectChanges();
   }
 
+  it.each(['rights', 'refresh'])('does not redirect after navigation starts during pending %s', async pending => {
+    const rights = new Subject<{ id: number; accessLevel: number; canCode: boolean }[]>();
+    const refresh = new Subject<AuthDataRefreshOutcome>();
+    getUsers.mockReturnValue(rights);
+    if (pending === 'refresh') mockAppService.refreshAuthData.mockReturnValue(refresh);
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+    createComponent();
+    routerEvents.next(new NavigationStart(2, '/workspace-admin/11/test-results'));
+    refresh.next('updated');
+    refresh.complete();
+    rights.next([{ id: 7, accessLevel: 1, canCode: true }]);
+    rights.complete();
+    await fixture.whenStable();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
+
   it('should create', () => {
     createComponent();
 
     expect(component).toBeTruthy();
+  });
+
+  it('shows the empty state when authentication completes outside a template event', async () => {
+    authStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('backend-login-running');
+    mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
+    createComponent();
+
+    expect(fixture.nativeElement.textContent).toContain('home.loading-user-workspaces');
+
+    authDataSubject.next({ ...defaultAuthData, userId: 1 });
+    authStatusSubject.next('ready');
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
+    expect(fixture.nativeElement.textContent).not.toContain('home.loading-user-workspaces');
   });
 
   it('should require reauthentication for expired-session query params when Keycloak is logged out', () => {
@@ -318,6 +357,24 @@ describe('HomeComponent', () => {
     refreshResult.next('updated');
 
     expect(getUsers).not.toHaveBeenCalled();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
+
+  it('cancels pending workspace access checks when leaving home', () => {
+    const users = new Subject<unknown[]>();
+    getUsers.mockReturnValue(users);
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+    createComponent();
+    expect(users.observed).toBe(true);
+
+    fixture.destroy();
+    expect(users.observed).toBe(false);
+    users.next([{ id: 7, accessLevel: 1, canCode: true }]);
+    users.complete();
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 

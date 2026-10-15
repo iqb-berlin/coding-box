@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, OnInit, inject
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -41,6 +43,8 @@ import {
   ]
 })
 export class JournalComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private appService = inject(AppService);
   private journalService = inject(JournalService);
   private snackBar = inject(MatSnackBar);
@@ -98,12 +102,14 @@ export class JournalComponent implements OnInit {
     )
       .subscribe({
         next: response => {
+          this.changeDetectorRef.markForCheck();
           this.journalEntries = response.data;
           this.totalEntries = response.total;
           this.loadError = false;
           this.loading = false;
         },
         error: error => {
+          this.changeDetectorRef.markForCheck();
           this.journalEntries = [];
           this.totalEntries = 0;
           this.loadError = true;
