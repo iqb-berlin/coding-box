@@ -45,7 +45,7 @@ import { GermanPaginatorIntl } from '../../shared/services/german-paginator-intl
   styleUrls: ['./item-matrix-diagnostics-dialog.component.scss']
 })
 export class ItemMatrixDiagnosticsDialogComponent {
-  readonly data = inject<ItemMatrixExportDiagnosticsDto>(MAT_DIALOG_DATA);
+  protected readonly data = inject<ItemMatrixExportDiagnosticsDto>(MAT_DIALOG_DATA);
 
   private readonly dialogRef = inject<
   MatDialogRef<ItemMatrixDiagnosticsDialogComponent>
@@ -53,11 +53,11 @@ export class ItemMatrixDiagnosticsDialogComponent {
 
   private readonly translateService = inject(TranslateService);
 
-  readonly pageSizeOptions = [10, 25, 50];
+  protected readonly pageSizeOptions = [10, 25, 50];
   search = '';
   selectedReason = '';
   pageIndex = 0;
-  pageSize = 25;
+  protected pageSize = 25;
   readonly reasonOptions = this.buildReasonOptions();
   filteredGroups: ItemMatrixExportDiagnosticGroupDto[] = this.data.groups;
   visibleGroups: ItemMatrixExportDiagnosticGroupDto[] =
@@ -99,20 +99,20 @@ export class ItemMatrixDiagnosticsDialogComponent {
     this.updateVisibleGroups();
   }
 
-  trackGroup(
+  protected trackGroup(
     _index: number,
     group: ItemMatrixExportDiagnosticGroupDto
   ): string {
     return `${group.reasonCode}\u0000${group.bookletName}\u0000${group.columnName}`;
   }
 
-  getReasonLabel(reason: ItemMatrixCellFailureReason): string {
+  protected getReasonLabel(reason: ItemMatrixCellFailureReason): string {
     return this.translateService.instant(
       `export-toast.item-matrix-diagnostics.reasons.${reason}.label`
     );
   }
 
-  getSuggestedAction(reason: ItemMatrixCellFailureReason): string {
+  protected getSuggestedAction(reason: ItemMatrixCellFailureReason): string {
     return this.translateService.instant(
       `export-toast.item-matrix-diagnostics.reasons.${reason}.action`
     );
@@ -153,7 +153,7 @@ export class ItemMatrixDiagnosticsDialogComponent {
     URL.revokeObjectURL(url);
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 

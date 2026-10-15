@@ -12,39 +12,39 @@ import { AppService, AuthBootstrapStatus } from '../../../core/services/app.serv
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'coding-book-user-workspaces',
+  selector: 'coding-box-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],
   imports: [MatAnchor, RouterLink, TranslateModule, MatButton, MatIcon, MatProgressSpinner]
 })
 
 export class UserWorkspacesComponent {
-  authService = inject(AuthService);
-  appService = inject(AppService);
+  protected authService = inject(AuthService);
+  protected appService = inject(AppService);
   @Input() workspaces!: WorkspaceFullDto[];
   @Input() authBootstrapStatus: AuthBootstrapStatus = 'checking';
   @Input() authDataLoaded = false;
-  readonly authDataReloadRunning = signal(false);
+  protected readonly authDataReloadRunning = signal(false);
 
-  get showLoading(): boolean {
+  protected get showLoading(): boolean {
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded &&
       (this.authBootstrapStatus === 'checking' || this.authBootstrapStatus === 'backend-login-running');
   }
 
-  get showSessionExpired(): boolean {
+  protected get showSessionExpired(): boolean {
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded &&
       this.authBootstrapStatus === 'session-expired';
   }
 
-  get showAuthDataError(): boolean {
+  protected get showAuthDataError(): boolean {
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded &&
       (this.authBootstrapStatus === 'auth-data-failed' || this.authBootstrapStatus === 'ready');
   }
 
-  get showEmptyWorkspaces(): boolean {
+  protected get showEmptyWorkspaces(): boolean {
     return this.authService.isLoggedIn() === true &&
       this.authDataLoaded &&
       (this.workspaces || []).length === 0;

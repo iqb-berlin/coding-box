@@ -84,13 +84,13 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
 
   readonly coderTrainings = signal<CoderTraining[]>([]);
   readonly originalData = signal<CoderTraining[]>([]);
-  readonly trainingNameFilterOptions = signal<TrainingNameFilterOption[]>([]);
+  protected readonly trainingNameFilterOptions = signal<TrainingNameFilterOption[]>([]);
   readonly duplicateTrainingLabels = signal(new Set<string>());
   readonly selectedTrainingName = signal<string | null>(null);
-  readonly isLoading = signal(false);
+  protected readonly isLoading = signal(false);
   private loadCoderTrainingsPromise?: Promise<void>;
   private loadCoderTrainingsWorkspaceId?: number;
-  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
+  protected displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
     this.loadCoderTrainings();
@@ -204,11 +204,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     return loadPromise;
   }
 
-  requestFullEdit(training: CoderTraining): void {
+  protected requestFullEdit(training: CoderTraining): void {
     this.onEditTraining.emit(training);
   }
 
-  createTraining(): void {
+  protected createTraining(): void {
     this.onCreateTraining.emit();
   }
 
@@ -313,7 +313,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste zuerst';
@@ -330,7 +330,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste verfügbare Fälle pro Variable';
@@ -347,11 +347,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+  protected getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
     return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
-  showTrainingJobs(training: CoderTraining): void {
+  protected showTrainingJobs(training: CoderTraining): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
@@ -384,7 +384,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       });
   }
 
-  deleteTraining(training: CoderTraining): void {
+  protected deleteTraining(training: CoderTraining): void {
     const dialogRef = this.dialog.open(DeleteConfirmationDialog, {
       width: '400px',
       data: { training }

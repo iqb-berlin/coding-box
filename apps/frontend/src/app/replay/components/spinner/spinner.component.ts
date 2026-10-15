@@ -7,7 +7,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'cb-spinner',
+  selector: 'coding-box-spinner',
   templateUrl: './spinner.component.html',
   styleUrls: ['./spinner.component.scss'],
   imports: [
@@ -16,7 +16,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 })
 export class SpinnerComponent implements OnInit, OnDestroy {
   readonly isLoaded = input.required<Subject<boolean>>();
-  readonly isLoading = signal<boolean>(true);
+  protected readonly isLoading = signal<boolean>(true);
   private ngUnsubscribe = new Subject<void>();
 
   ngOnInit(): void {

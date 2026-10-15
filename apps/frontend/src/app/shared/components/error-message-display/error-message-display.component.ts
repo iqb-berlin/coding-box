@@ -15,29 +15,29 @@ import {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-error-message-display',
+  selector: 'coding-box-error-message-display',
   standalone: true,
   imports: [CommonModule, MatButtonModule, MatIconModule, TranslateModule],
   templateUrl: './error-message-display.component.html',
   styleUrls: ['./error-message-display.component.scss']
 })
 export class ErrorMessageDisplayComponent {
-  appService: AppService = inject(AppService);
+  protected appService: AppService = inject(AppService);
   authService = inject(AuthService);
   private router = inject(Router);
   readonly expandedErrorIds = signal(new Set<number>());
 
-  get showGlobalReAuthenticationMessage(): boolean {
+  protected get showGlobalReAuthenticationMessage(): boolean {
     return this.appService.needsReAuthentication && !this.isHomeRoute();
   }
 
-  get showSessionExpiryWarning(): boolean {
+  protected get showSessionExpiryWarning(): boolean {
     return this.appService.sessionExpiryWarning &&
       !this.appService.needsReAuthentication &&
       !this.isHomeRoute();
   }
 
-  dismissError(errorId: number): void {
+  protected dismissError(errorId: number): void {
     this.appService.errorMessages = this.appService.errorMessages.filter((e: AppHttpError) => e.id !== errorId);
     this.expandedErrorIds.update(value => {
       const next = new Set(value);
@@ -46,7 +46,7 @@ export class ErrorMessageDisplayComponent {
     });
   }
 
-  dismissBackendUnavailable(): void {
+  protected dismissBackendUnavailable(): void {
     this.appService.setBackendUnavailable(false);
   }
 
@@ -84,42 +84,42 @@ export class ErrorMessageDisplayComponent {
     });
   }
 
-  isErrorDetailsExpanded(errorId: number): boolean {
+  protected isErrorDetailsExpanded(errorId: number): boolean {
     return this.expandedErrorIds().has(errorId);
   }
 
-  hasErrorDetails(error: AppHttpError): boolean {
+  protected hasErrorDetails(error: AppHttpError): boolean {
     return this.hasRequestId(error) ||
       this.hasHttpStatus(error) ||
       this.hasTechnicalMessage(error) ||
       this.getAffectedRequests(error).length > 0;
   }
 
-  hasRequestId(error: AppHttpError): boolean {
+  protected hasRequestId(error: AppHttpError): boolean {
     return !!error.requestId?.trim();
   }
 
-  hasHttpStatus(error: AppHttpError): boolean {
+  protected hasHttpStatus(error: AppHttpError): boolean {
     return Number.isFinite(error.status);
   }
 
-  hasTechnicalMessage(error: AppHttpError): boolean {
+  protected hasTechnicalMessage(error: AppHttpError): boolean {
     return !!error.technicalMessage?.trim() &&
       error.technicalMessage.trim() !== this.getDisplayMessage(error).trim();
   }
 
-  getDisplayMessage(error: AppHttpError): string {
+  protected getDisplayMessage(error: AppHttpError): string {
     return error.userMessage || error.message;
   }
 
-  shouldShowAffectedRequestId(error: AppHttpError, request: AppHttpErrorRequest): boolean {
+  protected shouldShowAffectedRequestId(error: AppHttpError, request: AppHttpErrorRequest): boolean {
     const requestId = request.requestId?.trim();
 
     return !!requestId &&
       (requestId !== error.requestId?.trim() || this.getAffectedRequests(error).length > 1);
   }
 
-  getAffectedRequests(error: AppHttpError): AppHttpErrorRequest[] {
+  protected getAffectedRequests(error: AppHttpError): AppHttpErrorRequest[] {
     if (error.affectedRequests?.length) {
       return error.affectedRequests;
     }

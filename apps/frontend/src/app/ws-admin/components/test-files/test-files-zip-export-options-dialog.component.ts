@@ -80,16 +80,16 @@ export type TestFilesZipExportOptionsDialogData = {
 export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
   @ViewChild('fileTypesList') fileTypesList!: MatSelectionList;
 
-  data: TestFilesZipExportOptions = {
+  protected data: TestFilesZipExportOptions = {
     fileTypes: []
   };
 
-  getFileTypeLabel = getFileTypeLabel;
+  protected getFileTypeLabel = getFileTypeLabel;
 
   constructor(
     private dialogRef: MatDialogRef<TestFilesZipExportOptionsDialogComponent>,
     @Inject(MAT_DIALOG_DATA)
-    public dialogData: TestFilesZipExportOptionsDialogData
+    protected dialogData: TestFilesZipExportOptionsDialogData
   ) {
     this.data.fileTypes = [
       ...(dialogData.selectedFileTypes || dialogData.availableFileTypes || [])
@@ -108,27 +108,27 @@ export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
     });
   }
 
-  onSelectionChange(): void {
+  protected onSelectionChange(): void {
     this.data.fileTypes = this.fileTypesList.selectedOptions.selected.map(
       option => option.value
     );
   }
 
-  selectAll(): void {
+  protected selectAll(): void {
     this.fileTypesList.selectAll();
     this.onSelectionChange();
   }
 
-  deselectAll(): void {
+  protected deselectAll(): void {
     this.fileTypesList.deselectAll();
     this.onSelectionChange();
   }
 
-  download(): void {
+  protected download(): void {
     this.dialogRef.close(this.data);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }

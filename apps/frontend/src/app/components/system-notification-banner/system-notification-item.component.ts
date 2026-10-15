@@ -24,7 +24,7 @@ export class SystemNotificationItemComponent {
 
   @Output() dismissed = new EventEmitter<SystemNotificationDto>();
 
-  icon(): string {
+  protected icon(): string {
     return {
       outage: 'error',
       maintenance: 'build',

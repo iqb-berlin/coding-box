@@ -37,7 +37,7 @@ export class UsersComponent implements OnInit {
   private translateService = inject(TranslateService);
 
   readonly selectedUsers = signal<number[]>([]);
-  readonly selectedRows = signal<UserFullDto[]>([]);
+  protected readonly selectedRows = signal<UserFullDto[]>([]);
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
@@ -87,7 +87,7 @@ export class UsersComponent implements OnInit {
     );
   }
 
-  addUser(userData: UntypedFormGroup): void {
+  protected addUser(userData: UntypedFormGroup): void {
     this.appService.dataLoading = true;
     const user: CreateUserDto = {
       username: userData.get('name')?.value,
@@ -115,7 +115,7 @@ export class UsersComponent implements OnInit {
     );
   }
 
-  userSelectionChanged(userData: UserFullDto[]): void {
+  protected userSelectionChanged(userData: UserFullDto[]): void {
     this.selectedUsers.set(userData.map(user => user.id));
     this.selectedRows.set(userData);
   }
@@ -146,7 +146,7 @@ export class UsersComponent implements OnInit {
     );
   }
 
-  deleteUsers(users: UserFullDto[]): void {
+  protected deleteUsers(users: UserFullDto[]): void {
     this.appService.dataLoading = true;
     const usersToDelete: number[] = [];
     users.forEach((r: UserFullDto) => usersToDelete.push(r.id));

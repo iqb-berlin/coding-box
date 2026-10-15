@@ -13,7 +13,7 @@ import { PostMessageService } from '../../../core/services/post-message.service'
 import { SchemerMessage } from '../../../core/services/post-message-types';
 
 @Component({
-  selector: 'unit-schemer-standalone',
+  selector: 'coding-box-unit-schemer',
   templateUrl: './unit-schemer.component.html',
   styleUrls: ['./unit-schemer.component.scss'],
   standalone: true,

@@ -39,11 +39,11 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private destroyRef = inject(DestroyRef);
 
-  readonly objectsDatasource = signal(new MatTableDataSource<WorkspaceInListDto>());
-  displayedColumns = ['selectCheckbox', 'name'];
+  protected readonly objectsDatasource = signal(new MatTableDataSource<WorkspaceInListDto>());
+  protected displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  readonly selectedWorkspaceId = signal(0);
+  protected readonly selectedWorkspaceId = signal(0);
   private workspaceListLoaded = false;
   readonly workspaceListReady = output<boolean>();
 
@@ -114,7 +114,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
     this.objectsDatasource().sort = this.sort() ?? null;
   }
 
-  selectCheckbox(row: WorkspaceInListDto): void {
+  protected selectCheckbox(row: WorkspaceInListDto): void {
     if (this.selectionDisabled()) return;
     this.tableSelectionCheckboxes.toggle(row);
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
@@ -126,7 +126,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     if (this.selectionDisabled()) return;
     this.isAllSelected() || !this.objectsDatasource() ?
       this.tableSelectionCheckboxes.clear() :
@@ -134,7 +134,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 
-  toggleRowSelection(row: WorkspaceInListDto): void {
+  protected toggleRowSelection(row: WorkspaceInListDto): void {
     this.tableSelectionRow.toggle(row);
   }
 }

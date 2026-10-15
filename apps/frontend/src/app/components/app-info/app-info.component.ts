@@ -26,7 +26,7 @@ export class AppInfoComponent {
   readonly userLongName = input.required<string | undefined>();
   readonly isUserLoggedIn = input.required<boolean>();
   readonly isAdmin = input.required<boolean>();
-  openImpressumDialog(): void {
+  protected openImpressumDialog(): void {
     this.dialog.open(ImpressumDialogComponent, {
       width: '600px',
       maxHeight: '90vh'

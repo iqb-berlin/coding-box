@@ -46,10 +46,10 @@ export interface TransferCodingCasesDialogResult {
   ]
 })
 export class TransferCodingCasesDialogComponent {
-  sourceCoderId: number | null = null;
-  targetCoderId: number | null = null;
+  protected sourceCoderId: number | null = null;
+  protected targetCoderId: number | null = null;
 
-  readonly coders: Coder[];
+  protected readonly coders: Coder[];
 
   constructor(
     private readonly dialogRef: MatDialogRef<
@@ -65,11 +65,11 @@ export class TransferCodingCasesDialogComponent {
     });
   }
 
-  get submitDisabled(): boolean {
+  protected get submitDisabled(): boolean {
     return !this.sourceCoderId || !this.targetCoderId || this.sourceCoderId === this.targetCoderId;
   }
 
-  submit(): void {
+  protected submit(): void {
     if (this.submitDisabled) {
       return;
     }

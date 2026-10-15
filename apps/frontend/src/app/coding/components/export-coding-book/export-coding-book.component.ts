@@ -55,7 +55,7 @@ interface CodebookUnitOption {
 }
 
 @Component({
-  selector: 'shared-export-coding-book',
+  selector: 'coding-box-export-coding-book',
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
@@ -87,8 +87,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   dataSource = new MatTableDataSource<CodebookUnitOption>([]);
 
-  filterValue = '';
-  filterTextChanged = new Subject<Event>();
+  protected filterValue = '';
+  protected filterTextChanged = new Subject<Event>();
   isLoading = false;
 
   selectedMissingsProfile: number = 0;
@@ -96,15 +96,15 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   selectedJobDefinitionId: number | null = null;
   availableJobDefinitions: JobDefinition[] = [];
   jobDefinitionOptions: CodebookJobDefinitionOption[] = [];
-  selectedJobDefinitionLabel = '';
-  selectedJobDefinitionSummary = '';
+  protected selectedJobDefinitionLabel = '';
+  protected selectedJobDefinitionSummary = '';
   isLoadingJobDefinitions = false;
-  selectedVariableBundleIds: number[] = [];
+  protected selectedVariableBundleIds: number[] = [];
   availableVariableBundles: VariableBundle[] = [];
-  isLoadingVariableBundles = false;
-  workspaceChanges = false;
+  protected isLoadingVariableBundles = false;
+  protected workspaceChanges = false;
 
-  displayedColumns: string[] = ['select', 'unitName'];
+  protected displayedColumns: string[] = ['select', 'unitName'];
 
   contentOptions: CodeBookContentSetting = {
     exportFormat: 'docx',

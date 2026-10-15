@@ -190,22 +190,22 @@ implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
-  readonly isRunning = signal(false);
-  readonly wasRun = signal(false);
-  readonly isLoadingPage = signal(false);
-  readonly isExporting = signal(false);
-  readonly errorMessage = signal<string | null>(null);
+  protected readonly isRunning = signal(false);
+  protected readonly wasRun = signal(false);
+  protected readonly isLoadingPage = signal(false);
+  protected readonly isExporting = signal(false);
+  protected readonly errorMessage = signal<string | null>(null);
   readonly duplicateResponses = signal<DuplicateResponseSelectionDto[]>([]);
-  readonly totalDuplicates = signal(0);
+  protected readonly totalDuplicates = signal(0);
   readonly duplicateResponseSelections = signal<Map<string, number>>(new Map());
   readonly duplicateResponseTouchedKeys = signal<Set<string>>(new Set());
-  readonly expandedPanel = signal(false);
-  readonly isResolvingDuplicates = signal(false);
-  readonly activeTask = signal<ValidationTaskDto | null>(null);
+  protected readonly expandedPanel = signal(false);
+  protected readonly isResolvingDuplicates = signal(false);
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   // Pagination state
-  readonly pageSize = signal(10);
-  readonly currentPage = signal(1);
+  protected readonly pageSize = signal(10);
+  protected readonly currentPage = signal(1);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -257,7 +257,7 @@ implements OnInit, OnDestroy {
     this.taskSubscription?.unsubscribe();
   }
 
-  get status(): ValidationStatus {
+  protected get status(): ValidationStatus {
     return this.duplicateResponsesValidationService.getValidationStatus();
   }
 
@@ -294,7 +294,7 @@ implements OnInit, OnDestroy {
     this.validate.emit();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex + 1);
     this.pageSize.set(event.pageSize);
     this.isLoadingPage.set(true);
@@ -322,7 +322,7 @@ implements OnInit, OnDestroy {
       });
   }
 
-  toggleExpansion(): void {
+  protected toggleExpansion(): void {
     this.expandedPanel.set(!this.expandedPanel());
   }
 
@@ -330,7 +330,7 @@ implements OnInit, OnDestroy {
     return `${encodeURIComponent(duplicate.unitName)}|${encodeURIComponent(duplicate.variableId)}|${encodeURIComponent(duplicate.subform || '')}|${encodeURIComponent(duplicate.testTakerLogin)}|${encodeURIComponent(duplicate.testTakerCode || '')}|${encodeURIComponent(duplicate.testTakerGroup || '')}`;
   }
 
-  selectDuplicateResponse(
+  protected selectDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): void {
@@ -346,21 +346,21 @@ implements OnInit, OnDestroy {
     });
   }
 
-  isSelectedDuplicateResponse(
+  protected isSelectedDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): boolean {
     return this.duplicateResponseSelections().get(duplicate.key) === responseId;
   }
 
-  isDuplicateRowSelected(
+  protected isDuplicateRowSelected(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): boolean {
     return this.isSelectedDuplicateResponse(duplicate, responseId);
   }
 
-  isDuplicateValueConflicting(
+  protected isDuplicateValueConflicting(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): boolean {
@@ -381,7 +381,7 @@ implements OnInit, OnDestroy {
     return String(current?.value ?? '') !== String(selected?.value ?? '');
   }
 
-  isDuplicateStatusConflicting(
+  protected isDuplicateStatusConflicting(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): boolean {
@@ -402,7 +402,7 @@ implements OnInit, OnDestroy {
     return String(current?.status ?? '') !== String(selected?.status ?? '');
   }
 
-  getDuplicateConflictLabel(duplicate: DuplicateResponseSelectionDto): string {
+  protected getDuplicateConflictLabel(duplicate: DuplicateResponseSelectionDto): string {
     const parts: string[] = [];
     const values = new Set(
       (duplicate.duplicates || []).map(d => String(d.value ?? ''))
@@ -419,19 +419,19 @@ implements OnInit, OnDestroy {
       `Unterschiede: ${parts.join(', ')}`;
   }
 
-  isDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): boolean {
+  protected isDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): boolean {
     return this.duplicateResponseTouchedKeys().has(duplicate.key);
   }
 
-  hasSelectedDuplicateResponses(): boolean {
+  protected hasSelectedDuplicateResponses(): boolean {
     return this.duplicateResponseSelections().size > 0;
   }
 
-  getSelectedDuplicateResponsesCount(): number {
+  protected getSelectedDuplicateResponsesCount(): number {
     return this.duplicateResponseSelections().size;
   }
 
-  selectSuggestedDuplicateResponse(
+  protected selectSuggestedDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto
   ): void {
     // Smart selection: prefer non-empty values, then keep newest response id.
@@ -446,7 +446,7 @@ implements OnInit, OnDestroy {
     }
   }
 
-  resolveDuplicateGroup(duplicate: DuplicateResponseSelectionDto): void {
+  protected resolveDuplicateGroup(duplicate: DuplicateResponseSelectionDto): void {
     const selectedId = this.duplicateResponseSelections().get(duplicate.key);
     if (!selectedId) return;
 
@@ -489,7 +489,7 @@ implements OnInit, OnDestroy {
       });
   }
 
-  resolveAllDuplicates(): void {
+  protected resolveAllDuplicates(): void {
     if (this.duplicateResponses().length === 0 || this.isResolvingDuplicates()) {
       return;
     }
@@ -579,7 +579,7 @@ implements OnInit, OnDestroy {
     });
   }
 
-  exportCsv(): void {
+  protected exportCsv(): void {
     if (this.isExporting()) {
       return;
     }

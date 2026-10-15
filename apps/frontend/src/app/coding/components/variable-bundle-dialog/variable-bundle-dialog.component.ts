@@ -74,7 +74,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   isLoading = false;
 
   // Variables
-  availableVariables: Variable[] = [];
+  protected availableVariables: Variable[] = [];
   selectedVariables = new SelectionModel<Variable>(true, []);
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
@@ -82,8 +82,8 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   isLoadingVariableAnalysis = false;
 
   // Filters
-  unitNameFilter = '';
-  variableIdFilter = '';
+  protected unitNameFilter = '';
+  protected variableIdFilter = '';
   private readonly debounceTimeMs = 300;
 
   // Name auto-generation tracking
@@ -93,7 +93,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     public dialogRef: MatDialogRef<VariableBundleDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableBundleGroupDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: VariableBundleGroupDialogData
   ) { }
 
   ngOnInit(): void {
@@ -254,24 +254,24 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  applyFilter(): void {
+  protected applyFilter(): void {
     this.dataSource.filter = JSON.stringify({
       unitName: this.unitNameFilter || '',
       variableId: this.variableIdFilter || ''
     });
   }
 
-  selectAll(): void {
+  protected selectAll(): void {
     this.dataSource.filteredData.forEach(variable => {
       this.selectedVariables.select(variable);
     });
   }
 
-  deselectAll(): void {
+  protected deselectAll(): void {
     this.selectedVariables.clear();
   }
 
-  clearFilters(): void {
+  protected clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
 
@@ -303,7 +303,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     this.dialogRef.close(bundleGroup);
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close();
   }
 }

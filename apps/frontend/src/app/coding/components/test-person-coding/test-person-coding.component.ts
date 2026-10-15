@@ -2,7 +2,7 @@ import {
   Component,
   Input,
   OnInit,
-  inject
+  inject, OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -74,7 +74,7 @@ import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-
     TranslateModule
   ]
 })
-export class TestPersonCodingComponent implements OnInit {
+export class TestPersonCodingComponent implements OnInit, OnDestroy {
   private testPersonCodingService = inject(TestPersonCodingService);
   private snackBar = inject(MatSnackBar);
   private appService = inject(AppService);
@@ -109,7 +109,7 @@ export class TestPersonCodingComponent implements OnInit {
     'actions'
   ];
 
-  isLoading = false;
+  protected isLoading = false;
 
   currentPage = 1;
   pageSize = 20;
@@ -121,15 +121,15 @@ export class TestPersonCodingComponent implements OnInit {
   private observedJobStatuses = new Map<string, JobStatus['status']>();
   private hasShownJobStatusPollingError = false;
 
-  allJobs: JobInfo[] = [];
-  jobsLoading = false;
+  protected allJobs: JobInfo[] = [];
+  protected jobsLoading = false;
   jobsRefreshInterval: number | null = null;
 
-  availableGroups: WorkspaceGroupCodingStats[] = [];
-  selectedGroups: string[] = [];
-  groupsLoading = false;
+  protected availableGroups: WorkspaceGroupCodingStats[] = [];
+  protected selectedGroups: string[] = [];
+  protected groupsLoading = false;
 
-  autoCoderRun: 1 | 2 = 1;
+  protected autoCoderRun: 1 | 2 = 1;
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
@@ -472,7 +472,7 @@ export class TestPersonCodingComponent implements OnInit {
     );
   }
 
-  cancelJob(jobId?: string): void {
+  protected cancelJob(jobId?: string): void {
     const idToCancel = jobId || this.activeJobId;
     if (!idToCancel) return;
 
@@ -504,7 +504,7 @@ export class TestPersonCodingComponent implements OnInit {
       });
   }
 
-  deleteJob(jobId: string): void {
+  protected deleteJob(jobId: string): void {
     if (!jobId) return;
 
     this.testPersonCodingService
@@ -535,7 +535,7 @@ export class TestPersonCodingComponent implements OnInit {
       });
   }
 
-  restartJob(jobId: string): void {
+  protected restartJob(jobId: string): void {
     if (!jobId) return;
 
     this.testPersonCodingService
@@ -605,7 +605,7 @@ export class TestPersonCodingComponent implements OnInit {
     });
   }
 
-  codeAllTestPersons(): void {
+  protected codeAllTestPersons(): void {
     if (this.availableGroups.length > 0) {
       this.selectedGroups = this.availableGroups.map(
         group => group.groupName
@@ -666,7 +666,7 @@ export class TestPersonCodingComponent implements OnInit {
       });
   }
 
-  formatDuration(durationMs: number): string {
+  protected formatDuration(durationMs: number): string {
     if (!durationMs) return '-';
     if (durationMs < 1000) {
       return `${Math.round(durationMs)}ms`;
@@ -691,15 +691,15 @@ export class TestPersonCodingComponent implements OnInit {
     return parts.join(' ');
   }
 
-  deselectAllGroups(): void {
+  protected deselectAllGroups(): void {
     this.selectedGroups = [];
   }
 
-  selectAllGroups(): void {
+  protected selectAllGroups(): void {
     this.selectedGroups = this.availableGroups.map(group => group.groupName);
   }
 
-  truncateText(text: string, maxLength: number): string {
+  protected truncateText(text: string, maxLength: number): string {
     if (!text) return '';
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
   }
