@@ -48,6 +48,7 @@ import {
 } from '../shared/workspace-files-lock.util';
 import { RuntimeConfigService } from '../../../config/runtime-config.service';
 import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
+import { CodingSchemeFactory as CompatibleCodingSchemeFactory } from './generated/autocoder-compatibility-engine';
 
 // Use the installed engine's contract here. The application's persistence and
 // manual-coding contract remains response 1.5.1, including legacy status 13.
@@ -2069,7 +2070,7 @@ export class CodingProcessService {
       canonicalInputIndexes.set(key, index);
     });
 
-    const canonicalResults = Autocoder.CodingSchemeFactory.code(
+    const canonicalResults = CompatibleCodingSchemeFactory.code(
       canonicalResponses,
       namespace.variableCodings
     );
