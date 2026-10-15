@@ -2,7 +2,7 @@ import {
   Component,
   input,
   output,
-  inject
+  inject, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,6 +12,7 @@ import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.servic
 import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-units-replay',
   imports: [MatButtonModule, MatIconModule, MatTooltipModule, TranslateModule],
   templateUrl: './units-replay.component.html',
@@ -21,11 +22,11 @@ import { ReplayCodingService } from '../../services/replay-coding.service';
 export class UnitsReplayComponent {
   private codingService = inject(ReplayCodingService);
 
-  unitsData = input<UnitsReplay | null>(null);
-  freeNavigation = input<boolean>(false);
-  unitChanged = output<UnitsReplayUnit>();
+  readonly unitsData = input<UnitsReplay | null>(null);
+  readonly freeNavigation = input<boolean>(false);
+  readonly unitChanged = output<UnitsReplayUnit>();
 
-  nextUnit(): void {
+  protected nextUnit(): void {
     const data = this.unitsData();
     if (!data) {
       return;
@@ -45,7 +46,7 @@ export class UnitsReplayComponent {
     }
   }
 
-  previousUnit(): void {
+  protected previousUnit(): void {
     const data = this.unitsData();
     if (!data || !this.hasPreviousUnit()) {
       return;
@@ -58,7 +59,7 @@ export class UnitsReplayComponent {
     }
   }
 
-  hasNextUnit(): boolean {
+  protected hasNextUnit(): boolean {
     const data = this.unitsData();
     if (!data || !data.units.length) return false;
 
@@ -80,14 +81,14 @@ export class UnitsReplayComponent {
     return hasSelection && nextJumpableIndex >= 0;
   }
 
-  hasPreviousUnit(): boolean {
+  protected hasPreviousUnit(): boolean {
     const data = this.unitsData();
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
   }
 
-  get totalUnits(): number {
+  protected get totalUnits(): number {
     return this.unitsData()?.units.length || 0;
   }
 }

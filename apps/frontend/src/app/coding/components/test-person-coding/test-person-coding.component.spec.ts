@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -37,7 +36,6 @@ describe('TestPersonCodingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestPersonCodingComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -89,8 +87,8 @@ describe('TestPersonCodingComponent', () => {
 
       component.startJobStatusPolling('freshness-job-1');
 
-      expect(component.jobStatus).toBeNull();
-      expect(component.activeJobId).toBeNull();
+      expect(component.jobStatus()).toBeNull();
+      expect(component.activeJobId()).toBeNull();
       expect(component.lastObservedJobId).toBe('freshness-job-1');
       expect(component.getLastObservedJobStatus('freshness-job-1')).toBe('failed');
       expect(jest.getTimerCount()).toBe(0);
@@ -100,6 +98,7 @@ describe('TestPersonCodingComponent', () => {
   });
 
   it('should keep freshness job polling active after a transient status error', () => {
+    fixture.componentRef.setInput('initialJobId', 'freshness-job-1');
     jest.useFakeTimers();
     try {
       const setJobRunningSpy = jest.spyOn(
@@ -111,7 +110,6 @@ describe('TestPersonCodingComponent', () => {
         progress: 100
       };
 
-      component.initialJobId = 'freshness-job-1';
       codingBackgroundJobsService.setJobRunning(
         1,
         'freshness-coding',
@@ -124,7 +122,7 @@ describe('TestPersonCodingComponent', () => {
 
       component.startJobStatusPolling('freshness-job-1');
 
-      expect(component.activeJobId).toBe('freshness-job-1');
+      expect(component.activeJobId()).toBe('freshness-job-1');
       expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
       expect(jest.getTimerCount()).toBe(1);
       expect(setJobRunningSpy).not.toHaveBeenCalledWith(
@@ -142,7 +140,7 @@ describe('TestPersonCodingComponent', () => {
         false,
         'freshness-job-1'
       );
-      expect(component.activeJobId).toBeNull();
+      expect(component.activeJobId()).toBeNull();
       expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
       expect(jest.getTimerCount()).toBe(0);
       expect(

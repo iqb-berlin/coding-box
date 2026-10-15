@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { FileService } from '../../../../shared/services/file/file.service';
@@ -112,6 +113,7 @@ describe('CodingJobResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CodingJobResultDialogComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
         { provide: MatSnackBar, useClass: MatSnackBarMock },
@@ -131,6 +133,20 @@ describe('CodingJobResultDialogComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('replaces the loading spinner after delayed coding results arrive', async () => {
+    const units = new Subject<unknown[]>();
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValueOnce(units.asObservable());
+    component.loadCodingResults();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-container')).not.toBeNull();
+
+    units.next([]);
+    units.complete();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
   });
 
   it('should keep dialog open and reload results when apply leaves coding issue reviews open', () => {
@@ -195,7 +211,7 @@ describe('CodingJobResultDialogComponent', () => {
       notes: 'group note'
     });
 
-    component.testPersonFilter = 'BOOKLET_A';
+    component.testPersonFilter.set('BOOKLET_A');
     component.applyFilters();
 
     expect(component.getFilteredResultCount()).toBe(1);
@@ -225,7 +241,7 @@ describe('CodingJobResultDialogComponent', () => {
 
     expect(component.dataSource.data).toHaveLength(1);
     expect(component.dataSource.data[0].code).toBe(1);
-    expect(component.isNotesUnavailable).toBe(true);
+    expect(component.isNotesUnavailable()).toBe(true);
   });
 
   it('should resolve manually selected missing codes from the coding job missing profile', () => {
@@ -683,7 +699,7 @@ describe('CodingJobResultDialogComponent', () => {
   });
 
   it('should allow applying results when the coding job freshness requires manual review', () => {
-    component.isLoading = false;
+    component.isLoading.set(false);
     component.data.codingJob = {
       ...component.data.codingJob,
       status: 'completed',
@@ -710,7 +726,7 @@ describe('CodingJobResultDialogComponent', () => {
   });
 
   it('should block applying results when the coding job source freshness is stale', () => {
-    component.isLoading = false;
+    component.isLoading.set(false);
     component.data.codingJob = {
       ...component.data.codingJob,
       status: 'completed',

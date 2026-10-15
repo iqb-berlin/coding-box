@@ -1,6 +1,8 @@
 import {
-  Component, OnDestroy, OnInit, inject
+  Component, OnDestroy, OnInit, inject, signal,
+  computed, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
@@ -37,6 +39,7 @@ export interface ResourcePackagesDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-resource-packages-dialog',
   templateUrl: './resource-packages-dialog.component.html',
   styleUrls: ['./resource-packages-dialog.component.scss'],
@@ -68,6 +71,8 @@ export interface ResourcePackagesDialogData {
   ]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
   data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
   resourcePackageService = inject(ResourcePackageService);
@@ -76,19 +81,19 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
 
   // Resource packages
-  resourcePackages: ResourcePackageDto[] = [];
-  resourcePackageDataSource = new MatTableDataSource<ResourcePackageDto>([]);
-  resourcePackageSelection = new SelectionModel<ResourcePackageDto>(true, []);
-  isLoadingResourcePackages = false;
-  isResourcePackageOperationActive = false;
-  resourcePackageOperationText = '';
-  resourcePackageProgressPercent = 0;
-  resourcePackageProgressLoadedBytes = 0;
-  resourcePackageProgressTotalBytes = 0;
-  resourcePackageProgressMode: 'determinate' | 'indeterminate' = 'indeterminate';
-  activeDownloadPackageId: number | null = null;
-  resourcePackageTextFilterValue: string = '';
-  resourcePackageColumns: string[] = [
+  readonly resourcePackages = signal<ResourcePackageDto[]>([]);
+  protected resourcePackageDataSource = new MatTableDataSource<ResourcePackageDto>([]);
+  protected resourcePackageSelection = new SelectionModel<ResourcePackageDto>(true, []);
+  protected readonly isLoadingResourcePackages = signal(false);
+  protected readonly isResourcePackageOperationActive = signal(false);
+  protected readonly resourcePackageOperationText = signal('');
+  protected readonly resourcePackageProgressPercent = signal(0);
+  protected readonly resourcePackageProgressLoadedBytes = signal(0);
+  protected readonly resourcePackageProgressTotalBytes = signal(0);
+  protected readonly resourcePackageProgressMode = signal<'determinate' | 'indeterminate'>('indeterminate');
+  readonly activeDownloadPackageId = signal<number | null>(null);
+  readonly resourcePackageTextFilterValue = signal<string>('');
+  protected resourcePackageColumns: string[] = [
     'selectCheckbox',
     'name',
     'packageType',
@@ -131,17 +136,17 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       );
       return;
     }
-    this.isLoadingResourcePackages = true;
-    this.resourcePackageService.getResourcePackages(workspaceId)
+    this.isLoadingResourcePackages.set(true);
+    this.resourcePackageService.getResourcePackages(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (packages: ResourcePackageDto[]) => {
-          this.resourcePackages = packages;
+          this.resourcePackages.set(packages);
           this.resourcePackageDataSource = new MatTableDataSource(packages);
           this.setupResourcePackageFilterPredicate();
-          this.isLoadingResourcePackages = false;
+          this.isLoadingResourcePackages.set(false);
         },
         error: () => {
-          this.isLoadingResourcePackages = false;
+          this.isLoadingResourcePackages.set(false);
           this.snackBar.open(
             this.translate.instant('Error loading resource packages'),
             this.translate.instant('error'),
@@ -184,27 +189,27 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /** Applies all resource package filters */
   applyResourcePackageFilters(): void {
     const filterObj = {
-      text: this.resourcePackageTextFilterValue
+      text: this.resourcePackageTextFilterValue()
     };
     this.resourcePackageDataSource.filter = JSON.stringify(filterObj);
   }
 
   /** Handles resource package text filter changes */
-  onResourcePackageTextFilterChange(value: string): void {
-    this.resourcePackageTextFilterValue = value.trim();
-    this.resourcePackageTextFilterChanged.next(this.resourcePackageTextFilterValue);
+  protected onResourcePackageTextFilterChange(value: string): void {
+    this.resourcePackageTextFilterValue.set(value.trim());
+    this.resourcePackageTextFilterChanged.next(this.resourcePackageTextFilterValue());
   }
 
   /** Clears all resource package filters */
-  clearResourcePackageFilters(): void {
-    this.resourcePackageTextFilterValue = '';
+  protected clearResourcePackageFilters(): void {
+    this.resourcePackageTextFilterValue.set('');
     this.applyResourcePackageFilters();
   }
 
   /**
    * Deletes selected resource packages
    */
-  deleteResourcePackages(): void {
+  protected deleteResourcePackages(): void {
     const workspaceId = this.getWorkspaceId();
     if (this.resourcePackageSelection.selected.length === 0) {
       return;
@@ -235,17 +240,17 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (!confirmed) {
         return;
       }
       const packageIds = selectedPackages.map(pkg => pkg.id);
-      this.isLoadingResourcePackages = true;
+      this.isLoadingResourcePackages.set(true);
 
-      this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds)
+      this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (success: boolean) => {
-            this.isLoadingResourcePackages = false;
+            this.isLoadingResourcePackages.set(false);
             if (success) {
               this.snackBar.open(
                 'Ressourcenpakete wurden gelöscht.',
@@ -264,7 +269,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             }
           },
           error: () => {
-            this.isLoadingResourcePackages = false;
+            this.isLoadingResourcePackages.set(false);
             this.snackBar.open(
               'Ressourcenpakete konnten nicht gelöscht werden.',
               this.translate.instant('error'),
@@ -279,7 +284,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Downloads a resource package
    * @param resourcePackage The resource package to download
    */
-  downloadResourcePackage(resourcePackage: ResourcePackageDto): void {
+  protected downloadResourcePackage(resourcePackage: ResourcePackageDto): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -289,14 +294,14 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       );
       return;
     }
-    this.activeDownloadPackageId = resourcePackage.id;
+    this.activeDownloadPackageId.set(resourcePackage.id);
     this.startResourcePackageOperation(`Download: ${resourcePackage.name}`, 'indeterminate');
-    this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name)
+    this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: event => {
           if (event.type === HttpEventType.DownloadProgress) {
             this.updateResourcePackageProgress(event.loaded, event.total || 0);
-            this.resourcePackageOperationText = `Download: ${resourcePackage.name} (${this.resourcePackageProgressPercent}%)`;
+            this.resourcePackageOperationText.set(`Download: ${resourcePackage.name} (${this.resourcePackageProgressPercent()}%)`);
             return;
           }
           if (event instanceof HttpResponse) {
@@ -335,7 +340,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Uploads a resource package
    * @param target The file input change event target
    */
-  onResourcePackageSelected(target: EventTarget | null): void {
+  protected onResourcePackageSelected(target: EventTarget | null): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -351,17 +356,17 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (files && files.length) {
       const file = files[0];
       this.startResourcePackageOperation(`Upload: ${file.name}`, 'determinate');
-      this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file)
+      this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: event => {
             if (event.type === HttpEventType.UploadProgress) {
               this.updateResourcePackageProgress(event.loaded, event.total || file.size);
-              this.resourcePackageOperationText = `Upload: ${file.name} (${this.resourcePackageProgressPercent}%)`;
+              this.resourcePackageOperationText.set(`Upload: ${file.name} (${this.resourcePackageProgressPercent()}%)`);
               return;
             }
             if (event instanceof HttpResponse) {
-              this.resourcePackageOperationText = 'Paket wird geprüft und entpackt...';
-              this.resourcePackageProgressMode = 'indeterminate';
+              this.resourcePackageOperationText.set('Paket wird geprüft und entpackt...');
+              this.resourcePackageProgressMode.set('indeterminate');
               const id = event.body || -1;
               this.finishResourcePackageOperation();
               if (id > 0) {
@@ -394,7 +399,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  installGeoGebraPackage(): void {
+  protected installGeoGebraPackage(): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -405,7 +410,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const packageExists = this.hasGeoGebraPackage;
+    const packageExists = this.hasGeoGebraPackage();
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '560px',
       data: <ConfirmDialogData>{
@@ -418,7 +423,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (!confirmed) {
         return;
       }
@@ -426,7 +431,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         'GeoGebra Math Apps Bundle wird heruntergeladen und installiert...',
         'indeterminate'
       );
-      this.resourcePackageService.installGeoGebraPackage(workspaceId)
+      this.resourcePackageService.installGeoGebraPackage(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: event => {
             if (event instanceof HttpResponse) {
@@ -458,11 +463,11 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /**
    * Toggles selection of all resource packages
    */
-  masterToggleResourcePackages(): void {
+  protected masterToggleResourcePackages(): void {
     if (this.isAllResourcePackagesSelected()) {
       this.resourcePackageSelection.clear();
     } else {
-      this.resourcePackages.forEach(pkg => this.resourcePackageSelection.select(pkg));
+      this.resourcePackages().forEach(pkg => this.resourcePackageSelection.select(pkg));
     }
   }
 
@@ -470,59 +475,57 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Checks if all resource packages are selected
    * @returns True if all resource packages are selected
    */
-  isAllResourcePackagesSelected(): boolean {
+  protected isAllResourcePackagesSelected(): boolean {
     const numSelected = this.resourcePackageSelection.selected.length;
-    const numRows = this.resourcePackages.length;
+    const numRows = this.resourcePackages().length;
     return numSelected === numRows && numRows > 0;
   }
 
-  get hasGeoGebraPackage(): boolean {
-    return this.resourcePackages.some(pkg => pkg.name.toLowerCase() === 'geogebra' && pkg.scope === 'global');
-  }
+  protected readonly hasGeoGebraPackage = computed<boolean>(() => this.resourcePackages().some(pkg => pkg.name.toLowerCase() === 'geogebra' && pkg.scope === 'global'));
 
-  getPackageTypeLabel(resourcePackage: ResourcePackageDto): string {
+  protected getPackageTypeLabel(resourcePackage: ResourcePackageDto): string {
     return resourcePackage.packageType === 'geogebra' ? 'GeoGebra' : 'Ressourcenpaket';
   }
 
-  getPackageScopeLabel(resourcePackage: ResourcePackageDto): string {
+  protected getPackageScopeLabel(resourcePackage: ResourcePackageDto): string {
     return resourcePackage.scope === 'global' ? 'Global' : 'Workspace';
   }
 
-  isResourcePackageDownloading(resourcePackage: ResourcePackageDto): boolean {
-    return this.activeDownloadPackageId === resourcePackage.id;
+  protected isResourcePackageDownloading(resourcePackage: ResourcePackageDto): boolean {
+    return this.activeDownloadPackageId() === resourcePackage.id;
   }
 
   private startResourcePackageOperation(text: string, mode: 'determinate' | 'indeterminate'): void {
-    this.isResourcePackageOperationActive = true;
-    this.resourcePackageOperationText = text;
-    this.resourcePackageProgressMode = mode;
-    this.resourcePackageProgressPercent = 0;
-    this.resourcePackageProgressLoadedBytes = 0;
-    this.resourcePackageProgressTotalBytes = 0;
+    this.isResourcePackageOperationActive.set(true);
+    this.resourcePackageOperationText.set(text);
+    this.resourcePackageProgressMode.set(mode);
+    this.resourcePackageProgressPercent.set(0);
+    this.resourcePackageProgressLoadedBytes.set(0);
+    this.resourcePackageProgressTotalBytes.set(0);
   }
 
   private updateResourcePackageProgress(loaded: number, total: number): void {
-    this.resourcePackageProgressLoadedBytes = loaded;
-    this.resourcePackageProgressTotalBytes = total;
+    this.resourcePackageProgressLoadedBytes.set(loaded);
+    this.resourcePackageProgressTotalBytes.set(total);
     if (total > 0) {
-      this.resourcePackageProgressMode = 'determinate';
-      this.resourcePackageProgressPercent = Math.min(100, Math.round((loaded / total) * 100));
+      this.resourcePackageProgressMode.set('determinate');
+      this.resourcePackageProgressPercent.set(Math.min(100, Math.round((loaded / total) * 100)));
     } else {
-      this.resourcePackageProgressMode = 'indeterminate';
+      this.resourcePackageProgressMode.set('indeterminate');
     }
   }
 
   private finishResourcePackageOperation(): void {
-    this.isResourcePackageOperationActive = false;
-    this.activeDownloadPackageId = null;
-    this.resourcePackageOperationText = '';
-    this.resourcePackageProgressPercent = 0;
-    this.resourcePackageProgressLoadedBytes = 0;
-    this.resourcePackageProgressTotalBytes = 0;
-    this.resourcePackageProgressMode = 'indeterminate';
+    this.isResourcePackageOperationActive.set(false);
+    this.activeDownloadPackageId.set(null);
+    this.resourcePackageOperationText.set('');
+    this.resourcePackageProgressPercent.set(0);
+    this.resourcePackageProgressLoadedBytes.set(0);
+    this.resourcePackageProgressTotalBytes.set(0);
+    this.resourcePackageProgressMode.set('indeterminate');
   }
 
-  formatBytes(bytes: number): string {
+  protected formatBytes(bytes: number): string {
     if (!bytes || bytes < 0) {
       return '0 B';
     }
@@ -555,7 +558,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /**
    * Closes the dialog
    */
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

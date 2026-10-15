@@ -1,17 +1,17 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  @if (isBusy) {
-  <div class="busy-overlay" [class.is-validation-overlay]="isValidating" aria-busy="true" aria-live="polite">
-    @if (isValidating) {
+  @if (isBusy()) {
+  <div class="busy-overlay" [class.is-validation-overlay]="isValidating()" aria-busy="true" aria-live="polite">
+    @if (isValidating()) {
     <div class="validation-busy-card">
       <div class="validation-busy-header">
         <mat-spinner diameter="36"></mat-spinner>
         <div class="validation-busy-text">
           <strong>Testdateien werden validiert</strong>
-          <p>{{ validationProgressMessage }}</p>
+          <p>{{ validationProgressMessage() }}</p>
         </div>
-        <span class="validation-busy-percent">{{ validationProgress }}%</span>
+        <span class="validation-busy-percent">{{ validationProgress() }}%</span>
       </div>
-      <mat-progress-bar class="validation-progress-bar" mode="determinate" [value]="validationProgress">
+      <mat-progress-bar class="validation-progress-bar" mode="determinate" [value]="validationProgress()">
       </mat-progress-bar>
       <div class="validation-progress-summary">
         <span>{{ completedValidationStepCount }} / {{ validationProgressSteps.length }} Schritte</span>
@@ -30,67 +30,67 @@
     } @else {
     <mat-spinner class="mat-spinner"></mat-spinner>
     <p class="loading-text">{{ busyText }}</p>
-    @if (isDownloadingAllFiles) {
-    <mat-progress-bar class="download-progress-bar" [mode]="isBusyProgressIndeterminate ? 'indeterminate' : 'determinate'"
-      [value]="busyProgressValue">
+    @if (isDownloadingAllFiles()) {
+    <mat-progress-bar class="download-progress-bar" [mode]="isBusyProgressIndeterminate() ? 'indeterminate' : 'determinate'"
+      [value]="busyProgressValue()">
     </mat-progress-bar>
     }
     }
   </div>
   }
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-    <a mat-raised-button color="primary" (click)="testCenterImport()">
+    <button type="button" mat-raised-button color="primary" (click)="testCenterImport()">
       <mat-icon>upload</mat-icon>
       Testcenter Import
-    </a>
-    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="hiddenFileInput.click()"
       [matTooltip]="'file-upload.upload-test-files-tooltip' | translate">
       <mat-icon>upload</mat-icon>
       {{ 'file-upload.upload-test-files' | translate }}
-    </a>
-    @if (contentPoolSettings.enabled) {
-      <a
+    </button>
+    @if (contentPoolSettings().enabled) {
+      <button type="button"
         mat-raised-button
         color="accent"
-        [disabled]="isBusy || isLoadingContentPoolConfig || !contentPoolSettings.hasApplicationToken"
+        [disabled]="isBusy() || isLoadingContentPoolConfig() || !contentPoolSettings().hasApplicationToken"
         (click)="openContentPoolImportDialog()"
         matTooltip="Importiert alle Dateien eines Content-Pool-ACP in diese Testdateien-Abteilung">
         <mat-icon>cloud_download</mat-icon>
         ACP aus Content Pool
-      </a>
-      <a
+      </button>
+      <button type="button"
         mat-raised-button
         color="accent"
-        [disabled]="isBusy || !canUploadSelectedFilesToContentPool()"
+        [disabled]="isBusy() || !canUploadSelectedFilesToContentPool()"
         (click)="openContentPoolUploadDialogForSelectedFiles()"
         matTooltip="Ersetzt gleichnamige Dateien im gewählten Content-Pool-ACP durch die ausgewählten Testdateien">
         <mat-icon>cloud_upload</mat-icon>
         Auswahl zu Content Pool
-      </a>
+      </button>
     }
-    <a mat-raised-button color="primary" [disabled]="isBusy || tableCheckboxSelection.selected.length === 0"
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy() || tableCheckboxSelection.selected.length === 0"
       (click)="deleteFiles()">
       <mat-icon>delete</mat-icon>
       Test Datei(en) löschen
-    </a>
-    <a mat-raised-button color="primary" [disabled]="isBusy" (click)="validateFiles()">
+    </button>
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy()" (click)="validateFiles()">
       <mat-icon>fact_check</mat-icon>
       Validieren
-    </a>
-    <a mat-raised-button color="primary" [disabled]="isBusy" (click)="downloadAllFilesAsZip()">
+    </button>
+    <button type="button" mat-raised-button color="primary" [disabled]="isBusy()" (click)="downloadAllFilesAsZip()">
       <mat-icon>download</mat-icon>
       Exportieren
-    </a>
-    <a mat-raised-button color="primary" (click)="openResourcePackagesDialog()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="openResourcePackagesDialog()"
       matTooltip="{{ 'file-upload.upload-packages-tooltip' | translate }}">
       <mat-icon>archive</mat-icon>
       Ressourcenpakete
-    </a>
-    <a mat-raised-button color="primary" (click)="openGithubReleasesDialog()"
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="openGithubReleasesDialog()"
       matTooltip="Aspect-Player und Schemer von GitHub laden">
       <mat-icon>cloud_download</mat-icon>
       GitHub
-    </a>
+    </button>
   </div>
 
   <input #hiddenFileInput type="file" name="files" accept=".xml,.voud,.vocs,.vomd,.zip,.html" multiple [hidden]="true"
@@ -109,7 +109,7 @@
             <mat-label>{{ 'file-upload.file_type' | translate }}</mat-label>
             <mat-select [(ngModel)]="selectedFileType" (selectionChange)="applyFilters()">
               <mat-option value="">Alle Dateitypen</mat-option>
-              @for (type of fileTypes; track type) {
+              @for (type of fileTypes(); track type) {
               <mat-option [value]="type">
                 {{ getFileTypeLabel(type) }}
               </mat-option>
@@ -224,7 +224,7 @@
       </mat-table>
     </div>
 
-    @if (!isBusy && dataSource.data.length === 0) {
+    @if (!isBusy() && dataSource.data.length === 0) {
     <div class="empty-state">
       <mat-icon class="empty-icon">folder_open</mat-icon>
       <p class="empty-text">
@@ -232,7 +232,7 @@
       </p>
     </div>
     }
-    <mat-paginator [length]="total" [pageIndex]="page - 1" [pageSize]="limit" [pageSizeOptions]="[100, 200, 500, 1000]"
+    <mat-paginator [length]="total()" [pageIndex]="page() - 1" [pageSize]="limit()" [pageSizeOptions]="[100, 200, 500, 1000]"
       (page)="onPageChange($event)">
     </mat-paginator>
   </div>

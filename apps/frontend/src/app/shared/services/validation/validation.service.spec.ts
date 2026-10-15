@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { ValidationService } from './validation.service';
@@ -219,40 +219,45 @@ describe('ValidationService', () => {
   });
 
   describe('pollValidationTask', () => {
-    it('should poll until completed', fakeAsync(() => {
-      const taskId = 100;
+    it('should poll until completed', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const taskId = 100;
 
-      // Sequence of task states
-      const taskPending = { id: taskId, status: 'pending' } as ValidationTaskDto;
-      const taskProcessing = { id: taskId, status: 'processing', progress: 50 } as ValidationTaskDto;
-      const taskCompleted = { id: taskId, status: 'completed' } as ValidationTaskDto;
+        // Sequence of task states
+        const taskPending = { id: taskId, status: 'pending' } as ValidationTaskDto;
+        const taskProcessing = { id: taskId, status: 'processing', progress: 50 } as ValidationTaskDto;
+        const taskCompleted = { id: taskId, status: 'completed' } as ValidationTaskDto;
 
-      service.pollValidationTask(mockWorkspaceId, taskId, 1000).subscribe(() => {
-      });
+        service.pollValidationTask(mockWorkspaceId, taskId, 1000).subscribe(() => {
+        });
 
-      // Initial tick (0s) - No request yet because interval waits
-      tick(0);
-      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
+        // Initial tick (0s) - No request yet because interval waits
+        await jest.advanceTimersByTimeAsync(0);
+        httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
 
-      // First tick (1s) - First Request
-      tick(1000);
-      const req1 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
-      req1.flush(taskPending);
+        // First tick (1s) - First Request
+        await jest.advanceTimersByTimeAsync(1000);
+        const req1 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
+        req1.flush(taskPending);
 
-      // Second tick (2s) - Second Request
-      tick(1000);
-      const req2 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
-      req2.flush(taskProcessing);
+        // Second tick (2s) - Second Request
+        await jest.advanceTimersByTimeAsync(1000);
+        const req2 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
+        req2.flush(taskProcessing);
 
-      // Third tick (3s) - Third Request
-      tick(1000);
-      const req3 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
-      req3.flush(taskCompleted);
+        // Third tick (3s) - Third Request
+        await jest.advanceTimersByTimeAsync(1000);
+        const req3 = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
+        req3.flush(taskCompleted);
 
-      // Since it completed, no more requests should happen.
-      tick(1000);
-      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
-    }));
+        // Since it completed, no more requests should happen.
+        await jest.advanceTimersByTimeAsync(1000);
+        httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/${taskId}`);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('getLastValidationResults', () => {

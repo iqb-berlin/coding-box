@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   TestResultsUploadResultDialogComponent,
@@ -106,7 +105,6 @@ describe('TestResultsUploadResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestResultsUploadResultDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -368,5 +366,18 @@ describe('TestResultsUploadResultDialogComponent', () => {
       '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
       'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
+  });
+  it('cancels queued viewport refreshes when its dialog is destroyed', () => {
+    jest.useFakeTimers();
+    const viewport = { scrollToIndex: jest.fn(), checkViewportSize: jest.fn() };
+    const query = jest.spyOn(component, 'issuesViewport').mockReturnValue(viewport as never);
+    try {
+      component.filterText = 'missing';
+      component.selectedCategory = 'unit_not_found';
+      fixture.destroy();
+      jest.runOnlyPendingTimers();
+      expect(viewport.scrollToIndex).not.toHaveBeenCalled();
+      expect(viewport.checkViewportSize).not.toHaveBeenCalled();
+    } finally { query.mockRestore(); jest.useRealTimers(); }
   });
 });

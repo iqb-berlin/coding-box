@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, ChangeDetectionStrategy
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -7,11 +9,11 @@ import {
   MatDialogTitle
 } from '@angular/material/dialog';
 import { MatList, MatListItem } from '@angular/material/list';
-import { NgClass } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 
 @Component({
-  selector: 'app-log-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-log-dialog',
   template: `
     <div class="dialog-header">
       <h1 mat-dialog-title>Booklet Logs</h1>
@@ -27,7 +29,7 @@ import { MatButton } from '@angular/material/button';
           <span class="progress-label">Unit-Fortschritt:</span>
           <span
             class="progress-value"
-            [ngClass]="{
+            [class]="{
               complete: unitProgressComplete,
               incomplete: !unitProgressComplete
             }"
@@ -375,14 +377,13 @@ import { MatButton } from '@angular/material/button';
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
-    MatButton,
-    NgClass
+    MatButton
   ],
   standalone: true
 })
 export class LogDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<LogDialogComponent>>(MatDialogRef);
-  data = inject<{
+  protected data = inject<{
     logs: {
       id: number;
       bookletid: number;
@@ -416,7 +417,7 @@ export class LogDialogComponent implements OnInit {
     }[];
   }>(MAT_DIALOG_DATA);
 
-  filteredLogs: {
+  protected filteredLogs: {
     id: number;
     bookletid: number;
     ts: string;
@@ -424,9 +425,9 @@ export class LogDialogComponent implements OnInit {
     parameter: string;
   }[] = [];
 
-  processingDuration: string | null = null;
+  protected processingDuration: string | null = null;
 
-  unitProgressComplete: boolean = false;
+  protected unitProgressComplete: boolean = false;
 
   ngOnInit(): void {
     this.filteredLogs = [...this.data.logs];
@@ -507,7 +508,7 @@ export class LogDialogComponent implements OnInit {
   /**
    * Formats a timestamp to a readable date and time
    */
-  formatTimestamp(timestamp: string): string {
+  protected formatTimestamp(timestamp: string): string {
     const date = new Date(Number(timestamp));
     return date.toLocaleString('de-DE', {
       year: 'numeric',
@@ -522,7 +523,7 @@ export class LogDialogComponent implements OnInit {
   /**
    * Filters logs based on search input
    */
-  filterLogs(event: Event): void {
+  protected filterLogs(event: Event): void {
     const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
 
     if (!searchTerm) {
@@ -554,7 +555,7 @@ export class LogDialogComponent implements OnInit {
   /**
    * Closes the dialog
    */
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 }

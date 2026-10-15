@@ -14,7 +14,7 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { JournalEntry } from '../../entities/journal-entry.entity';
 
 describe('Import batch audit atomicity', () => {
-  function fixture(failAudit = false) {
+  function fixture(options: { failAudit?: boolean; failResponseSave?: boolean; failLogSave?: boolean } = {}) {
     const person: Person = {
       workspace_id: 3,
       group: 'g',
@@ -85,6 +85,7 @@ describe('Import batch audit atomicity', () => {
     repositories.set(ResponseEntity, {
       createQueryBuilder: () => deleteQuery,
       save: async (entries: Array<{ value: string }>) => {
+        if (options.failResponseSave) throw new Error('response transformation failed');
         pending.responses.push(...entries.map(entry => entry.value));
         return entries.map((entry, index) => ({ ...entry, id: 100 + index }));
       }
@@ -92,14 +93,17 @@ describe('Import batch audit atomicity', () => {
     repositories.set(BookletLog, {
       count: async () => pending.logs.length,
       delete: async () => { pending.logs = []; },
-      save: async (entries: Array<{ parameter: string }>) => { pending.logs.push(...entries.map(entry => entry.parameter)); }
+      save: async (entries: Array<{ parameter: string }>) => {
+        if (options.failLogSave) throw new Error('log transformation failed');
+        pending.logs.push(...entries.map(entry => entry.parameter));
+      }
     });
     repositories.set(Session, { delete: jest.fn() });
     repositories.set(UnitLog, { count: async () => 0, save: jest.fn(), delete: jest.fn() });
     repositories.set(JournalEntry, {
       create: entry => entry,
       save: async (entry: JournalEntry) => {
-        if (failAudit) throw new Error('audit unavailable');
+        if (options.failAudit) throw new Error('audit unavailable');
         pending.events.push(entry);
         return entry;
       }
@@ -114,8 +118,45 @@ describe('Import batch audit atomicity', () => {
   };
 
   it('rolls back replacement deletions and inserts when the batch audit fails', async () => {
-    const f = fixture(true);
+    const f = fixture({ failAudit: true });
     await expect(f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit)).rejects.toThrow('audit unavailable');
+    expect(f.state()).toEqual({ responses: ['old-answer'], logs: ['old-log'], events: [] });
+  });
+
+  it('rolls back a replacement when response persistence fails before a database query', async () => {
+    const f = fixture({ failResponseSave: true });
+    await expect(f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit))
+      .rejects.toThrow('response transformation failed');
+    expect(f.state()).toEqual({ responses: ['old-answer'], logs: ['old-log'], events: [] });
+  });
+
+  it('waits for concurrent unit writes before rolling back a failed batch', async () => {
+    let releaseChunks!: () => void;
+    let chunksStarted!: () => void;
+    const pendingChunks = new Promise<void>(resolve => { releaseChunks = resolve; });
+    const started = new Promise<void>(resolve => { chunksStarted = resolve; });
+    const stateWrite = jest.spyOn(PersonPersistenceService.prototype, 'saveUnitLastState')
+      .mockRejectedValueOnce(new Error('last state failed'));
+    const chunkWrite = jest.spyOn(PersonPersistenceService.prototype, 'processChunks')
+      .mockImplementationOnce(() => { chunksStarted(); return pendingChunks; });
+    const f = fixture();
+    let finished = false;
+    const result = f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit)
+      .finally(() => { finished = true; });
+    const rejected = expect(result).rejects.toThrow('last state failed');
+    try {
+      await started;
+      await new Promise(resolve => { setImmediate(resolve); });
+      expect(finished).toBe(false);
+    } finally {
+      releaseChunks();
+      try {
+        await rejected;
+      } finally {
+        stateWrite.mockRestore();
+        chunkWrite.mockRestore();
+      }
+    }
     expect(f.state()).toEqual({ responses: ['old-answer'], logs: ['old-log'], events: [] });
   });
 
@@ -134,10 +175,17 @@ describe('Import batch audit atomicity', () => {
   });
 
   it('rolls back overwritten logs when the batch audit fails', async () => {
-    const f = fixture(true);
+    const f = fixture({ failAudit: true });
     await expect(f.service.processPersonLogs([f.person], [], [], true, audit)).rejects.toThrow('audit unavailable');
     expect(f.state().logs).toEqual(['old-log']);
     expect(f.state().events).toEqual([]);
+  });
+
+  it('rolls back overwritten logs when log persistence fails before a database query', async () => {
+    const f = fixture({ failLogSave: true });
+    await expect(f.service.processPersonLogs([f.person], [], [], true, audit))
+      .rejects.toThrow('log transformation failed');
+    expect(f.state()).toEqual({ responses: ['old-answer'], logs: ['old-log'], events: [] });
   });
 
   it('commits overwritten logs with their batch event', async () => {

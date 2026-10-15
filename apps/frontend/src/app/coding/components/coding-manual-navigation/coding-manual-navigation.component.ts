@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-manual-navigation',
   templateUrl: './coding-manual-navigation.component.html',
   styleUrls: ['./coding-manual-navigation.component.scss'],

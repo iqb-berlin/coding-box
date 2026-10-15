@@ -42,7 +42,9 @@ describe('WorkspaceBackendService', () => {
 
   describe('getAllWorkspacesList', () => {
     it('should fetch list', () => {
-      const mockList = { data: [], total: 0 };
+      const mockList = {
+        data: [], total: 0, page: 1, limit: 0
+      };
       service.getAllWorkspacesList().subscribe(res => {
         expect(res).toEqual(mockList as unknown);
       });
@@ -50,6 +52,85 @@ describe('WorkspaceBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
       expect(req.request.method).toBe('GET');
       req.flush(mockList);
+    });
+  });
+
+  it('propagates workspace list failures for access-rights selection', () => {
+    const error = jest.fn();
+    const next = jest.fn();
+    service.getAllWorkspacesListOrFail().subscribe({ next, error });
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
+    expect(req.request.method).toBe('GET');
+    req.flush('Unavailable', { status: 503, statusText: 'Unavailable' });
+    expect(next).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ status: 503 }));
+  });
+
+  describe('complete workspace list', () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({ id: index + 1, name: `Workspace ${index + 1}` }));
+
+    it('emits all workspaces only after the final page, including string pagination metadata', () => {
+      const next = jest.fn();
+      service.getAllWorkspacesListOrFail().subscribe(next);
+      httpMock.expectOne(`${mockServerUrl}admin/workspace`).flush({
+        data: firstPage, total: 21, page: '1', limit: '20'
+      });
+      expect(next).not.toHaveBeenCalled();
+      httpMock.expectOne(`${mockServerUrl}admin/workspace?page=2&limit=20`).flush({
+        data: [{ id: 21, name: 'Workspace 21' }], total: 21, page: 2, limit: 20
+      });
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next.mock.calls[0][0].data.map((workspace: { id: number }) => workspace.id))
+        .toEqual(Array.from({ length: 21 }, (_, index) => index + 1));
+    });
+
+    it('propagates a later page failure without emitting partial rights choices', () => {
+      const next = jest.fn();
+      const error = jest.fn();
+      service.getAllWorkspacesListOrFail().subscribe({ next, error });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace`).flush({
+        data: firstPage, total: 21, page: 1, limit: 20
+      });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace?page=2&limit=20`)
+        .flush('Unavailable', { status: 503, statusText: 'Unavailable' });
+      expect(next).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith(expect.objectContaining({ status: 503 }));
+    });
+
+    it.each([
+      {
+        data: [{ id: 21, name: 'Last' }], total: 21, page: 1, limit: 20
+      },
+      {
+        data: [{ id: 21, name: 'Last' }], total: 22, page: 2, limit: 20
+      },
+      {
+        data: [{ id: 1, name: 'Duplicate' }], total: 21, page: 2, limit: 20
+      }
+    ])('rejects inconsistent pagination or duplicate workspaces: %j', response => {
+      const next = jest.fn();
+      const error = jest.fn();
+      service.getAllWorkspacesListOrFail().subscribe({ next, error });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace`).flush({
+        data: firstPage, total: 21, page: 1, limit: 20
+      });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace?page=2&limit=20`).flush(response);
+      expect(next).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
+    });
+
+    it('rejects a truncated final page without emitting a partial list', () => {
+      const next = jest.fn();
+      const error = jest.fn();
+      service.getAllWorkspacesListOrFail().subscribe({ next, error });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace`).flush({
+        data: firstPage, total: 21, page: 1, limit: 20
+      });
+      httpMock.expectOne(`${mockServerUrl}admin/workspace?page=2&limit=20`).flush({
+        data: [], total: 21, page: 2, limit: 20
+      });
+      expect(next).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalled();
     });
   });
 

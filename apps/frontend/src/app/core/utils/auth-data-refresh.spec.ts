@@ -1,4 +1,4 @@
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom, of, Subject } from 'rxjs';
 import { AppService, AuthDataRefreshOutcome } from '../services/app.service';
 import {
   MutationAuthDataRefreshResult,
@@ -21,6 +21,29 @@ describe('auth data refresh after mutation', () => {
       authDataRefreshOutcome: 'not-requested'
     });
     expect(appService.refreshAuthData).not.toHaveBeenCalled();
+  });
+
+  it.each(['mutation', 'refresh'])('finishes global auth refresh after the view closes during %s', phase => {
+    const mutation = new Subject<boolean>();
+    const refresh = new Subject<AuthDataRefreshOutcome>();
+    const appService = createAppService('updated');
+    jest.mocked(appService.refreshAuthData).mockReturnValue(refresh);
+    const viewCallback = jest.fn();
+    const operation = runMutationAndRefreshAuthData(appService, mutation);
+    const view = operation.subscribe(viewCallback);
+    if (phase === 'refresh') mutation.next(true);
+    view.unsubscribe();
+    if (phase === 'mutation') mutation.next(true);
+    expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
+    expect(mutation.observed).toBe(false);
+    expect(refresh.observed).toBe(true);
+    refresh.next('updated');
+    refresh.complete();
+    expect(refresh.observed).toBe(false);
+    expect(viewCallback).not.toHaveBeenCalled();
+    const result = jest.fn();
+    operation.subscribe(result);
+    expect(result).toHaveBeenCalledWith({ mutationSucceeded: true, authDataRefreshOutcome: 'updated' });
   });
 
   it.each<AuthDataRefreshOutcome>([

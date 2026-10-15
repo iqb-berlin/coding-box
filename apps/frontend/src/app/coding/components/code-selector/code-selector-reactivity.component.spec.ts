@@ -1,4 +1,6 @@
-import { Component, inject } from '@angular/core';
+import {
+  Component, inject, provideZonelessChangeDetection, signal
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -11,11 +13,15 @@ import { CodeSelectorComponent } from './code-selector.component';
 
 @Component({
   imports: [CodeSelectorComponent],
-  template: `<app-code-selector [showProgress]="true" [unitsData]="units"
-    [codingService]="service" [hasSaveError]="service.hasSaveError" />`
+  template: `<coding-box-code-selector [showProgress]="true" [unitsData]="units"
+    [codingService]="service" [hasSaveError]="service.hasSaveError"
+    [coderNotes]="notes()" (notesChanged)="noteChanges.push($event)" (notesCommitted)="noteCommits.push($event)" />`
 })
 class ReplayHostComponent {
   readonly service = inject(ReplayCodingService);
+  readonly notes = signal('');
+  readonly noteChanges: string[] = [];
+  readonly noteCommits: string[] = [];
   readonly units: UnitsReplay = {
     id: 1,
     name: 'Job',
@@ -38,6 +44,7 @@ describe('CodeSelectorComponent reactive replay state', () => {
     await TestBed.configureTestingModule({
       imports: [ReplayHostComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: CodingJobBackendService, useValue: { saveCodingProgress: jest.fn(() => response) } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } }
       ]
@@ -56,6 +63,26 @@ describe('CodeSelectorComponent reactive replay state', () => {
     });
     fixture.autoDetectChanges();
     await fixture.whenStable();
+  });
+
+  it('emits edited notes and commits without overwriting the input, then renders replacement notes', async () => {
+    const host = fixture.componentInstance;
+    host.notes.set('Server note');
+    await fixture.whenStable();
+    const notes = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    expect(notes.value).toBe('Server note');
+    notes.value = 'Local note';
+    notes.dispatchEvent(new Event('input', { bubbles: true }));
+    notes.dispatchEvent(new Event('blur'));
+    await fixture.whenStable();
+    expect(host.notes()).toBe('Server note');
+    expect(host.noteChanges).toEqual(['Local note']);
+    expect(host.noteCommits).toEqual(['Local note']);
+
+    host.notes.set('Next coding case');
+    await fixture.whenStable();
+    expect(notes.value).toBe('Next coding case');
+    expect(host.noteChanges).toEqual(['Local note']);
   });
 
   it('disables navigation during a repeated save and enables it after the response', async () => {
@@ -150,7 +177,7 @@ describe('CodeSelectorComponent reactive replay state', () => {
 
   it('shows validation triggered by a parent call without a child event', async () => {
     const selector = fixture.debugElement.query(By.directive(CodeSelectorComponent)).componentInstance as CodeSelectorComponent;
-    selector.selectedCodingIssueOption = -2;
+    selector.selectedCodingIssueOption.set(-2);
     expect(selector.canLeaveCurrentUnit()).toBe(false);
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.notes-validation-error')).toBeTruthy();
