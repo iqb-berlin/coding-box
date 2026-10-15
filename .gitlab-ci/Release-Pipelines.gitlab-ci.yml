@@ -335,11 +335,31 @@ build-main-pr-liquibase-image:
     - docker logout ${REGISTRY}
 
 build-main-pr-backend-image:
-  stage: build
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: lint-app
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-auth-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
+    - job: test-main-pr-backend
+      artifacts: false
+    - job: test-main-pr-frontend
+      artifacts: false
+    - job: lint-main-pr-backend
+      artifacts: false
+    - job: lint-main-pr-frontend
+      artifacts: false
     - build-main-pr-base-image
     - build-main-pr-backend-test-image
   image: ${DOCKER_IMAGE}
@@ -379,11 +399,31 @@ build-main-pr-backend-image:
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-frontend-image:
-  stage: build
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: lint-app
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-auth-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
+    - job: test-main-pr-backend
+      artifacts: false
+    - job: test-main-pr-frontend
+      artifacts: false
+    - job: lint-main-pr-backend
+      artifacts: false
+    - job: lint-main-pr-frontend
+      artifacts: false
     - build-main-pr-base-image
     - build-main-pr-frontend-test-image
   image: ${DOCKER_IMAGE}

@@ -13,7 +13,7 @@ release or prerelease tag selects these blocking checks on its own revision:
    workflow against an isolated stack.
 6. Lint for both applications.
 
-The frontend and backend unit suites run sequentially. Product image uploads and
+The frontend and backend unit suites run sequentially. Application image uploads and
 public release publication depend on all six gates. A failed or
 missing required gate prevents those uploads. Existing builder and test helper
 images can still be uploaded before the gates. The separate Liquibase rollback

@@ -18,7 +18,8 @@ const config = Object.assign({}, read('.gitlab-ci.yml'),
   read('.gitlab-ci/Quality-Gates.gitlab-ci.yml'));
 const gates = ['test-backend', 'test-frontend', 'lint-app', 'test-replay-live',
   'test-auth-live', 'test-workflows-live'];
-const publishers = ['build-develop-commit-backend-image', 'build-develop-commit-frontend-image',
+const publishers = ['build-main-pr-backend-image', 'build-main-pr-frontend-image',
+  'build-develop-commit-backend-image', 'build-develop-commit-frontend-image',
   'build-main-commit-backend-image', 'build-main-commit-frontend-image',
   'build-pre-release', 'build-release'];
 const resolve = name => {
@@ -64,11 +65,22 @@ for (const [label, values] of scenarios) {
       assert.equal(resolve(gate).allow_failure, false, gate);
       for (const dependency of resolve(gate).needs || []) {
         const name = typeof dependency === 'string' ? dependency : dependency.job;
-        if (!dependency.optional) assert.ok(selected(name, env), `${gate} needs absent ${name}`);
+        if (!dependency.optional) {
+          assert.ok(selected(name, env), `${gate} needs absent ${name}`);
+          assert.ok(config.stages.indexOf(resolve(name).stage) <= config.stages.indexOf(resolve(gate).stage),
+            `${gate} needs a job in a later stage: ${name}`);
+        }
       }
     }
     for (const publisher of publishers.filter(name => selected(name, env))) {
       const needs = resolve(publisher).needs;
+      for (const dependency of needs) {
+        const name = typeof dependency === 'string' ? dependency : dependency.job;
+        if (dependency.optional) continue;
+        assert.ok(selected(name, env), `${publisher} needs absent ${name}`);
+        assert.ok(config.stages.indexOf(resolve(name).stage) <= config.stages.indexOf(resolve(publisher).stage),
+          `${publisher} needs a job in a later stage: ${name}`);
+      }
       for (const gate of gates) {
         assert.ok(needs.some(need => need.job === gate && !need.optional), `${publisher} bypasses ${gate}`);
       }
