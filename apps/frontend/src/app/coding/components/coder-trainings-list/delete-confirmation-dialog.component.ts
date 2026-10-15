@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -8,7 +8,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { CoderTraining } from '../../models/coder-training.model';
 
 @Component({
-  selector: 'delete-confirmation-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-delete-confirmation-dialog',
   standalone: true,
   imports: [MatButtonModule, MatDialogTitle, MatDialogContent, MatDialogActions, TranslateModule],
   template: `
@@ -31,16 +32,16 @@ import { CoderTraining } from '../../models/coder-training.model';
   `]
 })
 export class DeleteConfirmationDialog {
-  constructor(
-    public dialogRef: MatDialogRef<DeleteConfirmationDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: { training: CoderTraining }
-  ) {}
+  dialogRef = inject<MatDialogRef<DeleteConfirmationDialog>>(MatDialogRef);
+  protected data = inject<{
+    training: CoderTraining;
+  }>(MAT_DIALOG_DATA);
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 }

@@ -1,4 +1,3 @@
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -12,6 +11,7 @@ import { CoderService } from '../../apps/frontend/src/app/coding/services/coder.
 import { CodingJob } from '../../apps/frontend/src/app/coding/models/coding-job.model';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
 import { UserBackendService } from '../../apps/frontend/src/app/shared/services/user/user-backend.service';
+import { TestPersonCodingService } from '../../apps/frontend/src/app/coding/services/test-person-coding.service';
 
 describe('CodingJobsComponent', () => {
   it('shows contextual row actions for a coding job', () => {
@@ -36,7 +36,7 @@ describe('CodingJobsComponent', () => {
     cy.mount(CodingJobsComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
+        { provide: TestPersonCodingService, useValue: { notifyTestResultsChanged: () => {} } },
         {
           provide: CodingJobBackendService,
           useValue: {

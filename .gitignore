@@ -26,6 +26,10 @@ docker.env
 /tmp
 /cache/replay-player/
 /cypress/replay-artifacts/
+/cypress/downloads/
+/cypress/screenshots/
+/cypress/component-screenshots/
+/cypress/component-videos/
 /out-tsc
 
 # dependencies
@@ -63,7 +67,6 @@ config/frontend/default.conf.template.bkp
 # misc
 /connect.lock
 /coverage
-/reports
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log

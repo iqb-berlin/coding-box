@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, Inject, Optional, inject
+  Component, OnInit, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -38,6 +39,7 @@ export interface CohensKappaStatisticsDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-cohens-kappa-statistics',
   templateUrl: './cohens-kappa-statistics.component.html',
   styleUrls: ['./cohens-kappa-statistics.component.scss'],
@@ -59,79 +61,81 @@ export interface CohensKappaStatisticsDialogData {
   ]
 })
 export class CohensKappaStatisticsComponent implements OnInit {
+  protected dialogRef = inject<MatDialogRef<CohensKappaStatisticsComponent>>(MatDialogRef, { optional: true });
+  dialogData = inject<CohensKappaStatisticsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
   private kappaStatisticsRequestId = 0;
 
-  constructor(
-    @Optional() public dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
-    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: CohensKappaStatisticsDialogData | null
-  ) {
-    this.availableCoderTrainings = dialogData?.availableCoderTrainings ?? [];
-    this.selectedCoderTrainingId = this.getInitialCoderTrainingId();
-    this.excludeTrainings = dialogData?.excludeTrainings ??
-      !(this.hasCoderTrainingSelection || this.getEffectiveKappaScope()?.coderTrainingIds?.length);
-    this.excludeTrainingsLocked = this.hasCoderTrainingSelection || !!dialogData?.scope?.coderTrainingIds?.length;
+  constructor() {
+    const dialogData = this.dialogData;
+
+    this.availableCoderTrainings.set(dialogData?.availableCoderTrainings ?? []);
+    this.selectedCoderTrainingId.set(this.getInitialCoderTrainingId());
+    this.excludeTrainings.set(dialogData?.excludeTrainings ??
+      !(this.hasCoderTrainingSelection() || this.getEffectiveKappaScope()?.coderTrainingIds?.length));
   }
 
-  isLoading = false;
-  kappaStatistics: CohensKappaVariableSummary[] = [];
-  showInterpretationScale = false;
-  useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
-  useCodeLevel = true;
-  excludeTrainings = true; // Default: exclude trainings
-  excludeTrainingsLocked = false;
-  availableCoderTrainings: CoderTraining[] = [];
-  selectedCoderTrainingId: number | null = null;
-  availableCoders: Array<{ id: number; name: string }> = [];
-  selectedCoderIds: number[] = [];
-  exportInProgress: 'summary' | 'details' | 'xlsx' | null = null;
+  protected readonly isLoading = signal(false);
+  readonly kappaStatistics = signal<CohensKappaVariableSummary[]>([]);
+  protected readonly showInterpretationScale = signal(false);
+  protected readonly useWeightedMean = signal(true); // Default to weighted mean (matching R reference implementation)
+  readonly useCodeLevel = signal(true);
+  readonly excludeTrainings = signal(true); // Default: exclude trainings
+  protected readonly excludeTrainingsLocked = computed(() => (
+    this.hasCoderTrainingSelection() || !!this.dialogData?.scope?.coderTrainingIds?.length
+  ));
 
-  workspaceKappaSummary: {
+  protected readonly availableCoderTrainings = signal<CoderTraining[]>([]);
+  readonly selectedCoderTrainingId = signal<number | null>(null);
+  readonly availableCoders = signal<Array<{ id: number; name: string }>>([]);
+  readonly selectedCoderIds = signal<number[]>([]);
+  protected readonly exportInProgress = signal<'summary' | 'details' | 'xlsx' | null>(null);
+
+  readonly workspaceKappaSummary = signal<{
     workspaceSummary: CohensKappaStatisticsResponse['workspaceSummary'];
-  } | null = null;
+  } | null>(null);
 
   ngOnInit(): void {
     this.loadKappaStatistics();
   }
 
-  get hasCoderTrainingSelection(): boolean {
-    return this.availableCoderTrainings.length > 0;
-  }
+  protected readonly hasCoderTrainingSelection = computed(() => this.availableCoderTrainings().length > 0);
 
-  get canLoadKappaStatistics(): boolean {
-    if (this.hasCoderTrainingSelection && this.selectedCoderTrainingId === null) {
+  readonly canLoadKappaStatistics = computed(() => {
+    if (this.hasCoderTrainingSelection() && this.selectedCoderTrainingId() === null) {
       return false;
     }
 
-    return this.availableCoders.length === 0 || this.selectedCoderIds.length >= 2;
-  }
+    return this.availableCoders().length === 0 || this.selectedCoderIds().length >= 2;
+  });
 
-  get noDataTranslationKey(): string {
-    if (this.canLoadKappaStatistics) {
+  protected readonly noDataTranslationKey = computed(() => {
+    if (this.canLoadKappaStatistics()) {
       return 'cohens-kappa-statistics.no-data';
     }
 
-    return this.hasCoderTrainingSelection && this.selectedCoderTrainingId === null ?
+    return this.hasCoderTrainingSelection() && this.selectedCoderTrainingId() === null ?
       'cohens-kappa-statistics.select-training-hint' :
       'cohens-kappa-statistics.select-coders-hint';
+  });
+
+  readonly calculationLevel = computed<CohensKappaCalculationLevel>(() => (this.useCodeLevel() ? 'code' : 'score'));
+
+  protected getSelectedCoderTraining(): CoderTraining | undefined {
+    return this.availableCoderTrainings().find(training => training.id === this.selectedCoderTrainingId());
   }
 
-  get calculationLevel(): CohensKappaCalculationLevel {
-    return this.useCodeLevel ? 'code' : 'score';
-  }
-
-  getSelectedCoderTraining(): CoderTraining | undefined {
-    return this.availableCoderTrainings.find(training => training.id === this.selectedCoderTrainingId);
-  }
-
-  getTrainingOptionTitle(training: CoderTraining): string {
+  protected getTrainingOptionTitle(training: CoderTraining): string {
     return getTrainingOptionTitle(training);
   }
 
-  getTrainingOptionMeta(training: CoderTraining): string {
+  protected getTrainingOptionMeta(training: CoderTraining): string {
     return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
   }
 
@@ -144,15 +148,15 @@ export class CohensKappaStatisticsComponent implements OnInit {
     this.loadKappaStatistics();
   }
 
-  selectAllCoders(): void {
-    this.selectedCoderIds = this.availableCoders.map(coder => coder.id);
+  protected selectAllCoders(): void {
+    this.selectedCoderIds.set(this.availableCoders().map(coder => coder.id));
     this.loadKappaStatistics();
   }
 
   clearCoderSelection(): void {
-    this.selectedCoderIds = [];
-    this.kappaStatistics = [];
-    this.workspaceKappaSummary = null;
+    this.selectedCoderIds.set([]);
+    this.kappaStatistics.set([]);
+    this.workspaceKappaSummary.set(null);
   }
 
   private loadKappaStatistics(): void {
@@ -160,50 +164,50 @@ export class CohensKappaStatisticsComponent implements OnInit {
     this.kappaStatisticsRequestId += 1;
     const requestId = this.kappaStatisticsRequestId;
 
-    if (!workspaceId || !this.canLoadKappaStatistics) {
-      this.kappaStatistics = [];
-      this.workspaceKappaSummary = null;
-      this.isLoading = false;
+    if (!workspaceId || !this.canLoadKappaStatistics()) {
+      this.kappaStatistics.set([]);
+      this.workspaceKappaSummary.set(null);
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     const kappaScope = this.getEffectiveKappaScope();
 
     this.testPersonCodingService
       .getCohensKappaStatistics(
         workspaceId,
-        this.useWeightedMean,
-        this.excludeTrainings,
+        this.useWeightedMean(),
+        this.excludeTrainings(),
         undefined,
         undefined,
         kappaScope,
-        this.calculationLevel
-      )
+        this.calculationLevel()
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           if (requestId !== this.kappaStatisticsRequestId) {
             return;
           }
-          this.kappaStatistics = response.variables;
-          this.workspaceKappaSummary = {
+          this.kappaStatistics.set(response.variables);
+          this.workspaceKappaSummary.set({
             workspaceSummary: response.workspaceSummary
-          };
+          });
           this.syncAvailableCoders(response);
-          this.isLoading = false;
+          this.isLoading.set(false);
         },
         error: () => {
           if (requestId !== this.kappaStatisticsRequestId) {
             return;
           }
-          this.kappaStatistics = [];
-          this.workspaceKappaSummary = null;
-          this.isLoading = false;
+          this.kappaStatistics.set([]);
+          this.workspaceKappaSummary.set(null);
+          this.isLoading.set(false);
         }
       });
   }
 
-  toggleWeightingMethod(): void {
+  protected toggleWeightingMethod(): void {
     this.loadKappaStatistics();
   }
 
@@ -219,25 +223,25 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
   exportKappaSummaryCsv(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.canLoadKappaStatistics || this.exportInProgress || this.kappaStatistics.length === 0) {
+    if (!workspaceId || !this.canLoadKappaStatistics() || this.exportInProgress() || this.kappaStatistics().length === 0) {
       return;
     }
 
-    this.exportInProgress = 'summary';
+    this.exportInProgress.set('summary');
     const kappaScope = this.getEffectiveKappaScope();
     this.testPersonCodingService
       .exportCohensKappaSummaryAsCsv(
         workspaceId,
-        this.useWeightedMean,
-        this.excludeTrainings,
+        this.useWeightedMean(),
+        this.excludeTrainings(),
         undefined,
         undefined,
         kappaScope,
-        this.calculationLevel
+        this.calculationLevel()
       )
       .pipe(finalize(() => {
-        this.exportInProgress = null;
-      }))
+        this.exportInProgress.set(null);
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-summary-${this.getDateString()}.csv`);
@@ -252,27 +256,27 @@ export class CohensKappaStatisticsComponent implements OnInit {
       });
   }
 
-  exportKappaWorkbook(): void {
+  protected exportKappaWorkbook(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.canLoadKappaStatistics || this.exportInProgress || this.kappaStatistics.length === 0) {
+    if (!workspaceId || !this.canLoadKappaStatistics() || this.exportInProgress() || this.kappaStatistics().length === 0) {
       return;
     }
 
-    this.exportInProgress = 'xlsx';
+    this.exportInProgress.set('xlsx');
     const kappaScope = this.getEffectiveKappaScope();
     this.testPersonCodingService
       .exportCohensKappaStatisticsAsXlsx(
         workspaceId,
-        this.useWeightedMean,
-        this.excludeTrainings,
+        this.useWeightedMean(),
+        this.excludeTrainings(),
         undefined,
         undefined,
         kappaScope,
-        this.calculationLevel
+        this.calculationLevel()
       )
       .pipe(finalize(() => {
-        this.exportInProgress = null;
-      }))
+        this.exportInProgress.set(null);
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-${this.getDateString()}.xlsx`);
@@ -287,27 +291,27 @@ export class CohensKappaStatisticsComponent implements OnInit {
       });
   }
 
-  exportKappaDetails(): void {
+  protected exportKappaDetails(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.canLoadKappaStatistics || this.exportInProgress || this.kappaStatistics.length === 0) {
+    if (!workspaceId || !this.canLoadKappaStatistics() || this.exportInProgress() || this.kappaStatistics().length === 0) {
       return;
     }
 
-    this.exportInProgress = 'details';
+    this.exportInProgress.set('details');
     const kappaScope = this.getEffectiveKappaScope();
     this.testPersonCodingService
       .exportCohensKappaStatisticsAsCsv(
         workspaceId,
-        this.useWeightedMean,
-        this.excludeTrainings,
+        this.useWeightedMean(),
+        this.excludeTrainings(),
         undefined,
         undefined,
         kappaScope,
-        this.calculationLevel
+        this.calculationLevel()
       )
       .pipe(finalize(() => {
-        this.exportInProgress = null;
-      }))
+        this.exportInProgress.set(null);
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-details-${this.getDateString()}.csv`);
@@ -323,7 +327,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   private getInitialCoderTrainingId(): number | null {
-    if (!this.hasCoderTrainingSelection) {
+    if (!this.hasCoderTrainingSelection()) {
       return null;
     }
 
@@ -335,38 +339,39 @@ export class CohensKappaStatisticsComponent implements OnInit {
 
     if (
       initialTrainingId !== undefined &&
-      this.availableCoderTrainings.some(training => training.id === initialTrainingId)
+      this.availableCoderTrainings().some(training => training.id === initialTrainingId)
     ) {
       return initialTrainingId;
     }
 
-    return this.availableCoderTrainings.length === 1 ? this.availableCoderTrainings[0].id : null;
+    return this.availableCoderTrainings().length === 1 ? this.availableCoderTrainings()[0].id : null;
   }
 
   private getEffectiveKappaScope(): CohensKappaScope | undefined {
-    const selectedCoderIds = this.availableCoders.length > 0 ? this.selectedCoderIds : [];
+    const selectedCoderIds = this.availableCoders().length > 0 ? this.selectedCoderIds() : [];
 
-    if (!this.hasCoderTrainingSelection) {
+    if (!this.hasCoderTrainingSelection()) {
       return {
         ...this.dialogData?.scope,
         ...(selectedCoderIds.length ? { coderIds: selectedCoderIds } : {})
       };
     }
 
-    if (this.selectedCoderTrainingId === null) {
+    const selectedCoderTrainingId = this.selectedCoderTrainingId();
+    if (selectedCoderTrainingId === null) {
       return undefined;
     }
 
     return {
       ...this.dialogData?.scope,
-      coderTrainingIds: [this.selectedCoderTrainingId],
+      coderTrainingIds: [selectedCoderTrainingId],
       ...(selectedCoderIds.length ? { coderIds: selectedCoderIds } : {})
     };
   }
 
   private resetCoderSelection(): void {
-    this.availableCoders = [];
-    this.selectedCoderIds = [];
+    this.availableCoders.set([]);
+    this.selectedCoderIds.set([]);
   }
 
   private syncAvailableCoders(response: CohensKappaStatisticsResponse): void {
@@ -382,21 +387,21 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    const previousSelectedIds = new Set(this.selectedCoderIds);
-    const wasInitialized = this.availableCoders.length > 0;
+    const previousSelectedIds = new Set(this.selectedCoderIds());
+    const wasInitialized = this.availableCoders().length > 0;
     if (wasInitialized) {
-      this.availableCoders.forEach(coder => codersById.set(coder.id, coder.name));
+      this.availableCoders().forEach(coder => codersById.set(coder.id, coder.name));
     }
 
-    this.availableCoders = Array.from(codersById.entries())
+    this.availableCoders.set(Array.from(codersById.entries())
       .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id));
 
-    this.selectedCoderIds = wasInitialized ?
-      this.availableCoders
+    this.selectedCoderIds.set(wasInitialized ?
+      this.availableCoders()
         .map(coder => coder.id)
         .filter(coderId => previousSelectedIds.has(coderId)) :
-      this.availableCoders.map(coder => coder.id);
+      this.availableCoders().map(coder => coder.id));
   }
 
   private saveBlob(blob: Blob, filename: string): void {
@@ -414,7 +419,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
     return new Date().toISOString().slice(0, 10);
   }
 
-  getKappaClass(kappa: number | null): string {
+  protected getKappaClass(kappa: number | null): string {
     if (kappa === null) return 'kappa-na';
     if (kappa < 0) return 'kappa-poor';
     if (kappa < 0.2) return 'kappa-poor';
@@ -425,15 +430,15 @@ export class CohensKappaStatisticsComponent implements OnInit {
     return 'kappa-perfect';
   }
 
-  getVariableLabel(variable: Pick<CohensKappaVariableSummary, 'unitName' | 'variableId'>): string {
+  protected getVariableLabel(variable: Pick<CohensKappaVariableSummary, 'unitName' | 'variableId'>): string {
     return `${variable.unitName} - ${variable.variableId}`;
   }
 
-  getCoderPairLabel(pair: CohensKappaCoderPair): string {
+  protected getCoderPairLabel(pair: CohensKappaCoderPair): string {
     return `${pair.coder1Name} ↔ ${pair.coder2Name}`;
   }
 
-  getKappaInterpretationText(kappa: number | null): string {
+  protected getKappaInterpretationText(kappa: number | null): string {
     if (kappa === null) {
       return this.translateService.instant('cohens-kappa-statistics.no-data-available');
     }
@@ -458,7 +463,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
     return this.translateService.instant('kappa.almost_perfect');
   }
 
-  getKappaInterpretationClass(kappa: number | null): string {
+  protected getKappaInterpretationClass(kappa: number | null): string {
     if (kappa === null) {
       return 'kappa-no-data';
     }
@@ -483,11 +488,11 @@ export class CohensKappaStatisticsComponent implements OnInit {
     return 'kappa-excellent';
   }
 
-  toggleInterpretationScale(): void {
-    this.showInterpretationScale = !this.showInterpretationScale;
+  protected toggleInterpretationScale(): void {
+    this.showInterpretationScale.set(!this.showInterpretationScale());
   }
 
-  getTranslatedInterpretation(interpretationKey: string): string {
+  protected getTranslatedInterpretation(interpretationKey: string): string {
     if (!interpretationKey) return '';
     return this.translateService.instant(interpretationKey);
   }

@@ -60,46 +60,46 @@ describe('ReplayStatisticsDialogComponent', () => {
     expect(backend.getReplayDurationStatistics).toHaveBeenCalledWith(
       5, undefined, { lastDays: 30, limit: 25 }
     );
-    expect(component.sourceSummary).toEqual({ total: 10, internal: 7, external: 3 });
-    expect(component.frequencyData).toEqual([
+    expect(component.sourceSummary()).toEqual({ total: 10, internal: 7, external: 3 });
+    expect(component.frequencyData()).toEqual([
       { name: 'UNIT1', value: 8 }, { name: 'UNIT2', value: 2 }
     ]);
-    expect(component.dayDistributionData.map(row => row.name)).toEqual(['2026-01-01', '2026-01-02']);
-    expect(component.hourDistributionData.map(row => row.name)).toEqual(['2:00', '12:00']);
-    expect(component.durationDistributionData.map(row => row.name)).toEqual(['0-1000', '1000-2000']);
-    expect(component.durationStats).toEqual({ min: 100, max: 3000, average: 1500 });
-    expect(component.errorStats.failedReplays).toBe(2);
-    expect(component.failureByHourData).toEqual([{ name: '2:00', value: 1 }, { name: '12:00', value: 1 }]);
-    expect(component.loading).toBe(false);
+    expect(component.dayDistributionData().map(row => row.name)).toEqual(['2026-01-01', '2026-01-02']);
+    expect(component.hourDistributionData().map(row => row.name)).toEqual(['2:00', '12:00']);
+    expect(component.durationDistributionData().map(row => row.name)).toEqual(['0-1000', '1000-2000']);
+    expect(component.durationStats()).toEqual({ min: 100, max: 3000, average: 1500 });
+    expect(component.errorStats().failedReplays).toBe(2);
+    expect(component.failureByHourData()).toEqual([{ name: '2:00', value: 1 }, { name: '12:00', value: 1 }]);
+    expect(component.loading()).toBe(false);
   });
 
   it('keeps the top 25 units and aggregates remaining frequency counts', () => {
     const frequencies = Object.fromEntries(Array.from({ length: 27 }, (_, index) => [`UNIT${index}`, index + 1]));
     backend.getReplayFrequencyByUnit.mockReturnValue(of(frequencies));
     component.ngOnInit();
-    expect(component.frequencyData).toHaveLength(26);
-    expect(component.frequencyData[0]).toEqual({ name: 'UNIT26', value: 27 });
-    expect(component.frequencyData[24]).toEqual({ name: 'UNIT2', value: 3 });
-    expect(component.frequencyData[25]).toEqual({ name: 'Other', value: 3 });
-    expect(component.frequencyData.reduce((sum, row) => sum + row.value, 0)).toBe(378);
+    expect(component.frequencyData()).toHaveLength(26);
+    expect(component.frequencyData()[0]).toEqual({ name: 'UNIT26', value: 27 });
+    expect(component.frequencyData()[24]).toEqual({ name: 'UNIT2', value: 3 });
+    expect(component.frequencyData()[25]).toEqual({ name: 'Other', value: 3 });
+    expect(component.frequencyData().reduce((sum, row) => sum + row.value, 0)).toBe(378);
   });
 
   it('continues loading other statistics after source and day requests fail', () => {
     backend.getReplaySourceSummary.mockReturnValue(throwError(() => new Error('summary unavailable')));
     backend.getReplayDistributionByDay.mockReturnValue(throwError(() => new Error('day unavailable')));
     component.ngOnInit();
-    expect(component.sourceSummary).toEqual({ total: 0, internal: 0, external: 0 });
-    expect(component.dayDistributionData).toEqual([]);
+    expect(component.sourceSummary()).toEqual({ total: 0, internal: 0, external: 0 });
+    expect(component.dayDistributionData()).toEqual([]);
     expect(backend.getReplayDurationStatistics).toHaveBeenCalledTimes(1);
-    expect(component.errorStats.failedReplays).toBe(2);
-    expect(component.loading).toBe(false);
+    expect(component.errorStats().failedReplays).toBe(2);
+    expect(component.loading()).toBe(false);
   });
 
   it('ends loading when frequency cannot be retrieved', () => {
     backend.getReplayFrequencyByUnit.mockReturnValue(throwError(() => new Error('frequency unavailable')));
     component.ngOnInit();
-    expect(component.loading).toBe(false);
-    expect(component.frequencyData).toEqual([]);
+    expect(component.loading()).toBe(false);
+    expect(component.frequencyData()).toEqual([]);
     expect(backend.getReplayDurationStatistics).not.toHaveBeenCalled();
   });
 
@@ -107,10 +107,10 @@ describe('ReplayStatisticsDialogComponent', () => {
     const pendingHours = new Subject<Record<string, number>>();
     backend.getFailureDistributionByHour.mockReturnValue(pendingHours.asObservable());
     component.ngOnInit();
-    expect(component.loading).toBe(true);
+    expect(component.loading()).toBe(true);
     pendingHours.error(new Error('failure distribution unavailable'));
-    expect(component.loading).toBe(false);
-    expect(component.failureByHourData).toEqual([]);
-    expect(component.errorStats.successRate).toBe(80);
+    expect(component.loading()).toBe(false);
+    expect(component.failureByHourData()).toEqual([]);
+    expect(component.errorStats().successRate).toBe(80);
   });
 });

@@ -50,7 +50,7 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService
       .validateGroupResponses(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result)));
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
   }
 
   /**

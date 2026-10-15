@@ -17,7 +17,7 @@ export async function prepareAuthEnvironment(
     realm: 'coding-e2e',
     enabled: true,
     sslRequired: 'none',
-    accessTokenLifespan: 300,
+    accessTokenLifespan: 30,
     ssoSessionIdleTimeout: 600,
     ssoSessionMaxLifespan: 1800,
     roles: { realm: [{ name: 'admin' }] },

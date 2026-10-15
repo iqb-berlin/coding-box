@@ -46,10 +46,28 @@ describe('UnitPlayerComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('keeps the JSON input unchanged, sends one encoding and clears the parsed definition on reset', async () => {
+    const definition = JSON.stringify({ pages: [{ id: 'page-1' }] });
+    fixture.componentRef.setInput('unitDef', definition);
+    fixture.detectChanges();
+    const iframe = component.hostingIframe()!.nativeElement;
+    component.postMessageTarget = iframe.contentWindow!;
+    const post = jest.spyOn(component.postMessageTarget, 'postMessage');
+    await component.sendUnitData();
+    expect(component.unitDef()).toBe(definition);
+    expect(post).toHaveBeenLastCalledWith(expect.objectContaining({ unitDefinition: definition }), '*');
+
+    fixture.componentRef.setInput('unitDef', undefined);
+    fixture.detectChanges();
+    await component.sendUnitData();
+    expect(component.unitDef()).toBeUndefined();
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
   it('should emit playerReady when the hosted player reports ready', () => {
     const emitSpy = jest.spyOn(component.playerReady, 'emit');
     const appService = TestBed.inject(AppService);
-    const source = component.hostingIframe.nativeElement.contentWindow;
+    const source = component.hostingIframe().nativeElement.contentWindow;
 
     appService.postMessage$.next(new MessageEvent('message', {
       data: {
@@ -65,7 +83,7 @@ describe('UnitPlayerComponent', () => {
   it('should emit responseVisible again after unit responses change', () => {
     const emitSpy = jest.spyOn(component.responseVisible, 'emit');
     const appService = TestBed.inject(AppService);
-    const source = component.hostingIframe.nativeElement.contentWindow;
+    const source = component.hostingIframe().nativeElement.contentWindow;
     const emitPlayerStateChanged = () => appService.postMessage$.next(new MessageEvent('message', {
       data: {
         type: 'vopStateChangedNotification'
@@ -89,7 +107,7 @@ describe('UnitPlayerComponent', () => {
   });
 
   it('should forward key events only once after repeated iframe loads', () => {
-    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const iframe = component.hostingIframe().nativeElement as HTMLIFrameElement;
     const contentWindow = iframe.contentWindow as Window;
     const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
     const updateIframeContent = component as unknown as {
@@ -116,7 +134,7 @@ describe('UnitPlayerComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
 
-    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const iframe = component.hostingIframe().nativeElement as HTMLIFrameElement;
     const contentWindow = iframe.contentWindow as Window;
     const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
     const componentWithPrivateMethods = component as unknown as {
@@ -208,7 +226,7 @@ describe('UnitPlayerComponent', () => {
   it('should emit responseVisible again when navigating to the current page', () => {
     const emitSpy = jest.spyOn(component.responseVisible, 'emit');
     const appService = TestBed.inject(AppService);
-    const source = component.hostingIframe.nativeElement.contentWindow;
+    const source = component.hostingIframe().nativeElement.contentWindow;
     component.postMessageTarget = source;
 
     appService.postMessage$.next(new MessageEvent('message', {
@@ -231,7 +249,7 @@ describe('UnitPlayerComponent', () => {
 
   it('should handle a player state without a current page', () => {
     const appService = TestBed.inject(AppService);
-    const source = component.hostingIframe.nativeElement.contentWindow;
+    const source = component.hostingIframe().nativeElement.contentWindow;
 
     expect(() => {
       appService.postMessage$.next(new MessageEvent('message', {

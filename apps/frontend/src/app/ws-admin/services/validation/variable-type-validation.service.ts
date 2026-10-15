@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
+import { switchMap, tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
@@ -30,13 +30,8 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIds)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 
@@ -51,13 +46,8 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
         this.validationType as 'variableTypes'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 
@@ -88,7 +78,7 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService
       .validateVariableTypes(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result)));
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
   }
 
   /**

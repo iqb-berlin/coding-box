@@ -1,11 +1,5 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy,
-  ViewChild
+  Component, OnInit, OnDestroy, signal, computed, input, output, viewChild, effect, ChangeDetectionStrategy, inject
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -35,6 +29,7 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
  * exist in TestTakers XML files.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-takers-validation-panel',
   standalone: true,
   imports: [
@@ -124,29 +119,30 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   ]
 })
 export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  private testTakersValidationService = inject(TestTakersValidationService);
 
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
+  readonly paginator = viewChild(MatPaginator);
+  private readonly synchronizePaginator = effect(() => {
+    this.paginatedMissingPersons.paginator = this.paginator() ?? null;
+  });
 
-  isRunning = false;
-  wasRun = false;
-  isLoadingPage = false;
-  isExporting = false;
-  result: TestTakersValidationDto | null = null;
-  errorMessage: string | null = null;
-  expandedPanel = false;
-  paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
-  displayedColumns = ['group', 'login', 'code', 'reason'];
-  activeTask: ValidationTaskDto | null = null;
+  readonly disabled = input(false);
+  readonly validate = output<void>();
+
+  protected readonly isRunning = signal(false);
+  readonly wasRun = signal(false);
+  protected readonly isLoadingPage = signal(false);
+  protected readonly isExporting = signal(false);
+  readonly result = signal<TestTakersValidationDto | null>(null);
+  protected readonly errorMessage = signal<string | null>(null);
+  readonly expandedPanel = signal(false);
+  protected paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
+  protected displayedColumns = ['group', 'login', 'code', 'reason'];
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private testTakersValidationService: TestTakersValidationService
-  ) {}
 
   ngOnInit(): void {
     // Load cached result if available
@@ -154,15 +150,15 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
       this.testTakersValidationService.observeValidationResult();
 
     this.stateSubscription = cachedResult.subscribe(result => {
-      if (result && !this.isRunning) {
-        this.wasRun = true;
+      if (result && !this.isRunning()) {
+        this.wasRun.set(true);
         const details = result.details as Record<string, unknown>;
         if (result.status === 'failed' && details?.error) {
-          this.errorMessage = details.error as string;
-          this.result = null;
+          this.errorMessage.set(details.error as string);
+          this.result.set(null);
         } else {
-          this.errorMessage = null;
-          this.result = result.details as TestTakersValidationDto;
+          this.errorMessage.set(null);
+          this.result.set(result.details as TestTakersValidationDto);
           this.updatePaginatedMissingPersons();
         }
       }
@@ -172,8 +168,8 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     this.taskSubscription = this.testTakersValidationService
       .observeValidationTask()
       .subscribe(task => {
-        this.activeTask = task;
-        this.isRunning = !!task;
+        this.activeTask.set(task);
+        this.isRunning.set(!!task);
       });
   }
 
@@ -187,25 +183,23 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     return this.testTakersValidationService.getValidationStatus();
   }
 
-  get errorCount(): number {
-    return this.result?.missingPersons.length || 0;
-  }
+  protected readonly errorCount = computed(() => this.result()?.missingPersons.length || 0);
 
   onValidate(): void {
-    if (this.isRunning || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 
-    this.isRunning = true;
+    this.isRunning.set(true);
     this.subscription = this.testTakersValidationService.validate().subscribe({
       next: result => {
-        this.result = result;
-        this.wasRun = true;
-        this.isRunning = false;
+        this.result.set(result);
+        this.wasRun.set(true);
+        this.isRunning.set(false);
         this.updatePaginatedMissingPersons();
       },
       error: () => {
-        this.isRunning = false;
+        this.isRunning.set(false);
       }
     });
 
@@ -213,23 +207,27 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   }
 
   toggleExpansion(): void {
-    this.expandedPanel = !this.expandedPanel;
+    this.expandedPanel.set(!this.expandedPanel());
   }
 
   private updatePaginatedMissingPersons(): void {
-    if (this.result?.missingPersons) {
-      this.paginatedMissingPersons.data = this.result.missingPersons;
-      this.paginatedMissingPersons.paginator = this.paginator;
+    const resultSnapshot = this.result();
+
+    if (resultSnapshot?.missingPersons) {
+      this.paginatedMissingPersons.data = resultSnapshot.missingPersons;
+      this.paginatedMissingPersons.paginator = this.paginator() ?? null;
     }
   }
 
-  exportCsv(): void {
-    if (this.isExporting || !this.result) {
+  protected exportCsv(): void {
+    const resultSnapshot = this.result();
+
+    if (this.isExporting() || !resultSnapshot) {
       return;
     }
 
-    this.isExporting = true;
-    const csvContent = buildCsv(this.result.missingPersons || [], [
+    this.isExporting.set(true);
+    const csvContent = buildCsv(resultSnapshot.missingPersons || [], [
       { header: 'Gruppe', value: row => row.group },
       { header: 'Login', value: row => row.login },
       { header: 'Code', value: row => row.code },
@@ -237,6 +235,6 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     ]);
 
     downloadCsvFile('validierung-testpersonen.csv', csvContent);
-    this.isExporting = false;
+    this.isExporting.set(false);
   }
 }

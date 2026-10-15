@@ -1,4 +1,5 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject, throwError } from 'rxjs';
@@ -45,12 +46,14 @@ describe('TestResultsSearchComponent', () => {
   };
 
   beforeEach(() => {
+    jest.useFakeTimers();
     resultService = { quickSearch: jest.fn(() => of(searchResult)) };
     statisticsService = { getReplayUrl: jest.fn(() => of({ replayUrl: '/replay/11' })) };
     dialogRef = { close: jest.fn() };
     snackBar = { open: jest.fn() };
     TestBed.configureTestingModule({
       providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } },
         TestResultsSearchComponent,
         { provide: MAT_DIALOG_DATA, useValue: { title: 'Search' } },
         { provide: MatDialogRef, useValue: dialogRef },
@@ -67,19 +70,20 @@ describe('TestResultsSearchComponent', () => {
   afterEach(() => {
     component.ngOnDestroy();
     jest.restoreAllMocks();
+    jest.useRealTimers();
   });
 
-  it('debounces input and displays only the completed search result', fakeAsync(() => {
+  it('debounces input and displays only the completed search result', () => {
     const pendingResult = new Subject<QuickSearchResult>();
     resultService.quickSearch.mockReturnValue(pendingResult.asObservable());
     component.searchText = 'ans';
     component.onSearchChange();
-    tick(200);
+    jest.advanceTimersByTime(200);
     component.searchText = ' answer ';
     component.onSearchChange();
-    tick(component.SEARCH_DEBOUNCE_TIME - 1);
+    jest.advanceTimersByTime(component.SEARCH_DEBOUNCE_TIME - 1);
     expect(resultService.quickSearch).not.toHaveBeenCalled();
-    tick(1);
+    jest.advanceTimersByTime(1);
     expect(resultService.quickSearch).toHaveBeenCalledTimes(1);
     expect(resultService.quickSearch).toHaveBeenCalledWith(5, 'answer', 8);
     expect(component.isLoading).toBe(true);
@@ -88,31 +92,31 @@ describe('TestResultsSearchComponent', () => {
     expect(component.isLoading).toBe(false);
     expect(component.getVisibleResults('response')).toEqual([responseItem]);
     expect(component.getVisibleCount()).toBe(1);
-  }));
+  });
 
-  it('clears earlier results for input shorter than the search minimum', fakeAsync(() => {
+  it('clears earlier results for input shorter than the search minimum', () => {
     component.results = searchResult;
     component.searchText = ' a ';
     component.onSearchChange();
-    tick(component.SEARCH_DEBOUNCE_TIME);
+    jest.advanceTimersByTime(component.SEARCH_DEBOUNCE_TIME);
     expect(resultService.quickSearch).not.toHaveBeenCalled();
     expect(component.results.query).toBe('a');
     expect(component.getVisibleCount()).toBe(0);
     expect(component.hasSearched).toBe(false);
     expect(component.isLoading).toBe(false);
-  }));
+  });
 
-  it('clears stale results and releases loading when the search fails', fakeAsync(() => {
+  it('clears stale results and releases loading when the search fails', () => {
     resultService.quickSearch.mockReturnValue(throwError(() => new Error('search unavailable')));
     component.results = searchResult;
     component.searchText = 'answer';
     component.onSearchChange();
-    tick(component.SEARCH_DEBOUNCE_TIME);
+    jest.advanceTimersByTime(component.SEARCH_DEBOUNCE_TIME);
     expect(component.getVisibleCount()).toBe(0);
     expect(component.results.query).toBe('answer');
     expect(component.isLoading).toBe(false);
     expect(component.hasSearched).toBe(true);
-  }));
+  });
 
   it('keeps at least one result kind selected', () => {
     component.selectedKinds = new Set(['response']);
@@ -158,11 +162,11 @@ describe('TestResultsSearchComponent', () => {
     );
   });
 
-  it('does not run a queued search after the dialog is destroyed', fakeAsync(() => {
+  it('does not run a queued search after the dialog is destroyed', () => {
     component.searchText = 'answer';
     component.onSearchChange();
     component.ngOnDestroy();
-    tick(component.SEARCH_DEBOUNCE_TIME);
+    jest.advanceTimersByTime(component.SEARCH_DEBOUNCE_TIME);
     expect(resultService.quickSearch).not.toHaveBeenCalled();
-  }));
+  });
 });

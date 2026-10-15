@@ -1,7 +1,7 @@
 services:
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4.0
     mem_limit: 1g
+    image: quay.io/keycloak/keycloak:26.4.0
     command: ['start-dev', '--import-realm']
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: test-admin

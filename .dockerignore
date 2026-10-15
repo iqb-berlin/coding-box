@@ -10,7 +10,6 @@ backup
 cache
 changelogDocs
 coverage
-reports
 dist
 node_modules
 release-assets

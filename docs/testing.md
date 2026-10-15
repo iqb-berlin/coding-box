@@ -3,16 +3,18 @@
 ## Required checks
 
 Every pull request to `develop` or `main`, direct branch pipeline, and valid
-release or prerelease tag runs these blocking checks on its own revision:
+release or prerelease tag selects these blocking checks on its own revision:
 
 1. Complete backend Jest suite with coverage and reporter regression tests.
 2. Complete frontend Jest suite with coverage.
 3. Live replay and incomplete item-matrix export against an isolated stack.
-4. Real Keycloak permissions and the browser import → coding → reload → submit
-   → export/download workflow against an isolated stack.
+4. The existing real Keycloak login, permissions, session recovery and file settings suite.
+5. The additional browser import → coding → reload → submit → export/download
+   workflow against an isolated stack.
+6. Lint for both applications.
 
 The frontend and backend unit suites run sequentially. Product image uploads and
-public release publication depend on all four functional gates. A failed or
+public release publication depend on all six gates. A failed or
 missing required gate prevents those uploads. Existing builder and test helper
 images can still be uploaded before the gates. The separate Liquibase rollback
 checks use the uploaded SHA images and run afterwards; a later rollback failure
@@ -29,7 +31,7 @@ including failure paths. Generic calls that ignore exceptions or count method
 invocations are not acceptable substitutes for behaviour tests.
 
 CI retains JUnit results, Cobertura, HTML, lcov and JSON coverage reports for
-30 days, including failed runs. Report paths are `reports/junit/<project>.xml`
+30 days, including failed runs. Report paths are `coverage/apps/<project>/junit.xml`
 and `coverage/apps/<project>/`. Browser failures retain screenshots and redacted
 stack logs under `cypress/replay-artifacts/` and `tmp/replay-e2e-artifacts/`.
 
@@ -56,13 +58,14 @@ from the implementation merely to make a failing test pass.
 Run commands from the repository root, one at a time:
 
 ```sh
-npx nx test backend --codeCoverage --skipNxCache --maxWorkers=2
-npx nx test frontend --codeCoverage --skipNxCache --maxWorkers=2
+npx nx test backend --configuration=ci --skipNxCache --maxWorkers=2
+npx nx test frontend --configuration=ci --skipNxCache --maxWorkers=2
 npx nx lint backend
 npx nx lint frontend
 npx nx run frontend:test-e2e-harness
-npx nx run frontend:e2e-replay-live
-npx nx run frontend:e2e-workflows
+npx nx run frontend:e2e-replay-live --configuration=production
+npx nx run frontend:e2e-auth-live --configuration=production
+npx nx run frontend:e2e-workflows --configuration=production
 ```
 
 The live suites require Docker, Docker Compose and Cypress. Each run creates its
@@ -77,7 +80,7 @@ pressure without replacing real services or application responses.
 
 The workflow fixtures upload baseline player assets through the API, then import
 a new person through the browser. Fixture preparation marks only that synthetic
-response as ready for manual coding and excludes the two baseline replay persons
+response as ready for manual coding and excludes the baseline replay persons
 from the new coding job. It does not assert an automated coding run. Keycloak,
 application responses, PostgreSQL persistence and Redis/Bull jobs are real;
 observation intercepts do not replace successful server responses.
@@ -112,3 +115,12 @@ the access-level check. Nonmembers
 receive an empty member list used by frontend route permission resolution.
 These tests cover the named user and workspace permission boundaries; they do
 not establish a blanket authorization audit of all other administration APIs.
+
+## Integration with the current Angular baseline
+
+The existing zoneless frontend coverage, browser tests, security checks and
+authentication harness remain in place. The additional workflow uses `--workflows`
+and its own Cypress configuration; it does not replace the authentication suite.
+The earlier note-save race correction is already in the baseline. Backend coverage
+and required main/release checks close the remaining gaps. Run the functional
+CI-scenario fixtures through `nx run frontend:test-quality-gates`.

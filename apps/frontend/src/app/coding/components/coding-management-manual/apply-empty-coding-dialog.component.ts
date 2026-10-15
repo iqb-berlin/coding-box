@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,7 +12,8 @@ export interface ApplyEmptyCodingDialogData {
 }
 
 @Component({
-  selector: 'app-apply-empty-coding-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-apply-empty-coding-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -69,20 +70,18 @@ export interface ApplyEmptyCodingDialogData {
   `]
 })
 export class ApplyEmptyCodingDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<ApplyEmptyCodingDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyEmptyCodingDialogData
-  ) { }
+  dialogRef = inject<MatDialogRef<ApplyEmptyCodingDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyEmptyCodingDialogData>(MAT_DIALOG_DATA);
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 
-  getScoreDisplay(score: number | null): string | number {
+  protected getScoreDisplay(score: number | null): string | number {
     return score === null ? 'NA' : score;
   }
 }

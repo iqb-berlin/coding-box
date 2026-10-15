@@ -18,7 +18,7 @@ export async function prepareImportedCoding(state) {
     // Baseline cases belong to the replay fixture. Keep this coding job limited
     // to the newly imported person rather than choosing a random case limit.
     `UPDATE persons SET consider=false WHERE workspace_id=${workspaceId}
-      AND login IN ('replay-login-a', 'replay-login-b');
+      AND login IN ('replay-login-a', 'replay-login-b', 'replay-login-c');
      UPDATE response SET status_v1=8 WHERE variableid='answer_1' AND unitid IN
       (SELECT unit.id FROM unit JOIN booklet ON booklet.id=unit.bookletid
        JOIN persons ON persons.id=booklet.personid

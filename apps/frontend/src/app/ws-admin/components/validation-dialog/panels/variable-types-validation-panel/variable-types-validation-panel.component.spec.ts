@@ -1,10 +1,11 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject, throwError } from 'rxjs';
 import { VariableTypeValidationService } from '../../../../services/validation';
 import { VariableTypesValidationPanelComponent } from './variable-types-validation-panel.component';
 
 describe('VariableTypesValidationPanelComponent', () => {
+  let fixture: ComponentFixture<VariableTypesValidationPanelComponent>;
   let component: VariableTypesValidationPanelComponent;
   let service: {
     observeValidationResult: jest.Mock;
@@ -39,12 +40,13 @@ describe('VariableTypesValidationPanelComponent', () => {
     snackBar = { open: jest.fn() };
     TestBed.configureTestingModule({
       providers: [
-        VariableTypesValidationPanelComponent,
         { provide: VariableTypeValidationService, useValue: service },
         { provide: MatSnackBar, useValue: snackBar }
       ]
     });
-    component = TestBed.inject(VariableTypesValidationPanelComponent);
+    TestBed.overrideComponent(VariableTypesValidationPanelComponent, { set: { template: '', imports: [] } });
+    fixture = TestBed.createComponent(VariableTypesValidationPanelComponent);
+    component = fixture.componentInstance;
   });
 
   afterEach(() => component.ngOnDestroy());
@@ -54,22 +56,22 @@ describe('VariableTypesValidationPanelComponent', () => {
     service.validate.mockReturnValue(pending.asObservable());
     const validateAction = jest.spyOn(component.validate, 'emit');
     component.onValidate();
-    expect(component.isRunning).toBe(true);
+    expect(component.isRunning()).toBe(true);
     expect(service.validate).toHaveBeenCalledWith(1, 10);
     expect(validateAction).toHaveBeenCalledTimes(1);
     pending.next(pageResult);
     pending.complete();
-    expect(component.invalidTypeVariables).toEqual(rows);
-    expect(component.errorCount).toBe(1);
-    expect(component.wasRun).toBe(true);
-    expect(component.isRunning).toBe(false);
+    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.errorCount()).toBe(1);
+    expect(component.wasRun()).toBe(true);
+    expect(component.isRunning()).toBe(false);
   });
 
   it('does not start a second validation while running or disabled', () => {
-    component.disabled = true;
+    fixture.componentRef.setInput('disabled', true);
     component.onValidate();
-    component.disabled = false;
-    component.isRunning = true;
+    fixture.componentRef.setInput('disabled', false);
+    component.isRunning.set(true);
     component.onValidate();
     expect(service.validate).not.toHaveBeenCalled();
   });
@@ -77,8 +79,8 @@ describe('VariableTypesValidationPanelComponent', () => {
   it('reports validation failure and releases the running state', () => {
     service.validate.mockReturnValue(throwError(() => new Error('validation unavailable')));
     component.onValidate();
-    expect(component.isRunning).toBe(false);
-    expect(component.wasRun).toBe(false);
+    expect(component.isRunning()).toBe(false);
+    expect(component.wasRun()).toBe(false);
     expect(snackBar.open).toHaveBeenCalledWith(
       'Fehler bei der Validierung', 'Schließen', { duration: 5000 }
     );
@@ -89,21 +91,21 @@ describe('VariableTypesValidationPanelComponent', () => {
     service.fetchPage.mockReturnValue(pending.asObservable());
     component.onPageChange({ pageIndex: 2, pageSize: 25, length: 60 });
     expect(service.fetchPage).toHaveBeenCalledWith(3, 25);
-    expect(component.isLoadingPage).toBe(true);
+    expect(component.isLoadingPage()).toBe(true);
     pending.next({ ...pageResult, page: 3, limit: 25 });
     pending.complete();
-    expect(component.invalidTypeVariables).toEqual(rows);
-    expect(component.currentPage).toBe(3);
-    expect(component.pageSize).toBe(25);
-    expect(component.isLoadingPage).toBe(false);
+    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.currentPage()).toBe(3);
+    expect(component.pageSize()).toBe(25);
+    expect(component.isLoadingPage()).toBe(false);
   });
 
   it('keeps the current rows visible if a page request fails', () => {
-    component.invalidTypeVariables = rows;
+    component.invalidTypeVariables.set(rows);
     service.fetchPage.mockReturnValue(throwError(() => new Error('page unavailable')));
     component.onPageChange({ pageIndex: 1, pageSize: 10, length: 20 });
-    expect(component.invalidTypeVariables).toEqual(rows);
-    expect(component.isLoadingPage).toBe(false);
+    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.isLoadingPage()).toBe(false);
     expect(snackBar.open).toHaveBeenCalledWith(
       'Fehler beim Laden der Seite', 'Schließen', { duration: 5000 }
     );
@@ -113,26 +115,26 @@ describe('VariableTypesValidationPanelComponent', () => {
     const pendingDelete = new Subject<void>();
     service.deleteSelected.mockReturnValue(pendingDelete.asObservable());
     service.validate.mockReturnValue(of({ ...pageResult, data: [], total: 0 }));
-    component.selectedResponses = new Set([11]);
+    component.selectedResponses.set(new Set([11]));
     component.deleteSelected();
     expect(service.deleteSelected).toHaveBeenCalledWith([11]);
-    expect(component.isDeletingResponses).toBe(true);
+    expect(component.isDeletingResponses()).toBe(true);
     expect(service.validate).not.toHaveBeenCalled();
     pendingDelete.next();
     pendingDelete.complete();
-    expect(component.selectedResponses.size).toBe(0);
-    expect(component.isDeletingResponses).toBe(false);
+    expect(component.selectedResponses().size).toBe(0);
+    expect(component.isDeletingResponses()).toBe(false);
     expect(service.validate).toHaveBeenCalledTimes(1);
-    expect(component.invalidTypeVariables).toEqual([]);
-    expect(component.errorCount).toBe(0);
+    expect(component.invalidTypeVariables()).toEqual([]);
+    expect(component.errorCount()).toBe(0);
   });
 
   it('keeps the selection available for retry when deletion fails', () => {
     service.deleteSelected.mockReturnValue(throwError(() => new Error('delete unavailable')));
-    component.selectedResponses = new Set([11]);
+    component.selectedResponses.set(new Set([11]));
     component.deleteSelected();
-    expect(component.selectedResponses).toEqual(new Set([11]));
-    expect(component.isDeletingResponses).toBe(false);
+    expect(component.selectedResponses()).toEqual(new Set([11]));
+    expect(component.isDeletingResponses()).toBe(false);
     expect(service.validate).not.toHaveBeenCalled();
     expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Löschen', 'Schließen', { duration: 5000 });
   });
@@ -140,15 +142,15 @@ describe('VariableTypesValidationPanelComponent', () => {
   it('shows cached validation errors and stops observing after destruction', () => {
     const cachedResult = new Subject<{ status: string; details: { error: string } }>();
     service.observeValidationResult.mockReturnValue(cachedResult.asObservable());
-    component.invalidTypeVariables = rows;
-    component.totalInvalid = 1;
+    component.invalidTypeVariables.set(rows);
+    component.totalInvalid.set(1);
     component.ngOnInit();
     cachedResult.next({ status: 'failed', details: { error: 'Stored validation failure' } });
-    expect(component.errorMessage).toBe('Stored validation failure');
-    expect(component.invalidTypeVariables).toEqual([]);
-    expect(component.errorCount).toBe(0);
+    expect(component.errorMessage()).toBe('Stored validation failure');
+    expect(component.invalidTypeVariables()).toEqual([]);
+    expect(component.errorCount()).toBe(0);
     component.ngOnDestroy();
     cachedResult.next({ status: 'failed', details: { error: 'Later failure' } });
-    expect(component.errorMessage).toBe('Stored validation failure');
+    expect(component.errorMessage()).toBe('Stored validation failure');
   });
 });

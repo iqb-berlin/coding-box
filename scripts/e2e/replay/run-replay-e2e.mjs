@@ -20,7 +20,9 @@ const projectName = `coding-box-replay-${runId}`
 const runDir = path.join(repoDir, 'tmp', 'replay-e2e', runId);
 const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
-const authMode = process.argv.includes('--auth') || process.env.REPLAY_E2E_AUTH === 'true';
+const workflowMode = process.argv.includes('--workflows');
+const authMode = process.argv.includes('--auth') || workflowMode;
+const production = process.argv.includes('--production');
 const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
 const connectHost = authMode ? '127.0.0.1' : dockerConnectHost;
 const publishHost = process.env.REPLAY_E2E_PUBLISH_HOST || '127.0.0.1';
@@ -35,12 +37,13 @@ const compose = await findComposeCommand();
 await mkdir(runDir, { recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
-const composeFiles = ['--file', composeFile, ...(authMode ? ['--file', path.join(scriptDir, 'docker-compose.auth.yml')] : []), ...(process.env.REPLAY_E2E_COMPOSE_OVERRIDE ? ['--file', path.resolve(process.env.REPLAY_E2E_COMPOSE_OVERRIDE)] : [])];
+const composeFiles = ['--file', composeFile, ...(authMode ? ['--file', path.join(scriptDir, 'docker-compose.auth.yml')] : [])];
 const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloakPort, frontendPort, connectHost) : {};
 const replayEnvironment = {
   ...process.env,
   ...authEnvironment,
   REPLAY_E2E_CONNECT_HOST: connectHost,
+  REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : 'development',
   REPLAY_E2E_API_PORT: String(dockerApiPort),
   REPLAY_E2E_API_URL: `http://${connectHost}:${apiPort}`,
   REPLAY_E2E_BASE_URL: `http://${connectHost}:${frontendPort}`,
@@ -103,7 +106,7 @@ try {
       'cypress',
       'run',
       '--config-file',
-      process.env.REPLAY_E2E_CYPRESS_CONFIG || (authMode ? 'cypress.workflows.config.ts' : 'cypress.replay.config.ts'),
+      workflowMode ? 'cypress.workflows.config.ts' : (authMode ? 'cypress.auth.config.ts' : 'cypress.replay.config.ts'),
       '--browser',
       'electron'
     ],
@@ -214,7 +217,7 @@ async function waitForHttp(url, timeoutMs) {
   let lastStatus = 'unreachable';
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(url);
       lastStatus = `HTTP ${response.status}`;
       if (response.ok) {
         return;
