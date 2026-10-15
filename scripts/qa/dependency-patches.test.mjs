@@ -83,3 +83,20 @@ test('every http-cache-semantics installation uses the corrected release', () =>
     assert.equal(metadata.version, '4.3.0', location);
   }
 });
+
+for (const [name, version] of Object.entries({
+  compression: '1.8.2',
+  'proxy-addr': '2.0.8',
+  'source-map-js': '1.2.2',
+  handlebars: '4.7.10'
+})) {
+  test(`all ${name} installations use the corrected release`, () => {
+    const installations = Object.entries(lock.packages).filter(([location]) => location.endsWith(`/${name}`));
+    assert.ok(installations.length > 0);
+    for (const [location, entry] of installations) {
+      assert.equal(entry.version, version, location);
+      const metadata = JSON.parse(readFileSync(new URL(`../../${location}/package.json`, import.meta.url), 'utf8'));
+      assert.equal(metadata.version, version, location);
+    }
+  });
+}
