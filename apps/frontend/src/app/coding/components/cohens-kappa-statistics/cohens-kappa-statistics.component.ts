@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, Inject, Optional, inject, ChangeDetectionStrategy
+  Component, OnInit, Inject, Optional, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -38,7 +38,6 @@ export interface CohensKappaStatisticsDialogData {
 }
 
 @Component({
-  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-cohens-kappa-statistics',
   templateUrl: './cohens-kappa-statistics.component.html',
   styleUrls: ['./cohens-kappa-statistics.component.scss'],

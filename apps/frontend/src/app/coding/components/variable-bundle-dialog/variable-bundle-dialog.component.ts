@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef
 } from '@angular/core';
 
 import {
@@ -38,7 +38,6 @@ export interface VariableBundleGroupDialogData {
 }
 
 @Component({
-  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-bundle-dialog',
   templateUrl: './variable-bundle-dialog.component.html',
   styleUrls: ['./variable-bundle-dialog.component.scss'],
