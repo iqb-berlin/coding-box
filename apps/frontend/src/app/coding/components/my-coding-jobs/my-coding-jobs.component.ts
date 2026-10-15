@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, inject, DestroyRef, Input, OnChanges, ViewChild, signal
+  Component, OnInit, OnDestroy, inject, DestroyRef, Input, OnChanges, ViewChild, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -56,6 +56,7 @@ import {
 } from '../../utils/replay-url.util';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-my-coding-jobs',
   templateUrl: './my-coding-jobs.component.html',
   styleUrls: ['./my-coding-jobs.component.scss'],

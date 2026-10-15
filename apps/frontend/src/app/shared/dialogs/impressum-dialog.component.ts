@@ -2,7 +2,7 @@ import {
   MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
 import {
-  Component, OnInit, SecurityContext, inject, signal
+  Component, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatButton } from '@angular/material/button';
@@ -11,6 +11,7 @@ import { defaultLegalNoticeHtml } from '../../../../../../api-dto/legal-notice/d
 import { SystemSettingsService } from '../../core/services/system-settings.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1 mat-dialog-title>IQB-Kodierbox - Impressum/Datenschutz</h1>
     <mat-dialog-content>

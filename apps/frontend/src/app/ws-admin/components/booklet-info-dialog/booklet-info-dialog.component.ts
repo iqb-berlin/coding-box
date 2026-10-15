@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, Inject, OnInit, ChangeDetectionStrategy
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,6 +14,7 @@ import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/boo
 import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-booklet-info-dialog',
   templateUrl: './booklet-info-dialog.component.html',
   styleUrls: ['./booklet-info-dialog.component.scss'],

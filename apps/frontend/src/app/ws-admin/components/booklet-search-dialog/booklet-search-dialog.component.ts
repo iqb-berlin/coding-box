@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, ViewChild
+  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,12 +18,14 @@ import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+  MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import {
+  Subject, debounceTime, distinctUntilChanged, takeUntil
+} from 'rxjs';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
@@ -46,6 +49,7 @@ interface BookletSearchResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-booklet-search-dialog',
   templateUrl: './booklet-search-dialog.component.html',
   styleUrls: ['./booklet-search-dialog.component.scss'],
@@ -69,12 +73,12 @@ interface BookletSearchResult {
   ]
 })
 export class BookletSearchDialogComponent implements OnInit {
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly searchCancel$ = new Subject<void>();
   bookletSearchText = '';
-  bookletSearchResults: BookletSearchResult[] = [];
-  isLoading = false;
-  totalResults = 0;
+  readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
+  readonly isLoading = signal(false);
+  readonly totalResults = signal(0);
   currentPage = 1;
   pageSize = 10;
   displayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
@@ -95,7 +99,8 @@ export class BookletSearchDialogComponent implements OnInit {
     // Set up debounced search
     this.searchSubject.pipe(
       debounceTime(500),
-      distinctUntilChanged()
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe(searchText => {
       this.searchBooklets(searchText);
     });
@@ -108,7 +113,7 @@ export class BookletSearchDialogComponent implements OnInit {
   }
 
   onBookletSearchChange(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.searchSubject.next(this.bookletSearchText);
   }
 
@@ -119,29 +124,30 @@ export class BookletSearchDialogComponent implements OnInit {
   }
 
   searchBooklets(bookletName: string): void {
+    this.searchCancel$.next();
     if (!bookletName || bookletName.trim() === '') {
-      this.bookletSearchResults = [];
-      this.totalResults = 0;
-      this.isLoading = false;
+      this.bookletSearchResults.set([]);
+      this.totalResults.set(0);
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.testResultService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
       this.currentPage,
       this.pageSize
-    ).subscribe({
+    ).pipe(takeUntil(this.searchCancel$), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (response: { data: BookletSearchResult[]; total: number }) => {
-        this.bookletSearchResults = response.data;
-        this.totalResults = response.total;
-        this.isLoading = false;
+        this.bookletSearchResults.set(response.data);
+        this.totalResults.set(response.total);
+        this.isLoading.set(false);
       },
       error: () => {
-        this.bookletSearchResults = [];
-        this.totalResults = 0;
-        this.isLoading = false;
+        this.bookletSearchResults.set([]);
+        this.totalResults.set(0);
+        this.isLoading.set(false);
       }
     });
   }
@@ -160,7 +166,7 @@ export class BookletSearchDialogComponent implements OnInit {
     this.fileService.getBookletInfo(
       this.appService.selectedWorkspaceId,
       booklet.bookletName
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (bookletInfo: BookletInfoDto) => {
         loadingSnackBar.dismiss();
 
@@ -197,19 +203,19 @@ export class BookletSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.isLoading = true;
+        this.isLoading.set(true);
         this.testResultService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
-        ).subscribe({
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: (response: { success: boolean; report: { warnings: string[] } }) => {
             if (response.success) {
               // Remove the deleted booklet from the results
-              this.bookletSearchResults = this.bookletSearchResults.filter(
+              this.bookletSearchResults.set(this.bookletSearchResults().filter(
                 b => b.bookletId !== booklet.bookletId
-              );
+              ));
 
               this.snackBar.open(
                 `Booklet "${booklet.bookletName}" wurde erfolgreich gelöscht.`,
@@ -223,7 +229,7 @@ export class BookletSearchDialogComponent implements OnInit {
                 { duration: 5000 }
               );
             }
-            this.isLoading = false;
+            this.isLoading.set(false);
           },
           error: () => {
             this.snackBar.open(
@@ -231,7 +237,7 @@ export class BookletSearchDialogComponent implements OnInit {
               'OK',
               { duration: 5000 }
             );
-            this.isLoading = false;
+            this.isLoading.set(false);
           }
         });
       }
@@ -239,7 +245,7 @@ export class BookletSearchDialogComponent implements OnInit {
   }
 
   deleteAllBooklets(): void {
-    if (this.bookletSearchResults.length === 0) {
+    if (this.bookletSearchResults().length === 0) {
       return;
     }
 
@@ -247,25 +253,25 @@ export class BookletSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: 'Alle Booklets löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults.length} gefundenen Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults().length} gefundenen Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Alle löschen',
         showCancel: true
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        const bookletIds = this.bookletSearchResults.map(booklet => booklet.bookletId);
+        const bookletIds = this.bookletSearchResults().map(booklet => booklet.bookletId);
         let successCount = 0;
         let failCount = 0;
 
-        this.isLoading = true;
+        this.isLoading.set(true);
 
         // Process each booklet deletion sequentially
         const processNextBooklet = (index: number) => {
           if (index >= bookletIds.length) {
             // All booklets processed
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
               'OK',
@@ -279,7 +285,7 @@ export class BookletSearchDialogComponent implements OnInit {
           this.testResultService.deleteBooklet(
             this.appService.selectedWorkspaceId,
             bookletIds[index]
-          ).subscribe({
+          ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
