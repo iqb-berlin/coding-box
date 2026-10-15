@@ -1201,11 +1201,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   selectAllCoders(): void {
-    this.coders().forEach(coder => this.selectedCoders.update(value => {
+    this.selectedCoders.update(value => {
       const next = new Set(value);
-      next.add(coder.id);
+      this.coders().forEach(coder => next.add(coder.id));
       return next;
-    }));
+    });
   }
 
   deselectAllCoders(): void {
