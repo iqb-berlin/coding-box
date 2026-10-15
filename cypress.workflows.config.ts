@@ -19,6 +19,7 @@ export default defineConfig({
         'workflows:setup': () => harness.setup(),
         'workflows:prepare-imported-coding': () => harness.prepareImportedCoding(),
         'workflows:verify-audit-rollback': () => harness.verifyAuditRollback(),
+        'workflows:verify-job-isolation': () => harness.verifyJobIsolation(),
         'workflows:cleanup': () => harness.cleanup()
       });
       on('after:spec', (spec, results) => {

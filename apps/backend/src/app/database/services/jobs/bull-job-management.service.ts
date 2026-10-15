@@ -1,20 +1,30 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, forwardRef
+} from '@nestjs/common';
 import { Job } from 'bull';
-import { JobQueueService } from '../../../job-queue/job-queue.service';
+import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
 import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
 import { CodingStatistics } from '../shared';
+// eslint-disable-next-line import/no-cycle
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingReadinessService } from '../coding/coding-readiness.service';
 
 @Injectable()
 export class BullJobManagementService {
   private readonly logger = new Logger(BullJobManagementService.name);
 
   constructor(
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    @Inject(forwardRef(() => CodingFreshnessService))
+    private codingFreshnessService: CodingFreshnessService,
+    @Inject(forwardRef(() => CodingReadinessService))
+    private codingReadinessService: CodingReadinessService
   ) {}
 
-  async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async pauseJob(jobId: string, workspaceId: number): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob<TestPersonCodingJobData>(workspaceId, 'test-person-coding', jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -42,9 +52,9 @@ export class BullJobManagementService {
     }
   }
 
-  async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async resumeJob(jobId: string, workspaceId: number): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob<TestPersonCodingJobData>(workspaceId, 'test-person-coding', jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -67,9 +77,9 @@ export class BullJobManagementService {
     }
   }
 
-  async restartJob(jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
+  async restartJob(jobId: string, workspaceId: number): Promise<{ success: boolean; message: string; jobId?: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob<TestPersonCodingJobData>(workspaceId, 'test-person-coding', jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -82,20 +92,38 @@ export class BullJobManagementService {
         };
       }
 
-      const restartData = {
+      const autoCoderRun = requireAutoCoderRun(bullJob.data.autoCoderRun);
+
+      const sourceRevision = bullJob.data.freshnessSourceRevision;
+      if (sourceRevision !== undefined && (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0)) {
+        return {
+          success: false,
+          message: 'Der Job kann nicht neu gestartet werden: Die geplante Datenrevision ist ungültig.'
+        };
+      }
+
+      await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', bullJob.data.workspaceId);
+      await this.codingFreshnessService.assertAutoCodingRunCanStart(workspaceId, autoCoderRun);
+      await this.codingReadinessService.assertAutoCodingCanProcess(workspaceId, {
+        personIds: bullJob.data.personIds,
+        unitIds: bullJob.data.unitIds,
+        autoCoderRun
+      });
+
+      if (sourceRevision !== undefined && !await this.codingFreshnessService.isRevisionCurrent(workspaceId, sourceRevision)) {
+        return {
+          success: false,
+          message: 'Der Job kann nicht neu gestartet werden, weil sich die Testdaten oder Kodierschemata seit seiner Planung geändert haben. Bitte starten Sie einen neuen Autocoder-Lauf.'
+        };
+      }
+
+      const newJob = await this.jobQueueService.addTestPersonCodingJob({
         ...bullJob.data,
         isPaused: false,
-        autoCoderRun: requireAutoCoderRun(bullJob.data.autoCoderRun)
-      };
-      await this.jobQueueService.assertNoDependencyConflicts(
-        'test-person-coding',
-        restartData.workspaceId
-      );
-      const newJob = await this.jobQueueService.addTestPersonCodingJob(
-        restartData
-      );
+        autoCoderRun
+      });
 
-      await this.jobQueueService.deleteTestPersonCodingJob(jobId);
+      await this.jobQueueService.deleteTestPersonCodingJob(jobId, workspaceId);
 
       this.logger.log(`Job ${jobId} has been restarted as job ${newJob.id}`);
       return {
