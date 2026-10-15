@@ -63,6 +63,26 @@ describe('CodebookDocxGenerator integration', () => {
     consoleWarnSpy.mockRestore();
   });
 
+  it.each([false, true])('retains code and general text around failed inline images, score=%p', async showScore => {
+    const html = '<p><strong>VOR</strong><img src="data:image/png;base64,YQ==">' +
+      '<span style="color:#ff0000">NACH</span></p><p>WEITER</p>';
+    const units = buildUnits(html);
+    units[0].variables[0].generalInstruction = html;
+    const xml = new AdmZip(await CodebookDocxGenerator.generateDocx(
+      units, { ...defaultSettings, hasGeneralInstructions: true, showScore }
+    )).readAsText('word/document.xml');
+    const paragraphs = xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g) || [];
+    const instructions = paragraphs.filter(paragraph => paragraph.includes('>VOR</w:t>'));
+    expect(instructions).toHaveLength(2);
+    instructions.forEach(paragraph => {
+      expect(paragraph).toContain('>HTML konnte nicht verarbeitet werden.</w:t>');
+      expect(paragraph).toContain('>NACH</w:t>');
+      expect(paragraph).toContain('<w:b/>');
+      expect(paragraph).toContain('<w:color w:val="FF0000"/>');
+    });
+    expect(paragraphs.filter(paragraph => paragraph.includes('>WEITER</w:t>'))).toHaveLength(2);
+  });
+
   it.each([
     ['<p>10&nbsp;kg</p>', '10\u00a0kg'],
     ['<p>20&#8239;cm</p>', '20\u202fcm'],
