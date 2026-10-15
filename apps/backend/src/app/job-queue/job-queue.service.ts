@@ -25,6 +25,7 @@ ValidationTask,
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
+  requestedByUserId?: number;
   file: FileIo;
   resultType: 'logs' | 'responses';
   overwriteExisting: boolean;
@@ -85,6 +86,7 @@ export interface CodebookJobResult {
 
 export interface ResetCodingVersionJobData {
   workspaceId: number;
+  requestedByUserId?: number | string;
   version: 'v1' | 'v2' | 'v3';
   unitFilters?: string[];
   variableFilters?: string[];

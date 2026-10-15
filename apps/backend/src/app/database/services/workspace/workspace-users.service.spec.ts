@@ -2,6 +2,7 @@ import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceUsersService } from './workspace-users.service';
+import { JournalService } from '../shared/journal.service';
 
 const createLockedRowsQuery = (rows: unknown[] = []) => ({
   setLock: jest.fn().mockReturnThis(),
@@ -41,6 +42,7 @@ describe('WorkspaceUsersService', () => {
   let service: WorkspaceUsersService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     workspaceUsersRepository = createRepo();
     usersRepository = createRepo();
     workspacesRepository = createRepo();

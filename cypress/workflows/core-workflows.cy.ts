@@ -1,3 +1,5 @@
+import { AuditJournalEntryDto } from '../../api-dto/audit-journal/audit-journal.dto';
+
 type WorkflowSetup = {
   apiUrl: string;
   baseUrl: string;
@@ -5,6 +7,7 @@ type WorkflowSetup = {
   keycloakUrl: string;
   username: string;
   password: string;
+  userId: number;
 };
 
 type BackgroundJob = { status: string; error?: string };
@@ -44,7 +47,8 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
       cy.get('#kc-login').click();
     });
     cy.wait('@loginToken', { log: false }).its('response.statusCode').should('eq', 200);
-    cy.wait('@authData', { log: false }).its('response.statusCode').should('eq', 200);
+    // Re-login can validate unchanged browser-cached auth data with an ETag.
+    cy.wait('@authData', { log: false }).its('response.statusCode').should('be.oneOf', [200, 304]);
     cy.get('coding-box-home').should('be.visible');
   }
 
@@ -130,7 +134,20 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     cy.wait('@uploadComplete').then(({ response }) => {
       expect(response?.statusCode).to.equal(201);
       expect(response?.body[0].jobId).to.be.a('string');
-      waitForJob(`/admin/workspace/${setup.workspaceId}/upload/status/${response?.body[0].jobId}`);
+      const uploadJobId = response?.body[0].jobId;
+      waitForJob(`/admin/workspace/${setup.workspaceId}/upload/status/${uploadJobId}`);
+      apiRequest(`/admin/workspace/${setup.workspaceId}/journal?eventType=TEST_RESULTS_IMPORTED&limit=100`)
+        .then(({ body }) => {
+          const batch = (body.data as AuditJournalEntryDto[]).find(entry =>
+            entry.jobId === uploadJobId && entry.details?.phase === 'responses');
+          expect(batch, 'persisted audit of this browser upload').to.include({
+            workspaceId: setup.workspaceId, actorUserId: setup.userId,
+            actorType: 'job', eventType: 'TEST_RESULTS_IMPORTED', result: 'success'
+          });
+          expect(batch?.details).to.include({ source: 'upload', savedResponses: 1 });
+          expect(JSON.stringify(batch)).not.to.include('WORKFLOW-RESPONSE');
+          expect(JSON.stringify(batch)).not.to.include('workflow-import');
+        });
     });
     cy.get('coding-box-test-results-upload-result-dialog', { timeout: 120_000 })
       .should('be.visible').and('contain.text', 'Antworten');
@@ -249,6 +266,57 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
           expect(row?.[header.indexOf('Kommentar')]).to.equal('Persisted workflow note');
         });
       });
+    });
+  });
+
+  it('persists manual notes with trusted identity and exports formula-safe journal CSV', () => {
+    login(setup.username);
+    const route = `/admin/workspace/${setup.workspaceId}/journal`;
+    for (const claim of [
+      { eventType: 'ACCESS_LEVEL_CHANGED' },
+      { actorType: 'job' },
+      { actorType: 'system' },
+      { actorUserId: 999 },
+      { jobId: 'forged-job' },
+      { correlationId: 'forged-request' }
+    ]) {
+      apiRequest(route, { method: 'POST', body: { summary: 'Synthetic note', ...claim }, failOnStatusCode: false })
+        .its('status').should('eq', 400);
+    }
+    apiRequest(route, {
+      method: 'POST',
+      body: {
+        action_type: 'delete', result: 'failure', summary: '=synthetic-audit-formula',
+        entityType: 'workspace', entityId: String(setup.workspaceId),
+        details: { source: 'job', note: 'Synthetic manual note' }
+      }
+    }).then(({ status, body }) => {
+      expect(status).to.equal(201);
+      expect(body).to.include({
+        workspaceId: setup.workspaceId, actorUserId: setup.userId, actorType: 'user',
+        eventType: 'MANUAL_NOTE_CREATED', result: 'success', jobId: null, correlationId: null
+      });
+      expect(body.details).to.include({ source: 'manual', reportedActionType: 'delete', reportedResult: 'failure' });
+      apiRequest(`${route}?eventType=MANUAL_NOTE_CREATED`).then(({ body: persisted }) => {
+        expect(persisted.data).to.deep.include(body);
+      });
+    });
+    apiRequest(`${route}/csv`).then(({ headers, body }) => {
+      expect(headers['content-type']).to.include('text/csv');
+      expect(headers['content-disposition']).to.include('attachment');
+      expect(body).to.include(",success,'=synthetic-audit-formula,");
+    });
+  });
+
+  it('rolls back a real PostgreSQL deletion when its audit fails, then commits both together', () => {
+    // The fixture's API credential stays valid through the SQL checks. Browser
+    // identity/provenance is independently verified by the preceding cases.
+    cy.task('workflows:verify-audit-rollback', null, {
+      log: false, timeout: 120_000
+    }).then(result => {
+      const proof = result as { rollbackVerified: boolean; deletionVerified: boolean; actorUserId: number };
+      expect(proof).to.include({ rollbackVerified: true, deletionVerified: true });
+      expect(proof.actorUserId).to.be.a('number').and.be.greaterThan(0);
     });
   });
 });

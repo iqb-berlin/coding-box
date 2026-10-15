@@ -18,6 +18,7 @@ export default defineConfig({
       on('task', {
         'workflows:setup': () => harness.setup(),
         'workflows:prepare-imported-coding': () => harness.prepareImportedCoding(),
+        'workflows:verify-audit-rollback': () => harness.verifyAuditRollback(),
         'workflows:cleanup': () => harness.cleanup()
       });
       on('after:spec', (spec, results) => {

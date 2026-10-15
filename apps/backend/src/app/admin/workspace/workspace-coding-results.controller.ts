@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Req,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -98,10 +99,12 @@ export class WorkspaceCodingResultsController {
   async applyCodingResults(
     @WorkspaceId() workspace_id: number,
       @Param('jobId') jobId: number,
-      @Body('overwriteExisting') overwriteExisting?: boolean
+      @Body('overwriteExisting') overwriteExisting?: boolean,
+      @Req() request?: { user: { id: number } }
   ): Promise<ApplyCodingResultsResult> {
     return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId, {
-      overwriteExisting: overwriteExisting === true
+      overwriteExisting: overwriteExisting === true,
+      actorUserId: request?.user.id
     });
   }
 
@@ -182,30 +185,31 @@ export class WorkspaceCodingResultsController {
       }
     }
   })
-  async bulkApplyCodingResults(@WorkspaceId() workspace_id: number): Promise<{
-    success: boolean;
-    jobsProcessed: number;
-    totalUpdatedResponses: number;
-    totalSkippedReview: number;
-    totalSkippedAlreadyCoded: number;
-    totalOverwrittenExisting: number;
-    message: string;
-    results: Array<{
-      jobId: number;
-      jobName: string;
-      hasIssues: boolean;
-      skipped: boolean;
-      skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
-      result?: {
-        success: boolean;
-        updatedResponsesCount: number;
-        skippedReviewCount: number;
-        skippedAlreadyCodedCount: number;
-        overwrittenExistingCount: number;
-        message: string;
-      };
-    }>;
-  }> {
-    return this.codingJobOperationsService.bulkApplyCodingResults(workspace_id);
+  async bulkApplyCodingResults(@WorkspaceId() workspace_id: number,
+    @Req() request?: { user: { id: number } }): Promise<{
+      success: boolean;
+      jobsProcessed: number;
+      totalUpdatedResponses: number;
+      totalSkippedReview: number;
+      totalSkippedAlreadyCoded: number;
+      totalOverwrittenExisting: number;
+      message: string;
+      results: Array<{
+        jobId: number;
+        jobName: string;
+        hasIssues: boolean;
+        skipped: boolean;
+        skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
+        result?: {
+          success: boolean;
+          updatedResponsesCount: number;
+          skippedReviewCount: number;
+          skippedAlreadyCodedCount: number;
+          overwrittenExistingCount: number;
+          message: string;
+        };
+      }>;
+    }> {
+    return this.codingJobOperationsService.bulkApplyCodingResults(workspace_id, request?.user.id);
   }
 }

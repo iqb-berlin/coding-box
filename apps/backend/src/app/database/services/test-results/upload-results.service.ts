@@ -26,6 +26,7 @@ import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+import { JournalService } from '../shared/journal.service';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -622,7 +623,9 @@ export class UploadResultsService {
               );
               return pWithBooklets;
             });
-            const result = await this.personService.processPersonLogs(personList, unitLogs, bookletLogs, overwriteExisting);
+            const result = await this.personService.processPersonLogs(personList, unitLogs, bookletLogs, overwriteExisting, {
+              workspaceId, actorUserId: job.data.requestedByUserId, actorType: 'job', jobId: job.id, source: 'upload'
+            });
             importSummaryAgg.savedLogs += result.totalLogsSaved || 0;
             importSummaryAgg.skippedLogs += result.totalLogsSkipped || 0;
             if (result.issues) {
@@ -729,7 +732,11 @@ export class UploadResultsService {
                   filteredPersons,
                   workspaceId,
                   overwriteMode,
-                  scope === 'workspace' ? 'workspace' : 'person'
+                  scope === 'workspace' ? 'workspace' : 'person',
+                  issues,
+                  {
+                    workspaceId, actorUserId: job.data.requestedByUserId, actorType: 'job', jobId: job.id, source: 'upload'
+                  }
                 ) || {
                   addedUnitIds: [],
                   changedUnitIds: [],
@@ -787,6 +794,39 @@ export class UploadResultsService {
     } catch (e) {
       this.logger.error(`Error processing file ${file.originalname}: ${e.message}`);
       issues.push({ level: 'error', message: `Processing error: ${e.message}`, fileName: file.originalname });
+    }
+
+    try {
+      await this.connection.transaction(manager => JournalService.recordEventInTransaction(manager, {
+        workspaceId,
+        actorUserId: job.data.requestedByUserId,
+        actorType: 'job',
+        eventType: 'TEST_RESULTS_IMPORTED',
+        entityType: 'workspace',
+        entityId: workspaceId,
+        jobId: job.id,
+        result: issues.some(issue => issue.level === 'error') ? 'failure' : 'success',
+        summary: 'Test results upload processed',
+        details: {
+          source: 'upload',
+          phase: 'summary',
+          resultType,
+          overwriteMode,
+          scope,
+          totalRows: importSummaryAgg.totalRows,
+          savedResponses: importSummaryAgg.savedResponses,
+          deletedResponses: importSummaryAgg.deletedResponses,
+          savedLogs: importSummaryAgg.savedLogs,
+          skippedRows: importSummaryAgg.skippedRows
+        }
+      }));
+    } catch (error) {
+      this.logger.error(`Could not record upload import summary: ${error.message}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message: 'Das abschließende Importereignis konnte nicht gespeichert werden. Die verarbeiteten Datenstapel sind separat protokolliert. Starten Sie diesen Lauf nicht erneut.'
+      });
     }
 
     overviewPending = overviewPending ||
@@ -870,7 +910,8 @@ export class UploadResultsService {
     personMatchMode?: 'strict' | 'loose',
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person',
-    scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined
+    scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined,
+    requestedByUserId?: number
   ): Promise<TestResultsUploadJobDto[]> {
     if (!Array.isArray(originalFiles) || originalFiles.length === 0) {
       this.logger.error('The uploaded files parameter is not an array or is empty.');
@@ -897,6 +938,7 @@ export class UploadResultsService {
 
       return this.jobQueueService.addUploadJob({
         workspaceId: workspace_id,
+        requestedByUserId,
         file: jobFile,
         resultType,
         overwriteExisting,

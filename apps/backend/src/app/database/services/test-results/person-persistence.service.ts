@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Brackets, In, Repository } from 'typeorm';
+import {
+  Brackets, EntityManager, In, Repository
+} from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import {
   Log,
@@ -22,6 +24,10 @@ import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
+
+export type TestResultsImportAuditContext = Pick<RecordAuditJournalEventInput,
+'workspaceId' | 'actorUserId' | 'actorType' | 'jobId' | 'correlationId'> & { source: 'upload' | 'testcenter' };
 
 export interface TestResultsMutationSummary {
   addedUnitIds: number[];
@@ -63,6 +69,7 @@ type ResponseInsertEntry = {
 @Injectable()
 export class PersonPersistenceService {
   private readonly logger = new Logger(PersonPersistenceService.name);
+  private importTransaction = false;
 
   constructor(
     @InjectRepository(Persons)
@@ -86,6 +93,49 @@ export class PersonPersistenceService {
     @InjectRepository(UnitLog)
     private unitLogRepository: Repository<UnitLog>
   ) { }
+
+  private forImportTransaction(manager: EntityManager): PersonPersistenceService {
+    const service = new PersonPersistenceService(
+      manager.getRepository(Persons),
+      manager.getRepository(Booklet),
+      manager.getRepository(Unit),
+      manager.getRepository(UnitLastState),
+      manager.getRepository(BookletInfo),
+      manager.getRepository(ResponseEntity),
+      manager.getRepository(ChunkEntity),
+      manager.getRepository(BookletLog),
+      manager.getRepository(Session),
+      manager.getRepository(UnitLog)
+    );
+    service.importTransaction = true;
+    return service;
+  }
+
+  private async completeWrites(writes: Promise<unknown>[]): Promise<void> {
+    if (!this.importTransaction) {
+      await Promise.all(writes);
+      return;
+    }
+    // Let all writes on this manager settle before the transaction can roll back.
+    const results = await Promise.allSettled(writes);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  }
+
+  private recordImportBatch(manager: EntityManager, audit: TestResultsImportAuditContext,
+                            success: boolean, details: Record<string, unknown>) {
+    const { source, ...provenance } = audit;
+    return JournalService.recordEventInTransaction(manager, {
+      ...provenance,
+      eventType: 'TEST_RESULTS_IMPORTED',
+      entityType: 'workspace',
+      entityId: audit.workspaceId,
+      result: success ? 'success' : 'failure',
+      summary: 'Test results import batch committed',
+      details: { source, ...details }
+    });
+  }
 
   /**
    * Mark persons as not to be considered
@@ -160,8 +210,26 @@ export class PersonPersistenceService {
     workspace_id: number,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
-    issues: TestResultsUploadIssueDto[] = []
+    issues: TestResultsUploadIssueDto[] = [],
+    audit?: TestResultsImportAuditContext
   ): Promise<TestResultsMutationSummary> {
+    if (audit) {
+      if (audit.workspaceId !== workspace_id) throw new Error('Import audit workspace does not match');
+      const issueOffset = issues.length;
+      return this.personsRepository.manager.transaction(async manager => {
+        const result = await this.forImportTransaction(manager).processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
+        await this.recordImportBatch(manager, audit, !issues.slice(issueOffset).some(issue => issue.level === 'error'), {
+          phase: 'responses',
+          personCount: personList.length,
+          overwriteMode,
+          savedResponses: result.savedResponseCount || 0,
+          deletedResponses: result.deletedResponseCount || 0,
+          addedUnitCount: result.addedUnitIds.length,
+          changedUnitCount: result.changedUnitIds.length
+        });
+        return result;
+      });
+    }
     const mutationSummary = this.createMutationSummary();
     try {
       if (!Array.isArray(personList) || personList.length === 0) {
@@ -258,6 +326,7 @@ export class PersonPersistenceService {
               }
             }
           } catch (bookletError) {
+            if (this.importTransaction) throw bookletError;
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${person.id}: ${bookletError.message}`
             );
@@ -271,6 +340,7 @@ export class PersonPersistenceService {
         `${totalResponsesProcessed} responses processed, ${totalResponsesSkipped} responses skipped.`
       );
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
 
@@ -331,7 +401,7 @@ export class PersonPersistenceService {
       const batchSize = 10;
       for (let i = 0; i < booklet.units.length; i += batchSize) {
         const unitBatch = booklet.units.slice(i, i + batchSize);
-        await Promise.all(
+        await this.completeWrites(
           unitBatch.map(async unit => {
             if (!unit || !unit.id) {
               return;
@@ -359,7 +429,7 @@ export class PersonPersistenceService {
               );
 
               if (targetUnit) {
-                await Promise.all([
+                await this.completeWrites([
                   this.saveUnitLastState(unit, targetUnit),
                   this.processChunks(unit, targetUnit, booklet)
                 ]);
@@ -386,6 +456,7 @@ export class PersonPersistenceService {
                 }
               }
             } catch (unitError) {
+              if (this.importTransaction) throw unitError;
               const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
               this.logger.error(msg);
               issues.push({ level: 'error', message: msg, category: 'other' });
@@ -426,6 +497,7 @@ export class PersonPersistenceService {
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save last state for unit ${unit.id}: ${error.message}`);
     }
   }
@@ -452,6 +524,7 @@ export class PersonPersistenceService {
         success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
       return {
         success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
@@ -519,6 +592,7 @@ export class PersonPersistenceService {
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
     }
   }
@@ -621,6 +695,7 @@ export class PersonPersistenceService {
         addedResponseIds: Array.from(new Set(addedResponseIds))
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
       return {
         success: false,
@@ -648,6 +723,7 @@ export class PersonPersistenceService {
       const fallbackIds = await this.findResponseIdsForEntries(entries);
       return this.uniquePositiveIds([...savedIds, ...fallbackIds]);
     } catch (error) {
+      if (this.importTransaction) throw error;
       const detail = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn(`Could not resolve saved response ids after import: ${detail}`);
       return savedIds;
@@ -757,7 +833,8 @@ export class PersonPersistenceService {
     persons: Person[],
     unitLogs: Log[],
     bookletLogs: Log[],
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    audit?: TestResultsImportAuditContext
   ): Promise<{
       success: boolean;
       totalBooklets: number;
@@ -765,6 +842,16 @@ export class PersonPersistenceService {
       totalLogsSkipped: number;
       issues?: TestResultsUploadIssueDto[];
     }> {
+    if (audit) {
+      if (persons.some(person => person.workspace_id !== audit.workspaceId)) throw new Error('Import audit workspace does not match');
+      return this.personsRepository.manager.transaction(async manager => {
+        const result = await this.forImportTransaction(manager).processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs);
+        await this.recordImportBatch(manager, audit, result.success, {
+          phase: 'logs', savedLogs: result.totalLogsSaved, skippedLogs: result.totalLogsSkipped, overwriteExistingLogs
+        });
+        return result;
+      });
+    }
     let totalBooklets = 0;
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
@@ -882,8 +969,12 @@ export class PersonPersistenceService {
             }
 
             await this.storeBookletSessions(booklet, existingBooklet, overwriteExistingLogs);
-            await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
+            const unitLogsResult = await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
+            totalLogsSaved += unitLogsResult.saved;
+            totalLogsSkipped += unitLogsResult.skipped;
+            success = success && unitLogsResult.success;
           } catch (error) {
+            if (this.importTransaction) throw error;
             success = false;
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${originalPerson.code}: ${error.message}`
@@ -905,6 +996,7 @@ export class PersonPersistenceService {
         issues: issues.length > 0 ? issues : undefined
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Critical error while processing person logs: ${error.message}`
       );
@@ -961,6 +1053,7 @@ export class PersonPersistenceService {
 
       return { success: true, saved: booklet.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for booklet ${booklet.id}: ${error.message}`
       );
@@ -1058,9 +1151,10 @@ export class PersonPersistenceService {
     person: Person,
     overwriteExistingLogs: boolean = true,
     issues?: TestResultsUploadIssueDto[]
-  ): Promise<void> {
+  ): Promise<{ success: boolean; saved: number; skipped: number }> {
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
+    let success = true;
 
     for (const unit of booklet.units) {
       if (!unit || !unit.id) {
@@ -1109,6 +1203,9 @@ export class PersonPersistenceService {
       if (result.success) {
         totalLogsSaved += result.saved;
         totalLogsSkipped += result.skipped;
+      } else {
+        success = false;
+        issues?.push({ level: 'error', category: 'other', message: `Logs für Unit ${unit.id} konnten nicht gespeichert werden.` });
       }
     }
 
@@ -1116,6 +1213,7 @@ export class PersonPersistenceService {
       `Processed unit logs for booklet ${booklet.id}: ` +
       `${totalLogsSaved} logs saved, ${totalLogsSkipped} logs skipped`
     );
+    return { success, saved: totalLogsSaved, skipped: totalLogsSkipped };
   }
 
   /**
@@ -1166,6 +1264,7 @@ export class PersonPersistenceService {
       this.logger.log(`Saved ${unit.logs.length} logs for unit ${unit.id}`);
       return { success: true, saved: unit.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for unit ${unit.id}: ${error.message}`
       );

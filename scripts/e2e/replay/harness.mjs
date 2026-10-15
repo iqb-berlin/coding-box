@@ -51,6 +51,14 @@ export function createReplayHarness(environment = process.env) {
       return prepareImportedCoding(activeState);
     },
 
+    async verifyAuditRollback() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Audit rollback verification requires the isolated authentication fixture.');
+      }
+      const { verifyAuditRollback } = await import('./audit-fixture.mjs');
+      return verifyAuditRollback(activeState);
+    },
+
     async readFileSettings() {
       if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
         throw new Error('File settings read requires the isolated authentication fixture.');
