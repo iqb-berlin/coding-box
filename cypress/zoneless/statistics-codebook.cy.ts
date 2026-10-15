@@ -213,12 +213,12 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
       cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Codebook').click();
       cy.get('coding-box-export-coding-book').as('dialog');
-      cy.get('@dialog').find('mat-spinner').should('be.visible');
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').should('be.disabled');
       cy.then(() => { releaseUnits(); });
       cy.wait('@units');
-      cy.get('@dialog').find('mat-spinner').should('not.exist');
-      cy.get('@dialog').find('.select-all-container input').check();
-      cy.get('@dialog').find('.options-grid mat-checkbox').eq(1).find('input').uncheck();
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').should('not.be.disabled');
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').check();
+      cy.get('@dialog').contains('mat-checkbox', 'Allgemeine Hinweise für jede Variable').find('input').uncheck();
       cy.get('@dialog').find('button[type="submit"]').click();
       cy.wait('@startCodebook');
       cy.get('@dialog').find('button[type="submit"]').should('be.disabled');
