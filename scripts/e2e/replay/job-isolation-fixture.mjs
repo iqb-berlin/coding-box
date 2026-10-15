@@ -65,8 +65,10 @@ export async function verifyJobIsolation(state) {
     const analysisPath = `/variable-analysis/jobs/${encodeURIComponent(analysis.body.id)}`;
     const completedAnalysis = await pollCompleted(`${owner}${analysisPath}`);
     assert.equal(completedAnalysis.workspace_id, workspaceId);
-    const results = await request(`${owner}${analysisPath}/results`);
-    assert.equal(results.status, 200);
+    // Real processor results are chunked; the API serves them through pagination.
+    const resultsPath = `${analysisPath}/results/page`;
+    const results = await request(`${owner}${resultsPath}`);
+    assert.equal(results.status, 200, JSON.stringify(results.body));
     assert.ok(Array.isArray(results.body.variableCombos));
     assert.ok(Number.isSafeInteger(results.body.total) && results.body.total >= 0);
     const assertOwnerAnalysis = async () => {
@@ -75,7 +77,7 @@ export async function verifyJobIsolation(state) {
       assert.equal(status.body.id, analysis.body.id);
       assert.equal(status.body.workspace_id, workspaceId);
       assert.equal(status.body.status, 'completed');
-      assert.deepEqual(await request(`${owner}${analysisPath}/results`), results,
+      assert.deepEqual(await request(`${owner}${resultsPath}`), results,
         'A foreign mutation must preserve the owner job and cached results');
     };
     const foreignCancel = await request(`${other}${analysisPath}/cancel`, 'POST');
@@ -88,6 +90,7 @@ export async function verifyJobIsolation(state) {
     await assertOwnerAnalysis();
     assert.equal((await request(`${other}${analysisPath}`)).status, 404);
     assert.equal((await request(`${other}${analysisPath}/results`)).status, 404);
+    assert.equal((await request(`${other}${resultsPath}`)).status, 404);
 
     // Prior browser views may have populated this exact workspace/version cache.
     // Remove only that synthetic key so the API must return a real Bull job.
@@ -119,7 +122,7 @@ export async function verifyJobIsolation(state) {
     assert.equal(deleted.status, 200);
     assert.equal(deleted.body.success, true);
     assert.equal((await request(`${owner}${analysisPath}`)).status, 404);
-    assert.equal((await request(`${owner}${analysisPath}/results`)).status, 404);
+    assert.equal((await request(`${owner}${resultsPath}`)).status, 404);
     return {
       workspaceAccessVerified: true,
       foreignMutationsRejected: true,
