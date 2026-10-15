@@ -42,7 +42,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
 
   private destroyRef = inject(DestroyRef);
-  private changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   protected userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   protected displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];

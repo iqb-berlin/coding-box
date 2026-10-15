@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -8,6 +8,7 @@ import { WorkspaceUserDto } from '../../../../../../../api-dto/workspaces/worksp
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
+import { UsersSelectionComponent } from './users-selection.component';
 
 describe('User selection in the workspace rights dialog without Zone', () => {
   let users: Subject<UserFullDto[]>;
@@ -77,5 +78,52 @@ describe('User selection in the workspace rights dialog without Zone', () => {
     expect(fixture.componentInstance.result()).toEqual([7]);
     const saveButton: HTMLButtonElement = fixture.nativeElement.querySelector('button[color="primary"]');
     expect(saveButton.disabled).toBe(false);
+  });
+});
+
+describe('UsersSelectionComponent delayed lists', () => {
+  let fixture: ComponentFixture<UsersSelectionComponent>;
+  let response: Subject<UserFullDto[]>;
+  let getUsersFull: jest.Mock;
+
+  beforeEach(async () => {
+    response = new Subject<UserFullDto[]>();
+    getUsersFull = jest.fn().mockReturnValue(response);
+    await TestBed.configureTestingModule({
+      imports: [UsersSelectionComponent, TranslateModule.forRoot()],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: UserBackendService, useValue: { getUsersFull } },
+        { provide: WorkspaceBackendService, useValue: { getAllWorkspacesList: () => of({ data: [] }) } }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(UsersSelectionComponent);
+    fixture.componentRef.setInput('selectedUserIds', [7]);
+    await fixture.whenStable();
+  });
+
+  afterEach(() => fixture.destroy());
+
+  it('renders delayed users and existing access selections without another interaction', async () => {
+    response.next([{ id: 7, username: 'delayed-user' }]);
+    await fixture.whenStable();
+
+    const row = fixture.nativeElement.querySelector('mat-row') as HTMLElement;
+    expect(row?.textContent).toContain('delayed-user');
+    expect((row.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('replaces the visible list when a later refresh arrives', async () => {
+    response.next([{ id: 1, username: 'before-refresh' }]);
+    response.complete();
+    await fixture.whenStable();
+    const refreshed = new Subject<UserFullDto[]>();
+    getUsersFull.mockReturnValue(refreshed);
+    fixture.componentInstance.updateUserList();
+    refreshed.next([{ id: 1, username: 'after-refresh' }]);
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.textContent).toContain('after-refresh');
+    expect(fixture.nativeElement.textContent).not.toContain('before-refresh');
   });
 });
