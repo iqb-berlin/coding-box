@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -43,13 +43,11 @@ export interface CodebookJobDefinitionPickerDialogData {
   styleUrls: ['./codebook-job-definition-picker-dialog.component.scss']
 })
 export class CodebookJobDefinitionPickerDialogComponent {
+  protected dialogRef = inject<MatDialogRef<CodebookJobDefinitionPickerDialogComponent, number | null | undefined>>(MatDialogRef);
+  protected data = inject<CodebookJobDefinitionPickerDialogData>(MAT_DIALOG_DATA);
+
   filterText = '';
   selectedJobDefinitionId: number | null = this.data.selectedJobDefinitionId;
-
-  constructor(
-    protected dialogRef: MatDialogRef<CodebookJobDefinitionPickerDialogComponent, number | null | undefined>,
-    @Inject(MAT_DIALOG_DATA) protected data: CodebookJobDefinitionPickerDialogData
-  ) {}
 
   get filteredOptions(): CodebookJobDefinitionOption[] {
     const normalizedFilter = this.filterText.trim().toLowerCase();

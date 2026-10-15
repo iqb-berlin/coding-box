@@ -1,5 +1,11 @@
+/**
+ * @jest-config-loader ts-node
+ * @jest-config-loader-options {"compilerOptions":{"module":"CommonJS"}}
+ */
 export default {
   displayName: 'frontend',
+  // Recycle large Angular workers between files to bound CI memory usage.
+  workerIdleMemoryLimit: '1GB',
   preset: '../../jest.preset.js',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   globals: {
@@ -14,17 +20,21 @@ export default {
       }
     ]
   },
-  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver|d3-[^/]*|keycloak-js)'],
+  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver|keycloak-js)'],
   snapshotSerializers: [
     'jest-preset-angular/build/serializers/no-ng-attributes',
     'jest-preset-angular/build/serializers/ng-snapshot',
     'jest-preset-angular/build/serializers/html-comment'
   ],
   moduleNameMapper: {
-    '^@swimlane/ngx-charts$': '<rootDir>/src/test-mocks.ts',
     '^keycloak-js$': '<rootDir>/src/mocks/keycloak-js.mock.ts',
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'
   },
-  coverageDirectory: '../../coverage/apps/frontend'
+  coverageDirectory: '../../coverage/apps/frontend',
+  coverageReporters: ['text-summary', 'html', 'lcov', 'json', 'cobertura'],
+  reporters: [
+    'default',
+    ['jest-junit', { outputDirectory: '<rootDir>/../../coverage/apps/frontend', outputName: 'junit.xml' }]
+  ]
 };

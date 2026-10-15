@@ -1,5 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,7 +7,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -32,12 +31,125 @@ import { TestResultService } from '../../../shared/services/test-result/test-res
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
   let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
-  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+  let appService: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number>; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+
+  it('keeps the latest person and cancels notes belonging to an earlier selection', async () => {
+    const oldPerson = new Subject<unknown[]>();
+    const secondPerson = new Subject<unknown[]>();
+    const latestPerson = new Subject<unknown[]>();
+    const oldNotes = new Subject<unknown>();
+    const results = TestBed.inject(TestResultService);
+    results.getPersonTestResults = jest.fn().mockReturnValueOnce(oldPerson)
+      .mockReturnValueOnce(secondPerson).mockReturnValueOnce(latestPerson);
+    TestBed.inject(UnitNoteService).getNotesForMultipleUnits = jest.fn(() => oldNotes) as never;
+    const row = (id: number) => ({
+      id, code: String(id), group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    component.onRowClick(row(1));
+    component.onRowClick(row(2));
+    expect(oldPerson.observed).toBe(false);
+    oldPerson.next([{ id: 1, name: 'OLD', units: [] }]);
+    secondPerson.next([{ id: 2, name: 'SECOND', units: [{ id: 20 }] }]);
+    secondPerson.complete();
+    expect(oldNotes.observed).toBe(true);
+    component.onRowClick(row(3));
+    expect(oldNotes.observed).toBe(false);
+    oldNotes.next({ 20: [{ note: 'OLD NOTE' }] });
+    latestPerson.next([]);
+    latestPerson.complete();
+    await fixture.whenStable();
+    expect(component.testPerson()?.id).toBe(3);
+    expect(component.booklets()).toEqual([]);
+    expect(component.unitNotesMap().size).toBe(0);
+    expect(component.isLoadingBooklets()).toBe(false);
+  });
+
+  it('cancels a pending person read across a workspace change and return', async () => {
+    const response = new Subject<unknown[]>();
+    TestBed.inject(TestResultService).getPersonTestResults = jest.fn(() => response) as never;
+    component.onRowClick({
+      id: 1, code: 'p', group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(response.observed).toBe(false);
+    response.next([{ id: 1, name: 'OLD', units: [] }]);
+    await fixture.whenStable();
+    expect(component.booklets()).toEqual([]);
+    expect(component.testPerson()).toBeNull();
+  });
+
+  it('ignores an import choice from a dialog opened before a workspace change', () => {
+    const closed = new Subject<{ type: string }>();
+    jest.mocked(TestBed.inject(MatDialog).open).mockReturnValue({ afterClosed: () => closed } as never);
+    const startImport = jest.spyOn(component, 'testCenterImport').mockResolvedValue();
+    component.openImportDialog();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(closed.observed).toBe(false);
+    closed.next({ type: 'testcenter' });
+    expect(startImport).not.toHaveBeenCalled();
+  });
+
+  it('hands accepted chunked upload jobs to the root tracker after its view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const optionsClosed = new Subject<unknown>();
+    const progressRef = { close: jest.fn() };
+    jest.mocked(TestBed.inject(MatDialog).open)
+      .mockReturnValueOnce({ afterClosed: () => optionsClosed } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const registerBatch = jest.spyOn(TestBed.inject(TestResultsUploadStateService), 'registerBatch')
+      .mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    optionsClosed.next({ overwriteMode: 'skip', scope: 'person' });
+    optionsClosed.complete();
+    fixture.destroy();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    expect(acceptedJobs.observed).toBe(true);
+    acceptedJobs.next([{ jobId: 'accepted-job' }]);
+    acceptedJobs.complete();
+    expect(registerBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 1, jobIds: ['accepted-job'] }),
+      expect.objectContaining({ dialogRef: progressRef })
+    );
+  });
+
+  it('cleans up a failed background upload even after the starting view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const progressRef = { close: jest.fn() };
+    const dialog = TestBed.inject(MatDialog);
+    jest.mocked(dialog.open)
+      .mockReturnValueOnce({ afterClosed: () => of({ overwriteMode: 'skip', scope: 'person' }) } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    const progressState = (jest.mocked(dialog.open).mock.calls[1][1]?.data as {
+      state$: Subject<unknown>;
+    }).state$;
+    fixture.destroy();
+    acceptedJobs.error(new Error('Upload failed'));
+    expect(progressRef.close).toHaveBeenCalled();
+    expect(progressState.isStopped).toBe(true);
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalledWith(
+      'Fehler beim Upload-Start: Upload failed', 'Fehler', { duration: 5000 }
+    );
+  });
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -46,7 +158,6 @@ describe('TestResultsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -147,6 +258,7 @@ describe('TestResultsComponent', () => {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 1,
+            selectedWorkspaceId$: new Subject<number>(),
             loggedUser: { sub: 'user' },
             createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
@@ -373,6 +485,80 @@ describe('TestResultsComponent', () => {
 
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('updates derived unit order without mutating booklet snapshots', () => {
+    const units = [
+      { id: 7, alias: 'Z', name: 'Unit 7' },
+      { id: 8, alias: '', name: 'A' }
+    ];
+    component.booklets.set([{ id: 1, name: 'Booklet', units }] as never);
+    const originalBooklets = component.booklets();
+    const unitOrder = computed(() => component.booklets().map(
+      booklet => booklet.units.map(unit => unit.id)
+    ));
+    expect(unitOrder()).toEqual([[7, 8]]);
+
+    component.sortBookletUnits();
+
+    expect(unitOrder()).toEqual([[8, 7]]);
+    expect(originalBooklets[0].units.map(unit => unit.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[0].units).not.toBe(originalBooklets[0].units);
+  });
+
+  it('updates derived units after delayed deletion without mutating booklet snapshots', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const unitService = TestBed.inject(UnitService) as unknown as { deleteUnit: jest.Mock };
+    const deleteResponse = new Subject<{
+      success: boolean;
+      report: { deletedUnit: number; warnings: string[] };
+    }>();
+    const unit = { id: 7, alias: 'Unit 7', name: 'Unit 7' };
+    const booklet = { id: 1, name: 'Booklet 1', units: [unit, { id: 8, alias: 'Unit 8', name: 'Unit 8' }] };
+    const otherBooklet = { id: 2, name: 'Booklet 2', units: [{ id: 9, alias: 'Unit 9', name: 'Unit 9' }] };
+    component.booklets.set([booklet, otherBooklet] as never);
+    const originalBooklets = component.booklets();
+    const unitIds = computed(() => component.booklets().map(
+      current => current.units.map(currentUnit => currentUnit.id)
+    ));
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+    unitService.deleteUnit.mockReturnValue(deleteResponse.asObservable());
+
+    component.deleteUnit(unit as never, booklet as never);
+    await fixture.whenStable();
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+
+    deleteResponse.next({ success: true, report: { deletedUnit: 7, warnings: [] } });
+    deleteResponse.complete();
+    await fixture.whenStable();
+
+    expect(unitIds()).toEqual([[8], [9]]);
+    expect(originalBooklets[0].units.map(current => current.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[1]).toBe(originalBooklets[1]);
+  });
+
+  it('updates derived expanded responses without mutating response snapshots', () => {
+    component.responses.set([
+      { id: 13, variableid: 'VAR_1', expanded: false },
+      { id: 14, variableid: 'VAR_2', expanded: false }
+    ] as never);
+    const originalResponses = component.responses();
+    const expandedIds = computed(() => component.responses()
+      .filter(response => response.expanded).map(response => response.id));
+    expect(expandedIds()).toEqual([]);
+
+    component.toggleResponseExpansion(13);
+    const expandedResponses = component.responses();
+    expect(expandedIds()).toEqual([13]);
+    expect(originalResponses[0].expanded).toBe(false);
+    expect(expandedResponses[1]).toBe(originalResponses[1]);
+
+    component.toggleResponseExpansion(13);
+    expect(expandedIds()).toEqual([]);
+    expect(expandedResponses[0].expanded).toBe(true);
   });
 
   it('should reload workspace overview after deleting a response', () => {
@@ -719,6 +905,62 @@ describe('TestResultsComponent', () => {
         })
       })
     }));
+  });
+
+  it.each(['destroy', 'workspace'])('cancels the initial Testcenter overview and never opens a late dialog on %s', async reason => {
+    const reply = new Subject<unknown>();
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    service.getWorkspaceOverview.mockReturnValue(reply);
+    const pending = component.testCenterImport();
+    expect(reply.observed).toBe(true);
+    if (reason === 'destroy') fixture.destroy();
+    if (reason === 'workspace') {
+      appService.selectedWorkspaceId = 2;
+      appService.selectedWorkspaceId$.next(2);
+      appService.selectedWorkspaceId = 1;
+      appService.selectedWorkspaceId$.next(1);
+    }
+    expect(reply.observed).toBe(false);
+    reply.next({ testPersons: 12 });
+    await pending;
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+  });
+
+  it('cancels the post-import overview and closes progress without opening late results', async () => {
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    const initial = {
+      testPersons: 1,
+      testGroups: 1,
+      uniqueBooklets: 1,
+      uniqueUnits: 1,
+      uniqueResponses: 1,
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+    const reply = new Subject<unknown>();
+    const closed = new Subject<unknown>();
+    const progressClose = jest.fn();
+    const importClose = jest.fn();
+    service.getWorkspaceOverview.mockReturnValueOnce(of(initial)).mockReturnValue(reply);
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    dialog.open.mockImplementation((componentType: unknown) => {
+      if (componentType === TestCenterImportComponent) return { close: importClose, afterClosed: () => closed };
+      if (componentType === TestResultsImportProgressDialogComponent) return { close: progressClose };
+      return { close: jest.fn() };
+    });
+    await component.testCenterImport();
+    closed.next({ didImport: true, resultType: 'responses' });
+    expect(reply.observed).toBe(true);
+    fixture.destroy();
+    expect(reply.observed).toBe(false);
+    reply.next(initial);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(progressClose).toHaveBeenCalledTimes(1);
+    expect(dialog.open.mock.calls.some(([type]) => type === TestResultsUploadResultDialogComponent)).toBe(false);
   });
 
   it('should ignore zero-count coding freshness rows in the overview banner', () => {

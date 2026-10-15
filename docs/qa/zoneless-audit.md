@@ -7,12 +7,76 @@ Die Prüfung jedes einzelnen UI-Elements und aller zehn Szenarien pro Bindung
 ist kein Abschlusskriterium mehr. Maßgeblich sind die sechs Fachbereiche,
 sieben asynchronen Mechanismen und die Regressionen bestätigter Fehler in
 `zoneless-risk-coverage.json`. Die Freigabe ist noch nicht erteilt:
-Abschlussläufe und erfolgreicher CI-Nachweis des endgültigen Commits fehlen.
+Die lokalen Abschlussläufe sind erfolgreich; der CI-Nachweis des endgültigen
+Commits steht für den unten dokumentierten Stand noch aus.
 Ausgangspunkt: PR #1039, Commit `aaae7be16c7aeadb2abbb8d1001e367d7bccf598`.
 Prüfschritte, Korrekturen und zugehörige Testergebnisse sind unten dokumentiert.
 Lokale Nachweise, gepushte Änderungen und entfernte CI-Ergebnisse werden getrennt ausgewiesen.
 
+## Zusammengeführte Testumgebung (06.10.2026)
+
+Alle Frontend-Jest-Tests laufen nun über `frontend:test` mit nativer Zoneless-TestBed-Umgebung.
+Die bisherigen `fakeAsync`-Fälle verwenden Jest-Timer. `test-frontend` führt die Unit-Tests,
+Coverage und Freigabeprüfungen gemeinsam aus; `test-browser` prüft das Produktionsartefakt
+einmal. Die folgenden datierten Abschnitte dokumentieren die früheren Job- und Target-Namen.
+Aktuelle Befehle und Gates stehen in `frontend-quality-gates.md`.
+
+Lokale Abschlussläufe unter Node 22.23.1: 2.809 Jest-Tests in 267 Dateien,
+140 E2E-Tests in 27 Spec-Dateien und sechs Component-Tests mit nativen
+Zoneless-Testumgebungen sind erfolgreich, jeweils ohne übersprungene Fälle.
+Die Coverage liegt bei 78,97 % Statements/Zeilen, 78,15 % Branches und 77,58 % Funktionen.
+Die sechs Component-Specs verwenden `cypress/angular-zoneless`; ihre vorhandenen
+Mock-Provider und Daten sind an die aktuellen Dienste und Dialogabläufe angepasst.
+
+Pipeline #102989 auf `151cddda` bestand alle elf Jobs. Die anschließende Prüfung
+des Browser-Protokolls zeigte jedoch einen leeren Lauf der ersten Component-Spec:
+Nur fünf der sechs Fälle wurden ausgeführt. Deshalb lehnen beide Browser-Targets
+über `after:spec` einen Lauf ohne Tests ab. Pipeline #102990 auf `7a7a5a81`
+bestätigte den Schutz: Der erneute leere Lauf ließ den Browser-Job fehlschlagen;
+mehr Seitenladezeit beseitigte die Ursache nicht. Die Component-Konfiguration
+verwendet deshalb `justInTimeCompile: false`, damit alle sechs Specs vorab
+kompiliert werden. Cypress 15 kann mit Webpack-JIT den Runner vor dem Ende der
+Spec-Kompilierung starten; der Upstream-Fix ist noch offen:
+https://github.com/cypress-io/cypress/pull/34120. Component-Tests laufen im
+gleichen Job vor E2E, Retries bleiben aus. Die neun Quality-Gate-Tests prüfen
+auch, dass ein leerer Spec-Lauf fehlschlägt. Der abschließende CI-Nachweis muss
+den Schutz und die vorab kompilierten Component-Specs enthalten.
+
+Pipeline #102993 auf `684f404c` führte alle sechs Component-Fälle erfolgreich
+aus. Die parallele GitHub-Webhook-Pipeline #102992 scheiterte schon vor der
+Code-Ausführung beim Dependency-Proxy-Image-Pull mit HTTP 404. Für externe PRs
+nach `develop` bezieht der Workflow deshalb dieselben öffentlichen Basisimages
+direkt. Proxy-Login und -Logout erfolgen nur bei aktiviertem Proxy; Registry-
+Logins bleiben erhalten. Die neuen Quality-Gate-Fälle führen die tatsächlichen
+Shell-Zeilen mit einem Docker-Stub aus und prüfen beide Proxy-Modi.
+
 ## Prüfinfrastruktur
+
+### Zusätzliche Regressionen vom 03.10.2026
+
+- **Browserabdeckung für manuelle Vorbereitung:** 16 zusätzliche Fälle prüfen
+  verzögerte Schulungslisten und Referenzauswahl, Filter und Auswahl im
+  Schulungsvergleich, Variablenkarten nach echtem Debounce, Speicherfehler mit
+  Wiederholung, verzögerte Rollenrechte und den erreichbaren Bulk-Definitionsablauf.
+  Die neue Workspace-Navigation reproduzierte einen weiteren Fehler in der
+  Bulk-Vorschau (**ZL-046**); die Korrektur und Nachweisgrenzen stehen unten.
+  Die vorhandenen CI-Jobs `test-browser-zoneless` und `test-browser-production`
+  erfassen die drei betroffenen Cypress-Dateien automatisch.
+- **ZL-041 – Schemer-Rückmeldungen:** `vosReadNotification` und der Timer zum
+  Ausblenden aktualisierten ein normales Feld ohne Angular-Benachrichtigung.
+  Die Meldung ist jetzt ein Signal. Ein neuer Hinweis ersetzt den bisherigen
+  Ausblendetimer; beim Schließen wird der Timer beendet. Die native Regression
+  `unit-schemer.component.zoneless.spec.ts` prüft Anzeige und Ausblenden im echten
+  Template ohne zusätzliche Change Detection.
+- **ZL-042 – Workspace-Benutzerliste:** Die Tabelle hing für verzögerte Antworten
+  an einer Änderung des globalen Ladesignals. Wenn eine andere Anfrage dieses
+  bereits auf `false` setzte, blieb die normale Datasource-Zuweisung unsichtbar.
+  Die Datasource ist jetzt ein Signal und aktualisiert auch leere Ergebnisse.
+  Leseanfragen und Initialisierungstimer beider Benutzeransichten enden beim
+  Verlassen der Ansicht; der Ladezustand wird bei Abschluss oder Abbruch
+  freigegeben. `ws-users.component.zoneless.spec.ts` prüft verzögerte Antworten
+  mit unverändertem Ladesignal, leere Ergebnisse, Auswahlrücksetzung und verspätete
+  Antworten nach dem Zerstören beider Ansichten.
 
 Alle Befehle im Repository-Verzeichnis; Validierungen nacheinander ausführen.
 
@@ -42,7 +106,7 @@ Entwicklungsdaten und Produktion gehören nicht zur Prüfung.
 ## Matrix
 
 Aktueller Umfang: 155 Komponenten, 73 Services, fünf Pipes und 24 externe
-Bibliotheken. Insgesamt 8.729 Einträge einschließlich Template-Ereignissen,
+Bibliotheken. Insgesamt 8.783 Einträge einschließlich Template-Ereignissen,
 Bindungen und asynchronen Quellen. Alle Gesamteinträge sind noch offen.
 
 `zoneless-coverage.json` erfasst Komponenten, Services, Pipes, Template-Ereignisse,
@@ -1282,3 +1346,1352 @@ Diese Ergebnisse geben ZL-025 lokale Regressionsevidenz; die gesamte
 fachliche Abdeckung und erfolgreiche entfernte CI sind nicht bestätigt.
 Die `/tmp`-Protokolle sind lokale Nachweise und keine veröffentlichten
 CI-Artefakte.
+
+### ZL-026: Replay-Statistik bleibt nach der Serverantwort im Ladezustand
+
+Ausgangspunkt ist PR #1039, Commit `2351fc108e2dae9cfbfc07bb3b3b41959de1b2bd`.
+Die Statistikantworten änderten gewöhnliche Felder. Ohne Zone.js blieb der
+Spinner stehen, obwohl alle Antworten vorlagen. Ladezustand, Statistik- und
+Diagrammdaten sowie die durch ResizeObserver aktualisierten Diagrammgrößen
+sind jetzt Signals. Sortierte Daten werden als neue Arrays veröffentlicht.
+
+Die native Regression verwendet das echte Template und verzögerte Subjects.
+Sie prüft den erfolgreichen Abschluss sowie Fehler beim Frequenzabruf und
+bei der letzten Anfrage, ohne nach den Antworten `detectChanges()` oder
+`markForCheck()` aufzurufen. Der damalige Browserfall verwendete echte ngx-charts (in der Migration
+vom 03.10.2026 durch native SVG-Diagramme ersetzt) und prüft das Ende des Ladezustands, die Kennzahlen und den gerenderten Balken
+nach der verzögerten letzten Antwort. `window.Zone` muss fehlen.
+
+### ZL-027: Kodierbuch-Fortschritt und Abschluss aktualisieren die Ansicht nicht
+
+Jobstatus, Fortschritt und Fehleranzeige wurden nach asynchronen Antworten
+in gewöhnliche Felder geschrieben. Dadurch blieben Fortschrittsanzeige und
+Export-Schaltfläche veraltet. Diese Felder sowie die asynchron geladenen
+Auswahllisten sind jetzt Signals. Ausgewählte Einheiten und Exportoptionen
+werden unveränderlich aktualisiert; der Validierungszustand wird abgeleitet.
+
+Sechs native Regressionen prüfen verzögerte Einheitenlisten, deren Ladefehler,
+64 Prozent Fortschritt, Jobabschluss, Pollingfehler mit Zurücksetzen sowie
+Start- und Downloadfehler. Zwei Browserfälle öffnen den echten Material-Dialog,
+ändern eine Exportoption und prüfen den Request sowie Fortschritt und beide
+Job-Ausgänge. API-Antworten sind synthetische Fixtures; Produktion und externe
+CI sind kein Bestandteil dieses lokalen Nachweises.
+
+### Lokale Abschlussläufe für ZL-026 und ZL-027 am 02.10.2026
+
+Die App- und Testquellen blieben während aller Abschlussläufe unverändert.
+Aktualisiert wurden ausschließlich Inventar, Testreferenzen und Dokumentation.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.527 Tests / 227 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 765 Tests / 32 Suites bestanden, darunter neun neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/statistics-codebook.cy.ts` | Drei neue Browserfälle bestanden | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 27 Befunde referenziert | 0 |
+
+Die vorhandenen Zoneless- und Browser-Targets erfassen die neuen Spezifikationen
+automatisch. Diese lokalen Ergebnisse sind kein CI-Nachweis. Die CI des
+veröffentlichten Commits ist gesondert zu prüfen.
+
+
+### ZL-028: Cohen-Kappa-Dialog bleibt nach verzögerter Antwort im Ladezustand
+
+Ausgangspunkt ist PR #1039, Commit `214646b01814bfcc18376c349612e9f145425de9`.
+Im echten Template blieb nach einer verzögerten Statistikantwort der Spinner
+stehen. Auch der Fehlerpfad und die Freigabe der Exportbuttons schrieben
+gewöhnliche Felder ohne Angular-Benachrichtigung. Ladezustand, Statistik,
+Zusammenfassung, Trainings- und Kodiererauswahl, Filter sowie Exportzustand
+verwenden jetzt Signals; abhängige Freigaben und Hinweistexte sind Computeds.
+Die bestehenden Anfrage- und Scope-Regeln bleiben erhalten.
+
+Elf Regressionen in `cohens-kappa-statistics.component.zoneless.spec.ts` prüfen
+verzögerten Erfolg, Leerzustand, Fehler, vertauschte Trainingsantworten,
+Gewichtungswechsel über das gebundene Material-Control sowie Erfolg und Fehler
+aller drei Exportvarianten. Die Tests liefern Antworten über echte Timer und
+warten anschließend auf Angular-Stabilität, ohne manuelles `detectChanges()`
+oder `markForCheck()`. Der bestehende Zoneless-Target erfasst die Datei automatisch.
+
+`cypress/zoneless/cohens-kappa.cy.ts` öffnet den Dialog über die Durchführung der
+manuellen Kodierung. Die drei Fälle prüfen verzögerten Erfolg einschließlich
+Gewichtungswechsel und Exportfehler sowie Leerzustand und HTTP-Fehler. Die App
+läuft mit `frontend:serve:zoneless`; `window.Zone` muss fehlen. Alle API-Antworten
+und die Anmeldung sind synthetische Fixtures. Beim HTTP-Fehler bildet der echte
+Service wie bisher eine leere Statistik, während der Komponententest zusätzlich
+den direkten Observable-Fehlerpfad prüft.
+
+### Lokale Abschlussläufe für ZL-028 am 02.10.2026
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.538 Tests / 228 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 776 Tests / 33 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/cohens-kappa.cy.ts` | Drei Browserfälle bestanden | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 28 Befunde referenziert | 0 |
+
+Nach den Gesamt-Testläufen wurden ausschließlich die von ESLint verlangten
+Formatkorrekturen vorgenommen. Der vollständige Lint-Lauf, der Produktionsbuild
+und die elf neuen Regressionen im nativen Zoneless-Target bestehen anschließend.
+Das Inventar umfasst weiterhin 8.777 Einträge aus 325 Produktionsdateien.
+Diese lokalen Ergebnisse bestätigen keinen Push oder erfolgreichen CI-Lauf
+am veröffentlichten Commit; die Veröffentlichung ist gesondert zu prüfen.
+
+
+### ZL-029: Testcenter-Import aktualisiert nach verzögerten Antworten nicht
+
+Ausgangspunkt ist PR #1039, Commit `b639e193942de93b60c1f8f8008015ac5a42d4a0`.
+Nach einer verzögerten Testcenter-Anmeldung war intern `authenticated` gesetzt,
+das echte Template zeigte jedoch weiterhin das Anmeldeformular. Auch Gruppen,
+Importfortschritt, Fehlermeldungen und die Ladezustände wurden asynchron in
+gewöhnliche Felder geschrieben. Diese angezeigten Zustände verwenden jetzt
+Signals. Uploadfehler werden zusätzlich in den Dateiimport-Optionen angezeigt.
+Veraltete Anmeldeantworten nach Abmeldung oder einer neueren Anfrage werden
+verworfen. Offene Anfragen werden beim Schließen abbestellt; der sequenzielle
+Ergebnisimport startet danach keinen weiteren Gruppenimport.
+
+Elf native Regressionen prüfen Anmeldung, Fehler und Wiederholung, Gruppenlisten
+mit Daten und Leerzustand, Gruppenfortschritt und Ladefehler, Dateiimport mit
+Fortschritt und Fehler/Wiederholung sowie den sequenziellen Ergebnisimport und
+Schließen während offener Anfragen. `cypress/zoneless/testcenter-import.cy.ts`
+öffnet den echten Dialog über die Testdateien-Ansicht und prüft Anmeldung,
+Dateifortschritt, HTTP-Fehler und Wiederholung mit verzögerten API-Fixtures.
+
+### ZL-030: Testpersonenkodierung zeigt verspätete Jobdaten nicht zuverlässig
+
+Jobliste, Gruppen, laufender Job, Fortschritt und Ladezustände verwenden jetzt
+Signals. Anfragekennungen verhindern, dass ältere Listen neuere Ergebnisse
+überschreiben. Statusantworten werden nur für den aktuellen Job, Workspace und
+Pollinglauf angewendet. Offene Anfragen werden beim Zerstören abbestellt.
+Ein reproduzierter Fehler im zweistufigen Ablauf »Alle Testpersonen kodieren«
+ist korrigiert: Der Abschluss der Personensuche darf den Button nicht freigeben,
+während die anschließend gestartete Kodieranfrage noch läuft.
+
+Zwölf native Regressionen prüfen verspätete Listen, leere Service-Fallbacks,
+Wiederholung, Jobstart, Fortschritt, Abschluss und Fehler, Job-/Workspace-Wechsel,
+vertauschte Listenantworten, erneutes Polling desselben Jobs sowie Erfolg,
+Leerzustand und Fehler der verzögerten Personensuche und das Zerstören der Ansicht.
+
+### ZL-031: Auth-Daten erneut laden lässt den Button gesperrt
+
+`UserWorkspacesComponent` verwendet für `authDataReloadRunning` ein Signal.
+Vier native Regressionen klicken den gebundenen Wiederholen-Button und prüfen
+dessen automatische Freigabe nach verzögertem Erfolg, Fehlerergebnis und
+Observable-Fehler sowie das Abbestellen beim Zerstören. Mehrfachklicks während
+der laufenden Anfrage starten keinen zusätzlichen Ladevorgang.
+
+### ZL-032: Auth-Zustände besitzen jeweils eine führende Quelle
+
+Die zuvor parallel beschriebenen Signals und `BehaviorSubject`s für Auth-Daten
+und Bootstrapstatus sind vereinheitlicht: Jeweils ein `BehaviorSubject` führt
+den Zustand; `toSignal(..., { requireSync: true })` liefert dessen schreibgeschützte
+Signalansicht. Die bestehenden Observable-APIs benachrichtigen Auth-Guards
+weiterhin synchron und geben späten Abonnenten den aktuellen Zustand.
+`selectedWorkspaceId` bleibt ein Signal mit einem zustandslosen, ausschließlich
+Änderungen meldenden Eventstream; dessen bestehende Semantik bleibt erhalten.
+
+Fünf native Regressionen prüfen Signalzugriffe innerhalb synchroner
+Observable-Benachrichtigungen, rasche Statuswechsel, späte Abonnenten sowie die
+automatische Darstellung verzögerter HTTP-Auth-Daten und der Abmeldung.
+Der globale Auth-Retry läuft auch nach dem Abbestellen durch eine Ansicht weiter;
+Antworten aus einer nach Abmeldung oder erneutem Anmeldelauf veralteten Sitzung
+werden verworfen. Zwei HTTP-Regressionen sichern die Verantwortung des AppService und
+das Verwerfen einer Antwort nach Abmeldung ab.
+
+Die neuen Tests verwenden echte Templates, liefern Antworten erst nach der
+initialen Darstellung und warten danach mit `whenStable()` auf Angular.
+Beim sequenziellen Promise-Import wird zuvor die Promise-Microtask abgewartet.
+Kein neuer Test erzwingt die Darstellung nach einer Antwort mit
+`detectChanges()` oder `markForCheck()`. Die Browser-Anmeldung und API-Daten
+sind synthetisch; Produktionslast und reale Testcenter-Verbindungen werden
+damit nicht nachgewiesen.
+
+
+### Lokale Abschlussläufe für ZL-029 bis ZL-032 am 02.10.2026
+
+App- und Testquellen blieben während dieser abschließenden Läufe unverändert.
+Anschließend wurden ausschließlich Inventar und Dokumentation aktualisiert.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.570 Tests / 232 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 808 Tests / 37 Suites bestanden, darunter 32 neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless` mit `testcenter-import.cy.ts` und `test-files-upload.cy.ts` | Beide Browserfälle in Electron bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 32 Befunde referenziert | 0 |
+
+Das neue Browser-Szenario läuft bei 1.280 × 900 Pixeln mit synthetischer Anmeldung
+und verzögerten HTTP-Fixtures. Der bestehende Datei-Upload bleibt zusätzlich
+geprüft. Das Inventar enthält 8.780 Einträge aus 325 Produktionsdateien und bleibt
+eine Suchhilfe; diese Ergebnisse bestätigen keine lückenlose Prüfung jedes
+UI-Elements. CI am veröffentlichten Commit und reale Testcenter-Verbindungen
+sind gesondert zu prüfen.
+
+
+### ZL-033: Terminale Jobmeldungen gehen bei früherer Jobliste verloren
+
+Im Review von `f92c7379` wurde folgende Reihenfolge reproduziert: Die Jobliste
+meldet den aktiven Job als abgeschlossen, fehlgeschlagen, abgebrochen oder
+pausiert und beendet das Polling. Die anschließende Statusantwort wird durch
+die Prüfung von aktivem Job und Pollinggeneration verworfen. Da nur die
+Statusabfrage die Snackbar auslöste, fehlten die Abschlussmeldung und
+gegebenenfalls Warnungen oder Fehlerdetails.
+
+Jobliste und Statusabfrage verwenden jetzt dieselbe Statusverarbeitung.
+Sie merkt den letzten Jobstatus, aktualisiert den Freshness-Guard und beendet
+bei terminalem Status das Polling, bevor die passende Meldung ausgegeben wird.
+Das Stoppen invalidiert weitere Antworten; identische Meldungen und globale
+Abschlussereignisse werden dadurch nicht doppelt ausgelöst. Die bestehenden
+Prüfungen gegen Antworten alter Jobs, Workspaces und Pollingläufe bleiben
+bestehen. Eine Pause verhindert keinen späteren Abschluss desselben Jobs.
+
+Elf neue native Tests verwenden das echte Komponententemplate und die echte
+Angular-Material-Snackbar. Sie prüfen alle fünf Meldungsfälle (Abschluss,
+Abschluss mit Warnung, Fehler, Abbruch und Pause) in beiden Antwortreihenfolgen
+sowie Pause und erneutes Polling desselben Jobs. Nach jeder Antwort wird
+`whenStable()` abgewartet; `detectChanges()` und `markForCheck()` werden nicht
+verwendet. Vor der Korrektur scheiterten sechs Fälle an der fehlenden Meldung.
+Eine zusätzliche Regression erhält die bisherige Unterdrückung wiederholter
+Statusabfragefehler, auch wenn die unabhängige Jobliste erfolgreich antwortet.
+Im finalen Stand bestehen alle 24 Tests dieser Datei.
+
+`cypress/zoneless/test-person-coding-feedback.cy.ts` öffnet den echten Dialog
+über »Automatisch Kodieren« und startet einen Job. Zwei Browserfälle liefern
+Warnung beziehungsweise Fehler über eine frühere Jobliste und prüfen die
+Snackbar automatisch, während die verzögerte Statusantwort noch aussteht.
+Die Anmeldung und API-Daten bleiben synthetisch.
+
+
+### Lokale Abschlussläufe für ZL-033 am 02.10.2026
+
+Die endgültigen App- und Testquellen blieben während dieser Abschlussläufe
+unverändert. Anschließend wurde nur diese Prüfdokumentation ergänzt.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.582 Tests / 232 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 820 Tests / 37 Suites bestanden, darunter zwölf neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/test-person-coding-feedback.cy.ts` | Beide Browserfälle in Electron bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 33 Befunde referenziert | 0 |
+
+Das aktualisierte Inventar enthält weiterhin 8.780 Einträge aus 325
+Produktionsdateien. CI am veröffentlichten Commit und reale Backend-Jobs
+sind durch diese lokalen Prüfungen mit synthetischen Daten nicht bestätigt.
+
+
+### ZL-034: Asynchrone Bulk-Vorschau bleibt beim Spinner stehen
+
+Wird `CodingJobBulkCreationDialogComponent` ohne vorberechnete Verteilung
+geöffnet, setzt die verzögerte Backendantwort nach `firstValueFrom()` die Vorschau; zuvor
+meldeten weder diese Felder noch das Zurücksetzen von `isLoading` eine
+Templateänderung. Dadurch konnten Spinner und gesperrte Bestätigung trotz
+erfolgreicher Berechnung sichtbar bleiben.
+
+`isLoading`, `jobPreviews`, `distributionMatrix`, `doubleCodingPreview`,
+`warnings`, `showWarningsPanel` und `warningsConfirmed` sind jetzt Signals.
+Die Initialisierung erzeugt neue Listen und veröffentlicht sie mit `set()`;
+`finally` beendet den Ladezustand auch bei leerer Antwort oder Fehler. Das
+Template liest diese Quellen direkt. Die Bestätigung von Warnungen bleibt
+ein eigener Schritt vor dem Schließen des Dialogs.
+
+`apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts`
+verwendet das echte Template und ein verzögert freigegebenes Subject. Die
+Regressionen prüfen Spinner, Vorschau, Doppelkodierungsübersicht und
+Bestätigungsbutton, den zweistufigen Warnungsablauf sowie Leerzustand und
+Anfragefehler. Nach dem Fortsetzen der Promise wird `whenStable()` abgewartet;
+es gibt keinen erzwungenen Render nach der Antwort.
+
+Für diesen asynchronen Bulk-Antwortpfad wird derzeit nur die native
+Templateabdeckung referenziert. Der erreichbare Definitionsablauf übergibt
+bereits eine fertige Verteilung. Der direkte Neuauftrag, der die interne
+asynchrone Berechnung verwenden würde, hat derzeit keinen Template-Einstieg.
+Die Verteilungsprüfung in
+`cypress/zoneless/async-coding-dialogs.cy.ts` betrifft
+`VariableAnalysisDialogComponent` und ist kein Bulk-Browsernachweis.
+
+### ZL-035: Verzögerte Trainingsoptionen erscheinen nicht im Vergleich
+
+`CodingResultsComparisonComponent` lud die Trainingsliste asynchron in normale
+Arrays. Nach dem initialen Material-Rendering konnte eine spätere Antwort
+ohne weitere Benutzeraktion deshalb keine Trainingsoptionen anzeigen.
+
+`availableTrainings` ist jetzt die führende Signalliste. Ein privates Signal
+führt den normalisierten Filter; `filteredTrainings` ist ein `computed`, das
+ausschließlich aus diesen beiden Quellen ableitet. Beide Auswahltemplates
+lesen die Signalwerte. Die ursprüngliche Reihenfolge, Suche nach Label, ID
+und Metadaten sowie Filterreset beim Moduswechsel bleiben erhalten. Die
+vorhandenen Anfrage- und Workspace-Prüfungen verwerfen überholte Antworten.
+
+`apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts`
+prüft das echte Template mit kontrollierten, verzögerten Trainingsantworten.
+Vor deren Freigabe wartet die Suite nach `whenStable()` zusätzlich reale
+50 Millisekunden und erneut `whenStable()`, damit initiale Material-Termine
+die fehlende Änderungsbenachrichtigung nicht verdecken. Weitere Fälle prüfen
+Filter und Reset, Leerantwort mit Wiederholung, Ladefehler mit Wiederholung
+sowie die ältere Antwort nach einem neueren erfolgreichen Ladevorgang.
+Seit 03.10.2026 prüft `cypress/zoneless/training-comparison.cy.ts` zusätzlich die
+verzögerte Schulungsliste und beide Auswahlen über den erreichbaren Menüablauf,
+einschließlich Filter, Auswahlbeibehaltung und Reset beim Moduswechsel. Die
+Liste ist bei diesem Einstieg bereits im gemeinsamen Backend-Service gecacht;
+eine separate verspätete HTTP-Antwort erst innerhalb des Vergleichsdialogs
+wird weiterhin durch die native Regression geprüft.
+
+### ZL-036: XLSX-Parsefehler blockiert Upload und Wiederholung
+
+Im Exportdialog kann eine beschädigte XLSX-Datei erst nach FileReader und
+ExcelJS-Promise scheitern. Der `ValidationStateService` meldete den Fehler
+bereits, während die aus normalen Subscriber-Feldern gerenderte Ansicht
+weiter Fortschritt und gesperrte Buttons zeigen konnte.
+
+Die bestehenden `BehaviorSubject`s für Fortschritt und Ergebnisse bleiben
+die führenden Quellen. `toSignal(..., { requireSync: true })` liefert daraus
+schreibgeschützte Templateansichten; `isValidating` und `validationCacheKey`
+sind abgeleitete `computed`s. Der Download hat ein unabhängiges Signal, das
+durch `finalize()` beendet wird. Weitere Ergebnismeldungen setzen einen noch
+laufenden Download dadurch nicht vorzeitig zurück. Der Ergebnisdialog erhält
+den Cache-Key direkt aus der jeweiligen Ergebnismeldung; sein Abonnement
+endet mit `takeUntilDestroyed()`.
+
+`apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts`
+prüft im echten Template eine beschädigte Datei über den echten FileReader
+und ExcelJS-Parser: Fortschritt verschwindet, Fehler erscheint und Upload
+sowie Wiederholung werden freigegeben. Weitere Fälle verwenden eine echte
+generierte XLSX-Datei mit verzögertem Backend-Erfolg beziehungsweise -Fehler,
+prüfen die unabhängige Downloadsperre und das Ausbleiben neuer Ergebnisdialoge
+nach dem Zerstören der Ansicht. Sie erzwingen nach den Antworten keinen Render.
+
+`cypress/zoneless/async-coding-dialogs.cy.ts` öffnet den Export über »Kodierliste«,
+lädt eine beschädigte Datei hoch und prüft Fehler, verschwundenen Fortschritt
+und verfügbare Wiederholung. Danach erzeugt der Browserfall eine gültige
+ExcelJS-Datei und prüft nach verzögerter synthetischer Validierungsantwort
+den Ergebnisdialog und die aktualisierte Exportansicht.
+
+### ZL-037: Debouncte Variablenfilter aktualisieren die Karten nicht
+
+`VariableBundleDialogComponent` rendert Karten mit `@for`; dort ist keine
+Material-Tabelle angeschlossen, die Änderungen des `MatTableDataSource`
+meldet. Der verzögerte Filtercallback änderte dessen `filteredData`, ohne
+die Karten zu benachrichtigen. Erst eine weitere Benutzeraktion konnte die
+bereits berechnete Filterung sichtbar machen.
+
+`filteredVariables` verwendet jetzt
+`toSignal(this.dataSource.connect(), { initialValue: [] })` als Templatequelle.
+Der DataSource bleibt für Filter und sichtbare Karten maßgeblich; »Alle
+auswählen« arbeitet weiterhin mit dessen `filteredData`. Die verfügbare Liste
+und Ladezustände sind Signals. Bestehende Abonnements werden beim Zerstören
+beendet und der DataSource wird getrennt.
+
+`apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts`
+dispatcht echte Input-Ereignisse im vollständigen Template und wartet reale
+350 Millisekunden auf den 300-Millisekunden-Debounce. Die Fälle prüfen
+Einheiten- und Variablenfilter, leere Treffer, Wiederherstellung nach dem
+Leeren der Filter sowie Auswahl und Rückgabe ausschließlich sichtbarer
+Variablen. Verzögerter Listenerfolg, Leerantwort und Fehler prüfen zusätzlich
+die Karten und Ladeanzeige ohne weiteren Klick. Seit 03.10.2026 hält
+`cypress/zoneless/manual-preparation.cy.ts` den Variablenabruf am realen
+Erstellbutton zurück und prüft anschließend Einheiten- und Variablenfilter,
+leere Treffer, Reset, Auswahlbeibehaltung und den tatsächlich gesendeten
+Speicherinhalt im Browser. Der erreichbare Dialog erhält die fertige Liste
+vom Manager; sein zusätzlicher interner Ladepfad bleibt nativ geprüft.
+
+### ZL-038: Gespeicherte Rechte behalten nach Auth-Fehler den Änderungsstatus
+
+Nach erfolgreichem Speichern der Workspace-Rechte und fehlgeschlagener
+Auth-Aktualisierung setzt die Komponente die gespeicherten Werte als neue
+Ausgangslage. Das bisher normale `hasChanged`-Feld im enthaltenen
+`WorkspaceUserToCheckCollection` änderte dabei jedoch nicht die Identität des
+äußeren `workspaceUsers`-Signals. Der Speichern-Button konnte deshalb weiterhin
+aktiv bleiben, obwohl die Änderung bereits angenommen war.
+
+Der Änderungsstatus hat jetzt mit dem privaten `hasChangedState`-Signal eine
+eigene führende Quelle; der bestehende `hasChanged`-Getter liest dieses Signal
+auch im Template. `setChecks()`, `updateHasChanged()` und
+`setHasChangedFalse()` aktualisieren dieselbe Quelle. Die neue Ausgangslage
+enthält weiterhin die gespeicherten Rechte. Ein fehlgeschlagener
+Speichervorgang lässt den Änderungsstatus bestehen; eine fehlgeschlagene
+nachgelagerte Auth-Aktualisierung zeigt die Meldung für bereits gespeicherte
+Änderungen und setzt den Status zurück.
+
+`apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.zoneless.spec.ts`
+klickt Checkbox und Speichern im echten Template. Getrennte Subjects geben
+Speicherantwort und Auth-Aktualisierung erst danach frei. Die Fälle prüfen
+die Auth-Ergebnisse `updated`, `failed` und `invalidated`, die gesperrte
+Speichern-Aktion nach erfolgreicher Mutation, eine danach erneut erkennbare
+Änderung sowie den weiterhin aktiven Button bei fehlgeschlagener Mutation.
+Die tatsächliche Material-Snackbar gehört zur Prüfung.
+
+`cypress/zoneless/workspace-access-rights.cy.ts` prüft denselben Ablauf im
+Browser mit verzögert erfolgreichem PATCH und danach fehlschlagender
+Auth-Antwort. Der Speichern-Button wird gesperrt, die ausgewählte Rechtstufe
+bleibt sichtbar und die Meldung enthält den Speichererfolg. API und Anmeldung
+sind synthetisch; dieser Fall bestätigt keine reale Backend-Persistenz.
+
+### Lokale Abschlussläufe für ZL-034 bis ZL-038 am 02.10.2026
+
+Die Korrekturen wurden im isolierten Checkout auf Basis von PR-Head
+`ec84464cd974161c0e39dab757156f2a5c3e2731` geprüft. Die fünf neuen nativen
+Testdateien ergänzen 23 Regressionen. Die Produktquellen und nativen Tests
+blieben während der vollständigen Prüfungen unverändert. Danach wurden die
+Cypress-Sichtbarkeitsprüfungen an den tatsächlich scrollbaren Dialoginhalt
+angepasst und beide Browserdateien gemeinsam abschließend ausgeführt.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.630 Tests / 246 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 868 Tests / 51 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --port=cypress-auto --browser=electron` mit `async-coding-dialogs.cy.ts` und `workspace-access-rights.cy.ts` | Alle zwölf Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production --verbose` | bestanden mit `NG_BUILD_MAX_WORKERS=2` | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung; sechs Bereiche, sieben Mechanismen und 38 Befunde referenziert | 0 |
+
+Der Produktionsbuild brach in der lokalen Sandbox zweimal ohne
+Compilerdiagnose ab; der Abschlusslauf außerhalb der Sandbox bestand.
+Der lokale Angular-Server und Electron liefen ebenfalls außerhalb der
+Sandbox. Die beiden Browserfälle für ZL-036 und ZL-038 verwenden synthetische
+Anmeldung und API-Antworten. Der XLSX-Fall prüft das Erscheinen des Fehlers,
+das Ende des Fortschritts und freigegebene Buttons vor dem Scrollen; die
+anschließende Sichtbarkeitsprüfung bezieht sich auf den Dialoginhalt.
+
+Das aktualisierte Inventar umfasst weiterhin 8.780 Einträge aus 325
+Produktionsdateien. Der risikobasierte Nachweis bestätigt keine vollständige
+Prüfung jedes UI-Elements. Spezifische Browsernachweise für die Trainingswahl
+und Variablenkarten sowie ein erreichbarer asynchroner Bulk-Browserpfad
+fehlen wie oben beschrieben. Die Abschlussprüfungen fanden vor Commit und
+Push statt; CI am veröffentlichten Commit und echte Backend-Persistenz sind durch
+diese lokalen Prüfungen nicht bestätigt.
+
+
+### ZL-039: Externer Kodierimport benachrichtigt den Vergleichsdialog nicht
+
+Der erreichbare Importvergleich behielt nach der globalen Zoneless-Aktivierung
+normale Felder für Ladezustand und Fortschritt. Verzögerte Statusantworten
+änderten das Modell, während die Anzeige bei 0 Prozent blieb. Nach einem
+fehlgeschlagenen Start oder einer fehlgeschlagenen Statusabfrage blieb die
+Wiederholung deaktiviert; eine echte Snackbar konnte zusätzlich NG0100 auslösen.
+
+`isLoading` und `applyProgress` sind jetzt Signals und werden im Template gelesen.
+Alle Schreibpfade einschließlich Excel-Download, Start, Polling und Ergebnisabruf
+aktualisieren diese führenden Zustandsquellen.
+`import-comparison-dialog.component.zoneless.spec.ts` prüft mit echtem Template
+und Material-Snackbar verzögerten Fortschritt, Start- und Statusfehler, einen
+fehlgeschlagenen Job, Abschluss mit nachfolgendem Ergebnisabruf und das
+Beenden einer laufenden Statusabfrage beim Zerstören. Nach Antworten wird
+keine Änderungserkennung erzwungen.
+
+### ZL-040: Gespeicherter Managerentwurf bleibt in vorhandener Spalte unsichtbar
+
+Enthielt eine Reviewseite bereits eine angewendete Entscheidung des aktuellen
+Managers, existierte seine Tabellenspalte auch für andere offene Zeilen.
+Der verzögerte Entwurfserfolg änderte dort die verschachtelte Draft-Liste per
+`splice`, ohne die Tabelle zu benachrichtigen. Das Modell enthielt den Entwurf,
+die Zelle zeigte weiterhin einen Strich. Der Ausschluss eigener Entwürfe bei
+der Spaltenerzeugung verhindert diesen gemischten Seitenzustand nicht.
+
+Die Facade veröffentlicht erfolgreiche Speicher- und Löschantworten über
+`managerDraftUpdates$`. Die Komponente übernimmt sie immutable in die aktuelle
+Zeile und aktualisiert den Tabellen-DataSource. Neuere Auswahlwerte und
+Entscheidungen anderer Manager bleiben erhalten; Antworten aus einem früheren
+Workspace oder Benutzerkontext werden verworfen. Das Abonnement endet vor
+dem abschließenden Flush beim Zerstören. Bereits gestartete und eingereihte
+Backend-Schreibvorgänge dürfen weiterhin abschließen.
+
+Native Regressionen in `double-coded-review.component.spec.ts` verwenden das
+vollständige Template und die echte Facade mit verzögerten Speicherantworten.
+Sie prüfen den gemischten Managerzustand, unveränderte frühere Snapshots und
+die Aktualisierung der dargestellten Zeile ohne erzwungene Änderungserkennung.
+
+### Signal-Konsistenz beim Aufklappen der Dateilisten
+
+`toggleFilesList()` ersetzt die Map und ihren betroffenen Eintrag über `.update()`.
+Es verändert weder frühere Snapshots noch Einträge anderer Testtaker. Der
+gebundene Klick aktualisierte die Ansicht bereits zuvor; diese Korrektur stellt
+zusätzlich die Benachrichtigung reaktiver Leser sicher. Der bestehende native
+Dateivalidierungstest prüft einen `computed`-Leser und die Snapshot-Isolation.
+
+### Lokale Abschlussläufe für ZL-039 und ZL-040 am 02.10.2026
+
+Die Korrekturen wurden in einem isolierten Checkout auf Basis von PR-Head
+`1f7af8e577cb9777966236a62c735978eb8cd8c6` geprüft. Zwölf ergänzte native
+Regressionen decken die beiden Zoneless-Befunde und die immutable Map-Aktualisierung
+ab. Nach den vollständigen Testläufen wurden ausschließlich Formatverstöße
+in ergänzten Zeilen korrigiert. Der anschließende Lint- und Produktionsbuild
+bestand mit diesen Formatkorrekturen.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.642 Tests / 247 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 880 Tests / 52 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --port=cypress-auto --browser=electron` mit `review-notifications.cy.ts` | Beide Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden mit `NG_BUILD_MAX_WORKERS=2` | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung; sechs Bereiche, sieben Mechanismen und 40 Befunde referenziert | 0 |
+
+Der Import-Browserfall öffnet den Vergleich über den realen CSV-Upload und
+prüft Fortschritt, HTTP-409 beim Start, einen fehlgeschlagenen Job, Wiederholung
+und Abschluss. Der Review-Browserfall hält die Speicherantwort zurück und
+prüft die Managerzelle, die aktuelle Auswahl und die Kodierer-Markierung vor
+und nach der Antwort. Die Reviewdaten werden dabei nur einmal geladen.
+Beide Fälle erkennen API-Aufrufe ohne explizite Fixtures; Anmeldung und
+API-Antworten sind synthetisch und bestätigen keine reale Backend-Persistenz.
+
+Der erste Produktionsbuild endete in der Sandbox mit einem esbuild-Deadlock
+ohne Compilerdiagnose. Der Wiederholungslauf außerhalb der Sandbox bestand;
+der lokale Angular-Server und Electron liefen ebenfalls außerhalb der Sandbox.
+Das aktualisierte Inventar umfasst 8.781 Einträge aus 325 Produktionsdateien.
+Die Prüfungen erfolgten vor Commit und Push; CI für diese Korrekturen ist
+durch die lokalen Läufe nicht bestätigt. Die oben dokumentierten Grenzen des
+risikobasierten Nachweises gelten weiterhin.
+
+### ZL-043: Verzögerte Kappa-Ergebnisse bleiben im Schulungsvergleich unsichtbar
+
+Der Schulungsvergleich schrieb Kappa-Ergebnisse und Ladezustände in normale
+Felder. Eine verzögerte Backend-Antwort füllte das Modell, während das Template
+weiterhin „Berechne Interrater-Reliabilität“ zeigte. Ergebnisse, Optionen und
+Ladezustände sind jetzt Signals; Variablenzusammenfassungen werden mit `computed`
+abgeleitet. Die Berechnung der mittleren Übereinstimmung ersetzt das Ergebnis
+und seine `workspaceSummary`, ohne frühere Snapshots oder die Backend-Antwort
+zu verändern. Bei einem Fehler endet die Ladeanzeige ebenfalls.
+
+### ZL-044: Diskussionsspeicherungen lassen die Speicheranzeige stehen
+
+Verzögerte Speicherantworten änderten die Diskussionswerte und den Speicherstatus
+in gewöhnlichen Records. Die Anzeige „Speichert ...“ blieb nach Erfolg bestehen.
+Codes, Scores, Notizen, Fehler, Speicherstatus und Managername sind jetzt Signals.
+Alle Änderungen an den Records erzeugen neue Objekte; die Initialisierung baut
+lokale Records auf und veröffentlicht sie jeweils einmal. Replay-Übernahme,
+eingereihte Notizen und Sitzungswiederherstellung verwenden dieselben Schreibpfade.
+
+### ZL-045: Der initiale Vergleich beendet seine Ladeanzeige nicht
+
+Die Browserregression erreichte zunächst weder Kappa noch Diskussion: Auch nach
+der verzögerten Vergleichsantwort blieb „Lade Vergleichsdaten“ sichtbar. Solange
+nur der Ladeblock gerendert wurde, waren die Diskussions-Signals noch keine
+Template-Abhängigkeiten. `isLoading` ist deshalb ebenfalls ein Signal; Erfolg,
+Fehler und Abbruch benachrichtigen das Template über diesen Zustand.
+
+Die nativen Regressionen in
+`coding-results-comparison.zoneless.spec.ts` prüfen verzögerte Kappa- und
+Speicherantworten einschließlich Fehlern mit echtem Template, ohne nach der
+Antwort Änderungserkennung zu erzwingen. Der bestehende Komponententest prüft
+zusätzlich, dass die Kappa-Berechnung eingefrorene frühere Snapshots erhält.
+Vier Browserfälle in `cypress/zoneless/training-comparison.cy.ts` öffnen den
+Schulungsvergleich über die Schulungsliste, laden Vergleichsdaten über HTTP und
+prüfen Kappa beziehungsweise Diskussion bei Erfolg und Fehler. Der Kappa-Erfolg
+prüft auch Gewichtung und Code-/Score-Ebene. Alle vier Fälle bestehen ohne
+`window.Zone`; Anmeldung und Backend-Antworten sind synthetisch.
+
+### Lokale Prüfungen für ZL-043 bis ZL-045 am 03.10.2026
+
+Die Korrekturen wurden auf Basis von PR-Head
+`d03c2f4ef70b15d292686a4de8504a8389f8a716` geprüft.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --runInBand` | 2.673 Tests bestanden; ein Regex-Timer-Test fehlgeschlagen | 1 |
+| `frontend:test --runInBand --testPathPatterns='coding-results-comparison\|test-results-flat-table.component.spec'` | 91 Tests / drei Suites bestanden | 0 |
+| `frontend:test-zoneless --runInBand` | 907 Tests / 58 Suites bestanden | 0 |
+| `frontend:e2e:zoneless --spec=cypress/zoneless/training-comparison.cy.ts` | vier Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build:production` mit `NG_BUILD_MAX_WORKERS=2` | bestanden | 0 |
+| `frontend:zoneless-approval` | 8.783 Inventareinträge ohne Abweichung; 45 Befunde referenziert | 0 |
+
+Der fehlgeschlagene Test `should ignore an invalid-regex error for an edited
+filter` wartet real 401 ms bei einer Debounce-Zeit von 400 ms. Er und seine
+vollständige Suite mit 31 Tests bestehen separat im unveränderten PR-Stand;
+die Suite besteht auch zusammen mit den Vergleichstests im korrigierten Stand.
+Der Fehler trat nur im Gesamtlauf auf. Die Ergebnis-Tabelle und ihr Test wurden
+nicht geändert. Der Gesamtlauf wird deshalb trotz erfolgreicher Gegenprüfungen
+als fehlgeschlagen dokumentiert. Remote-CI und reale Backend-Persistenz sind
+durch diese lokalen Läufe nicht bestätigt.
+
+### ZL-046: Bulk-Fortsetzungen verlassen ihren Workspace-Kontext
+
+Eine zurückgehaltene `create-job-preview`-Antwort öffnete den Bulk-Dialog noch,
+nachdem die Jobdefinitionsansicht zerstört und ein anderer Workspace geöffnet
+worden war. Ein bereits geöffneter Bestätigungsdialog wurde ebenfalls nicht
+von seiner aufrufenden Ansicht geschlossen. Zusätzlich lösten verzögerte
+Erfolgs- und Fehlerantworten einer bereits gestarteten Bulk-Anlage weiterhin
+Snackbar-Meldungen, Listenabrufe und Aktualisierungsereignisse aus.
+
+Die Vorschau endet jetzt mit der Lebensdauer der Jobdefinitionsansicht. Vor
+Dialogöffnung, bestätigter Mutation und Verarbeitung einer Speicherantwort
+werden Lebensdauer und ursprüngliche Workspace-ID geprüft. Die Ansicht hält
+nur ihren eigenen Bulk-Dialog und schließt ihn beim Zerstören. Bereits
+abgeschickte Mutationen werden nicht abgebrochen oder zurückgerollt; ihre
+verspäteten UI-Fortsetzungen werden verworfen.
+
+Fünf neue native Regressionen in `coding-job-definitions.zoneless.spec.ts`
+prüfen Abonnementabbruch, einen Workspace-Wechsel vor der Vorschauantwort,
+Schließen des eigenen Dialogs, eine verspätete Bestätigung sowie Erfolg und
+Fehler eines bereits gestarteten Auftrags nach dem Verlassen des Workspaces.
+Die letzten beiden Fälle scheiterten vor der ergänzten Kontextprüfung mit
+einer Snackbar aus dem alten Auftrag. Die Browserregression für die alte
+Vorschau scheiterte zuvor mit einem nach der Navigation geöffneten Dialog.
+
+`cypress/zoneless/manual-preparation.cy.ts` verwendet den tatsächlichen
+Erstellbutton einer genehmigten Definition. Es prüft Serververteilung,
+Vorschaufehler mit Wiederholung, ausbleibende Anlage vor Bestätigung, Abbruch,
+Ladeende nach Erfolg und Workspace-Wechsel während Vorschau, Bestätigung und
+laufender Mutation. Weitere Fälle prüfen Schulungsanlage mit Referenzen,
+Speicherfehler und Wiederholung, Dialogschließen während Referenzabruf,
+Workspace-Stufen 0–3 und Variablenfilter mit dem tatsächlich gesendeten Bundle.
+
+Die beiden ergänzten Fälle in `training-comparison.cy.ts` prüfen die verspätete
+Schulungsliste vor dem realen Menüaufruf, Auswahl in beiden Vergleichsmodi,
+Filter und Reset sowie Schließen und erneutes Öffnen während einer ausstehenden
+Vergleichsantwort. Der normale Einstieg übernimmt die zuvor geladene Liste
+aus dem gemeinsamen Cache. Die zwei ergänzten Fälle in
+`workspace-access-rights.cy.ts` prüfen Rechte-Speicherfehler mit Wiederholung
+als Realm-Admin und Studienleitung; die ausgewählten Rechte bleiben erhalten.
+
+Alle neuen Browserfälle verwenden echte Angular-/Material-Ansichten ohne
+`window.Zone`, synthetische Anmeldung und kontrollierte API-Antworten. Nicht
+explizit vorbereitete API-Aufrufe lassen die Tests fehlschlagen. Die bereits
+vorhandenen CI-Jobs erfassen sämtliche Fälle über
+`cypress.zoneless.config.ts`, auch mit Produktionseinstellungen. Der interne
+Bulk-Berechnungspfad ohne vorbereitete Serververteilung hat weiterhin keinen
+Template-Einstieg; seine bestehenden nativen Regressionen bleiben der Nachweis.
+
+### Lokale Abschlussprüfungen der Browserergänzung am 03.10.2026
+
+Basis war PR-Head `1e29acee1bdb7d75fc22137465ea37f16c0c60bf`.
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:test-zoneless --runInBand` | 914 Tests / 59 Suites bestanden |
+| `frontend:test --runInBand` | 2.681 Tests / 254 Suites bestanden |
+| `frontend:lint` | bestanden |
+| `frontend:test-zoneless --runInBand --testPathPatterns=coding-job-definitions.zoneless.spec` | sechs Fälle nach der abschließenden Testformatierung bestanden |
+| Betroffene Cypress-Spezifikationen, Zoneless | 26 Fälle bestanden: zwölf manuelle Vorbereitung, sechs Schulungsvergleich und acht Rechte; abschließende Läufe der Dateien getrennt |
+| `frontend:serve --configuration=production` mit `NG_BUILD_MAX_WORKERS=2` | optimierte Bundles erfolgreich erzeugt und für die Browserprüfung bereitgestellt |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts` | vollständige Suite: 128 Fälle / 23 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-approval` | 8.783 Inventareinträge ohne Abweichung; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde referenziert |
+
+Der erste vollständige Zoneless-Browserlauf bestand 125 von 127 Fällen; zwei
+neue Fälle scheiterten im Testaufbau. Ein Variablenabruf wurde vor seinem
+Erstellbutton erwartet, und eine zurückgehaltene Vergleichsantwort wurde als
+Wartebedingung für die Wiederöffnung verwendet. Diese Bedingungen wurden
+korrigiert. Vergleichsantworten werden außerdem nach Trainings-ID bzw.
+Dialogöffnung unterschieden, damit zusätzliche Initialisierungsabrufe nicht
+mit der getesteten Auswahl verwechselt werden. Die Tabelle weist die
+abschließenden erfolgreichen Läufe aus. Die vollständige Produktionssuite
+enthält sämtliche betroffenen Fälle; der vollständige Zoneless-Browserlauf
+wird zusätzlich im bestehenden CI-Job ausgeführt.
+
+Die lokalen Prüfungen erfolgten vor Commit und Push. Remote-CI für den neuen
+Commit ist separat nachzuweisen. Live-Backend-/Keycloak- und Replay-Targets
+wurden bei dieser Ergänzung lokal nicht erneut ausgeführt; die Browserfälle
+belegen kontrollierte HTTP-Verarbeitung und UI-Zustände, keine tatsächliche
+Backend-Persistenz oder Autorisierung. Die bestehenden Live-CI-Jobs bleiben
+Teil der Freigabe.
+
+
+### Zwischenstand: native Diagramme und sichere RxJS-Übergänge am 03.10.2026
+
+Basis: PR-Head `1a8fac0c65f2198e4c301d2536b926a5f0380dfb`.
+
+Die Anwendung benötigt keine globale Angular-Animationsengine mehr.
+`provideAnimationsAsync()` ist entfernt. Der einzige Anwendungskonsument
+von `@swimlane/ngx-charts` war der Replay-Statistikdialog mit acht vertikalen
+Balkendiagrammen. Auch die installierte und zum Prüfzeitpunkt aktuelle
+Version 25.0.2 importierte `trigger`, `transition`, `style` und `animate`
+aus `@angular/animations`; lediglich den Provider zu entfernen wäre deshalb
+keine sichere Migration gewesen.
+
+Die acht Diagramme verwendeten in diesem Zwischenstand `VerticalBarChartComponent` mit nativen
+SVG-Balken, Signal-Inputs, abgeleiteter Skalierung und OnPush. Achsentitel,
+gekürzte Unit-Beschriftungen, volle Werte im Tooltip, Tastaturfokus und
+Größenänderungen bleiben erhalten. `animate.enter` steuert eine CSS-Animation;
+`prefers-reduced-motion` deaktiviert sie. Leere/Null-Daten, Bruchteile und
+aktualisierte Inputs sind nativ ohne Animationsprovider geprüft. ngx-charts
+und seine exklusiven D3-Abhängigkeiten sind aus dem Lockfile entfernt.
+`@angular/animations` blieb zunächst als Dev-Abhängigkeit für vorhandene
+`provideNoopAnimations()`-/`NoopAnimationsModule`-Testeinrichtungen, nicht
+als Anwendungskonsument.
+
+Die Aussage „toSignal wird nicht verwendet“ war bereits vor dieser Änderung
+überholt: sieben Anwendungscalls. Geprüft wurden zwei synchrone Auth-Quellen
+im AppService, zwei synchrone Validierungsquellen im Exportdialog, zwei
+SelectionModel-Ereignisbrücken und eine MatTableDataSource-Brücke. Die
+BehaviorSubjects besitzen jeweils die führende Zustandsquelle und sind mit
+`requireSync: true` eingebunden; die Ereignis-/Tabellenbrücken haben explizite
+Startwerte. Alle Aufrufe laufen im Injection-Kontext mit automatischer
+Bereinigung. Sie sind keine HTTP-Streams mit unbehandelten Netzwerkfehlern.
+
+Als achter Aufruf ersetzt `toSignal(exportJobService.jobs$, { requireSync:
+true })` die manuelle Subscription mit Schreibkopie im Export-Toast. Dessen
+BehaviorSubject bleibt die führende Quelle, der UI-Zustand ist schreibgeschützt.
+Aktionsabonnements verwenden `takeUntilDestroyed(DestroyRef)`. Der neue native
+Zoneless-Fall prüft initialen Zustand, verspäteten Fortschritt im echten
+Template und Bereinigung von Zustands- sowie Aktionsabonnements. RxJS bleibt
+für Polling, HTTP und Ereignisverarbeitung erhalten.
+
+Referenzen: [Angular-Animationsmigration](https://angular.dev/guide/animations/migration),
+[provideAnimationsAsync](https://angular.dev/api/platform-browser/animations/async/provideAnimationsAsync),
+[toSignal-Vertrag](https://angular.dev/ecosystem/rxjs-interop).
+
+
+### Lokale Prüfungen der Animations- und Interop-Migration am 03.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.685 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 918 Tests / 61 Suites bestanden |
+| `frontend:build --statsJson=true` | Produktionsbuild bestanden; kein Input aus `@angular/animations` oder `@swimlane/ngx-charts` unter den 834 Bundle-Inputs |
+| Cypress, abschließende vollständige Produktions-Browsersuite | 128 Fälle / 23 Spezifikationen bestanden, keine Retries; inklusive 25 Units in der Daueransicht nach der Spaltenkorrektur |
+| Cypress, Produktions-Nachlauf `cypress/zoneless/app.cy.ts` | nach SPA-Fallback im lokalen Server alle vier Fälle bestanden; anschließend wurde die vollständige Suite erneut erfolgreich ausgeführt |
+| Cypress, Zoneless-Entwicklungsbuild `cypress/zoneless/statistics-codebook.cy.ts` | drei Fälle mit allen acht Diagrammen, 25 Units in der Daueransicht, internem Scrollbereich und Größenänderung bestanden |
+| Native betroffene Komponenten nach der abschließenden CSS-Korrektur | sieben Fälle / drei Suites bestanden |
+| `frontend:zoneless-approval` | 8.773 Inventareinträge, sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+
+Die Produktionsprüfung verwendet die optimierten Bundles über einen lokalen
+HTTP-Server, kontrollierte API-Antworten und Electron. Der erste vollständige
+Lauf bestand 127 von 128 Fällen; der direkte `/coding`-Aufruf scheiterte vor
+App-Start mit HTTP 404 am einfachen lokalen Dateiserver. Der Nachlauf ergänzte
+den SPA-Fallback, den der Nx-Server der CI-Browserjobs bereitstellt; er ist
+kein Nachweis für die Nginx-Konfiguration eines Deployments. Im erweiterten
+Diagrammfall ist die Ausgangsgröße 1280 × 900 explizit gesetzt, die
+Verkleinerung auf 800 × 600 wird über die tatsächlich aktualisierte SVG-Breite
+nachgewiesen. Die aktiven Material-Tabs und sichtbaren, in den Scrollbereich
+gebrachten Balken werden geprüft. Die Screenshot-Erfassung verwendet den
+Viewport statt des Inline-Dialoghosts.
+
+Der zusätzliche Browsernachweis mit 25 Unit-Durchschnittswerten zeigte, dass
+die SVG-Mindestbreite beide Flex-Spalten auseinanderdrückte (1.357 Pixel
+Scrollbreite bei 1.078 Pixeln Zeilenbreite). `min-width: 0` begrenzt die
+Spalten; die SVG-Breite bleibt im internen Scrollbereich. Der Fall prüft die
+Zeilenbreite, den internen Überlauf und alle 26 Balken der beiden
+Dauerdiagramme. Danach bestanden die sieben betroffenen nativen Fälle und
+der Entwicklungs-Browserlauf erneut; die finalen Produktionsbundles wurden
+neuerstellt und die vollständige Browser-Suite erfolgreich wiederholt.
+Die vollständigen Jest-Läufe stammen vor dieser begrenzten CSS-Korrektur.
+
+Live-Backend-/Keycloak- oder Replay-Targets wurden bei dieser Migration lokal
+nicht erneut ausgeführt. Remote-CI für den neuen Commit ist separat
+nachzuweisen; die vorhandenen Browserjobs führen die geänderte Spezifikation
+automatisch aus.
+
+
+### Chart.js und vollständige Bereinigung der Animationstests am 03.10.2026
+
+Basis: PR-Head `dd81d74d263bf562e42a91d6bcaa1b4d2aea37fe`. Dieser Abschnitt
+ersetzt den oben dokumentierten SVG-Zwischenstand für die acht Replay-Diagramme.
+
+`VerticalBarChartComponent` verwendet Chart.js 4.5.1 direkt, mit expliziter
+Registrierung ausschließlich von `BarController`, `BarElement`, `CategoryScale`,
+`LinearScale` und `Tooltip`. Es gibt keinen Angular-Wrapper und keinen Import
+von `chart.js/auto`. Die bisherige zehnfarbige Vivid-Palette, abgerundete Balken,
+volle Tooltip-Namen und Werte sind vorhanden. Änderungen werden über 500 ms
+animiert; bei `prefers-reduced-motion` sind Animationen deaktiviert. Ein Wechsel
+der Bewegungseinstellung wird während der Lebensdauer berücksichtigt und beendet
+laufende Animationen sofort, wenn reduzierte Bewegung eingeschaltet wird.
+
+Signal-Inputs bleiben die führende Zustandsquelle. `afterRenderEffect` bindet
+frische Datenarrays nach dem DOM-Rendering an die imperative Bibliothek; sie
+erhält keine veränderbare Referenz auf die Signal-Eingaben. Die private Dataset-
+und Balkenidentität bleibt bei Aktualisierungen erhalten, damit Chart.js Werte
+interpolieren kann. Chart-Erstellung,
+Aktualisierung und Zerstörung erfolgen außerhalb der Angular-Zone. `DestroyRef`
+entfernt den Media-Query-Listener und ruft `Chart.destroy()` auf. Die beobachteten
+Dialogmaße steuern Canvas und internen Scrollbereich ausdrücklich.
+
+Die Diagramme besitzen einen zugänglichen Namen und einen Verweis auf die
+aufklappbare HTML-Datentabelle. Der native `summary`-Schalter ist per Tastatur
+mit der Leertaste bedienbar; das Öffnen und Schließen ist im Browser geprüft.
+Tabelle und Tooltip enthalten die vollständigen Kategorienamen,
+auch wenn Achsenbeschriftungen gekürzt sind. Die Tabelle hat Caption, Spalten-
+und Zeilenüberschriften; sie bietet den vollständigen Inhalt unabhängig vom
+Canvas. Das allein ist kein umfassendes Screenreader-Akzeptanzgutachten.
+
+Alle 88 Testdateien mit `NoopAnimationsModule` oder `provideNoopAnimations()`
+sind bereinigt. Das Paket `@angular/animations` ist aus den direkten
+Abhängigkeiten, dem aufgelösten Lockfile-Paketbestand und der lokalen Installation
+entfernt. Nur die unveränderte optionale Peer-Metadatenangabe von
+`@angular/platform-browser` enthält noch den Paketnamen. In den Informations-
+dialogtests ersetzen Material-Timingoptionen und das Warten auf `afterClosed()`
+die implizite Annahme eines synchronen Dialogschlusses. JSDOM wird für Canvas
+mit `jest-canvas-mock` ergänzt; Chart.js selbst wird in diesen Tests nicht gemockt.
+
+Der im Review reproduzierte Abstandfehler bei 30 Tageswerten wird jetzt durch
+Chart.js' gemessene Tickauswahl behandelt. Die Browserregression misst die
+tatsächlich gezeichneten Labelpositionen und Textbreiten bei 800 × 600 Pixeln.
+Sie prüft außerdem echte Canvas-Balkenpixel, Zwischenstände der Animation,
+ungekürzte Tooltip-Texte, Tastaturöffnung der Tabelle, alle acht Diagramme,
+25 Units, Größenänderung sowie Schließen und erneutes Öffnen des Dialogs.
+
+Im optimierten Produktionsbuild stammen 151.626 unkomprimierte Bytes aus
+Chart.js und dessen Farbmodul. Diese liegen im nachgeladenen Einstellungs-Chunk;
+sie werden nicht mit dem initialen App-Bundle geladen. Unter den 837 Bundle-
+Inputs findet sich weder `@angular/animations` noch `@swimlane/ngx-charts`.
+
+Referenzen: [Chart.js-Integration und gezielte Imports](https://www.chartjs.org/docs/latest/getting-started/integration.html),
+[Chart.js-Lebensdauer](https://www.chartjs.org/docs/latest/developers/api.html),
+[Canvas-Barrierefreiheit](https://www.chartjs.org/docs/latest/general/accessibility.html).
+
+
+### Lokale Abschlussprüfungen der Chart.js- und Testmigration am 03.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.687 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 920 Tests / 61 Suites bestanden |
+| `frontend:build --statsJson=true` | optimierter Produktionsbuild bestanden; 837 Bundle-Inputs ohne alte Animations-Engine oder ngx-charts |
+| Cypress, vollständige Produktions-Browsersuite | 128 Fälle / 23 Spezifikationen bestanden, keine Retries; einschließlich der erweiterten Chart.js-Regression |
+| `frontend:zoneless-approval` | 8.751 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| Abhängigkeitsprüfung | kein direktes, aufgelöstes oder installiertes `@angular/animations`; keine alten Animationstesthelfer im Frontend |
+
+Jest verwendet eine simulierte Canvas-API, führt aber die echte Chart.js-
+Implementierung aus. Der Browserlauf verwendet Electron 138, optimierte
+Produktionsbundles über einen lokalen HTTP-Server und kontrollierte API-
+Antworten. Er beweist keine reale Backend-Persistenz oder Autorisierung.
+Live-Backend-/Keycloak- und Replay-Targets wurden für diese Änderung nicht
+nochmals ausgeführt. Die vorhandenen CI-Browserjobs übernehmen die erweiterte
+Spezifikation automatisch; ihre Ergebnisse für den neuen Commit sind separat
+zu prüfen.
+
+
+### Typisierte Reactive Forms am 04.10.2026
+
+Basis: PR-Head `fe5caf6a718cb89e098f63e6e8e8aa8de43148cb`.
+Der Anwendungscode enthält keine `UntypedFormGroup`, `UntypedFormBuilder`
+oder `UntypedFormControl` mehr. Die vier aktiven Formulargruppen für
+Benutzerbearbeitung, Workspace-Bearbeitung und Testcenter-Anmeldung/-Import
+verwenden `NonNullableFormBuilder`, konkrete Control-Typen beziehungsweise
+vollständig inferierte Control-Maps. Optionale Felder des weiterhin vorhandenen
+Benutzeranlage-Vertrags sind als optionale Controls modelliert. Es gibt keinen
+Ersatz durch `FormGroup<any>` oder Typbehauptungen auf untypisierte Formulare.
+
+Textfelder und Checkboxen setzen sich auf ihre Anfangswerte zurück, statt
+bei `reset()` zu `null` zu werden. Die Testcenter-Auswahl ist `number | ''`,
+mit leerem Anfangswert und bestehender Pflichtfeldprüfung; der Überschreibmodus
+ist ausdrücklich `TestResultsOverwriteMode`. `getRawValue()` und konkrete
+Controls erhalten auch deaktivierte Feldwerte und boolesches `false` bei der
+DTO-Übergabe. Dialogdaten, Ergebnisse und Menü-Outputs sind für Benutzer- und
+Workspace-Editoren typisiert; Abbruch und Schließen lösen keine Mutation aus.
+
+Die typisierten Dialogdaten deckten fehlerhafte Workspace-Übergaben auf:
+Der Anlagepfad übergab `wsg` statt `ws`, der Bearbeitungspfad nur eine ID
+statt eines Workspace-Datensatzes. Der über die Tabelle ausgewählte Datensatz
+wird jetzt bis zum Editor übergeben. `selectedWorkspaceRows` ist die einzige
+Auswahlquelle im übergeordneten Baustein; IDs werden daraus mit `computed`
+abgeleitet. Die beim Öffnen gewählte ID wird beim Speichern verwendet, auch
+wenn sich die Auswahl während eines geöffneten Dialogs ändert. Browserfälle
+belegen Pflichtfeld-/Mindestlängenprüfung, Vorbefüllung, Anlegen, Umbenennen
+und Abbruch; ein Menütest prüft den zwischenzeitlichen Auswahlwechsel.
+
+Testcenter-Importoptionen bleiben im Frontend boolesch. Erst der unveränderte
+HTTP-Adapter serialisiert sie in die bestehenden String-Queryparameter.
+Shared DTOs und Backend-Implementierung sind unverändert. Der Formulartyp
+verhindert, dass String-Flags versehentlich als wahr interpretiert werden.
+Für individuelle Testcenter-URLs bleibt Auswahl-ID 6 im Formular und im
+Auswahlcache; bei der Anmeldung wird das vom vorhandenen Backend benötigte
+leere Serverfeld gesendet. Ein unvollständiges Login per Enter sendet keine
+Anmeldeanfrage. Die Browserregression prüft Standard-Testcenter und individuelle
+URL einschließlich Request-Body, Importparametern, verzögerter Antwort,
+Fehleranzeige und Wiederholung.
+
+Veraltete FormGroup-Rückgabealternativen der Importdialog-Aufrufer sind
+bereinigt; deren vorhandene Ergebnis-/Refreshpfade bleiben erhalten.
+
+### Lokale Abschlussprüfungen der Formularmigration am 04.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.699 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 920 Tests / 61 Suites bestanden |
+| `frontend:build` | optimierter Produktionsbuild mit strenger Formular-/Template-Typprüfung bestanden |
+| Cypress, gezielte Produktions-Browserregressionen | 14 Fälle / drei Spezifikationen bestanden, keine Retries: `admin-forms`, `testcenter-import`, `workspace-access-rights` |
+| `frontend:zoneless-approval` | 8.750 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| Quellcodeprüfung | keine `UntypedFormGroup`-/`UntypedFormBuilder`-/`UntypedFormControl`-Verwendungen oder `FormGroup<any>` im Anwendungscode |
+
+Die Browserregressionen verwenden Electron 138, optimierte Produktionsbundles
+über einen lokalen HTTP-Server und kontrollierte API-Antworten. Sie prüfen die
+Formularzustände, Request-Daten und verzögerte Darstellung; reale Backend-
+Persistenz und Autorisierung sind damit nicht belegt. Live-Backend-/Keycloak-
+und Replay-Targets wurden für diese Änderung nicht erneut ausgeführt. Die
+vollständige Produktions-Browsersuite wurde für die Formularmigration nicht
+wiederholt. Der bestehende CI-Browserjob nimmt die neue Spezifikation über
+sein Glob automatisch auf; Remote-CI-Ergebnisse sind separat zu prüfen.
+
+
+### Anwendungsweite Komponenten-API-Migration am 04.10.2026
+
+Basis: PR-Head `5fd872a28f8b9194e579422d977a431e6273ea79`.
+
+Alle 111 verbliebenen Decorator-Inputs und 39 Decorator-Outputs in der
+Anwendung sind auf `input()` beziehungsweise `output()` umgestellt.
+Von 43 alten View-Queries verwenden 38 jetzt `viewChild()`/`viewChildren()`;
+fünf ungenutzte oder nicht erreichbare Queries wurden entfernt (die beiden
+Administrations-Elternkomponenten mit Tabellen in ihren Kindkomponenten,
+TestFiles ohne MatSort sowie die ungenutzten Paginator-Referenzen der beiden
+Suchdialoge). Es bleiben keine `@Input`-, `@Output`-, `@ViewChild`-,
+`@ViewChildren`-, `@ContentChild`- oder `@ContentChildren`-Deklarationen im
+Anwendungscode. Einschließlich der vorher bereits modernen APIs sind es
+160 Signal-Inputs, 73 Outputs und 42 Signal-Queries. Alle API-Felder sind
+`readonly`; `output()` ist eine Ereignis-API, kein Zustandssignal.
+
+Die externe Benennung der Bindings und Ereignisse bleibt erhalten. Auch
+`ngOnChanges` mit den bisherigen Property-Namen bleibt für bestehende
+Initialisierungslogik erhalten. Nicht ausdrücklich verpflichtende Eingaben
+im CodeSelector erhalten weiterhin sichere Leer-/Optionalwerte; ein früheres
+Definite-Assignment-`!` wird dort nicht in eine neue Laufzeitpflicht umgedeutet.
+Die Angular-Migration hat den automatisch umstellbaren Teil übernommen;
+Schreibzugriffe, Setter und problematische Query-Lebensdauern wurden manuell
+angepasst. Test-Stubs verwenden dieselben APIs, Fixture-Inputs werden mit
+`componentRef.setInput()` gesetzt.
+
+ResponseFilters und CodeSelector bearbeiten per `linkedSignal()` einen lokalen
+Entwurf. Elternwerte bleiben unverändert; neue Input-Werte ersetzen den Entwurf.
+Filteränderungen schreiben neue Objekte, statt das Input-Objekt zu mutieren.
+Der eingebettete Schemer hält gemeldete Änderungen ebenfalls in einem lokalen
+`linkedSignal()` und erhält Variablen und Schematyp. Beim UnitPlayer bleiben
+die rohe JSON-Eingabe und die geparste Definition getrennt; die Startnachricht
+enthält weiterhin genau eine JSON-Kodierung. Ein Reset verwirft die alte
+geparste Definition und sendet keine alte oder undefinierte Definition.
+
+Bedingt gerenderte Tabellen nutzen optionale Queries. Effects verbinden
+Sortierung/Paginierung mit den tatsächlich vorhandenen Material-Instanzen
+auch nach verspäteten Antworten, Reload und erneutem Rendern. Die
+ViewChildren-/Wasserzeichen-Observer reagieren über `afterRenderEffect()` auf
+die Queries und werden beim Zerstören bereinigt. SearchFilter initialisiert
+seinen Wert vor dem Rendern und abonniert DOM-Ereignisse erst in
+`ngAfterViewInit`; VariableBundleDialog verbindet seine Filter ebenfalls
+nach der View-Initialisierung. Die ZIP-Auswahl setzt initiale Optionen direkt
+über `[selected]`, ohne einen nachlaufenden Timer. Auch die derzeit nicht
+über die Anwendung erreichbare CoderList wurde umgestellt: Der Ladezustand
+ist ein Signal, die Sortierung folgt der bedingt gerenderten Tabelle und
+ausstehende Lese-Subscriptions enden mit der Komponenten-Lebensdauer.
+
+Neue Regressionen prüfen unveränderte Eltern-Inputs und lokale Filter-/Notiz-
+Entwürfe, Schemer-Änderungen mit Variablenerhalt und Ersatz-Input, die
+Bereinigung der Schemer-Streams, Sortierung bei synchroner Erstantwort und
+nach einem Reload, Suchinitialisierung/Leeren/Debounce-Abbruch sowie die
+JSON-Kodierung und den Reset im UnitPlayer. Zwei native CoderList-Fälle
+prüfen verspätete Antworten, das Entfernen und erneute Erzeugen der Tabelle
+sowie den Abbruch beim Zerstören. Die regulären UnitPlayer- und
+CodeSelector-Reaktivitätssuiten sind zusätzlich Teil des nativen Zoneless-
+Targets. Die Inventarmatrix wurde auf die neuen Fingerprints aktualisiert;
+die risikobasierte Matrix verweist auf die ergänzten Fälle. Offen markierte
+Inventareinträge werden dadurch nicht als vollständig geprüft behauptet.
+
+### Lokale Abschlussprüfungen der Komponenten-API-Migration am 04.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false` | 2.710 Tests / 259 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 951 Tests / 66 Suites bestanden |
+| `frontend:build --configuration=production` | optimierter Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --browser=electron` | vollständige Produktions-Browserregression: 133 Fälle / 24 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| AST- und Quellcodeprüfung | 160 `input()`-, 73 `output()`- und 42 Signal-Query-Deklarationen, alle API-Felder `readonly`; keine alten Input-/Output-/View-/Content-Query-Decorator-APIs im Anwendungscode oder aktiven Test-Stubs |
+
+Die regulären Tests verwenden `componentRef.setInput()` für Fixture-Eingaben
+und Angular-Renderzyklen für View-Queries. Der Test eines verzögerten
+Variablenfilters wartet auf die konkrete Folgeanfrage statt auf eine feste
+401-ms-Pause. Die neuen nativen Spezifikationen werden vom vorhandenen
+Test-Glob automatisch aufgenommen; UnitPlayer und CodeSelector-Reaktivität
+sind zusätzlich explizit im Zoneless-Target enthalten.
+
+Die Browserregressionen verwenden Electron 138, optimierte Produktionsbundles
+und kontrollierte HTTP-Antworten. Sie prüfen Darstellung, asynchrone Zustände,
+Dialoge, Rollenfälle und Request-Daten. Reale Backend-Persistenz und
+Autorisierung sind damit nicht belegt. Live-Backend-/Keycloak- und Replay-
+Targets wurden für diese Migration nicht erneut ausgeführt. Die nicht
+erreichbare CoderList hat native Komponentennachweise und keinen künstlich
+hinzugefügten Browserpfad. Remote-CI-Ergebnisse sind separat zu prüfen.
+
+Abgebrochene Läufe wegen vollem Jest-Transformcache beziehungsweise ohne
+Abschluss des Prüfprozesses werden nicht gezählt. Ein zusätzlicher Electron-
+Lauf blieb im Codebook-Fall stehen und wurde abgebrochen; der vollständige
+Wiederholungslauf am finalen Stand hat auch diesen Fall bestanden. Die Tabelle
+nennt ausschließlich vollständig bestandene Abschlussläufe.
+
+## Vollständige OnPush-Umstellung am 04.10.2026
+
+Die AST-Prüfung des aktuellen Anwendungscodes erfasst 156 Komponenten.
+Vor dieser Änderung waren acht explizit OnPush; die übrigen 148 verwenden
+jetzt ebenfalls `ChangeDetectionStrategy.OnPush`. Das umfasst Root, Shell,
+Administration, Testergebnisse, Kodierung, Replay, gemeinsame Komponenten
+und Dialoge. Test-Hosts und externe Bibliothekskomponenten gehören nicht
+zu dieser Zahl.
+
+Der debouncte Suchfilter hält seinen lokalen Wert in einem Signal; der
+Löschen-Button liest dieses Signal. Unit- und Booklet-Suchdialoge verwenden
+Signals für Ladezustand, Ergebnislisten und Trefferzahl. Analyse-Aufträge
+liegen in einem lokalen Signal, ohne die injizierten Daten des Aufrufers
+zu verändern. Neue Such- beziehungsweise Refresh-Anfragen brechen ihre
+Vorgänger ab; Subscriptions, Bestätigungen und Debounces enden beim
+Zerstören der Dialoge. Ein Wechsel des Suchmodus verwirft die aktive
+Anfrage und ignoriert Debounces des vorherigen Modus.
+
+Die Workspace-Auswahl hält den ersetzten `MatTableDataSource` in einem
+Signal. Dadurch werden auch der umgebende Suchfilter, die Vorauswahl und
+die Signal-Query für die Sortierung nach einer verzögerten Antwort erneut
+geprüft. Die manuelle Kodierverwaltung markiert nach einem asynchronen
+Laden der Exportdefinitionen ihre Ansicht. Die Definitionserstellung
+markiert ihre Ansicht zusätzlich beim Invalidieren der Vorschau aus
+Reactive Forms beziehungsweise SelectionModel. Bestehende RxJS-Ströme,
+Workspace-Prüfungen und Bibliotheks-Datenquellen bleiben erhalten.
+
+19 zusätzliche native Tests prüfen verzögerte Suchergebnisse aller drei
+Modi, Fehler, bestätigtes Löschen, überholte Antworten, Moduswechsel,
+Dialogschließung, gefilterte Analyse-Aufträge, Abbruch mit anschließendem
+Refresh, unveränderte Aufruferdaten, die debouncte Löschenschaltfläche und
+eine verspätete Workspace-Vorauswahl ohne Parent-Output-Handler. Die
+Vergleichstests markieren bei ihrer direkten synthetischen Vorbereitung
+die tatsächliche Komponentenansicht; die anschließenden asynchronen
+Antworten werden weiterhin ausschließlich über `whenStable()` geprüft.
+Der Reauthentifizierungstest ändert den Bootstrap-Input wie der echte
+Parent. Zwei bereits falsch geschriebene Übersetzungsschlüssel in der
+Workspace-Ansicht wurden beim Nachlauf korrigiert.
+
+Die UnitSearchDialog-, BookletSearchDialog- und
+VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im
+Anwendungscode. Ihre zusätzlichen Tests rendern die echten Komponenten
+mit kontrollierten Antworten. Der erreichbare Schnellsuche-Einstieg wird
+weiterhin durch die vorhandene Browserregression geprüft. Die Umstellung
+belegt durch die Funktionsprüfungen keine gemessene CPU-Ersparnis und
+keine vollständige Fehlerfreiheit aller UI-Kombinationen.
+
+### Lokale Abschlussprüfungen der OnPush-Umstellung
+
+| Prüfung | Ergebnis |
+|---|---|
+| AST-Prüfung aller Anwendungskomponenten | 156 von 156 explizit OnPush; keine fehlende Deklaration |
+| Komponenten-API-Nachprüfung | 160 Inputs, 73 Outputs und 42 Signal-Queries weiterhin readonly; keine alten API-Decorator |
+| `frontend:lint --fix` | bestanden; Importformatierung an die vorhandenen Regeln angepasst |
+| `frontend:test --runInBand --cache=false` | 2.729 Tests / 261 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 970 Tests / 68 Suites bestanden, ohne Zone.js |
+| `frontend:build --configuration=production` | optimierter Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --skipServe=true --baseUrl=http://127.0.0.1:4260 --browser=electron` | 133 Fälle / 24 Spezifikationen bestanden, keine Retries; optimierte Bundles vom Produktionsbuild über lokalen SPA-Server |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; Referenzen für sechs Bereiche, sieben Mechanismen und 46 frühere korrigierte Befunde gültig |
+
+Die Nachweise sind lokale Abschlussläufe. Sie belegen keine erfolgreiche
+Remote-CI, keinen erneuten Live-Backend-/Keycloak-Lauf und kein Deployment.
+
+## OnPush-Nachlauf am 04.10.2026: Navigation und native Eingaben
+
+Zwei Regressionen aus dem anschließenden Review sind korrigiert.
+`ErrorMessageDisplayComponent` leitet die abgeschlossene Router-URL mit
+`toSignal()` aus `NavigationEnd.urlAfterRedirects` ab. Sitzungswarnung und
+Anmeldehinweis aktualisieren sich damit beim Wechsel zwischen Home und
+anderen Routen auch bei unverändertem Auth-Zustand. Der initiale Wert
+stammt aus `router.url`; die Subscription endet mit der Komponente.
+
+Der gemeinsame Suchfilter verarbeitet `input` anstelle von `keyup` und
+setzt seinen lokalen Signal-Wert sofort. Der Löschen-Button funktioniert
+damit auch nach Einfügen ohne Tastaturereignis. Die Ausgabe bleibt um
+300 ms verzögert; neuere Eingaben ersetzen den wartenden Timer. Löschen
+bricht die ausstehende Ausgabe ab und meldet sofort den leeren Wert.
+Der zusätzliche Debounce in der Dateiliste bleibt erhalten.
+
+Sechs neue native Fälle sind vor der Korrektur fehlgeschlagen und danach
+grün: beide globalen Auth-Hinweise bei Routenwechseln in beide Richtungen,
+Redirects und abgebrochene Navigationen, Einfügen ohne `keyup`, Löschen
+während des Debounce sowie zusammengefasste Eingaben und ein Leerwert.
+Die Routenfälle verwenden einen echten Router und eine persistente Shell;
+die UI-Prüfungen warten auf `whenStable()` ohne erzwungenes
+`detectChanges()`. Bestehende Router-Mocks senden jetzt Navigationsereignisse,
+und Dateilisten-Tests erzeugen wie echte Texteingaben ein `input`-Ereignis.
+Ein neuer Browserfall prüft Einfügen und Löschen im erreichbaren
+Dateilisten-UI einschließlich der Such- und Zurücksetzungsanfragen.
+
+| Lokale Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false` | 2.735 Tests / 262 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 976 Tests / 69 Suites bestanden, ohne Zone.js |
+| `frontend:build --configuration=production` | Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`, `file-list.cy.ts` und `app.cy.ts` | 23 Fälle / 2 Spezifikationen bestanden, keine Retries; lokaler SPA-Server mit optimierten Bundles und kontrollierten API-/Keycloak-Antworten |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; Referenzen für sechs Bereiche, sieben Mechanismen und 46 frühere korrigierte Befunde gültig |
+
+Dieser Nachlauf führt gezielte Browserfälle aus; die übrigen Browser-Spezifikationen
+und die Live-Backend-/Keycloak-Suites wurden dabei nicht erneut ausgeführt.
+Die lokale Prüfung ersetzt weder Remote-CI noch einen Deploymentnachweis.
+
+
+## Pipeline-Reparatur am 04.10.2026
+
+Die abgeschlossene Pipeline 102850 für `efb8d401` hatte drei fehlgeschlagene
+Jobs: `audit-app`, `test-browser-zoneless` und `test-browser-production`.
+Beide Browserläufe führten 134 Fälle aus; jeweils vier Fälle in den drei
+Spezifikationen `async-coding-dialogs`, `manual-preparation` und
+`statistics-codebook` scheiterten. Die Live-Replay- und Live-Auth-Jobs bestanden.
+
+- Die vier Filter-Schaltflächen innerhalb des Variablenbündel-Formulars erhalten
+  `type="button"`. Ohne den Typ lösen sie die Formularübermittlung aus und
+  schließen ein gültiges Bündel vor dem ausdrücklichen Erstellen. Ein nativer
+  Zoneless-Test mit ausgewählter Variable und gültigem Namen belegt den Fehler
+  vor der Korrektur und prüft danach Anwenden, beide Lösch-Schaltflächen,
+  Zurücksetzen und genau eine ausdrückliche Übermittlung.
+- Die Browserprüfung wartet auf den initialen Material-Fokus, bevor sie einen
+  anderen Eingabekontrollwert tippt. Damit kann der Dialog-Autofokus die Eingabe
+  auf langsameren Rechnern nicht in das Namensfeld umleiten. Filter, erhaltene
+  Auswahl und exakter Speicher-Payload bleiben geprüft.
+- Die Excel-Validierungsantwort und die Codebook-Aufgabenliste werden durch
+  Antwort-Gates bis nach der sichtbaren Ladeprüfung gehalten. Ein kurzer
+  Antwort-Delay allein garantiert auf einem ausgelasteten CI-Rechner keinen
+  sichtbaren Zwischenzustand. Die Prüfungen für Fortschritt, Erfolg, Fehler
+  und erneute Freigabe der Bedienelemente bleiben erhalten; Retries bleiben 0.
+- `http-cache-semantics` wird auf 4.3.0 aktualisiert. Für `braces` wird der noch
+  unveröffentlichte Upstream-Patch gegen CVE-2026-93687 lokal eingebunden.
+  Herkunft, unveränderte Quelldateien, Lizenz und Ablösung sind in
+  `vendor/braces/README.md` dokumentiert. npm audit bewertet die lokale Quelle
+  nicht; deshalb prüft `frontend:test-dependency-patches` alle installierten
+  Verbraucher und die Sicherheitseigenschaften vor dem weiter verbindlichen
+  Audit. Der Live-Test-Dockerbuild kopiert diese Quelle vor `npm ci`, und Nx
+  berücksichtigt sie bei der Cache-Berechnung.
+
+Die Bewertung des korrigierten Commits erfordert den Abschluss aller
+Remote-Pipeline-Jobs. Lokale Browserläufe mit kontrollierten API-/Keycloak-
+Antworten und statische CI-Konfiguration sind kein Live- oder Deploymentnachweis.
+
+## Lebensdauer und konkurrierende Antworten am 04.10.2026
+
+### ZL-047: Komponenten-Subscriptions enden nicht mit ihrer Ansicht
+
+Die bisher nicht an eine Zerstörung gebundenen Subscriptions wurden über
+`takeUntilDestroyed` an ihren Komponentenbesitzer gebunden. Vorhandene
+`takeUntil`-Signale und explizit in `ngOnDestroy` aufgeräumte Subscription-Sammlungen
+bleiben erhalten. Die Änderung erfasst auch HTTP- und Dialog-Abos in Komponenten,
+deren bisheriger Destroy-Hook nur Filter, Polling oder einzelne Anfragen aufräumte.
+Der Ressourcenpaket-Dialog war ein durch den neuen Destroy-Test bestätigtes Beispiel.
+
+Globale Hintergrundaufträge bleiben pro Workspace weiter aktiv, wenn nur ihre
+Ansicht geschlossen wird. Der globale Nachrichten-Listener, Benachrichtigungs-
+Poller und die Sprachsubscription des Paginators erhalten dagegen eine explizite
+Bereinigung bei der Zerstörung ihres jeweiligen Providers. Die verzögerten
+Workspace-Löschanzeigen und Upload-Viewport-Refreshs enden ebenfalls mit ihrer Ansicht.
+
+### ZL-048: Ältere Leseantworten überschreiben neuere Auswahlen
+
+Listenabrufe für Journal, Systemnachrichten, Prozesse, GitHub-Releases, Metadaten
+und Variablenbündel sowie Profil-Details, Code-/Score-Verteilung und Validierungsseiten
+brechen ihre vorherige Anfrage ab. Die Profil-Neuanlage verwirft zusätzlich noch
+laufende Detail- und Standardauswahl-Anfragen. Fehlende Profildetails ergeben eine
+leere Auswahl statt eines bearbeitbaren leeren Profils.
+
+Während Profil-Schreibanfragen laufen, sind Auswahl, neue Entwürfe und weitere
+Bearbeitungen gesperrt. Der gespeicherte Stand kann dadurch keinen inzwischen
+geänderten Entwurf ersetzen. Die Listenaktualisierung behält ein gespeichertes
+Profil ausgewählt; die Standardauswahl gilt nur bei noch leerer Auswahl.
+
+Bei den Verteilungsfiltern wird die ältere Anfrage bereits beim Ändern des Textes
+abgebrochen, auch während des Debounce-Intervalls oder bei einem ungültigen Regex.
+`distinctUntilChanged` auf `Subject<void>` entfällt: Es hatte nach dem ersten
+Filterereignis alle weiteren Ereignisse unterdrückt. Native Tests prüfen die
+zweite Filteränderung, leere Ergebnisse, verspätete Fehler und gegensätzlich
+geordnete Antworten; Browserregressionen verwenden gehaltene Antworten.
+
+### ZL-049: Workspace-Wechsel und Dialogschließung erhalten alte Fortsetzungen
+
+`takeUntilWorkspaceChanged` beendet eine Anfrage beim ersten Kontextwechsel und
+prüft den Kontext auch vor der Subscription. Damit bleibt eine alte Anfrage nach
+`A -> B -> A` ungültig. Journal und Bündelmanager leeren den alten sichtbaren
+Datensatz und laden den neuen Workspace. Der Bündelmanager schließt seine eigenen
+Dialoge; späte Bestätigungen können kein Bündel im inzwischen ausgewählten Workspace
+anlegen, ändern oder löschen.
+
+Profil-, Verteilungs-, Validierungs-, Export- und Metadatendialoge beenden ihre
+kritischen Anfragen bereits bei `beforeClosed`, bevor die Schließanimation die
+Komponente zerstört. Der Metadaten-Resolver erhält nach jedem `await` eine
+Generationsprüfung; seine nicht abbrechbaren Promises können weder einen neuen
+Dialog öffnen noch einen Fehler im neuen Kontext anzeigen.
+
+Der Excel-Exportdialog besitzt einen eigenen `ValidationStateService`. Eine neue
+Datei, das Schließen oder die Zerstörung verwirft Timer, FileReader und HTTP-
+Validierung. Nach dem Excel-Parser-Promise wird dessen Generation geprüft.
+Ein erneut geöffneter oder gleichzeitig vorhandener Dialog erhält keinen alten
+Validierungszustand. Laufende Downloads bleiben ebenfalls im ursprünglichen Kontext.
+
+### ZL-050: Replay-Fortschritt und Hintergrund-Polls können alte Zustände veröffentlichen
+
+Replay-Fortschritt, Notizen und Jobdaten werden zusammen gelesen und übernommen.
+Ein neuer Ladevorgang, `resetCodingData`, eine neue Replay-Session oder Provider-
+Zerstörung beendet alle alten Leseanfragen und lässt die wartende Promise still
+enden. Es wird kein teilweise geladener Fortschritt mit alten Notizen oder
+Job-Metadaten veröffentlicht. Bestehende Schreibwarteschlangen und ihre
+Kontextprüfungen bleiben erhalten.
+
+Der globale Variablenanalyse-Poller verfolgt neben Timern auch laufende Anfragen.
+Das Zurücksetzen einer Workspace-Sperre bricht deren Anfrage ab; eine alte Antwort
+kann weder den Cache erneut invalidieren noch den Poll-Timer wieder starten.
+Die Zerstörung des Providers beendet alle Workspace-Polls.
+
+### ZL-051: Testergebnisse und Import übernehmen Antworten aus alten Kontexten
+
+Vor dem Import und nach dessen Abschluss gelesene Übersichten gehören nun zu
+einem abbrechbaren Workflow. Eine neue Importaktion, die Zerstörung oder der erste
+Workspace-Wechsel beendet dessen Leseanfragen und Warte-Timer und schließt die
+noch eigenen Import-/Fortschrittsdialoge. Nach weiteren Promise-Fortsetzungen
+werden Ergebnisse nur im weiterhin aktiven Workflow übernommen. Native Tests
+prüfen den initialen Abruf und den verspäteten Abruf nach einem erfolgreichen Import.
+
+Personenwechsel im Ergebnisbrowser und in der Schnellsuche verwerfen zusätzlich
+ausstehende Testheft- und Notizantworten. Ein Workspace-Wechsel leert die Auswahl
+und bricht deren Anfragen auch bei einem anschließenden Zurückwechseln ab.
+Die Ladeanzeige endet bei Abbruch, Fehler und leerem Ergebnis.
+Auch Dialogentscheidungen dieser Ansicht bleiben an ihren ursprünglichen Workspace
+gebunden und lösen nach einem Wechsel keine verspätete Aktion aus.
+
+### ZL-052: Rechteänderungen müssen die globale Aktualisierung abschließen
+
+Die endliche Operation aus Rechteänderung und Auth-Datenaktualisierung bleibt
+nach dem Absenden aktiv, wenn die auslösende Ansicht geschlossen wird. Eine
+geteilte Subscription gehört zur Operation; die UI-Subscription endet weiterhin
+mit der Ansicht. So verhindert die neue Bereinigung, dass eine bereits serverseitig
+gespeicherte Rechteänderung die globale Aktualisierung auslässt. Bestehende
+Session- und Anfrageprüfungen im AppService bleiben erhalten.
+
+Bei abgebrochenen Benutzer-Schreibanfragen wird außerdem die globale Ladeanzeige
+freigegeben. Beginnt nach erfolgreichem Schreiben die Listenaktualisierung,
+übernimmt deren bestehender Finalizer die Anzeige.
+
+Die Referenzen und Ausführungsresultate unten unterscheiden lokale native Tests,
+Browserläufe mit kontrollierten API-Antworten und die Remote-Pipeline. Die statische
+Inventur bleibt ein Vollständigkeitswerkzeug; sie bestätigt keine vollständige
+Verhaltensprüfung sämtlicher UI-Kombinationen.
+
+
+### Lokale Validierung der Lebensdauer- und Antwortkorrekturen
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint --fix` | bestanden; abschließender Diff ohne Whitespace-Fehler |
+| `frontend:test --runInBand --cache=false --silent` | 266 Suiten, 2.801 Tests bestanden |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 73 Suiten, 1.031 Tests bestanden, einschließlich der neuen Kontext-/Dialogregressionen |
+| `frontend:build:production` | optimierter Produktionsbuild bestanden |
+| `frontend:e2e:zoneless --headless` | erster vollständiger Browserlauf: 136 Fälle in 24 Spezifikationen bestanden; vor der abschließenden Nachprüfung |
+| `frontend:e2e:production --cypressConfig=cypress.zoneless.config.ts --headless --browser=electron` | abschließender vollständiger Produktions-Browserlauf: 136 Fälle in 24 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge aus 328 Quelldateien, 156 Komponenten; 52 Finding-Referenzen in 6 Risikobereichen geprüft |
+
+Die Browserläufe verwenden kontrollierte API- und Keycloak-Antworten und prüfen
+reale Routen und Templates ohne ZoneJS. Die native Suite und die reguläre Suite
+überschneiden sich; ihre Testzahlen sind getrennte Ausführungen und werden nicht
+als Anzahl einzigartiger Fälle addiert. Die endgültigen Korrekturen sind durch
+den abschließenden Produktions-Browserlauf abgesichert.
+
+Live-Backend-/Keycloak-E2E wurden für diese Korrekturen lokal nicht erneut
+aufgesetzt. Der Remote-CI-Nachweis muss zum neuen gepushten Head gehören;
+frühere grüne Pipelines bestätigen diesen Stand nicht. Merge, Deployment und
+Produktionsbetrieb sind separate Nachweise. Die dokumentierten Grenzen der
+Risikoabdeckung bleiben erhalten.
+
+## Review-Nachlauf am 05.10.2026: Fehler und globale Operationen
+
+### ZL-053: Fehlgeschlagene Replay-Wiederherstellung darf nicht als geladen gelten
+
+Der atomare Abruf von Fortschritt, Notizen und Jobdaten meldet aktuelle
+HTTP-Fehler jetzt an den Aufrufer. Abgebrochene oder überholte Ladevorgänge
+enden weiterhin ohne Zustandsübernahme. Die Replay-Ansicht beendet bei einem
+Fehler den Ladezustand, zeigt den Fehler, leert die nicht verwendbare Sitzung
+und setzt keinen erfolgreichen Job-Schlüssel. Ein späterer Versuch kann den
+gespeicherten Fortschritt erneut laden. Native Service-Tests prüfen Fehler
+der Notiz- und Jobanfrage; der Komponenten-Test prüft die Fehlermeldung und
+den anschließenden erfolgreichen Versuch.
+
+### ZL-054: Upload- und Exportregistrierung überleben ihre auslösende Ansicht
+
+Der globale Upload-Dienst übernimmt den gesamten Chunk-Upload, seine
+Fortschrittsansicht und die Registrierung angenommener Jobs. Workspace und
+Ausgangsübersicht werden beim Start erfasst. Die Ansicht beendet nur ihre
+eigene Subscription; die endliche, geteilte Operation läuft bis zur Übergabe
+an den bestehenden globalen Poller weiter. Die Fortschrittsansicht bleibt
+bei Navigation geöffnet und endet auch bei einem verspäteten Startfehler.
+Bei Provider-Zerstörung werden Uploads, aktive Status-Polls und Fortschrittsansichten
+bereinigt. Globale Exportstarts registrieren und verfolgen angenommene Jobs
+ebenfalls nach dem Schließen ihrer auslösenden Ansicht; erneutes Abonnieren
+derselben erfolgreichen Operation erzeugt keinen zweiten Auftrag.
+
+Regressionen prüfen den ursprünglichen Workspace, verspäteten Erfolg und
+Fehler nach Ansichtszerstörung sowie einmalige Exportregistrierung mit
+anschließendem Poll. Der Browserfall hält die Upload-Abschlussantwort bis
+nach einer echten Navigation und prüft danach Fortschritts- und Ergebnisdialog.
+Ein angenommenes Serververfahren wird durch Navigation nicht zurückgerollt.
+
+### ZL-055: Speicher-Snackbar bleibt nach dem Schließen des Schemaeditors bedienbar
+
+Die Aktion „Kodierstand prüfen“ gehört zur Lebensdauer ihrer Snackbar.
+Sie navigiert auch nach dem erfolgreichen Speichern und Schließen des
+Schemaeditors zum ursprünglichen Workspace. Die Subscription endet nach
+einer Aktion oder beim Verschwinden der Snackbar. Native Tests prüfen beide
+Abschlusswege; der Browserfall ändert das Schema über die iframe-Schnittstelle,
+speichert und öffnet die Kodierverwaltung über die weiterhin sichtbare Aktion.
+
+### ZL-056: Dauerhafte Lade-Snackbars verschwinden bei Dialogschließung
+
+Die Leseanfragen für Unit-Informationen und Kodierungsschemata räumen ihre
+Lade-Snackbar über `finalize` auf. Damit endet die Anzeige auch beim Abbruch
+durch Dialogzerstörung. Native Tests halten beide Antworten zurück, zerstören
+den Dialog und prüfen sofortiges Aufräumen sowie das Ausbleiben verspäteter
+Folgedialoge und Fehlermeldungen.
+
+### Lokale Validierung des Review-Nachlaufs
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint --fix` und Nachprüfung der beiden ergänzten Service-Testdateien | bestanden; abschließender Diff ohne Whitespace-Fehler |
+| `frontend:test --runInBand --cache=false --silent` | abschließender vollständiger Lauf: 266 Suiten, 2.813 Tests bestanden; der alte Test für unterdrückte Replay-Ladefehler prüft jetzt die Fehlerweitergabe |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 73 Suiten, 1.039 Tests bestanden |
+| `frontend:build:production` | optimierter Produktionsbuild mit strenger Template-Prüfung bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`: vollständiger Lauf und gezielte Schema-Nachprüfung | 138 Fälle aus 24 Spezifikationen abgesichert: 134 Fälle in 23 Spezifikationen im Gesamtlauf bestanden; anschließend alle 4 Schemafälle bestanden, keine Retries |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge aus 328 Quelldateien und Referenzen auf 56 korrigierte Befunde geprüft |
+
+Die neue Schema-Browserfixture wurde auf UTF-8-Base64 umgestellt. Nach der
+Snackbar-Navigation aktualisiert die Zielansicht ihren Kodierstand; dafür
+sind jetzt die Statistik-, Übernahmeübersichts- und Readiness-Antworten explizit
+abgedeckt. Der Gesamtlauf scheiterte zunächst an diesen fehlenden Fixture-Antworten
+im Schemafall. Die gezielte Nachprüfung führt dessen vier Fälle mit der
+ergänzten Fixture erfolgreich aus, einschließlich der erwarteten Statistik-
+Aktualisierung. Ein zusätzlicher Nachprüfungslauf mit vier bestandenen Tests
+endete zunächst beim Nx-Cache-Schreiben mit `ENOSPC`; die abschließende Wiederholung
+mit eigenem Cache-Verzeichnis und `--skip-nx-cache` bestand vollständig.
+
+Die Browsernachweise verwenden kontrollierte API- und Keycloak-Antworten
+mit echten Routen und Templates des optimierten Frontends ohne ZoneJS.
+Live-Backend-/Keycloak-E2E wurden für diesen Nachlauf nicht erneut gestartet.
+Native und reguläre Tests überschneiden sich. Diese lokalen Nachweise
+bestätigen weder eine erfolgreiche Remote-CI am neuen Head noch ein Deployment.
+
+## ZL-057: Export-Startfehler bleiben nach Navigation sichtbar
+
+Die gemeinsame Export-Operation meldet Startfehler jetzt im globalen
+`ExportJobService`, bevor sie an die aufrufenden Ansichten verteilt wird.
+So bleibt die fachliche Fehlermeldung auch nach dem Schließen der Exportansicht
+sichtbar. Die allgemeine HTTP-Fehlererfassung durch den Interceptor bleibt
+erhalten. Replay-Tokenfehler verwenden weiterhin ihren spezifischen Hinweis.
+Exportansicht und manuelle Kodierverwaltung räumen nur noch ihren eigenen
+Startzustand auf; sie erzeugen keine zusätzliche Startfehlermeldung.
+
+Die native Regression verwendet den echten Export-Service, die echte
+Export-Komponente und deren Template. Sie prüft offene und zerstörte Ansicht,
+genau eine Fehlermeldung, Freigabe des Exportbuttons sowie stillen Abbruch bei
+Provider-Zerstörung. Service-Tests prüfen mehrere Abonnenten, Weitergabe des
+ursprünglichen Fehlers und den spezifischen Replay-Tokenhinweis. Die neue
+Browserregression hält eine echte Export-Startantwort bis nach Navigation
+zurück und prüft dann die globale Snackbar. Ein zweiter Browserfall prüft
+Fehlermeldung und Buttonfreigabe in der offenen Ansicht.
+
+Lokale Prüfung am 05.10.2026:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false --silent` | 267 Suiten, 2.818 Tests bestanden |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 74 Suiten, 1.042 Tests bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`, `export-start-failure.cy.ts` und `export-item-dataset.cy.ts` | alle 6 Browserfälle aus 2 Spezifikationen bestanden, keine Retries; optimierter Build mit strenger Template-Prüfung bestanden |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge und Referenzen auf 57 korrigierte Befunde geprüft |
+
+Die Testmengen überschneiden sich. Die neue Browserregression verwendet
+kontrollierte HTTP- und Keycloak-Antworten mit echten Routen und Templates;
+Live-Backend-/Keycloak-E2E wurden nicht erneut ausgeführt. Die vollständige
+Browser-Suite wurde für diesen einzelnen Befund nicht erneut gestartet.
+Remote-CI, Merge und Deployment sind separate Nachweise.

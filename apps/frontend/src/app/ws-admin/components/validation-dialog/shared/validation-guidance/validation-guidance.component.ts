@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import {
+  Component, input, ChangeDetectionStrategy
+} from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
 
@@ -12,21 +14,21 @@ import { MatIconModule } from '@angular/material/icon';
   imports: [MatIconModule],
   template: `
     <div class="validation-details">
-      @if (description) {
-        <p class="validation-details-intro">{{ description }}</p>
+      @if (description()) {
+        <p class="validation-details-intro">{{ description() }}</p>
       }
 
       <div class="validation-guidance">
-        @if (whyText) {
+        @if (whyText()) {
           <div class="info-banner">
             <mat-icon>help</mat-icon>
-            <span><strong>Warum ist das wichtig?</strong> {{ whyText }}</span>
+            <span><strong>Warum ist das wichtig?</strong> {{ whyText() }}</span>
           </div>
         }
-        @if (fixHint) {
+        @if (fixHint()) {
           <div class="info-banner">
             <mat-icon>build</mat-icon>
-            <span><strong>So beheben Sie es:</strong> {{ fixHint }}</span>
+            <span><strong>So beheben Sie es:</strong> {{ fixHint() }}</span>
           </div>
         }
       </div>
@@ -89,7 +91,7 @@ import { MatIconModule } from '@angular/material/icon';
   `]
 })
 export class ValidationGuidanceComponent {
-  @Input() description?: string;
-  @Input() whyText?: string;
-  @Input() fixHint?: string;
+  readonly description = input<string>();
+  readonly whyText = input<string>();
+  readonly fixHint = input<string>();
 }

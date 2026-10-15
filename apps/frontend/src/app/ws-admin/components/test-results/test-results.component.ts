@@ -12,12 +12,12 @@ import {
   MatRow
 } from '@angular/material/table';
 import {
-  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, ViewChild, signal, computed, ChangeDetectionStrategy
+  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, signal, computed, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MatPaginator,
@@ -27,6 +27,7 @@ import {
 } from '@angular/material/paginator';
 import {
   BehaviorSubject,
+  ReplaySubject,
   Subject,
   Subscription,
   catchError,
@@ -37,6 +38,7 @@ import {
   forkJoin,
   of,
   switchMap,
+  takeUntil,
   takeWhile,
   timer as rxjsTimer
 } from 'rxjs';
@@ -56,7 +58,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -159,11 +161,9 @@ import {
   isSecondAutocodingWaitingForManualCoding,
   SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
-import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import {
   TestResultsImportProgressDialogComponent,
-  TestResultsImportProgressHandle,
   TestResultsImportProgressState
 } from './test-results-import-progress-dialog.component';
 import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
@@ -190,6 +190,7 @@ import {
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 
 interface BookletLog {
   id: number;
@@ -382,6 +383,9 @@ string,
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
+  private readonly selectedResultRequestsCancelled = new Subject<void>();
+  private unitNotesRequest?: Subscription;
+  private cancelTestCenterImport: (() => void) | null = null;
   private dialog = inject(MatDialog);
   private testResultBackendService = inject(TestResultBackendService);
   private validationService = inject(ValidationService);
@@ -479,15 +483,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly exportTypeInProgress = signal<'test-results' | 'test-logs' | null>(null);
   protected readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild('hiddenResponsesFileInput')
-    hiddenResponsesFileInput!: ElementRef<HTMLInputElement>;
+  readonly paginator = viewChild(MatPaginator);
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    if (this.dataSource) this.dataSource.sort = this.sort() ?? null;
+  });
 
-  @ViewChild('hiddenLogsFileInput')
-    hiddenLogsFileInput!: ElementRef<HTMLInputElement>;
+  readonly hiddenResponsesFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenResponsesFileInput');
+
+  readonly hiddenLogsFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenLogsFileInput');
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.resetSelectedResultDetails();
+      this.testPerson.set(null);
+    });
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
       .subscribe(searchText => {
@@ -495,7 +505,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
 
     // Sync with upload state service
-    this.uploadStateService.uploadingBatches$.subscribe(
+    this.uploadStateService.uploadingBatches$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       (batches: PendingUploadBatch[]) => {
         const myBatch = batches.find(
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
@@ -510,7 +520,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     );
 
-    this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
+    this.uploadStateService.uploadsFinished$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
         this.reloadLogAnomalySummaryIfRequested();
@@ -596,7 +606,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (Object.keys(taskIds).length > 0) {
       for (const [type, task] of Object.entries(taskIds)) {
         this.validationService
-          .getValidationTask(this.appService.selectedWorkspaceId, task.id)
+          .getValidationTask(this.appService.selectedWorkspaceId, task.id).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: updatedTask => {
               if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
@@ -676,16 +686,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   onRowClick(row: P): void {
+    this.resetSelectedResultDetails();
     this.testPerson.set(row);
-    this.responses.set([]);
-    this.logs.set([]);
-    this.bookletLogs.set([]);
-    this.selectedUnit.set(undefined);
-    this.unitTagsMap.set(new Map());
-    this.unitNotesMap.set(new Map());
     this.isLoadingBooklets.set(true);
     this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
+      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
+      )
       .subscribe({
         next: (booklets: PersonTestResult[]) => {
           this.selectedBooklet.set('');
@@ -722,19 +729,27 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.booklets().forEach(booklet => {
+    this.booklets.update(booklets => booklets.map(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.sort((a, b) => {
+        const units = [...booklet.units].sort((a, b) => {
           const aliasA = a.alias || a.name || '';
           const aliasB = b.alias || b.name || '';
           return aliasA.localeCompare(aliasB);
         });
+        return { ...booklet, units };
       }
-    });
+      return booklet;
+    }));
   }
 
   protected getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap().get(unitId) || [];
+  }
+
+  toggleResponseExpansion(responseId: number): void {
+    this.responses.update(responses => responses.map(response => (response.id === responseId ? {
+      ...response, expanded: !response.expanded
+    } : response)));
   }
 
   loadAllUnitTags(): void {
@@ -755,6 +770,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   loadAllUnitNotes(): void {
+    this.unitNotesRequest?.unsubscribe();
     if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
@@ -774,8 +790,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.unitNoteService
-      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
+    this.unitNotesRequest = this.unitNoteService
+      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe({
         next: notesByUnitId => {
           this.unitNotesMap.update(value => {
@@ -817,7 +835,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.appService.selectedWorkspaceId,
         booklet.name,
         testPerson
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: bookletReplay => {
           loadingSnackBar.dismiss();
@@ -914,7 +932,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const firstResponse = this.responses()[0];
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, firstResponse.id)
+      .getReplayUrl(this.appService.selectedWorkspaceId, firstResponse.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result && result.replayUrl) {
@@ -1001,7 +1019,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.unitTags.set(result);
         this.unitTagsMap.update(value => {
@@ -1032,7 +1050,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.unitNotes.set(result);
         this.unitNotesMap.update(value => {
@@ -1093,7 +1111,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.unitNotes.set(this.unitNotesMap().get(unitId) || []);
       } else {
         this.unitNoteService
-          .getUnitNotes(this.appService.selectedWorkspaceId, unitId)
+          .getUnitNotes(this.appService.selectedWorkspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: notes => {
               this.unitNotes.set(notes);
@@ -1263,7 +1281,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         page,
         limit,
         searchText
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           this.isLoading.set(false);
@@ -1280,7 +1298,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private loadWorkspaceOverview(): void {
     this.isLoadingOverview.set(true);
     this.testResultService
-      .getWorkspaceOverview(this.appService.selectedWorkspaceId)
+      .getWorkspaceOverview(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result) {
@@ -1302,7 +1320,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.workspaceSettingsService
-      .getShowTestResultsLogAnomalies(workspaceId)
+      .getShowTestResultsLogAnomalies(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
         this.setShowTestResultsLogAnomalies(enabled);
       });
@@ -1316,7 +1334,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.workspaceSettingsService
-      .getEnableRegexSearch(workspaceId)
+      .getEnableRegexSearch(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
         this.enableRegexSearch.set(enabled);
       });
@@ -1330,7 +1348,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.workspaceSettingsService
-      .getAutoRefreshManualCodingJobs(workspaceId)
+      .getAutoRefreshManualCodingJobs(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
         this.setAutoRefreshCodingStatus(enabled);
       });
@@ -1390,7 +1408,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     getLogAnomalySummary.call(this.testResultService, workspaceId)
       .pipe(finalize(() => {
         this.isLoadingLogAnomalySummary.set(false);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: summary => {
           this.logAnomalySummary.set(summary);
@@ -1484,7 +1502,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: undefined }
     );
 
-    getLogAnomalyDetails.call(this.testResultService, workspaceId)
+    getLogAnomalyDetails.call(this.testResultService, workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: details => {
           loadingSnackBar.dismiss();
@@ -1516,7 +1534,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             }
           });
 
-          dialogRef.afterClosed().subscribe(result => {
+          dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
             if (result?.showTable) {
               this.showLogAnomaliesInTable();
             }
@@ -1575,7 +1593,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.isLoadingCodingFreshnessStatus.set(false);
           this.isLoadingManualAppliedResultsOverview.set(false);
         }
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ([summary, overview]) => {
           if (this.codingFreshnessStatusRequestGeneration !== requestGeneration) {
@@ -1937,7 +1955,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }));
     this.dataSource = new MatTableDataSource(mappedResults);
     this.totalRecords.set(total);
-    this.dataSource.sort = this.sort;
+    this.dataSource.sort = this.sort() ?? null;
   }
 
   openImportDialog(): void {
@@ -1945,17 +1963,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe(async result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(async result => {
       if (result) {
         switch (result.type) {
           case 'testcenter':
             await this.testCenterImport();
             break;
           case 'responses':
-            this.hiddenResponsesFileInput.nativeElement.click();
+            this.hiddenResponsesFileInput().nativeElement.click();
             break;
           case 'logs':
-            this.hiddenLogsFileInput.nativeElement.click();
+            this.hiddenLogsFileInput().nativeElement.click();
             break;
           default:
             break;
@@ -1965,6 +1983,30 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   async testCenterImport(): Promise<void> {
+    if (this.destroyRef.destroyed) return;
+    this.cancelTestCenterImport?.();
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const cancellation = new ReplaySubject<void>(1);
+    const ownedDialogs = new Set<MatDialogRef<unknown>>();
+    let cancelled = false;
+    let workspaceChanges: Subscription | undefined;
+    let unregisterDestroy = () => {};
+    const cancel = (): void => {
+      if (cancelled) return;
+      cancelled = true;
+      cancellation.next();
+      cancellation.complete();
+      workspaceChanges?.unsubscribe();
+      unregisterDestroy();
+      ownedDialogs.forEach(ref => ref.close());
+      ownedDialogs.clear();
+      if (this.cancelTestCenterImport === cancel) this.cancelTestCenterImport = null;
+    };
+    this.cancelTestCenterImport = cancel;
+    unregisterDestroy = this.destroyRef.onDestroy(cancel);
+    workspaceChanges = this.appService.selectedWorkspaceId$.subscribe(id => {
+      if (id !== workspaceId) cancel();
+    });
     const fallbackOverview: TestResultsOverviewResponse = {
       testPersons: 0,
       testGroups: 0,
@@ -1977,17 +2019,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       sessionScreenCounts: {}
     };
 
-    const workspaceId = this.appService.selectedWorkspaceId;
     let loadedBeforeOverview: TestResultsOverviewResponse | null = null;
     if (workspaceId) {
       try {
         loadedBeforeOverview = await firstValueFrom(
-          this.testResultService.getWorkspaceOverview(workspaceId)
+          this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+          { defaultValue: null }
         );
       } catch {
         loadedBeforeOverview = null;
       }
     }
+    if (cancelled) return;
     const beforeOverview =
       loadedBeforeOverview || this.overview() || fallbackOverview;
 
@@ -2000,10 +2043,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         importType: 'testResults'
       }
     });
+    ownedDialogs.add(dialogRef);
 
-    const sleep = (ms: number) => new Promise<void>(resolve => {
-      window.setTimeout(() => resolve(), ms);
-    });
+    const sleep = (ms: number) => firstValueFrom(rxjsTimer(ms).pipe(takeUntil(cancellation)), { defaultValue: null });
 
     const hasOverviewChanged = (current: TestResultsOverviewResponse) => (
       current.testPersons !== beforeOverview.testPersons ||
@@ -2030,6 +2072,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         // A loaded overview is the reliable result. It may legitimately be unchanged
         // when an import only confirms already existing data.
         for (let i = 0; i < 12; i += 1) {
+          if (cancelled) return { overview: beforeOverview, loaded: false, changed: false };
           progressState$?.next({
             title: 'Testcenter-Import',
             icon: 'upload_file',
@@ -2043,7 +2086,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           let current: TestResultsOverviewResponse | null = null;
           try {
             current = await firstValueFrom(
-              this.testResultService.getWorkspaceOverview(workspaceId)
+              this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+              { defaultValue: null }
             );
           } catch {
             current = null;
@@ -2057,7 +2101,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         let finalOverview: TestResultsOverviewResponse | null = null;
         try {
           finalOverview = await firstValueFrom(
-            this.testResultService.getWorkspaceOverview(workspaceId)
+            this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+            { defaultValue: null }
           );
         } catch {
           finalOverview = null;
@@ -2069,14 +2114,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         };
       };
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntil(cancellation), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+      ownedDialogs.delete(dialogRef);
+      let awaitingOverview = false;
       const maybePayload = result as
         | {
           didImport?: boolean;
           resultType?: 'logs' | 'responses';
         }
         | boolean
-        | UntypedFormGroup
         | undefined;
 
       if (
@@ -2085,6 +2131,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         'didImport' in maybePayload &&
         (maybePayload as { didImport?: boolean }).didImport
       ) {
+        awaitingOverview = true;
         (async () => {
           const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
             title: 'Testcenter-Import',
@@ -2103,6 +2150,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               data: { state$: progressState$ }
             }
           );
+          ownedDialogs.add(progressDialogRef);
 
           let overviewResult: {
             overview: TestResultsOverviewResponse;
@@ -2120,6 +2168,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             }
 
             overviewResult = await pollOverviewAfterImport(progressState$);
+            if (cancelled) return;
 
             progressState$.next({
               title: 'Testcenter-Import',
@@ -2131,7 +2180,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               mode: 'determinate'
             });
           } finally {
-            progressDialogRef.close();
+            if (ownedDialogs.delete(progressDialogRef)) progressDialogRef.close();
             progressState$.complete();
           }
 
@@ -2184,6 +2233,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (!codingFreshness && workspaceId) {
             codingFreshness = await this.fetchCodingFreshnessSummary(workspaceId);
           }
+          if (cancelled) return;
           if (codingFreshness) {
             this.codingFreshnessSummary.set(codingFreshness);
           }
@@ -2193,6 +2243,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               overview: this.manualAppliedResultsOverview(),
               loadFailed: this.manualAppliedResultsOverviewLoadFailed()
             };
+          if (cancelled) return;
           this.manualAppliedResultsOverview.set(manualOverviewResult.overview);
           this.manualAppliedResultsOverviewLoadFailed.set(manualOverviewResult.loadFailed);
 
@@ -2235,10 +2286,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               manualAppliedResultsOverviewLoadFailed: manualOverviewResult.loadFailed
             }
           });
-        })();
+        })().finally(cancel);
       }
 
-      if (result instanceof UntypedFormGroup || result) {
+      if (result) {
         if (workspaceId) {
           this.testResultService.invalidateCache(workspaceId);
         }
@@ -2250,6 +2301,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.getCurrentSearchText()
         );
       }
+      if (!awaitingOverview) cancel();
     });
   }
 
@@ -2274,7 +2326,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         });
 
         optionsRef
-          .afterClosed()
+          .afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe(
             (options: TestResultsUploadOptionsDialogResult | undefined) => {
               if (!options) {
@@ -2292,129 +2344,36 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               };
 
               const overwriteExisting = overwriteMode !== 'skip';
-              const uploadTitle =
-                resultType === 'logs' ?
-                  'Upload-Ergebnis (Logs)' :
-                  'Upload-Ergebnis (Antworten)';
-              const uploadIcon = resultType === 'logs' ? 'article' : 'upload_file';
-              const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
-                title: uploadTitle,
-                icon: uploadIcon,
-                phase: 'uploading',
-                phaseLabel: 'Datei wird hochgeladen',
-                message: resultType === 'logs' ?
-                  'Die Log-Datei wird in Teilen übertragen.' :
-                  'Die Antwortdatei wird in Teilen übertragen.',
-                percent: 0,
-                mode: 'determinate'
-              });
-              const progressDialogRef = this.dialog.open(
-                TestResultsImportProgressDialogComponent,
-                {
-                  width: '560px',
-                  maxWidth: '95vw',
-                  disableClose: true,
-                  data: { state$: progressState$ }
-                }
-              );
-              const progressHandle: TestResultsImportProgressHandle = {
-                dialogRef: progressDialogRef,
-                state$: progressState$
+              const workspaceId = this.appService.selectedWorkspaceId;
+              const beforeOverview = this.overview() || {
+                testPersons: 0,
+                testGroups: 0,
+                uniqueBooklets: 0,
+                uniqueUnits: 0,
+                uniqueResponses: 0,
+                responseStatusCounts: {},
+                sessionBrowserCounts: {},
+                sessionOsCounts: {},
+                sessionScreenCounts: {}
               };
-
               this.isLoading.set(true);
               this.isUploadingResults.set(true);
-
-              if (resultType === 'responses') {
-                this.uploadingMessage.set('Importiere Antworten... (0%)');
-              } else if (resultType === 'logs') {
-                this.uploadingMessage.set('Importiere Logs... (0%)');
-              } else {
-                this.uploadingMessage.set('Ergebnisse werden hochgeladen... (0%)');
-              }
-
-              const file = inputElement.files![0];
-              this.fileService
-                .uploadTestResultsChunked(
-                  this.appService.selectedWorkspaceId,
-                  file,
-                  resultType,
-                  {
-                    overwriteExisting,
-                    overwriteMode,
-                    scope,
-                    filters
-                  },
-                  (percent: number) => {
-                    if (resultType === 'responses') {
-                      this.uploadingMessage.set(`Importiere Antworten... (${percent}%)`);
-                    } else if (resultType === 'logs') {
-                      this.uploadingMessage.set(`Importiere Logs... (${percent}%)`);
-                    } else {
-                      this.uploadingMessage.set(`Ergebnisse werden hochgeladen... (${percent}%)`);
-                    }
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'uploading',
-                      phaseLabel: 'Datei wird hochgeladen',
-                      message: resultType === 'logs' ?
-                        'Die Log-Datei wird in Teilen übertragen.' :
-                        'Die Antwortdatei wird in Teilen übertragen.',
-                      percent,
-                      mode: 'determinate'
-                    });
-                  }
-                )
-                .subscribe({
-                  next: (jobs: TestResultsUploadJobDto[]) => {
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'processing',
-                      phaseLabel: 'Verarbeitung läuft',
-                      message: 'Upload abgeschlossen. Der Server verarbeitet die Datei.',
-                      percent: 0,
-                      completed: 0,
-                      total: jobs.length,
-                      mode: 'determinate'
-                    });
-
-                    const beforeOverview = this.overview() || {
-                      testPersons: 0,
-                      testGroups: 0,
-                      uniqueBooklets: 0,
-                      uniqueUnits: 0,
-                      uniqueResponses: 0,
-                      responseStatusCounts: {},
-                      sessionBrowserCounts: {},
-                      sessionOsCounts: {},
-                      sessionScreenCounts: {}
-                    };
-
-                    this.uploadStateService.registerBatch({
-                      workspaceId: this.appService.selectedWorkspaceId,
-                      jobIds: jobs.map(j => j.jobId),
-                      resultType,
-                      beforeOverview,
-                      initialIssues: [],
-                      progress: 0,
-                      completedCount: 0,
-                      totalJobs: jobs.length
-                    }, progressHandle);
-                  },
-                  error: err => {
-                    progressDialogRef.close();
-                    progressState$.complete();
-                    this.isLoading.set(false);
-                    this.isUploadingResults.set(false);
-                    this.snackBar.open(
-                      `Fehler beim Upload-Start: ${err.message}`,
-                      'Fehler',
-                      { duration: 5000 }
-                    );
-                  }
-                });
+              this.uploadingMessage.set(resultType === 'responses' ?
+                'Importiere Antworten... (0%)' : 'Importiere Logs... (0%)');
+              this.uploadStateService.startChunkedUpload(
+                workspaceId,
+                inputElement.files![0],
+                resultType,
+                {
+                  overwriteExisting, overwriteMode, scope, filters
+                },
+                beforeOverview
+              ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+                error: () => {
+                  this.isLoading.set(false);
+                  this.isUploadingResults.set(false);
+                }
+              });
             }
           );
       }
@@ -2498,7 +2457,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(
       (request: TestResultsResponseCleanupRequestDto | false | undefined) => {
         if (request) {
           this.confirmAndStartResponseCleanup(request);
@@ -2521,7 +2480,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.isDeletingTestPersons.set(true);
 
     this.testResultService
-      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
+      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
           this.isDeletingTestPersons.set(false);
@@ -2560,7 +2519,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .previewDeleteTestResultResponses(
         this.appService.selectedWorkspaceId,
         request
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
           this.isDeletingTestPersons.set(false);
@@ -2598,7 +2557,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.startDeleteJob(request);
       }
@@ -2617,7 +2576,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.startResponseCleanupJob(request);
       }
@@ -2631,7 +2590,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.deleteProgressMessage.set('Löschung wird gestartet...');
 
     this.testResultService
-      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
           this.activeDeleteTask.set(task);
@@ -2661,7 +2620,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .createDeleteTestResultResponsesJob(
         this.appService.selectedWorkspaceId,
         request
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
           this.activeDeleteTask.set(task);
@@ -2727,7 +2686,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private finishDeleteTask(taskId: number): void {
     this.validationService
-      .getValidationResults(this.appService.selectedWorkspaceId, taskId)
+      .getValidationResults(this.appService.selectedWorkspaceId, taskId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           const deleteResult = result as TestResultsDeleteResultDto;
@@ -2776,6 +2735,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private resetSelectedResultDetails(): void {
+    this.selectedResultRequestsCancelled.next();
+    this.isLoadingBooklets.set(false);
     this.booklets.set([]);
     this.responses.set([]);
     this.logs.set([]);
@@ -2794,7 +2755,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result?: QuickSearchDialogResult) => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe((result?: QuickSearchDialogResult) => {
       if (!result) {
         return;
       }
@@ -2832,7 +2793,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.isLoadingBooklets.set(true);
 
     this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId)
+      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
+      )
       .subscribe({
         next: (booklets: PersonTestResult[]) => {
           this.booklets.set(booklets as unknown as Booklet[]);
@@ -2928,19 +2891,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.unitService
-          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number)
+          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               if (result.success) {
-                const unitIndex = booklet.units.findIndex(
-                  u => u.id === unit.id
-                );
-                if (unitIndex !== -1) {
-                  booklet.units.splice(unitIndex, 1);
-                }
+                this.booklets.update(booklets => booklets.map(current => (
+                  current.id === booklet.id ? {
+                    ...current, units: current.units.filter(candidate => candidate.id !== unit.id)
+                  } : current
+                )));
 
                 if (this.selectedUnit()?.id === unit.id) {
                   this.selectedUnit.set(undefined);
@@ -3000,13 +2962,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.responseService
           .deleteResponse(
             this.appService.selectedWorkspaceId,
             response.id as number
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               if (result.success) {
@@ -3067,7 +3029,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         if (result.variableValidationResult) {
           this.variableValidationResult.set(result.variableValidationResult);
@@ -3094,7 +3056,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
 
     this.variableAnalysisService
-      .getAllJobs(this.appService.selectedWorkspaceId)
+      .getAllJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: jobs => {
           loadingSnackBar.dismiss();
@@ -3230,7 +3192,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         if (result.type === 'download' && result.jobId) {
           this.downloadExportResult(result.jobId);
@@ -3256,7 +3218,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe((result: ExportOptions | undefined) => {
       if (result) {
         const filters = {
           groupNames:
@@ -3294,7 +3256,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               filters
             );
 
-        exportMethod.subscribe({
+        exportMethod.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: response => {
             this.exportJobId.set(response.jobId);
             this.exportJobStatus.set('active');
@@ -3322,7 +3284,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
     this.testResultBackendService
-      .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+      .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
@@ -3354,7 +3316,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         return;
       }
       this.testResultBackendService
-        .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+        .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (jobs: TestResultExportJob[]) => {
             const job = jobs.find(j => j.jobId === jobId);
@@ -3370,7 +3332,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   'Herunterladen',
                   { duration: 10000 }
                 );
-                snackBarRef.onAction().subscribe(() => {
+                snackBarRef.onAction().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
                   this.downloadExportResult(jobId);
                 });
               } else if (job.status === 'failed') {
@@ -3402,7 +3364,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.testResultBackendService
-      .cancelTestResultExportJob(this.appService.selectedWorkspaceId, jobId)
+      .cancelTestResultExportJob(this.appService.selectedWorkspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           if (response.success) {
@@ -3446,7 +3408,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
     this.testResultBackendService
-      .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
+      .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           const url = window.URL.createObjectURL(blob);
@@ -3467,7 +3429,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             .deleteTestResultExportJob(
               this.appService.selectedWorkspaceId,
               jobId
-            )
+            ).pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe();
         },
         error: () => {

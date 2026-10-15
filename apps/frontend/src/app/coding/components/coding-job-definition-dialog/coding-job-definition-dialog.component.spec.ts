@@ -1,6 +1,7 @@
-import {
-  ComponentFixture, TestBed, fakeAsync, tick
-} from '@angular/core/testing';
+import { MAT_TABS_CONFIG } from '@angular/material/tabs';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { MatTabGroupHarness } from '@angular/material/tabs/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { EventEmitter } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
@@ -8,7 +9,6 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
@@ -176,8 +176,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       imports: [
         CodingJobDefinitionDialogComponent,
         ReactiveFormsModule,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         FormBuilder,
@@ -646,56 +645,61 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
-  it('saves display-only definition updates directly when coding jobs exist', fakeAsync(() => {
-    createComponent({
-      isEdit: true,
-      mode: 'definition',
-      jobDefinitionId: 55,
-      createdJobsCount: 2,
-      codingJob: {
-        id: 55,
-        status: 'approved',
-        assignedCoders: [1],
-        assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
-        missingsProfileId: 7,
-        maxCodingCases: 5,
-        doubleCodingAbsolute: 0,
-        doubleCodingPercentage: 0,
-        caseOrderingMode: 'continuous',
-        showScore: false,
-        allowComments: true,
-        suppressGeneralInstructions: false
-      } as CodingJob
-    });
-    (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 55 }));
+  it('saves display-only definition updates directly when coding jobs exist', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      createComponent({
+        isEdit: true,
+        mode: 'definition',
+        jobDefinitionId: 55,
+        createdJobsCount: 2,
+        codingJob: {
+          id: 55,
+          status: 'approved',
+          assignedCoders: [1],
+          assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+          missingsProfileId: 7,
+          maxCodingCases: 5,
+          doubleCodingAbsolute: 0,
+          doubleCodingPercentage: 0,
+          caseOrderingMode: 'continuous',
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        } as CodingJob
+      });
+      (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 55 }));
 
-    component.codingJobForm.patchValue({
-      name: '  Neuer Anzeigename  ',
-      description: '   ',
-      showScore: true
-    });
-    component.onSubmit();
-    tick();
-
-    expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
-      1,
-      55,
-      expect.objectContaining({
-        name: 'Neuer Anzeigename',
-        description: null,
+      component.codingJobForm.patchValue({
+        name: '  Neuer Anzeigename  ',
+        description: '   ',
         showScore: true
-      })
-    );
-    expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
-      1,
-      55,
-      expect.not.objectContaining({
-        maxCodingCases: expect.anything(),
-        assignedVariables: expect.anything()
-      })
-    );
-    expect(mockCodingJobBackendService.previewJobDefinitionUpdateRefresh).not.toHaveBeenCalled();
-  }));
+      });
+      component.onSubmit();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
+        1,
+        55,
+        expect.objectContaining({
+          name: 'Neuer Anzeigename',
+          description: null,
+          showScore: true
+        })
+      );
+      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(
+        1,
+        55,
+        expect.not.objectContaining({
+          maxCodingCases: expect.anything(),
+          assignedVariables: expect.anything()
+        })
+      );
+      expect(mockCodingJobBackendService.previewJobDefinitionUpdateRefresh).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('previews and applies distribution-relevant definition updates when coding jobs exist', async () => {
     const preview = {
@@ -783,6 +787,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('preserves the Space default of the nested DERIVE_ERROR checkbox', async () => {
+    TestBed.overrideProvider(MAT_TABS_CONFIG, { useValue: { animationDuration: '0ms' } });
+    createComponent(undefined, true);
+    component.selectedVariables().select(mockVariables[0]);
+    const tabs = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatTabGroupHarness);
+    await tabs.selectTab({ label: 'Einzelne Variablen' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const checkbox = fixture.nativeElement.querySelector('.derive-error-option input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    expect(checkbox.disabled).toBe(false);
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    checkbox.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(component.isVariableSelected(mockVariables[0])).toBe(true);
+    checkbox.click();
+    await fixture.whenStable();
+    expect(component.isDeriveErrorIncluded(component.variables()[0])).toBe(true);
+  });
+
   it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
     createComponent(undefined, true);
 
@@ -826,7 +851,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.selectedVariables().select(variable);
     component.setDeriveErrorIncluded(variable, true);
 
-    expect(component.getAvailabilityText(variable)).toBe('3/3');
+    expect(component.getAvailabilityText(component.variables()[0])).toBe('3/3');
     expect(component.getTotalCodingCases()).toBe(3);
 
     await component.onSubmit();
@@ -967,102 +992,122 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   describe('Mode: Job (Create/Edit)', () => {
-    it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
-      createComponent({ mode: 'job', isEdit: false });
+    it('should submit create calling createCodingJob and assignCoder when 1 variable selected', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        createComponent({ mode: 'job', isEdit: false });
 
-      component.selectedCoders.select(mockCoders[0]);
-      component.selectedVariables().select(mockVariables[0]); // Only 1 variable
+        component.selectedCoders.select(mockCoders[0]);
+        component.selectedVariables().select(mockVariables[0]); // Only 1 variable
 
-      const mockCreatedJob = { id: 101, name: 'New Job' };
-      (mockCodingJobBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
+        const mockCreatedJob = { id: 101, name: 'New Job' };
+        (mockCodingJobBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
 
-      component.onSubmit();
-      tick();
+        component.onSubmit();
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(mockCodingJobBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
-        assignedCoders: [1],
-        variables: [mockVariables[0]]
-      }));
-      expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(101, 1);
-      expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ id: 101 }));
-    }));
+        expect(mockCodingJobBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
+          assignedCoders: [1],
+          variables: [mockVariables[0]]
+        }));
+        expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(101, 1);
+        expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ id: 101 }));
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should submit edit calling updateCodingJob and assignCoder', fakeAsync(() => {
-      const existingJob: Partial<CodingJob> = {
-        id: 202, name: 'Edit Job', variables: [], assignedCoders: []
-      };
-      createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
+    it('should submit edit calling updateCodingJob and assignCoder', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const existingJob: Partial<CodingJob> = {
+          id: 202, name: 'Edit Job', variables: [], assignedCoders: []
+        };
+        createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
 
-      component.selectedCoders.select(mockCoders[1]); // Change coder
-      component.selectedVariables().select(mockVariables[0]);
+        component.selectedCoders.select(mockCoders[1]); // Change coder
+        component.selectedVariables().select(mockVariables[0]);
 
-      (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
+        (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
 
-      component.onSubmit();
-      tick();
+        component.onSubmit();
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
-        1,
-        202,
-        expect.objectContaining({ assignedCoders: [2] })
-      );
-      expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(202, 2);
-      expect(mockDialogRef.close).toHaveBeenCalled();
-    }));
+        expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
+          1,
+          202,
+          expect.objectContaining({ assignedCoders: [2] })
+        );
+        expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(202, 2);
+        expect(mockDialogRef.close).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should allow editing a job when its assigned variables are not in the current incomplete list', fakeAsync(() => {
-      (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValue(of([]));
-      (mockCoderService.getCodersByJobId as jest.Mock).mockReturnValue(of([mockCoders[0]]));
-      const existingJob: Partial<CodingJob> = {
-        id: 303,
-        name: 'Existing Job',
-        assignedCoders: [1],
-        assignedVariables: [{ unitName: 'Finished Unit', variableId: 'Finished Var' }]
-      };
-      createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
+    it('should allow editing a job when its assigned variables are not in the current incomplete list', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValue(of([]));
+        (mockCoderService.getCodersByJobId as jest.Mock).mockReturnValue(of([mockCoders[0]]));
+        const existingJob: Partial<CodingJob> = {
+          id: 303,
+          name: 'Existing Job',
+          assignedCoders: [1],
+          assignedVariables: [{ unitName: 'Finished Unit', variableId: 'Finished Var' }]
+        };
+        createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
 
-      (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
+        (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
 
-      component.onSubmit();
-      tick();
+        component.onSubmit();
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
-        1,
-        303,
-        expect.objectContaining({ assignedCoders: [1] })
-      );
-      expect(mockSnackBar.open).not.toHaveBeenCalledWith(
-        'coding-job-definition-dialog.validation.variable-or-bundle-required',
-        'common.close',
-        expect.anything()
-      );
-    }));
+        expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
+          1,
+          303,
+          expect.objectContaining({ assignedCoders: [1] })
+        );
+        expect(mockSnackBar.open).not.toHaveBeenCalledWith(
+          'coding-job-definition-dialog.validation.variable-or-bundle-required',
+          'common.close',
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should update definition when in definition mode and editing', fakeAsync(() => {
-      createComponent({ mode: 'definition', isEdit: true, jobDefinitionId: 555 });
-      component.selectedCoders.select(mockCoders[0]);
-      component.selectedVariables().select(mockVariables[0]);
-      component.codingJobForm.patchValue({
-        showScore: true,
-        allowComments: false,
-        suppressGeneralInstructions: true
-      });
+    it('should update definition when in definition mode and editing', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        createComponent({ mode: 'definition', isEdit: true, jobDefinitionId: 555 });
+        component.selectedCoders.select(mockCoders[0]);
+        component.selectedVariables().select(mockVariables[0]);
+        component.codingJobForm.patchValue({
+          showScore: true,
+          allowComments: false,
+          suppressGeneralInstructions: true
+        });
 
-      (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
+        (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
 
-      component.onSubmit();
-      tick();
+        component.onSubmit();
+        await jest.advanceTimersByTimeAsync(0);
 
-      const updatePayload = (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mock.calls[0][2];
-      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
-        showScore: true,
-        allowComments: false,
-        suppressGeneralInstructions: true,
-        missingsProfileId: 7
-      }));
-      expect(updatePayload).not.toHaveProperty('distributionSeed');
-      expect(mockDialogRef.close).toHaveBeenCalled();
-    }));
+        const updatePayload = (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mock.calls[0][2];
+        expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
+          showScore: true,
+          allowComments: false,
+          suppressGeneralInstructions: true,
+          missingsProfileId: 7
+        }));
+        expect(updatePayload).not.toHaveProperty('distributionSeed');
+        expect(mockDialogRef.close).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   it('should not load coders by job id when editing a definition and should keep assigned coder selection', () => {
@@ -1084,32 +1129,37 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.selectedCoders.selected[0].capacityPercent).toBe(50);
   });
 
-  it('should preserve edited coder capacity configs when updating a definition', fakeAsync(() => {
-    const definitionAsCodingJob = {
-      id: 555,
-      assignedCoders: [1],
-      assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }]
-    } as Partial<CodingJob>;
+  it('should preserve edited coder capacity configs when updating a definition', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const definitionAsCodingJob = {
+        id: 555,
+        assignedCoders: [1],
+        assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }]
+      } as Partial<CodingJob>;
 
-    createComponent({
-      mode: 'definition',
-      isEdit: true,
-      jobDefinitionId: 555,
-      codingJob: definitionAsCodingJob as CodingJob
-    }, true);
+      createComponent({
+        mode: 'definition',
+        isEdit: true,
+        jobDefinitionId: 555,
+        codingJob: definitionAsCodingJob as CodingJob
+      }, true);
 
-    component.selectedVariables().select(mockVariables[0]);
-    component.updateCoderCapacityPercent(component.selectedCoders.selected[0], 150);
-    (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
+      component.selectedVariables().select(mockVariables[0]);
+      component.updateCoderCapacityPercent(component.selectedCoders.selected[0], 150);
+      (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
 
-    component.onSubmit();
-    tick();
+      component.onSubmit();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
-      assignedCoders: [1],
-      assignedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }]
-    }));
-  }));
+      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
+        assignedCoders: [1],
+        assignedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }]
+      }));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should restore the DERIVE_ERROR opt-in when editing a definition', () => {
     const definitionAsCodingJob = {
@@ -1509,117 +1559,137 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTotalCodingTasks()).toBe(11);
   });
 
-  it('should use the backend distribution preview for definition estimates', fakeAsync(() => {
-    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
-    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(of({
-      ...emptyDistributionPreview,
-      doubleCodingInfo: {
-        'bundle:1': {
-          totalCases: 10,
-          distinctCases: 6,
-          doubleCodedCases: 4,
-          singleCodedCasesAssigned: 2,
-          codingTasksTotal: 10,
-          doubleCodedCasesPerCoder: {}
+  it('should use the backend distribution preview for definition estimates', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(of({
+        ...emptyDistributionPreview,
+        doubleCodingInfo: {
+          'bundle:1': {
+            totalCases: 10,
+            distinctCases: 6,
+            doubleCodedCases: 4,
+            singleCodedCasesAssigned: 2,
+            codingTasksTotal: 10,
+            doubleCodedCasesPerCoder: {}
+          }
+        },
+        tasksPerCoder: {
+          1: 7,
+          2: 3
         }
-      },
-      tasksPerCoder: {
-        1: 7,
-        2: 3
-      }
-    }));
-    createComponent();
-    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+      }));
+      createComponent();
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
-    expect(bundle).toBeDefined();
+      const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
+      expect(bundle).toBeDefined();
 
-    component.selectedCoders.select(component.availableCoders()[0], component.availableCoders()[1]);
-    component.selectedVariableBundles.select(bundle!);
-    component.codingJobForm.patchValue({
-      maxCodingCases: 6,
-      doubleCodingAbsolute: 2,
-      durationSeconds: 60
-    });
+      component.selectedCoders.select(component.availableCoders()[0], component.availableCoders()[1]);
+      component.selectedVariableBundles.select(bundle!);
+      component.codingJobForm.patchValue({
+        maxCodingCases: 6,
+        doubleCodingAbsolute: 2,
+        durationSeconds: 60
+      });
 
-    tick(300);
+      await jest.advanceTimersByTimeAsync(300);
 
-    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledWith(
-      1,
-      [],
-      [
-        expect.objectContaining({ id: 1, capacityPercent: 100 }),
-        expect.objectContaining({ id: 2, capacityPercent: 100 })
-      ],
-      2,
-      0,
-      [expect.objectContaining({ id: 1, name: 'Bundle 1' })],
-      'continuous',
-      6,
-      expect.stringMatching(/^job-definition:1:/)
-    );
-    expect(component.getTotalCodingCases()).toBe(6);
-    expect(component.getTotalDoubleCodedCases()).toBe(4);
-    expect(component.getTotalCodingTasks()).toBe(10);
-    expect(component.getTimePerCoderInSeconds()).toBe(420);
-  }));
+      expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledWith(
+        1,
+        [],
+        [
+          expect.objectContaining({ id: 1, capacityPercent: 100 }),
+          expect.objectContaining({ id: 2, capacityPercent: 100 })
+        ],
+        2,
+        0,
+        [expect.objectContaining({ id: 1, name: 'Bundle 1' })],
+        'continuous',
+        6,
+        expect.stringMatching(/^job-definition:1:/)
+      );
+      expect(component.getTotalCodingCases()).toBe(6);
+      expect(component.getTotalDoubleCodedCases()).toBe(4);
+      expect(component.getTotalCodingTasks()).toBe(10);
+      expect(component.getTimePerCoderInSeconds()).toBe(420);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should cancel an outdated distribution preview before starting the next one', fakeAsync(() => {
-    const firstPreviewCancelled = jest.fn();
-    const firstPreview = new Observable(() => firstPreviewCancelled);
-    (mockDistributedCodingService.calculateDistribution as jest.Mock)
-      .mockReturnValueOnce(firstPreview)
-      .mockReturnValue(of(emptyDistributionPreview));
-    createComponent();
-    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+  it('should cancel an outdated distribution preview before starting the next one', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const firstPreviewCancelled = jest.fn();
+      const firstPreview = new Observable(() => firstPreviewCancelled);
+      (mockDistributedCodingService.calculateDistribution as jest.Mock)
+        .mockReturnValueOnce(firstPreview)
+        .mockReturnValue(of(emptyDistributionPreview));
+      createComponent();
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    component.selectedCoders.select(component.availableCoders()[0]);
-    component.selectedVariables().select(component.variables()[0]);
-    tick(300);
+      component.selectedCoders.select(component.availableCoders()[0]);
+      component.selectedVariables().select(component.variables()[0]);
+      await jest.advanceTimersByTimeAsync(300);
 
-    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
-    expect(firstPreviewCancelled).not.toHaveBeenCalled();
+      expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+      expect(firstPreviewCancelled).not.toHaveBeenCalled();
 
-    component.codingJobForm.patchValue({ maxCodingCases: 5 });
+      component.codingJobForm.patchValue({ maxCodingCases: 5 });
 
-    expect(firstPreviewCancelled).toHaveBeenCalledTimes(1);
-    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+      expect(firstPreviewCancelled).toHaveBeenCalledTimes(1);
+      expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
 
-    tick(300);
+      await jest.advanceTimersByTimeAsync(300);
 
-    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(2);
-  }));
+      expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should not recalculate distribution for unrelated definition fields', fakeAsync(() => {
-    createComponent();
-    component.selectedCoders.select(component.availableCoders()[0]);
-    component.selectedVariables().select(component.variables()[0]);
-    tick(300);
-    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+  it('should not recalculate distribution for unrelated definition fields', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      createComponent();
+      component.selectedCoders.select(component.availableCoders()[0]);
+      component.selectedVariables().select(component.variables()[0]);
+      await jest.advanceTimersByTimeAsync(300);
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    component.codingJobForm.patchValue({
-      name: 'Neuer Name',
-      description: 'Neue Beschreibung',
-      durationSeconds: 60,
-      showScore: true
-    });
-    tick(300);
+      component.codingJobForm.patchValue({
+        name: 'Neuer Name',
+        description: 'Neue Beschreibung',
+        durationSeconds: 60,
+        showScore: true
+      });
+      await jest.advanceTimersByTimeAsync(300);
 
-    expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
-  }));
+      expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should calculate distribution while the unrelated required name is empty', fakeAsync(() => {
-    createComponent(undefined, false, false);
-    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+  it('should calculate distribution while the unrelated required name is empty', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      createComponent(undefined, false, false);
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    expect(component.codingJobForm.get('name')?.invalid).toBe(true);
+      expect(component.codingJobForm.get('name')?.invalid).toBe(true);
 
-    component.selectedCoders.select(component.availableCoders()[0]);
-    component.selectedVariables().select(component.variables()[0]);
-    tick(300);
+      component.selectedCoders.select(component.availableCoders()[0]);
+      component.selectedVariables().select(component.variables()[0]);
+      await jest.advanceTimersByTimeAsync(300);
 
-    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
-  }));
+      expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should send a stable distribution seed when submitting a new definition for review', () => {
     createComponent();
@@ -1724,7 +1794,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       missingsProfileId: 9
     });
     component.updateCoderCapacityPercent(selectedCoder, 150);
-    component.selectedCoders.select(selectedCoder);
+    component.selectedCoders.select(component.availableCoders()[0]);
     component.selectedVariables().select(selectedVariable);
     component.toggleBundleSelection(selectedBundle);
     component.setBundleOrderingMode(selectedBundle, 'alternating');

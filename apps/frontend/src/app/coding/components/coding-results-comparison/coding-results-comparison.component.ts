@@ -1,6 +1,5 @@
 import {
-  ChangeDetectionStrategy,
-  Component, Inject, inject, OnInit, computed, signal, viewChild, effect, OnDestroy, AfterViewInit
+  Component, inject, OnInit, computed, signal, viewChild, effect, ChangeDetectionStrategy, OnDestroy, AfterViewInit
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -33,6 +32,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   debounceTime, distinctUntilChanged, finalize, Subject, takeUntil
 } from 'rxjs';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -266,6 +266,12 @@ interface ModalValueDisplay {
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit, OnDestroy, AfterViewInit {
+  protected dialogRef = inject<MatDialogRef<CodingResultsComparisonComponent>>(MatDialogRef);
+  data = inject<CodingResultsComparisonDialogData>(MAT_DIALOG_DATA);
+  private paginatorIntl = inject(MatPaginatorIntl);
+
+  protected readonly onActionKeydown = activateOnKeyboard;
+
   readonly sort = viewChild(MatSort);
   private readonly synchronizeSort = effect(() => {
     const sort = this.sort();
@@ -408,11 +414,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     tooltip: ''
   };
 
-  constructor(
-    protected dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingResultsComparisonDialogData,
-    private paginatorIntl: MatPaginatorIntl
-  ) {
+  constructor() {
     this.paginatorIntl.itemsPerPageLabel = this.translate.instant('paginator.itemsPerPageLabel');
     this.paginatorIntl.nextPageLabel = this.translate.instant('paginator.nextPageLabel');
     this.paginatorIntl.previousPageLabel = this.translate.instant('paginator.previousPageLabel');

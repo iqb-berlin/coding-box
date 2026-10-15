@@ -1,16 +1,13 @@
-import {
-  ComponentFixture, TestBed, fakeAsync, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, Subject } from 'rxjs';
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, input, output
 } from '@angular/core';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { SchemerConfig } from '../schemer/schemer-config.interface';
@@ -27,11 +24,11 @@ import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.componen
   standalone: true
 })
 class MockStandaloneUnitSchemerComponent {
-  @Input() schemerHtml = '';
-  @Input() unitScheme?: UnitScheme;
-  @Input() schemerConfig?: SchemerConfig;
-  @Output() schemeChanged = new EventEmitter<UnitScheme>();
-  @Output() error = new EventEmitter<string>();
+  readonly schemerHtml = input('');
+  readonly unitScheme = input<UnitScheme>();
+  readonly schemerConfig = input<SchemerConfig>();
+  readonly schemeChanged = output<UnitScheme>();
+  readonly schemerError = output<string>();
 }
 
 describe('SchemeEditorDialogComponent', () => {
@@ -69,7 +66,8 @@ describe('SchemeEditorDialogComponent', () => {
     snackBarAction$ = new Subject<void>();
     mockSnackBar = {
       open: jest.fn().mockReturnValue({
-        onAction: () => snackBarAction$.asObservable()
+        onAction: () => snackBarAction$.asObservable(),
+        afterDismissed: () => new Subject<void>().asObservable()
       })
     };
 
@@ -90,8 +88,7 @@ describe('SchemeEditorDialogComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        SchemeEditorDialogComponent,
-        NoopAnimationsModule
+        SchemeEditorDialogComponent
       ],
       providers: [
         { provide: FileService, useValue: mockFileService },
@@ -151,106 +148,126 @@ describe('SchemeEditorDialogComponent', () => {
     expect(mockDialogRef.close).toHaveBeenCalledWith(false);
   });
 
-  it('should save scheme successfully', fakeAsync(() => {
-    component.hasChanges.set(true);
-    component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
+  it('should save scheme successfully', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.hasChanges.set(true);
+      component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
 
-    // Mock getFilesList for Resource to find existing file
-    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }] }));
+      // Mock getFilesList for Resource to find existing file
+      (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }] }));
 
-    component.save();
-    tick();
+      component.save();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
-    expect(mockFileService.uploadTestFiles).toHaveBeenCalledWith(
-      1,
-      expect.any(FormData),
-      true,
-      ['test-scheme.json']
-    );
-    expect(mockSnackBar.open).toHaveBeenCalledWith(
-      'coding.schemer.save-success',
-      'coding.schemer.check-coding-status',
-      { duration: 10000 }
-    );
-    expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+      expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
+      expect(mockFileService.uploadTestFiles).toHaveBeenCalledWith(
+        1,
+        expect.any(FormData),
+        true,
+        ['test-scheme.json']
+      );
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'coding.schemer.save-success',
+        'coding.schemer.check-coding-status',
+        { duration: 10000 }
+      );
+      expect(mockDialogRef.close).toHaveBeenCalledWith(true);
 
-    snackBarAction$.next();
-    tick();
+      snackBarAction$.next();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockRouter.navigate).toHaveBeenCalledWith(
-      ['/workspace-admin/1/coding/management'],
-      { queryParams: { refreshCodingFreshness: '1' } }
-    );
-  }));
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/workspace-admin/1/coding/management'],
+        { queryParams: { refreshCodingFreshness: '1' } }
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should show a freshness warning with navigation action after saving', fakeAsync(() => {
-    component.hasChanges.set(true);
-    component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
+  it('should show a freshness warning with navigation action after saving', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.hasChanges.set(true);
+      component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
 
-    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({
-      data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }]
-    }));
-    (mockFileService.uploadTestFiles as jest.Mock).mockReturnValueOnce(of({
-      failed: 0,
-      conflicts: [],
-      issues: [{
-        level: 'warning',
-        category: 'coding_freshness',
-        message: 'Datei wurde gespeichert'
-      }]
-    }));
+      (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({
+        data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }]
+      }));
+      (mockFileService.uploadTestFiles as jest.Mock).mockReturnValueOnce(of({
+        failed: 0,
+        conflicts: [],
+        issues: [{
+          level: 'warning',
+          category: 'coding_freshness',
+          message: 'Datei wurde gespeichert'
+        }]
+      }));
 
-    component.save();
-    tick();
+      component.save();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockSnackBar.open).toHaveBeenCalledWith(
-      'coding.schemer.save-freshness-warning',
-      'coding.schemer.check-coding-status',
-      { duration: 10000 }
-    );
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'coding.schemer.save-freshness-warning',
+        'coding.schemer.check-coding-status',
+        { duration: 10000 }
+      );
 
-    snackBarAction$.next();
-    tick();
+      snackBarAction$.next();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockRouter.navigate).toHaveBeenCalledWith(
-      ['/workspace-admin/1/coding/management'],
-      { queryParams: { refreshCodingFreshness: '1' } }
-    );
-  }));
+      expect(mockRouter.navigate).toHaveBeenCalledWith(
+        ['/workspace-admin/1/coding/management'],
+        { queryParams: { refreshCodingFreshness: '1' } }
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should handle save error', fakeAsync(() => {
-    component.hasChanges.set(true);
-    (mockFileService.uploadTestFiles as jest.Mock).mockReturnValue(of({ failed: 1, conflicts: [] }));
+  it('should handle save error', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.hasChanges.set(true);
+      (mockFileService.uploadTestFiles as jest.Mock).mockReturnValue(of({ failed: 1, conflicts: [] }));
 
-    // Mock getFilesList for Resource to NOT find existing file
-    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
+      // Mock getFilesList for Resource to NOT find existing file
+      (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
 
-    component.save();
-    tick();
+      component.save();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-error', 'Error', expect.any(Object));
-  }));
+      expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-error', 'Error', expect.any(Object));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should handle save when file does not exist initially', fakeAsync(() => {
-    component.hasChanges.set(true);
-    component.unitScheme.set({ scheme: '{"new": true}', schemeType: 'type1' });
+  it('should handle save when file does not exist initially', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.hasChanges.set(true);
+      component.unitScheme.set({ scheme: '{"new": true}', schemeType: 'type1' });
 
-    // Mock getFilesList for Resource to NOT find existing file
-    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
+      // Mock getFilesList for Resource to NOT find existing file
+      (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
 
-    component.save();
-    tick();
+      component.save();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
-    expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith(
-      'coding.schemer.save-success',
-      'coding.schemer.check-coding-status',
-      { duration: 10000 }
-    );
-    expect(mockDialogRef.close).toHaveBeenCalledWith(true);
-  }));
+      expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
+      expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'coding.schemer.save-success',
+        'coding.schemer.check-coding-status',
+        { duration: 10000 }
+      );
+      expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should show error via snackbar on schemer error', () => {
     const errorMsg = 'Something went wrong';

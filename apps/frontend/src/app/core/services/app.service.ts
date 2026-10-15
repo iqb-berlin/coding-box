@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -181,11 +182,13 @@ export class AppService {
 
   reAuthenticationReturnUrl?: string;
   private readonly selectedWorkspaceIdValue = signal(0);
+  // A changes-only event stream; selectedWorkspaceIdValue owns the state.
   private readonly selectedWorkspaceIdSubject = new Subject<number>();
   readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
-  private readonly authBootstrapStatusState = signal<AuthBootstrapStatus>('checking');
-  private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  // Guards consume synchronous auth notifications; signals are readonly views of that state.
+  private readonly authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private readonly authBootstrapStatusState = toSignal(this.authBootstrapStatusSubject, { requireSync: true });
   private authDataSessionGeneration = 0;
   private authDataRefreshRequestId = 0;
   private latestAppliedAuthDataRefreshRequestId = 0;
@@ -279,19 +282,26 @@ export class AppService {
       return of(false);
     }
 
+    const sessionGeneration = this.authDataSessionGeneration;
+    const isCurrentSession = () => sessionGeneration === this.authDataSessionGeneration &&
+      identity === (this.loggedUser?.sub || this.keycloakIdentity);
+
     this.setAuthBootstrapStatus('backend-login-running');
     this.sessionRecoveryService.setOwnerId(identity);
     return this.getAuthDataWithRetry(identity)
       .pipe(
         map(authData => {
+          if (!isCurrentSession()) return false;
           this.updateAuthData(authData);
           this.completeBackendLogin();
           return true;
         }),
         catchError(() => {
-          this.markAuthDataFailed();
+          if (isCurrentSession()) this.markAuthDataFailed();
           return of(false);
-        })
+        }),
+        // Global authentication must finish even if the retrying view is destroyed.
+        shareReplay({ bufferSize: 1, refCount: false })
       );
   }
 
@@ -372,8 +382,8 @@ export class AppService {
     });
   }
 
-  private readonly authDataState = signal<AuthDataDto>(AppService.defaultAuthData);
-  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+  private readonly authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+  private readonly authDataState = toSignal(this.authDataSubject, { requireSync: true });
 
   get authData$() {
     return this.authDataSubject.asObservable();
@@ -396,12 +406,10 @@ export class AppService {
   }
 
   setAuthBootstrapStatus(status: AuthBootstrapStatus): void {
-    this.authBootstrapStatusState.set(status);
     this.authBootstrapStatusSubject.next(status);
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {
-    this.authDataState.set(newAuthData);
     this.authDataSubject.next(newAuthData);
   }
 

@@ -1,3 +1,4 @@
+import { computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -6,6 +7,12 @@ import { CodingJobBackendService } from '../../coding/services/coding-job-backen
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
 import { CodingScheme } from '../../models/coding-interfaces';
+
+// A macrotask boundary lets the complete native Promise queue settle before inspecting
+// the next queued request, without relying on Zone.js microtask scheduling.
+const settleQueuedMutations = () => new Promise<void>(resolve => {
+  setTimeout(resolve, 0);
+});
 
 describe('ReplayCodingService', () => {
   let service: ReplayCodingService;
@@ -48,6 +55,86 @@ describe('ReplayCodingService', () => {
     service = TestBed.inject(ReplayCodingService);
   });
 
+  describe('reactive coding state readers', () => {
+    it('invalidates derived notes when local drafts change or are cleared', () => {
+      const notes = computed(() => service.getNotes('p1', 'u1', 'v1'));
+      expect(notes()).toBe('');
+
+      service.updateLocalNotes('p1', 'u1', 'v1', 'First draft');
+      expect(notes()).toBe('First draft');
+      service.updateLocalNotes('p1', 'u1', 'v1', 'Latest draft');
+      expect(notes()).toBe('Latest draft');
+      service.updateLocalNotes('p1', 'u1', 'v1', '   ');
+      expect(notes()).toBe('');
+    });
+
+    it('invalidates derived code and issue selections independently of progress readers', async () => {
+      const codeId = computed(() => service.getPreSelectedCodeId('p1', 'u1', 'v1'));
+      const issueId = computed(() => service.getPreSelectedCodingIssueOptionId('p1', 'u1', 'v1'));
+      expect(codeId()).toBeNull();
+      expect(issueId()).toBeNull();
+
+      await service.handleCodeSelected({
+        variableId: 'v1',
+        code: { id: 7, label: 'Code 7' } as never,
+        codingIssueOption: { id: 'uncertain', code: -1, label: 'Uncertain' }
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBe(7);
+      expect(issueId()).toBe(-1);
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: { id: 7, label: 'Code 7' } as never, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBe(7);
+      expect(issueId()).toBeNull();
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: null, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(codeId()).toBeNull();
+      expect(issueId()).toBeNull();
+    });
+
+    it('invalidates total and unit-scoped open counts after recovery and coding', async () => {
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      const otherKey = service.generateCompositeKey('p2', 'u2', 'v2');
+      const unitsData = {
+        id: 1,
+        name: 'Replay',
+        currentUnitIndex: 0,
+        units: [{
+          id: 1, name: 'u1', alias: 'u1', bookletId: 0, testPerson: 'p1', variableId: 'v1'
+        }]
+      };
+      const total = computed(() => service.getOpenCount());
+      const scoped = computed(() => service.getOpenCount(unitsData));
+      expect(total()).toBe(0);
+      expect(scoped()).toBe(0);
+
+      service.restoreRecoverySnapshot({
+        codingJobId: null,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [key, otherKey],
+        notes: [],
+        codingJobComment: ''
+      });
+      expect(total()).toBe(2);
+      expect(scoped()).toBe(1);
+
+      await service.handleCodeSelected({
+        variableId: 'v1', code: { id: 7, label: 'Code 7' } as never, codingIssueOption: null
+      }, 'p1', 'u1', 1, null);
+      expect(total()).toBe(1);
+      expect(scoped()).toBe(0);
+
+      service.resetCodingData();
+      expect(total()).toBe(0);
+      expect(scoped()).toBe(0);
+    });
+  });
+
   it.each([true, false])('persists new-code-needed during a progress save (with regular code: %s)', async withRegularCode => {
     const pending = new Subject<CodingJob>();
     codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pending).mockReturnValue(of({} as CodingJob));
@@ -58,8 +145,8 @@ describe('ReplayCodingService', () => {
     const first = service.handleCodeSelected({
       variableId: 'v1', code: { id: 1, label: 'Code 1' } as never, codingIssueOption: null
     }, 'p1', 'u1', 1, null);
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleQueuedMutations();
+    await settleQueuedMutations();
     expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledTimes(1);
     const second = service.handleCodeSelected({
       variableId: 'v1',
@@ -111,7 +198,7 @@ describe('ReplayCodingService', () => {
     service.codingJobId = 100;
 
     const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', '');
-    await Promise.resolve();
+    await settleQueuedMutations();
     const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Unsaved explanation').catch(error => error);
     await service.handleCodeSelected({
       variableId: 'v1',
@@ -121,8 +208,8 @@ describe('ReplayCodingService', () => {
 
     firstNote.next({} as CodingJob);
     firstNote.complete();
-    await Promise.resolve();
-    await Promise.resolve();
+    await settleQueuedMutations();
+    await settleQueuedMutations();
     expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(2);
     secondNote.error(new Error('Latest note failed'));
     await Promise.all([firstSave, secondSave]);
@@ -277,10 +364,14 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.getCodingJob).toHaveBeenCalledWith(1, 100, 'replay-token');
     });
 
-    it('should handle errors gracefully', async () => {
-      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
-      await service.loadSavedCodingProgress(1, 100);
+    it('propagates read failures so the replay view can report and retry them', async () => {
+      const failure = new Error('Progress request failed');
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(throwError(() => failure));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({} as CodingJob));
+      await expect(service.loadSavedCodingProgress(1, 100)).rejects.toBe(failure);
       expect(service.selectedCodes.size).toBe(0);
+      expect(service.notes.size).toBe(0);
     });
   });
 
@@ -444,7 +535,7 @@ describe('ReplayCodingService', () => {
       service.setAuthToken('old-token');
 
       const firstSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(subjects).toHaveLength(1);
 
       const secondSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 2, label: 'two' });
@@ -455,7 +546,7 @@ describe('ReplayCodingService', () => {
       subjects[0].next({} as CodingJob);
       subjects[0].complete();
       await firstSave;
-      await Promise.resolve();
+      await settleQueuedMutations();
 
       expect(subjects).toHaveLength(2);
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenNthCalledWith(
@@ -491,8 +582,9 @@ describe('ReplayCodingService', () => {
       service.setAuthToken('old-token');
 
       const firstSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
-      await Promise.resolve();
+      await settleQueuedMutations();
       const secondSave = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 2, label: 'two' });
+      const secondFailure = expect(secondSave).rejects.toThrow('old save failed');
       service.resetCodingData();
       service.codingJobId = 200;
       service.setAuthToken('new-token');
@@ -500,9 +592,9 @@ describe('ReplayCodingService', () => {
       firstSubject.next({} as CodingJob);
       firstSubject.complete();
       await firstSave;
-      await Promise.resolve();
+      await settleQueuedMutations();
 
-      await expect(secondSave).rejects.toThrow('old save failed');
+      await secondFailure;
       expect(service.hasSaveError).toBe(false);
       expect(service.lastSaveError).toBeNull();
       expect(snackBarMock.open).not.toHaveBeenCalled();
@@ -514,13 +606,13 @@ describe('ReplayCodingService', () => {
       service.codingJobId = 100;
 
       const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
-      await Promise.resolve();
+      await settleQueuedMutations();
       let didFlush = false;
       const flushPromise = service.flushPendingRowMutations().then(() => {
         didFlush = true;
       });
 
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(didFlush).toBe(false);
 
       pendingSave.next({} as CodingJob);
@@ -544,14 +636,14 @@ describe('ReplayCodingService', () => {
       };
 
       const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
-      await Promise.resolve();
+      await settleQueuedMutations();
 
       expect(service.isUnitSavePending(unit)).toBe(true);
 
       pendingSave.next({} as CodingJob);
       pendingSave.complete();
       await savePromise;
-      await Promise.resolve();
+      await settleQueuedMutations();
 
       expect(service.isUnitSavePending(unit)).toBe(false);
     });
@@ -562,7 +654,7 @@ describe('ReplayCodingService', () => {
       service.codingJobId = 100;
 
       const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
-      await Promise.resolve();
+      await settleQueuedMutations();
       const flushPromise = service.flushPendingRowMutations();
 
       pendingSave.error(new Error('pending save failed'));
@@ -651,14 +743,14 @@ describe('ReplayCodingService', () => {
         null
       );
 
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(subjects.length).toBe(1);
       subjects[0].next({} as CodingJob);
       subjects[0].complete();
       await expect(first).resolves.toBeNull();
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(service.selectedCodes.size).toBe(0);
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(subjects.length).toBe(2);
 
       subjects[1].next({} as CodingJob);
@@ -686,7 +778,7 @@ describe('ReplayCodingService', () => {
         1,
         null
       );
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(subjects).toHaveLength(1);
 
       const second = service.handleCodeSelected(
@@ -705,7 +797,7 @@ describe('ReplayCodingService', () => {
       subjects[0].next({} as CodingJob);
       subjects[0].complete();
       await expect(first).resolves.toBeNull();
-      await Promise.resolve();
+      await settleQueuedMutations();
 
       expect(subjects).toHaveLength(2);
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenNthCalledWith(
@@ -954,7 +1046,7 @@ describe('ReplayCodingService', () => {
       service.setAuthToken('old-token');
 
       const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'first');
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(subjects).toHaveLength(1);
 
       const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'second');
@@ -965,7 +1057,7 @@ describe('ReplayCodingService', () => {
       subjects[0].next({} as CodingJob);
       subjects[0].complete();
       await firstSave;
-      await Promise.resolve();
+      await settleQueuedMutations();
 
       expect(subjects).toHaveLength(2);
       expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenNthCalledWith(
@@ -999,14 +1091,14 @@ describe('ReplayCodingService', () => {
       service.codingJobId = 100;
 
       const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'P');
-      await Promise.resolve();
+      await settleQueuedMutations();
       const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Persisted live note');
       expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted live note');
 
       subjects[0].next({} as CodingJob);
       subjects[0].complete();
       await firstSave;
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted live note');
 
       subjects[1].next({} as CodingJob);
@@ -1114,7 +1206,7 @@ describe('ReplayCodingService', () => {
       });
 
       const noteSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'needs a new code');
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
 
       const regularSave = service.handleCodeSelected(
@@ -1128,14 +1220,14 @@ describe('ReplayCodingService', () => {
         1,
         null
       );
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
 
       noteSubject.next({} as CodingJob);
       noteSubject.complete();
       await noteSave;
-      await Promise.resolve();
-      await Promise.resolve();
+      await settleQueuedMutations();
+      await settleQueuedMutations();
 
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledTimes(1);
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
@@ -1191,14 +1283,14 @@ describe('ReplayCodingService', () => {
         null
       );
       await newCodeNeededSelection;
-      await Promise.resolve();
+      await settleQueuedMutations();
       expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
 
       noteSubject.next({} as CodingJob);
       noteSubject.complete();
-      await Promise.resolve();
-      await Promise.resolve();
+      await settleQueuedMutations();
+      await settleQueuedMutations();
 
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
         1,

@@ -2,7 +2,8 @@ import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
+import { FormControl, FormGroup } from '@angular/forms';
 import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
 import { UsersComponent } from './users.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -11,7 +12,7 @@ import { AppService } from '../../../core/services/app.service';
 
 describe('UsersComponent', () => {
   let component: UsersComponent;
-  let userBackendService: { setUserWorkspaceAccessRight: jest.Mock };
+  let userBackendService: { setUserWorkspaceAccessRight: jest.Mock; changeUserData: jest.Mock };
   let appService: {
     dataLoading: boolean;
     authData$: Observable<AuthDataDto>;
@@ -21,7 +22,8 @@ describe('UsersComponent', () => {
 
   beforeEach(() => {
     userBackendService = {
-      setUserWorkspaceAccessRight: jest.fn().mockReturnValue(of(true))
+      setUserWorkspaceAccessRight: jest.fn().mockReturnValue(of(true)),
+      changeUserData: jest.fn().mockReturnValue(of(true))
     };
     appService = {
       dataLoading: false,
@@ -51,6 +53,36 @@ describe('UsersComponent', () => {
     expect(userBackendService.setUserWorkspaceAccessRight).toHaveBeenCalledWith(7, [2, 3]);
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
     expect(snackBar.open).toHaveBeenCalledWith('admin.workspace-access-right-set', '', { duration: 1000 });
+  });
+
+  it('sends the disabled username and false admin value without losing fields', () => {
+    jest.spyOn(component, 'updateUserList').mockImplementation(() => undefined);
+    const form = new FormGroup({
+      username: new FormControl({ value: 'existing-user', disabled: true }, { nonNullable: true }),
+      isAdmin: new FormControl(false, { nonNullable: true })
+    });
+    component.editUser({ selection: [{ id: 7, username: 'existing-user', isAdmin: true }], user: form });
+    expect(userBackendService.changeUserData).toHaveBeenCalledWith(AppService.defaultAuthData.userId, {
+      id: 7, username: 'existing-user', isAdmin: false
+    });
+  });
+
+  it('clears the global loading flag when a pending edit is cancelled with the view', () => {
+    const response = new Subject<boolean>();
+    userBackendService.changeUserData.mockReturnValue(response);
+    const refreshList = jest.spyOn(component, 'updateUserList').mockImplementation(() => undefined);
+    const form = new FormGroup({
+      username: new FormControl('existing-user', { nonNullable: true }),
+      isAdmin: new FormControl(false, { nonNullable: true })
+    });
+    component.editUser({ selection: [{ id: 7, username: 'existing-user', isAdmin: true }], user: form });
+    expect(appService.dataLoading).toBe(true);
+    TestBed.resetTestingModule();
+    expect(response.observed).toBe(false);
+    expect(appService.dataLoading).toBe(false);
+    response.next(true);
+    expect(refreshList).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 
   it('should refresh auth data after removing all workspace assignments', () => {

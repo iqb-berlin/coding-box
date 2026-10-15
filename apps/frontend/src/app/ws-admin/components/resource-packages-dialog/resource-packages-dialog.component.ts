@@ -1,7 +1,8 @@
 import {
   Component, OnDestroy, OnInit, inject, signal,
-  computed, ChangeDetectionStrategy
+  computed, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
@@ -70,6 +71,8 @@ export interface ResourcePackagesDialogData {
   ]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
   data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
   resourcePackageService = inject(ResourcePackageService);
@@ -134,7 +137,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       return;
     }
     this.isLoadingResourcePackages.set(true);
-    this.resourcePackageService.getResourcePackages(workspaceId)
+    this.resourcePackageService.getResourcePackages(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (packages: ResourcePackageDto[]) => {
           this.resourcePackages.set(packages);
@@ -237,14 +240,14 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (!confirmed) {
         return;
       }
       const packageIds = selectedPackages.map(pkg => pkg.id);
       this.isLoadingResourcePackages.set(true);
 
-      this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds)
+      this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (success: boolean) => {
             this.isLoadingResourcePackages.set(false);
@@ -293,7 +296,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     }
     this.activeDownloadPackageId.set(resourcePackage.id);
     this.startResourcePackageOperation(`Download: ${resourcePackage.name}`, 'indeterminate');
-    this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name)
+    this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: event => {
           if (event.type === HttpEventType.DownloadProgress) {
@@ -353,7 +356,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (files && files.length) {
       const file = files[0];
       this.startResourcePackageOperation(`Upload: ${file.name}`, 'determinate');
-      this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file)
+      this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: event => {
             if (event.type === HttpEventType.UploadProgress) {
@@ -420,7 +423,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (!confirmed) {
         return;
       }
@@ -428,7 +431,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         'GeoGebra Math Apps Bundle wird heruntergeladen und installiert...',
         'indeterminate'
       );
-      this.resourcePackageService.installGeoGebraPackage(workspaceId)
+      this.resourcePackageService.installGeoGebraPackage(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: event => {
             if (event instanceof HttpResponse) {

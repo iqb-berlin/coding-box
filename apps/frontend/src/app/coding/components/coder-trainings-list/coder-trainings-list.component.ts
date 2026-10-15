@@ -1,6 +1,7 @@
 import {
-  Component, OnDestroy, OnChanges, OnInit, inject, Input, Output, EventEmitter, SimpleChanges, signal, ChangeDetectionStrategy
+  Component, OnDestroy, OnChanges, OnInit, inject, SimpleChanges, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -68,6 +69,8 @@ interface TrainingNameFilterOption {
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -77,10 +80,10 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   private destroy$ = new Subject<void>();
   private loadRequestId = 0;
 
-  @Input() showCreateButton = true;
-  @Input() workspaceId?: number;
-  @Output() onCreateTraining = new EventEmitter<void>();
-  @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
+  readonly showCreateButton = input(true);
+  readonly workspaceId = input<number>();
+  readonly trainingCreationRequested = output<void>();
+  readonly trainingEditRequested = output<CoderTraining>();
 
   readonly coderTrainings = signal<CoderTraining[]>([]);
   readonly originalData = signal<CoderTraining[]>([]);
@@ -110,7 +113,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   private getCurrentWorkspaceId(): number {
-    return this.workspaceId || this.appService.selectedWorkspaceId;
+    return this.workspaceId() || this.appService.selectedWorkspaceId;
   }
 
   private clearTrainingState(options: { resetFilters?: boolean } = {}): void {
@@ -205,11 +208,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   protected requestFullEdit(training: CoderTraining): void {
-    this.onEditTraining.emit(training);
+    this.trainingEditRequested.emit(training);
   }
 
   protected createTraining(): void {
-    this.onCreateTraining.emit();
+    this.trainingCreationRequested.emit();
   }
 
   onTrainingNameFilterChange(): void {
@@ -390,7 +393,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       data: { training }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.performDelete(training);
       }

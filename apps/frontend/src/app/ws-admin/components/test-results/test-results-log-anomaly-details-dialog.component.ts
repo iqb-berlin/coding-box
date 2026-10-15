@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -214,13 +214,8 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   `]
 })
 export class TestResultsLogAnomalyDetailsDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsLogAnomalyDetailsDialogComponent,
-    TestResultsLogAnomalyDetailsDialogResult | undefined
-    >,
-    @Inject(MAT_DIALOG_DATA) protected data: TestResultsLogAnomalyDetailsDialogData
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsLogAnomalyDetailsDialogComponent, TestResultsLogAnomalyDetailsDialogResult | undefined>>(MatDialogRef);
+  protected data = inject<TestResultsLogAnomalyDetailsDialogData>(MAT_DIALOG_DATA);
 
   protected close(): void {
     this.dialogRef.close(undefined);

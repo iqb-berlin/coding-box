@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -43,6 +44,13 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
+  private dialogRef = inject<MatDialogRef<TestResultsResponseCleanupDialogComponent, TestResultsResponseCleanupRequestDto | false>>(MatDialogRef);
+  private testResultBackendService = inject(TestResultBackendService);
+  private fileBackendService = inject(FileBackendService);
+  data = inject<TestResultsResponseCleanupDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly availableUnits = signal<string[]>([]);
   private variableOptions: VariableOption[] = [];
   protected selectedUnitNames: string[] = [];
@@ -53,16 +61,6 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
   protected readonly isLoading = signal(false);
   protected readonly loadFailed = signal(false);
 
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsResponseCleanupDialogComponent,
-    TestResultsResponseCleanupRequestDto | false
-    >,
-    private testResultBackendService: TestResultBackendService,
-    private fileBackendService: FileBackendService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsResponseCleanupDialogData
-  ) {}
-
   ngOnInit(): void {
     this.isLoading.set(true);
     forkJoin({
@@ -71,7 +69,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       unitVariables: this.fileBackendService.getUnitVariables(
         this.data.workspaceId
       )
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ exportOptions, unitVariables }) => {
         this.availableUnits.set(Array.from(new Set((exportOptions.units || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
         this.variableOptions = this.buildVariableOptions(unitVariables);

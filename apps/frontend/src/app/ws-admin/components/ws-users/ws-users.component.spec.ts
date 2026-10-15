@@ -1,6 +1,4 @@
-import {
-  ComponentFixture, TestBed, fakeAsync, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { EventEmitter } from '@angular/core';
 import {
   TranslateModule, TranslateService, LangChangeEvent, TranslationChangeEvent, DefaultLangChangeEvent
@@ -11,7 +9,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -76,7 +73,6 @@ describe('WsUsersComponent', () => {
         MatIconModule,
         MatTableModule,
         MatDialogModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -100,35 +96,50 @@ describe('WsUsersComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load users on init', fakeAsync(() => {
-    component.ngOnInit();
-    tick(); // processes setTimeout
-    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
-    expect(component.userObjectsDatasource.data.length).toBe(2);
-  }));
+  it('should load users on init', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.ngOnInit();
+      await jest.advanceTimersByTimeAsync(0); // processes setTimeout
+      expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
+      expect(component.userObjectsDatasource().data.length).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should load users when updateUserList is called', () => {
     component.updateUserList();
     expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
-    expect(component.userObjectsDatasource.data.length).toBe(2);
+    expect(component.userObjectsDatasource().data.length).toBe(2);
   });
 
-  it('should filter users correctly', fakeAsync(() => {
-    component.ngOnInit();
-    tick();
-    component.userObjectsDatasource.filter = 'user1';
-    expect(component.userObjectsDatasource.filteredData.length).toBe(1);
-    expect(component.userObjectsDatasource.filteredData[0].username).toBe('user1');
-  }));
+  it('should filter users correctly', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.ngOnInit();
+      await jest.advanceTimersByTimeAsync(0);
+      component.userObjectsDatasource().filter = 'user1';
+      expect(component.userObjectsDatasource().filteredData.length).toBe(1);
+      expect(component.userObjectsDatasource().filteredData[0].username).toBe('user1');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should toggle checkbox and emit selection', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
-    const emitSpy = jest.spyOn(component.userSelectionChanged, 'emit');
-    component.checkboxToggle(mockUsers[0]);
-    expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
-    expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
-  }));
+  it('should toggle checkbox and emit selection', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      fixture.detectChanges();
+      await jest.advanceTimersByTimeAsync(0);
+      const emitSpy = jest.spyOn(component.userSelectionChanged, 'emit');
+      component.checkboxToggle(mockUsers[0]);
+      expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
+      expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   describe('Dialogs', () => {
     beforeEach(() => {

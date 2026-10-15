@@ -1,8 +1,5 @@
 import {
-  Component,
-  OnDestroy,
-  ViewChild,
-  inject, ChangeDetectionStrategy
+  Component, OnDestroy, inject, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -32,14 +29,14 @@ export interface TestPersonCodingDialogResult {
   imports: [TestPersonCodingComponent, MatIconModule, MatButtonModule, TranslateModule]
 })
 export class TestPersonCodingDialogComponent implements OnDestroy {
+  dialogRef = inject<MatDialogRef<TestPersonCodingDialogComponent>>(MatDialogRef);
+
   protected data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
-  @ViewChild(TestPersonCodingComponent) testPersonCodingComponent?: TestPersonCodingComponent;
+  readonly testPersonCodingComponent = viewChild(TestPersonCodingComponent);
 
   private destroy$ = new Subject<void>();
 
-  constructor(
-    public dialogRef: MatDialogRef<TestPersonCodingDialogComponent>
-  ) {
+  constructor() {
     this.dialogRef.backdropClick()
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.closeDialog());
@@ -68,8 +65,8 @@ export class TestPersonCodingDialogComponent implements OnDestroy {
 
     return {
       initialJobId: initialJobId ?? undefined,
-      jobId: initialJobId ?? this.testPersonCodingComponent?.lastObservedJobId ?? null,
-      jobStatus: this.testPersonCodingComponent?.getLastObservedJobStatus(initialJobId) ?? null
+      jobId: initialJobId ?? this.testPersonCodingComponent()?.lastObservedJobId ?? null,
+      jobStatus: this.testPersonCodingComponent()?.getLastObservedJobStatus(initialJobId) ?? null
     };
   }
 }

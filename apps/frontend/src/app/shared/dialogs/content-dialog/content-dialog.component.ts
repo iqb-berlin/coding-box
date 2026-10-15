@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions
 } from '@angular/material/dialog';
@@ -116,12 +116,14 @@ export interface DialogData {
   `]
 })
 export class ContentDialogComponent {
+  dialogRef = inject<MatDialogRef<ContentDialogComponent>>(MatDialogRef);
+  protected data = inject<DialogData>(MAT_DIALOG_DATA);
+
   readonly displayContent: string;
 
-  constructor(
-    public dialogRef: MatDialogRef<ContentDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: DialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.displayContent = data.isJson ? this.formatJson(data.content) : data.content;
   }
 

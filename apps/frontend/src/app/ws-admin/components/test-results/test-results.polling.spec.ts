@@ -8,7 +8,6 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { TestResultsComponent } from './test-results.component';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -47,7 +46,6 @@ describe('TestResultsComponent Polling', () => {
         MatCheckboxModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         TestResultsComponent // Import standalone component
       ],
@@ -71,7 +69,7 @@ describe('TestResultsComponent Polling', () => {
         { provide: UnitService, useValue: { getUnits: jest.fn().mockReturnValue(of([])) } },
         { provide: CodingStatisticsService, useValue: { getCodingStatistics: jest.fn().mockReturnValue(of({})) } },
         { provide: VariableAnalysisService, useValue: { getVariableAnalysis: jest.fn().mockReturnValue(of([])) } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1, loggedUser: { sub: 'user' } } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of(), loggedUser: { sub: 'user' } } },
         {
           provide: WorkspaceSettingsService,
           useValue: {

@@ -1,6 +1,7 @@
 import {
-  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject, input, signal, computed, ChangeDetectionStrategy
+  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, HostListener, inject, input, signal, computed, viewChild, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -98,6 +99,7 @@ interface ReplayRecoveryDraft {
 }
 
 @Component({
+  host: { '(window:keydown)': 'onKeyDown($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [ReplayCodingService, ReplaySessionLoaderService],
   selector: 'coding-box-replay',
@@ -120,6 +122,8 @@ interface ReplayRecoveryDraft {
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private readonly destroyRef = inject(DestroyRef);
+
   private fileService = inject(FileService);
   private replayBackendService = inject(ReplayBackendService);
   private appService = inject(AppService);
@@ -174,20 +178,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private readonly replayNotesCommitSubject = new Subject<PendingReplayNotesCommit>();
   private replayReAuthenticationPending = false;
   private replayRecoveryRestorePromise: Promise<void> | null = null;
-  @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
-  @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
-  @ViewChild('watermark')
-  set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
-    this.watermarkElement = ref ?? null;
-    this.setupWatermarkObserver();
-  }
+  readonly unitPlayerComponent = viewChild(UnitPlayerComponent);
+  readonly codeSelectorComponent = viewChild(CodeSelectorComponent);
+  readonly watermarkRef = viewChild<ElementRef<HTMLElement>>('watermark');
+  private readonly synchronizeWatermark = afterRenderEffect(() => this.setupWatermarkObserver());
 
   private replayAttempt = new ReplayAttemptContext();
   protected readonly reloadKey = signal<number>(0);
   readonly workspaceId = signal<number>(0);
   readonly originResponseId = signal<number | null>(null);
   protected readonly reviewCodeSelections = signal<ReviewCodeSelection[]>([]);
-  private watermarkElement: ElementRef<HTMLElement> | null = null;
   private watermarkObserver: ResizeObserver | null = null;
   private watermarkCheckPending: boolean = false;
   private anchorHighlightTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -242,7 +242,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const snackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
     this.errorSnackbarRef = snackbarRef;
-    snackbarRef.afterDismissed().subscribe(() => {
+    snackbarRef.afterDismissed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       if (this.errorSnackbarRef !== snackbarRef) {
         return;
       }
@@ -731,7 +731,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 const jobId = this.codingService.codingJobId;
                 const jobKey = `${this.workspaceId()}:${jobId}`;
                 if (this.codingProgressLoadedForJobKey !== jobKey) {
-                  await this.codingService.loadSavedCodingProgress(this.workspaceId(), jobId);
+                  try {
+                    await this.codingService.loadSavedCodingProgress(this.workspaceId(), jobId);
+                  } catch (error) {
+                    if (!this.isCurrentRouterRun(routerRunId)) return;
+                    this.unitsData.set(null);
+                    this.totalUnits.set(0);
+                    this.codingProgressLoadedForJobKey = null;
+                    this.setIsLoaded();
+                    this.catchError(error as HttpErrorResponse);
+                    return;
+                  }
                   if (!this.isCurrentRouterRun(routerRunId)) {
                     return;
                   }
@@ -1234,7 +1244,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       clientTimings: replayAttempt.getClientTimings(visibleTime),
       serverTimings: replayAttempt.getServerTimings(),
       replayAttemptId: replayAttempt.id
-    }, this.getReplayRequestAuthToken(), replayAttempt.id).subscribe({
+    }, this.getReplayRequestAuthToken(), replayAttempt.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       error: () => undefined
     });
   }
@@ -1309,7 +1319,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private canLeaveCurrentCodingCase(): boolean {
     if (this.isCodingReadOnly()) return true;
-    return this.codeSelectorComponent?.canLeaveCurrentUnit() ?? true;
+    return this.codeSelectorComponent()?.canLeaveCurrentUnit() ?? true;
   }
 
   private async applyUnitChanged(unit: UnitsReplayUnit): Promise<void> {
@@ -1359,7 +1369,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           const targetPage = this.page();
           this.invalidateUnitPayloadRequests();
           replayAttempt.startDirectPageNavigation();
-          if (targetPage && !this.unitPlayerComponent?.navigateToPage(targetPage)) {
+          if (targetPage && !this.unitPlayerComponent()?.navigateToPage(targetPage)) {
             isCurrentUnitPayload = await this.loadAndApplyUnitData(
               workspaceId,
               this.getReplayRequestAuthToken()
@@ -1665,7 +1675,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
 
-    const iframe = this.unitPlayerComponent?.hostingIframe?.nativeElement as HTMLIFrameElement | undefined;
+    const iframe = this.unitPlayerComponent()?.hostingIframe()?.nativeElement as HTMLIFrameElement | undefined;
     const highlightedElements = iframe ? highlightAspectSectionWithAnchor(iframe, anchorSnapshot) : [];
     if (iframe) {
       this.highlightCurrentBundleMarkers(iframe);
@@ -1936,7 +1946,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       data: { comment: this.codingService.codingJobComment }
     });
 
-    dialogRef.afterClosed().subscribe(async (result: string) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async (result: string) => {
       if (result !== undefined && result !== this.codingService.codingJobComment) {
         await this.codingService.saveCodingJobComment(this.workspaceId(), result);
       }
@@ -1960,7 +1970,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       data: dialogData
     });
 
-    dialogRef.afterClosed().subscribe((selectedUnit: UnitsReplayUnit | undefined) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((selectedUnit: UnitsReplayUnit | undefined) => {
       if (selectedUnit) {
         this.handleUnitChanged(selectedUnit);
       }
@@ -2059,7 +2069,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 variableId: this.codingService.currentVariableId,
                 code: code
               });
-              this.codeSelectorComponent?.scrollToCode(codeId);
+              this.codeSelectorComponent()?.scrollToCode(codeId);
             }
           }
         }
@@ -2113,7 +2123,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.watermarkObserver?.disconnect();
     this.watermarkObserver = null;
 
-    const element = this.watermarkElement?.nativeElement;
+    const element = this.watermarkRef()?.nativeElement;
     if (!element) {
       this.isWatermarkTruncated.set(false);
       return;
@@ -2147,7 +2157,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private updateWatermarkTruncation(): void {
-    const element = this.watermarkElement?.nativeElement;
+    const element = this.watermarkRef()?.nativeElement;
     if (!element) {
       this.isWatermarkTruncated.set(false);
       return;
@@ -2168,7 +2178,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       const unitId = this.unitId();
       const testPerson = this.testPerson();
       this.fileService.getCodingSchemeFile(workspaceId, codingSchemeRef)
-        .pipe(catchError(() => of(null)))
+        .pipe(catchError(() => of(null))).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe(fileData => {
           if (!this.isCurrentUnitPayloadRun(unitPayloadRunId) ||
             workspaceId !== this.workspaceId() ||

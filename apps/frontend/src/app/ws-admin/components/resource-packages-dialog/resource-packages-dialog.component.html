@@ -3,23 +3,23 @@
 
   <div mat-dialog-content>
     <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-      <a mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive()"
+      <button type="button" mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive()"
         (click)="resourcePackageInput.click()">
         <mat-icon>upload</mat-icon>
         Ressourcenpaket hochladen
-      </a>
-      <a mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive()"
+      </button>
+      <button type="button" mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive()"
         (click)="installGeoGebraPackage()"
         matTooltip="Lädt das GeoGebra Math Apps Bundle herunter und installiert oder repariert es global">
         <mat-icon>add_circle</mat-icon>
         {{ hasGeoGebraPackage() ? 'GeoGebra prüfen/reparieren' : 'GeoGebra installieren' }}
-      </a>
-      <a mat-raised-button color="primary"
+      </button>
+      <button type="button" mat-raised-button color="primary"
         [disabled]="isResourcePackageOperationActive() || resourcePackageSelection.selected.length === 0"
         (click)="deleteResourcePackages()">
         <mat-icon>delete</mat-icon>
         Ressourcenpaket(e) löschen
-      </a>
+      </button>
     </div>
 
     <div class="hint-text">

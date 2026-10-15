@@ -4,7 +4,6 @@ import {
   ComponentFixture, TestBed
 } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
@@ -15,10 +14,12 @@ import { CodingStatisticsService } from '../../../coding/services/coding-statist
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { AppService } from '../../../core/services/app.service';
 import {
+  FlatResponseFrequenciesResponse,
   FlatTestResultResponsesResponse,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 
 describe('TestResultsFlatTableComponent', () => {
   let fixture: ComponentFixture<TestResultsFlatTableComponent>;
@@ -68,7 +69,6 @@ describe('TestResultsFlatTableComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestResultsFlatTableComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -113,6 +113,67 @@ describe('TestResultsFlatTableComponent', () => {
     fixture.destroy();
   });
 
+  it.each(['notes', 'frequencies'])('renders delayed %s without another user action', async kind => {
+    const notes = new Subject<Record<number, UnitNoteDto[]>>();
+    const frequencies = new Subject<FlatResponseFrequenciesResponse>();
+    jest.spyOn(TestBed.inject(UnitNoteService), 'getNotesForMultipleUnits').mockReturnValue(notes);
+    testResultService.getFlatResponseFrequencies.mockReturnValue(frequencies);
+    const response: FlatTestResultResponsesResponse = {
+      data: [{
+        responseId: 1,
+        unitId: 1,
+        personId: 1,
+        code: 'person',
+        group: 'g',
+        login: 'login',
+        booklet: 'BOOKLET',
+        unit: 'UNIT',
+        response: 'V1',
+        responseStatus: 'VALUE_CHANGED',
+        responseValue: 'answer',
+        tags: [],
+        logAnomalies: []
+      }],
+      total: 1,
+      page: 1,
+      limit: 100
+    };
+    testResultService.getFlatResponses.mockReturnValue(of(response));
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    // Settle initial ngModel notifications before delivering the independent requests.
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    const frequencyCell = fixture.nativeElement.querySelector('td.mat-column-frequencies') as HTMLElement;
+    const hasNoteIndicator = () => Array.from(
+      fixture.nativeElement.querySelectorAll('td.mat-column-actions mat-icon') as NodeListOf<HTMLElement>
+    ).some(icon => icon.textContent?.trim() === 'circle');
+    expect(frequencyCell.textContent?.trim()).toBe('');
+    expect(hasNoteIndicator()).toBe(false);
+
+    if (kind === 'notes') {
+      notes.next({
+        1: [{
+          id: 1, unitId: 1, note: 'note', createdAt: new Date(), updatedAt: new Date()
+        }]
+      });
+    } else {
+      frequencies.next({ 'UNIT:V1': { total: 10, values: [{ value: 'answer', count: 2, p: 0.2 }] } });
+    }
+    await fixture.whenStable();
+
+    if (kind === 'notes') {
+      expect(hasNoteIndicator()).toBe(true);
+      notes.error(new Error('Request failed'));
+      await fixture.whenStable();
+      expect(hasNoteIndicator()).toBe(false);
+    } else {
+      expect(frequencyCell.textContent?.trim()).toBe('p=.200 (n=2)');
+    }
+    notes.complete();
+    frequencies.complete();
+  });
+
   it('should display response-value frequencies as proportions', () => {
     const frequencyState = component as unknown as {
       frequenciesByComboKey: WritableSignal<Map<string, {
@@ -139,7 +200,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should not include row log anomalies when the dashboard force is disabled by workspace setting', () => {
-    component.forceShowLogAnomalies = true;
+    fixture.componentRef.setInput('forceShowLogAnomalies', true);
     component.ngOnChanges({
       forceShowLogAnomalies: new SimpleChange(false, true, true)
     });
@@ -155,7 +216,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should include row log anomalies when the workspace setting enables the column', () => {
-    component.showWorkspaceLogAnomalies = true;
+    fixture.componentRef.setInput('showWorkspaceLogAnomalies', true);
 
     component.ngOnInit();
 
@@ -168,10 +229,10 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should expose the dashboard all-anomalies filter in the media filter UI', () => {
-    component.initialFilters = { logAnomalies: 'any' };
+    fixture.componentRef.setInput('initialFilters', { logAnomalies: 'any' });
 
     component.ngOnChanges({
-      initialFilters: new SimpleChange(null, component.initialFilters, true)
+      initialFilters: new SimpleChange(null, component.initialFilters(), true)
     });
 
     expect(component.flatFilters().logAnomalies).toBe('any');
@@ -194,14 +255,14 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should replace external table filters instead of keeping stale log filters', () => {
-    component.initialFilters = { logAnomalies: 'any' };
+    fixture.componentRef.setInput('initialFilters', { logAnomalies: 'any' });
     component.ngOnChanges({
-      initialFilters: new SimpleChange(null, component.initialFilters, true)
+      initialFilters: new SimpleChange(null, component.initialFilters(), true)
     });
 
-    component.initialFilters = { code: 'person-a' };
+    fixture.componentRef.setInput('initialFilters', { code: 'person-a' });
     component.ngOnChanges({
-      initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters, false)
+      initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters(), false)
     });
 
     expect(component.flatFilters().code).toBe('person-a');
@@ -210,7 +271,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should send the regex flag when the workspace setting is enabled', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
 
     component.ngOnInit();
 
@@ -237,7 +298,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should not request data while a regex filter exceeds the limit', async () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.update(value => ({ ...value, response: 'a'.repeat(257) }));
@@ -250,7 +311,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should send PostgreSQL ARE syntax unsupported by JavaScript', async () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.update(value => ({ ...value, response: '(?i)^var$' }));
@@ -267,7 +328,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should disable autocomplete suggestions in regex mode', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilterOptions.update(value => ({ ...value, codes: ['P-01'] }));
     component.flatFilters.update(value => ({ ...value, code: '^P-' }));
 
@@ -275,7 +336,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should show a specific message when a regex query times out', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
@@ -318,7 +379,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should use the structured invalid regex error code', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
@@ -343,16 +404,18 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should ignore an invalid-regex error for an edited filter', async () => {
     const staleResponse = new Subject<FlatTestResultResponsesResponse>();
-    component.enableRegexSearch = true;
+    let resolveReload: () => void;
+    const reloadStarted = new Promise<void>(resolve => { resolveReload = resolve; });
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses
       .mockReturnValueOnce(staleResponse.asObservable())
-      .mockReturnValueOnce(of({
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 100
-      }));
+      .mockImplementationOnce(() => {
+        resolveReload();
+        return of({
+          data: [], total: 0, page: 1, limit: 100
+        });
+      });
     fixture.detectChanges();
 
     component.flatFilters.update(value => ({ ...value, response: '[a]' }));
@@ -365,7 +428,8 @@ describe('TestResultsFlatTableComponent', () => {
         message: 'Invalid regular expression for response'
       }
     }));
-    await new Promise<void>(resolve => { setTimeout(resolve, 401); });
+    await reloadStarted;
+    await fixture.whenStable();
 
     expect(component.isRegexFilterInvalid('response')).toBe(false);
     expect(testResultService.getFlatResponses).toHaveBeenCalledTimes(2);
@@ -379,7 +443,7 @@ describe('TestResultsFlatTableComponent', () => {
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();
     const secondResponse = new Subject<FlatTestResultResponsesResponse>();
-    component.showWorkspaceLogAnomalies = true;
+    fixture.componentRef.setInput('showWorkspaceLogAnomalies', true);
     testResultService.getFlatResponses
       .mockReturnValueOnce(firstResponse.asObservable())
       .mockReturnValueOnce(secondResponse.asObservable());
