@@ -633,6 +633,7 @@ audit-app:
   needs:
     - install-dependencies
   script:
+    - npx nx run frontend:test-dependency-patches
     - npm audit --audit-level high
 
 build-develop-commit-db-image:
