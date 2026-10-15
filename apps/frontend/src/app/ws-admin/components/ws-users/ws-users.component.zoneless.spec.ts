@@ -48,7 +48,7 @@ describe('Workspace users without Zone.js', () => {
         { provide: HttpClient, useValue: {} },
         { provide: LogoService, useValue: { getLogoSettings: () => of(null) } },
         { provide: SessionRecoveryService, useValue: {} },
-        { provide: UserBackendService, useValue: { getUsersFull, getWorkspacesByUserList: () => of([]) } },
+        { provide: UserBackendService, useValue: { getUsersFull, getUsersForWorkspaceSelection: getUsersFull, getWorkspacesByUserList: () => of([]) } },
         { provide: WorkspaceBackendService, useValue: { getAllWorkspacesList: () => of({ data: [] }) } }
       ]
     }).overrideComponent(UsersComponent, { set: { template: '', imports: [] } }).compileComponents();

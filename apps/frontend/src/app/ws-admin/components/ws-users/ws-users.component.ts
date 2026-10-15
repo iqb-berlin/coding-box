@@ -88,7 +88,7 @@ export class WsUsersComponent implements OnInit {
     const datasource = new MatTableDataSource(users);
     datasource
       .filterPredicate = (userList: UserFullDto, filter) => [
-        'name', 'firstName', 'lastName'
+        'username', 'firstName', 'lastName'
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
@@ -96,9 +96,16 @@ export class WsUsersComponent implements OnInit {
     this.userObjectsDatasource.set(datasource);
   }
 
+  get canManageGlobalUsers(): boolean {
+    return this.appService.authData.isAdmin;
+  }
+
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().pipe(
+    const usersRequest = this.canManageGlobalUsers ?
+      this.userBackendService.getUsersFull() :
+      this.userBackendService.getUsersForWorkspaceSelection(this.appService.selectedWorkspaceId);
+    usersRequest.pipe(
       takeUntilDestroyed(this.destroyRef),
       finalize(() => { this.appService.dataLoading = false; })
     ).subscribe(
@@ -123,7 +130,7 @@ export class WsUsersComponent implements OnInit {
   }
 
   updateUserWorkspacesList(userId: number): void {
-    if (this.tableSelectionCheckboxes.selected.length === 1) {
+    if (this.canManageGlobalUsers && this.tableSelectionCheckboxes.selected.length === 1) {
       this.userBackendService.getWorkspacesByUserList(userId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaces => {
         this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
       });

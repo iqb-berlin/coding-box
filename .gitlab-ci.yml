@@ -26,7 +26,7 @@ workflow:
   rules:
     # The GitHub project bot cannot pull from the group-level Dependency Proxy.
     # Use the same public upstream images without granting it group access.
-    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")
       variables:
         DOCKER_HUB_PROXY: ""
         DOCKER_IMAGE: docker:28

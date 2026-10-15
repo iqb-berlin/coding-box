@@ -35,6 +35,10 @@ export default {
   coverageReporters: ['text-summary', 'html', 'lcov', 'json', 'cobertura'],
   reporters: [
     'default',
-    ['jest-junit', { outputDirectory: '<rootDir>/../../coverage/apps/frontend', outputName: 'junit.xml' }]
+    ['jest-junit', {
+      outputDirectory: '<rootDir>/../../coverage/apps/frontend',
+      outputName: 'junit.xml',
+      reportTestSuiteErrors: 'true'
+    }]
   ]
 };

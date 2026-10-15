@@ -211,7 +211,7 @@ test('the actual lint job checks earlier commits and rejects frontend failures',
   }
 });
 
-test('the actual backend job checks earlier commits, excludes frontend, and rejects test failures', () => {
+test('the actual backend job checks its complete suite and rejects test failures', () => {
   const yaml = require('js-yaml');
   const schema = yaml.DEFAULT_SCHEMA.extend([
     new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
@@ -270,7 +270,7 @@ test('the actual backend job checks earlier commits, excludes frontend, and reje
       '--withTarget=test', '--json']);
     assert.deepEqual(JSON.parse(affected.stdout), []);
 
-    const script = config['test-backend'].script.join('\n');
+    const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
@@ -343,7 +343,7 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   assert.doesNotMatch(job, /frontend:lint|nx build frontend|frontend:test-zoneless/);
   assert.doesNotMatch(ci, /\ntest-(?:frontend-zoneless|zoneless-approval|browser-zoneless|browser-production):/);
   const backend = ci.split('\ntest-backend:\n')[1].split('\ntest-frontend:\n')[0];
-  assert.match(backend, /--target=test --exclude=frontend/);
+  assert.match(backend, /nx test backend --configuration=ci/);
   assert.match(backend, /allow_failure: false/);
   assert.match(backend, /--passWithNoTests=false/);
   const browser = ci.split('\ntest-browser:\n')[1].split('\ntest-replay-live:\n')[0];
