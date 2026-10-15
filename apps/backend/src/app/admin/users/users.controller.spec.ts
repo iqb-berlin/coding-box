@@ -111,7 +111,7 @@ describe('UsersController', () => {
 
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toBe(true);
-        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload);
+        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload, 4);
       } finally {
         await app?.close();
       }
@@ -177,7 +177,7 @@ describe('UsersController', () => {
 
         expect(response.status).toBe(201);
         await expect(response.json()).resolves.toBe(true);
-        expect(usersService.assignUserWorkspaces).toHaveBeenCalledWith(5, [2, 3]);
+        expect(usersService.assignUserWorkspaces).toHaveBeenCalledWith(5, [2, 3], 4);
       } finally {
         await app?.close();
       }
@@ -291,7 +291,7 @@ describe('UsersController', () => {
 
         expect(response.status).toBe(200);
         expect(await response.json()).toBe(true);
-        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload);
+        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload, userId);
       } finally {
         await app.close();
       }

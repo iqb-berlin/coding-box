@@ -112,6 +112,7 @@ export class WorkspaceCodingVersionController {
 
     const job = await this.jobQueueService.addResetCodingVersionJob({
       workspaceId: workspace_id,
+      requestedByUserId: request.user?.id,
       version: body.version,
       unitFilters: body.unitFilters,
       variableFilters: body.variableFilters

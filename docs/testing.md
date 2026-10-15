@@ -47,6 +47,9 @@ stack logs under `cypress/replay-artifacts/` and `tmp/replay-e2e-artifacts/`.
 | Exports report success with missing results | Live incomplete item-matrix jobs remain failed and deliver diagnostic ZIP; successful workflow checks downloaded CSV content |
 | Replay mixes people, aliases or pages | Embedded Aspect player, two people, pages, aliases, anchors and delayed navigation regression |
 | Unit failures are hidden in a green pipeline | Blocking complete suites, 60% coverage checks and JUnit failure/initialization-error reporting |
+| A manual note impersonates a backend action or actor | Real authenticated API rejects event/actor/job claims; persisted notes use the authenticated user and manual event type; journal CSV neutralizes formula cells |
+| Persisted import data loses its provenance | Browser upload checks the persisted batch event against its exact Bull job, workspace and authenticated user without raw response values |
+| A failed audit or persistence write leaves a partial mutation | Import rollback regressions include pre-query failures and pending concurrent writes; isolated PostgreSQL fault injection proves deletion rollback with dependent rows, followed by a successful data-and-audit commit |
 
 Requirement-specific datasets and independent reference limits remain documented
 in `docs/requirements/`. Add an acceptance row and a test for each material new
@@ -72,6 +75,13 @@ The live suites require Docker, Docker Compose and Cypress. Each run creates its
 own Compose project, database, Redis prefix, random credentials, workspace and
 ports. Cleanup removes only that project's resources. Never point the acceptance
 fixtures at an existing production or development database.
+
+The workflow's audit rollback case temporarily rejects one synthetic person's
+deletion event with a PostgreSQL constraint in that disposable database. It removes
+the constraint in `finally`, verifies the failed deletion preserved all dependent
+rows, then repeats the real API call and checks both deletion and trusted audit.
+This is representative transaction evidence, not exhaustive coverage of every
+audited mutation or a production database test.
 
 The test stack disables Nx daemon/plugin subprocesses, limits Node heaps to
 2 GiB per process and uses two Angular build workers. The synthetic Keycloak

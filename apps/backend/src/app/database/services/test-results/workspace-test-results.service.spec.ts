@@ -438,7 +438,6 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValue(undefined);
 
       (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
-      (journalService.recordEvent as jest.Mock).mockRejectedValueOnce(new Error('audit down'));
 
       const result = await service.deleteTestLogsByRequest(
         1,
@@ -465,13 +464,13 @@ describe('WorkspaceTestResultsService', () => {
           actorUserId: 'user-1',
           eventType: 'TEST_LOGS_DELETED',
           entityType: 'test-logs',
-          entityId: null,
           result: 'success',
-          summary: 'Test logs deleted by bulk job',
+          summary: 'Test logs deleted',
           details: expect.objectContaining({
             deletedTargetCount: 3
           })
-        })
+        }),
+        manager
       );
 
       resolveSpy.mockRestore();
@@ -572,14 +571,15 @@ describe('WorkspaceTestResultsService', () => {
           actorUserId: 'user-1',
           eventType: 'TEST_RESULT_RESPONSES_DELETED',
           entityType: 'responses',
-          entityId: null,
           result: 'success',
-          summary: 'Test result responses deleted by cleanup job',
+          summary: 'Test result response deletion batch committed',
           details: expect.objectContaining({
             deletedTargetCount: 2,
-            preview
+            batchNumber: 1,
+            batchCount: 1
           })
-        })
+        }),
+        manager
       );
 
       resolveSpy.mockRestore();
@@ -2705,6 +2705,7 @@ describe('WorkspaceTestResultsService', () => {
         createQueryBuilder: jest.fn(() => ({
           select: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 1, login: 'l1' }, { id: 2, login: 'l2' }]),
           delete: jest.fn().mockReturnThis(),
           from: jest.fn().mockReturnThis(),

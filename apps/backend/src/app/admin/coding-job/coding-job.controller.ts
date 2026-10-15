@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Req,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -149,7 +150,8 @@ export class CodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+      @Body() createCodingJobDto: CreateCodingJobDto,
+      @Req() req?: { user?: { id: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -167,7 +169,8 @@ export class CodingJobController {
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
-        createCodingJobDto
+        createCodingJobDto,
+        req?.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -207,13 +210,15 @@ export class CodingJobController {
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto
+      @Body() updateCodingJobDto: UpdateCodingJobDto,
+      @Req() req?: { user?: { id: number } }
   ): Promise<CodingJobDto> {
     try {
       const codingJob = await this.codingJobService.updateCodingJob(
         id,
         workspaceId,
-        updateCodingJobDto
+        updateCodingJobDto,
+        req?.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -257,10 +262,11 @@ export class CodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req?: { user?: { id: number } }
   ): Promise<{ success: boolean }> {
     try {
-      return await this.codingJobService.deleteCodingJob(id, workspaceId);
+      return await this.codingJobService.deleteCodingJob(id, workspaceId, req?.user?.id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -306,14 +312,15 @@ export class CodingJobController {
   async assignCoders(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() assignCodersDto: AssignCodersDto
+      @Body() assignCodersDto: AssignCodersDto,
+      @Req() req?: { user?: { id: number } }
   ): Promise<{ success: boolean }> {
     try {
       // Verify the coding job exists in this workspace
       await this.codingJobService.getCodingJob(id, workspaceId);
 
       // Assign the coders
-      await this.codingJobService.assignCoders(id, assignCodersDto.userIds);
+      await this.codingJobService.assignCoders(id, assignCodersDto.userIds, undefined, workspaceId, req?.user?.id);
 
       return { success: true };
     } catch (error) {

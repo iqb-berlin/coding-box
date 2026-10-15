@@ -357,7 +357,7 @@ describe('WorkspaceUsersController', () => {
 
         expect(response.status).toBe(201);
         expect(await response.json()).toBe(true);
-        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], userId);
       } finally {
         await app.close();
       }
@@ -366,9 +366,9 @@ describe('WorkspaceUsersController', () => {
     it('delegates workspace user assignment', async () => {
       workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
 
-      await expect(controller.setWorkspaceUsers([7, 8], 3)).resolves.toBe(true);
+      await expect(controller.setWorkspaceUsers([7, 8], 3, { user: { id: 12 } })).resolves.toBe(true);
 
-      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], 12);
     });
 
     it('parses the workspace id from the route before delegating', async () => {
@@ -386,7 +386,7 @@ describe('WorkspaceUsersController', () => {
 
         expect(response.status).toBe(201);
         await expect(response.json()).resolves.toBe(true);
-        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], 12);
       } finally {
         await app?.close();
       }
