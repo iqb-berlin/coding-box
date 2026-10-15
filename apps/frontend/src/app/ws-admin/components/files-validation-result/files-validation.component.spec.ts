@@ -223,6 +223,39 @@ describe('FilesValidationComponent', () => {
     expect(expanded()).toBe(false);
   });
 
+  it('should preserve retained expansion state and reset selections when refreshed results change', () => {
+    const expanded = {
+      booklets: true,
+      units: false,
+      schemes: false,
+      schemer: false,
+      definitions: false,
+      player: false,
+      metadata: false
+    };
+    const previous = new Map([['retained', expanded], ['removed', expanded]]);
+    component.expandedFilesLists.set(previous);
+    component.duplicateSelection.set(new Map([['stale-login', 'removed']]));
+
+    const result: FileValidationResultDto = {
+      testTakersFound: true,
+      validationResults: [createValidationResult('retained', []), createValidationResult('new', [])],
+      duplicateTestTakers: [
+        { login: 'login', occurrences: [{ testTaker: 'first', mode: 'run' }, { testTaker: 'second', mode: 'run' }] },
+        { login: 'empty', occurrences: [] }
+      ]
+    };
+    (component as unknown as { applyValidationResultData: (value: FileValidationResultDto) => void })
+      .applyValidationResultData(result);
+
+    expect([...component.expandedFilesLists().keys()]).toEqual(['retained', 'new']);
+    expect(component.expandedFilesLists().get('retained')?.booklets).toBe(true);
+    expect(component.expandedFilesLists().get('new')?.booklets).toBe(false);
+    expect(component.duplicateSelection()).toEqual(new Map([['login', 'first']]));
+    expect(previous.has('removed')).toBe(true);
+    expect(component.validationResults().map(value => value.testTaker)).toEqual(['retained', 'new']);
+  });
+
   it('should calculate summary correctly', () => {
     // Mock data
     component.data = {
