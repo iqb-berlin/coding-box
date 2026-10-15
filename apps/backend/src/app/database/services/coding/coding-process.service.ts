@@ -4,7 +4,6 @@ import {
   Brackets, EntityManager, In, Repository, QueryRunner
 } from 'typeorm';
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
-import type { Response as AutocoderResponse } from '@iqbspecs/response/response.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 
@@ -49,6 +48,10 @@ import {
 } from '../shared/workspace-files-lock.util';
 import { RuntimeConfigService } from '../../../config/runtime-config.service';
 import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
+
+// Use the installed engine's contract here. The application's persistence and
+// manual-coding contract remains response 1.5.1, including legacy status 13.
+type AutocoderResponse = Parameters<typeof Autocoder.CodingSchemeFactory.code>[0][number];
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -1434,7 +1437,7 @@ export class CodingProcessService {
           return {
             id: String(response.variableid),
             value: responseValue,
-            status: statusNumberToString(inputStatus) as import('@iqbspecs/response/response.interface').ResponseStatusType,
+            status: statusNumberToString(inputStatus) as AutocoderResponse['status'],
             subform: response.subform,
             code: inputCode,
             score: inputScore
