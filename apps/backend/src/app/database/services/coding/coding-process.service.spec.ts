@@ -3026,6 +3026,45 @@ describe('CodingProcessService', () => {
       ])).toThrow('Autocoder produced multiple updates for generated:1:03:');
     });
 
+    it('preserves legacy pending selection and Code 0 through the real current engine', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<Record<string, unknown>>,
+            variableCodings: VariableCodingData[]
+          ) => Array<Record<string, unknown>>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const input = {
+        id: 'public-alias',
+        subform: 'part-a',
+        status: 'CODE_SELECTION_PENDING',
+        value: 'A',
+        code: 0,
+        score: 0,
+        codes: [{ id: 0, parameter: 'legacy selection' }]
+      };
+      const result = codeResponses([input], [{
+        id: 'technical-id',
+        alias: 'public-alias',
+        sourceType: 'BASE',
+        codes: [{
+          id: 1,
+          type: 'FULL_CREDIT',
+          score: 1,
+          ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['A'] }] }]
+        }]
+      }]);
+      expect(result).toEqual([input]);
+      expect(input.status).toBe('CODE_SELECTION_PENDING');
+      expect(input.codes).toEqual([{ id: 0, parameter: 'legacy selection' }]);
+    });
+
     it('rejects genuinely duplicate output aliases before coding', () => {
       const createNamespace = (
         service as unknown as {

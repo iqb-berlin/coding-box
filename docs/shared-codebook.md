@@ -1,8 +1,19 @@
 # Integration des gemeinsamen Codebooks
 
-## Aktuelle Inlinebild-Korrektur
+## Aktueller Responses-Stand
 
-Die [Prüfung vom 15.10.2026](codebook-inline-images-2026-10-15.md) behebt Textverlust bei defekten Inlinebildern. 1.285 Generator-Tests und 4.694 installierte Exportpaare bestehen. Beide Anwendungen verwenden den Tarball mit SHA256 `1340db41e6493cca3d4395426c14f156319c3bbbf0b81d01f84c233a56a5091a`. Eine neue Word-Abnahme wurde für diesen Paketstand nicht ausgeführt.
+Die [Prüfung vom 15.10.2026](codebook-responses-2026-10-15.md) verwendet überall
+`@iqb/responses` 5.3.1, die beim Abgleich aktuelle Patchversion der 5.3-Reihe.
+Die Bibliothek bezieht Responses als Peer (`^5.3.0`); Schemer, Validierung und
+Generator verwenden dieselbe Installation wie der Host. Es gibt keine private
+5.2.2-Installation mehr. 1.285 Generator-Tests und 4.694 installierte Exportpaare
+bestehen einschließlich der unveränderten Studio-Referenzen. Aktueller Tarball-
+SHA256: `9a0e75158dcc70e821c6a481d431ec6a0429e248afb85bd27991b1ae1af22d7a`.
+Frühere Berichte unten beziehen sich auf ihre damaligen Paketstände.
+
+## Vorherige Inlinebild-Korrektur
+
+Die [Prüfung vom 15.10.2026](codebook-inline-images-2026-10-15.md) behebt Textverlust bei defekten Inlinebildern. 1.285 Generator-Tests und 4.694 installierte Exportpaare bestehen. Dabei verwendeten beide Anwendungen den Tarball mit SHA256 `1340db41e6493cca3d4395426c14f156319c3bbbf0b81d01f84c233a56a5091a`. Eine neue Word-Abnahme wurde für diesen Paketstand nicht ausgeführt.
 
 ## Format- und Aspect-Abnahme vom 13.10.2026
 
@@ -40,6 +51,8 @@ Nach gemeinsamer Abnahme: Bibliothek veröffentlichen, die Root-Abhängigkeit au
 `npm pkg set`-Schritte im Backend-Dockerfile sowie den Tarball entfernen und die
 Runtime-Installation erneut prüfen. Nicht nur die Frontend-Abhängigkeit ändern.
 
-Die Kodierengine verbleibt bei @iqb/responses 5.2.0; die gemeinsame Bibliothek hat
-für Codebook-Regeltexte eine eigene, feste Abhängigkeit auf 5.2.2.
+Die Kodierengine verwendet wie Schemer, Validierung und Codebook-Regeltexte
+`@iqb/responses` 5.3.1. Die Bibliothek verwendet den Host-Peer. Der Anwendungs-
+und Persistenzvertrag bleibt bei response-Spezifikation 1.5.1; ein echter
+Engine-Regressionstest erhält auch den alten Status CODE_SELECTION_PENDING.
 Rollback erfolgt durch die vorherige Anwendungsversion, ohne Datenmigration.
