@@ -1,6 +1,6 @@
 import {
   Component, DestroyRef, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -56,6 +56,7 @@ type MissingsProfileOption = { label: string; id: number };
 type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export',
   templateUrl: './export.component.html',
   styleUrls: ['./export.component.scss'],

@@ -1,6 +1,6 @@
 import {
   Component, OnInit, OnDestroy, Input, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 
 import {
@@ -98,6 +98,7 @@ import { getResponseStatusLabel } from '../../../shared/utils/response-status-me
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-coding-management',
   templateUrl: './coding-management.component.html',
   standalone: true,

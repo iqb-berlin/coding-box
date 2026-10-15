@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, signal
+  Component, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
@@ -18,6 +18,7 @@ import { FileService } from '../../services/file/file.service';
 import { base64ToUtf8 } from '../../utils/common-utils';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-item-list-dialog',
   standalone: true,
   imports: [

@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, signal, computed
+  Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -29,6 +29,7 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
  * exist in TestTakers XML files.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-takers-validation-panel',
   standalone: true,
   imports: [

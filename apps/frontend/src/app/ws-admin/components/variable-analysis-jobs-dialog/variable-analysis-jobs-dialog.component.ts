@@ -1,4 +1,8 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, takeUntil } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,6 +26,7 @@ export interface VariableAnalysisJobsDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-analysis-jobs-dialog',
   templateUrl: './variable-analysis-jobs-dialog.component.html',
   styleUrls: ['./variable-analysis-jobs-dialog.component.scss'],
@@ -42,27 +47,34 @@ export interface VariableAnalysisJobsDialogData {
   ]
 })
 export class VariableAnalysisJobsDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly refreshCancel$ = new Subject<void>();
   displayedColumns: string[] = ['id', 'status', 'createdAt', 'unitId', 'variableId', 'actions'];
-  isLoading = false;
+  readonly isLoading = signal(false);
+  readonly jobs = signal<VariableAnalysisJobDto[]>([]);
 
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisJobsDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisJobsDialogData,
     private variableAnalysisService: VariableAnalysisService,
     private snackBar: MatSnackBar
-  ) { }
+  ) {
+    this.jobs.set([...data.jobs]);
+  }
 
   ngOnInit(): void {
     this.refreshJobs();
   }
 
   refreshJobs(): void {
-    this.isLoading = true;
+    this.refreshCancel$.next();
+    this.isLoading.set(true);
     this.variableAnalysisService.getAllJobs(this.data.workspaceId)
+      .pipe(takeUntil(this.refreshCancel$), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (jobs: VariableAnalysisJobDto[]) => {
-          this.data.jobs = jobs.filter(job => job.type === 'variable-analysis');
-          this.isLoading = false;
+          this.jobs.set(jobs.filter(job => job.type === 'variable-analysis'));
+          this.isLoading.set(false);
         },
         error: () => {
           this.snackBar.open(
@@ -70,14 +82,14 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
             'Fehler',
             { duration: 3000 }
           );
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
   cancelJob(jobId: number | string): void {
-    this.isLoading = true;
-    this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
+    this.isLoading.set(true);
+    this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result: JobCancelResult) => {
           if (result.success) {
@@ -93,7 +105,7 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
               'Fehler',
               { duration: 3000 }
             );
-            this.isLoading = false;
+            this.isLoading.set(false);
           }
         },
         error: () => {
@@ -102,7 +114,7 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
             'Fehler',
             { duration: 3000 }
           );
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }

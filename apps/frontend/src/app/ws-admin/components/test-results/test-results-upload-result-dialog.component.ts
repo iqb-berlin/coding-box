@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ViewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, Inject, ViewChild
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -48,6 +50,7 @@ type LogUnitDetail = { bookletName: string; unitKey: string; hasLog: boolean };
 type ImportOutcomeMetric = { label: string; value: number };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-upload-result-dialog',
   standalone: true,
   imports: [

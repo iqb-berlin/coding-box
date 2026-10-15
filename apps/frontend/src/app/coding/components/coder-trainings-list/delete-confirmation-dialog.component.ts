@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -8,6 +8,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { CoderTraining } from '../../models/coder-training.model';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'delete-confirmation-dialog',
   standalone: true,
   imports: [MatButtonModule, MatDialogTitle, MatDialogContent, MatDialogActions, TranslateModule],

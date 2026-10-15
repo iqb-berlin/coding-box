@@ -1,0 +1,135 @@
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TranslateModule } from '@ngx-translate/core';
+import { of, Subject } from 'rxjs';
+import { WorkspacesSelectionComponent } from './workspaces-selection.component';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
+
+@Component({
+  selector: 'coding-box-workspace-refresh-test-host',
+  standalone: true,
+  imports: [WorkspacesSelectionComponent],
+  template: `
+    <button (click)="changed.set(true)">Workspace mutation completed</button>
+    <coding-box-workspaces-selection
+      [workspacesChanged]="changed()"
+      [selectedWorkspacesIds]="selected"
+      [selectionDisabled]="!ready()"
+      (workspacesUpdated)="changed.set(false)"
+      (workspaceListReady)="ready.set($event)" />
+  `
+})
+class WorkspaceRefreshHostComponent {
+  readonly changed = signal(false);
+  readonly ready = signal(false);
+  readonly selected: number[] = [];
+}
+
+describe('WorkspacesSelectionComponent refresh recovery', () => {
+  let fixture: ComponentFixture<WorkspaceRefreshHostComponent>;
+
+  afterEach(() => fixture?.destroy());
+
+  it('renders a delayed initial list and preselection without a parent output handler', async () => {
+    const response = new Subject<{ data: { id: number; name: string }[]; total: number; page: number; limit: number }>();
+    await TestBed.configureTestingModule({
+      imports: [WorkspacesSelectionComponent, TranslateModule.forRoot()],
+      providers: [provideZonelessChangeDetection(), { provide: WorkspaceBackendService, useValue: { getAllWorkspacesListOrFail: () => response } }]
+    }).compileComponents();
+    const directFixture = TestBed.createComponent(WorkspacesSelectionComponent);
+    directFixture.componentRef.setInput('selectedWorkspacesIds', [2]);
+    directFixture.componentRef.setInput('workspacesChanged', false);
+    await directFixture.whenStable();
+    response.next({
+      data: [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta' }], total: 2, page: 1, limit: 20
+    });
+    await directFixture.whenStable();
+    const rows = directFixture.nativeElement.querySelectorAll('mat-row') as NodeListOf<HTMLElement>;
+    expect(rows).toHaveLength(2);
+    expect(rows[1].textContent).toContain('Beta');
+    expect((rows[1].querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
+    directFixture.destroy();
+    expect(response.observed).toBe(false);
+  });
+
+  it('connects sorting after a synchronous initial response and retains it after a reload', async () => {
+    const page = {
+      data: [{ id: 1, name: 'Zulu' }, { id: 2, name: 'Alpha' }], total: 2, page: 1, limit: 20
+    };
+    const getList = jest.fn().mockReturnValue(of(page));
+    await TestBed.configureTestingModule({
+      imports: [WorkspaceRefreshHostComponent, TranslateModule.forRoot()],
+      providers: [provideZonelessChangeDetection(), { provide: WorkspaceBackendService, useValue: { getAllWorkspacesListOrFail: getList } }]
+    }).compileComponents();
+    fixture = TestBed.createComponent(WorkspaceRefreshHostComponent);
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const firstRow = () => element.querySelector('mat-row')?.textContent;
+    expect(firstRow()).toContain('Zulu');
+    (element.querySelector('.mat-column-name .mat-sort-header-container') as HTMLElement).click();
+    await fixture.whenStable();
+    expect(firstRow()).toContain('Alpha');
+
+    (element.querySelector('button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(getList).toHaveBeenCalledTimes(2);
+    expect(firstRow()).toContain('Alpha');
+  });
+
+  it('retries after a failed refresh while retaining the previous list and disabling access selection', async () => {
+    const firstPage = {
+      data: [{ id: 1, name: 'First workspace' }], total: 1, page: 1, limit: 20
+    };
+    const failingRefresh = new Subject<typeof firstPage>();
+    const retryRefresh = new Subject<typeof firstPage>();
+    const getList = jest.fn()
+      .mockReturnValueOnce(of(firstPage))
+      .mockReturnValueOnce(failingRefresh)
+      .mockReturnValueOnce(retryRefresh);
+    await TestBed.configureTestingModule({
+      imports: [WorkspaceRefreshHostComponent, TranslateModule.forRoot()],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: WorkspaceBackendService, useValue: { getAllWorkspacesListOrFail: getList } }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(WorkspaceRefreshHostComponent);
+    await fixture.whenStable();
+    expect(getList).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.ready()).toBe(true);
+
+    const element = fixture.nativeElement as HTMLElement;
+    const mutate = () => (element.querySelector('button') as HTMLButtonElement).click();
+    const firstRow = () => element.querySelector('mat-row') as HTMLElement;
+    const firstCheckbox = () => firstRow().querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    mutate();
+    await fixture.whenStable();
+    expect(getList).toHaveBeenCalledTimes(2);
+    failingRefresh.error(new Error('Temporary HTTP failure'));
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.changed()).toBe(false);
+    expect(fixture.componentInstance.ready()).toBe(false);
+    expect(firstRow().textContent).toContain('First workspace');
+    expect(firstCheckbox().disabled).toBe(true);
+
+    mutate();
+    await fixture.whenStable();
+    expect(getList).toHaveBeenCalledTimes(3);
+    expect(fixture.componentInstance.ready()).toBe(false);
+    expect(firstRow().textContent).toContain('First workspace');
+    expect(firstCheckbox().disabled).toBe(true);
+
+    retryRefresh.next({
+      ...firstPage,
+      data: [{ id: 2, name: 'Updated workspace' }]
+    });
+    retryRefresh.complete();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.changed()).toBe(false);
+    expect(fixture.componentInstance.ready()).toBe(true);
+    expect(firstRow().textContent).toContain('Updated workspace');
+    expect(firstCheckbox().disabled).toBe(false);
+  });
+});

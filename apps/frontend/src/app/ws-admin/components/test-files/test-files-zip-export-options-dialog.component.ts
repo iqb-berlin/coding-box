@@ -1,5 +1,5 @@
 import {
-  Component, Inject, ViewChild, AfterViewInit
+  Component, Inject, ViewChild, AfterViewInit, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -21,6 +21,7 @@ export type TestFilesZipExportOptionsDialogData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files-zip-export-options-dialog',
   standalone: true,
   imports: [
