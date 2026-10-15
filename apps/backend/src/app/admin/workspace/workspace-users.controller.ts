@@ -218,7 +218,8 @@ export class WorkspaceUsersController {
 
   @Post(':workspace_id/users')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({

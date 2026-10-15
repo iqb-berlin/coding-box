@@ -20,7 +20,8 @@ const projectName = `coding-box-replay-${runId}`
 const runDir = path.join(repoDir, 'tmp', 'replay-e2e', runId);
 const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
-const authMode = process.argv.includes('--auth');
+const workflowMode = process.argv.includes('--workflows');
+const authMode = process.argv.includes('--auth') || workflowMode;
 const production = process.argv.includes('--production');
 const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
 const connectHost = authMode ? '127.0.0.1' : dockerConnectHost;
@@ -105,7 +106,7 @@ try {
       'cypress',
       'run',
       '--config-file',
-      authMode ? 'cypress.auth.config.ts' : 'cypress.replay.config.ts',
+      workflowMode ? 'cypress.workflows.config.ts' : (authMode ? 'cypress.auth.config.ts' : 'cypress.replay.config.ts'),
       '--browser',
       'electron'
     ],

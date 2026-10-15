@@ -41,6 +41,7 @@ describe('WsUsersComponent', () => {
   beforeEach(async () => {
     mockUserBackendService = {
       getUsersFull: jest.fn().mockReturnValue(of(mockUsers)),
+      getUsersForWorkspaceSelection: jest.fn().mockReturnValue(of(mockUsers)),
       getWorkspacesByUserList: jest.fn().mockReturnValue(of([])),
       deleteUsers: jest.fn().mockReturnValue(of(true))
     };
@@ -50,7 +51,9 @@ describe('WsUsersComponent', () => {
     };
 
     mockAppService = {
-      dataLoading: false
+      dataLoading: false,
+      selectedWorkspaceId: 3,
+      authData: { ...AppService.defaultAuthData, isAdmin: true }
     };
 
     mockDialog = {
@@ -139,6 +142,46 @@ describe('WsUsersComponent', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('keeps study-manager selection without requesting global user administration', () => {
+    jest.useFakeTimers();
+    mockAppService.authData = { ...AppService.defaultAuthData, isAdmin: false };
+    component.ngOnInit();
+    jest.advanceTimersByTime(0);
+    fixture.detectChanges();
+    jest.advanceTimersByTime(0);
+    component.checkboxToggle(mockUsers[0]);
+    fixture.detectChanges();
+
+    expect(component.userObjectsDatasource().data).toEqual(mockUsers);
+    expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
+    expect(mockUserBackendService.getUsersForWorkspaceSelection).toHaveBeenCalledWith(3);
+    expect(mockUserBackendService.getUsersFull).not.toHaveBeenCalled();
+    expect(mockUserBackendService.getWorkspacesByUserList).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('.container coding-box-wrapped-icon')).toBeNull();
+    jest.useRealTimers();
+  });
+
+  it('filters the minimal study-manager directory by username', () => {
+    const users = [{ id: 7, username: 'selected-coder' }, { id: 8, username: 'other' }];
+    mockAppService.authData = { ...AppService.defaultAuthData, isAdmin: false };
+    (mockUserBackendService.getUsersForWorkspaceSelection as jest.Mock).mockReturnValue(of(users));
+    component.updateUserList();
+    component.userObjectsDatasource().filter = 'selected';
+
+    expect(component.userObjectsDatasource().filteredData).toEqual([users[0]]);
+  });
+
+  it('retains the admin flag for the authorized global edit dialog', () => {
+    component.updateUserList();
+    component.selectedRows = [component.userObjectsDatasource().data[1]];
+    component.editUser();
+
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
+    expect(mockDialog.open).toHaveBeenCalledWith(EditUserComponent, expect.objectContaining({
+      data: { username: 'user2', isAdmin: true }
+    }));
   });
 
   describe('Dialogs', () => {

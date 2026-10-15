@@ -43,6 +43,14 @@ export function createReplayHarness(environment = process.env) {
       return activeState.browser;
     },
 
+    async prepareImportedCoding() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Imported coding setup requires the isolated authentication fixture.');
+      }
+      const { prepareImportedCoding } = await import('./workflow-fixture.mjs');
+      return prepareImportedCoding(activeState);
+    },
+
     async readFileSettings() {
       if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
         throw new Error('File settings read requires the isolated authentication fixture.');
