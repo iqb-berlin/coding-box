@@ -1,4 +1,6 @@
-import { Component, inject, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component, inject, provideZonelessChangeDetection, signal
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -12,10 +14,14 @@ import { CodeSelectorComponent } from './code-selector.component';
 @Component({
   imports: [CodeSelectorComponent],
   template: `<coding-box-code-selector [showProgress]="true" [unitsData]="units"
-    [codingService]="service" [hasSaveError]="service.hasSaveError" />`
+    [codingService]="service" [hasSaveError]="service.hasSaveError"
+    [coderNotes]="notes()" (notesChanged)="noteChanges.push($event)" (notesCommitted)="noteCommits.push($event)" />`
 })
 class ReplayHostComponent {
   readonly service = inject(ReplayCodingService);
+  readonly notes = signal('');
+  readonly noteChanges: string[] = [];
+  readonly noteCommits: string[] = [];
   readonly units: UnitsReplay = {
     id: 1,
     name: 'Job',
@@ -57,6 +63,26 @@ describe('CodeSelectorComponent reactive replay state', () => {
     });
     fixture.autoDetectChanges();
     await fixture.whenStable();
+  });
+
+  it('emits edited notes and commits without overwriting the input, then renders replacement notes', async () => {
+    const host = fixture.componentInstance;
+    host.notes.set('Server note');
+    await fixture.whenStable();
+    const notes = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    expect(notes.value).toBe('Server note');
+    notes.value = 'Local note';
+    notes.dispatchEvent(new Event('input', { bubbles: true }));
+    notes.dispatchEvent(new Event('blur'));
+    await fixture.whenStable();
+    expect(host.notes()).toBe('Server note');
+    expect(host.noteChanges).toEqual(['Local note']);
+    expect(host.noteCommits).toEqual(['Local note']);
+
+    host.notes.set('Next coding case');
+    await fixture.whenStable();
+    expect(notes.value).toBe('Next coding case');
+    expect(host.noteChanges).toEqual(['Local note']);
   });
 
   it('disables navigation during a repeated save and enables it after the response', async () => {

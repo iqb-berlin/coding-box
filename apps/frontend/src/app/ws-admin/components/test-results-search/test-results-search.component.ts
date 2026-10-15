@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, inject, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -67,6 +68,18 @@ interface QuickSearchTypeOption {
   ]
 })
 export class TestResultsSearchComponent implements OnInit, OnDestroy {
+  private dialogRef = inject<MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>>(MatDialogRef);
+  protected data = inject<{
+    title: string;
+  }>(MAT_DIALOG_DATA);
+
+  private testResultService = inject(TestResultService);
+  private appService = inject(AppService);
+  private statisticsService = inject(CodingStatisticsService);
+  private snackBar = inject(MatSnackBar);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   protected searchText = '';
@@ -92,15 +105,6 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
   results: QuickSearchResult = this.createEmptyResult('');
   private searchSubject = new Subject<string>();
   private searchSubscription?: Subscription;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>,
-    @Inject(MAT_DIALOG_DATA) protected data: { title: string },
-    private testResultService: TestResultService,
-    private appService: AppService,
-    private statisticsService: CodingStatisticsService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject
@@ -187,7 +191,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, responseId)
+      .getReplayUrl(this.appService.selectedWorkspaceId, responseId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result?.replayUrl) {
@@ -228,7 +232,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     this.hasSearched = true;
     this.changeDetectorRef.markForCheck();
     this.testResultService
-      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8)
+      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: results => {
           this.results = results || this.createEmptyResult(trimmedQuery);

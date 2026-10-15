@@ -2,11 +2,11 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, inject, signal, ChangeDetectionStrategy
+  Component, DestroyRef, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize, timer } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort } from '@angular/material/sort';
-import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
@@ -16,6 +16,7 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
+import { CreateUserForm, EditUserForm } from '../../models/user-form.model';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
 import {
   hasCurrentAuthDataAfterMutation,
@@ -30,6 +31,7 @@ import {
   imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
@@ -43,16 +45,14 @@ export class UsersComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
 
-  @ViewChild(MatSort) sort = new MatSort();
-
   readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
-    this.appService.authData$.subscribe(
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       authData => {
         this.authData.set(authData);
       }
     );
-    setTimeout(() => {
+    timer(0).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.createWorkspaceList();
       this.updateUserList();
     });
@@ -66,38 +66,46 @@ export class UsersComponent implements OnInit {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.userObjectsDatasource.sort = this.sort;
   }
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { this.appService.dataLoading = false; })
+    ).subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         } else {
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         }
       }
     );
   }
 
-  protected addUser(userData: UntypedFormGroup): void {
+  protected addUser(userData: CreateUserForm): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
+    const {
+      name: username, isAdmin, firstName, lastName, email
+    } = userData.getRawValue();
     const user: CreateUserDto = {
-      username: userData.get('name')?.value,
-      isAdmin: userData.get('isAdmin')?.value,
-      firstName: userData.get('firstName')?.value,
-      lastName: userData.get('lastName')?.value,
-      email: userData.get('email')?.value
+      username,
+      isAdmin,
+      firstName,
+      lastName,
+      email
     };
-    this.userBackendService.addUser(user).subscribe(
+    this.userBackendService.addUser(user).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
+        refreshingUsers = true;
         this.updateUserList();
         if (respOk) {
           this.snackBar.open(
@@ -120,15 +128,19 @@ export class UsersComponent implements OnInit {
     this.selectedRows.set(userData);
   }
 
-  editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
+  editUser(value: { selection: UserFullDto[], user: EditUserForm }): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
     const changedData: UserFullDto = {
       id: value.selection[0].id,
-      username: value.user.get('username')?.value,
-      isAdmin: value.user.get('isAdmin')?.value
+      ...value.user.getRawValue()
     };
-    this.userBackendService.changeUserData(this.authData().userId, changedData).subscribe(
+    this.userBackendService.changeUserData(this.authData().userId, changedData).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
+        refreshingUsers = true;
         this.updateUserList();
         if (respOk) {
           this.snackBar.open(
@@ -148,15 +160,20 @@ export class UsersComponent implements OnInit {
 
   protected deleteUsers(users: UserFullDto[]): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
     const usersToDelete: number[] = [];
     users.forEach((r: UserFullDto) => usersToDelete.push(r.id));
-    this.userBackendService.deleteUsers(usersToDelete).subscribe(
+    this.userBackendService.deleteUsers(usersToDelete).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
             this.translateService.instant('admin.users-deleted'),
             '',
             { duration: 1000 });
+          refreshingUsers = true;
           this.updateUserList();
         } else {
           this.snackBar.open(
@@ -173,7 +190,7 @@ export class UsersComponent implements OnInit {
     runMutationAndRefreshAuthData(
       this.appService,
       this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers()[0], workspaces)
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (hasCurrentAuthDataAfterMutation(result)) {
@@ -198,7 +215,7 @@ export class UsersComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaces => {
       if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
     });
   }

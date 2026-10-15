@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
+  Component, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -73,6 +73,15 @@ interface BookletSearchResult {
   ]
 })
 export class BookletSearchDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<BookletSearchDialogComponent>>(MatDialogRef);
+  data = inject<{ initialSearch?: string }>(MAT_DIALOG_DATA);
+  private testResultService = inject(TestResultService);
+  private fileService = inject(FileService);
+  private appService = inject(AppService);
+  private router = inject(Router);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchCancel$ = new Subject<void>();
   protected bookletSearchText = '';
@@ -83,17 +92,6 @@ export class BookletSearchDialogComponent implements OnInit {
   protected pageSize = 10;
   protected displayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
   private searchSubject = new Subject<string>();
-
-  constructor(
-    public dialogRef: MatDialogRef<BookletSearchDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { initialSearch?: string },
-    private testResultService: TestResultService,
-    private fileService: FileService,
-    private appService: AppService,
-    private router: Router,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     // Set up debounced search

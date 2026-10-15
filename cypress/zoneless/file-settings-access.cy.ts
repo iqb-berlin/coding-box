@@ -83,7 +83,7 @@ describe('Zoneless file settings access', () => {
       cy.location('hash', { timeout: 15_000 }).should('contain', role.destination);
       if (role.allowed) {
         cy.get('coding-box-test-files').should('be.visible');
-        cy.get('coding-box-test-files').contains('a', 'ACP aus Content Pool').should('not.have.attr', 'aria-disabled', 'true');
+        cy.get('coding-box-test-files').contains('button', 'ACP aus Content Pool').should('be.enabled');
         cy.get('coding-box-search-filter input').focus().type('[');
         cy.get('coding-box-search-filter .regex-filter-error').should('be.visible');
         cy.then(() => {

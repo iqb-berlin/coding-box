@@ -108,7 +108,7 @@ describe('File validation without Zone', () => {
   });
 
   const start = () => {
-    const button = Array.from(fixture.nativeElement.querySelectorAll('a'))
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button'))
       .find(element => (element as HTMLElement).textContent?.includes('Validieren')) as HTMLElement;
     button.click();
   };
@@ -326,6 +326,7 @@ describe('File validation without Zone', () => {
     app.selectedWorkspaceId = 1;
     const newTask = new Subject();
     validation.createValidationTask.mockReturnValue(newTask);
+    await fixture.whenStable();
     start();
     await fixture.whenStable();
     expect(validation.createValidationTask).toHaveBeenCalledTimes(2);
@@ -670,7 +671,7 @@ describe('File validation without Zone', () => {
       const loads = fileService.getFilesList.mock.calls.length;
       const input = fixture.nativeElement.querySelector('coding-box-search-filter input') as HTMLInputElement;
       input.value = 'debounced-file';
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'e', bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await jest.advanceTimersByTimeAsync(300);
       await fixture.whenStable();
       expect(fileService.getFilesList).toHaveBeenCalledTimes(loads);
@@ -697,7 +698,7 @@ describe('File validation without Zone', () => {
       const loads = fileService.getFilesList.mock.calls.length;
       const input = fixture.nativeElement.querySelector('coding-box-search-filter input') as HTMLInputElement;
       input.value = 'abandoned-search';
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'h', bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await jest.advanceTimersByTimeAsync(elapsed);
       await fixture.whenStable();
       fixture.destroy();
@@ -756,7 +757,7 @@ describe('File validation without Zone', () => {
     pool.next({ enabled, baseUrl: ' https://synthetic.example ', hasApplicationToken: token });
     pool.complete();
     await fixture.whenStable();
-    const buttons = Array.from(fixture.nativeElement.querySelectorAll('a')) as HTMLAnchorElement[];
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
     const importButton = buttons.find(button => button.textContent?.includes('ACP aus Content Pool'));
     const uploadButton = buttons.find(button => button.textContent?.includes('Auswahl zu Content Pool'));
     if (!enabled) {
@@ -764,11 +765,11 @@ describe('File validation without Zone', () => {
       expect(uploadButton).toBeUndefined();
       return;
     }
-    expect(importButton?.getAttribute('aria-disabled') === 'true').toBe(!token);
-    expect(uploadButton?.getAttribute('aria-disabled')).toBe('true');
+    expect(importButton?.disabled).toBe(!token);
+    expect(uploadButton?.disabled).toBe(true);
     (fixture.nativeElement.querySelector('mat-row mat-checkbox input') as HTMLInputElement).click();
     await fixture.whenStable();
-    expect(uploadButton?.getAttribute('aria-disabled') === 'true').toBe(!token);
+    expect(uploadButton?.disabled).toBe(!token);
     expect(fixture.componentInstance.contentPoolSettings().baseUrl).toBe('https://synthetic.example');
   });
 

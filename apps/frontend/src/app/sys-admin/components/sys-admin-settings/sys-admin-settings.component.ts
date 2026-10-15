@@ -1,7 +1,8 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy
+  Component, OnDestroy, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -59,6 +60,8 @@ interface DatabaseExportJobState {
   ]
 })
 export class SysAdminSettingsComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   protected appService = inject(AppService);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
@@ -155,7 +158,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     if (!selectedFileSnapshot || !this.previewUrl()) return;
 
-    this.logoService.uploadLogo(selectedFileSnapshot).subscribe({
+    this.logoService.uploadLogo(selectedFileSnapshot).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         const newLogo: AppLogoDto = {
           data: response.path,
@@ -166,7 +169,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
         this.appService.appLogo = newLogo;
         this.isDefaultLogo.set(false);
-        this.logoService.saveLogoSettings(newLogo).subscribe({
+        this.logoService.saveLogoSettings(newLogo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: settingsResponse => {
             if (settingsResponse.success) {
               this.snackBar.open('Logo erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
@@ -188,7 +191,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected resetToDefaultLogo(): void {
-    this.logoService.deleteLogo().subscribe({
+    this.logoService.deleteLogo().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (response.success) {
           this.appService.appLogo = standardLogo;
@@ -215,7 +218,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     this.appService.appLogo = updatedLogo;
 
-    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+    this.logoService.saveLogoSettings(updatedLogo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (response.success) {
           this.snackBar.open('Alternativtext erfolgreich gespeichert', 'Schließen', { duration: 3000 });
@@ -236,7 +239,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     };
 
     this.appService.appLogo = updatedLogo;
-    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+    this.logoService.saveLogoSettings(updatedLogo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (response.success) {
           this.snackBar.open('Hintergrundfarbe erfolgreich gespeichert', 'Schließen', { duration: 3000 });
@@ -257,7 +260,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       bodyBackground: this.backgroundColorValue()
     };
     this.appService.appLogo = updatedLogo;
-    this.logoService.saveLogoSettings(updatedLogo).subscribe({
+    this.logoService.saveLogoSettings(updatedLogo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (response.success) {
           this.snackBar.open('Hintergrundfarbe auf Standard zurückgesetzt', 'Schließen', { duration: 3000 });
@@ -273,7 +276,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   loadLegalNotice(): void {
     this.isLoadingLegalNotice.set(true);
-    this.systemSettingsService.getLegalNotice().subscribe({
+    this.systemSettingsService.getLegalNotice().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: legalNotice => {
         this.legalNoticeHtml.set(legalNotice.html || defaultLegalNoticeHtml);
         this.isLegalNoticeDefault.set(legalNotice.isDefault);
@@ -306,7 +309,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     }
 
     this.isSavingLegalNotice.set(true);
-    this.systemSettingsService.updateLegalNotice({ html }).subscribe({
+    this.systemSettingsService.updateLegalNotice({ html }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: legalNotice => {
         this.legalNoticeHtml.set(legalNotice.html);
         this.isLegalNoticeDefault.set(legalNotice.isDefault);
@@ -331,7 +334,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   resetLegalNoticeToDefault(): void {
     this.isSavingLegalNotice.set(true);
-    this.systemSettingsService.resetLegalNotice().subscribe({
+    this.systemSettingsService.resetLegalNotice().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: legalNotice => {
         this.legalNoticeHtml.set(legalNotice.html);
         this.isLegalNoticeDefault.set(legalNotice.isDefault);
@@ -381,7 +384,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   loadContentPoolSettings(): void {
     this.isLoadingContentPoolSettings.set(true);
-    this.systemSettingsService.getContentPoolSettings().subscribe({
+    this.systemSettingsService.getContentPoolSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: settings => {
         this.contentPoolSettings.set({
           enabled: !!settings.enabled,
@@ -434,7 +437,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         baseUrl: normalizedBaseUrl,
         applicationToken: applicationToken || undefined,
         clearApplicationToken: this.clearContentPoolApplicationToken() && !applicationToken
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: settings => {
           this.contentPoolSettings.set({
@@ -503,7 +506,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         baseUrl: normalizedBaseUrl,
         applicationToken: applicationToken || undefined,
         clearApplicationToken: this.clearContentPoolApplicationToken() && !applicationToken
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.isTestingContentPoolConnection.set(false);
@@ -537,7 +540,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.databaseExportError.set(null);
 
     this.http
-      .post<{ jobId: string; message: string }>(`${this.exportBaseUrl}/job`, {}, { headers: authHeaders })
+      .post<{ jobId: string; message: string }>(`${this.exportBaseUrl}/job`, {}, { headers: authHeaders }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ({ jobId }) => {
           this.startExportPolling(jobId, authHeaders);
@@ -564,7 +567,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           `${this.exportBaseUrl}/job/${jobId}`,
           { headers }
         ))
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: state => {
           this.databaseExportStatus.set(state.status);
@@ -604,7 +607,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       .get(`${this.exportBaseUrl}/job/${jobId}/download`, {
         headers,
         responseType: 'blob'
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(

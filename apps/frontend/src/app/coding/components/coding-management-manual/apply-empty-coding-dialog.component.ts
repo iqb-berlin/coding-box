@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -70,10 +70,8 @@ export interface ApplyEmptyCodingDialogData {
   `]
 })
 export class ApplyEmptyCodingDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<ApplyEmptyCodingDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ApplyEmptyCodingDialogData
-  ) { }
+  dialogRef = inject<MatDialogRef<ApplyEmptyCodingDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyEmptyCodingDialogData>(MAT_DIALOG_DATA);
 
   protected onCancel(): void {
     this.dialogRef.close(false);

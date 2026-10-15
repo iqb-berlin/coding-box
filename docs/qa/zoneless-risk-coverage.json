@@ -10,38 +10,85 @@
         "ZL-001",
         "ZL-002",
         "ZL-003",
-        "ZL-004"
+        "ZL-004",
+        "ZL-028",
+        "ZL-039",
+        "ZL-043",
+        "ZL-044",
+        "ZL-045",
+        "ZL-047",
+        "ZL-048",
+        "ZL-049",
+        "ZL-057"
       ],
       "tests": [
+        "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
+        "cypress/zoneless/cohens-kappa.cy.ts",
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/review-notifications.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
+        "cypress/zoneless/training-comparison.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-management/components/response-filters/response-filters.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-manager/variable-bundle-manager.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts"
       ]
     },
     {
       "id": "jobs",
       "name": "Jobdefinitionen und Kodierjobs",
       "risk": "Erstellung, Verteilung und Review dürfen keine veralteten oder ungespeicherten Ergebnisse zeigen.",
-      "findings": [],
+      "findings": [
+        "ZL-030",
+        "ZL-033",
+        "ZL-034",
+        "ZL-035",
+        "ZL-037",
+        "ZL-040",
+        "ZL-046"
+      ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.spec.ts",
         "apps/frontend/src/app/coding/components/coder-trainings-list/coder-trainings-list.component.spec.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/coding/components/test-person-coding/test-person-coding.component.zoneless.spec.ts",
+        "cypress/zoneless/test-person-coding-feedback.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/review-notifications.cy.ts",
+        "cypress/zoneless/manual-preparation.cy.ts",
+        "cypress/zoneless/training-comparison.cy.ts"
       ]
     },
     {
       "id": "coding-replay",
       "name": "Kodierung, Replay und Sitzungen",
       "risk": "Kodierungen und Kommentare müssen gespeichert werden; Navigation und Sitzungswiederherstellung dürfen Eingaben nicht verlieren.",
-      "findings": [],
+      "findings": [
+        "ZL-050",
+        "ZL-053",
+        "ZL-056"
+      ],
       "tests": [
         "apps/frontend/src/app/coding/components/code-selector/code-selector-reactivity.component.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding.service.spec.ts",
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.zoneless.spec.ts",
         "cypress/e2e/replay-live.cy.ts",
         "cypress/e2e/item-matrix-live.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
+        "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts"
       ]
     },
     {
@@ -55,7 +102,9 @@
         "ZL-008",
         "ZL-011",
         "ZL-013",
-        "ZL-014"
+        "ZL-014",
+        "ZL-051",
+        "ZL-054"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
@@ -65,7 +114,12 @@
         "cypress/zoneless/validation-dialog.cy.ts",
         "cypress/zoneless/validation-access.cy.ts",
         "cypress/zoneless/test-results-view.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/zoneless/info-dialogs.cy.ts",
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts"
       ]
     },
     {
@@ -84,9 +138,19 @@
         "ZL-022",
         "ZL-023",
         "ZL-024",
-        "ZL-025"
+        "ZL-025",
+        "ZL-027",
+        "ZL-029",
+        "ZL-036",
+        "ZL-041",
+        "ZL-049",
+        "ZL-054",
+        "ZL-055",
+        "ZL-057"
       ],
       "tests": [
+        "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
+        "cypress/zoneless/statistics-codebook.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-files/test-files-settings.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/scheme-editor-dialog/scheme-editor-dialog.component.zoneless.spec.ts",
@@ -105,8 +169,19 @@
         "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/zoneless/test-files-upload.cy.ts",
         "cypress/zoneless/scheme-preview.cy.ts",
-        "cypress/zoneless/export-item-dataset.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/e2e/export-item-dataset.cy.ts",
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
+        "cypress/zoneless/testcenter-import.cy.ts",
+        "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/async-coding-dialogs.cy.ts",
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
+        "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/export/export-start-lifecycle.zoneless.spec.ts",
+        "cypress/zoneless/export-start-failure.cy.ts"
       ]
     },
     {
@@ -115,17 +190,47 @@
       "risk": "Verzögerte Rechte und Anmeldung dürfen nicht falsch weiterleiten; Einstellungen und Benachrichtigungen müssen nach Serverantworten sichtbar sein.",
       "findings": [
         "ZL-009",
-        "ZL-010"
+        "ZL-010",
+        "ZL-026",
+        "ZL-031",
+        "ZL-032",
+        "ZL-038",
+        "ZL-042",
+        "ZL-047",
+        "ZL-048",
+        "ZL-052"
       ],
       "tests": [
+        "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/statistics-codebook.cy.ts",
         "apps/frontend/src/app/components/home/home.component.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-admin/ws-admin.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.zoneless.spec.ts",
         "apps/frontend/src/app/zoneless-dialog-responses.spec.ts",
         "cypress/zoneless/app.cy.ts",
         "cypress/zoneless/workspace-access-rights.cy.ts",
         "cypress/e2e/zoneless-dialogs.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/workspace/components/user-workspaces/user-workspaces.component.zoneless.spec.ts",
+        "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts",
+        "cypress/zoneless/manual-preparation.cy.ts",
+        "apps/frontend/src/app/shared/components/vertical-bar-chart/vertical-bar-chart.component.zoneless.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/edit-user/edit-user.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/users/users.component.spec.ts",
+        "apps/frontend/src/app/workspace/components/edit-workspace/edit-workspace.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces-menu/workspaces-menu.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces/workspaces.component.spec.ts",
+        "cypress/zoneless/admin-forms.cy.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces-selection/workspaces-selection-refresh.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.zoneless.spec.ts",
+        "apps/frontend/src/app/core/services/post-message.service.spec.ts",
+        "apps/frontend/src/app/core/services/system-notification.service.spec.ts",
+        "apps/frontend/src/app/shared/services/german-paginator-intl.service.spec.ts",
+        "apps/frontend/src/app/shared/services/response/variable-analysis.service.spec.ts",
+        "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts"
       ]
     }
   ],
@@ -136,16 +241,19 @@
         "management",
         "results-validation",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs",
+        "coding-replay"
       ],
-      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template."
+      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template. Fehler der atomaren Replay-Wiederherstellung werden angezeigt und lassen einen erneuten Versuch zu; kein erfolgreicher Lade-Schlüssel wird gesetzt. Der globale Export-Service meldet Startfehler einmalig, auch nach Ansichtszerstörung; Replay-Tokenfehler behalten ihren spezifischen Hinweis."
     },
     {
       "id": "progress",
       "areas": [
         "management",
         "results-validation",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs"
       ],
       "evidence": "Mehrere feste Fortschrittsfolgen, Job-Abschluss und Export-Download; Browser und isoliertes Backend."
     },
@@ -153,26 +261,32 @@
       "id": "ordering",
       "areas": [
         "management",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs",
+        "results-validation"
       ],
-      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen."
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes."
     },
     {
       "id": "lifecycle",
       "areas": [
         "results-validation",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs",
+        "coding-replay"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung."
     },
     {
       "id": "timers-promises",
       "areas": [
         "coding-replay",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs",
+        "administration"
       ],
-      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Wiederherstellung abgelaufener Sitzungen."
+      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Sitzungswiederherstellung; native verspätete Bulk-/Trainingsfortsetzungen, Browserfilter mit echtem Debounce sowie verzögerte Schulungs- und Variablenlisten über erreichbare Menüs. Native Tests prüfen Einfügen ohne keyup, sofortige Aktualisierung der Löschenschaltfläche, zusammengefasste Eingaben und das Abbrechen einer ausstehenden Filterausgabe beim Löschen. Sitzungs- und Anmeldehinweise aktualisieren sich nach abgeschlossener Navigation bei unverändertem Auth-Zustand; Redirects und abgebrochene Navigationen sind nativ abgesichert."
     },
     {
       "id": "browser-libraries",
@@ -181,22 +295,26 @@
         "files-exports-metadata",
         "administration"
       ],
-      "evidence": "Echter Aspect-Player, Diagramme, Material-Overlays und Metadaten-Webkomponente; window.Zone fehlt."
+      "evidence": "Echter Aspect-Player, Diagramme, Material-Overlays und Metadaten-Webkomponente; window.Zone fehlt. Replay-Balkendiagramme verwenden native SVG/CSS-Animationen ohne globalen Angular-Animationsprovider; der Browserfall wechselt alle Diagramm-Tabs und prüft Tooltip sowie Größenänderung."
     },
     {
       "id": "roles-persistence",
       "areas": [
         "coding-replay",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs"
       ],
-      "evidence": "Synthetische Workspace-Rollen 0–3, persistierte und Realm-Administration; Keycloak, direkte API-Prüfung und erneutes Lesen gespeicherter Werte."
+      "evidence": "Synthetische Workspace-Rollen 0–3, persistierte und Realm-Administration; Keycloak, direkte API-Prüfung und erneutes Lesen gespeicherter Werte. Zusätzlich prüfen synthetische Browserfälle verzögerte Rechte für Schulungsanlage (Stufen 0–3) sowie Rechte-Speicherfehler und Wiederholung als Realm-Admin und Studienleitung."
     }
   ],
   "unresolvedFindings": [],
   "residualLimits": [
+    "Chart.js ist in JSDOM mit simulierter Canvas-API und im Electron-Browser mit echten gezeichneten Pixeln, Animationen und Beschriftungen geprüft. Ein vollständiges Screenreader-Gutachten, visuelle Identität zu ngx-charts und sämtliche Browser sind nicht nachgewiesen.",
+    "Alle 156 Anwendungskomponenten sind explizit OnPush. Die zusätzlich nativ geprüften UnitSearchDialog-, BookletSearchDialog- und VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im Anwendungscode; diese Fälle belegen ihre realen Templates, keinen erreichbaren Browser-Einstieg. Die vorhandene Browser-Suite prüft die aktive Schnellsuche und andere erreichbare Abläufe. Ein CPU- oder Laufzeitvergleich ist nicht Bestandteil der Funktionsprüfung.",
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
+    "Browsernachweise prüfen verzögerte Schulungslisten, Auswahl und Filter sowie den erreichbaren Bulk-Definitionsablauf mit fertiger Serververteilung. Die zusätzliche interne asynchrone Bulk-Berechnung (ZL-034) hat weiterhin keinen Template-Einstieg und bleibt nativ geprüft. Der Schulungsvergleich übernimmt am erreichbaren Einstieg die bereits gecachte Liste; sein separater verspäteter Listenabruf (ZL-035) bleibt nativ geprüft. Browser-Anmeldung und API-Antworten dieser zusätzlichen Fälle sind synthetisch und belegen keine reale Backend-Persistenz oder Autorisierung.",
     "Der MetadataResolver unterstützt am verwendeten öffentlichen Aufruf kein AbortSignal; laufende interne Arbeit kann weitergehen, ihr Ergebnis wird nach Abbruch verworfen.",
     "Ein bereits angenommener Backend-Job wird durch Schließen des Dialogs nicht zurückgerollt.",
     "Historische Workspace-Stufe 4 ist nur synthetisch geprüft. Die aktuelle Rechte-API vergibt Stufen 0–3; ein echtes Backend-Szenario für historische Stufe 4 fehlt.",

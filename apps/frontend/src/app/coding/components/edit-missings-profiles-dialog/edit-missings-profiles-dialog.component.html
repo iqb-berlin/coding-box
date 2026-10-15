@@ -6,7 +6,7 @@
     <!-- Profiles List -->
     <div class="profiles-list">
       <h3>{{ 'workspace.missings-profiles' | translate }}</h3>
-      <mat-list>
+      <mat-list [disabled]="saving()">
         @for (profile of missingsProfiles(); track profile.id) {
           <mat-list-item
             [class.selected]="selectedProfileValue?.label === profile.label"
@@ -17,7 +17,7 @@
         }
       </mat-list>
       <div class="list-actions">
-        <button mat-raised-button color="primary" (click)="createProfile()">
+        <button mat-raised-button color="primary" [disabled]="saving()" (click)="createProfile()">
           <mat-icon>add</mat-icon>
           {{ 'workspace.create-profile' | translate }}
         </button>
@@ -38,12 +38,13 @@
           <div class="profile-form">
             <mat-form-field appearance="fill">
               <mat-label>{{ 'workspace.profile-name' | translate }}</mat-label>
-              <input matInput [ngModel]="selectedProfileValue.label" required  (ngModelChange)="setSelectedProfileField('label', $event)"/>
+              <input matInput [disabled]="saving()" [ngModel]="selectedProfileValue.label" required  (ngModelChange)="setSelectedProfileField('label', $event)"/>
             </mat-form-field>
             <h4>{{ 'workspace.missing-values' | translate }}</h4>
             <table
               mat-table
               [dataSource]="editMode() ? editMissings() : getMissings()"
+              [trackBy]="trackMissingRow"
               class="missings-table"
               >
               <!-- ID Column -->
@@ -53,7 +54,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.id" />
+                    <input matInput [disabled]="saving()" [ngModel]="missing.id" (ngModelChange)="setMissingField(i, 'id', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -64,7 +65,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.label" />
+                    <input matInput [disabled]="saving()" [ngModel]="missing.label" (ngModelChange)="setMissingField(i, 'label', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -75,7 +76,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.description" />
+                    <input matInput [disabled]="saving()" [ngModel]="missing.description" (ngModelChange)="setMissingField(i, 'description', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -86,7 +87,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput type="number" [(ngModel)]="missing.code" />
+                    <input matInput [disabled]="saving()" type="number" [ngModel]="missing.code" (ngModelChange)="setMissingField(i, 'code', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -102,13 +103,14 @@
                         matInput
                         type="number"
                         [ngModel]="missing.score"
-                        (ngModelChange)="setMissingScore(missing, $event)"
-                        [disabled]="isMissingScoreNa(missing)"
+                        (ngModelChange)="setMissingScore(i, $event)"
+                        [disabled]="saving() || isMissingScoreNa(missing)"
                         />
                     </mat-form-field>
                     <mat-checkbox
+                      [disabled]="saving()"
                       [checked]="isMissingScoreNa(missing)"
-                      (change)="setMissingScoreNa(missing, $event.checked)"
+                      (change)="setMissingScoreNa(i, $event.checked)"
                       >
                       NA
                     </mat-checkbox>
@@ -124,7 +126,7 @@
                   <button
                     mat-icon-button
                     color="warn"
-                    (click)="removeMissing(i)"
+                    [disabled]="saving()" (click)="removeMissing(i)"
                     matTooltip="{{ 'workspace.remove-missing' | translate }}"
                     >
                     <mat-icon>delete</mat-icon>
@@ -135,7 +137,7 @@
               <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
             </table>
             <div class="add-missing-button">
-              <button mat-raised-button color="primary" (click)="addMissing()">
+              <button mat-raised-button color="primary" [disabled]="saving()" (click)="addMissing()">
                 <mat-icon>add</mat-icon>
                 {{ 'workspace.add-missing' | translate }}
               </button>
@@ -208,16 +210,16 @@
       <mat-icon>save</mat-icon>
       {{ 'workspace.save-profile' | translate }}
     </button>
-    <button mat-raised-button (click)="cancelEdit()">
+    <button mat-raised-button [disabled]="saving()" (click)="cancelEdit()">
       <mat-icon>cancel</mat-icon>
       {{ 'workspace.cancel' | translate }}
     </button>
   } @else {
-    <button mat-raised-button color="primary" (click)="editProfile()">
+    <button mat-raised-button color="primary" [disabled]="saving()" (click)="editProfile()">
       <mat-icon>edit</mat-icon>
       {{ 'workspace.edit-profile' | translate }}
     </button>
-    <button mat-raised-button color="warn" (click)="deleteProfile()">
+    <button mat-raised-button color="warn" [disabled]="saving()" (click)="deleteProfile()">
       <mat-icon>delete</mat-icon>
       {{ 'workspace.delete-profile' | translate }}
     </button>

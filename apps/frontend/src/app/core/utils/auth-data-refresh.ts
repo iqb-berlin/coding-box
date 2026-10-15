@@ -1,5 +1,5 @@
 import {
-  map, Observable, of, switchMap
+  map, Observable, of, shareReplay, switchMap, take
 } from 'rxjs';
 import { AppService, AuthDataRefreshOutcome } from '../services/app.service';
 
@@ -18,6 +18,7 @@ export function runMutationAndRefreshAuthData(
   mutation$: Observable<boolean>
 ): Observable<MutationAuthDataRefreshResult> {
   return mutation$.pipe(
+    take(1),
     switchMap(mutationSucceeded => {
       if (!mutationSucceeded) {
         return of<MutationAuthDataRefreshResult>({
@@ -32,7 +33,10 @@ export function runMutationAndRefreshAuthData(
           authDataRefreshOutcome
         }))
       );
-    })
+    }),
+    // A submitted permission change must refresh global auth state even if its view closes.
+    // The finite operation owns this subscription; view subscribers can still cancel their UI callbacks.
+    shareReplay({ bufferSize: 1, refCount: false })
   );
 }
 

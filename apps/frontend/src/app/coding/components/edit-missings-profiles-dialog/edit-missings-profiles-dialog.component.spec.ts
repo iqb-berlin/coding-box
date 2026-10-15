@@ -1,8 +1,13 @@
 import { ChangeDetectorRef, computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { MissingsProfileService } from '../../services/missings-profile.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('EditMissingsProfilesDialogComponent', () => {
   beforeEach(() => {
@@ -35,14 +40,19 @@ describe('EditMissingsProfilesDialogComponent', () => {
       getMissingsProfileDetails: jest.Mock;
     }> = {},
     snackBar = { open: jest.fn() }
-  ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
-    { close: jest.fn() } as never,
-    { workspaceId: 1 },
-    missingsProfileService as never,
-    {} as never,
-    snackBar as never,
-    { instant: jest.fn(key => key) } as never
-  ));
+  ) => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => of() } },
+        { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
+        { provide: MissingsProfileService, useValue: missingsProfileService },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
+        { provide: MatSnackBar, useValue: snackBar },
+        { provide: TranslateService, useValue: { instant: jest.fn(key => key) } }
+      ]
+    });
+    return TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent());
+  };
 
   it('validates missing entries like the backend', () => {
     const component = createComponent();
@@ -167,6 +177,35 @@ describe('EditMissingsProfilesDialogComponent', () => {
     component.createProfile();
 
     expect(component.editMissings()).toEqual(createValidMissings());
+  });
+
+  it('publishes missing field and score edits without mutating the previous signal value', () => {
+    const component = createComponent();
+    const profile = new MissingsProfilesDto();
+    const originalMissings = createValidMissings();
+    profile.missings = originalMissings;
+    component.selectedProfile.set(profile);
+    component.editProfile();
+    const previousRows = component.editMissings();
+    const label = computed(() => component.editMissings()[0].label);
+    const score = computed(() => component.editMissings()[0].score);
+    expect(label()).toBe(originalMissings[0].label);
+    expect(score()).toBe(0);
+
+    component.setMissingField(previousRows[0], 'label', 'Changed');
+    expect(label()).toBe('Changed');
+    expect(component.editMissings()).not.toBe(previousRows);
+    expect(previousRows[0].label).toBe(originalMissings[0].label);
+    expect(originalMissings[0].label).toBe('missing invalid response');
+
+    component.setMissingScoreNa(component.editMissings()[0], true);
+    expect(score()).toBeNull();
+    component.setMissingScore(component.editMissings()[0], '3');
+    expect(score()).toBe(3);
+    component.setMissingScore(component.editMissings()[0], '');
+    expect(score()).toBe('');
+    expect(previousRows[0].score).toBe(0);
+    expect(originalMissings[0].score).toBe(0);
   });
 
   it('adds new missing rows with an editable score value', () => {

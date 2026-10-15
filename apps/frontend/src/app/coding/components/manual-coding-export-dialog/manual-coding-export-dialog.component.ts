@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -62,6 +62,9 @@ export interface ManualCodingExportDialogResult {
   ]
 })
 export class ManualCodingExportDialogComponent {
+  dialogRef = inject<MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>>(MatDialogRef);
+  protected data = inject<ManualCodingExportDialogData>(MAT_DIALOG_DATA);
+
   readonly selectAllOptionId = -1;
 
   exportMode: ManualCodingExportMode = 'review';
@@ -77,11 +80,6 @@ export class ManualCodingExportDialogComponent {
   selectedJobDefinitionIds: number[] = [];
   selectedCoderTrainingIds: number[] = [];
   protected selectedCoderIds: number[] = [];
-
-  constructor(
-    public dialogRef: MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>,
-    @Inject(MAT_DIALOG_DATA) protected data: ManualCodingExportDialogData
-  ) { }
 
   protected get contextSubtitleKey(): string {
     return this.data.context === 'training' ?

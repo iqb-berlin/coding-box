@@ -1,7 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChange, SimpleChanges, ViewChild, inject,
-  input,
-  output, ChangeDetectionStrategy
+  AfterViewInit, Component, ElementRef, OnChanges, OnDestroy, SimpleChange, SimpleChanges, inject, input, output, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -35,19 +33,20 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private translateService = inject(TranslateService);
   private fileService = inject(FileService);
 
-  @Input() unitDef: string | undefined;
+  readonly unitDef = input<string>();
+  private parsedUnitDefinition: unknown;
   readonly unitPlayer = input<string>();
   readonly unitResponses = input<ResponseDto>();
   readonly pageId = input<string>();
   readonly printMode = input<boolean>(false);
-  iFrameHeight = input<number>();
+  readonly iFrameHeight = input<number>();
   readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
   readonly playerReady = output<void>();
   readonly responseVisible = output<void>();
   // Track the last emitted page error to prevent flickering
   private lastPageError: 'notInList' | 'notCurrent' | null = null;
   private hasEmittedResponseVisible = false;
-  @ViewChild('hostingIframe') hostingIframe!: ElementRef;
+  readonly hostingIframe = viewChild<ElementRef<HTMLIFrameElement>>('hostingIframe');
   private validPages = new ReplaySubject<{ pages: string[], current: string }>(1);
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
@@ -80,6 +79,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
       this.currentPageId = '';
+      this.parsedUnitDefinition = undefined;
       this.resetIframeContent();
       return;
     }
@@ -129,8 +129,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private resetIframeContent(): void {
-    if (this.hostingIframe) {
-      this.hostingIframe.nativeElement.srcdoc = '';
+    const hostingIframe = this.hostingIframe();
+    if (hostingIframe) {
+      hostingIframe.nativeElement.srcdoc = '';
     }
   }
 
@@ -140,7 +141,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     unitResponsesChange?: SimpleChange
   ): void {
     try {
-      this.unitDef = JSON.parse(newUnitDef);
+      this.parsedUnitDefinition = JSON.parse(newUnitDef);
 
       if (unitResponsesChange?.currentValue) {
         this.handleResponsesChange(unitResponsesChange.currentValue);
@@ -173,7 +174,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           return acc;
         }, {}
       );
-      this.dataParts = normalizeMathTextReplayDataParts(dataParts, this.unitDef);
+      this.dataParts = normalizeMathTextReplayDataParts(dataParts, this.parsedUnitDefinition);
     }
   }
 
@@ -183,7 +184,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   ngAfterViewInit(): void {
-    this.iFrameElement = this.hostingIframe?.nativeElement;
+    this.iFrameElement = this.hostingIframe()?.nativeElement;
     this.subscribeForIframeLoad();
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
@@ -423,11 +424,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private postUnitDef(): void {
-    if (!this.postMessageTarget) {
+    if (!this.postMessageTarget || this.parsedUnitDefinition === undefined) {
       return;
     }
 
-    const unitDefStringified = JSON.stringify(this.unitDef);
+    const unitDefStringified = JSON.stringify(this.parsedUnitDefinition);
     const postMessageData: { sessionId: string; unitDefinition: string; type?: string; unitState?: object; playerConfig?: object } = {
       sessionId: this.sessionId,
       unitDefinition: unitDefStringified
@@ -437,7 +438,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       postMessageData.type = 'vo.ToPlayer.DataTransfer';
     } else {
       const dataParts = this.dataParts ?
-        normalizeMathTextReplayDataParts(this.dataParts, this.unitDef) :
+        normalizeMathTextReplayDataParts(this.dataParts, this.parsedUnitDefinition) :
         this.dataParts;
       this.isLoaded.next(true);
       Object.assign(postMessageData, {

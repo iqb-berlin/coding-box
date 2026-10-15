@@ -1,6 +1,5 @@
 import {
-  Component, DestroyRef, inject, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
-  computed, ChangeDetectionStrategy
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -104,11 +103,14 @@ interface ResponseStatusValidationResult {
 })
 export class ResponseStatusValidationPanelComponent
 implements OnInit, OnDestroy {
+  private responseStatusValidationService = inject(ResponseStatusValidationService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
-  @Output() showUnitXml = new EventEmitter<string>();
+  readonly disabled = input(false);
+  readonly validate = output<void>();
+  readonly showUnitXml = output<string>();
 
   protected readonly isRunning = signal(false);
   protected readonly wasRun = signal(false);
@@ -140,11 +142,6 @@ implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private responseStatusValidationService: ResponseStatusValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =
@@ -191,7 +188,7 @@ implements OnInit, OnDestroy {
   protected readonly errorCount = computed<number>(() => this.totalInvalid());
 
   protected onValidate(): void {
-    if (this.isRunning() || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 

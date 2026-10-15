@@ -3,7 +3,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { WorkspaceProcessesService } from '../../services/workspace-processes.service';
@@ -38,7 +37,6 @@ describe('ProcessOverviewComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         ProcessOverviewComponent
       ],

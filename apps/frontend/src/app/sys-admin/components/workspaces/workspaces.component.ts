@@ -1,29 +1,25 @@
 import {
-  Component, ViewChild, inject, signal, ChangeDetectionStrategy
+  Component, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSort } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { SelectionModel } from '@angular/cdk/collections';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { map } from 'rxjs';
+import {
+  map, take, timer, finalize
+} from 'rxjs';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
-import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
+import { EditWorkspaceForm } from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import {
   MutationAuthDataRefreshResult,
   hasCurrentAuthDataAfterMutation,
   runMutationAndRefreshAuthData
 } from '../../../core/utils/auth-data-refresh';
-
-type WorkspaceData = {
-  id: number;
-  name: string;
-};
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -33,29 +29,28 @@ type WorkspaceData = {
   imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent, MatProgressSpinnerModule]
 })
 export class WorkspacesComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private appService = inject(AppService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
-  tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   protected readonly initialSelectedWorkspaceIds: number[] = [];
-  readonly selectedWorkspaces = signal<number[]>([]);
+  readonly selectedWorkspaceRows = signal<WorkspaceInListDto[]>([]);
+  readonly selectedWorkspaces = computed(() => this.selectedWorkspaceRows().map(workspace => workspace.id));
   readonly workspacesChanged = signal<boolean>(false);
   readonly isDeleting = signal<boolean>(false);
   protected readonly deleteStatus = signal<string>('');
 
-  @ViewChild(MatSort) sort = new MatSort();
-
-  addWorkspace(result: UntypedFormGroup): void {
+  addWorkspace(result: EditWorkspaceForm): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
-        name: (<UntypedFormGroup>result).get('name')?.value,
+      this.workspaceBackendService.addWorkspace({
+        name: result.controls.name.value,
         settings: {}
       }).pipe(map(workspaceId => workspaceId !== null))
-    ).subscribe(
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       mutationResult => {
         if (mutationResult.mutationSucceeded) {
           this.showMutationSuccess('admin.workspace-created', mutationResult);
@@ -70,14 +65,14 @@ export class WorkspacesComponent {
     );
   }
 
-  editWorkspace(value: { selection: number[], formData: UntypedFormGroup }): void {
+  editWorkspace(value: { selection: number[], formData: EditWorkspaceForm }): void {
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.changeWorkspace({
         id: value.selection[0],
-        name: value.formData.get('name')?.value
+        name: value.formData.controls.name.value
       })
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (result.mutationSucceeded) {
@@ -95,6 +90,7 @@ export class WorkspacesComponent {
   }
 
   deleteWorkspace(workspace_ids: number[]): void {
+    if (this.isDeleting()) return;
     this.isDeleting.set(true);
 
     const deleteSteps = [
@@ -104,33 +100,25 @@ export class WorkspacesComponent {
       'admin.deleting-workspace-finish'
     ];
 
-    let stepIndex = 0;
-    const interval = setInterval(() => {
-      if (stepIndex < deleteSteps.length) {
-        this.deleteStatus.set(this.translateService.instant(deleteSteps[stepIndex]));
-
-        // eslint-disable-next-line no-plusplus
-        stepIndex++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 1000);
+    const progress = timer(1000, 1000).pipe(
+      take(deleteSteps.length), takeUntilDestroyed(this.destroyRef)
+    ).subscribe(stepIndex => this.deleteStatus.set(this.translateService.instant(deleteSteps[stepIndex])));
 
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.deleteWorkspace(workspace_ids)
-    )
+    ).pipe(finalize(() => progress.unsubscribe()), takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
-          clearInterval(interval);
+          progress.unsubscribe();
           if (result.mutationSucceeded) {
             this.deleteStatus.set(this.translateService.instant('admin.deleting-workspace-success'));
 
-            setTimeout(() => {
+            timer(1000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
               this.showMutationSuccess('admin.workspace-deleted', result);
               this.workspacesChanged.set(true);
               this.isDeleting.set(false);
-            }, 1000);
+            });
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-deleted'),
@@ -146,15 +134,15 @@ export class WorkspacesComponent {
     this.workspacesChanged.set(false);
   }
 
-  workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
-    this.selectedWorkspaces.set(workspaceData.map(workspace => workspace.id));
+  workspaceSelectionChanged(workspaceData: WorkspaceInListDto[]): void {
+    this.selectedWorkspaceRows.set([...workspaceData]);
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces()[0], users)
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (result.mutationSucceeded) {

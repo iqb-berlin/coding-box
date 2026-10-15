@@ -1,14 +1,16 @@
 import {
   Component, inject,
   input,
-  output, ChangeDetectionStrategy
+  output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
-import { UntypedFormGroup } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { EditWorkspaceComponent } from '../../../workspace/components/edit-workspace/edit-workspace.component';
+import {
+  EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm
+} from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import {
@@ -25,6 +27,8 @@ import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/us
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule]
 })
 export class WorkspacesMenuComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private editWorkspaceDialog = inject(MatDialog);
   private UserAccessRightsToWorkspaceDialog = inject(MatDialog);
   private deleteConfirmDialog = inject(MatDialog);
@@ -34,22 +38,22 @@ export class WorkspacesMenuComponent {
   readonly selectedRows = input.required<WorkspaceInListDto[]>();
   readonly checkedRows = input.required<WorkspaceInListDto[]>();
   readonly downloadWorkspacesReport = output<boolean>();
-  readonly workspaceAdded = output<UntypedFormGroup>();
+  readonly workspaceAdded = output<EditWorkspaceForm>();
   readonly workspaceDeleted = output<number[]>();
   readonly workspaceSettingsEdited = output();
   readonly workspaceAccessRightsChanged = output();
   readonly workspaceEdited = output<{
     selection: number[];
-    formData: UntypedFormGroup;
+    formData: EditWorkspaceForm;
   }>();
 
   readonly setWorkspaceUsersAccessRight = output<number[]>();
 
   addWorkspace(): void {
-    const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
+    const dialogRef = this.editWorkspaceDialog.open<EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm | false>(EditWorkspaceComponent, {
       width: '600px',
       data: {
-        wsg: {
+        ws: {
           name: ''
         },
         title: this.translateService.instant('admin.new-workspace'),
@@ -57,32 +61,30 @@ export class WorkspacesMenuComponent {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      if (typeof result !== 'undefined') {
-        if (result !== false) {
-          this.workspaceAdded.emit(result as UntypedFormGroup);
-        }
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+      if (result) {
+        this.workspaceAdded.emit(result);
       }
     });
   }
 
   editWorkspace(): void {
     const selectedWorkspaces = this.selectedWorkspaces();
-    if (selectedWorkspaces.length) {
-      const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
+    const selectedWorkspace = [...this.selectedRows(), ...this.checkedRows()]
+      .find(workspace => workspace.id === selectedWorkspaces[0]);
+    if (selectedWorkspace) {
+      const dialogRef = this.editWorkspaceDialog.open<EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm | false>(EditWorkspaceComponent, {
         width: '600px',
         data: {
-          ws: selectedWorkspaces[0],
+          ws: selectedWorkspace,
           title: this.translateService.instant('admin.edit-workspace'),
           saveButtonLabel: this.translateService.instant('save')
 
         }
       });
-      dialogRef.afterClosed().subscribe(result => {
-        if (typeof result !== 'undefined') {
-          if (result !== false) {
-            this.workspaceEdited.emit({ selection: this.selectedWorkspaces(), formData: result });
-          }
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+        if (result) {
+          this.workspaceEdited.emit({ selection: selectedWorkspaces, formData: result });
         }
       });
     }
@@ -104,7 +106,7 @@ export class WorkspacesMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe(result => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result === true) {
           this.workspaceDeleted.emit(this.selectedWorkspaces());
         }
@@ -121,7 +123,7 @@ export class WorkspacesMenuComponent {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: number[]) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: number[]) => {
       if (typeof result !== 'undefined') {
         if (result.length > 0) {
           this.setWorkspaceUsersAccessRight.emit(result as number[]);

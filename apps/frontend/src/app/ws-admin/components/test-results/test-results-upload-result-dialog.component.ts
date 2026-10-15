@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, Inject, ViewChild
+  Component, viewChild, ChangeDetectionStrategy, OnDestroy, inject
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -70,9 +70,19 @@ type ImportOutcomeMetric = { label: string; value: number };
   templateUrl: './test-results-upload-result-dialog.component.html',
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
-export class TestResultsUploadResultDialogComponent {
-  @ViewChild('issuesViewport')
-    issuesViewport?: CdkVirtualScrollViewport;
+export class TestResultsUploadResultDialogComponent implements OnDestroy {
+  private dialogRef = inject<MatDialogRef<TestResultsUploadResultDialogComponent>>(MatDialogRef);
+  private translateService = inject(TranslateService);
+  data = inject<TestResultsUploadResultDialogData>(MAT_DIALOG_DATA);
+
+  private readonly viewportRefreshTimers = new Set<number>();
+
+  ngOnDestroy(): void {
+    this.viewportRefreshTimers.forEach(timeout => window.clearTimeout(timeout));
+    this.viewportRefreshTimers.clear();
+  }
+
+  readonly issuesViewport = viewChild<CdkVirtualScrollViewport>('issuesViewport');
 
   private issueFilterText = '';
   private issueCategory: string | null = null;
@@ -83,12 +93,6 @@ export class TestResultsUploadResultDialogComponent {
     query: string;
     result: TestResultsUploadIssueDto[];
   } | null = null;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsUploadResultDialogComponent>,
-    private translateService: TranslateService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadResultDialogData
-  ) { }
 
   get result(): TestResultsUploadResultDto {
     return this.data.result;
@@ -663,12 +667,14 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   private scheduleIssueViewportRefresh(resetScroll = false): void {
-    window.setTimeout(() => {
+    const timeout = window.setTimeout(() => {
+      this.viewportRefreshTimers.delete(timeout);
       if (resetScroll) {
-        this.issuesViewport?.scrollToIndex(0);
+        this.issuesViewport()?.scrollToIndex(0);
       }
-      this.issuesViewport?.checkViewportSize();
+      this.issuesViewport()?.checkViewportSize();
     });
+    this.viewportRefreshTimers.add(timeout);
   }
 
   private getIssueExportFileName(): string {
