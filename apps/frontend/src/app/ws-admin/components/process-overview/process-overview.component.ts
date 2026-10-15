@@ -1,6 +1,8 @@
+import { Subscription } from 'rxjs';
 import {
-  Component, OnInit, inject, ViewChild, AfterViewInit
+  Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -213,6 +215,7 @@ const DETAIL_ORDER = [
 ];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-process-overview-dialog',
   imports: [
     CommonModule,
@@ -234,26 +237,31 @@ const DETAIL_ORDER = [
   styleUrls: ['./process-overview.component.scss']
 })
 export class ProcessOverviewComponent implements OnInit, AfterViewInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private processesService = inject(WorkspaceProcessesService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+
   data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
   processes = new MatTableDataSource<ProcessDto>([]);
-  displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
-  isLoading = false;
-  lastLoadedAt = Date.now();
+  protected displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
+  protected readonly isLoading = signal(false);
+  readonly lastLoadedAt = signal(Date.now());
 
   // Filter properties
-  statusFilter = '';
-  typeFilter = '';
-  searchFilter = '';
-  availableTypes: string[] = [];
-  statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
+  protected readonly statusFilter = signal('');
+  protected readonly typeFilter = signal('');
+  protected readonly searchFilter = signal('');
+  protected readonly availableTypes = signal<string[]>([]);
+  protected statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  readonly paginator = viewChild.required(MatPaginator);
 
   ngOnInit(): void {
     if (this.workspaceId) {
@@ -263,7 +271,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.processes.paginator = this.paginator;
+    this.processes.paginator = this.paginator();
   }
 
   setupFilterPredicate(): void {
@@ -291,34 +299,35 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     };
   }
 
-  applyFilter(): void {
+  protected applyFilter(): void {
     this.processes.filter = JSON.stringify({
-      status: this.statusFilter,
-      type: this.typeFilter,
-      search: this.searchFilter
+      status: this.statusFilter(),
+      type: this.typeFilter(),
+      search: this.searchFilter()
     });
     if (this.processes.paginator) {
       this.processes.paginator.firstPage();
     }
   }
 
-  clearFilters(): void {
-    this.statusFilter = '';
-    this.typeFilter = '';
-    this.searchFilter = '';
+  protected clearFilters(): void {
+    this.statusFilter.set('');
+    this.typeFilter.set('');
+    this.searchFilter.set('');
     this.applyFilter();
   }
 
   loadProcesses(): void {
+    this.loadRequest?.unsubscribe();
     if (!this.workspaceId) return;
-    this.isLoading = true;
-    this.processesService.getProcesses(this.workspaceId).subscribe({
+    this.isLoading.set(true);
+    this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
-        this.availableTypes = [...new Set(data.map(d => d.queueName))]
-          .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de'));
-        this.lastLoadedAt = Date.now();
-        this.isLoading = false;
+        this.availableTypes.set([...new Set(data.map(d => d.queueName))]
+          .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
+        this.lastLoadedAt.set(Date.now());
+        this.isLoading.set(false);
         this.applyFilter();
       },
       error: () => {
@@ -327,7 +336,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           this.translateService.instant('close'),
           { duration: 3000 }
         );
-        this.isLoading = false;
+        this.isLoading.set(false);
       }
     });
   }
@@ -350,7 +359,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (confirmed) {
         this.confirmDeleteProcess(process, action);
       }
@@ -360,8 +369,9 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   confirmDeleteProcess(process: ProcessDto, action: ProcessActionKind = this.getProcessAction(process) as ProcessActionKind): void {
     if (!action) return;
 
-    this.isLoading = true;
-    this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).subscribe({
+    this.isLoading.set(true);
+
+    this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           this.snackBar.open(this.getActionSuccessMessage(action), this.translateService.instant('close'), { duration: 3000 });
@@ -372,7 +382,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
             this.translateService.instant('close'),
             { duration: 4000 }
           );
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       },
       error: () => {
@@ -381,7 +391,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           this.translateService.instant('close'),
           { duration: 4000 }
         );
-        this.isLoading = false;
+        this.isLoading.set(false);
       }
     });
   }
@@ -390,7 +400,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return this.getProcessAction(process) !== null;
   }
 
-  getActionTooltip(process: ProcessDto): string {
+  protected getActionTooltip(process: ProcessDto): string {
     const action = this.getProcessAction(process);
     if (!action) {
       return this.translateService.instant('process-overview.actions.not-safe');
@@ -407,7 +417,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return presentation ? this.translateService.instant(presentation.labelKey) : queueName;
   }
 
-  getQueueDescription(queueName: string): string {
+  protected getQueueDescription(queueName: string): string {
     const presentation = QUEUE_PRESENTATIONS[queueName];
     return presentation ? this.translateService.instant(presentation.descriptionKey) : queueName;
   }
@@ -420,15 +430,15 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return STATUS_PRESENTATIONS[status].icon;
   }
 
-  getStatusClass(status: ProcessStatus): string {
+  protected getStatusClass(status: ProcessStatus): string {
     return `status-${STATUS_PRESENTATIONS[status].cssClass}`;
   }
 
-  getStatusTooltip(status: ProcessStatus): string {
+  protected getStatusTooltip(status: ProcessStatus): string {
     return this.translateService.instant(STATUS_PRESENTATIONS[status].tooltipKey);
   }
 
-  hasProgressPercent(process: ProcessDto): boolean {
+  protected hasProgressPercent(process: ProcessDto): boolean {
     return this.getProgressPercent(process) !== null;
   }
 
@@ -485,7 +495,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return null;
   }
 
-  getActionIcon(process: ProcessDto): string {
+  protected getActionIcon(process: ProcessDto): string {
     const action = this.getProcessAction(process);
     if (action === 'cancel') return 'cancel';
     if (action === 'pause') return 'pause_circle';
@@ -517,7 +527,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     }
 
     if (process.status === 'active') {
-      return Math.max(0, this.lastLoadedAt - process.processedOn);
+      return Math.max(0, this.lastLoadedAt() - process.processedOn);
     }
 
     return null;

@@ -2,7 +2,7 @@
   @if (appService.dataLoading) {
     <div class="spinner-container fx-column-start-center">
       <mat-spinner class="fx-flex-fix-100"></mat-spinner>
-      <button mat-button class="fx-flex-fill"></button>
+      <span class="fx-flex-fill" aria-hidden="true"></span>
     </div>
   }
 
@@ -25,8 +25,8 @@
       </h1>
 
       <div class="admin-section">
-        @if (currentWorkspaceName) {
-          <span class="workspace-name" [matTooltip]="currentWorkspaceName">{{ currentWorkspaceName }}</span>
+        @if (currentWorkspaceName()) {
+          <span class="workspace-name" [matTooltip]="currentWorkspaceName()">{{ currentWorkspaceName() }}</span>
         }
 
         @if (isAdminUser()) {
@@ -55,5 +55,5 @@
     <router-outlet></router-outlet>
   </div>
   <coding-box-export-toast></coding-box-export-toast>
-  <app-error-message-display></app-error-message-display>
+  <coding-box-error-message-display></coding-box-error-message-display>
 </div>

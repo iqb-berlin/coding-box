@@ -141,13 +141,23 @@ describe('ExportToastComponent', () => {
     Object.assign(component, { dialog });
   });
 
-  it('summarizes jobs and delegates user actions', () => {
-    component.ngOnInit();
+  it.each(['Enter', ' '])('preserves the collapse button keyboard default with %p', key => {
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('.collapse-btn') as HTMLButtonElement;
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
 
-    expect(component.hasJobs).toBe(true);
-    expect(component.activeJobCount).toBe(2);
-    expect(component.completedJobCount).toBe(1);
-    expect(component.failedJobCount).toBe(1);
+    expect(event.defaultPrevented).toBe(false);
+    expect(component.isCollapsed()).toBe(false);
+    button.click();
+    expect(component.isCollapsed()).toBe(true);
+  });
+
+  it('summarizes jobs and delegates user actions', () => {
+    expect(component.hasJobs()).toBe(true);
+    expect(component.activeJobCount()).toBe(2);
+    expect(component.completedJobCount()).toBe(1);
+    expect(component.failedJobCount()).toBe(1);
     expect(component.getStatusIcon('waiting')).toBe('hourglass_empty');
     expect(component.getStatusIcon('active')).toBe('sync');
     expect(component.getStatusIcon('downloading')).toBe('file_download');
@@ -176,7 +186,7 @@ describe('ExportToastComponent', () => {
     expect(component.getErrorTitle(jobs[3])).toBe('Export fehlgeschlagen');
 
     component.toggleCollapse();
-    expect(component.isCollapsed).toBe(true);
+    expect(component.isCollapsed()).toBe(true);
     component.downloadFile(jobs[0]);
     component.removeJob(jobs[0]);
     component.cancelJob(jobs[1]);
@@ -197,15 +207,14 @@ describe('ExportToastComponent', () => {
   });
 
   it('updates from the jobs stream and tears down subscriptions', () => {
-    component.ngOnInit();
     jobs$.next([]);
 
-    expect(component.jobs).toEqual([]);
-    expect(component.hasJobs).toBe(false);
+    expect(component.jobs()).toEqual([]);
+    expect(component.hasJobs()).toBe(false);
 
-    component.ngOnDestroy();
+    fixture.destroy();
     jobs$.next(jobs);
-    expect(component.jobs).toEqual([]);
+    expect(component.jobs()).toEqual([]);
   });
 
   it('keeps a job visible and reports a failed removal', () => {

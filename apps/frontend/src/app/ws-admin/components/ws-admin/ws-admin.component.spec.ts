@@ -1,3 +1,4 @@
+import { WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -68,13 +69,13 @@ describe('WsAdminComponent', () => {
     hasAssignedCodingJobs = false,
     isAdmin = false
   ): string[] {
-    component.accessLevel = accessLevel;
-    component.canCode = canCode;
-    component.hasAssignedCodingJobs = hasAssignedCodingJobs;
-    component.authData = {
+    component.accessLevel.set(accessLevel);
+    component.canCode.set(canCode);
+    component.hasAssignedCodingJobs.set(hasAssignedCodingJobs);
+    component.authData.set({
       ...AppService.defaultAuthData,
       isAdmin
-    };
+    });
     (component as unknown as { updateNavLinks: () => void }).updateNavLinks();
 
     fixture.detectChanges();
@@ -106,7 +107,7 @@ describe('WsAdminComponent', () => {
 
   it('should render coding manager links without own coding jobs when canCode is false', () => {
     const links = renderNavLinks(2, false);
-    const navLinks = (component as unknown as { navLinks: Array<{ path: string }> }).navLinks;
+    const navLinks = (component as unknown as { navLinks: WritableSignal<Array<{ path: string }>> }).navLinks();
 
     expect(links).toEqual([
       'ws-admin.coding-overview',
@@ -144,7 +145,7 @@ describe('WsAdminComponent', () => {
 
   it('should render full navigation without own coding jobs for study managers without canCode', () => {
     const links = renderNavLinks(3, false);
-    const navLinks = (component as unknown as { navLinks: Array<{ path: string }> }).navLinks;
+    const navLinks = (component as unknown as { navLinks: WritableSignal<Array<{ path: string }>> }).navLinks();
 
     expect(links).toEqual([
       'ws-admin.test-files',

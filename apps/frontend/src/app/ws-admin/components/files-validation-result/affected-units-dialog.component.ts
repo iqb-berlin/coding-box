@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -12,6 +12,7 @@ export type AffectedUnitsDialogResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-affected-units-dialog',
   templateUrl: './affected-units-dialog.component.html',
   styleUrls: ['./affected-units-dialog.component.scss'],
@@ -27,15 +28,15 @@ export type AffectedUnitsDialogResult = {
   ]
 })
 export class AffectedUnitsDialogComponent {
-  filterText = '';
+  private dialogRef = inject<MatDialogRef<AffectedUnitsDialogComponent, AffectedUnitsDialogResult>>(MatDialogRef);
+  protected data = inject<{
+    title: string;
+    units: string[];
+  }>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<AffectedUnitsDialogComponent, AffectedUnitsDialogResult>,
-    @Inject(MAT_DIALOG_DATA)
-    public data: { title: string; units: string[] }
-  ) {}
+  protected filterText = '';
 
-  get filteredUnits(): string[] {
+  protected get filteredUnits(): string[] {
     const all = (this.data?.units || []).slice();
     const q = (this.filterText || '').trim().toUpperCase();
     if (!q) {
@@ -44,14 +45,14 @@ export class AffectedUnitsDialogComponent {
     return all.filter(u => (u || '').toUpperCase().includes(q));
   }
 
-  selectUnit(unitId: string): void {
+  protected selectUnit(unitId: string): void {
     if (!unitId) {
       return;
     }
     this.dialogRef.close({ unitId });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

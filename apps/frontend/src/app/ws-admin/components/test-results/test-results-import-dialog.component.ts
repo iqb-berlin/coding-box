@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,6 +11,7 @@ export type TestResultsImportDialogResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-import-dialog',
   standalone: true,
   imports: [
@@ -78,15 +79,13 @@ export type TestResultsImportDialogResult = {
   ]
 })
 export class TestResultsImportDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsImportDialogComponent>
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsImportDialogComponent>>(MatDialogRef);
 
-  selectImportType(type: 'testcenter' | 'responses' | 'logs'): void {
+  protected selectImportType(type: 'testcenter' | 'responses' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }
