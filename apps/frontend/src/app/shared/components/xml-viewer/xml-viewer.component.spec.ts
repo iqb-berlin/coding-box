@@ -30,8 +30,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<Unit>',
       '  <Metadata id="u1"/>',
       '  <Definition>',
@@ -46,8 +46,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(true);
-    expect(component.formattedXml).toBe('<Unit><Metadata></Unit>');
+    expect(component.hasParseError()).toBe(true);
+    expect(component.formattedXml()).toBe('<Unit><Metadata></Unit>');
   });
 
   it('should pretty-print XML without splitting tags on greater-than signs in attributes', () => {
@@ -55,8 +55,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<Unit>',
       '  <Metadata label="a > b"/>',
       '</Unit>'
@@ -68,19 +68,19 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<!DOCTYPE Unit [<!ELEMENT Unit ANY>]>',
       '<Unit/>'
     ].join('\n'));
   });
 
   it('should toggle line wrapping', () => {
-    expect(component.lineWrap).toBe(false);
+    expect(component.lineWrap()).toBe(false);
 
     component.toggleLineWrap();
 
-    expect(component.lineWrap).toBe(true);
+    expect(component.lineWrap()).toBe(true);
   });
 
   it('should copy the original XML', fakeAsync(() => {
@@ -88,15 +88,15 @@ describe('XmlViewerComponent', () => {
     fixture.componentRef.setInput('xml', rawXml);
     fixture.detectChanges();
 
-    expect(component.formattedXml).not.toBe(rawXml);
+    expect(component.formattedXml()).not.toBe(rawXml);
 
     component.copyToClipboard();
 
     expect(clipboard.copy).toHaveBeenCalledWith(rawXml);
-    expect(component.copySucceeded).toBe(true);
+    expect(component.copySucceeded()).toBe(true);
 
     tick(1500);
 
-    expect(component.copySucceeded).toBe(false);
+    expect(component.copySucceeded()).toBe(false);
   }));
 });

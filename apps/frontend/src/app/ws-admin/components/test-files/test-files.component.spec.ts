@@ -120,8 +120,8 @@ describe('TestFilesComponent', () => {
 
   describe('regex filter validation', () => {
     it('should reject invalid regex syntax before requesting files', () => {
-      component.enableRegexSearch = true;
-      component.textFilterValue = '[';
+      component.enableRegexSearch.set(true);
+      component.textFilterValue.set('[');
 
       expect(component.isTextFilterRegexInvalid()).toBe(true);
     });
@@ -222,7 +222,7 @@ describe('TestFilesComponent', () => {
 
       component.onFileSelected(event.target);
 
-      expect(component.isUploading).toBe(true);
+      expect(component.isUploading()).toBe(true);
       expect(fileService.uploadTestFiles).toHaveBeenCalledWith(1, mockFiles, false);
 
       uploadSubject.next(uploadResult);
@@ -230,7 +230,7 @@ describe('TestFilesComponent', () => {
 
       tick(); // process upload subscription
 
-      expect(component.isUploading).toBe(false);
+      expect(component.isUploading()).toBe(false);
       expect(snackBar.open).toHaveBeenCalledWith(expect.stringContaining('Upload abgeschlossen'), 'OK', { duration: 5000 });
       expect(dialog.open).toHaveBeenCalled(); // Should open openUploadResultDialog
 
@@ -340,7 +340,7 @@ describe('TestFilesComponent', () => {
       component.onFileSelected(event.target);
       tick();
 
-      expect(component.isUploading).toBe(false);
+      expect(component.isUploading()).toBe(false);
       expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', 'error', { duration: 3000 });
     }));
   });
@@ -401,27 +401,27 @@ describe('TestFilesComponent', () => {
 
   describe('Busy State', () => {
     it('should return true if any operation is in progress', () => {
-      component.isLoading = false;
-      component.isUploading = false;
-      component.isDeleting = false;
-      component.isValidating = false;
-      component.isDownloadingAllFiles = false;
-      expect(component.isBusy).toBe(false);
+      component.isLoading.set(false);
+      component.isUploading.set(false);
+      component.isDeleting.set(false);
+      component.isValidating.set(false);
+      component.isDownloadingAllFiles.set(false);
+      expect(component.isBusy()).toBe(false);
 
-      component.isUploading = true;
-      expect(component.isBusy).toBe(true);
+      component.isUploading.set(true);
+      expect(component.isBusy()).toBe(true);
 
-      component.isUploading = false;
-      component.isLoading = true;
-      expect(component.isBusy).toBe(true);
+      component.isUploading.set(false);
+      component.isLoading.set(true);
+      expect(component.isBusy()).toBe(true);
     });
 
     it('should return correct busy text', () => {
-      component.isUploading = true;
+      component.isUploading.set(true);
       expect(component.busyText).toBe('Datei(en) werden hochgeladen...');
 
-      component.isUploading = false;
-      component.isDeleting = true;
+      component.isUploading.set(false);
+      component.isDeleting.set(true);
       expect(component.busyText).toBe('Datei(en) werden gelöscht...');
     });
   });

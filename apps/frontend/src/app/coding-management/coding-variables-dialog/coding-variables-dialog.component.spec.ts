@@ -98,8 +98,8 @@ describe('CodingVariablesDialogComponent', () => {
   });
 
   it('should load all variables without restrictive default filters', () => {
-    expect(component.hasCodingSchemeFilter).toBe(false);
-    expect(component.hasCodesFilter).toBe(false);
+    expect(component.hasCodingSchemeFilter()).toBe(false);
+    expect(component.hasCodesFilter()).toBe(false);
     expect(component.dataSource.data).toHaveLength(3);
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual([
       'Alias_1',
@@ -109,7 +109,7 @@ describe('CodingVariablesDialogComponent', () => {
   });
 
   it('should expose aliases as public variable ids', () => {
-    component.variableIdFilter = 'Alias_1';
+    component.variableIdFilter.set('Alias_1');
     component.applyFilter();
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_1']);
   });
@@ -124,23 +124,23 @@ describe('CodingVariablesDialogComponent', () => {
   it('should attach saved replay anchors to variables', () => {
     const variable = component.dataSource.data.find(item => item.variableId === 'Alias_2');
 
-    expect(variable?.replayAnchor).toBe('TEXT_ANCHOR');
-    expect(variable?.savedReplayAnchor).toBe('TEXT_ANCHOR');
+    expect(variable?.replayAnchor()).toBe('TEXT_ANCHOR');
+    expect(variable?.savedReplayAnchor()).toBe('TEXT_ANCHOR');
   });
 
   it('should filter derived variables', () => {
-    component.isDerivedFilter = true;
+    component.isDerivedFilter.set(true);
     component.applyFilter();
 
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_2']);
   });
 
   it('should filter variables by training effort', () => {
-    component.trainingRequiredFilter = 'required';
+    component.trainingRequiredFilter.set('required');
     component.applyFilter();
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual(['Alias_1']);
 
-    component.trainingRequiredFilter = 'not-required';
+    component.trainingRequiredFilter.set('not-required');
     component.applyFilter();
     expect(component.dataSource.filteredData.map(variable => variable.variableId)).toEqual([
       'Alias_2',
@@ -149,7 +149,7 @@ describe('CodingVariablesDialogComponent', () => {
   });
 
   it('should distinguish source data from filtered results', () => {
-    component.variableIdFilter = 'missing';
+    component.variableIdFilter.set('missing');
     component.applyFilter();
 
     expect(component.hasVariables).toBe(true);
@@ -159,20 +159,20 @@ describe('CodingVariablesDialogComponent', () => {
   });
 
   it('should clear all filters', () => {
-    component.variableIdFilter = 'Alias_1';
-    component.hasCodingSchemeFilter = true;
-    component.hasCodesFilter = true;
-    component.trainingRequiredFilter = 'required';
-    component.selectedTypes = ['string'];
+    component.variableIdFilter.set('Alias_1');
+    component.hasCodingSchemeFilter.set(true);
+    component.hasCodesFilter.set(true);
+    component.trainingRequiredFilter.set('required');
+    component.selectedTypes.set(['string']);
     component.applyFilter();
 
     component.clearFilters();
 
-    expect(component.variableIdFilter).toBe('');
-    expect(component.hasCodingSchemeFilter).toBe(false);
-    expect(component.hasCodesFilter).toBe(false);
-    expect(component.trainingRequiredFilter).toBe('all');
-    expect(component.selectedTypes).toEqual([]);
+    expect(component.variableIdFilter()).toBe('');
+    expect(component.hasCodingSchemeFilter()).toBe(false);
+    expect(component.hasCodesFilter()).toBe(false);
+    expect(component.trainingRequiredFilter()).toBe('all');
+    expect(component.selectedTypes()).toEqual([]);
     expect(component.dataSource.filteredData).toHaveLength(3);
   });
   it('renders a delayed server response without another user action', async () => {

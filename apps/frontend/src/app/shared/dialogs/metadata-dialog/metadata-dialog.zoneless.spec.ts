@@ -70,7 +70,7 @@ describe('Metadata dialog without Zone.js', () => {
     const form = fixture.nativeElement.querySelector('metadata-profile-form');
     fixture.destroy();
     form.dispatchEvent(new CustomEvent('metadataChange', { detail: { profiles: [] } }));
-    expect(fixture.componentInstance.hasChanges).toBe(false);
+    expect(fixture.componentInstance.hasChanges()).toBe(false);
   });
   async function openPair() {
     const fixtures = ['first', 'second'].map(title => {
@@ -119,8 +119,8 @@ describe('Metadata dialog without Zone.js', () => {
       detail: { profiles: [{ profileId: 'second-unit', entries: [] }] }
     }));
     await second.whenStable();
-    expect(second.componentInstance.hasChanges).toBe(true);
-    expect(first.componentInstance.hasChanges).toBe(false);
+    expect(second.componentInstance.hasChanges()).toBe(true);
+    expect(first.componentInstance.hasChanges()).toBe(false);
   });
 
   it('changes the selected profile only in the dialog whose selector was used', async () => {

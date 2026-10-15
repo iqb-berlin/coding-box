@@ -1,9 +1,11 @@
+@let errorMessageValue = errorMessage();
+@let activeTaskValue = activeTask();
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
       title="Antwortstatus-Prüfung"
       [status]="status"
-      [errorCount]="errorCount">
+      [errorCount]="errorCount()">
     </coding-box-validation-panel-header>
   </mat-expansion-panel-header>
 
@@ -14,47 +16,47 @@
   </coding-box-validation-guidance>
 
   <div class="validation-actions">
-    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+    <button mat-button (click)="onValidate()" [disabled]="isRunning() || disabled">
       Antwortstatus prüfen
     </button>
   </div>
 
-  @if (isRunning) {
+  @if (isRunning()) {
       <div class="loading-container">
-        <mat-spinner class="mat-spinner" diameter="30" [mode]="activeTask?.progress ? 'determinate' : 'indeterminate'" [value]="activeTask?.progress"></mat-spinner>
+        <mat-spinner class="mat-spinner" diameter="30" [mode]="activeTaskValue?.progress ? 'determinate' : 'indeterminate'" [value]="activeTaskValue?.progress"></mat-spinner>
         <p class="loading-text">
           Antwortstatus werden geprüft...
-          @if (activeTask?.progress) {
-            ({{ activeTask?.progress }}%)
+          @if (activeTaskValue?.progress) {
+            ({{ activeTaskValue?.progress }}%)
           }
         </p>
       </div>
     }
 
-  @if (errorMessage) {
+  @if (errorMessageValue) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Fehler bei der Validierung: {{ errorMessage }}</span>
+      <span>Fehler bei der Validierung: {{ errorMessageValue }}</span>
     </div>
   }
 
-  @if (invalidStatusVariables.length > 0 || totalInvalid > 0) {
+  @if (invalidStatusVariables().length > 0 || totalInvalid() > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Antwortstatus gefunden.</span>
+      <span>Prüfung fehlgeschlagen: {{ totalInvalid() }} ungültige Antwortstatus gefunden.</span>
     </div>
 
-    @if (invalidStatusVariables.length > 0) {
+    @if (invalidStatusVariables().length > 0) {
       <div class="actions-container">
         <button mat-button (click)="toggleExpansion()">
-          {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
+          {{ expandedPanel() ? 'Details ausblenden' : 'Details anzeigen' }}
         </button>
         <button
           mat-button
           (click)="exportCsv()"
-          [disabled]="isExporting || isLoadingPage"
+          [disabled]="isExporting() || isLoadingPage()"
         >
-          @if (isExporting) {
+          @if (isExporting()) {
             <mat-spinner diameter="20"></mat-spinner> Export...
           } @else {
             CSV exportieren
@@ -64,41 +66,41 @@
         <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
         <button mat-button color="warn" 
                 (click)="deleteSelected()" 
-                [disabled]="isDeletingResponses || selectedResponses.size === 0">
-          @if (isDeletingResponses) {
+                [disabled]="isDeletingResponses() || selectedResponses().size === 0">
+          @if (isDeletingResponses()) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
-            Ausgewählte löschen ({{ selectedResponses.size }})
+            Ausgewählte löschen ({{ selectedResponses().size }})
           }
         </button>
         <button mat-button color="warn" 
                 (click)="deleteAll()" 
-                [disabled]="isDeletingResponses || invalidStatusVariables.length === 0">
-          @if (isDeletingResponses) {
+                [disabled]="isDeletingResponses() || invalidStatusVariables().length === 0">
+          @if (isDeletingResponses()) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
-            Alle löschen ({{ totalInvalid }})
+            Alle löschen ({{ totalInvalid() }})
           }
         </button>
       </div>
 
-      <mat-expansion-panel [expanded]="expandedPanel">
+      <mat-expansion-panel [expanded]="expandedPanel()">
         <coding-box-validation-data-table
-          [data]="invalidStatusVariables"
+          [data]="invalidStatusVariables()"
           [columns]="tableColumns"
-          [totalItems]="totalInvalid"
-          [pageSize]="pageSize"
-          [currentPage]="currentPage"
-          [selectedItems]="selectedResponses"
+          [totalItems]="totalInvalid()"
+          [pageSize]="pageSize()"
+          [currentPage]="currentPage()"
+          [selectedItems]="selectedResponses()"
           [selectionKey]="'responseId'"
-          [loading]="isLoadingPage"
+          [loading]="isLoadingPage()"
           (pageChange)="onPageChange($event)"
           (selectionChange)="onSelectionChange($event)"
           (linkClick)="onLinkClick($event)">
         </coding-box-validation-data-table>
       </mat-expansion-panel>
     }
-  } @else if (!isRunning && invalidStatusVariables.length === 0 && totalInvalid === 0 && wasRun) {
+  } @else if (!isRunning() && invalidStatusVariables().length === 0 && totalInvalid() === 0 && wasRun()) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
       <span>Prüfung bestanden: Keine ungültigen Antwortstatus gefunden.</span>

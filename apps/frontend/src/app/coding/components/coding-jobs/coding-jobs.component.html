@@ -1,8 +1,8 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  @if (isLoading && !hasLoadedJobs) {
+  @if (isLoading() && !hasLoadedJobs()) {
     <mat-spinner></mat-spinner>
   }
-  @if (hasLoadedJobs) {
+  @if (hasLoadedJobs()) {
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
       <div class="fx-row-center-center fx-gap-16 filters-row">
         <mat-form-field appearance="outline" class="filter-field">
@@ -22,7 +22,7 @@
             (selectionChange)="onCoderFilterChange()"
             >
             <mat-option [value]="null">Alle Kodierer</mat-option>
-            @for (coder of allCoders; track coder) {
+            @for (coder of allCoders(); track coder) {
               <mat-option [value]="coder.id">
                 {{ coder.displayName || coder.name }}
               </mat-option>
@@ -61,7 +61,7 @@
                 >
                 <mat-option [value]="null">Alle Trainings</mat-option>
                 <mat-option value="none">Ohne Training</mat-option>
-                @for (training of coderTrainings; track training) {
+                @for (training of coderTrainings(); track training) {
                   <mat-option
                     [value]="training.id"
                     >
@@ -75,7 +75,7 @@
 
         <div class="actions-row">
           <div class="actions-group primary-actions">
-            @if (canApplyResults && showApplyActions) {
+            @if (canApplyResults() && showApplyActions) {
               <button
                 mat-button
                 (click)="bulkApplyCodingResults()"
@@ -85,7 +85,7 @@
                 Alle Ergebnisse anwenden
               </button>
             }
-            @if (canManageCodingJobs && showTransferAction) {
+            @if (canManageCodingJobs() && showTransferAction) {
               <button mat-button (click)="openTransferCodingCasesDialog()">
                 <mat-icon>swap_horiz</mat-icon>
                 Fälle übertragen
@@ -110,7 +110,7 @@
                 Aktualisieren
               </button>
             }
-            @if (canManageCodingJobs && showBulkDeleteAction) {
+            @if (canManageCodingJobs() && showBulkDeleteAction) {
               <button
                 mat-raised-button
                 color="warn"
@@ -126,7 +126,7 @@
         </div>
       </div>
 
-      @if (isLoading) {
+      @if (isLoading()) {
         <div class="coding-jobs-refresh-indicator" aria-live="polite">
           <mat-spinner diameter="20"></mat-spinner>
           <span>{{ 'coding.jobs.refreshing' | translate }}</span>
@@ -136,8 +136,8 @@
       <mat-table
         [dataSource]="dataSource"
         matSort
-        [matSortActive]="sortBy"
-        [matSortDirection]="sortDirection"
+        [matSortActive]="sortBy()"
+        [matSortDirection]="sortDirection()"
         (matSortChange)="onSortChange($event)"
         class="coding-jobs-table"
         >
@@ -314,7 +314,7 @@
                 }
                 @if (
                   showApplyActions &&
-                  canApplyResults &&
+                  canApplyResults() &&
                   getPrimaryJobAction(element) !== 'apply'
                   ) {
                   <button
@@ -328,7 +328,7 @@
                     <span>Ergebnisse anwenden</span>
                   </button>
                 }
-                @if (canManageCodingJobs && showBulkDeleteAction) {
+                @if (canManageCodingJobs() && showBulkDeleteAction) {
                   <mat-divider class="menu-section-divider"></mat-divider>
                   <button
                     mat-menu-item
@@ -467,13 +467,13 @@
                     </ng-container>
                   </mat-table>
 
-                  @if (jobsTotal > 0) {
+                  @if (jobsTotal() > 0) {
                     <mat-paginator
                       [pageSizeOptions]="[10, 25, 50, 100]"
                       showFirstLastButtons
-                      [length]="jobsTotal"
-                      [pageIndex]="pageIndex"
-                      [pageSize]="pageSize"
+                      [length]="jobsTotal()"
+                      [pageIndex]="pageIndex()"
+                      [pageSize]="pageSize()"
                       (page)="onPageChange($event)"
                       >
                     </mat-paginator>

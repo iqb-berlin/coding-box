@@ -1,4 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
+import { WritableSignal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -238,9 +239,9 @@ describe('ReplayComponent', () => {
 
   it('should initialise observables and default properties', () => {
     expect(component.isLoaded).toBeDefined();
-    expect(component.player).toBe('player data');
-    expect(component.unitDef).toBe('unitDef data');
-    expect(component.responses).toBeDefined();
+    expect(component.player()).toBe('player data');
+    expect(component.unitDef()).toBe('unitDef data');
+    expect(component.responses()).toBeDefined();
   });
 
   it('should recreate the unit player when a new replay payload is applied', () => {
@@ -288,11 +289,11 @@ describe('ReplayComponent', () => {
     const replayComponent = component as unknown as {
       loadAndApplyUnitData: (workspace: number, authToken?: string) => Promise<boolean>;
     };
-    component.testPerson = 'person-1@code@booklet';
-    component.unitId = 'unit-1';
+    component.testPerson.set('person-1@code@booklet');
+    component.unitId.set('unit-1');
 
     const firstLoad = replayComponent.loadAndApplyUnitData(47, 'token');
-    component.testPerson = 'person-2@code@booklet';
+    component.testPerson.set('person-2@code@booklet');
     const secondLoad = replayComponent.loadAndApplyUnitData(47, 'token');
 
     expect(firstRequestFinalized).toHaveBeenCalledTimes(1);
@@ -306,8 +307,8 @@ describe('ReplayComponent', () => {
 
     await expect(firstLoad).resolves.toBe(false);
     await expect(secondLoad).resolves.toBe(true);
-    expect(component.unitDef).toBe('latest unitDef');
-    expect(component.responses).toEqual({
+    expect(component.unitDef()).toBe('latest unitDef');
+    expect(component.responses()).toEqual({
       responses: [{ id: 'chunk', content: 'latest response' }]
     });
   });
@@ -330,9 +331,9 @@ describe('ReplayComponent', () => {
     const replayComponent = component as unknown as {
       loadAndApplyUnitData: (workspace: number, authToken?: string) => Promise<boolean>;
     };
-    component.isCodingMode = true;
-    component.testPerson = 'person-1@code@booklet';
-    component.unitId = 'unit-1';
+    component.isCodingMode.set(true);
+    component.testPerson.set('person-1@code@booklet');
+    component.unitId.set('unit-1');
 
     await expect(replayComponent.loadAndApplyUnitData(47, 'token')).resolves.toBe(true);
 
@@ -417,7 +418,7 @@ describe('ReplayComponent', () => {
     };
 
     replayBackendService.storeReplayStatistics.mockClear();
-    component.workspaceId = 42;
+    component.workspaceId.set(42);
     const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
     replayAttempt.startPayloadLoad(300);
     replayAttempt.recordPayloadResponse(500, { responseTotalMs: 5 });
@@ -476,7 +477,7 @@ describe('ReplayComponent', () => {
     );
 
     replayBackendService.storeReplayStatistics.mockClear();
-    component.workspaceId = 42;
+    component.workspaceId.set(42);
     const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
 
     privateComponent.storeReplayStatistics(
@@ -509,12 +510,12 @@ describe('ReplayComponent', () => {
 
   it('should set test person correctly when valid', () => {
     component.setTestPerson('valid@test@person');
-    expect(component.testPerson).toBe('valid@test@person');
+    expect(component.testPerson()).toBe('valid@test@person');
   });
 
   it('should handle page errors correctly', () => {
     snackBar.open.mockClear();
-    component.page = 'page-1';
+    component.page.set('page-1');
     component.checkPageError('notInList');
     expect(snackBar.open).toHaveBeenCalledWith(
       'Keine valide Seite mit der ID "page-1" gefunden',
@@ -525,7 +526,7 @@ describe('ReplayComponent', () => {
 
   it('should finalize replay statistics after an error', () => {
     replayBackendService.storeReplayStatistics.mockClear();
-    component.page = 'page-1';
+    component.page.set('page-1');
 
     component.checkPageError('notInList');
     component.onResponseVisible();
@@ -548,10 +549,10 @@ describe('ReplayComponent', () => {
       value: { postMessage },
       configurable: true
     });
-    component.originResponseId = 99;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
-    component.workspaceId = 5;
+    component.originResponseId.set(99);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
+    component.workspaceId.set(5);
     jest.spyOn(component.codingService, 'getNotes').mockReturnValue('Replay note');
     jest.spyOn(component.codingService, 'handleCodeSelected').mockResolvedValue({
       id: 7,
@@ -587,9 +588,9 @@ describe('ReplayComponent', () => {
       value: { postMessage },
       configurable: true
     });
-    component.originResponseId = 99;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
+    component.originResponseId.set(99);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
     component.onNotesCommitted('Late replay note');
@@ -612,10 +613,10 @@ describe('ReplayComponent', () => {
       configurable: true
     });
     jest.spyOn(component.codingService, 'saveNotes').mockResolvedValue();
-    component.originResponseId = 99;
-    component.workspaceId = 5;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
+    component.originResponseId.set(99);
+    component.workspaceId.set(5);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
     component.onNotesChanged('Late replay note');
@@ -641,9 +642,9 @@ describe('ReplayComponent', () => {
       value: { postMessage },
       configurable: true
     });
-    component.originResponseId = 99;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
+    component.originResponseId.set(99);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
     component.onNotesCommitted('Retry note');
@@ -660,9 +661,9 @@ describe('ReplayComponent', () => {
   it('should handle rejected note saves in the component boundary', async () => {
     const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes')
       .mockRejectedValue(new Error('save failed'));
-    component.workspaceId = 5;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
+    component.workspaceId.set(5);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
     component.onNotesChanged('note');
@@ -684,11 +685,11 @@ describe('ReplayComponent', () => {
     const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes');
     const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
 
-    component.isCodingMode = true;
-    component.workspaceId = 5;
-    component.page = '0';
-    component.unitId = 'UNIT_1';
-    component.testPerson = 'valid@test@person';
+    component.isCodingMode.set(true);
+    component.workspaceId.set(5);
+    component.page.set('0');
+    component.unitId.set('UNIT_1');
+    component.testPerson.set('valid@test@person');
     component.codingService.codingJobId = 77;
     component.codingService.currentVariableId = 'VAR1';
     appService.needsReAuthentication = true;
@@ -719,8 +720,8 @@ describe('ReplayComponent', () => {
     expect(handleCodeSelectedSpy).not.toHaveBeenCalled();
     expect(saveNotesSpy).not.toHaveBeenCalled();
     expect(submitSpy).not.toHaveBeenCalled();
-    expect(component.unitId).toBe('UNIT_1');
-    expect(component.page).toBe('0');
+    expect(component.unitId()).toBe('UNIT_1');
+    expect(component.page()).toBe('0');
     expect(snackBar.open).toHaveBeenCalledWith(
       'replay.reauthentication-required',
       'close',
@@ -749,15 +750,15 @@ describe('ReplayComponent', () => {
 
     component.setUnitParams(params);
 
-    expect(component.page).toBe('test-page');
-    expect(component.anchor).toBe('test-anchor');
-    expect(component.unitId).toBe('test-unit');
-    expect(component.testPerson).toBe('valid@test@person');
+    expect(component.page()).toBe('test-page');
+    expect(component.anchor()).toBe('test-anchor');
+    expect(component.unitId()).toBe('test-unit');
+    expect(component.testPerson()).toBe('valid@test@person');
   });
 
   it('should update the requested page when changing coding units', async () => {
-    component.isCodingMode = true;
-    component.page = '0';
+    component.isCodingMode.set(true);
+    component.page.set('0');
 
     await component.handleUnitChanged({
       id: 1,
@@ -769,8 +770,8 @@ describe('ReplayComponent', () => {
       variablePage: '1'
     });
 
-    expect(component.page).toBe('1');
-    expect(component.anchor).toBe('ANCHOR_2');
+    expect(component.page()).toBe('1');
+    expect(component.anchor()).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
   });
 
@@ -822,10 +823,10 @@ describe('ReplayComponent', () => {
       }
     }));
     const replayComponent = component as unknown as {
-      reloadKey: number;
+      reloadKey: WritableSignal<number>;
       replayAttempt: ReplayAttemptContext;
     };
-    const initialReloadKey = replayComponent.reloadKey;
+    const initialReloadKey = replayComponent.reloadKey();
     const initialAttempt = replayComponent.replayAttempt;
     initialAttempt.recordCodingSession({
       requestStartedAt: 100,
@@ -852,8 +853,8 @@ describe('ReplayComponent', () => {
       expect.any(String)
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
-    expect(replayComponent.reloadKey).toBe(initialReloadKey);
-    expect(component.responses).toEqual({
+    expect(replayComponent.reloadKey()).toBe(initialReloadKey);
+    expect(component.responses()).toEqual({
       responses: [{ id: 'chunk', content: 'new person response' }]
     });
     expect(replayComponent.replayAttempt).not.toBe(initialAttempt);
@@ -892,9 +893,9 @@ describe('ReplayComponent', () => {
       codeSelectorComponent: { canLeaveCurrentUnit: jest.Mock };
     };
 
-    component.isCodingMode = true;
-    component.unitId = 'UNIT_1';
-    component.page = '0';
+    component.isCodingMode.set(true);
+    component.unitId.set('UNIT_1');
+    component.page.set('0');
     component.codingService.currentVariableId = 'VAR_1';
     privateComponent.codeSelectorComponent = { canLeaveCurrentUnit };
 
@@ -909,8 +910,8 @@ describe('ReplayComponent', () => {
     });
 
     expect(canLeaveCurrentUnit).toHaveBeenCalled();
-    expect(component.unitId).toBe('UNIT_1');
-    expect(component.page).toBe('0');
+    expect(component.unitId()).toBe('UNIT_1');
+    expect(component.page()).toBe('0');
     expect(component.codingService.currentVariableId).toBe('VAR_1');
   });
 
@@ -922,7 +923,7 @@ describe('ReplayComponent', () => {
       .mockReturnValueOnce([])
       .mockReturnValueOnce([highlightedSection]);
     const scrollSpy = jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
-    component.anchor = 'VAR1';
+    component.anchor.set('VAR1');
     component.unitPlayerComponent = {
       hostingIframe: {
         nativeElement: iframe
@@ -950,19 +951,19 @@ describe('ReplayComponent', () => {
     jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
     const bundleMarkerSpy = jest.spyOn(domUtils, 'highlightBundleVariableMarkers')
       .mockReturnValue([]);
-    component.anchor = 'VAR1';
-    component.page = '0';
+    component.anchor.set('VAR1');
+    component.page.set('0');
     component.unitPlayerComponent = {
       hostingIframe: {
         nativeElement: iframe
       }
     } as unknown as typeof component.unitPlayerComponent;
     (component as unknown as {
-      unitsData: {
+      unitsData: WritableSignal<{
         currentUnitIndex: number;
         units: unknown[];
-      };
-    }).unitsData = {
+      }>;
+    }).unitsData.set({
       currentUnitIndex: 0,
       units: [{
         id: 1,
@@ -1012,7 +1013,7 @@ describe('ReplayComponent', () => {
           ]
         }
       }]
-    };
+    });
 
     component.onResponseVisible();
 
@@ -1026,7 +1027,7 @@ describe('ReplayComponent', () => {
     const iframe = document.createElement('iframe');
     const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
       .mockReturnValue([]);
-    component.anchor = 'VAR1';
+    component.anchor.set('VAR1');
     component.unitPlayerComponent = {
       hostingIframe: {
         nativeElement: iframe
@@ -1074,11 +1075,11 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    const replayComponent = component as unknown as { unitsData: typeof unitsData | null };
-    expect(component.isBookletReplayMode).toBe(true);
-    expect(component.isCodingMode).toBe(false);
-    expect(replayComponent.unitsData?.units).toHaveLength(2);
-    expect(component.totalUnits).toBe(2);
+    const replayComponent = component as unknown as { unitsData: WritableSignal<typeof unitsData | null> };
+    expect(component.isBookletReplayMode()).toBe(true);
+    expect(component.isCodingMode()).toBe(false);
+    expect(replayComponent.unitsData()?.units).toHaveLength(2);
+    expect(component.totalUnits()).toBe(2);
     expect(updateStatusSpy).not.toHaveBeenCalled();
   });
 
@@ -1335,8 +1336,8 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(component.unitId).toBe('unit-2');
-    expect(component.page).toBe('1');
+    expect(component.unitId()).toBe('unit-2');
+    expect(component.page()).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
 
@@ -1422,7 +1423,7 @@ describe('ReplayComponent', () => {
     firstSessionResponse.complete();
     await Promise.resolve();
 
-    expect(component.unitId).not.toBe('unit-1');
+    expect(component.unitId()).not.toBe('unit-1');
 
     secondSessionResponse.next({
       units: [{
@@ -1459,7 +1460,7 @@ describe('ReplayComponent', () => {
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledTimes(2);
-    expect(component.unitId).toBe('unit-2');
+    expect(component.unitId()).toBe('unit-2');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
 
@@ -1554,8 +1555,8 @@ describe('ReplayComponent', () => {
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledWith(47, 77, 'fresh-token', false, expect.any(String));
-    expect(component.unitId).toBe('unit-2');
-    expect(component.page).toBe('1');
+    expect(component.unitId()).toBe('unit-2');
+    expect(component.page()).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
 
@@ -1679,7 +1680,7 @@ describe('ReplayComponent', () => {
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledWith(47, 77, 'coding-token', false, expect.any(String));
-    expect(component.unitId).toBe('unit-2');
+    expect(component.unitId()).toBe('unit-2');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
 
@@ -1951,7 +1952,7 @@ describe('ReplayComponent', () => {
       true,
       expect.any(String)
     );
-    expect(component.unitId).toBe('unit-new');
+    expect(component.unitId()).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');
     expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toBeNull();
   });
@@ -2163,8 +2164,8 @@ describe('ReplayComponent', () => {
       `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${oldToken}&mode=coding&codingJobId=77&workspaceId=47`
     );
 
-    component.isCodingMode = true;
-    component.workspaceId = 47;
+    component.isCodingMode.set(true);
+    component.workspaceId.set(47);
     privateComponent.authToken = oldToken;
     component.codingService.setAuthToken(oldToken);
     (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
@@ -2206,8 +2207,8 @@ describe('ReplayComponent', () => {
       `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${oldToken}&mode=coding&codingJobId=77&workspaceId=47`
     );
 
-    component.isCodingMode = true;
-    component.workspaceId = 47;
+    component.isCodingMode.set(true);
+    component.workspaceId.set(47);
     privateComponent.authToken = oldToken;
     component.codingService.setAuthToken(oldToken);
     (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
@@ -2238,8 +2239,8 @@ describe('ReplayComponent', () => {
       '/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=invalid-token&mode=coding&codingJobId=77&workspaceId=47'
     );
 
-    component.isCodingMode = true;
-    component.workspaceId = 47;
+    component.isCodingMode.set(true);
+    component.workspaceId.set(47);
     privateComponent.authToken = 'invalid-token';
     component.codingService.setAuthToken('invalid-token');
     await fixture.whenStable();
@@ -2282,8 +2283,8 @@ describe('ReplayComponent', () => {
       }
     };
     sessionRecoveryService.saveDraft('replay-active-coding-state', draft);
-    component.isCodingMode = true;
-    component.workspaceId = 0;
+    component.isCodingMode.set(true);
+    component.workspaceId.set(0);
     component.codingService.codingJobId = 77;
     codingJobBackendServiceMock.saveCodingProgress.mockClear();
 
@@ -2297,11 +2298,11 @@ describe('ReplayComponent', () => {
     const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
     const privateComponent = component as unknown as {
       restoreReplayRecoveryDraft: () => Promise<boolean>;
-      unitsData: unknown;
+      unitsData: WritableSignal<unknown>;
     };
-    component.isCodingMode = true;
-    component.workspaceId = 47;
-    privateComponent.unitsData = {
+    component.isCodingMode.set(true);
+    component.workspaceId.set(47);
+    privateComponent.unitsData.set({
       id: 77,
       name: 'Coding Job 77',
       currentUnitIndex: 0,
@@ -2315,7 +2316,7 @@ describe('ReplayComponent', () => {
         variableAnchor: 'VAR1',
         variablePage: '0'
       }]
-    };
+    });
     component.codingService.codingJobId = 77;
     const compositeKey = component.codingService.generateCompositeKey(
       'valid@test@person',
@@ -2374,12 +2375,12 @@ describe('ReplayComponent', () => {
     const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
     const privateComponent = component as unknown as {
       restoreReplayRecoveryDraft: () => Promise<boolean>;
-      unitsData: unknown;
+      unitsData: WritableSignal<unknown>;
     };
-    component.isCodingMode = true;
-    component.isCodingIssueReviewMode = true;
-    component.workspaceId = 47;
-    privateComponent.unitsData = {
+    component.isCodingMode.set(true);
+    component.isCodingIssueReviewMode.set(true);
+    component.workspaceId.set(47);
+    privateComponent.unitsData.set({
       id: 77,
       name: 'Coding Job 77',
       currentUnitIndex: 0,
@@ -2393,7 +2394,7 @@ describe('ReplayComponent', () => {
         variableAnchor: 'VAR1',
         variablePage: '0'
       }]
-    };
+    });
     component.codingService.codingJobId = 77;
     component.codingService.isCodingIssueReviewMode = true;
     const compositeKey = component.codingService.generateCompositeKey(
@@ -2444,12 +2445,12 @@ describe('ReplayComponent', () => {
     const privateComponent = component as unknown as {
       restoreReplayRecoveryDraft: () => Promise<boolean>;
     };
-    component.isCodingMode = true;
-    component.isCodingDecisionMode = true;
-    component.workspaceId = 47;
-    component.originResponseId = 501;
-    component.testPerson = 'valid@test@person';
-    component.unitId = 'unit-123';
+    component.isCodingMode.set(true);
+    component.isCodingDecisionMode.set(true);
+    component.workspaceId.set(47);
+    component.originResponseId.set(501);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
     const compositeKey = component.codingService.generateCompositeKey(
       'valid@test@person',
@@ -2541,8 +2542,8 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(component.isCodingMode).toBe(true);
-    expect(component.isReviewMode).toBe(true);
+    expect(component.isCodingMode()).toBe(true);
+    expect(component.isReviewMode()).toBe(true);
     expect(component.codingService.isReviewMode).toBe(true);
     expect(component.isCodingReadOnly()).toBe(true);
     expect(codingJobBackendServiceMock.getCodingJobUnits)
@@ -2590,9 +2591,9 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(component.isCodingMode).toBe(true);
-    expect(component.isReviewMode).toBe(false);
-    expect(component.isCodingIssueReviewMode).toBe(true);
+    expect(component.isCodingMode()).toBe(true);
+    expect(component.isReviewMode()).toBe(false);
+    expect(component.isCodingIssueReviewMode()).toBe(true);
     expect(component.codingService.isReviewMode).toBe(false);
     expect(component.codingService.isCompletedJobReview).toBe(false);
     expect(component.isCodingReadOnly()).toBe(false);
@@ -2635,12 +2636,12 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(component.isCodingMode).toBe(true);
-    expect(component.isCodingDecisionMode).toBe(true);
-    expect(component.isReviewMode).toBe(false);
-    expect(component.isCodingIssueReviewMode).toBe(false);
-    expect(component.originResponseId).toBe(77);
-    expect((component as unknown as { reviewCodeSelections: unknown }).reviewCodeSelections).toEqual([
+    expect(component.isCodingMode()).toBe(true);
+    expect(component.isCodingDecisionMode()).toBe(true);
+    expect(component.isReviewMode()).toBe(false);
+    expect(component.isCodingIssueReviewMode()).toBe(false);
+    expect(component.originResponseId()).toBe(77);
+    expect((component as unknown as { reviewCodeSelections: WritableSignal<unknown> }).reviewCodeSelections()).toEqual([
       { code: 1, coderNames: ['Coder A', 'Coder B'] },
       { code: 2, coderNames: ['Coder C'] }
     ]);
@@ -2783,27 +2784,29 @@ describe('ReplayComponent', () => {
 
   it('should reset unit data correctly', () => {
     // Set some data first
-    component.unitId = 'test-unit';
-    component.player = 'test-player';
-    component.unitDef = 'test-unitDef';
-    component.page = 'test-page';
-    component.responses = [{ id: 1 }];
+    // Set some data first
+    component.unitId.set('test-unit');
+    component.player.set('test-player');
+    component.unitDef.set('test-unitDef');
+    component.page.set('test-page');
+    component.responses.set([{ id: 1 }]);
 
     // Call the private method using type assertion
     (component as unknown as { resetUnitData: () => void }).resetUnitData();
 
     // Check if data was reset
-    expect(component.unitId).toBe('');
-    expect(component.player).toBe('');
-    expect(component.unitDef).toBe('');
-    expect(component.page).toBeUndefined();
-    expect(component.responses).toBeUndefined();
+    expect(component.unitId()).toBe('');
+    expect(component.player()).toBe('');
+    expect(component.unitDef()).toBe('');
+    expect(component.page()).toBeUndefined();
+    expect(component.responses()).toBeUndefined();
   });
 
   it('catchError should reset unit data', () => {
     // Set some data first
-    component.unitId = 'test-unit';
-    component.player = 'test-player';
+    // Set some data first
+    component.unitId.set('test-unit');
+    component.player.set('test-player');
 
     // Access private members safely
     const privateComponent = component as unknown as {
@@ -2821,16 +2824,16 @@ describe('ReplayComponent', () => {
     privateComponent.catchError(error);
 
     expect(resetSpy).toHaveBeenCalled();
-    expect(component.unitId).toBe('');
-    expect(component.player).toBe('');
+    expect(component.unitId()).toBe('');
+    expect(component.player()).toBe('');
   });
 
   it('should clear stale replay state and finalize statistics once for a 404', () => {
     replayBackendService.storeReplayStatistics.mockClear();
-    component.unitId = 'stale-unit';
-    component.player = 'stale-player';
-    component.unitDef = 'stale-unit-definition';
-    component.responses = [{ id: 'chunk', content: 'stale-response' }];
+    component.unitId.set('stale-unit');
+    component.player.set('stale-player');
+    component.unitDef.set('stale-unit-definition');
+    component.responses.set([{ id: 'chunk', content: 'stale-response' }]);
 
     const privateComponent = component as unknown as {
       catchError: (error: HttpErrorResponse) => void;
@@ -2845,10 +2848,10 @@ describe('ReplayComponent', () => {
     }));
     component.onResponseVisible();
 
-    expect(component.unitId).toBe('');
-    expect(component.player).toBe('');
-    expect(component.unitDef).toBe('');
-    expect(component.responses).toBeUndefined();
+    expect(component.unitId()).toBe('');
+    expect(component.player()).toBe('');
+    expect(component.unitDef()).toBe('');
+    expect(component.responses()).toBeUndefined();
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
@@ -2873,17 +2876,17 @@ describe('ReplayComponent', () => {
     privateComponent.openErrorSnackBar('old replay error', 'Schließen');
 
     privateComponent.routerRunId = 2;
-    component.unitId = 'latest-unit';
-    component.player = 'latest-player';
-    component.unitDef = 'latest-unit-definition';
-    component.responses = [{ id: 'chunk', content: 'latest-response' }];
+    component.unitId.set('latest-unit');
+    component.player.set('latest-player');
+    component.unitDef.set('latest-unit-definition');
+    component.responses.set([{ id: 'chunk', content: 'latest-response' }]);
     dismissed.next();
     dismissed.complete();
 
-    expect(component.unitId).toBe('latest-unit');
-    expect(component.player).toBe('latest-player');
-    expect(component.unitDef).toBe('latest-unit-definition');
-    expect(component.responses).toEqual([
+    expect(component.unitId()).toBe('latest-unit');
+    expect(component.player()).toBe('latest-player');
+    expect(component.unitDef()).toBe('latest-unit-definition');
+    expect(component.responses()).toEqual([
       { id: 'chunk', content: 'latest-response' }
     ]);
   });
@@ -2966,7 +2969,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should navigate to immediate next unit on ArrowRight for interleaved variables', () => {
-      component.isCodingMode = true;
+      component.isCodingMode.set(true);
       const unitsData = {
         id: 123,
         name: 'job',
@@ -2992,13 +2995,13 @@ describe('ReplayComponent', () => {
           }
         ]
       };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
-      component.testPerson = 'tp1@code1@grp@booklet';
-      component.unitId = 'UNIT1';
+      const replayComponent = component as ReplayComponent & { unitsData: WritableSignal<typeof unitsData> };
+      replayComponent.unitsData.set(unitsData);
+      component.testPerson.set('tp1@code1@grp@booklet');
+      component.unitId.set('UNIT1');
       component.codingService.currentVariableId = 'V1';
 
-      const compositeKey = component.codingService.generateCompositeKey(component.testPerson, 'UNIT1', 'V1');
+      const compositeKey = component.codingService.generateCompositeKey(component.testPerson(), 'UNIT1', 'V1');
       component.codingService.selectedCodes.set(compositeKey, {
         id: 1,
         label: 'coded'
@@ -3013,7 +3016,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should ignore digit shortcuts for regular codes without manual instructions', () => {
-      component.isCodingMode = true;
+      component.isCodingMode.set(true);
       const unitsData = {
         id: 123,
         name: 'job',
@@ -3030,8 +3033,8 @@ describe('ReplayComponent', () => {
           }
         ]
       };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
+      const replayComponent = component as ReplayComponent & { unitsData: WritableSignal<typeof unitsData> };
+      replayComponent.unitsData.set(unitsData);
       component.codingService.currentVariableId = 'V1';
       component.codingService.codingScheme = digitShortcutCodingScheme;
       const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
@@ -3045,7 +3048,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should ignore digit shortcuts for regular codes with visually empty HTML manual instructions', () => {
-      component.isCodingMode = true;
+      component.isCodingMode.set(true);
       const unitsData = {
         id: 123,
         name: 'job',
@@ -3062,8 +3065,8 @@ describe('ReplayComponent', () => {
           }
         ]
       };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
+      const replayComponent = component as ReplayComponent & { unitsData: WritableSignal<typeof unitsData> };
+      replayComponent.unitsData.set(unitsData);
       component.codingService.currentVariableId = 'V1';
       component.codingService.codingScheme = digitShortcutCodingScheme;
       const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
@@ -3077,7 +3080,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should keep digit shortcuts for regular codes with manual instructions', () => {
-      component.isCodingMode = true;
+      component.isCodingMode.set(true);
       const unitsData = {
         id: 123,
         name: 'job',
@@ -3094,8 +3097,8 @@ describe('ReplayComponent', () => {
           }
         ]
       };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
+      const replayComponent = component as ReplayComponent & { unitsData: WritableSignal<typeof unitsData> };
+      replayComponent.unitsData.set(unitsData);
       component.codingService.currentVariableId = 'V1';
       component.codingService.codingScheme = digitShortcutCodingScheme;
       const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
@@ -3110,8 +3113,8 @@ describe('ReplayComponent', () => {
     });
 
     it('should ignore digit shortcuts in coding review mode', () => {
-      component.isCodingMode = true;
-      component.isReviewMode = true;
+      component.isCodingMode.set(true);
+      component.isReviewMode.set(true);
       const unitsData = {
         id: 123,
         name: 'job',
@@ -3128,8 +3131,8 @@ describe('ReplayComponent', () => {
           }
         ]
       };
-      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
-      replayComponent.unitsData = unitsData;
+      const replayComponent = component as ReplayComponent & { unitsData: WritableSignal<typeof unitsData> };
+      replayComponent.unitsData.set(unitsData);
       component.codingService.currentVariableId = 'V1';
       component.codingService.codingScheme = digitShortcutCodingScheme;
       const onCodeSelectedSpy = jest.spyOn(component, 'onCodeSelected').mockResolvedValue();
@@ -3147,14 +3150,15 @@ describe('ReplayComponent', () => {
       jest.spyOn(component.codingService, 'loadSavedCodingProgress').mockReturnValue(Promise.resolve());
 
       // Simulate coding mode but NOT review mode
-      component.isCodingMode = true;
-      component.isReviewMode = false;
-      component.workspaceId = 42;
+      // Simulate coding mode but NOT review mode
+      component.isCodingMode.set(true);
+      component.isReviewMode.set(false);
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
 
       // Re-trigger the logic that would be in subscribeRouter (simplified for test)
       // In a real scenario, this is called inside subscribeRouter
-      if (component.isCodingMode && !component.isReviewMode) {
+      if (component.isCodingMode() && !component.isReviewMode()) {
         await component.codingService.updateCodingJobStatus(42, 123, 'active');
       }
 
@@ -3165,14 +3169,15 @@ describe('ReplayComponent', () => {
       const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
 
       // Simulate review mode
-      component.isCodingMode = true;
-      component.isReviewMode = true;
-      component.workspaceId = 42;
+      // Simulate review mode
+      component.isCodingMode.set(true);
+      component.isReviewMode.set(true);
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
 
       // This mimics the logic in subscribeRouter:
       // if (this.isCodingMode) { ... if (!this.isReviewMode) { updateCodingJobStatus(...) } }
-      if (component.isCodingMode && !component.isReviewMode) {
+      if (component.isCodingMode() && !component.isReviewMode()) {
         await component.codingService.updateCodingJobStatus(42, 123, 'active');
       }
 
@@ -3182,10 +3187,10 @@ describe('ReplayComponent', () => {
     it('should NOT pause job on unload if in review mode', () => {
       const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.isCodingJobCompleted = false;
-      component.isReviewMode = true;
+      component.isReviewMode.set(true);
 
       component.onBeforeUnload();
 
@@ -3195,11 +3200,11 @@ describe('ReplayComponent', () => {
     it('should NOT pause completed review jobs on unload', () => {
       const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.isCodingJobCompleted = false;
       component.codingService.isCompletedJobReview = true;
-      component.isReviewMode = false;
+      component.isReviewMode.set(false);
 
       component.onBeforeUnload();
 
@@ -3209,10 +3214,10 @@ describe('ReplayComponent', () => {
     it('should pause job on unload if NOT in review mode', () => {
       const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.isCodingJobCompleted = false;
-      component.isReviewMode = false;
+      component.isReviewMode.set(false);
 
       component.onBeforeUnload();
 
@@ -3226,11 +3231,11 @@ describe('ReplayComponent', () => {
         'navigate'
       ).mockResolvedValue(true);
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.isCompletedJobReview = false;
       component.codingService.isCodingJobFinalized = false;
-      component.isReviewMode = false;
+      component.isReviewMode.set(false);
 
       component.openCodingJobs();
 
@@ -3244,7 +3249,7 @@ describe('ReplayComponent', () => {
         'navigate'
       ).mockResolvedValue(true);
 
-      component.workspaceId = 0;
+      component.workspaceId.set(0);
 
       component.openCodingJobs();
 
@@ -3258,7 +3263,7 @@ describe('ReplayComponent', () => {
       const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.hasSaveError = false;
 
@@ -3276,7 +3281,7 @@ describe('ReplayComponent', () => {
         .mockRejectedValue(new Error('pending save failed'));
       const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.hasSaveError = false;
 
@@ -3292,7 +3297,7 @@ describe('ReplayComponent', () => {
       const flushSpy = jest.spyOn(component.codingService, 'flushPendingRowMutations').mockResolvedValue();
       const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
 
-      component.workspaceId = 42;
+      component.workspaceId.set(42);
       component.codingService.codingJobId = 123;
       component.codingService.hasSaveError = true;
 

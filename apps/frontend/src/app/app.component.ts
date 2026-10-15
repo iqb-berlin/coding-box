@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -48,10 +48,10 @@ export class AppComponent implements OnInit, OnDestroy {
   private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
-  loggedInKeycloak: boolean = false;
-  errorMessage = '';
-  authData: AuthDataDto = AppService.defaultAuthData;
-  currentWorkspaceName = '';
+  readonly loggedInKeycloak = signal<boolean>(false);
+  readonly errorMessage = signal('');
+  readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
+  readonly currentWorkspaceName = signal('');
   private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
@@ -75,7 +75,7 @@ export class AppComponent implements OnInit, OnDestroy {
     });
 
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
-      this.authData = authData;
+      this.authData.set(authData);
       this.updateCurrentWorkspaceName();
     });
 
@@ -88,11 +88,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private updateCurrentWorkspaceName(): void {
     const workspaceId = this.getWorkspaceIdFromUrl();
-    if (workspaceId > 0 && this.authData.workspaces) {
-      const workspace = this.authData.workspaces.find(ws => ws.id === workspaceId);
-      this.currentWorkspaceName = workspace?.name || '';
+    if (workspaceId > 0 && this.authData().workspaces) {
+      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
+      this.currentWorkspaceName.set(workspace?.name || '');
     } else {
-      this.currentWorkspaceName = '';
+      this.currentWorkspaceName.set('');
     }
   }
 
@@ -108,7 +108,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async loadAuthData(identity: string): Promise<boolean> {
-    this.errorMessage = '';
+    this.errorMessage.set('');
     this.appService.errorMessagesDisabled = true;
 
     try {
@@ -160,7 +160,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private setAuthState(): void {
-    this.loggedInKeycloak = true;
+    this.loggedInKeycloak.set(true);
     this.appService.isLoggedInKeycloak = true;
     this.appService.loggedUser = this.authService.getLoggedUser();
   }
@@ -170,6 +170,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   isAdminUser(): boolean {
-    return hasAdminBypass(this.authService.getRoles(), this.authData.isAdmin);
+    return hasAdminBypass(this.authService.getRoles(), this.authData().isAdmin);
   }
 }

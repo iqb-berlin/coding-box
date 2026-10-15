@@ -546,7 +546,7 @@ describe('File validation without Zone', () => {
     const component = fixture.componentInstance;
     if (action === 'page') component.onPageChange({ pageIndex: 1, pageSize: 100, length: 300 });
     else if (action === 'filter') {
-      component.textFilterValue = 'new';
+      component.textFilterValue.set('new');
       component.applyFilters();
     } else reloadFiles();
     const page = action === 'page' ? 2 : 1;
@@ -575,7 +575,7 @@ describe('File validation without Zone', () => {
     }
     expect(fixture.nativeElement.textContent).toContain('new-file.xml');
     expect(fixture.nativeElement.textContent).not.toContain('old-file.xml');
-    expect(component.page).toBe(page);
+    expect(component.page()).toBe(page);
     expect(old.observed).toBe(false);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
@@ -720,8 +720,8 @@ describe('File validation without Zone', () => {
     (TestBed.inject(ContentPoolIntegrationService) as jest.Mocked<ContentPoolIntegrationService>)
       .getWorkspaceConfig.mockReturnValue(pool);
     fixture = TestBed.createComponent(TestFilesComponent);
-    fixture.componentInstance.textFilterValue = pattern;
-    fixture.componentInstance.enableRegexSearch = initialRegex;
+    fixture.componentInstance.textFilterValue.set(pattern);
+    fixture.componentInstance.enableRegexSearch.set(initialRegex);
     fixture.autoDetectChanges();
     await fixture.whenStable();
   };
@@ -769,7 +769,7 @@ describe('File validation without Zone', () => {
     (fixture.nativeElement.querySelector('mat-row mat-checkbox input') as HTMLInputElement).click();
     await fixture.whenStable();
     expect(uploadButton?.getAttribute('aria-disabled') === 'true').toBe(!token);
-    expect(fixture.componentInstance.contentPoolSettings.baseUrl).toBe('https://synthetic.example');
+    expect(fixture.componentInstance.contentPoolSettings().baseUrl).toBe('https://synthetic.example');
   });
 
   it('releases Content Pool loading on error and loads fresh settings after reopening', async () => {
@@ -780,7 +780,7 @@ describe('File validation without Zone', () => {
     regex.complete();
     failed.error(new Error('settings unavailable'));
     await fixture.whenStable();
-    expect(fixture.componentInstance.isLoadingContentPoolConfig).toBe(false);
+    expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('ACP aus Content Pool');
     const retry = new Subject<ObservedValueOf<ReturnType<ContentPoolIntegrationService['getWorkspaceConfig']>>>();
     await recreateWithSettings(new Subject<boolean>(), retry);
@@ -813,17 +813,17 @@ describe('File validation without Zone', () => {
     if (source === 'regex') {
       regex.next(true);
       regex.complete();
-      expect(fixture.componentInstance.enableRegexSearch).toBe(false);
+      expect(fixture.componentInstance.enableRegexSearch()).toBe(false);
     } else {
       pool.next({ enabled: true, baseUrl: 'https://old.example', hasApplicationToken: true });
       pool.complete();
-      expect(fixture.componentInstance.contentPoolSettings.enabled).toBe(false);
+      expect(fixture.componentInstance.contentPoolSettings().enabled).toBe(false);
     }
     if (action !== 'destroy') {
       await fixture.whenStable();
       expect(fixture.nativeElement.querySelector('.regex-filter-error')).toBeNull();
       expect(fixture.nativeElement.textContent).not.toContain('ACP aus Content Pool');
-      expect(fixture.componentInstance.isLoadingContentPoolConfig).toBe(false);
+      expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
     }
   });
 
@@ -840,7 +840,7 @@ describe('File validation without Zone', () => {
     expect(pool.observed).toBe(false);
     pool.error(new Error('old settings failed'));
     expect(snackBar.open).not.toHaveBeenCalled();
-    expect(fixture.componentInstance.isLoadingContentPoolConfig).toBe(false);
+    expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
   });
 
   it('ends a pending literal search when delayed settings make its regex invalid', async () => {

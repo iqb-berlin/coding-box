@@ -1,5 +1,6 @@
 import {
-  ChangeDetectorRef, Component, DestroyRef, inject
+  Component, DestroyRef, inject, signal,
+  computed
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -76,8 +77,6 @@ type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
   ]
 })
 export class ExportComponent {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
-
   private appService = inject(AppService);
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
@@ -88,47 +87,47 @@ export class ExportComponent {
   private dialog = inject(MatDialog);
 
   selectedFormat: ExportFormat = 'results-by-version';
-  isStartingExport = false;
-  includeResponseValues = true;
-  includeGeoGebraResponseValues = false;
-  includeGeoGebraFiles = false;
-  hasGeoGebraResponses = false;
+  readonly isStartingExport = signal(false);
+  readonly includeResponseValues = signal(true);
+  readonly includeGeoGebraResponseValues = signal(false);
+  readonly includeGeoGebraFiles = signal(false);
+  readonly hasGeoGebraResponses = signal(false);
   resultsVersion: ResultsVersion = 'v2';
   resultsFormat: ResultsExportFormat = 'csv';
   matrixValue: MatrixValue = 'score';
-  itemDatasetOptions: ItemDatasetOption[] = [];
-  selectedItemKeys: string[] = [];
-  itemSearch = '';
-  itemDatasetMappingIssues: ItemDatasetMappingIssueDto[] = [];
-  itemDatasetMappingWarnings: ItemDatasetMappingWarningDto[] = [];
-  notReachedScope: ItemDatasetNotReachedScope = 'unit';
-  recodeTrailingOmissions = false;
-  isLoadingItemDatasetOptions = false;
-  itemDatasetOptionsLoadFailed = false;
-  psychometricDomainCandidates: PsychometricDomainCandidateDto[] = [];
-  psychometricItemCount = 0;
-  psychometricMappingIssueCount = 0;
-  psychometricMappingIssueDetails = '';
-  missingsProfiles: MissingsProfileOption[] = [];
-  itemDatasetMissingsProfiles: MissingsProfileOption[] = [];
-  resultsMissingsProfiles: MissingsProfileOption[] = [];
-  selectedPsychometricDomain = 'workspace';
-  selectedMissingsProfileId: number | null = null;
-  selectedItemDatasetMissingsProfileId: number | null = null;
-  selectedResultsMissingsProfileId: number | null = null;
-  partWholeCorrection = true;
-  maxCategoryCount = 10;
-  isPsychometricInfoExpanded = false;
-  isLoadingPsychometricOptions = false;
-  psychometricOptionsLoadFailed = false;
+  readonly itemDatasetOptions = signal<ItemDatasetOption[]>([]);
+  readonly selectedItemKeys = signal<string[]>([]);
+  readonly itemSearch = signal('');
+  readonly itemDatasetMappingIssues = signal<ItemDatasetMappingIssueDto[]>([]);
+  readonly itemDatasetMappingWarnings = signal<ItemDatasetMappingWarningDto[]>([]);
+  readonly notReachedScope = signal<ItemDatasetNotReachedScope>('unit');
+  readonly recodeTrailingOmissions = signal(false);
+  readonly isLoadingItemDatasetOptions = signal(false);
+  readonly itemDatasetOptionsLoadFailed = signal(false);
+  readonly psychometricDomainCandidates = signal<PsychometricDomainCandidateDto[]>([]);
+  readonly psychometricItemCount = signal(0);
+  readonly psychometricMappingIssueCount = signal(0);
+  readonly psychometricMappingIssueDetails = signal('');
+  readonly missingsProfiles = signal<MissingsProfileOption[]>([]);
+  readonly itemDatasetMissingsProfiles = signal<MissingsProfileOption[]>([]);
+  readonly resultsMissingsProfiles = signal<MissingsProfileOption[]>([]);
+  readonly selectedPsychometricDomain = signal('workspace');
+  readonly selectedMissingsProfileId = signal<number | null>(null);
+  readonly selectedItemDatasetMissingsProfileId = signal<number | null>(null);
+  readonly selectedResultsMissingsProfileId = signal<number | null>(null);
+  readonly partWholeCorrection = signal(true);
+  readonly maxCategoryCount = signal(10);
+  readonly isPsychometricInfoExpanded = signal(false);
+  readonly isLoadingPsychometricOptions = signal(false);
+  readonly psychometricOptionsLoadFailed = signal(false);
   private psychometricOptionsWorkspaceId: number | null = null;
   private loadingPsychometricOptionsWorkspaceId: number | null = null;
   private itemDatasetOptionsWorkspaceId: number | null = null;
   private loadingItemDatasetOptionsWorkspaceId: number | null = null;
   private resultsOptionsWorkspaceId: number | null = null;
   private loadingResultsOptionsWorkspaceId: number | null = null;
-  isLoadingResultsOptions = false;
-  resultsOptionsLoadFailed = false;
+  readonly isLoadingResultsOptions = signal(false);
+  readonly resultsOptionsLoadFailed = signal(false);
 
   constructor() {
     this.loadGeneralOptions();
@@ -136,7 +135,6 @@ export class ExportComponent {
     this.appService.selectedWorkspaceId$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
-        this.changeDetectorRef.markForCheck();
         this.resetWorkspaceOptions();
         this.loadGeneralOptions();
         if (this.selectedFormat === 'psychometrics') {
@@ -156,9 +154,8 @@ export class ExportComponent {
     this.responseService
       .hasGeogebraResponses(workspaceId)
       .subscribe(hasGeoGebraResponses => {
-        this.changeDetectorRef.markForCheck();
         if (workspaceId !== this.appService.selectedWorkspaceId) return;
-        this.hasGeoGebraResponses = hasGeoGebraResponses;
+        this.hasGeoGebraResponses.set(hasGeoGebraResponses);
         this.clearUnsupportedResultsOptions();
       });
   }
@@ -173,8 +170,8 @@ export class ExportComponent {
       return;
     }
 
-    this.psychometricOptionsLoadFailed = false;
-    this.isLoadingPsychometricOptions = true;
+    this.psychometricOptionsLoadFailed.set(false);
+    this.isLoadingPsychometricOptions.set(true);
     this.loadingPsychometricOptionsWorkspaceId = workspaceId;
     forkJoin({
       profiles: this.asOptionLoadResult(
@@ -184,19 +181,17 @@ export class ExportComponent {
         this.exportJobService.getPsychometricDomainCandidates(workspaceId)
       )
     }).subscribe(result => {
-      this.changeDetectorRef.markForCheck();
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
         'ws-admin.export.errors.psychometric-options-failed'
       );
       this.applyDomainCandidateResult(result.domains);
-      this.psychometricOptionsLoadFailed =
-        !result.profiles.ok || !result.domains.ok;
+      this.psychometricOptionsLoadFailed.set(!result.profiles.ok || !result.domains.ok);
       this.psychometricOptionsWorkspaceId =
-        this.psychometricOptionsLoadFailed ? null : workspaceId;
+        this.psychometricOptionsLoadFailed() ? null : workspaceId;
       this.loadingPsychometricOptionsWorkspaceId = null;
-      this.isLoadingPsychometricOptions = false;
+      this.isLoadingPsychometricOptions.set(false);
     });
   }
 
@@ -210,8 +205,8 @@ export class ExportComponent {
       return;
     }
 
-    this.itemDatasetOptionsLoadFailed = false;
-    this.isLoadingItemDatasetOptions = true;
+    this.itemDatasetOptionsLoadFailed.set(false);
+    this.isLoadingItemDatasetOptions.set(true);
     this.loadingItemDatasetOptionsWorkspaceId = workspaceId;
     forkJoin({
       profiles: this.asOptionLoadResult(
@@ -221,7 +216,6 @@ export class ExportComponent {
         this.exportJobService.getItemDatasetOptions(workspaceId)
       )
     }).subscribe(result => {
-      this.changeDetectorRef.markForCheck();
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
@@ -230,12 +224,11 @@ export class ExportComponent {
         false
       );
       this.applyItemDatasetOptionsResult(result.items);
-      this.itemDatasetOptionsLoadFailed =
-        !result.profiles.ok || !result.items.ok;
+      this.itemDatasetOptionsLoadFailed.set(!result.profiles.ok || !result.items.ok);
       this.itemDatasetOptionsWorkspaceId =
-        this.itemDatasetOptionsLoadFailed ? null : workspaceId;
+        this.itemDatasetOptionsLoadFailed() ? null : workspaceId;
       this.loadingItemDatasetOptionsWorkspaceId = null;
-      this.isLoadingItemDatasetOptions = false;
+      this.isLoadingItemDatasetOptions.set(false);
     });
   }
 
@@ -248,35 +241,31 @@ export class ExportComponent {
     ) {
       return;
     }
-    this.resultsOptionsLoadFailed = false;
-    this.isLoadingResultsOptions = true;
+    this.resultsOptionsLoadFailed.set(false);
+    this.isLoadingResultsOptions.set(true);
     this.loadingResultsOptionsWorkspaceId = workspaceId;
     this.missingsProfileService.getExportMissingsProfilesOrThrow(workspaceId)
       .subscribe({
         next: profiles => {
-          this.changeDetectorRef.markForCheck();
           if (workspaceId !== this.appService.selectedWorkspaceId) return;
-          this.resultsMissingsProfiles = profiles.filter(profile => (
-            Number.isSafeInteger(profile.id) && profile.id > 0
-          ));
-          const standard = this.resultsMissingsProfiles.find(profile => (
+          this.resultsMissingsProfiles.set(profiles.filter(profile => (Number.isSafeInteger(profile.id) && profile.id > 0)));
+          const standard = this.resultsMissingsProfiles().find(profile => (
             profile.label === 'IQB-Standard'
           ));
-          this.selectedResultsMissingsProfileId = standard?.id ??
-            this.resultsMissingsProfiles[0]?.id ?? null;
+          this.selectedResultsMissingsProfileId.set(standard?.id ??
+    this.resultsMissingsProfiles()[0]?.id ?? null);
           this.resultsOptionsWorkspaceId = workspaceId;
           this.loadingResultsOptionsWorkspaceId = null;
-          this.isLoadingResultsOptions = false;
+          this.isLoadingResultsOptions.set(false);
         },
         error: () => {
-          this.changeDetectorRef.markForCheck();
           if (workspaceId !== this.appService.selectedWorkspaceId) return;
-          this.resultsMissingsProfiles = [];
-          this.selectedResultsMissingsProfileId = null;
-          this.resultsOptionsLoadFailed = true;
+          this.resultsMissingsProfiles.set([]);
+          this.selectedResultsMissingsProfileId.set(null);
+          this.resultsOptionsLoadFailed.set(true);
           this.resultsOptionsWorkspaceId = null;
           this.loadingResultsOptionsWorkspaceId = null;
-          this.isLoadingResultsOptions = false;
+          this.isLoadingResultsOptions.set(false);
           this.showPsychometricOptionsError(
             'ws-admin.export.errors.results-options-failed'
           );
@@ -285,35 +274,35 @@ export class ExportComponent {
   }
 
   private resetWorkspaceOptions(): void {
-    this.hasGeoGebraResponses = false;
-    this.psychometricDomainCandidates = [];
-    this.psychometricItemCount = 0;
-    this.psychometricMappingIssueCount = 0;
-    this.psychometricMappingIssueDetails = '';
-    this.missingsProfiles = [];
-    this.itemDatasetMissingsProfiles = [];
-    this.resultsMissingsProfiles = [];
-    this.selectedPsychometricDomain = 'workspace';
-    this.selectedMissingsProfileId = null;
-    this.selectedItemDatasetMissingsProfileId = null;
-    this.selectedResultsMissingsProfileId = null;
-    this.itemDatasetOptions = [];
-    this.selectedItemKeys = [];
-    this.itemSearch = '';
-    this.itemDatasetMappingIssues = [];
-    this.itemDatasetMappingWarnings = [];
-    this.notReachedScope = 'unit';
-    this.recodeTrailingOmissions = false;
-    this.isLoadingItemDatasetOptions = false;
-    this.itemDatasetOptionsLoadFailed = false;
+    this.hasGeoGebraResponses.set(false);
+    this.psychometricDomainCandidates.set([]);
+    this.psychometricItemCount.set(0);
+    this.psychometricMappingIssueCount.set(0);
+    this.psychometricMappingIssueDetails.set('');
+    this.missingsProfiles.set([]);
+    this.itemDatasetMissingsProfiles.set([]);
+    this.resultsMissingsProfiles.set([]);
+    this.selectedPsychometricDomain.set('workspace');
+    this.selectedMissingsProfileId.set(null);
+    this.selectedItemDatasetMissingsProfileId.set(null);
+    this.selectedResultsMissingsProfileId.set(null);
+    this.itemDatasetOptions.set([]);
+    this.selectedItemKeys.set([]);
+    this.itemSearch.set('');
+    this.itemDatasetMappingIssues.set([]);
+    this.itemDatasetMappingWarnings.set([]);
+    this.notReachedScope.set('unit');
+    this.recodeTrailingOmissions.set(false);
+    this.isLoadingItemDatasetOptions.set(false);
+    this.itemDatasetOptionsLoadFailed.set(false);
     this.itemDatasetOptionsWorkspaceId = null;
     this.loadingItemDatasetOptionsWorkspaceId = null;
-    this.isLoadingPsychometricOptions = false;
-    this.psychometricOptionsLoadFailed = false;
+    this.isLoadingPsychometricOptions.set(false);
+    this.psychometricOptionsLoadFailed.set(false);
     this.psychometricOptionsWorkspaceId = null;
     this.loadingPsychometricOptionsWorkspaceId = null;
-    this.isLoadingResultsOptions = false;
-    this.resultsOptionsLoadFailed = false;
+    this.isLoadingResultsOptions.set(false);
+    this.resultsOptionsLoadFailed.set(false);
     this.resultsOptionsWorkspaceId = null;
     this.loadingResultsOptionsWorkspaceId = null;
     this.clearUnsupportedResultsOptions();
@@ -339,8 +328,8 @@ export class ExportComponent {
   }
 
   onNotReachedScopeChange(): void {
-    if (this.notReachedScope === 'unit') {
-      this.recodeTrailingOmissions = false;
+    if (this.notReachedScope() === 'unit') {
+      this.recodeTrailingOmissions.set(false);
     }
   }
 
@@ -356,19 +345,19 @@ export class ExportComponent {
     if (
       this.selectedFormat !== 'results-by-version' ||
       this.resultsFormat !== 'excel' ||
-      !this.includeResponseValues ||
-      !this.hasGeoGebraResponses
+      !this.includeResponseValues() ||
+      !this.hasGeoGebraResponses()
     ) {
-      this.includeGeoGebraFiles = false;
+      this.includeGeoGebraFiles.set(false);
     }
 
     if (
       this.selectedFormat !== 'results-by-version' ||
-      !this.includeResponseValues ||
-      !this.hasGeoGebraResponses ||
-      this.includeGeoGebraFiles
+      !this.includeResponseValues() ||
+      !this.hasGeoGebraResponses() ||
+      this.includeGeoGebraFiles()
     ) {
-      this.includeGeoGebraResponseValues = false;
+      this.includeGeoGebraResponseValues.set(false);
     }
   }
 
@@ -387,22 +376,20 @@ export class ExportComponent {
       return;
     }
 
-    this.isStartingExport = true;
+    this.isStartingExport.set(true);
 
     this.exportJobService
       .startJob(workspaceId, this.buildExportConfig())
       .subscribe({
         next: () => {
-          this.changeDetectorRef.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-admin.export.job-started'),
             this.translateService.instant('close'),
             { duration: 3000 }
           );
-          this.isStartingExport = false;
+          this.isStartingExport.set(false);
         },
         error: () => {
-          this.changeDetectorRef.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-admin.export.errors.start-failed'
@@ -410,7 +397,7 @@ export class ExportComponent {
             this.translateService.instant('close'),
             { duration: 5000 }
           );
-          this.isStartingExport = false;
+          this.isStartingExport.set(false);
         }
       });
   }
@@ -423,10 +410,10 @@ export class ExportComponent {
         version: this.resultsVersion,
         format: this.resultsFormat,
         matrixValue: this.matrixValue,
-        missingsProfileId: this.selectedItemDatasetMissingsProfileId!,
-        notReachedScope: this.notReachedScope,
-        recodeTrailingOmissions: this.recodeTrailingOmissions,
-        items: this.selectedItemKeys.map(key => {
+        missingsProfileId: this.selectedItemDatasetMissingsProfileId()!,
+        notReachedScope: this.notReachedScope(),
+        recodeTrailingOmissions: this.recodeTrailingOmissions(),
+        items: this.selectedItemKeys().map(key => {
           const selectionKey = ItemDatasetSelectionKey.parse(key);
           return {
             unitId: selectionKey?.unitId || '',
@@ -444,10 +431,10 @@ export class ExportComponent {
         userId: this.appService.userId,
         version: this.resultsVersion,
         format: this.resultsFormat,
-        partWholeCorrection: this.partWholeCorrection,
-        missingsProfileId: this.selectedMissingsProfileId || undefined,
+        partWholeCorrection: this.partWholeCorrection(),
+        missingsProfileId: this.selectedMissingsProfileId() || undefined,
         domain: this.getPsychometricDomainSelection(),
-        maxCategoryCount: this.maxCategoryCount
+        maxCategoryCount: this.maxCategoryCount()
       };
     }
 
@@ -457,50 +444,50 @@ export class ExportComponent {
       includeReplayUrl: false,
       version: this.resultsVersion,
       format: this.resultsFormat,
-      includeResponseValues: this.includeResponseValues,
-      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
-      includeGeoGebraFiles: this.includeGeoGebraFiles,
-      missingsProfileId: this.selectedResultsMissingsProfileId!
+      includeResponseValues: this.includeResponseValues(),
+      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues(),
+      includeGeoGebraFiles: this.includeGeoGebraFiles(),
+      missingsProfileId: this.selectedResultsMissingsProfileId()!
     };
   }
 
   get isExportDisabled(): boolean {
-    if (this.isStartingExport) {
+    if (this.isStartingExport()) {
       return true;
     }
     if (this.selectedFormat === 'item-matrix') {
-      return this.isLoadingItemDatasetOptions ||
-        this.itemDatasetOptionsLoadFailed ||
-        this.selectedItemDatasetMissingsProfileId === null ||
-        this.itemDatasetOptions.length === 0 ||
-        this.selectedItemKeys.length === 0 ||
-        this.itemDatasetMappingIssues.length > 0;
+      return this.isLoadingItemDatasetOptions() ||
+        this.itemDatasetOptionsLoadFailed() ||
+        this.selectedItemDatasetMissingsProfileId() === null ||
+        this.itemDatasetOptions().length === 0 ||
+        this.selectedItemKeys().length === 0 ||
+        this.itemDatasetMappingIssues().length > 0;
     }
     if (this.selectedFormat === 'results-by-version') {
       return (
-        this.isLoadingResultsOptions ||
-        this.resultsOptionsLoadFailed ||
-        this.selectedResultsMissingsProfileId === null
+        this.isLoadingResultsOptions() ||
+        this.resultsOptionsLoadFailed() ||
+        this.selectedResultsMissingsProfileId() === null
       );
     }
     if (this.selectedFormat !== 'psychometrics') {
       return false;
     }
     if (
-      this.isLoadingPsychometricOptions ||
-      this.psychometricOptionsLoadFailed ||
-      this.selectedMissingsProfileId === null ||
-      this.psychometricItemCount === 0 ||
-      !Number.isSafeInteger(this.maxCategoryCount) ||
-      this.maxCategoryCount < 1 ||
-      this.maxCategoryCount > 100
+      this.isLoadingPsychometricOptions() ||
+      this.psychometricOptionsLoadFailed() ||
+      this.selectedMissingsProfileId() === null ||
+      this.psychometricItemCount() === 0 ||
+      !Number.isSafeInteger(this.maxCategoryCount()) ||
+      this.maxCategoryCount() < 1 ||
+      this.maxCategoryCount() > 100
     ) {
       return true;
     }
-    if (this.psychometricMappingIssueCount > 0) {
+    if (this.psychometricMappingIssueCount() > 0) {
       return true;
     }
-    if (this.selectedPsychometricDomain === 'workspace') {
+    if (this.selectedPsychometricDomain() === 'workspace') {
       return false;
     }
     return !this.getSelectedDomainCandidate()?.selectable;
@@ -512,16 +499,16 @@ export class ExportComponent {
     );
   }
 
-  get filteredItemDatasetOptions(): ItemDatasetOption[] {
-    const search = this.itemSearch.trim().toLocaleLowerCase();
+  readonly filteredItemDatasetOptions = computed<ItemDatasetOption[]>(() => {
+    const search = this.itemSearch().trim().toLocaleLowerCase();
     if (!search) {
-      return this.itemDatasetOptions;
+      return this.itemDatasetOptions();
     }
-    return this.itemDatasetOptions.filter(item => (
+    return this.itemDatasetOptions().filter(item => (
       item.columnName.toLocaleLowerCase().includes(search) ||
       item.itemLabel.toLocaleLowerCase().includes(search)
     ));
-  }
+  });
 
   getItemDatasetKey(item: ItemDatasetOption): string {
     return ItemDatasetSelectionKey
@@ -531,53 +518,45 @@ export class ExportComponent {
 
   onItemDatasetSelectionChange(selectedVisibleKeys: string[]): void {
     const visibleKeys = new Set(
-      this.filteredItemDatasetOptions.map(item => this.getItemDatasetKey(item))
+      this.filteredItemDatasetOptions().map(item => this.getItemDatasetKey(item))
     );
     const selectedVisible = new Set(selectedVisibleKeys);
-    const previouslySelected = new Set(this.selectedItemKeys);
-    this.selectedItemKeys = this.itemDatasetOptions
-      .map(item => this.getItemDatasetKey(item))
-      .filter(key => (
-        visibleKeys.has(key) ?
-          selectedVisible.has(key) :
-          previouslySelected.has(key)
-      ));
+    const previouslySelected = new Set(this.selectedItemKeys());
+    this.selectedItemKeys.set(this.itemDatasetOptions().map(item => this.getItemDatasetKey(item))
+      .filter(key => (visibleKeys.has(key) ?
+        selectedVisible.has(key) :
+        previouslySelected.has(key))));
   }
 
   selectAllItemDatasetItems(): void {
-    this.selectedItemKeys = this.itemDatasetOptions.map(item => (
-      this.getItemDatasetKey(item)
-    ));
+    this.selectedItemKeys.set(this.itemDatasetOptions().map(item => (this.getItemDatasetKey(item))));
   }
 
   clearAllItemDatasetItems(): void {
-    this.selectedItemKeys = [];
+    this.selectedItemKeys.set([]);
   }
 
   selectFilteredItemDatasetItems(): void {
-    const selected = new Set(this.selectedItemKeys);
-    this.filteredItemDatasetOptions.forEach(item => (
+    const selected = new Set(this.selectedItemKeys());
+    this.filteredItemDatasetOptions().forEach(item => (
       selected.add(this.getItemDatasetKey(item))
     ));
-    this.selectedItemKeys = this.itemDatasetOptions
-      .map(item => this.getItemDatasetKey(item))
-      .filter(key => selected.has(key));
+    this.selectedItemKeys.set(this.itemDatasetOptions().map(item => this.getItemDatasetKey(item))
+      .filter(key => selected.has(key)));
   }
 
   clearFilteredItemDatasetItems(): void {
-    const filtered = new Set(this.filteredItemDatasetOptions.map(item => (
+    const filtered = new Set(this.filteredItemDatasetOptions().map(item => (
       this.getItemDatasetKey(item)
     )));
-    this.selectedItemKeys = this.selectedItemKeys.filter(key => (
-      !filtered.has(key)
-    ));
+    this.selectedItemKeys.set(this.selectedItemKeys().filter(key => (!filtered.has(key))));
   }
 
   openItemDatasetMappingDiagnostics(
     severity: ItemDatasetMappingSeverity
   ): void {
     const diagnostics = severity === 'warning' ?
-      this.itemDatasetMappingWarnings : this.itemDatasetMappingIssues;
+      this.itemDatasetMappingWarnings() : this.itemDatasetMappingIssues();
     if (diagnostics.length === 0) return;
     this.dialog.open(ItemDatasetMappingDiagnosticsDialogComponent, {
       data: { severity, diagnostics },
@@ -590,15 +569,15 @@ export class ExportComponent {
 
   private getSelectedDomainCandidate():
   PsychometricDomainCandidateDto | undefined {
-    return this.psychometricDomainCandidates.find(
+    return this.psychometricDomainCandidates().find(
       candidate => this.getPsychometricDomainKey(candidate) ===
-        this.selectedPsychometricDomain
+        this.selectedPsychometricDomain()
     );
   }
 
   private getPsychometricDomainSelection(): PsychometricDomainSelection {
     const candidate = this.getSelectedDomainCandidate();
-    if (this.selectedPsychometricDomain === 'workspace' || !candidate) {
+    if (this.selectedPsychometricDomain() === 'workspace' || !candidate) {
       return { mode: 'workspace' };
     }
     return {
@@ -617,21 +596,21 @@ export class ExportComponent {
   ): void {
     const getSelectedProfileId = (): number | null => (
       target === 'item-dataset' ?
-        this.selectedItemDatasetMissingsProfileId :
-        this.selectedMissingsProfileId
+        this.selectedItemDatasetMissingsProfileId() :
+        this.selectedMissingsProfileId()
     );
     const setSelectedProfileId = (profileId: number | null): void => {
       if (target === 'item-dataset') {
-        this.selectedItemDatasetMissingsProfileId = profileId;
+        this.selectedItemDatasetMissingsProfileId.set(profileId);
       } else {
-        this.selectedMissingsProfileId = profileId;
+        this.selectedMissingsProfileId.set(profileId);
       }
     };
     const setProfiles = (profiles: MissingsProfileOption[]): void => {
       if (target === 'item-dataset') {
-        this.itemDatasetMissingsProfiles = profiles;
+        this.itemDatasetMissingsProfiles.set(profiles);
       } else {
-        this.missingsProfiles = profiles;
+        this.missingsProfiles.set(profiles);
       }
     };
 
@@ -667,18 +646,17 @@ export class ExportComponent {
     result: OptionLoadResult<PsychometricDomainCandidatesDto>
   ): void {
     if (result.ok) {
-      this.psychometricDomainCandidates = result.value.candidates;
-      this.psychometricItemCount = result.value.itemCount;
-      this.psychometricMappingIssueCount = result.value.mappingIssueCount;
-      this.psychometricMappingIssueDetails =
-        result.value.mappingIssuePreview.join('\n');
+      this.psychometricDomainCandidates.set(result.value.candidates);
+      this.psychometricItemCount.set(result.value.itemCount);
+      this.psychometricMappingIssueCount.set(result.value.mappingIssueCount);
+      this.psychometricMappingIssueDetails.set(result.value.mappingIssuePreview.join('\n'));
       return;
     }
 
-    this.psychometricDomainCandidates = [];
-    this.psychometricItemCount = 0;
-    this.psychometricMappingIssueCount = 0;
-    this.psychometricMappingIssueDetails = '';
+    this.psychometricDomainCandidates.set([]);
+    this.psychometricItemCount.set(0);
+    this.psychometricMappingIssueCount.set(0);
+    this.psychometricMappingIssueDetails.set('');
     this.showPsychometricOptionsError(
       'ws-admin.export.errors.psychometric-domain-options-failed'
     );
@@ -688,18 +666,16 @@ export class ExportComponent {
     result: OptionLoadResult<ItemDatasetOptionsDto>
   ): void {
     if (result.ok) {
-      this.itemDatasetOptions = result.value.items;
-      this.itemDatasetMappingIssues = result.value.mappingIssues;
-      this.itemDatasetMappingWarnings = result.value.mappingWarnings || [];
-      this.selectedItemKeys = result.value.items.map(item => (
-        this.getItemDatasetKey(item)
-      ));
+      this.itemDatasetOptions.set(result.value.items);
+      this.itemDatasetMappingIssues.set(result.value.mappingIssues);
+      this.itemDatasetMappingWarnings.set(result.value.mappingWarnings || []);
+      this.selectedItemKeys.set(result.value.items.map(item => (this.getItemDatasetKey(item))));
       return;
     }
-    this.itemDatasetOptions = [];
-    this.selectedItemKeys = [];
-    this.itemDatasetMappingIssues = [];
-    this.itemDatasetMappingWarnings = [];
+    this.itemDatasetOptions.set([]);
+    this.selectedItemKeys.set([]);
+    this.itemDatasetMappingIssues.set([]);
+    this.itemDatasetMappingWarnings.set([]);
     this.showPsychometricOptionsError(
       'ws-admin.export.errors.item-dataset-options-failed'
     );

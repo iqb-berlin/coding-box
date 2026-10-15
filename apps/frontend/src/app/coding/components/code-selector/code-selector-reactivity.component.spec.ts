@@ -151,7 +151,7 @@ describe('CodeSelectorComponent reactive replay state', () => {
 
   it('shows validation triggered by a parent call without a child event', async () => {
     const selector = fixture.debugElement.query(By.directive(CodeSelectorComponent)).componentInstance as CodeSelectorComponent;
-    selector.selectedCodingIssueOption = -2;
+    selector.selectedCodingIssueOption.set(-2);
     expect(selector.canLeaveCurrentUnit()).toBe(false);
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.notes-validation-error')).toBeTruthy();

@@ -211,7 +211,7 @@ describe('CodingJobResultDialogComponent', () => {
       notes: 'group note'
     });
 
-    component.testPersonFilter = 'BOOKLET_A';
+    component.testPersonFilter.set('BOOKLET_A');
     component.applyFilters();
 
     expect(component.getFilteredResultCount()).toBe(1);
@@ -241,7 +241,7 @@ describe('CodingJobResultDialogComponent', () => {
 
     expect(component.dataSource.data).toHaveLength(1);
     expect(component.dataSource.data[0].code).toBe(1);
-    expect(component.isNotesUnavailable).toBe(true);
+    expect(component.isNotesUnavailable()).toBe(true);
   });
 
   it('should resolve manually selected missing codes from the coding job missing profile', () => {
@@ -699,7 +699,7 @@ describe('CodingJobResultDialogComponent', () => {
   });
 
   it('should allow applying results when the coding job freshness requires manual review', () => {
-    component.isLoading = false;
+    component.isLoading.set(false);
     component.data.codingJob = {
       ...component.data.codingJob,
       status: 'completed',
@@ -726,7 +726,7 @@ describe('CodingJobResultDialogComponent', () => {
   });
 
   it('should block applying results when the coding job source freshness is stale', () => {
-    component.isLoading = false;
+    component.isLoading.set(false);
     component.data.codingJob = {
       ...component.data.codingJob,
       status: 'completed',

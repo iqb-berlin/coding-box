@@ -1,3 +1,8 @@
+@let selectedUnitValue = selectedUnit();
+@let quickSearchTableFiltersValue = quickSearchTableFilters();
+@let testPersonValue = testPerson();
+@let overviewValue = overview();
+@let logAnomalySummaryValue = logAnomalySummary();
 <div class="fx-column-start-start fx-gap-10 container">
   <div>
     <div class="fx-row-center-center-stretch fx-gap-20 action-bar">
@@ -17,9 +22,9 @@
         (click)="openExportDialog()"
         class="action-button"
       >
-        @if (!isExporting) {
+        @if (!isExporting()) {
         <mat-icon>download</mat-icon>
-        } @if (isExporting) {
+        } @if (isExporting()) {
         <mat-spinner
           diameter="20"
           style="display: inline-block; margin-right: 8px"
@@ -81,7 +86,7 @@
         class="action-button"
       >
         <mat-icon>table_chart</mat-icon>
-        @if (!isTableView) {
+        @if (!isTableView()) {
         <span>Tabellenansicht</span>
         } @else {
         <span>Ergebnisbrowser</span>
@@ -90,7 +95,7 @@
     </div>
   </div>
 
-  @if (hasCodingFreshnessWarning) {
+  @if (hasCodingFreshnessWarning()) {
   <div class="coding-freshness-banner">
     <div class="coding-freshness-icon">
       <mat-icon>warning</mat-icon>
@@ -102,7 +107,7 @@
         <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
       </div>
       <div class="coding-freshness-chip-row">
-        @for (item of codingFreshnessDisplayWarnings; track item.version + item.state) {
+        @for (item of codingFreshnessDisplayWarnings(); track item.version + item.state) {
         <span class="coding-freshness-chip">
           {{ getCodingFreshnessChipLabel(item) }}
         </span>
@@ -110,13 +115,13 @@
       </div>
     </div>
     <button mat-stroked-button type="button" (click)="openCodingFreshnessTarget()">
-      <mat-icon>{{ codingFreshnessActionIcon }}</mat-icon>
-      {{ codingFreshnessActionLabel }}
+      <mat-icon>{{ codingFreshnessActionIcon() }}</mat-icon>
+      {{ codingFreshnessActionLabel() }}
     </button>
   </div>
   }
 
-  @if (showTestResultsLogAnomalies) {
+  @if (showTestResultsLogAnomalies()) {
   <div class="log-quality-card">
     <div class="log-quality-header">
       <div>
@@ -125,7 +130,7 @@
           Technische Auffälligkeiten in Booklet- und Aufgaben-Logs
         </p>
       </div>
-      @if (logAnomalySummary; as summary) {
+      @if (logAnomalySummaryValue; as summary) {
       <span
         class="log-quality-pill"
         [class.critical]="summary.criticalBooklets > 0"
@@ -138,14 +143,14 @@
     </div>
     <mat-divider></mat-divider>
 
-    @if (isLoadingLogAnomalySummary) {
+    @if (isLoadingLogAnomalySummary()) {
     <div class="loading-container compact">
       <mat-spinner class="mat-spinner" diameter="32"></mat-spinner>
       <p class="loading-text">Log-Qualität wird geladen...</p>
     </div>
     }
 
-    @if (!isLoadingLogAnomalySummary && logAnomalySummaryLoadFailed) {
+    @if (!isLoadingLogAnomalySummary() && logAnomalySummaryLoadFailed()) {
     <div class="log-quality-note warning">
       <mat-icon>warning</mat-icon>
       <span>Die Log-Qualität konnte nicht geladen werden.</span>
@@ -160,7 +165,7 @@
     </div>
     }
 
-    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && !logAnomalySummaryRequested) {
+    @if (!isLoadingLogAnomalySummary() && !logAnomalySummaryLoadFailed() && !logAnomalySummaryRequested()) {
     <div class="log-quality-note neutral">
       <mat-icon>troubleshoot</mat-icon>
       <span>Die Log-Qualität wird bei Bedarf berechnet.</span>
@@ -175,7 +180,7 @@
     </div>
     }
 
-    @if (!isLoadingLogAnomalySummary && !logAnomalySummaryLoadFailed && logAnomalySummary; as summary) {
+    @if (!isLoadingLogAnomalySummary() && !logAnomalySummaryLoadFailed() && logAnomalySummaryValue; as summary) {
     <div class="log-quality-grid">
       <div class="log-quality-metric">
         <div class="label">Booklets geprüft</div>
@@ -184,7 +189,7 @@
       <div class="log-quality-metric affected">
         <div class="label">Auffällig</div>
         <div class="value">{{ summary.affectedBooklets }}</div>
-        <div class="hint">{{ logAnomalyAffectedPercent }}%</div>
+        <div class="hint">{{ logAnomalyAffectedPercent() }}%</div>
       </div>
       <div class="log-quality-metric critical">
         <div class="label">Kritisch</div>
@@ -248,32 +253,32 @@
     </p>
     <mat-divider></mat-divider>
 
-    @if (isLoadingOverview) {
+    @if (isLoadingOverview()) {
     <div class="loading-container">
       <mat-spinner class="mat-spinner"></mat-spinner>
       <p class="loading-text">Übersicht wird geladen...</p>
     </div>
-    } @if (!isLoadingOverview && overview) {
+    } @if (!isLoadingOverview() && overviewValue) {
     <div class="overview-grid">
       <div class="overview-metric">
         <div class="label">Testgruppen</div>
-        <div class="value">{{ overview.testGroups | number:'1.0-0' }}</div>
+        <div class="value">{{ overviewValue.testGroups | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
         <div class="label">Testpersonen</div>
-        <div class="value">{{ overview.testPersons | number:'1.0-0' }}</div>
+        <div class="value">{{ overviewValue.testPersons | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
         <div class="label">Verschiedene Aufgaben</div>
-        <div class="value">{{ overview.uniqueUnits | number:'1.0-0' }}</div>
+        <div class="value">{{ overviewValue.uniqueUnits | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
         <div class="label">Verschiedene Testhefte</div>
-        <div class="value">{{ overview.uniqueBooklets | number:'1.0-0' }}</div>
+        <div class="value">{{ overviewValue.uniqueBooklets | number:'1.0-0' }}</div>
       </div>
       <div class="overview-metric">
         <div class="label">Antwortwerte gesamt</div>
-        <div class="value">{{ overview.uniqueResponses | number:'1.0-0' }}</div>
+        <div class="value">{{ overviewValue.uniqueResponses | number:'1.0-0' }}</div>
       </div>
     </div>
 
@@ -284,7 +289,7 @@
         <button
           type="button"
           class="status-chip"
-          [class.is-active]="quickSearchTableFilters?.responseStatus === sc.status && isTableView"
+          [class.is-active]="quickSearchTableFiltersValue?.responseStatus === sc.status && isTableView()"
           [matTooltip]="getResponseStatusTooltip(sc.status)"
           [attr.aria-label]="'Antwortstatus ' + sc.status + ' in der Tabellenansicht anzeigen'"
           (click)="openResponseStatusInTable(sc.status)"
@@ -311,7 +316,7 @@
         Sitzungsdaten
       </button>
     </div>
-    } @if (!isLoadingOverview && !overview) {
+    } @if (!isLoadingOverview() && !overviewValue) {
     <div class="empty-state-container" style="max-width: unset">
       <mat-icon class="empty-state-icon">info</mat-icon>
       <h2 class="empty-state-title">Keine Übersicht verfügbar</h2>
@@ -340,17 +345,17 @@
     [hidden]="true"
     (change)="onFileSelected($event.currentTarget, 'logs')"
   />
-  @if (isUploadingResults) {
+  @if (isUploadingResults()) {
   <div class="loading-container">
     <mat-spinner class="mat-spinner"></mat-spinner>
-    <p class="loading-text">{{ uploadingMessage }}</p>
+    <p class="loading-text">{{ uploadingMessage() }}</p>
   </div>
-  } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
+  } @if(!isUploadingResults()){ @if (dataSource) { @if (isTableView()) {
   <coding-box-test-results-flat-table
-    [initialFilters]="quickSearchTableFilters"
-    [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies"
-    [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn"
-    [enableRegexSearch]="enableRegexSearch"
+    [initialFilters]="quickSearchTableFiltersValue"
+    [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies()"
+    [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn()"
+    [enableRegexSearch]="enableRegexSearch()"
     (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>
   } @else {
@@ -384,7 +389,7 @@
           </button>
           <button
             mat-stroked-button
-            [disabled]="totalRecords === 0 || isDeleteJobRunning()"
+            [disabled]="totalRecords() === 0 || isDeleteJobRunning()"
             (click)="deleteFilteredPersons()"
             class="delete-button"
           >
@@ -399,24 +404,24 @@
       <div class="delete-progress-container">
         <div class="delete-progress-header">
           <mat-icon>delete_sweep</mat-icon>
-          <span>{{ deleteProgressMessage || 'Löschung läuft...' }}</span>
-          <span class="delete-progress-value">{{ deleteProgress }}%</span>
+          <span>{{ deleteProgressMessage() || 'Löschung läuft...' }}</span>
+          <span class="delete-progress-value">{{ deleteProgress() }}%</span>
         </div>
-        <mat-progress-bar mode="determinate" [value]="deleteProgress"></mat-progress-bar>
+        <mat-progress-bar mode="determinate" [value]="deleteProgress()"></mat-progress-bar>
       </div>
       }
 
-      @if (isDeletingTestPersons) {
+      @if (isDeletingTestPersons()) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">{{ deleteProgressMessage || 'Löschung wird vorbereitet...' }}</p>
+        <p class="loading-text">{{ deleteProgressMessage() || 'Löschung wird vorbereitet...' }}</p>
       </div>
-      } @if (isLoading && !isSearching && !isDeletingTestPersons) {
+      } @if (isLoading() && !isSearching() && !isDeletingTestPersons()) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
         <p class="loading-text">Daten werden geladen...</p>
       </div>
-      } @if (!isLoading || isSearching) {
+      } @if (!isLoading() || isSearching()) {
       <div class="table-section">
         <div class="search-container">
           <mat-icon class="search-icon">search</mat-icon>
@@ -436,7 +441,7 @@
           </button>
         </div>
         <div class="table-container">
-          @if (isSearching) {
+          @if (isSearching()) {
           <div class="search-loading-indicator">
             <mat-spinner diameter="20"></mat-spinner>
             <span>Suche läuft...</span>
@@ -500,7 +505,7 @@
               (click)="onRowClick(row)"
               *matRowDef="let row; columns: displayedColumns"
               class="clickable-row"
-              [class.active-test-person]="testPerson?.id === row.id"
+              [class.active-test-person]="testPersonValue?.id === row.id"
             ></mat-row>
           </mat-table>
 
@@ -522,9 +527,9 @@
           }
         </div>
         <mat-paginator
-          [length]="totalRecords"
-          [pageSize]="pageSize"
-          [pageIndex]="pageIndex"
+          [length]="totalRecords()"
+          [pageSize]="pageSize()"
+          [pageIndex]="pageIndex()"
           [pageSizeOptions]="[50, 100, 200, 500]"
           showFirstLastButtons
           (page)="onPaginatorChange($event)"
@@ -543,7 +548,7 @@
         </p>
         <mat-divider></mat-divider>
 
-        @if (!testPerson) {
+        @if (!testPersonValue) {
         <div
           class="empty-state-container"
           style="
@@ -563,7 +568,7 @@
             Sitzungen anzeigen zu können.
           </p>
         </div>
-        } @else { @if (isLoadingBooklets) {
+        } @else { @if (isLoadingBooklets()) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
           <p class="loading-text">Testhefte werden geladen...</p>
@@ -572,11 +577,11 @@
 
         <mat-accordion
           class="accordion"
-          [style.display]="isLoadingBooklets ? 'none' : 'block'"
+          [style.display]="isLoadingBooklets() ? 'none' : 'block'"
         >
-          @for (booklet of booklets; track booklet.id) {
+          @for (booklet of booklets(); track booklet.id) {
           <mat-expansion-panel
-            [expanded]="booklets.length === 1"
+            [expanded]="booklets().length === 1"
             class="booklet-panel"
           >
             <mat-expansion-panel-header>
@@ -709,7 +714,7 @@
         </p>
         <mat-divider></mat-divider>
 
-        @if (!testPerson) {
+        @if (!testPersonValue) {
         <div
           class="empty-state-container"
           style="
@@ -728,7 +733,7 @@
             anzeigen zu können.
           </p>
         </div>
-        } @else if (!selectedBooklet) {
+        } @else if (!selectedBooklet()) {
         <div
           class="empty-state-container"
           style="
@@ -747,7 +752,7 @@
             zu können.
           </p>
         </div>
-        } @else if (!selectedUnit) {
+        } @else if (!selectedUnitValue) {
         <div
           class="empty-state-container"
           style="
@@ -765,7 +770,7 @@
             Bitte wählen Sie eine Aufgabe aus dem ausgewählten Testheft aus.
           </p>
         </div>
-        } @else { @if (responses.length > 0) {
+        } @else { @if (responses().length > 0) {
         <div class="response-actions">
           <button
             mat-stroked-button
@@ -797,8 +802,8 @@
           <button
             mat-stroked-button
             color="warn"
-            [disabled]="isDeleteJobRunning() || !selectedUnit"
-            (click)="selectedUnit ? deleteUnitsByName(selectedUnit) : null"
+            [disabled]="isDeleteJobRunning() || !selectedUnitValue"
+            (click)="selectedUnitValue ? deleteUnitsByName(selectedUnitValue) : null"
             class="action-button"
           >
             <mat-icon>delete_sweep</mat-icon>
@@ -823,8 +828,8 @@
               <mat-icon>note</mat-icon>
               Notizen
             </button>
-            @if (selectedUnit && selectedUnit.id &&
-            hasUnitNotes(selectedUnit.id)) {
+            @if (selectedUnitValue && selectedUnitValue.id &&
+            hasUnitNotes(selectedUnitValue.id)) {
             <span
               style="
                 position: absolute;
@@ -851,7 +856,7 @@
           </div>
         </div>
         <div class="var-list">
-          @for (response of this.responses; track response.id) {
+          @for (response of responses(); track response.id) {
           <div class="response-item">
             <div class="response-header">
               <div class="response-content">

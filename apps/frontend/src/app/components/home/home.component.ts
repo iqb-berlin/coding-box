@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnInit, DestroyRef, inject
+  Component, OnInit, DestroyRef, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -49,16 +49,16 @@ import {
 export class HomeComponent implements OnInit {
   readonly appService: AppService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private readonly route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
-  workspaces: WorkspaceFullDto[] = [];
-  authData = AppService.defaultAuthData;
-  authBootstrapStatus: AuthBootstrapStatus = 'checking';
+  readonly workspaces = signal<WorkspaceFullDto[]>([]);
+  readonly authData = signal(AppService.defaultAuthData);
+  readonly authBootstrapStatus = signal<AuthBootstrapStatus>('checking');
   private isPersonalCodingJobsRedirectChecked = false;
   private authDataRefreshRequested = false;
   private navigationStarted = false;
@@ -71,19 +71,18 @@ export class HomeComponent implements OnInit {
     });
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
       if (authData) {
-        this.authData = authData;
-        this.workspaces = authData.workspaces;
+        this.authData.set(authData);
+        this.workspaces.set(authData.workspaces);
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
-        this.changeDetectorRef.markForCheck();
       }
     });
 
     this.appService.authBootstrapStatus$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
-        this.authBootstrapStatus = status;
+        this.authBootstrapStatus.set(status);
 
         if (status === 'ready' && !this.authDataRefreshRequested) {
           this.authDataRefreshRequested = true;
@@ -91,7 +90,6 @@ export class HomeComponent implements OnInit {
         }
 
         this.resolveAuthDataFailedQueryParam();
-        this.changeDetectorRef.markForCheck();
       });
 
     this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
@@ -109,9 +107,9 @@ export class HomeComponent implements OnInit {
   private refreshHomeAuthData(): void {
     this.appService.refreshAuthData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       if (!this.navigationStarted && !this.isPersonalCodingJobsRedirectChecked &&
-        this.authData.userId > 0 &&
-        !this.authData.isAdmin) {
-        this.redirectPureCoderToPersonalCodingJobs(this.authData.userId);
+        this.authData().userId > 0 &&
+        !this.authData().isAdmin) {
+        this.redirectPureCoderToPersonalCodingJobs(this.authData().userId);
       }
     });
   }
@@ -119,11 +117,11 @@ export class HomeComponent implements OnInit {
   private redirectPureCoderToPersonalCodingJobs(userId: number): void {
     this.isPersonalCodingJobsRedirectChecked = true;
 
-    if (!this.workspaces || this.workspaces.length === 0) {
+    if (!this.workspaces() || this.workspaces().length === 0) {
       return;
     }
 
-    const workspaceIds = this.workspaces.map(workspace => workspace.id);
+    const workspaceIds = this.workspaces().map(workspace => workspace.id);
     const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
 
     forkJoin(observables).pipe(catchError(() => of(null)), takeUntilDestroyed(this.destroyRef)).subscribe(responses => {
@@ -204,12 +202,12 @@ export class HomeComponent implements OnInit {
       return;
     }
 
-    if (this.authData.userId > 0 || this.authBootstrapStatus === 'ready') {
+    if (this.authData().userId > 0 || this.authBootstrapStatus() === 'ready') {
       this.clearAuthDataFailedQueryParams();
       return;
     }
 
-    if (this.authBootstrapStatus === 'auth-data-failed' && !this.authDataFailedMessageShown) {
+    if (this.authBootstrapStatus() === 'auth-data-failed' && !this.authDataFailedMessageShown) {
       this.authDataFailedMessageShown = true;
       this.snackBar.open(
         'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',

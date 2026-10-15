@@ -30,6 +30,6 @@
 
       <mat-header-row *matHeaderRowDef="displayedColumns" />
       <mat-row *matRowDef="let row; columns: displayedColumns;"
-        [class.selected] = "row | isSelectedId: selectedWorkspaceId"
+        [class.selected] = "row | isSelectedId: selectedWorkspaceId()"
         (click)="toggleRowSelection(row)" />
     </mat-table>

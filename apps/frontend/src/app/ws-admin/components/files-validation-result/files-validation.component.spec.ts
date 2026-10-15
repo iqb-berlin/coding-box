@@ -13,7 +13,7 @@ import { WorkspaceService } from '../../../workspace/services/workspace.service'
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
-import { UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import { FileValidationResultDto, UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('FilesValidationComponent', () => {
   let closing: Subject<void>;
@@ -122,6 +122,39 @@ describe('FilesValidationComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should preserve retained expansion state and reset selections when refreshed results change', () => {
+    const expanded = {
+      booklets: true,
+      units: false,
+      schemes: false,
+      schemer: false,
+      definitions: false,
+      player: false,
+      metadata: false
+    };
+    const previous = new Map([['retained', expanded], ['removed', expanded]]);
+    component.expandedFilesLists.set(previous);
+    component.duplicateSelection.set(new Map([['stale-login', 'removed']]));
+
+    const result: FileValidationResultDto = {
+      testTakersFound: true,
+      validationResults: [createValidationResult('retained', []), createValidationResult('new', [])],
+      duplicateTestTakers: [
+        { login: 'login', occurrences: [{ testTaker: 'first', mode: 'run' }, { testTaker: 'second', mode: 'run' }] },
+        { login: 'empty', occurrences: [] }
+      ]
+    };
+    (component as unknown as { applyValidationResultData: (value: FileValidationResultDto) => void })
+      .applyValidationResultData(result);
+
+    expect([...component.expandedFilesLists().keys()]).toEqual(['retained', 'new']);
+    expect(component.expandedFilesLists().get('retained')?.booklets).toBe(true);
+    expect(component.expandedFilesLists().get('new')?.booklets).toBe(false);
+    expect(component.duplicateSelection()).toEqual(new Map([['login', 'first']]));
+    expect(previous.has('removed')).toBe(true);
+    expect(component.validationResults().map(value => value.testTaker)).toEqual(['retained', 'new']);
+  });
+
   it('should calculate summary correctly', () => {
     // Mock data
     component.data = {
@@ -165,19 +198,19 @@ describe('FilesValidationComponent', () => {
     // Rebuild derived view data and summary after replacing injected data in test.
     (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
 
-    expect(component.summary.totalTestTakers).toBe(3);
-    expect(component.summary.validTestTakerXmls).toBe(2);
-    expect(component.summary.invalidTestTakerXmls).toBe(1);
+    expect(component.summary().totalTestTakers).toBe(3);
+    expect(component.summary().validTestTakerXmls).toBe(2);
+    expect(component.summary().invalidTestTakerXmls).toBe(1);
 
-    expect(component.summary.booklets.complete).toBe(1);
-    expect(component.summary.booklets.incomplete).toBe(2);
-    expect(component.summary.booklets.missingFiles).toBe(2);
-    expect(component.summary.booklets.missingFileNames).toEqual(['b2', 'b3']);
+    expect(component.summary().booklets.complete).toBe(1);
+    expect(component.summary().booklets.incomplete).toBe(2);
+    expect(component.summary().booklets.missingFiles).toBe(2);
+    expect(component.summary().booklets.missingFileNames).toEqual(['b2', 'b3']);
 
-    expect(component.summary.units.complete).toBe(2);
-    expect(component.summary.units.incomplete).toBe(1);
-    expect(component.summary.units.missingFiles).toBe(1);
-    expect(component.summary.units.missingFileNames).toEqual(['u1']);
+    expect(component.summary().units.complete).toBe(2);
+    expect(component.summary().units.incomplete).toBe(1);
+    expect(component.summary().units.missingFiles).toBe(1);
+    expect(component.summary().units.missingFileNames).toEqual(['u1']);
   });
 
   it('should ignore a testlet across all matching booklets', async () => {
@@ -215,11 +248,11 @@ describe('FilesValidationComponent', () => {
       workspaceId: 1,
       validationResults: [createValidationResult('test1', ['BOOK1', 'BOOK2', 'BOOK3'])]
     };
-    component.ignoredTestlets = [
+    component.ignoredTestlets.set([
       { bookletId: 'BOOK1', testletId: 'TL1' },
       { bookletId: 'BOOK2', testletId: 'TL1' },
       { bookletId: 'BOOK3', testletId: 'TL9' }
-    ];
+    ]);
 
     (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
 
@@ -273,7 +306,7 @@ describe('FilesValidationComponent', () => {
       validationResults: [],
       unusedTestFiles: unusedFiles
     };
-    component.unusedTestFiles = [...unusedFiles];
+    component.unusedTestFiles.set([...unusedFiles]);
     component.unusedFilesSelection.select(...unusedFiles);
     fileService.deleteFilesWithResult.mockReturnValue(of({
       success: true,
@@ -283,8 +316,8 @@ describe('FilesValidationComponent', () => {
     component.deleteSelectedUnusedFiles();
 
     expect(fileService.deleteFilesWithResult).toHaveBeenCalledWith(1, [101, 102, 103]);
-    expect(component.filesDeleted).toBe(true);
-    expect(component.unusedTestFiles).toEqual([]);
+    expect(component.filesDeleted()).toBe(true);
+    expect(component.unusedTestFiles()).toEqual([]);
     expect(component.unusedFilesSelection.selected).toHaveLength(0);
     expect(refreshSpy).toHaveBeenCalledWith('Validierungsergebnisse wurden aktualisiert');
   });
@@ -312,7 +345,7 @@ describe('FilesValidationComponent', () => {
       validationResults: [],
       unusedTestFiles: unusedFiles
     };
-    component.unusedTestFiles = [...unusedFiles];
+    component.unusedTestFiles.set([...unusedFiles]);
     component.unusedFilesSelection.select(...unusedFiles);
     fileService.deleteFilesWithResult.mockReturnValue(of({
       success: false,
@@ -321,7 +354,7 @@ describe('FilesValidationComponent', () => {
 
     component.deleteSelectedUnusedFiles();
 
-    expect(component.filesDeleted).toBe(true);
+    expect(component.filesDeleted()).toBe(true);
     expect(component.unusedFilesSelection.selected).toHaveLength(0);
     expect(refreshSpy).toHaveBeenCalledWith();
   });
