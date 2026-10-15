@@ -59,6 +59,14 @@ export function createReplayHarness(environment = process.env) {
       return verifyAuditRollback(activeState);
     },
 
+    async verifyJobIsolation() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Job isolation verification requires the isolated authentication fixture.');
+      }
+      const { verifyJobIsolation } = await import('./job-isolation-fixture.mjs');
+      return verifyJobIsolation(activeState);
+    },
+
     async readFileSettings() {
       if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
         throw new Error('File settings read requires the isolated authentication fixture.');

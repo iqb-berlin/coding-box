@@ -43,6 +43,7 @@ describe('CodingStatisticsService', () => {
 
     mockJobQueueService = {
       getTestPersonCodingJob: jest.fn(),
+      getWorkspaceJob: jest.fn(),
       getCodingStatisticsJob: jest.fn(),
       getActiveCodingStatisticsJob: jest.fn().mockResolvedValue(undefined),
       addCodingStatisticsJob: jest.fn(),
@@ -50,6 +51,13 @@ describe('CodingStatisticsService', () => {
       deleteTestPersonCodingJob: jest.fn(),
       assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined)
     } as unknown as jest.Mocked<JobQueueService>;
+
+    mockJobQueueService.getWorkspaceJob.mockImplementation(async (workspaceId, queueName, jobId) => {
+      const job = await (queueName === 'test-person-coding' ?
+        mockJobQueueService.getTestPersonCodingJob(jobId) :
+        mockJobQueueService.getCodingStatisticsJob(jobId));
+      return job?.data?.workspaceId === workspaceId ? job as never : null;
+    });
 
     mockBullJobManagementService = {
       mapJobStateToStatus: jest.fn(),
@@ -568,10 +576,12 @@ describe('CodingStatisticsService', () => {
 
     it('should read coding statistics job status only from the statistics queue', async () => {
       const mockAutoCodingJob: Partial<Job> = {
+        data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
         progress: jest.fn().mockReturnValue(100)
       };
       const mockStatisticsJob: Partial<Job> = {
+        data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
         progress: jest.fn().mockReturnValue(100)
       };
@@ -588,7 +598,7 @@ describe('CodingStatisticsService', () => {
         result: mockStatistics
       });
 
-      const result = await service.getCodingStatisticsJobStatus('job-123');
+      const result = await service.getCodingStatisticsJobStatus('job-123', 1);
 
       expect(mockJobQueueService.getTestPersonCodingJob).not.toHaveBeenCalled();
       expect(mockJobQueueService.getCodingStatisticsJob).toHaveBeenCalledWith('job-123');
@@ -599,6 +609,7 @@ describe('CodingStatisticsService', () => {
 
     it('should cancel job successfully', async () => {
       const mockJob: Partial<Job> = {
+        data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('waiting')
       };
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(
@@ -606,21 +617,68 @@ describe('CodingStatisticsService', () => {
       );
       mockJobQueueService.cancelTestPersonCodingJob.mockResolvedValue(true);
 
-      const result = await service.cancelJob('job-123');
+      const result = await service.cancelJob('job-123', 1);
 
       expect(result.success).toBe(true);
     });
 
     it('should delete job successfully', async () => {
-      const mockJob: Partial<Job> = {};
+      const mockJob: Partial<Job> = { data: { workspaceId: 1 } };
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(
         mockJob as Job
       );
       mockJobQueueService.deleteTestPersonCodingJob.mockResolvedValue(true);
 
-      const result = await service.deleteJob('job-123');
+      const result = await service.deleteJob('job-123', 1);
 
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Workspace job isolation', () => {
+    it('ignores a foreign auto-coding job and finds the owned statistics job with the same ID', async () => {
+      const foreignJob = {
+        data: { workspaceId: 2 },
+        getState: jest.fn(),
+        progress: jest.fn()
+      };
+      const ownJob = {
+        data: { workspaceId: 1 },
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockReturnValue(100)
+      };
+      mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(foreignJob as never);
+      mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(ownJob as never);
+      mockBullJobManagementService.mapJobStateToStatus.mockReturnValue('completed');
+      mockBullJobManagementService.extractJobResult.mockReturnValue({
+        result: { totalResponses: 12, statusCounts: {} }
+      });
+
+      await expect(service.getJobStatus('17', 1)).resolves.toMatchObject({
+        status: 'completed', result: { totalResponses: 12 }
+      });
+      expect(foreignJob.getState).not.toHaveBeenCalled();
+      expect(foreignJob.progress).not.toHaveBeenCalled();
+      expect(mockJobQueueService.getWorkspaceJob).toHaveBeenCalledWith(1, 'coding-statistics', '17');
+    });
+
+    it('does not disclose foreign statistics or mutate foreign auto-coding jobs', async () => {
+      const foreignJob = {
+        data: { workspaceId: 2 },
+        getState: jest.fn(),
+        progress: jest.fn()
+      };
+      mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(foreignJob as never);
+      mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(foreignJob as never);
+
+      await expect(service.getJobStatus('17', 1)).resolves.toBeNull();
+      await expect(service.getCodingStatisticsJobStatus('17', 1)).resolves.toBeNull();
+      await expect(service.cancelJob('17', 1)).resolves.toMatchObject({ success: false });
+      await expect(service.deleteJob('17', 1)).resolves.toMatchObject({ success: false });
+      expect(foreignJob.getState).not.toHaveBeenCalled();
+      expect(foreignJob.progress).not.toHaveBeenCalled();
+      expect(mockJobQueueService.cancelTestPersonCodingJob).not.toHaveBeenCalled();
+      expect(mockJobQueueService.deleteTestPersonCodingJob).not.toHaveBeenCalled();
     });
   });
 
@@ -989,7 +1047,7 @@ describe('CodingStatisticsService', () => {
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(null);
       mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(null);
 
-      const result = await service.getJobStatus('job-123');
+      const result = await service.getJobStatus('job-123', 1);
 
       expect(result).toBeNull();
     });

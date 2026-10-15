@@ -319,4 +319,18 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
       expect(proof.actorUserId).to.be.a('number').and.be.greaterThan(0);
     });
   });
+
+  it('rejects foreign queue mutations and statistics reads while preserving owner results', () => {
+    cy.task('workflows:verify-job-isolation', null, {
+      log: false, timeout: 240_000
+    }).then(proof => {
+      expect(proof).to.deep.equal({
+        workspaceAccessVerified: true,
+        foreignMutationsRejected: true,
+        ownerResultsPreserved: true,
+        statisticsReadsIsolated: true,
+        ownerDeletionVerified: true
+      });
+    });
+  });
 });

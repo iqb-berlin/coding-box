@@ -50,6 +50,7 @@ stack logs under `cypress/replay-artifacts/` and `tmp/replay-e2e-artifacts/`.
 | A manual note impersonates a backend action or actor | Real authenticated API rejects event/actor/job claims; persisted notes use the authenticated user and manual event type; journal CSV neutralizes formula cells |
 | Persisted import data loses its provenance | Browser upload checks the persisted batch event against its exact Bull job, workspace and authenticated user without raw response values |
 | A failed audit or persistence write leaves a partial mutation | Import rollback regressions include pre-query failures and pending concurrent writes; isolated PostgreSQL fault injection proves deletion rollback with dependent rows, followed by a successful data-and-audit commit |
+| A permitted workspace route exposes or mutates another workspace's Bull job | Real API/Redis acceptance passes both workspace guards, rejects foreign analysis cancel/delete and statistics reads, preserves owner results and verifies owner deletion |
 
 Requirement-specific datasets and independent reference limits remain documented
 in `docs/requirements/`. Add an acceptance row and a test for each material new
@@ -82,6 +83,16 @@ the constraint in `finally`, verifies the failed deletion preserved all dependen
 rows, then repeats the real API call and checks both deletion and trusted audit.
 This is representative transaction evidence, not exhaustive coverage of every
 audited mutation or a production database test.
+
+The queue isolation case creates a second disposable workspace accessible to the
+same fixture user. It waits for real variable-analysis and coding-statistics jobs
+to complete, then verifies that foreign routes cannot cancel/delete the analysis
+job or read either statistics status route. Owner status and cached analysis
+results remain available; deleting the analysis through its owner succeeds.
+To require a real statistics job, setup removes only the exact synthetic
+workspace/version cache key from that run's Redis container. The second workspace
+is removed in `finally`. These cases cover representative queue boundaries;
+other queue families and restart prerequisites retain focused unit coverage.
 
 The test stack disables Nx daemon/plugin subprocesses, limits Node heaps to
 2 GiB per process and uses two Angular build workers. The synthetic Keycloak

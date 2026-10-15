@@ -280,8 +280,22 @@ export class JobQueueService {
     const jobWorkspaceId = Number(
       (job?.data as { workspaceId?: unknown } | undefined)?.workspaceId
     );
-    return (Number.isFinite(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId)
-    );
+    const requestedWorkspaceId = Number(workspaceId);
+    return Number.isSafeInteger(requestedWorkspaceId) && requestedWorkspaceId > 0 &&
+      Number.isSafeInteger(jobWorkspaceId) && jobWorkspaceId === requestedWorkspaceId;
+  }
+
+  async getWorkspaceJob<T = Record<string, unknown>>(
+    workspaceId: number,
+    queueName: string,
+    jobId: string
+  ): Promise<Job<T> | null> {
+    if (!Number.isSafeInteger(workspaceId) || workspaceId < 1) return null;
+    const queue = this.getQueue(queueName);
+    if (!queue) return null;
+    const job = await queue.getJob(jobId);
+    if (!job || !await this.jobBelongsToWorkspace(queueName, job, workspaceId)) return null;
+    return job as Job<T>;
   }
 
   private normalizeCodingStatisticsVersion(
@@ -406,31 +420,22 @@ export class JobQueueService {
     }
   }
 
-  async cancelJob(queueName: string, jobId: string): Promise<boolean> {
-    const queue = this.getQueue(queueName);
-    if (!queue) return false;
-    const job = await queue.getJob(jobId);
+  async cancelJob(queueName: string, jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, queueName, jobId);
     if (!job) return false;
 
     return this.cancelKnownJob(queueName, job);
   }
 
   async cancelWorkspaceJob(workspaceId: number, queueName: string, jobId: string): Promise<boolean> {
-    const queue = this.getQueue(queueName);
-    if (!queue) return false;
-    const job = await queue.getJob(jobId);
+    const job = await this.getWorkspaceJob(workspaceId, queueName, jobId);
     if (!job) return false;
-
-    const belongsToWorkspace = await this.jobBelongsToWorkspace(queueName, job, workspaceId);
-    if (!belongsToWorkspace) return false;
 
     return this.cancelKnownJob(queueName, job);
   }
 
-  async deleteJob(queueName: string, jobId: string): Promise<boolean> {
-    const queue = this.getQueue(queueName);
-    if (!queue) return false;
-    const job = await queue.getJob(jobId);
+  async deleteJob(queueName: string, jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, queueName, jobId);
     if (!job) return false;
 
     try {
@@ -787,8 +792,8 @@ export class JobQueueService {
     return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
   }
 
-  async cancelTestPersonCodingJob(jobId: string): Promise<boolean> {
-    const job = await this.testPersonCodingQueue.getJob(jobId);
+  async cancelTestPersonCodingJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
     if (!job) {
       this.logger.warn(`Job with ID ${jobId} not found`);
       return false;
@@ -828,8 +833,8 @@ export class JobQueueService {
     }
   }
 
-  async deleteTestPersonCodingJob(jobId: string): Promise<boolean> {
-    const job = await this.testPersonCodingQueue.getJob(jobId);
+  async deleteTestPersonCodingJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
     if (!job) {
       this.logger.warn(`Job with ID ${jobId} not found`);
       return false;
@@ -896,8 +901,8 @@ export class JobQueueService {
     this.exportCancellationControllers.get(jobId)?.abort();
   }
 
-  async cancelExportJob(jobId: string): Promise<boolean> {
-    const job = await this.dataExportQueue.getJob(jobId);
+  async cancelExportJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'data-export', jobId);
     if (!job) {
       this.logger.warn(`Export job with ID ${jobId} not found`);
       return false;
@@ -948,8 +953,8 @@ export class JobQueueService {
     }
   }
 
-  async markExportJobCancelled(jobId: string): Promise<boolean> {
-    const job = await this.dataExportQueue.getJob(jobId);
+  async markExportJobCancelled(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'data-export', jobId);
     if (!job) {
       this.logger.warn(
         `Export job with ID ${jobId} not found for cancellation marking`
@@ -991,8 +996,8 @@ export class JobQueueService {
     }
   }
 
-  async deleteExportJob(jobId: string): Promise<boolean> {
-    const job = await this.dataExportQueue.getJob(jobId);
+  async deleteExportJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'data-export', jobId);
     if (!job) {
       this.logger.warn(`Export job with ID ${jobId} not found`);
       return false;
@@ -1151,8 +1156,8 @@ export class JobQueueService {
     return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
   }
 
-  async deleteVariableAnalysisJob(jobId: string): Promise<boolean> {
-    const job = await this.variableAnalysisQueue.getJob(jobId);
+  async deleteVariableAnalysisJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'variable-analysis', jobId);
     if (!job) {
       this.logger.warn(`Variable analysis job with ID ${jobId} not found`);
       return false;
@@ -1194,8 +1199,8 @@ export class JobQueueService {
     }
   }
 
-  async cancelVariableAnalysisJob(jobId: string): Promise<boolean> {
-    const job = await this.variableAnalysisQueue.getJob(jobId);
+  async cancelVariableAnalysisJob(jobId: string, workspaceId: number): Promise<boolean> {
+    const job = await this.getWorkspaceJob(workspaceId, 'variable-analysis', jobId);
     if (!job) {
       this.logger.warn(`Variable analysis job with ID ${jobId} not found`);
       return false;

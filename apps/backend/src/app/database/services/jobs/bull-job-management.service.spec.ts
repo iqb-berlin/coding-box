@@ -4,6 +4,8 @@ import {
   TestPersonCodingJobData
 } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from './bull-job-management.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingReadinessService } from '../coding/coding-readiness.service';
 
 describe('BullJobManagementService', () => {
   afterEach(() => {
@@ -20,7 +22,7 @@ describe('BullJobManagementService', () => {
 
   const createService = (job: Job<TestPersonCodingJobData>) => {
     const jobQueueService = {
-      getTestPersonCodingJob: jest.fn().mockResolvedValue(job),
+      getWorkspaceJob: jest.fn().mockResolvedValue(job),
       getTestPersonCodingJobs: jest.fn().mockResolvedValue([]),
       assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined),
       addTestPersonCodingJob: jest.fn().mockResolvedValue({ id: 'new-job' }),
@@ -29,7 +31,12 @@ describe('BullJobManagementService', () => {
 
     return {
       service: new BullJobManagementService(
-        jobQueueService as unknown as JobQueueService
+        jobQueueService as unknown as JobQueueService,
+        {
+          assertAutoCodingRunCanStart: jest.fn().mockResolvedValue(undefined),
+          isRevisionCurrent: jest.fn().mockResolvedValue(true)
+        } as unknown as CodingFreshnessService,
+        { assertAutoCodingCanProcess: jest.fn().mockResolvedValue(undefined) } as unknown as CodingReadinessService
       ),
       jobQueueService
     };
@@ -52,7 +59,7 @@ describe('BullJobManagementService', () => {
       createFailedJob(originalData)
     );
 
-    await expect(service.restartJob('old-job')).resolves.toEqual({
+    await expect(service.restartJob('old-job', 7)).resolves.toEqual({
       success: true,
       message: 'Job old-job has been restarted as job new-job',
       jobId: 'new-job'
@@ -71,7 +78,7 @@ describe('BullJobManagementService', () => {
       freshnessSourceRevision: 42
     });
     expect(jobQueueService.deleteTestPersonCodingJob).toHaveBeenCalledWith(
-      'old-job'
+      'old-job', 7
     );
   });
 
@@ -87,7 +94,7 @@ describe('BullJobManagementService', () => {
         createFailedJob(invalidData)
       );
 
-      await expect(service.restartJob('old-job')).resolves.toEqual({
+      await expect(service.restartJob('old-job', 7)).resolves.toEqual({
         success: false,
         message: 'Error restarting job: autoCoderRun must be 1 or 2'
       });
@@ -112,13 +119,13 @@ describe('BullJobManagementService', () => {
     job.update = jest.fn().mockResolvedValue(undefined);
     const { service } = createService(job);
 
-    await expect(service.pauseJob('old-job')).resolves.toEqual({
+    await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
       success: true, message: 'Job old-job has been paused successfully'
     });
     expect(job.update).toHaveBeenCalledWith({ ...data, isPaused: true });
 
     job.data = { ...data, isPaused: true };
-    await expect(service.resumeJob('old-job')).resolves.toEqual({
+    await expect(service.resumeJob('old-job', 7)).resolves.toEqual({
       success: true, message: 'Job old-job has been resumed successfully'
     });
     expect(job.update).toHaveBeenLastCalledWith(data);
@@ -130,7 +137,7 @@ describe('BullJobManagementService', () => {
     job.update = jest.fn();
     const { service } = createService(job);
 
-    await expect(service.pauseJob('old-job')).resolves.toEqual({
+    await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
       success: false, message: 'Job with ID old-job cannot be paused because it is completed'
     });
     expect(job.update).not.toHaveBeenCalled();
@@ -145,7 +152,7 @@ describe('BullJobManagementService', () => {
       'error'
     ).mockImplementation(() => undefined);
 
-    await expect(service.restartJob('old-job')).resolves.toEqual({
+    await expect(service.restartJob('old-job', 7)).resolves.toEqual({
       success: false, message: 'Error restarting job: reset job active'
     });
     expect(jobQueueService.assertNoDependencyConflicts).toHaveBeenCalledWith('test-person-coding', 7);
