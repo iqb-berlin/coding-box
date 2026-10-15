@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, ChangeDetectionStrategy
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogTitle,
@@ -11,7 +13,8 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 
 @Component({
-  selector: 'tc-confirm-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-confirm-dialog',
   standalone: true,
   template: `
     <h1 mat-dialog-title>{{ confirmData.title }}</h1>
@@ -51,10 +54,10 @@ import { MatButton } from '@angular/material/button';
   ]
 })
 export class ConfirmDialogComponent implements OnInit {
-  confirmData = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
+  protected confirmData = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
   private translateService = inject(TranslateService);
 
-  showCancel = true;
+  protected showCancel = true;
   ngOnInit(): void {
     if (
       typeof this.confirmData.title === 'undefined' ||

@@ -1,4 +1,3 @@
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
@@ -10,6 +9,8 @@ import { TestPersonCodingService } from '../../apps/frontend/src/app/coding/serv
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
 import { CodingFacadeService } from '../../apps/frontend/src/app/services/facades/coding-facade.service';
 import { WorkspaceBackendService } from '../../apps/frontend/src/app/workspace/services/workspace-backend.service';
+import { DoubleCodedReviewApiService } from '../../apps/frontend/src/app/coding/services/double-coded-review-api.service';
+import { DoubleCodedReviewResponseDto } from '../../api-dto/coding/double-coded-review.dto';
 
 describe('DoubleCodedReviewComponent replay access', () => {
   it('opens editable replay decisions for a study manager without coding permission', () => {
@@ -26,16 +27,19 @@ describe('DoubleCodedReviewComponent replay access', () => {
     cy.mount(DoubleCodedReviewComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 1,
+            userId: 99,
             authData: {
+              userId: 99,
+              isAdmin: false,
               userName: 'Study Manager',
-              workspaces: [{ id: 1, accessLevel: 2, canCode: false }]
+              workspaces: [{ id: 1, accessLevel: 3, canCode: false }]
             },
-            loggedUser: undefined
+            loggedUser: undefined,
+            createOwnToken: () => of('ct-token')
           }
         },
         {
@@ -44,7 +48,7 @@ describe('DoubleCodedReviewComponent replay access', () => {
         },
         {
           provide: MAT_DIALOG_DATA,
-          useValue: {}
+          useValue: { canApplyResults: true }
         },
         {
           provide: WorkspaceBackendService,
@@ -68,27 +72,43 @@ describe('DoubleCodedReviewComponent replay access', () => {
         },
         {
           provide: TestPersonCodingService,
+          useValue: { notifyTestResultsChanged: () => {} }
+        },
+        {
+          provide: DoubleCodedReviewApiService,
           useValue: {
             getDoubleCodedVariablesForReview: () => of({
               data: [{
                 responseId: 501,
+                sourceUnitId: 1501,
                 unitName: 'Unit A',
                 variableId: 'VAR_1',
                 personLogin: 'person-1',
                 personCode: 'P001',
+                personGroup: 'Group 1',
                 bookletName: 'Booklet 1',
                 givenAnswer: 'answer',
                 isResolved: false,
                 appliedCode: null,
                 appliedScore: null,
                 appliedComment: null,
+                availableCodes: [
+                  { code: 1, label: 'Incorrect', score: 0, source: 'schema' },
+                  { code: 2, label: 'Correct', score: 1, source: 'schema' }
+                ],
+                managerDrafts: [],
+                managerHistory: [],
                 coderResults: [
                   {
                     coderId: 10,
                     coderName: 'Coder A',
                     jobId: 1001,
                     jobName: 'Definition 99 / A',
+                    jobDefinitionId: 99,
+                    trainingId: null,
+                    trainingLabel: null,
                     code: 1,
+                    codingIssueOption: null,
                     score: 0,
                     notes: null,
                     supervisorComment: null,
@@ -99,7 +119,11 @@ describe('DoubleCodedReviewComponent replay access', () => {
                     coderName: 'Coder B',
                     jobId: 1002,
                     jobName: 'Definition 99 / B',
+                    jobDefinitionId: 99,
+                    trainingId: null,
+                    trainingLabel: null,
                     code: 2,
+                    codingIssueOption: null,
                     score: 1,
                     notes: null,
                     supervisorComment: null,
@@ -110,7 +134,7 @@ describe('DoubleCodedReviewComponent replay access', () => {
               total: 1,
               page: 1,
               limit: 50
-            }),
+            } satisfies DoubleCodedReviewResponseDto),
             applyDoubleCodedResolutions: () => of({
               success: true,
               appliedCount: 1,

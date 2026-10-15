@@ -10,20 +10,20 @@
       mat-stroked-button
       color="primary"
       (click)="loadAcps()"
-      [disabled]="isLoadingAcps || isImporting">
+      [disabled]="isLoadingAcps() || isImporting()">
       <mat-icon>sync</mat-icon>
-      {{ isLoadingAcps ? 'Lade ACPs...' : 'ACPs laden' }}
+      {{ isLoadingAcps() ? 'Lade ACPs...' : 'ACPs laden' }}
     </button>
-    @if (isLoadingAcps) {
+    @if (isLoadingAcps()) {
       <mat-spinner diameter="20"></mat-spinner>
     }
   </div>
 
-  @if (hasLoadedAcps) {
+  @if (hasLoadedAcps()) {
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>ACP auswählen</mat-label>
-      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting">
-        @for (acp of acps; track acp.id) {
+      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting()">
+        @for (acp of acps(); track acp.id) {
           <mat-option [value]="acp.id">
             {{ acp.name || acp.packageId || acp.id }}
           </mat-option>
@@ -32,7 +32,7 @@
     </mat-form-field>
   }
 
-  @if (isImporting) {
+  @if (isImporting()) {
     <div class="import-progress">
       <div class="progress-header">
         <span>{{ importProgressText }}</span>
@@ -47,19 +47,19 @@
     </div>
   }
 
-  @if (errorMessage) {
-    <div class="error-message">{{ errorMessage }}</div>
+  @if (errorMessage()) {
+    <div class="error-message">{{ errorMessage() }}</div>
   }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="cancel()" [disabled]="isImporting">Abbrechen</button>
+  <button mat-button (click)="cancel()" [disabled]="isImporting()">Abbrechen</button>
   <button
     mat-raised-button
     color="primary"
     (click)="importAcp()"
-    [disabled]="isImporting || !hasLoadedAcps || !selectedAcpId">
+    [disabled]="isImporting() || !hasLoadedAcps() || !selectedAcpId()">
     <mat-icon>download</mat-icon>
-    {{ isImporting ? 'Importiere...' : 'ACP importieren' }}
+    {{ isImporting() ? 'Importiere...' : 'ACP importieren' }}
   </button>
 </mat-dialog-actions>

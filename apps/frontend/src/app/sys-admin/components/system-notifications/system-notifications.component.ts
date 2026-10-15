@@ -1,5 +1,9 @@
+import { Subscription } from 'rxjs';
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormBuilder,
@@ -48,6 +52,7 @@ function trimmedRequiredValidator(control: AbstractControl): ValidationErrors | 
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-system-notifications-admin',
   imports: [
     DatePipe,
@@ -67,6 +72,10 @@ function trimmedRequiredValidator(control: AbstractControl): ValidationErrors | 
   styleUrl: './system-notifications.component.scss'
 })
 export class SystemNotificationsComponent implements OnInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly service = inject(SystemNotificationService);
 
   private readonly snackBar = inject(MatSnackBar);
@@ -77,17 +86,17 @@ export class SystemNotificationsComponent implements OnInit {
 
   private readonly dialog = inject(MatDialog);
 
-  readonly types = Object.values(SystemNotificationType);
+  protected readonly types = Object.values(SystemNotificationType);
 
-  readonly severities = Object.values(SystemNotificationSeverity);
+  protected readonly severities = Object.values(SystemNotificationSeverity);
 
-  readonly columns = ['status', 'type', 'title', 'window', 'actions'];
+  protected readonly columns = ['status', 'type', 'title', 'window', 'actions'];
 
-  notifications: SystemNotificationDto[] = [];
+  protected readonly notifications = signal<SystemNotificationDto[]>([]);
 
-  editingId: number | null = null;
+  protected readonly editingId = signal<number | null>(null);
 
-  loading = false;
+  protected readonly loading = signal(false);
 
   readonly form = this.formBuilder.nonNullable.group({
     type: [SystemNotificationType.Info, Validators.required],
@@ -107,21 +116,22 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   load(): void {
-    this.loading = true;
-    this.service.getAll().subscribe({
+    this.loadRequest?.unsubscribe();
+    this.loading.set(true);
+    this.loadRequest = this.service.getAll().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: notifications => {
-        this.notifications = notifications;
-        this.loading = false;
+        this.notifications.set(notifications);
+        this.loading.set(false);
       },
       error: () => {
-        this.loading = false;
+        this.loading.set(false);
         this.showMessage('system-notifications.load-error');
       }
     });
   }
 
-  edit(notification: SystemNotificationDto): void {
-    this.editingId = notification.id;
+  protected edit(notification: SystemNotificationDto): void {
+    this.editingId.set(notification.id);
     this.form.reset({
       type: notification.type,
       severity: notification.severity,
@@ -136,8 +146,8 @@ export class SystemNotificationsComponent implements OnInit {
     });
   }
 
-  cancelEdit(): void {
-    this.editingId = null;
+  protected cancelEdit(): void {
+    this.editingId.set(null);
     this.form.reset({
       type: SystemNotificationType.Info,
       severity: SystemNotificationSeverity.Low,
@@ -153,6 +163,8 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   save(): void {
+    const editingIdSnapshot = this.editingId();
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -167,10 +179,10 @@ export class SystemNotificationsComponent implements OnInit {
       visibleFrom: this.toIso(value.visibleFrom),
       visibleUntil: this.toIso(value.visibleUntil)
     };
-    const request = this.editingId === null ?
+    const request = editingIdSnapshot === null ?
       this.service.create(input) :
-      this.service.update(this.editingId, input);
-    request.subscribe({
+      this.service.update(editingIdSnapshot, input);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showMessage('system-notifications.saved');
         this.cancelEdit();
@@ -192,16 +204,16 @@ export class SystemNotificationsComponent implements OnInit {
         showCancel: true
       }
     });
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (confirmed) this.deleteConfirmed(notification);
     });
   }
 
   private deleteConfirmed(notification: SystemNotificationDto): void {
-    this.service.delete(notification.id).subscribe({
+    this.service.delete(notification.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showMessage('system-notifications.deleted');
-        if (this.editingId === notification.id) this.cancelEdit();
+        if (this.editingId() === notification.id) this.cancelEdit();
         this.load();
       },
       error: () => this.showMessage('system-notifications.delete-error')
@@ -217,10 +229,10 @@ export class SystemNotificationsComponent implements OnInit {
     return 'active';
   }
 
-  preview(): SystemNotificationDto {
+  protected preview(): SystemNotificationDto {
     const value = this.form.getRawValue();
     return {
-      id: this.editingId ?? 0,
+      id: this.editingId() ?? 0,
       ...value,
       title: value.title || this.translate.instant('system-notifications.preview-title'),
       message: value.message || this.translate.instant('system-notifications.preview-message'),

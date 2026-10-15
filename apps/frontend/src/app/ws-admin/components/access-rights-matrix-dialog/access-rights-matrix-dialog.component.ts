@@ -1,4 +1,7 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  Component, inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,6 +23,7 @@ interface MatrixRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-access-rights-matrix-dialog',
   templateUrl: './access-rights-matrix-dialog.component.html',
   styleUrls: ['./access-rights-matrix-dialog.component.scss'],
@@ -33,21 +37,23 @@ interface MatrixRow {
   ]
 })
 export class AccessRightsMatrixDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   private workspaceService = inject(WorkspaceService);
 
-  matrix: AccessRightsMatrixDto | null = null;
-  loading = true;
-  displayedColumns: string[] = [];
-  dataSource: MatrixRow[] = [];
-  levels: AccessLevelDto[] = [];
+  protected readonly matrix = signal<AccessRightsMatrixDto | null>(null);
+  protected readonly loading = signal(true);
+  protected readonly displayedColumns = signal<string[]>([]);
+  protected readonly dataSource = signal<MatrixRow[]>([]);
+  protected readonly levels = signal<AccessLevelDto[]>([]);
 
   ngOnInit(): void {
-    this.workspaceService.getAccessRightsMatrix().subscribe(matrix => {
-      this.matrix = matrix;
-      this.levels = matrix.levels;
-      this.displayedColumns = ['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)];
-      this.dataSource = this.buildDataSource(matrix.categories);
-      this.loading = false;
+    this.workspaceService.getAccessRightsMatrix().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(matrix => {
+      this.matrix.set(matrix);
+      this.levels.set(matrix.levels);
+      this.displayedColumns.set(['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)]);
+      this.dataSource.set(this.buildDataSource(matrix.categories));
+      this.loading.set(false);
     });
   }
 
@@ -67,7 +73,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
       // Add feature rows
       category.features.forEach((feature: { featureKey: string; translationKey: string; minAccessLevel: number }) => {
         const permissions: { [level: number]: boolean } = {};
-        this.levels.forEach(level => {
+        this.levels().forEach(level => {
           permissions[level.level] = level.level >= feature.minAccessLevel;
         });
 
@@ -84,7 +90,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
     return rows;
   }
 
-  hasPermission(row: MatrixRow, level: number): boolean {
+  protected hasPermission(row: MatrixRow, level: number): boolean {
     return row.permissions[level] || false;
   }
 }

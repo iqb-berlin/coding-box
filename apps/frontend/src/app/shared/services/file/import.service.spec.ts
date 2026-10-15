@@ -43,15 +43,15 @@ describe('ImportService', () => {
   describe('importWorkspaceFiles', () => {
     it('should send import request with all options', () => {
       const options: ImportOptions = {
-        responses: 'true',
-        definitions: 'true',
-        units: 'true',
-        player: 'true',
-        codings: 'true',
-        logs: 'true',
-        testTakers: 'true',
-        booklets: 'true',
-        metadata: 'true'
+        responses: true,
+        definitions: true,
+        units: true,
+        player: true,
+        codings: true,
+        logs: true,
+        testTakers: true,
+        booklets: true,
+        metadata: true
       };
 
       service.importWorkspaceFiles(mockWorkspaceId, 'ws1', 'srv', 'url', 'tok', options, ['g1'])
@@ -66,20 +66,22 @@ describe('ImportService', () => {
         request.params.get('responseOverwriteMode') === 'skip'
       );
       expect(req.request.method).toBe('GET');
+      expect(req.request.params.get('definitions')).toBe('true');
+      expect(req.request.params.get('logs')).toBe('true');
       req.flush({});
     });
 
     it('should send the selected response overwrite mode', () => {
       const options: ImportOptions = {
-        responses: 'true',
-        definitions: 'false',
-        units: 'false',
-        player: 'false',
-        codings: 'false',
-        logs: 'false',
-        testTakers: 'false',
-        booklets: 'false',
-        metadata: 'false'
+        responses: true,
+        definitions: false,
+        units: false,
+        player: false,
+        codings: false,
+        logs: false,
+        testTakers: false,
+        booklets: false,
+        metadata: false
       };
 
       service.importWorkspaceFiles(
@@ -102,6 +104,8 @@ describe('ImportService', () => {
         request => request.params.get('responseOverwriteMode') === 'merge'
       );
       expect(req.request.method).toBe('GET');
+      expect(req.request.params.get('definitions')).toBe('false');
+      expect(req.request.params.get('logs')).toBe('false');
       req.flush({});
     });
   });

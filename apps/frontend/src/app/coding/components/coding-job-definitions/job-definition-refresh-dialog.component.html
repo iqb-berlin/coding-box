@@ -47,7 +47,7 @@
     <h3>{{ 'coding-job-definitions.refresh-dialog.preview-title' | translate }}</h3>
     <div class="stats-grid">
       @for (stat of getJobStats(); track stat.labelKey) {
-      <div class="stat-item" [ngClass]="stat.tone">
+      <div class="stat-item" [class]="stat.tone">
         <span>{{ stat.labelKey | translate }}</span>
         <strong>{{ stat.value }}</strong>
       </div>
@@ -57,7 +57,7 @@
     <h3>{{ 'coding-job-definitions.refresh-dialog.case-title' | translate }}</h3>
     <div class="stats-grid">
       @for (stat of getCaseStats(); track stat.labelKey) {
-      <div class="stat-item" [ngClass]="stat.tone">
+      <div class="stat-item" [class]="stat.tone">
         <span>{{ stat.labelKey | translate }}</span>
         <strong>{{ stat.value }}</strong>
       </div>
@@ -67,7 +67,7 @@
     <h3>{{ 'coding-job-definitions.refresh-dialog.task-title' | translate }}</h3>
     <div class="stats-grid compact">
       @for (stat of getTaskStats(); track stat.labelKey) {
-      <div class="stat-item" [ngClass]="stat.tone">
+      <div class="stat-item" [class]="stat.tone">
         <span>{{ stat.labelKey | translate }}</span>
         <strong>{{ stat.value }}</strong>
       </div>

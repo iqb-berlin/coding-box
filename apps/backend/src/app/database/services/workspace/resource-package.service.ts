@@ -13,7 +13,6 @@ import * as AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as util from 'util';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
 import { GeoGebraPackageStatus } from '../../../../../../../api-dto/files/file-validation-result.dto';
@@ -137,7 +136,6 @@ export class ResourcePackageService {
 
     await this.extractAndStorePackage(
       preparedUpload.packageName,
-      preparedUpload.zip,
       zippedResourcePackage,
       preparedUpload.safeZipEntries,
       preparedUpload.geoGebraPackageLayout
@@ -397,7 +395,6 @@ export class ResourcePackageService {
 
     await this.extractAndStorePackage(
       preparedUpload.packageName,
-      preparedUpload.zip,
       zippedResourcePackage,
       preparedUpload.safeZipEntries,
       preparedUpload.geoGebraPackageLayout
@@ -421,14 +418,12 @@ export class ResourcePackageService {
 
   private async extractAndStorePackage(
     packageName: string,
-    zip: AdmZip,
     zippedResourcePackage: Express.Multer.File,
     safeZipEntries: SafeZipEntry[],
     geoGebraPackageLayout: GeoGebraPackageLayout | null
   ): Promise<void> {
     const packageDirectoryPath = this.getPackageDirectoryPath(packageName);
     const tempPackageDirectoryPath = `${packageDirectoryPath}.tmp-${process.pid}-${Date.now()}`;
-    const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync.bind(zip));
     fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
 
     try {
@@ -439,7 +434,7 @@ export class ResourcePackageService {
           geoGebraPackageLayout
         );
       } else {
-        await zipExtractAllToAsync(tempPackageDirectoryPath, true, true);
+        await this.extractPackageEntries(tempPackageDirectoryPath, safeZipEntries);
       }
       fs.writeFileSync(
         path.join(tempPackageDirectoryPath, `${packageName}.itcr.zip`),
@@ -450,6 +445,37 @@ export class ResourcePackageService {
     } catch (error) {
       fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
       throw error;
+    }
+  }
+
+  private async extractPackageEntries(directoryPath: string, entries: SafeZipEntry[]): Promise<void> {
+    const directories: { targetPath: string; entry: AdmZip.IZipEntry }[] = [];
+    for (const { entry, entryName } of entries) {
+      const targetPath = path.join(directoryPath, entryName);
+      this.assertPathIsInsideDirectory(directoryPath, targetPath);
+      if (entry.isDirectory) {
+        await fs.promises.mkdir(targetPath, { recursive: true });
+        directories.push({ targetPath, entry });
+      } else {
+        // Calling each reader inside its own Promise also catches synchronous
+        // CRC errors; adm-zip's chained extraction can throw on a later fs tick.
+        const content = await new Promise<Buffer>((resolve, reject) => {
+          entry.getDataAsync((data, error) => {
+            if (error) reject(error);
+            else resolve(data);
+          });
+        });
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+        const mode = Math.floor(entry.attr / 65536) % 512;
+        await fs.promises.writeFile(targetPath, content, { mode: mode || 0o666 });
+        await fs.promises.utimes(targetPath, entry.header.time, entry.header.time).catch(() => undefined);
+      }
+    }
+    // Restore directory modes after writing their children; exclude SUID/SGID.
+    for (const { targetPath, entry } of directories.reverse()) {
+      const mode = Math.floor(entry.attr / 65536) % 512;
+      if (mode) await fs.promises.chmod(targetPath, mode);
+      await fs.promises.utimes(targetPath, entry.header.time, entry.header.time).catch(() => undefined);
     }
   }
 

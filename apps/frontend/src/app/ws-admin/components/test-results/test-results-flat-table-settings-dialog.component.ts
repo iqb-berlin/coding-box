@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -42,6 +42,7 @@ export type TestResultsFlatTableSettingsDialogResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-flat-table-settings-dialog',
   standalone: true,
   imports: [
@@ -55,28 +56,27 @@ export type TestResultsFlatTableSettingsDialogResult = {
   templateUrl: './test-results-flat-table-settings-dialog.component.html'
 })
 export class TestResultsFlatTableSettingsDialogComponent {
-  audioLowThreshold: number;
-  shortProcessingThresholdMs: number;
-  longLoadingThresholdMs: number;
-  focusLostThresholdMs: number;
-  sessionSpanThresholdMs: number;
-  repeatedStartThreshold: number;
-  processingDurationMin: string;
-  processingDurationMax: string;
-  sessionBrowsersAllowlist: string[];
-  sessionOsAllowlist: string[];
-  sessionScreensAllowlist: string[];
-  availableSessionBrowsers: string[];
-  availableSessionOs: string[];
-  availableSessionScreens: string[];
+  private dialogRef = inject<MatDialogRef<TestResultsFlatTableSettingsDialogComponent, TestResultsFlatTableSettingsDialogResult | undefined>>(MatDialogRef);
+  data = inject<TestResultsFlatTableSettingsDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsFlatTableSettingsDialogComponent,
-    TestResultsFlatTableSettingsDialogResult | undefined
-    >,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsFlatTableSettingsDialogData
-  ) {
+  protected audioLowThreshold: number;
+  protected shortProcessingThresholdMs: number;
+  protected longLoadingThresholdMs: number;
+  protected focusLostThresholdMs: number;
+  protected sessionSpanThresholdMs: number;
+  protected repeatedStartThreshold: number;
+  protected processingDurationMin: string;
+  protected processingDurationMax: string;
+  protected sessionBrowsersAllowlist: string[];
+  protected sessionOsAllowlist: string[];
+  protected sessionScreensAllowlist: string[];
+  protected availableSessionBrowsers: string[];
+  protected availableSessionOs: string[];
+  protected availableSessionScreens: string[];
+
+  constructor() {
+    const data = this.data;
+
     this.audioLowThreshold = Number(data.audioLowThreshold ?? 0.9);
     this.shortProcessingThresholdMs = Number(
       data.shortProcessingThresholdMs ?? 60000
@@ -109,11 +109,11 @@ export class TestResultsFlatTableSettingsDialogComponent {
       [];
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  save(): void {
+  protected save(): void {
     const parsed = Number(this.audioLowThreshold);
     const shortParsed = Number(this.shortProcessingThresholdMs);
     const longParsed = Number(this.longLoadingThresholdMs);

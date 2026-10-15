@@ -1,4 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,7 +7,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -31,12 +31,125 @@ import { TestResultService } from '../../../shared/services/test-result/test-res
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
   let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
-  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+  let appService: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number>; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+
+  it('keeps the latest person and cancels notes belonging to an earlier selection', async () => {
+    const oldPerson = new Subject<unknown[]>();
+    const secondPerson = new Subject<unknown[]>();
+    const latestPerson = new Subject<unknown[]>();
+    const oldNotes = new Subject<unknown>();
+    const results = TestBed.inject(TestResultService);
+    results.getPersonTestResults = jest.fn().mockReturnValueOnce(oldPerson)
+      .mockReturnValueOnce(secondPerson).mockReturnValueOnce(latestPerson);
+    TestBed.inject(UnitNoteService).getNotesForMultipleUnits = jest.fn(() => oldNotes) as never;
+    const row = (id: number) => ({
+      id, code: String(id), group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    component.onRowClick(row(1));
+    component.onRowClick(row(2));
+    expect(oldPerson.observed).toBe(false);
+    oldPerson.next([{ id: 1, name: 'OLD', units: [] }]);
+    secondPerson.next([{ id: 2, name: 'SECOND', units: [{ id: 20 }] }]);
+    secondPerson.complete();
+    expect(oldNotes.observed).toBe(true);
+    component.onRowClick(row(3));
+    expect(oldNotes.observed).toBe(false);
+    oldNotes.next({ 20: [{ note: 'OLD NOTE' }] });
+    latestPerson.next([]);
+    latestPerson.complete();
+    await fixture.whenStable();
+    expect(component.testPerson()?.id).toBe(3);
+    expect(component.booklets()).toEqual([]);
+    expect(component.unitNotesMap().size).toBe(0);
+    expect(component.isLoadingBooklets()).toBe(false);
+  });
+
+  it('cancels a pending person read across a workspace change and return', async () => {
+    const response = new Subject<unknown[]>();
+    TestBed.inject(TestResultService).getPersonTestResults = jest.fn(() => response) as never;
+    component.onRowClick({
+      id: 1, code: 'p', group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(response.observed).toBe(false);
+    response.next([{ id: 1, name: 'OLD', units: [] }]);
+    await fixture.whenStable();
+    expect(component.booklets()).toEqual([]);
+    expect(component.testPerson()).toBeNull();
+  });
+
+  it('ignores an import choice from a dialog opened before a workspace change', () => {
+    const closed = new Subject<{ type: string }>();
+    jest.mocked(TestBed.inject(MatDialog).open).mockReturnValue({ afterClosed: () => closed } as never);
+    const startImport = jest.spyOn(component, 'testCenterImport').mockResolvedValue();
+    component.openImportDialog();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(closed.observed).toBe(false);
+    closed.next({ type: 'testcenter' });
+    expect(startImport).not.toHaveBeenCalled();
+  });
+
+  it('hands accepted chunked upload jobs to the root tracker after its view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const optionsClosed = new Subject<unknown>();
+    const progressRef = { close: jest.fn() };
+    jest.mocked(TestBed.inject(MatDialog).open)
+      .mockReturnValueOnce({ afterClosed: () => optionsClosed } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const registerBatch = jest.spyOn(TestBed.inject(TestResultsUploadStateService), 'registerBatch')
+      .mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    optionsClosed.next({ overwriteMode: 'skip', scope: 'person' });
+    optionsClosed.complete();
+    fixture.destroy();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    expect(acceptedJobs.observed).toBe(true);
+    acceptedJobs.next([{ jobId: 'accepted-job' }]);
+    acceptedJobs.complete();
+    expect(registerBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 1, jobIds: ['accepted-job'] }),
+      expect.objectContaining({ dialogRef: progressRef })
+    );
+  });
+
+  it('cleans up a failed background upload even after the starting view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const progressRef = { close: jest.fn() };
+    const dialog = TestBed.inject(MatDialog);
+    jest.mocked(dialog.open)
+      .mockReturnValueOnce({ afterClosed: () => of({ overwriteMode: 'skip', scope: 'person' }) } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    const progressState = (jest.mocked(dialog.open).mock.calls[1][1]?.data as {
+      state$: Subject<unknown>;
+    }).state$;
+    fixture.destroy();
+    acceptedJobs.error(new Error('Upload failed'));
+    expect(progressRef.close).toHaveBeenCalled();
+    expect(progressState.isStopped).toBe(true);
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalledWith(
+      'Fehler beim Upload-Start: Upload failed', 'Fehler', { duration: 5000 }
+    );
+  });
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -45,10 +158,10 @@ describe('TestResultsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideRouter([]),
         {
@@ -85,7 +198,7 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: FileService,
-          useValue: { getFilesList: jest.fn().mockReturnValue(of({ data: [] })) }
+          useValue: { getBookletInfo: jest.fn(), getUnitInfo: jest.fn(), getFilesList: jest.fn().mockReturnValue(of({ data: [] })) }
         },
         {
           provide: ResponseService,
@@ -145,6 +258,7 @@ describe('TestResultsComponent', () => {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 1,
+            selectedWorkspaceId$: new Subject<number>(),
             loggedUser: { sub: 'user' },
             createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
@@ -249,11 +363,11 @@ describe('TestResultsComponent', () => {
     };
 
     expect(testResultService.getLogAnomalySummary).not.toHaveBeenCalled();
-    expect(component.logAnomalySummaryRequested).toBe(false);
+    expect(component.logAnomalySummaryRequested()).toBe(false);
   });
 
   it('should load the workspace regex setting for the flat table', () => {
-    expect(component.enableRegexSearch).toBe(true);
+    expect(component.enableRegexSearch()).toBe(true);
   });
 
   it('should not show manual coding status controls on the test results page', () => {
@@ -271,7 +385,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should hide log quality when disabled by workspace setting', () => {
-    expect(component.showTestResultsLogAnomalies).toBe(false);
+    expect(component.showTestResultsLogAnomalies()).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('Log-Qualität');
   });
 
@@ -281,7 +395,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show clearer overview labels and formatted counts without translating technical statuses', () => {
-    component.overview = {
+    component.overview.set({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -296,7 +410,7 @@ describe('TestResultsComponent', () => {
       sessionBrowserCounts: {},
       sessionOsCounts: {},
       sessionScreenCounts: {}
-    };
+    });
 
     fixture.detectChanges();
 
@@ -312,7 +426,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should open the flat table filtered by the selected technical response status', () => {
-    component.overview = {
+    component.overview.set({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -324,7 +438,7 @@ describe('TestResultsComponent', () => {
       sessionBrowserCounts: {},
       sessionOsCounts: {},
       sessionScreenCounts: {}
-    };
+    });
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
@@ -334,13 +448,13 @@ describe('TestResultsComponent', () => {
 
     statusButton.click();
 
-    expect(component.quickSearchTableFilters).toEqual({ responseStatus: 'DISPLAYED' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ responseStatus: 'DISPLAYED' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(false);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should show log quality when enabled by workspace setting', () => {
-    component.showTestResultsLogAnomalies = true;
+    component.showTestResultsLogAnomalies.set(true);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Log-Qualität');
@@ -373,6 +487,80 @@ describe('TestResultsComponent', () => {
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
   });
 
+  it('updates derived unit order without mutating booklet snapshots', () => {
+    const units = [
+      { id: 7, alias: 'Z', name: 'Unit 7' },
+      { id: 8, alias: '', name: 'A' }
+    ];
+    component.booklets.set([{ id: 1, name: 'Booklet', units }] as never);
+    const originalBooklets = component.booklets();
+    const unitOrder = computed(() => component.booklets().map(
+      booklet => booklet.units.map(unit => unit.id)
+    ));
+    expect(unitOrder()).toEqual([[7, 8]]);
+
+    component.sortBookletUnits();
+
+    expect(unitOrder()).toEqual([[8, 7]]);
+    expect(originalBooklets[0].units.map(unit => unit.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[0].units).not.toBe(originalBooklets[0].units);
+  });
+
+  it('updates derived units after delayed deletion without mutating booklet snapshots', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const unitService = TestBed.inject(UnitService) as unknown as { deleteUnit: jest.Mock };
+    const deleteResponse = new Subject<{
+      success: boolean;
+      report: { deletedUnit: number; warnings: string[] };
+    }>();
+    const unit = { id: 7, alias: 'Unit 7', name: 'Unit 7' };
+    const booklet = { id: 1, name: 'Booklet 1', units: [unit, { id: 8, alias: 'Unit 8', name: 'Unit 8' }] };
+    const otherBooklet = { id: 2, name: 'Booklet 2', units: [{ id: 9, alias: 'Unit 9', name: 'Unit 9' }] };
+    component.booklets.set([booklet, otherBooklet] as never);
+    const originalBooklets = component.booklets();
+    const unitIds = computed(() => component.booklets().map(
+      current => current.units.map(currentUnit => currentUnit.id)
+    ));
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+    unitService.deleteUnit.mockReturnValue(deleteResponse.asObservable());
+
+    component.deleteUnit(unit as never, booklet as never);
+    await fixture.whenStable();
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+
+    deleteResponse.next({ success: true, report: { deletedUnit: 7, warnings: [] } });
+    deleteResponse.complete();
+    await fixture.whenStable();
+
+    expect(unitIds()).toEqual([[8], [9]]);
+    expect(originalBooklets[0].units.map(current => current.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[1]).toBe(originalBooklets[1]);
+  });
+
+  it('updates derived expanded responses without mutating response snapshots', () => {
+    component.responses.set([
+      { id: 13, variableid: 'VAR_1', expanded: false },
+      { id: 14, variableid: 'VAR_2', expanded: false }
+    ] as never);
+    const originalResponses = component.responses();
+    const expandedIds = computed(() => component.responses()
+      .filter(response => response.expanded).map(response => response.id));
+    expect(expandedIds()).toEqual([]);
+
+    component.toggleResponseExpansion(13);
+    const expandedResponses = component.responses();
+    expect(expandedIds()).toEqual([13]);
+    expect(originalResponses[0].expanded).toBe(false);
+    expect(expandedResponses[1]).toBe(originalResponses[1]);
+
+    component.toggleResponseExpansion(13);
+    expect(expandedIds()).toEqual([]);
+    expect(expandedResponses[0].expanded).toBe(true);
+  });
+
   it('should reload workspace overview after deleting a response', () => {
     const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
     const responseService = TestBed.inject(ResponseService) as unknown as {
@@ -386,7 +574,7 @@ describe('TestResultsComponent', () => {
     };
     const response = { id: 13, variableid: 'VAR_1' };
 
-    component.responses = [response] as never;
+    component.responses.set([response] as never);
     testResultService.getWorkspaceOverview.mockClear();
     dialog.open.mockReturnValue({ afterClosed: () => of(true) });
     responseService.deleteResponse.mockReturnValue(of({
@@ -474,10 +662,10 @@ describe('TestResultsComponent', () => {
     appliedResults$.next({ appliedResponses: 5 });
     appliedResults$.complete();
 
-    expect(component.codingFreshnessSummary).toBeNull();
-    expect(component.manualAppliedResultsOverview).toBeNull();
-    expect(component.isLoadingCodingFreshnessStatus).toBe(false);
-    expect(component.isLoadingManualAppliedResultsOverview).toBe(false);
+    expect(component.codingFreshnessSummary()).toBeNull();
+    expect(component.manualAppliedResultsOverview()).toBeNull();
+    expect(component.isLoadingCodingFreshnessStatus()).toBe(false);
+    expect(component.isLoadingManualAppliedResultsOverview()).toBe(false);
   });
 
   it('should keep the last workspace overview while a reload has no result yet', () => {
@@ -496,14 +684,14 @@ describe('TestResultsComponent', () => {
       sessionScreenCounts: {}
     };
 
-    component.overview = previousOverview;
+    component.overview.set(previousOverview);
     testResultService.getWorkspaceOverview.mockReturnValue(of(null));
 
     (component as unknown as { loadWorkspaceOverview: () => void })
       .loadWorkspaceOverview();
 
-    expect(component.overview).toBe(previousOverview);
-    expect(component.isLoadingOverview).toBe(false);
+    expect(component.overview()).toBe(previousOverview);
+    expect(component.isLoadingOverview()).toBe(false);
   });
 
   it('should expose log anomaly summary load failures', () => {
@@ -511,8 +699,8 @@ describe('TestResultsComponent', () => {
       getLogAnomalySummary: jest.Mock;
     };
 
-    component.showTestResultsLogAnomalies = true;
-    component.logAnomalySummary = {
+    component.showTestResultsLogAnomalies.set(true);
+    component.logAnomalySummary.set({
       totalBooklets: 10,
       affectedBooklets: 1,
       criticalBooklets: 1,
@@ -521,7 +709,7 @@ describe('TestResultsComponent', () => {
       totalAnomalyRules: 1,
       totalAnomalyEvents: 1,
       byCode: { controller_error: 1 }
-    };
+    });
     testResultService.getLogAnomalySummary.mockReturnValue(
       throwError(() => new Error('summary failed'))
     );
@@ -529,32 +717,32 @@ describe('TestResultsComponent', () => {
     (component as unknown as { loadLogAnomalySummary: () => void })
       .loadLogAnomalySummary();
 
-    expect(component.logAnomalySummary).toBeNull();
-    expect(component.logAnomalySummaryLoadFailed).toBe(true);
-    expect(component.isLoadingLogAnomalySummary).toBe(false);
-    expect(component.logAnomalySummaryRequested).toBe(true);
+    expect(component.logAnomalySummary()).toBeNull();
+    expect(component.logAnomalySummaryLoadFailed()).toBe(true);
+    expect(component.isLoadingLogAnomalySummary()).toBe(false);
+    expect(component.logAnomalySummaryRequested()).toBe(true);
   });
 
   it('should force the log anomaly table column for the dashboard table action', () => {
-    component.showTestResultsLogAnomalies = true;
-    component.forceShowLogAnomalyTableColumn = false;
+    component.showTestResultsLogAnomalies.set(true);
+    component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
 
-    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(true);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(true);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should not force the log anomaly table column when workspace setting is disabled', () => {
-    component.showTestResultsLogAnomalies = false;
-    component.forceShowLogAnomalyTableColumn = false;
+    component.showTestResultsLogAnomalies.set(false);
+    component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
 
-    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(false);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should open booklet replay in booklet-view mode with a clean hash URL', () => {
@@ -577,11 +765,11 @@ describe('TestResultsComponent', () => {
 
     unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
     appService.createOwnToken.mockReturnValue(of('token'));
-    component.testPerson = {
+    component.testPerson.set({
       login: 'login',
       code: 'code',
       group: 'group'
-    } as never;
+    } as never);
 
     component.replayBooklet({ name: 'BOOKLET_Ä' } as never);
 
@@ -620,11 +808,11 @@ describe('TestResultsComponent', () => {
 
     unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
     appService.createOwnToken.mockReturnValue(of('token'));
-    component.testPerson = {
+    component.testPerson.set({
       login: 'login',
       code: '',
       group: 'group'
-    } as never;
+    } as never);
 
     component.replayBooklet({ name: 'BOOKLET_A' } as never);
 
@@ -719,8 +907,64 @@ describe('TestResultsComponent', () => {
     }));
   });
 
+  it.each(['destroy', 'workspace'])('cancels the initial Testcenter overview and never opens a late dialog on %s', async reason => {
+    const reply = new Subject<unknown>();
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    service.getWorkspaceOverview.mockReturnValue(reply);
+    const pending = component.testCenterImport();
+    expect(reply.observed).toBe(true);
+    if (reason === 'destroy') fixture.destroy();
+    if (reason === 'workspace') {
+      appService.selectedWorkspaceId = 2;
+      appService.selectedWorkspaceId$.next(2);
+      appService.selectedWorkspaceId = 1;
+      appService.selectedWorkspaceId$.next(1);
+    }
+    expect(reply.observed).toBe(false);
+    reply.next({ testPersons: 12 });
+    await pending;
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+  });
+
+  it('cancels the post-import overview and closes progress without opening late results', async () => {
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    const initial = {
+      testPersons: 1,
+      testGroups: 1,
+      uniqueBooklets: 1,
+      uniqueUnits: 1,
+      uniqueResponses: 1,
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+    const reply = new Subject<unknown>();
+    const closed = new Subject<unknown>();
+    const progressClose = jest.fn();
+    const importClose = jest.fn();
+    service.getWorkspaceOverview.mockReturnValueOnce(of(initial)).mockReturnValue(reply);
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    dialog.open.mockImplementation((componentType: unknown) => {
+      if (componentType === TestCenterImportComponent) return { close: importClose, afterClosed: () => closed };
+      if (componentType === TestResultsImportProgressDialogComponent) return { close: progressClose };
+      return { close: jest.fn() };
+    });
+    await component.testCenterImport();
+    closed.next({ didImport: true, resultType: 'responses' });
+    expect(reply.observed).toBe(true);
+    fixture.destroy();
+    expect(reply.observed).toBe(false);
+    reply.next(initial);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(progressClose).toHaveBeenCalledTimes(1);
+    expect(dialog.open.mock.calls.some(([type]) => type === TestResultsUploadResultDialogComponent)).toBe(false);
+  });
+
   it('should ignore zero-count coding freshness rows in the overview banner', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -731,15 +975,15 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 0
         }
       ]
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.hasCodingFreshnessWarning()).toBe(false);
     expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
   });
 
   it('should show second auto-coding as waiting while manual coding results are still open', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -750,8 +994,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 210,
       remainingResponses: 461,
@@ -762,22 +1006,22 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.hasCodingFreshnessWarning).toBe(true);
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.codingFreshnessDisplayWarnings).toHaveLength(1);
+    expect(component.hasCodingFreshnessWarning()).toBe(true);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings()).toHaveLength(1);
     expect(component.codingFreshnessBannerTitle).toBe('Manuelle Kodierung abschließen');
     expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
     expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
-    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings[0])).toBe(
+    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings()[0])).toBe(
       'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Manuelle Kodierung öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Manuelle Kodierung öffnen');
   });
 
   it('should hide second auto-coding while the manual coding status is still loading', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -788,8 +1032,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 671,
       remainingResponses: 0,
@@ -800,17 +1044,17 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
-    component.manualAppliedResultsOverviewLoadFailed = false;
-    component.isLoadingManualAppliedResultsOverview = true;
+    });
+    component.manualAppliedResultsOverviewLoadFailed.set(false);
+    component.isLoadingManualAppliedResultsOverview.set(true);
 
-    expect(component.hasCodingFreshnessWarning).toBe(false);
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.codingFreshnessDisplayWarnings).toEqual([]);
+    expect(component.hasCodingFreshnessWarning()).toBe(false);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings()).toEqual([]);
   });
 
   it('should show second auto-coding as actionable once manual coding is complete', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -821,8 +1065,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 671,
       remainingResponses: 0,
@@ -833,19 +1077,19 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toHaveLength(1);
+    expect(component.codingFreshnessWarnings()).toHaveLength(1);
     expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
       '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
       'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Auto-Coding öffnen');
   });
 
   it('should keep earlier auto-coding warnings actionable while second auto-coding waits', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -862,8 +1106,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 210,
       remainingResponses: 461,
@@ -874,9 +1118,9 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toEqual([
+    expect(component.codingFreshnessWarnings()).toEqual([
       expect.objectContaining({ version: 'v1' })
     ]);
     expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
@@ -884,6 +1128,26 @@ describe('TestResultsComponent', () => {
       '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
       'Dabei werden 50 Antwortwerte berücksichtigt.'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Auto-Coding öffnen');
+  });
+  it.each(['booklet', 'unit'].flatMap(kind => ['destroy', 'workspace'].flatMap(end => ['success', 'error'].map(outcome => ({ kind, end, outcome })))))('ignores delayed $kind $outcome after $end', async ({ kind, end, outcome }) => {
+    const response = new Subject<unknown>();
+    const files = TestBed.inject(FileService) as unknown as { getBookletInfo: jest.Mock; getUnitInfo: jest.Mock };
+    files.getBookletInfo.mockReturnValue(response);
+    files.getUnitInfo.mockReturnValue(response);
+    component.selectedUnit.set({ id: 10, name: 'UNIT' } as NonNullable<ReturnType<TestResultsComponent['selectedUnit']>>);
+    const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
+    snack.mockClear();
+    if (kind === 'booklet') component.openBookletInfo('BOOKLET');
+    else component.openUnitInfoForSelectedUnit();
+    const loading = snack.mock.results[0].value;
+    if (end === 'destroy') fixture.destroy();
+    else appService.selectedWorkspaceId = 2;
+    if (outcome === 'error') response.error(new Error('Synthetic error'));
+    else { response.next({}); response.complete(); }
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    expect(snack).toHaveBeenCalledTimes(1);
+    expect(loading.dismiss).toHaveBeenCalled();
   });
 });

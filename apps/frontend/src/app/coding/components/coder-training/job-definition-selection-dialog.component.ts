@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +10,7 @@ import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-
 import { JobDefinition } from '../../services/coding-job-backend.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-job-definition-selection-dialog',
   standalone: true,
   imports: [
@@ -72,17 +73,17 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
 export class JobDefinitionSelectionDialogComponent {
   private dialogRef = inject(MatDialogRef<JobDefinitionSelectionDialogComponent>);
 
-  defaultSampleCountControl = new FormControl(10, [
+  protected defaultSampleCountControl = new FormControl(10, [
     Validators.required,
     Validators.min(1),
     Validators.max(1000)
   ]);
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
-  onSelect(definition: JobDefinition): void {
+  protected onSelect(definition: JobDefinition): void {
     if (this.defaultSampleCountControl.valid) {
       this.dialogRef.close({
         jobDefinition: definition,

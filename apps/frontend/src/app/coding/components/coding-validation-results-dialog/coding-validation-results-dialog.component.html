@@ -75,7 +75,7 @@
                   <td>{{result.combination.booklet_id}}</td>
                   <td>{{result.combination.variable_id}}</td>
                   <td>
-                    <mat-chip [ngClass]="result.status === 'MISSING' ? 'status-missing' : 'status-present'">
+                    <mat-chip [class]="result.status === 'MISSING' ? 'status-missing' : 'status-present'">
                       <mat-icon>{{ result.status === 'MISSING' ? 'error_outline' : 'check_circle' }}</mat-icon>
                       {{ 'coding-validation-results.table.status.' + (result.status === 'MISSING' ? 'missing' : 'present') | translate }}
                     </mat-chip>

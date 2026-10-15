@@ -22,13 +22,26 @@ stages:
 
 image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
 
+workflow:
+  rules:
+    # The GitHub project bot cannot pull from the group-level Dependency Proxy.
+    # Use the same public upstream images without granting it group access.
+    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")
+      variables:
+        DOCKER_HUB_PROXY: ""
+        DOCKER_IMAGE: docker:28
+        DOCKER_SERVICE: docker:28-dind
+        TRAEFIK_BASE_IMAGE: traefik:v2.11
+        TRIVY_IMAGE: aquasec/trivy:latest
+    - when: always
+
 variables:
   REGISTRY: "${CI_REGISTRY}"
   REGISTRY_USER: "${CI_REGISTRY_USER}"
   REGISTRY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
   REGISTRY_PROJECT: "/${CI_PROJECT_PATH}/"
   DOCKER_HUB_PROXY: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/"
-  BASE_IMAGE: node:lts-bookworm-slim
+  BASE_IMAGE: node:22-bookworm-slim
   CICD_BASE_IMAGE: "${BASE_IMAGE}-git"
   CYPRESS_IMAGE: cypress/browsers:node-22.14.0-chrome-134.0.6998.165-1-ff-136.0.3-edge-134.0.3124.85-1
   CYPRESS_CACHE_FOLDER: "${CI_PROJECT_DIR}/cache/Cypress"
