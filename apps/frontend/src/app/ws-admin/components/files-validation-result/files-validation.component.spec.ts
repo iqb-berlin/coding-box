@@ -1,9 +1,11 @@
+import { MetadataResolver } from '@iqb/metadata-resolver';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { FilesValidationDialogComponent } from './files-validation.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
@@ -14,10 +16,13 @@ import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/bookle
 import { UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('FilesValidationComponent', () => {
+  let closing: Subject<void>;
   let component: FilesValidationDialogComponent;
   let fixture: ComponentFixture<FilesValidationDialogComponent>;
   let workspaceService: jest.Mocked<WorkspaceService>;
   let fileService: jest.Mocked<FileService>;
+
+  afterEach(() => jest.restoreAllMocks());
 
   const createValidationResult = (testTaker: string, bookletNames: string[]) => ({
     testTaker,
@@ -43,6 +48,7 @@ describe('FilesValidationComponent', () => {
   });
 
   beforeEach(async () => {
+    closing = new Subject<void>();
     const workspaceServiceMock = {
       getWorkspaceSettings: jest.fn().mockReturnValue(of({
         ignoredUnits: [],
@@ -56,7 +62,10 @@ describe('FilesValidationComponent', () => {
     };
 
     const fileServiceMock = {
+      getFilesList: jest.fn(),
       getBookletInfo: jest.fn(),
+      getCodingSchemeFile: jest.fn(),
+      getTestTakerContentXml: jest.fn(),
       validateFiles: jest.fn().mockReturnValue(of(true)),
       getUnitInfo: jest.fn(),
       downloadFile: jest.fn(),
@@ -67,6 +76,8 @@ describe('FilesValidationComponent', () => {
     await TestBed.configureTestingModule({
       imports: [FilesValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
+        { provide: MatDialog, useValue: { open: jest.fn() } },
         provideHttpClient(),
         {
           provide: SERVER_URL,
@@ -74,7 +85,7 @@ describe('FilesValidationComponent', () => {
         },
         {
           provide: MatDialogRef,
-          useValue: []
+          useValue: { beforeClosed: () => closing, close: jest.fn() }
         },
         {
           provide: MAT_DIALOG_DATA,
@@ -82,7 +93,7 @@ describe('FilesValidationComponent', () => {
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: { open: jest.fn().mockReturnValue({ dismiss: jest.fn() }) }
         },
         {
           provide: WorkspaceService,
@@ -97,7 +108,7 @@ describe('FilesValidationComponent', () => {
           useValue: { invalidateCache: jest.fn() }
         }
       ]
-    }).compileComponents();
+    }).overrideProvider(MatDialog, { useValue: { open: jest.fn() } }).compileComponents();
 
     workspaceService = TestBed.inject(WorkspaceService) as jest.Mocked<WorkspaceService>;
     fileService = TestBed.inject(FileService) as jest.Mocked<FileService>;
@@ -313,5 +324,140 @@ describe('FilesValidationComponent', () => {
     expect(component.filesDeleted).toBe(true);
     expect(component.unusedFilesSelection.selected).toHaveLength(0);
     expect(refreshSpy).toHaveBeenCalledWith();
+  });
+  it.each(['booklet', 'unit', 'scheme'].flatMap(kind => ['destroy', 'closing'].flatMap(end => ['success', 'error'].map(outcome => ({ kind, end, outcome })))))('ignores delayed $kind $outcome after $end', async ({ kind, end, outcome }) => {
+    const response = new Subject<never>();
+    fileService.getBookletInfo.mockReturnValue(response);
+    fileService.getUnitInfo.mockReturnValue(response);
+    fileService.getCodingSchemeFile.mockReturnValue(response);
+    component.data.workspaceId = 1;
+    if (kind === 'booklet') component.openBookletInfo('BOOKLET');
+    else if (kind === 'unit') component.openUnitInfo('UNIT');
+    else component.openSchemeFile('SCHEME');
+    const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
+    const loading = snack.mock.results[0].value;
+    if (end === 'destroy') fixture.destroy();
+    else closing.next();
+    if (outcome === 'error') response.error(new Error('Synthetic error'));
+    else {
+      response.next((kind === 'scheme' ? { base64Data: btoa('{}'), filename: 'SCHEME' } : {}) as never);
+      response.complete();
+    }
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    expect(snack).toHaveBeenCalledTimes(1);
+    expect(loading.dismiss).toHaveBeenCalled();
+  });
+
+  it.each(['destroy', 'closing'].flatMap(end => ['xml', 'empty'].map(outcome => ({ end, outcome }))))('ignores delayed test taker $outcome after $end', async ({ end, outcome }) => {
+    const response = new Subject<string | null>();
+    fileService.getTestTakerContentXml.mockReturnValue(response);
+    component.data.workspaceId = 1;
+    component.showTestTakerXml('TESTTAKER');
+    if (end === 'destroy') fixture.destroy();
+    else closing.next();
+    response.next(outcome === 'xml' ? '<TestTakers/>' : null);
+    response.complete();
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    expect(TestBed.inject(MatSnackBar).open).not.toHaveBeenCalled();
+  });
+
+  it.each(['booklet', 'unit', 'scheme', 'xml'])('opens delayed %s information while the parent remains open', async kind => {
+    const response = new Subject<never>();
+    fileService.getBookletInfo.mockReturnValue(response);
+    fileService.getUnitInfo.mockReturnValue(response);
+    fileService.getCodingSchemeFile.mockReturnValue(response);
+    fileService.getTestTakerContentXml.mockReturnValue(response);
+    component.data.workspaceId = 1;
+    if (kind === 'booklet') component.openBookletInfo('BOOKLET');
+    else if (kind === 'unit') component.openUnitInfo('UNIT');
+    else if (kind === 'scheme') component.openSchemeFile('SCHEME');
+    else component.showTestTakerXml('TESTTAKER');
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    let data: unknown = {};
+    if (kind === 'scheme') data = { base64Data: btoa('{}'), filename: 'SCHEME' };
+    else if (kind === 'xml') data = '<TestTakers/>';
+    response.next(data as never);
+    response.complete();
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).toHaveBeenCalledTimes(1);
+    const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
+    if (kind !== 'xml') expect(snack.mock.results[0].value.dismiss).toHaveBeenCalled();
+  });
+
+  it.each(['booklet', 'unit', 'scheme'])('retries %s information after a delayed error', async kind => {
+    const failed = new Subject<never>();
+    const retry = new Subject<never>();
+    const request = { booklet: fileService.getBookletInfo, unit: fileService.getUnitInfo, scheme: fileService.getCodingSchemeFile }[kind]!;
+    request.mockReturnValueOnce(failed).mockReturnValueOnce(retry);
+    component.data.workspaceId = 1;
+    const open = () => {
+      if (kind === 'booklet') component.openBookletInfo('BOOKLET');
+      else if (kind === 'unit') component.openUnitInfo('UNIT');
+      else component.openSchemeFile('SCHEME');
+    };
+    open();
+    failed.error(new Error('Synthetic error'));
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenLastCalledWith(expect.stringContaining('Fehler beim Laden'), 'Fehler', { duration: 3000 });
+    open();
+    retry.next((kind === 'scheme' ? { base64Data: btoa('{}'), filename: 'SCHEME' } : {}) as never);
+    retry.complete();
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).toHaveBeenCalledTimes(1);
+  });
+  it.each(['search', 'download', 'unit-profile', 'item-profile'].flatMap(stage => ['destroy', 'closing', 'open'].flatMap(end => ['success', 'error'].map(outcome => ({ stage, end, outcome })))))('handles metadata $stage $outcome with parent $end', async ({ stage, end, outcome }) => {
+    const response = new Subject<never>();
+    let resolveProfile!: (value: never) => void;
+    let rejectProfile!: (error: Error) => void;
+    const profileResponse = new Promise<never>((resolve, reject) => { resolveProfile = resolve; rejectProfile = reject; });
+    let reached!: () => void;
+    const ready = new Promise<void>(resolve => { reached = resolve; });
+    const files = { data: [{ id: 17, filename: 'metadata.vomd' }] };
+    const download = { base64Data: btoa(JSON.stringify({ profiles: [{ profileId: 'UNIT_PROFILE' }], items: [{ profiles: [{ profileId: 'ITEM_PROFILE' }] }] })), filename: 'metadata.vomd' };
+    fileService.getFilesList.mockImplementation(() => {
+      if (stage === 'search') { reached(); return response; }
+      return of(files as never);
+    });
+    fileService.downloadFile.mockImplementation(() => {
+      if (stage === 'download') { reached(); return response; }
+      return of(download);
+    });
+    const profiles = jest.spyOn(MetadataResolver.prototype, 'loadProfileWithVocabularies').mockImplementation(url => {
+      if ((stage === 'unit-profile' && url === 'UNIT_PROFILE') || (stage === 'item-profile' && url === 'ITEM_PROFILE')) {
+        reached(); return profileResponse;
+      }
+      return Promise.resolve({ profile: {}, vocabularies: [] } as never);
+    });
+    component.data.workspaceId = 1;
+    const operation = component.openMetadataFile('metadata.vomd');
+    await ready;
+    const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
+    const loading = snack.mock.results[0].value;
+    if (end === 'destroy') fixture.destroy();
+    else if (end === 'closing') closing.next();
+    if (end !== 'open') {
+      expect(loading.dismiss).toHaveBeenCalled();
+      await operation;
+      expect(response.observed).toBe(false);
+    }
+    if (stage === 'search' || stage === 'download') {
+      if (outcome === 'error') response.error(new Error('Synthetic error'));
+      else { response.next((stage === 'search' ? files : download) as never); response.complete(); }
+    } else if (outcome === 'error') rejectProfile(new Error('Synthetic error'));
+    else resolveProfile({ profile: {}, vocabularies: [] } as never);
+    await operation;
+    expect(TestBed.inject(MatDialog).open).toHaveBeenCalledTimes(end === 'open' && outcome === 'success' ? 1 : 0);
+    expect(snack).toHaveBeenCalledTimes(end === 'open' && outcome === 'error' ? 2 : 1);
+    expect(loading.dismiss).toHaveBeenCalled();
+    if (stage === 'search' && end !== 'open') expect(fileService.downloadFile).not.toHaveBeenCalled();
+    const expectedProfileCalls = {
+      search: 0, download: 0, 'unit-profile': 1, 'item-profile': 2
+    };
+    expect(profiles).toHaveBeenCalledTimes(end === 'open' && outcome === 'success' ? 2 : expectedProfileCalls[stage]);
+    expect(closing.observed).toBe(false);
+    profiles.mockRestore();
   });
 });

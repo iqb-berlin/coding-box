@@ -50,22 +50,138 @@ export class ReplayCodingService {
   private readonly codingStateVersion = signal(0);
   private readonly saveError = signal(false);
 
-  codingScheme: CodingScheme | null = null;
-  currentVariableId: string = '';
-  codingJobId: number | null = null;
+  private readonly codingSchemeState = signal<CodingScheme | null>(null);
+
+  get codingScheme(): CodingScheme | null {
+    return this.codingSchemeState();
+  }
+
+  set codingScheme(value: CodingScheme | null) {
+    this.codingSchemeState.set(value);
+  }
+
+  private readonly currentVariableIdState = signal<string>('');
+
+  get currentVariableId(): string {
+    return this.currentVariableIdState();
+  }
+
+  set currentVariableId(value: string) {
+    this.currentVariableIdState.set(value);
+  }
+
+  private readonly codingJobIdState = signal<number | null>(null);
+
+  get codingJobId(): number | null {
+    return this.codingJobIdState();
+  }
+
+  set codingJobId(value: number | null) {
+    this.codingJobIdState.set(value);
+  }
+
   selectedCodes: Map<string, SavedCode> = new Map();
   openUnitKeys: Set<string> = new Set();
   notes: Map<string, string> = new Map();
-  codingJobComment: string = '';
-  isPausingJob: boolean = false;
-  isCodingJobCompleted: boolean = false;
-  isCodingJobPaused: boolean = false;
-  isSubmittingJob: boolean = false;
-  isResumingJob: boolean = false;
-  isCodingJobFinalized: boolean = false;
-  isCompletedJobReview: boolean = false;
-  isReviewMode: boolean = false;
-  isCodingIssueReviewMode: boolean = false;
+  private readonly codingJobCommentState = signal<string>('');
+
+  get codingJobComment(): string {
+    return this.codingJobCommentState();
+  }
+
+  set codingJobComment(value: string) {
+    this.codingJobCommentState.set(value);
+  }
+
+  private readonly isPausingJobState = signal<boolean>(false);
+
+  get isPausingJob(): boolean {
+    return this.isPausingJobState();
+  }
+
+  set isPausingJob(value: boolean) {
+    this.isPausingJobState.set(value);
+  }
+
+  private readonly isCodingJobCompletedState = signal<boolean>(false);
+
+  get isCodingJobCompleted(): boolean {
+    return this.isCodingJobCompletedState();
+  }
+
+  set isCodingJobCompleted(value: boolean) {
+    this.isCodingJobCompletedState.set(value);
+  }
+
+  private readonly isCodingJobPausedState = signal<boolean>(false);
+
+  get isCodingJobPaused(): boolean {
+    return this.isCodingJobPausedState();
+  }
+
+  set isCodingJobPaused(value: boolean) {
+    this.isCodingJobPausedState.set(value);
+  }
+
+  private readonly isSubmittingJobState = signal<boolean>(false);
+
+  get isSubmittingJob(): boolean {
+    return this.isSubmittingJobState();
+  }
+
+  set isSubmittingJob(value: boolean) {
+    this.isSubmittingJobState.set(value);
+  }
+
+  private readonly isResumingJobState = signal<boolean>(false);
+
+  get isResumingJob(): boolean {
+    return this.isResumingJobState();
+  }
+
+  set isResumingJob(value: boolean) {
+    this.isResumingJobState.set(value);
+  }
+
+  private readonly isCodingJobFinalizedState = signal<boolean>(false);
+
+  get isCodingJobFinalized(): boolean {
+    return this.isCodingJobFinalizedState();
+  }
+
+  set isCodingJobFinalized(value: boolean) {
+    this.isCodingJobFinalizedState.set(value);
+  }
+
+  private readonly isCompletedJobReviewState = signal<boolean>(false);
+
+  get isCompletedJobReview(): boolean {
+    return this.isCompletedJobReviewState();
+  }
+
+  set isCompletedJobReview(value: boolean) {
+    this.isCompletedJobReviewState.set(value);
+  }
+
+  private readonly isReviewModeState = signal<boolean>(false);
+
+  get isReviewMode(): boolean {
+    return this.isReviewModeState();
+  }
+
+  set isReviewMode(value: boolean) {
+    this.isReviewModeState.set(value);
+  }
+
+  private readonly isCodingIssueReviewModeState = signal<boolean>(false);
+
+  get isCodingIssueReviewMode(): boolean {
+    return this.isCodingIssueReviewModeState();
+  }
+
+  set isCodingIssueReviewMode(value: boolean) {
+    this.isCodingIssueReviewModeState.set(value);
+  }
 
   get hasSaveError(): boolean {
     return this.saveError();
@@ -75,19 +191,65 @@ export class ReplayCodingService {
     this.saveError.set(value);
   }
 
-  lastSaveError: string | null = null;
+  private readonly lastSaveErrorState = signal<string | null>(null);
+
+  get lastSaveError(): string | null {
+    return this.lastSaveErrorState();
+  }
+
+  set lastSaveError(value: string | null) {
+    this.lastSaveErrorState.set(value);
+  }
+
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
   private pendingRowMutations = new Set<Promise<void>>();
+  private pendingNoteMutations = new Map<string, Promise<void>>();
   private latestSelectionRevisionByKey = new Map<string, number>();
   private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
   private codingDataRunId = 0;
   private codingSchemeSource: string | null = null;
-  currentCodingJobStatus: string | null = null;
-  showScore = false;
-  allowComments = true;
-  suppressGeneralInstructions = false;
+  private readonly currentCodingJobStatusState = signal<string | null>(null);
+
+  get currentCodingJobStatus(): string | null {
+    return this.currentCodingJobStatusState();
+  }
+
+  set currentCodingJobStatus(value: string | null) {
+    this.currentCodingJobStatusState.set(value);
+  }
+
+  private readonly showScoreState = signal<boolean>(false);
+
+  get showScore(): boolean {
+    return this.showScoreState();
+  }
+
+  set showScore(value: boolean) {
+    this.showScoreState.set(value);
+  }
+
+  private readonly allowCommentsState = signal<boolean>(true);
+
+  get allowComments(): boolean {
+    return this.allowCommentsState();
+  }
+
+  set allowComments(value: boolean) {
+    this.allowCommentsState.set(value);
+  }
+
+  private readonly suppressGeneralInstructionsState = signal<boolean>(false);
+
+  get suppressGeneralInstructions(): boolean {
+    return this.suppressGeneralInstructionsState();
+  }
+
+  set suppressGeneralInstructions(value: boolean) {
+    this.suppressGeneralInstructionsState.set(value);
+  }
+
   private codingJobCommentRevision = 0;
   private savedCodingJobCommentRevision = 0;
   private recoveredCodingJobCommentChanged = false;
@@ -117,6 +279,7 @@ export class ReplayCodingService {
     this.failedSaveKeys.clear();
     this.rowMutationChains.clear();
     this.pendingRowMutations.clear();
+    this.pendingNoteMutations.clear();
     this.latestSelectionRevisionByKey.clear();
     this.latestRequestedSelectionByKey.clear();
     this.selectionRevision = 0;
@@ -756,12 +919,14 @@ export class ReplayCodingService {
       return;
     }
 
-    await this.enqueueRowMutation(compositeKey, async () => {
-      try {
-        if (this.isCurrentCodingContext(contextSnapshot)) {
-          this.updateLocalNotes(testPerson, unitId, variableId, notes);
-        }
+    // Show the latest keystroke immediately. Earlier queued saves must never
+    // write their captured note text back over a newer local draft.
+    if (this.isCurrentCodingContext(contextSnapshot)) {
+      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+    }
 
+    const noteMutation = this.enqueueRowMutation(compositeKey, async () => {
+      try {
         await firstValueFrom(
           this.codingJobBackendService.saveCodingNotes(workspaceId, jobId, {
             testPerson,
@@ -789,7 +954,13 @@ export class ReplayCodingService {
         }
         throw error;
       }
-    });
+    }, true);
+    await noteMutation;
+
+    // An older note save must not persist the latest local text before a newer
+    // queued note has reached the backend. The newest save will sync the code.
+    const latestNoteMutation = this.pendingNoteMutations.get(compositeKey);
+    if (latestNoteMutation && latestNoteMutation !== noteMutation) return;
 
     if (this.isCurrentCodingContext(contextSnapshot)) {
       await this.syncNewCodeNeededProgressAfterNotes(
@@ -986,6 +1157,9 @@ export class ReplayCodingService {
     selectedCode: SavedCode
   ): Promise<void> {
     if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
+    // A new-code-needed choice requires a saved note. The pending note save
+    // persists this choice after it succeeds.
+    if (this.isNewCodeNeededSelection(selectedCode) && this.pendingNoteMutations.has(compositeKey)) return;
 
     await this.saveCodingProgress(
       workspaceId,
@@ -1082,12 +1256,16 @@ export class ReplayCodingService {
     return -1;
   }
 
-  private enqueueRowMutation(key: string, operation: () => Promise<void>): Promise<void> {
+  private enqueueRowMutation(key: string, operation: () => Promise<void>, isNoteMutation = false): Promise<void> {
     const previous = this.rowMutationChains.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(operation);
     this.pendingRowMutations.add(next);
+    if (isNoteMutation) this.pendingNoteMutations.set(key, next);
     const tracked = next.catch(() => undefined).finally(() => {
       this.pendingRowMutations.delete(next);
+      if (this.pendingNoteMutations.get(key) === next) {
+        this.pendingNoteMutations.delete(key);
+      }
       if (this.rowMutationChains.get(key) === tracked) {
         this.rowMutationChains.delete(key);
         this.codingStateVersion.update(version => version + 1);

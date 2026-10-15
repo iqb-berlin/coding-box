@@ -1,6 +1,12 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LogoService } from '../../../core/services/logo.service';
+import { SERVER_URL } from '../../../injection-tokens';
 import { ErrorMessageDisplayComponent } from './error-message-display.component';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -194,5 +200,50 @@ describe('ErrorMessageDisplayComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Internal server error');
     expect(fixture.nativeElement.textContent).toContain('request-123');
     expect(fixture.nativeElement.textContent).toContain('/api/admin/workspace/5/journal?page=1&limit=20');
+  });
+});
+
+describe('ErrorMessageDisplayComponent zoneless session warning', () => {
+  let fixture: ComponentFixture<ErrorMessageDisplayComponent>;
+  let appService: AppService;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [ErrorMessageDisplayComponent, TranslateModule.forRoot()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: SERVER_URL, useValue: '/api/' },
+        { provide: LogoService, useValue: { getLogoSettings: () => of(null) } },
+        { provide: AuthService, useValue: { getValidToken: jest.fn().mockResolvedValue('token') } },
+        { provide: Router, useValue: { url: '/coding' } }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(ErrorMessageDisplayComponent);
+    appService = TestBed.inject(AppService);
+    await fixture.whenStable();
+  });
+
+  it('renders an asynchronous warning and clears it after extending the session', async () => {
+    expect(fixture.nativeElement.querySelector('.session-expiry-warning')).toBeNull();
+    await Promise.resolve().then(() => appService.setSessionExpiryWarning(true));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.session-expiry-warning')).not.toBeNull();
+
+    await fixture.componentInstance.handleExtendSession();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.session-expiry-warning')).toBeNull();
+  });
+
+  it('replaces the warning with reauthentication when the session expires', async () => {
+    appService.setSessionExpiryWarning(true);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.session-expiry-warning')).not.toBeNull();
+
+    appService.requireReAuthentication('/coding');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.session-expiry-warning')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.re-authentication')).not.toBeNull();
   });
 });

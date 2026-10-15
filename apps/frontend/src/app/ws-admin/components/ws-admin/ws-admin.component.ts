@@ -1,10 +1,15 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, DestroyRef, OnInit, inject
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-import { catchError, of } from 'rxjs';
+import {
+  catchError, combineLatest, of, Subscription
+} from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { getEffectiveCanCode } from '../../../shared/utils/workspace-access';
@@ -29,6 +34,10 @@ interface WsAdminNavLink {
     TranslateModule]
 })
 export class WsAdminComponent implements OnInit {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+  private workspaceAccessSubscription?: Subscription;
+  private assignedJobsSubscription?: Subscription;
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   appService = inject(AppService);
@@ -65,34 +74,29 @@ export class WsAdminComponent implements OnInit {
   }
 
   ngOnInit() {
-    // Subscribe to route parameter changes to handle workspace switching
-    this.route.params.subscribe(params => {
-      const routeKey = 'ws';
-      this.appService.selectedWorkspaceId = Number(params[routeKey]);
-
-      // Update access level for the new workspace
-      this.updateAccessLevel();
-    });
+    combineLatest([this.route.params, this.appService.authData$])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([params, authData]) => {
+        const workspaceId = Number(params.ws);
+        const contextChanged = workspaceId !== this.appService.selectedWorkspaceId ||
+          authData.userId !== this.authData.userId || authData.isAdmin !== this.authData.isAdmin;
+        this.appService.selectedWorkspaceId = workspaceId;
+        this.updateAccessLevel(authData, contextChanged);
+      });
   }
 
-  private updateAccessLevel(): void {
-    this.appService.authData$.subscribe(authData => {
-      this.authData = authData;
-
-      if (authData.isAdmin) {
-        this.accessLevel = 3;
-        this.canCode = false;
-        this.hasAssignedCodingJobs = false;
-        this.updateNavLinks();
-        this.handleDefaultNavigation();
-        this.updateWorkspaceCodingAccess();
-        return;
-      }
-
-      if (authData.userId > 0) {
-        this.updateWorkspaceCodingAccess();
-      }
-    });
+  private updateAccessLevel(authData: typeof AppService.defaultAuthData, contextChanged: boolean): void {
+    this.workspaceAccessSubscription?.unsubscribe();
+    this.assignedJobsSubscription?.unsubscribe();
+    this.authData = authData;
+    if (contextChanged) {
+      this.accessLevel = authData.isAdmin ? 3 : 0;
+      this.canCode = false;
+      this.hasAssignedCodingJobs = false;
+    }
+    this.updateNavLinks();
+    this.handleDefaultNavigation();
+    if (authData.userId > 0) this.updateWorkspaceCodingAccess();
   }
 
   private updateWorkspaceCodingAccess(): void {
@@ -100,13 +104,18 @@ export class WsAdminComponent implements OnInit {
       return;
     }
 
-    this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
-      .pipe(catchError(() => of([])))
+    this.workspaceAccessSubscription = this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
+      .pipe(catchError(() => of([])), takeUntilDestroyed(this.destroyRef))
       .subscribe(users => {
         const currentUser = users.find(user => user.id === this.authData.userId);
         if (!currentUser) {
           if (this.authData.isAdmin) {
             this.updateAssignedCodingJobsAccess();
+          } else {
+            this.accessLevel = 0;
+            this.canCode = false;
+            this.hasAssignedCodingJobs = false;
+            this.updateNavLinks();
           }
           return;
         }
@@ -121,6 +130,7 @@ export class WsAdminComponent implements OnInit {
   }
 
   private updateNavLinks(): void {
+    this.changeDetector.markForCheck();
     const showMyCodingJobs = this.hasCodingJobsAccess;
     this.codingManagerLinks = showMyCodingJobs ?
       [this.myCodingJobsLink, ...this.baseCodingManagerLinks] :
@@ -149,7 +159,8 @@ export class WsAdminComponent implements OnInit {
       return;
     }
 
-    this.codingJobBackendService.getCodingJobs(
+    this.assignedJobsSubscription?.unsubscribe();
+    this.assignedJobsSubscription = this.codingJobBackendService.getCodingJobs(
       workspaceId,
       undefined,
       1,
@@ -160,7 +171,7 @@ export class WsAdminComponent implements OnInit {
         total: 0,
         page: 1,
         limit: 1
-      })))
+      })), takeUntilDestroyed(this.destroyRef))
       .subscribe(response => {
         this.hasAssignedCodingJobs = (response.total ?? response.data.length) > 0;
         this.updateNavLinks();

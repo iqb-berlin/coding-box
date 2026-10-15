@@ -2,15 +2,20 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   inject,
   OnInit
 } from '@angular/core';
-import { firstValueFrom, of, timer } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  firstValueFrom, from, Observable, of, Subject, timer
+} from 'rxjs';
 import {
   filter,
   finalize,
   switchMap,
   take,
+  takeUntil,
   tap
 } from 'rxjs/operators';
 import { MetadataResolver } from '@iqb/metadata-resolver';
@@ -182,6 +187,7 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
 export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
+  private readonly destroyRef = inject(DestroyRef);
   private cdr = inject(ChangeDetectorRef);
 
   data = inject<{
@@ -1517,6 +1523,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getBookletInfo(
       this.data.workspaceId,
       normalizedBookletId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (bookletInfo: unknown) => {
         loadingSnackBar.dismiss();
@@ -1559,6 +1569,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getUnitInfo(
       this.data.workspaceId,
       unitId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (unitInfo: unknown) => {
         loadingSnackBar.dismiss();
@@ -1599,6 +1613,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getCodingSchemeFile(
       this.data.workspaceId,
       schemeId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (fileDownload: { base64Data: string; filename: string } | null) => {
         loadingSnackBar.dismiss();
@@ -1660,6 +1678,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
 
     this.fileService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
+      .pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef))
       .subscribe((xmlContent: string | null) => {
         if (xmlContent) {
           this.dialog.open(ContentDialogComponent, {
@@ -1685,13 +1704,26 @@ export class FilesValidationDialogComponent implements OnInit {
       return;
     }
 
+    const workspaceId = this.data.workspaceId;
     const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+    const canceled$ = new Subject<void>();
+    let canceled = false;
+    const cancel = () => {
+      canceled = true;
+      canceled$.next();
+      loadingSnackBar.dismiss();
+    };
+    const closingSubscription = this.dialogRef.beforeClosed().subscribe(cancel);
+    const unregisterDestroy = this.destroyRef.onDestroy(cancel);
+    const waitFor = <T>(source: Observable<T>) => firstValueFrom(
+      source.pipe(takeUntil(canceled$)), { defaultValue: undefined }
+    );
 
     try {
       // 1. Find file ID
-      const filesList = await firstValueFrom(
+      const filesList = await waitFor(
         this.fileService.getFilesList(
-          this.data.workspaceId,
+          workspaceId,
           1,
           20,
           'Resource',
@@ -1699,6 +1731,8 @@ export class FilesValidationDialogComponent implements OnInit {
           filename
         )
       );
+
+      if (canceled || !filesList) return;
 
       // eslint-disable-next-line no-console
       console.log('Metadata file search:', {
@@ -1726,10 +1760,11 @@ export class FilesValidationDialogComponent implements OnInit {
       }
 
       // 2. Download file content
-      const fileDownload = await firstValueFrom(
-        this.fileService.downloadFile(this.data.workspaceId, fileEntry.id)
+      const fileDownload = await waitFor(
+        this.fileService.downloadFile(workspaceId, fileEntry.id)
       );
 
+      if (canceled) return;
       if (!fileDownload) {
         loadingSnackBar.dismiss();
         this.snackBar.open('Fehler beim Laden der Datei.', 'Fehler', { duration: 3000 });
@@ -1751,7 +1786,8 @@ export class FilesValidationDialogComponent implements OnInit {
 
       const resolver = new MetadataResolver();
       const unitProfileUrl = unitProfile.profileId;
-      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+      const unitProfileWithVocabs = await waitFor(from(resolver.loadProfileWithVocabularies(unitProfileUrl)));
+      if (canceled || !unitProfileWithVocabs) return;
 
       let itemProfileData = null;
       const firstItem = vomdData.items?.[0];
@@ -1759,7 +1795,8 @@ export class FilesValidationDialogComponent implements OnInit {
 
       if (itemProfile) {
         const itemProfileUrl = itemProfile.profileId;
-        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        const itemProfileWithVocabs = await waitFor(from(resolver.loadProfileWithVocabularies(itemProfileUrl)));
+        if (canceled || !itemProfileWithVocabs) return;
         itemProfileData = itemProfileWithVocabs.profile;
       }
 
@@ -1781,10 +1818,16 @@ export class FilesValidationDialogComponent implements OnInit {
         }
       });
     } catch (error) {
+      if (canceled) return;
       // eslint-disable-next-line no-console
       console.error('Error opening metadata file:', error);
       loadingSnackBar.dismiss();
       this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+    } finally {
+      closingSubscription.unsubscribe();
+      unregisterDestroy();
+      canceled$.complete();
+      loadingSnackBar.dismiss();
     }
   }
 }

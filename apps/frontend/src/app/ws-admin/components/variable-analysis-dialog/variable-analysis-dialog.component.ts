@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy
+  ChangeDetectorRef, inject, Component, Inject, OnInit, OnDestroy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -199,6 +199,8 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   isLoading = false;
   variableFrequencies: { [key: string]: VariableFrequency[] } = {};
   displayedColumns: string[] = [
@@ -285,6 +287,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe(searchText => {
+        this.changeDetectorRef.markForCheck();
         this.searchText = searchText;
         this.currentPage = 0;
         if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
@@ -310,11 +313,13 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
+        this.changeDetectorRef.markForCheck();
         this.isJobsLoading = false;
         this.isInitializing = false;
         this.applyJobs(jobs, true);
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.isJobsLoading = false;
         this.isInitializing = false;
       }
@@ -845,10 +850,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
+        this.changeDetectorRef.markForCheck();
         this.isJobsLoading = false;
         this.applyJobs(jobs);
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         if (showError) {
           this.snackBar.open(
             this.translate.instant('variable-analysis.error-loading-jobs'),
@@ -880,6 +887,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (job: VariableAnalysisJobDto) => {
+          this.changeDetectorRef.markForCheck();
           this.isStartingJob = false;
           this.applyStartedJob(job);
           this.isJobsLoading = false; // Reset loading flag here too
@@ -894,6 +902,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.refreshJobs();
         },
         error: error => {
+          this.changeDetectorRef.markForCheck();
           this.isStartingJob = false;
           this.setResponseAnalysisGuardActive(Boolean(this.activeJob));
           loadingSnackBar.dismiss();
@@ -926,6 +935,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       .cancelJob(this.data.workspaceId, jobId)
       .subscribe({
         next: (result: JobCancelResult) => {
+          this.changeDetectorRef.markForCheck();
           if (result.success) {
             if (jobId === this.currentAnalysisJobId) {
               this.clearCurrentAnalysisResults();
@@ -950,6 +960,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           }
         },
         error: error => {
+          this.changeDetectorRef.markForCheck();
           const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
             `${this.translate.instant('variable-analysis.error-cancelling-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
@@ -977,6 +988,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
 
     confirmRef.afterClosed().subscribe((confirmed: boolean) => {
+      this.changeDetectorRef.markForCheck();
       if (!confirmed) {
         return;
       }
@@ -986,6 +998,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         .deleteJob(this.data.workspaceId, jobId)
         .subscribe({
           next: (result: JobCancelResult) => {
+            this.changeDetectorRef.markForCheck();
             if (result.success) {
               if (jobId === this.currentAnalysisJobId) {
                 this.clearCurrentAnalysisResults();
@@ -1010,6 +1023,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             }
           },
           error: error => {
+            this.changeDetectorRef.markForCheck();
             const errorMessage = error?.error?.message || error?.message || '';
             this.snackBar.open(
               `${this.translate.instant('variable-analysis.error-deleting-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
@@ -1037,12 +1051,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe(result => {
+      this.changeDetectorRef.markForCheck();
       if (result) {
         this.isJobsLoading = true;
         this.variableAnalysisService
           .deleteAllJobs(this.data.workspaceId)
           .subscribe({
             next: () => {
+              this.changeDetectorRef.markForCheck();
               this.snackBar.open(
                 this.translate.instant('variable-analysis.all-jobs-deleted'),
                 'OK',
@@ -1056,6 +1072,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
               this.refreshJobs();
             },
             error: error => {
+              this.changeDetectorRef.markForCheck();
               this.isJobsLoading = false;
               const errorMessage =
                 error?.error?.message || error?.message || '';
@@ -1112,6 +1129,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     request.subscribe({
       next: blob => {
+        this.changeDetectorRef.markForCheck();
         this.saveBlob(blob, this.createExportFileName(format));
         this.isExporting = false;
         this.snackBar.open(
@@ -1121,6 +1139,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
+        this.changeDetectorRef.markForCheck();
         this.isExporting = false;
         const errorMessage = error?.error?.message || error?.message || '';
         this.snackBar.open(
@@ -1177,6 +1196,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: (results: VariableAnalysisResultPageDto) => {
+          this.changeDetectorRef.markForCheck();
           if (requestId !== this.latestResultsRequestId) {
             this.dismissResultsLoadingSnackBar(loadingSnackBar);
             return;
@@ -1191,6 +1211,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.analyzeVariables();
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           if (requestId !== this.latestResultsRequestId) {
             this.dismissResultsLoadingSnackBar(loadingSnackBar);
             return;

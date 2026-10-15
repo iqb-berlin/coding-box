@@ -1,6 +1,7 @@
-import { SimpleChange } from '@angular/core';
+import { provideZonelessChangeDetection, SimpleChange } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import {
-  ComponentFixture, fakeAsync, TestBed, tick
+  ComponentFixture, TestBed
 } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -25,6 +26,7 @@ describe('TestResultsFlatTableComponent', () => {
   let snackBar: { open: jest.Mock };
   let testResultService: {
     getFlatResponses: jest.Mock;
+    getPersonTestResults: jest.Mock;
     getFlatResponseFilterOptions: jest.Mock;
     getFlatResponseFrequencies: jest.Mock;
     workspaceCacheInvalidated$: Subject<number>;
@@ -51,6 +53,7 @@ describe('TestResultsFlatTableComponent', () => {
       open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
     };
     testResultService = {
+      getPersonTestResults: jest.fn().mockReturnValue(of([{ name: 'BOOKLET', units: [{ id: 10, name: 'UNIT' }] }])),
       getFlatResponses: jest.fn().mockReturnValue(of({
         data: [],
         total: 0,
@@ -69,7 +72,8 @@ describe('TestResultsFlatTableComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        { provide: FileService, useValue: {} },
+        provideZonelessChangeDetection(),
+        { provide: FileService, useValue: { getBookletInfo: jest.fn().mockReturnValue(of({})), getUnitInfo: jest.fn().mockReturnValue(of({})) } },
         {
           provide: UnitNoteService,
           useValue: {
@@ -232,27 +236,27 @@ describe('TestResultsFlatTableComponent', () => {
     );
   });
 
-  it('should not request data while a regex filter exceeds the limit', fakeAsync(() => {
+  it('should not request data while a regex filter exceeds the limit', async () => {
     component.enableRegexSearch = true;
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.response = 'a'.repeat(257);
 
     component.onFlatFilterChanged();
-    tick(401);
+    await new Promise<void>(resolve => { setTimeout(resolve, 401); });
 
     expect(component.isRegexFilterInvalid('response')).toBe(true);
     expect(testResultService.getFlatResponses).not.toHaveBeenCalled();
-  }));
+  });
 
-  it('should send PostgreSQL ARE syntax unsupported by JavaScript', fakeAsync(() => {
+  it('should send PostgreSQL ARE syntax unsupported by JavaScript', async () => {
     component.enableRegexSearch = true;
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.response = '(?i)^var$';
 
     component.onFlatFilterChanged();
-    tick(401);
+    await new Promise<void>(resolve => { setTimeout(resolve, 401); });
 
     expect(component.isRegexFilterInvalid('response')).toBe(false);
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
@@ -260,7 +264,7 @@ describe('TestResultsFlatTableComponent', () => {
       expect.objectContaining({ response: '(?i)^var$' }),
       expect.objectContaining({ suppressGlobalHttpError: true })
     );
-  }));
+  });
 
   it('should disable autocomplete suggestions in regex mode', () => {
     component.enableRegexSearch = true;
@@ -337,7 +341,7 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.isRegexFilterInvalid('response')).toBe(true);
   });
 
-  it('should ignore an invalid-regex error for an edited filter', fakeAsync(() => {
+  it('should ignore an invalid-regex error for an edited filter', async () => {
     const staleResponse = new Subject<FlatTestResultResponsesResponse>();
     component.enableRegexSearch = true;
     component.flatFilters.response = '[';
@@ -349,7 +353,7 @@ describe('TestResultsFlatTableComponent', () => {
         page: 1,
         limit: 100
       }));
-    component.ngOnInit();
+    fixture.detectChanges();
 
     component.flatFilters.response = '[a]';
     component.onFlatFilterChanged();
@@ -361,7 +365,7 @@ describe('TestResultsFlatTableComponent', () => {
         message: 'Invalid regular expression for response'
       }
     }));
-    tick(401);
+    await new Promise<void>(resolve => { setTimeout(resolve, 401); });
 
     expect(component.isRegexFilterInvalid('response')).toBe(false);
     expect(testResultService.getFlatResponses).toHaveBeenCalledTimes(2);
@@ -370,7 +374,7 @@ describe('TestResultsFlatTableComponent', () => {
       expect.objectContaining({ response: '[a]' }),
       expect.objectContaining({ suppressGlobalHttpError: true })
     );
-  }));
+  });
 
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();
@@ -439,5 +443,56 @@ describe('TestResultsFlatTableComponent', () => {
 
     expect(component.flatData[0].code).toBe('new');
     expect(component.flatData[0].logAnomalies).toHaveLength(1);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(TestResultService);
+    const response = backend.getFlatResponses(1, {}).pipe(delay(30));
+    jest.spyOn(backend, 'getFlatResponses').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(TestResultsFlatTableComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Keine Ergebnisse gefunden');
+  });
+  it.each(['booklet', 'unit-person', 'unit-info'].flatMap(stage => ['destroy', 'workspace'].flatMap(end => ['success', 'error'].map(outcome => ({ stage, end, outcome })))))('ignores delayed $stage $outcome after $end', async ({ stage, end, outcome }) => {
+    const response = new Subject<unknown>();
+    const files = TestBed.inject(FileService) as unknown as { getBookletInfo: jest.Mock; getUnitInfo: jest.Mock };
+    if (stage === 'booklet') files.getBookletInfo.mockReturnValue(response);
+    else if (stage === 'unit-person') testResultService.getPersonTestResults.mockReturnValue(response);
+    else files.getUnitInfo.mockReturnValue(response);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const row = {
+      bookletId: 1,
+      responseId: 1,
+      unitId: 10,
+      personId: 20,
+      code: '',
+      group: '',
+      login: '',
+      booklet: 'BOOKLET',
+      unit: 'UNIT',
+      response: 'v',
+      responseStatus: '',
+      responseValue: '',
+      tags: []
+    };
+    if (stage === 'booklet') component.openBookletInfoFromFlatRow(row);
+    else component.openUnitInfoFromFlatRow(row);
+    const loading = snackBar.open.mock.results.at(-1)?.value;
+    if (end === 'destroy') fixture.destroy();
+    else TestBed.inject(AppService).selectedWorkspaceId = 2;
+    if (outcome === 'error') response.error(new Error('Synthetic error'));
+    else {
+      response.next(stage === 'unit-person' ? [{ name: 'BOOKLET', units: [{ id: 10, name: 'UNIT' }] }] : {});
+      response.complete();
+    }
+    expect(snackBar.open).toHaveBeenCalledTimes(stage === 'unit-person' ? 0 : 1);
+    if (stage !== 'unit-person') expect(loading.dismiss).toHaveBeenCalled();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    if (stage === 'unit-person') expect(files.getUnitInfo).not.toHaveBeenCalled();
   });
 });

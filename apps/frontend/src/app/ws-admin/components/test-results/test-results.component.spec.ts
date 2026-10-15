@@ -1,4 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,6 +50,7 @@ describe('TestResultsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideRouter([]),
         {
@@ -85,7 +87,7 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: FileService,
-          useValue: { getFilesList: jest.fn().mockReturnValue(of({ data: [] })) }
+          useValue: { getBookletInfo: jest.fn(), getUnitInfo: jest.fn(), getFilesList: jest.fn().mockReturnValue(of({ data: [] })) }
         },
         {
           provide: ResponseService,
@@ -885,5 +887,25 @@ describe('TestResultsComponent', () => {
       'Dabei werden 50 Antwortwerte berücksichtigt.'
     );
     expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+  });
+  it.each(['booklet', 'unit'].flatMap(kind => ['destroy', 'workspace'].flatMap(end => ['success', 'error'].map(outcome => ({ kind, end, outcome })))))('ignores delayed $kind $outcome after $end', async ({ kind, end, outcome }) => {
+    const response = new Subject<unknown>();
+    const files = TestBed.inject(FileService) as unknown as { getBookletInfo: jest.Mock; getUnitInfo: jest.Mock };
+    files.getBookletInfo.mockReturnValue(response);
+    files.getUnitInfo.mockReturnValue(response);
+    component.selectedUnit = { id: 10, name: 'UNIT' } as NonNullable<TestResultsComponent['selectedUnit']>;
+    const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
+    snack.mockClear();
+    if (kind === 'booklet') component.openBookletInfo('BOOKLET');
+    else component.openUnitInfoForSelectedUnit();
+    const loading = snack.mock.results[0].value;
+    if (end === 'destroy') fixture.destroy();
+    else appService.selectedWorkspaceId = 2;
+    if (outcome === 'error') response.error(new Error('Synthetic error'));
+    else { response.next({}); response.complete(); }
+    await fixture.whenStable();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    expect(snack).toHaveBeenCalledTimes(1);
+    expect(loading.dismiss).toHaveBeenCalled();
   });
 });

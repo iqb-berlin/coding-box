@@ -1,5 +1,5 @@
 import {
-  Component,
+  ChangeDetectorRef, Component,
   OnInit,
   OnDestroy,
   Input,
@@ -120,6 +120,8 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   @Input() hideActionButtons = false;
 
   private appService = inject(AppService);
@@ -284,6 +286,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.codingStatistics$
       .pipe(takeUntil(this.destroy$))
       .subscribe(stats => {
+        this.changeDetectorRef.markForCheck();
         if (stats) {
           this.codingStatistics = stats;
           this.statisticsLoaded = true;
@@ -293,24 +296,28 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.referenceStatistics$
       .pipe(takeUntil(this.destroy$))
       .subscribe(stats => {
+        this.changeDetectorRef.markForCheck();
         this.referenceStatistics = stats;
       });
 
     this.codingManagementService.referenceVersion$
       .pipe(takeUntil(this.destroy$))
       .subscribe(version => {
+        this.changeDetectorRef.markForCheck();
         this.referenceVersion = version;
       });
 
     this.codingManagementService.isLoadingStatistics$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isLoading => {
+        this.changeDetectorRef.markForCheck();
         this.isLoadingStatistics = isLoading;
       });
 
     this.codingManagementService.resetProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
+        this.changeDetectorRef.markForCheck();
         const previousProgress = this.lastResetProgress;
         this.lastResetProgress = progress;
         this.resetProgress = progress;
@@ -329,6 +336,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.downloadProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
+        this.changeDetectorRef.markForCheck();
         this.downloadProgress = progress;
         this.isDownloadInProgress = progress !== null;
       });
@@ -336,6 +344,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.codingListDownloadProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
+        this.changeDetectorRef.markForCheck();
         this.codingListDownloadProgress = progress;
       });
 

@@ -5,6 +5,7 @@ import {
   tick,
   flush
 } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -160,6 +161,7 @@ describe('CodingJobsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
+        provideZonelessChangeDetection(),
         provideNoopAnimations(),
         {
           provide: CodingJobBackendService,
@@ -442,7 +444,7 @@ describe('CodingJobsComponent', () => {
     ).toBeNull();
   });
 
-  it('uses the full spinner only for the initial coding jobs load', () => {
+  it('replaces the initial spinner after a delayed job response without another UI event', async () => {
     const initialResponse$ = new Subject<{
       data: CodingJob[];
       total: number;
@@ -464,17 +466,18 @@ describe('CodingJobsComponent', () => {
     ).toBeNull();
 
     initialResponse$.next({
-      data: [],
-      total: 0,
+      data: mockCodingJobs as CodingJob[],
+      total: mockCodingJobs.length,
       page: 1,
       limit: 50
     });
-    initialFixture.detectChanges();
+    await initialFixture.whenStable();
 
     expect(initialFixture.componentInstance.hasLoadedJobs).toBe(true);
     expect(
       initialFixture.nativeElement.querySelector('.filters-row')
     ).not.toBeNull();
+    expect(initialFixture.nativeElement.textContent).toContain('Job 1');
     initialFixture.destroy();
   });
 

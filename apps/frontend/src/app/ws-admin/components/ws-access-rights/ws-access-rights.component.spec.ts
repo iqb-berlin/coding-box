@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -51,6 +53,7 @@ describe('WsAccessRightsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: UserBackendService, useValue: mockUserBackendService },
         { provide: AppService, useValue: mockAppService },
         { provide: MatSnackBar, useValue: mockSnackBar }
@@ -194,5 +197,18 @@ describe('WsAccessRightsComponent', () => {
 
     expect(component.workspaceUsers.hasChanged).toBe(false);
     expect(mockSnackBar.open).not.toHaveBeenCalled();
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(UserBackendService);
+    const response = backend.getUsers(1).pipe(delay(30));
+    jest.spyOn(backend, 'getUsers').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(WsAccessRightsComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('user1');
+    expect(fixture.nativeElement.querySelector('input:checked')).toBeTruthy();
   });
 });

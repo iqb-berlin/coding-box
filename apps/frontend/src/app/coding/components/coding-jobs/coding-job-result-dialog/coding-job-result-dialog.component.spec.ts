@@ -1,9 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { FileService } from '../../../../shared/services/file/file.service';
@@ -112,6 +113,7 @@ describe('CodingJobResultDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [CodingJobResultDialogComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
         { provide: MatSnackBar, useClass: MatSnackBarMock },
@@ -131,6 +133,20 @@ describe('CodingJobResultDialogComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('replaces the loading spinner after delayed coding results arrive', async () => {
+    const units = new Subject<unknown[]>();
+    mockCodingJobBackendService.getCodingJobUnits.mockReturnValueOnce(units.asObservable());
+    component.loadCodingResults();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-container')).not.toBeNull();
+
+    units.next([]);
+    units.complete();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
   });
 
   it('should keep dialog open and reload results when apply leaves coding issue reviews open', () => {
