@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { FormBuilder } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of, Subject } from 'rxjs';
@@ -21,6 +21,7 @@ describe('VariableBundleDialogComponent', () => {
   ];
 
   beforeEach(() => {
+    jest.useFakeTimers();
     backend = { getCodingIncompleteVariables: jest.fn(() => of(variables)) };
     dialogRef = { close: jest.fn() };
     dialogData = { isEdit: false };
@@ -37,9 +38,12 @@ describe('VariableBundleDialogComponent', () => {
     component = TestBed.inject(VariableBundleDialogComponent);
   });
 
-  afterEach(() => component.ngOnDestroy());
+  afterEach(() => {
+    component.ngOnDestroy();
+    jest.useRealTimers();
+  });
 
-  it('reuses preloaded variables and restores only matching bundle selections', fakeAsync(() => {
+  it('reuses preloaded variables and restores only matching bundle selections', () => {
     dialogData.preloadedIncompleteVariables = variables;
     dialogData.isEdit = true;
     dialogData.bundleGroup = {
@@ -50,17 +54,17 @@ describe('VariableBundleDialogComponent', () => {
       variables: [variables[1], { unitName: 'REMOVED', variableId: 'VAR3' }]
     };
     component.ngOnInit();
-    tick();
+    jest.advanceTimersByTime(0);
     expect(backend.getCodingIncompleteVariables).not.toHaveBeenCalled();
     expect(component.dataSource.data).toEqual(variables);
     expect(component.selectedVariables.selected).toEqual([variables[1]]);
-    expect(component.isLoadingVariableAnalysis).toBe(false);
-  }));
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+  });
 
-  it('submits the selected variables with their generated name', fakeAsync(() => {
+  it('submits the selected variables with their generated name', () => {
     component.ngOnInit();
     component.selectedVariables.select(...variables);
-    tick(300);
+    jest.advanceTimersByTime(300);
     component.onSubmit();
     expect(backend.getCodingIncompleteVariables).toHaveBeenCalledWith(5, undefined);
     expect(dialogRef.close).toHaveBeenCalledWith(expect.objectContaining({
@@ -70,43 +74,43 @@ describe('VariableBundleDialogComponent', () => {
       createdAt: expect.any(Date),
       updatedAt: expect.any(Date)
     }));
-  }));
+  });
 
-  it('preserves a manually edited name when the selection changes', fakeAsync(() => {
+  it('preserves a manually edited name when the selection changes', () => {
     component.ngOnInit();
     component.selectedVariables.select(variables[0]);
-    tick(300);
+    jest.advanceTimersByTime(300);
     component.bundleGroupForm.patchValue({ name: 'My bundle' });
-    tick(300);
+    jest.advanceTimersByTime(300);
     component.selectedVariables.select(variables[1]);
     expect(component.bundleGroupForm.value.name).toBe('My bundle');
-    tick(300);
-  }));
+    jest.advanceTimersByTime(300);
+  });
 
-  it('selects only variables matching both case-insensitive table filters', fakeAsync(() => {
+  it('selects only variables matching both case-insensitive table filters', () => {
     component.ngOnInit();
-    tick();
+    jest.advanceTimersByTime(0);
     component.unitNameFilter = 'unit2';
     component.variableIdFilter = 'var2';
     component.applyFilter();
     component.selectAll();
     expect(component.selectedVariables.selected).toEqual([variables[1]]);
-    tick(300);
-  }));
+    jest.advanceTimersByTime(300);
+  });
 
   it('releases the loading state when variable analysis fails', () => {
     const pendingVariables = new Subject<Variable[]>();
     backend.getCodingIncompleteVariables.mockReturnValue(pendingVariables.asObservable());
     component.initForm();
     component.loadCodingIncompleteVariables();
-    expect(component.isLoadingVariableAnalysis).toBe(true);
+    expect(component.isLoadingVariableAnalysis()).toBe(true);
     pendingVariables.error(new Error('analysis unavailable'));
-    expect(component.isLoadingVariableAnalysis).toBe(false);
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
     expect(component.dataSource.data).toEqual([]);
     expect(dialogRef.close).not.toHaveBeenCalled();
   });
 
-  it('does not submit an invalid bundle and preserves identity when editing', fakeAsync(() => {
+  it('does not submit an invalid bundle and preserves identity when editing', () => {
     component.initForm();
     component.onSubmit();
     expect(dialogRef.close).not.toHaveBeenCalled();
@@ -120,7 +124,7 @@ describe('VariableBundleDialogComponent', () => {
     dialogData.bundleGroup = original;
     component.bundleGroupForm.patchValue({ name: 'Renamed bundle' });
     component.selectedVariables.select(variables[0]);
-    tick(300);
+    jest.advanceTimersByTime(300);
     component.onSubmit();
     expect(dialogRef.close).toHaveBeenCalledWith(expect.objectContaining({
       id: 9,
@@ -128,5 +132,5 @@ describe('VariableBundleDialogComponent', () => {
       createdAt: original.createdAt,
       variables: [variables[0]]
     }));
-  }));
+  });
 });

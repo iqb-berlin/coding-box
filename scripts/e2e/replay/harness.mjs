@@ -51,6 +51,39 @@ export function createReplayHarness(environment = process.env) {
       return prepareImportedCoding(activeState);
     },
 
+    async readFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings read requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      return { regex: JSON.parse(regex.value), pool };
+    },
+
+    async prepareFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings setup requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const headers = { 'content-type': 'application/json' };
+      await apiJson(config, `/workspace/${workspaceId}/settings`, {
+        method: 'POST', token: adminToken, headers,
+        body: JSON.stringify({ key: 'enable-regex-search', value: JSON.stringify({ enabled: true }) })
+      });
+      await apiJson(config, '/admin/content-pool/settings', {
+        method: 'PUT', token: adminToken, headers,
+        body: JSON.stringify({ enabled: true, baseUrl: 'https://synthetic.example.invalid',
+          applicationToken: 'file-settings-e2e-synthetic-token' })
+      });
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      if (!JSON.parse(regex.value).enabled || !pool.enabled || !pool.hasApplicationToken) {
+        throw new Error('File settings fixture did not persist.');
+      }
+      return pool;
+    },
+
     async verifyItemMatrix() {
       if (!activeState) {
         activeState = await setupReplayWorkspace(config);
@@ -504,7 +537,12 @@ async function pollExportJob(config, workspaceId, token, jobId) {
       `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
       { token }
     );
-    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+    // The queue can expose the failed state before failedReason (and therefore
+    // the public diagnostic metadata) is visible through the status endpoint.
+    if (
+      lastStatus.status === 'completed' ||
+      (lastStatus.status === 'failed' && lastStatus.error)
+    ) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));

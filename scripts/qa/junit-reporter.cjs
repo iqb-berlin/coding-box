@@ -22,7 +22,7 @@ class JunitReporter {
     this.project = options.project;
     this.workspaceRoot = path.resolve(__dirname, '../..');
     this.outputFile = options.outputFile || path.join(
-      this.workspaceRoot, 'reports', 'junit', `${this.project}.xml`
+      this.workspaceRoot, 'coverage', 'apps', this.project, 'junit.xml'
     );
     this.error = undefined;
   }

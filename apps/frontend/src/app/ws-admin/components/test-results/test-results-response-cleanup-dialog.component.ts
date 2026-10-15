@@ -1,4 +1,7 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -24,6 +27,7 @@ interface VariableOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-response-cleanup-dialog',
   standalone: true,
   imports: [
@@ -40,50 +44,45 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
-  availableUnits: string[] = [];
-  private variableOptions: VariableOption[] = [];
-  selectedUnitNames: string[] = [];
-  selectedVariableIds: string[] = [];
-  answeredFrom = '';
-  answeredBefore = '';
-  subformsText = '';
-  isLoading = false;
-  loadFailed = false;
+  private dialogRef = inject<MatDialogRef<TestResultsResponseCleanupDialogComponent, TestResultsResponseCleanupRequestDto | false>>(MatDialogRef);
+  private testResultBackendService = inject(TestResultBackendService);
+  private fileBackendService = inject(FileBackendService);
+  data = inject<TestResultsResponseCleanupDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsResponseCleanupDialogComponent,
-    TestResultsResponseCleanupRequestDto | false
-    >,
-    private testResultBackendService: TestResultBackendService,
-    private fileBackendService: FileBackendService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsResponseCleanupDialogData
-  ) {}
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly availableUnits = signal<string[]>([]);
+  private variableOptions: VariableOption[] = [];
+  protected selectedUnitNames: string[] = [];
+  protected readonly selectedVariableIds = signal<string[]>([]);
+  protected readonly answeredFrom = signal('');
+  protected readonly answeredBefore = signal('');
+  protected readonly subformsText = signal('');
+  protected readonly isLoading = signal(false);
+  protected readonly loadFailed = signal(false);
 
   ngOnInit(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     forkJoin({
       exportOptions:
         this.testResultBackendService.getExportOptions(this.data.workspaceId),
       unitVariables: this.fileBackendService.getUnitVariables(
         this.data.workspaceId
       )
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ exportOptions, unitVariables }) => {
-        this.availableUnits = Array.from(
-          new Set((exportOptions.units || []).filter(Boolean))
-        ).sort((a, b) => a.localeCompare(b));
+        this.availableUnits.set(Array.from(new Set((exportOptions.units || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
         this.variableOptions = this.buildVariableOptions(unitVariables);
-        this.isLoading = false;
+        this.isLoading.set(false);
       },
       error: () => {
-        this.loadFailed = true;
-        this.isLoading = false;
+        this.loadFailed.set(true);
+        this.isLoading.set(false);
       }
     });
   }
 
-  get availableVariables(): VariableOption[] {
+  protected get availableVariables(): VariableOption[] {
     const selectedUnits = new Set(
       this.selectedUnitNames.map(TestResultsResponseCleanupDialogComponent.normalizeUnitName)
     );
@@ -96,41 +95,39 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       .sort((a, b) => a.label.localeCompare(b.label));
   }
 
-  get canSubmit(): boolean {
+  protected get canSubmit(): boolean {
     return this.selectedUnitNames.length > 0 &&
-      this.toTimestamp(this.answeredBefore) !== null &&
+      this.toTimestamp(this.answeredBefore()) !== null &&
       (
-        !this.answeredFrom ||
+        !this.answeredFrom() ||
         (
-          this.toTimestamp(this.answeredFrom) !== null &&
-          (this.toTimestamp(this.answeredFrom) || 0) <
-            (this.toTimestamp(this.answeredBefore) || 0)
+          this.toTimestamp(this.answeredFrom()) !== null &&
+          (this.toTimestamp(this.answeredFrom()) || 0) <
+            (this.toTimestamp(this.answeredBefore()) || 0)
         )
       );
   }
 
-  onUnitsChanged(): void {
+  protected onUnitsChanged(): void {
     const available = new Set(this.availableVariables.map(option => option.value));
-    this.selectedVariableIds = this.selectedVariableIds.filter(
-      variableId => available.has(variableId)
-    );
+    this.selectedVariableIds.set(this.selectedVariableIds().filter(variableId => available.has(variableId)));
   }
 
-  submit(): void {
+  protected submit(): void {
     if (!this.canSubmit) {
       return;
     }
 
-    const answeredBefore = this.toTimestamp(this.answeredBefore);
+    const answeredBefore = this.toTimestamp(this.answeredBefore());
     if (!answeredBefore) {
       return;
     }
 
-    const answeredFrom = this.toTimestamp(this.answeredFrom);
+    const answeredFrom = this.toTimestamp(this.answeredFrom());
     const request: TestResultsResponseCleanupRequestDto = {
       unitNames: this.selectedUnitNames,
       answeredBefore,
-      variableIds: this.selectedVariableIds,
+      variableIds: this.selectedVariableIds(),
       subforms: this.parseSubforms()
     };
 
@@ -141,7 +138,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
     this.dialogRef.close(request);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(false);
   }
 
@@ -172,7 +169,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
   private parseSubforms(): string[] {
     return Array.from(
       new Set(
-        this.subformsText
+        this.subformsText()
           .split(',')
           .map(value => value.trim())
           .filter(Boolean)

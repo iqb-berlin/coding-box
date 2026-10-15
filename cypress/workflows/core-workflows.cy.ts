@@ -31,6 +31,10 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     }).as('loginToken');
     cy.intercept('GET', '**/api/auth-data*').as('authData');
     cy.visit('/');
+    cy.window().should(win => {
+      expect(win.isSecureContext, 'Keycloak requires a secure browser context').to.equal(true);
+      expect(win.crypto.subtle, 'native Web Crypto').to.exist;
+    });
     cy.get('.login-button').click();
     cy.origin(setup.keycloakUrl, {
       args: { username, password: setup.password }
@@ -104,7 +108,7 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     cy.window().then(win => {
       win.location.hash = `/workspace-admin/${setup.workspaceId}/test-results`;
     });
-    cy.wait('@overview').its('response.body.testPersons').should('eq', 2);
+    cy.wait('@overview').its('response.body.testPersons').should('eq', 3);
     cy.get('coding-box-test-results .action-bar').contains('button', 'Import').click();
     cy.get('coding-box-test-results-import-dialog')
       .contains('mat-list-item', 'Antworten hochladen').click();
@@ -131,7 +135,7 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     cy.get('coding-box-test-results-upload-result-dialog', { timeout: 120_000 })
       .should('be.visible').and('contain.text', 'Antworten');
     apiRequest(`/admin/workspace/${setup.workspaceId}/test-results/overview`)
-      .its('body.testPersons').should('eq', 3);
+      .its('body.testPersons').should('eq', 4);
 
     cy.task('workflows:prepare-imported-coding', null, { log: false }).then(value => {
       const { codingJobId } = value as { codingJobId: number };
@@ -157,14 +161,14 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
       });
       // Coding the sole case opens a completion overlay. Save the note while
       // the editable controls are still reachable, then finish the coding.
-      cy.get('app-code-selector textarea').clear().type('Persisted workflow note')
+      cy.get('coding-box-code-selector textarea').clear().type('Persisted workflow note')
         .should('have.value', 'Persisted workflow note').blur();
       cy.wait('@completeNotes').its('response.statusCode').should('eq', 201);
-      cy.get('app-code-selector [data-code-id="1"]').should('be.visible').click();
+      cy.get('coding-box-code-selector [data-code-id="1"]').should('be.visible').click();
       cy.wait('@progress').its('response.statusCode').should('eq', 201);
       cy.reload();
-      cy.get('app-code-selector [data-code-id="1"]').should('have.class', 'selected');
-      cy.get('app-code-selector textarea').should('have.value', 'Persisted workflow note');
+      cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+      cy.get('coding-box-code-selector textarea').should('have.value', 'Persisted workflow note');
       cy.intercept('POST', `**/coding-job/${codingJobId}/submit`).as('submit');
       cy.window().then(win => cy.stub(win, 'close').as('closeReplay'));
       cy.get('.completion-overlay .submit-button').should('not.be.disabled').click();

@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -16,6 +16,7 @@ interface DeleteMetric {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-delete-preview-dialog',
   standalone: true,
   imports: [
@@ -28,14 +29,12 @@ interface DeleteMetric {
   styleUrls: ['./test-results-delete-preview-dialog.component.scss']
 })
 export class TestResultsDeletePreviewDialogComponent {
-  acknowledged = false;
+  private dialogRef = inject<MatDialogRef<TestResultsDeletePreviewDialogComponent>>(MatDialogRef);
+  data = inject<TestResultsDeletePreviewDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsDeletePreviewDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsDeletePreviewDialogData
-  ) {}
+  protected acknowledged = false;
 
-  get preview(): TestResultsDeletePreviewDto {
+  protected get preview(): TestResultsDeletePreviewDto {
     return this.data.preview;
   }
 
@@ -59,7 +58,7 @@ export class TestResultsDeletePreviewDialogComponent {
     return 'Testergebnisse unwiderruflich löschen';
   }
 
-  get warningText(): string {
+  protected get warningText(): string {
     if (this.isLogDelete) {
       return 'Diese Aktion entfernt nur Logs und Sitzungsdaten dauerhaft. Testergebnisse, Antworten, Testhefte und Aufgaben bleiben erhalten.';
     }
@@ -71,7 +70,7 @@ export class TestResultsDeletePreviewDialogComponent {
     return 'Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist danach nicht möglich.';
   }
 
-  get metricAriaLabel(): string {
+  protected get metricAriaLabel(): string {
     if (this.isLogDelete) {
       return 'Betroffene Logs';
     }
@@ -83,7 +82,7 @@ export class TestResultsDeletePreviewDialogComponent {
     return 'Betroffene Testergebnisse';
   }
 
-  get countNote(): string {
+  protected get countNote(): string {
     if (this.isLogDelete) {
       return 'Gezählt werden vorhandene Log- und Sitzungsdatensätze. Ergebnisdaten und Antworten werden nicht gelöscht.';
     }
@@ -148,7 +147,7 @@ export class TestResultsDeletePreviewDialogComponent {
     ];
   }
 
-  get acknowledgementLabel(): string {
+  protected get acknowledgementLabel(): string {
     if (this.isLogDelete) {
       return 'Ich verstehe, dass diese Logs endgültig entfernt werden.';
     }
@@ -160,7 +159,7 @@ export class TestResultsDeletePreviewDialogComponent {
     return 'Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.';
   }
 
-  get confirmButtonIcon(): string {
+  protected get confirmButtonIcon(): string {
     return this.isLogDelete || this.isResponseCleanup ?
       'delete_sweep' :
       'delete_forever';
@@ -289,29 +288,29 @@ export class TestResultsDeletePreviewDialogComponent {
       (!this.requiresAcknowledgement || this.acknowledged);
   }
 
-  get visibleGroups(): string[] {
+  protected get visibleGroups(): string[] {
     return this.preview.groups.slice(0, 6);
   }
 
-  get visibleBooklets(): string[] {
+  protected get visibleBooklets(): string[] {
     return this.preview.bookletNames.slice(0, 6);
   }
 
-  get visibleUnits(): string[] {
+  protected get visibleUnits(): string[] {
     return this.preview.unitNames.slice(0, 6);
   }
 
-  get hasDetails(): boolean {
+  protected get hasDetails(): boolean {
     return this.preview.groups.length > 0 ||
       this.preview.bookletNames.length > 0 ||
       this.preview.unitNames.length > 0;
   }
 
-  get hasResponseCleanupDetails(): boolean {
+  protected get hasResponseCleanupDetails(): boolean {
     return this.isResponseCleanup && !!this.preview.responseCleanup;
   }
 
-  get responseCleanupTimeText(): string {
+  protected get responseCleanupTimeText(): string {
     const cleanup = this.preview.responseCleanup;
     if (!cleanup) {
       return '';
@@ -341,7 +340,7 @@ export class TestResultsDeletePreviewDialogComponent {
     return this.preview.responseCleanup?.unknownTimestampResponses || 0;
   }
 
-  get responseCleanupSamples() {
+  protected get responseCleanupSamples() {
     return this.preview.responseCleanup?.samples || [];
   }
 
@@ -355,11 +354,11 @@ export class TestResultsDeletePreviewDialogComponent {
     }
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(false);
   }
 
-  formatTimestamp(value: string | number | null | undefined): string {
+  protected formatTimestamp(value: string | number | null | undefined): string {
     if (value === null || value === undefined) {
       return '-';
     }

@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -23,6 +23,7 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-log-anomaly-details-dialog',
   standalone: true,
   imports: [
@@ -213,19 +214,14 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   `]
 })
 export class TestResultsLogAnomalyDetailsDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsLogAnomalyDetailsDialogComponent,
-    TestResultsLogAnomalyDetailsDialogResult | undefined
-    >,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsLogAnomalyDetailsDialogData
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsLogAnomalyDetailsDialogComponent, TestResultsLogAnomalyDetailsDialogResult | undefined>>(MatDialogRef);
+  protected data = inject<TestResultsLogAnomalyDetailsDialogData>(MAT_DIALOG_DATA);
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  getSeverityLabel(severity: LogAnomalySummary['severity']): string {
+  protected getSeverityLabel(severity: LogAnomalySummary['severity']): string {
     switch (severity) {
       case 'critical':
         return 'kritisch';
@@ -238,7 +234,7 @@ export class TestResultsLogAnomalyDetailsDialogComponent {
     }
   }
 
-  getAnomalyTooltip(anomaly: LogAnomalySummary): string {
+  protected getAnomalyTooltip(anomaly: LogAnomalySummary): string {
     const count = anomaly.count > 1 ? ` (${anomaly.count}x)` : '';
     return `${anomaly.label}${count}: ${anomaly.evidence}`;
   }

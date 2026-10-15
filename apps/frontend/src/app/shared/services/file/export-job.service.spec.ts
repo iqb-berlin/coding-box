@@ -1,5 +1,7 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import {
   ExportJobService,
@@ -19,8 +21,10 @@ describe('ExportJobService', () => {
   let codingJobBackendServiceMock: jest.Mocked<CodingJobBackendService>;
   let appServiceMock: jest.Mocked<AppService>;
   let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
+  let snackOpen: jest.Mock;
 
   beforeEach(() => {
+    snackOpen = jest.fn();
     codingJobBackendServiceMock = {
       startExportJob: jest.fn(),
       getExportJobStatus: jest.fn(),
@@ -53,7 +57,9 @@ describe('ExportJobService', () => {
         ExportJobService,
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: AppService, useValue: appServiceMock },
-        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock }
+        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock },
+        { provide: MatSnackBar, useValue: { open: snackOpen } },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } }
       ]
     });
 
@@ -111,94 +117,170 @@ describe('ExportJobService', () => {
   });
 
   describe('startJob', () => {
-    it('should start job and poll', fakeAsync(() => {
-      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
-      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+    it('reports a shared start failure once and preserves its error for current subscribers', () => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      const request = service.startJob(47, { exportType: 'aggregated' });
+      const firstError = jest.fn();
+      const secondError = jest.fn();
+      request.subscribe({ error: firstError });
+      request.subscribe({ error: secondError });
+      const error = new HttpErrorResponse({ status: 503 });
 
-      let createdJobId = '';
-      service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe(job => {
-        createdJobId = job.jobId;
-      });
+      accepted.error(error);
 
-      expect(createdJobId).toBe('j1');
-      expect(service.activeJobs.length).toBe(1);
+      expect(firstError).toHaveBeenCalledWith(error);
+      expect(secondError).toHaveBeenCalledWith(error);
+      expect(snackOpen).toHaveBeenCalledTimes(1);
+      expect(snackOpen).toHaveBeenCalledWith(
+        'ws-admin.export.errors.start-failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(service.activeJobs).toHaveLength(0);
+      expect(codingJobBackendServiceMock.getExportJobStatus).not.toHaveBeenCalled();
+    });
 
-      tick(2000);
-
-      expect(service.completedJobs.length).toBe(1);
-      expect(service.completedJobs[0].jobId).toBe('j1');
-
-      service.ngOnDestroy(); // cleanup
-    }));
-
-    it('should keep structured progress details from polling', fakeAsync(() => {
-      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
-      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
-        status: 'processing',
-        progress: 55,
-        progressPhase: 'writing',
-        processedRows: 100,
-        totalRows: 200,
-        progressMessage: '100/200 rows'
-      }));
-
-      service.startJob(1, {
-        exportType: 'results-by-version',
-        userId: 1,
-        missingsProfileId: 7
-      }).subscribe();
-
-      tick(2000);
-
-      expect(service.activeJobs[0]).toEqual(expect.objectContaining({
-        progress: 55,
-        progressPhase: 'writing',
-        processedRows: 100,
-        totalRows: 200,
-        progressMessage: '100/200 rows'
-      }));
-
+    it('does not report root teardown as a failed start', () => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      const onError = jest.fn();
+      service.startJob(47, { exportType: 'aggregated' }).subscribe({ error: onError });
       service.ngOnDestroy();
-    }));
+      expect(accepted.observed).toBe(false);
+      accepted.error(new HttpErrorResponse({ status: 503 }));
+      expect(onError).not.toHaveBeenCalled();
+      expect(snackOpen).not.toHaveBeenCalled();
+    });
 
-    it('should expire item matrix actions without another status poll', fakeAsync(() => {
-      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
-        jobId: 'j1',
-        message: 'Job started'
-      }));
-      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
-        status: 'failed',
-        progress: 90,
-        errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
-        errorDetails: {
-          total: 2,
-          groupCount: 1,
-          sampleLimit: 20,
+    it('registers and polls an accepted job after the starting view unsubscribes', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const accepted = new Subject<{ jobId: string; message: string }>();
+        codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+        codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+        const request = service.startJob(47, { exportType: 'aggregated', userId: 1 });
+        request.subscribe().unsubscribe();
+        expect(accepted.observed).toBe(true);
+
+        accepted.next({ jobId: 'accepted', message: 'started' });
+        accepted.complete();
+        expect(service.activeJobs).toEqual([expect.objectContaining({ jobId: 'accepted', workspaceId: 47 })]);
+        request.subscribe();
+        expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledTimes(1);
+        expect(service.activeJobs).toHaveLength(1);
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(codingJobBackendServiceMock.getExportJobStatus).toHaveBeenCalledWith(47, 'accepted');
+        expect(service.completedJobs).toHaveLength(1);
+        service.ngOnDestroy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should start job and poll', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+        codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+
+        let createdJobId = '';
+        service.startJob(1, { exportType: 'aggregated', userId: 1 }).subscribe(job => {
+          createdJobId = job.jobId;
+        });
+
+        expect(createdJobId).toBe('j1');
+        expect(service.activeJobs.length).toBe(1);
+
+        await jest.advanceTimersByTimeAsync(2000);
+
+        expect(service.completedJobs.length).toBe(1);
+        expect(service.completedJobs[0].jobId).toBe('j1');
+
+        service.ngOnDestroy(); // cleanup
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should keep structured progress details from polling', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+        codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+          status: 'processing',
+          progress: 55,
+          progressPhase: 'writing',
+          processedRows: 100,
+          totalRows: 200,
+          progressMessage: '100/200 rows'
+        }));
+
+        service.startJob(1, {
+          exportType: 'results-by-version',
+          userId: 1,
+          missingsProfileId: 7
+        }).subscribe();
+
+        await jest.advanceTimersByTimeAsync(2000);
+
+        expect(service.activeJobs[0]).toEqual(expect.objectContaining({
+          progress: 55,
+          progressPhase: 'writing',
+          processedRows: 100,
+          totalRows: 200,
+          progressMessage: '100/200 rows'
+        }));
+
+        service.ngOnDestroy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should expire item matrix actions without another status poll', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+          jobId: 'j1',
+          message: 'Job started'
+        }));
+        codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+          status: 'failed',
+          progress: 90,
+          errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+          errorDetails: {
+            total: 2,
+            groupCount: 1,
+            sampleLimit: 20,
+            diagnosticsAvailable: true,
+            incompleteDownloadAvailable: true,
+            expiresAt: Date.now() + 2500
+          }
+        }));
+
+        service.startJob(1, {
+          exportType: 'item-matrix',
+          missingsProfileId: 4
+        }).subscribe();
+
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
           diagnosticsAvailable: true,
-          incompleteDownloadAvailable: true,
-          expiresAt: Date.now() + 2500
-        }
-      }));
+          incompleteDownloadAvailable: true
+        }));
 
-      service.startJob(1, {
-        exportType: 'item-matrix',
-        missingsProfileId: 4
-      }).subscribe();
+        await jest.advanceTimersByTimeAsync(500);
+        expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
+          diagnosticsAvailable: false,
+          incompleteDownloadAvailable: false
+        }));
 
-      tick(2000);
-      expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
-        diagnosticsAvailable: true,
-        incompleteDownloadAvailable: true
-      }));
-
-      tick(500);
-      expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
-        diagnosticsAvailable: false,
-        incompleteDownloadAvailable: false
-      }));
-
-      service.ngOnDestroy();
-    }));
+        service.ngOnDestroy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should keep display metadata on the local job', () => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
@@ -359,6 +441,12 @@ describe('ExportJobService', () => {
 
       expect(codingJobBackendServiceMock.startExportJob).not.toHaveBeenCalled();
       expect(service.activeJobs.length).toBe(0);
+      expect(snackOpen).toHaveBeenCalledTimes(1);
+      expect(snackOpen).toHaveBeenCalledWith(
+        'coding-management-manual.errors.replay-auth-token-failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
     });
   });
 
@@ -482,41 +570,46 @@ describe('ExportJobService', () => {
     expect(download$.observers).toHaveLength(0);
   });
 
-  it('marks item matrix artifacts expired after a 404 download', fakeAsync(() => {
-    codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
-      jobId: 'j1',
-      message: 'Job started'
-    }));
-    codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
-      status: 'failed',
-      progress: 90,
-      errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
-      errorDetails: {
-        total: 2,
-        groupCount: 1,
-        sampleLimit: 20,
-        diagnosticsAvailable: true,
-        incompleteDownloadAvailable: true,
-        expiresAt: Date.now() + 3600000
-      }
-    }));
-    codingJobBackendServiceMock.downloadIncompleteItemMatrix.mockReturnValue(
-      throwError(() => new HttpErrorResponse({ status: 404 }))
-    );
-    service.startJob(1, {
-      exportType: 'item-matrix',
-      missingsProfileId: 4
-    }).subscribe();
-    tick(2000);
+  it('marks item matrix artifacts expired after a 404 download', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'j1',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'failed',
+        progress: 90,
+        errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+        errorDetails: {
+          total: 2,
+          groupCount: 1,
+          sampleLimit: 20,
+          diagnosticsAvailable: true,
+          incompleteDownloadAvailable: true,
+          expiresAt: Date.now() + 3600000
+        }
+      }));
+      codingJobBackendServiceMock.downloadIncompleteItemMatrix.mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 404 }))
+      );
+      service.startJob(1, {
+        exportType: 'item-matrix',
+        missingsProfileId: 4
+      }).subscribe();
+      await jest.advanceTimersByTimeAsync(2000);
 
-    service.downloadIncompleteItemMatrix(service.failedJobs[0]).subscribe({
-      error: () => undefined
-    });
+      service.downloadIncompleteItemMatrix(service.failedJobs[0]).subscribe({
+        error: () => undefined
+      });
 
-    expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
-      diagnosticsAvailable: false,
-      incompleteDownloadAvailable: false
-    }));
-    service.ngOnDestroy();
-  }));
+      expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
+        diagnosticsAvailable: false,
+        incompleteDownloadAvailable: false
+      }));
+      service.ngOnDestroy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

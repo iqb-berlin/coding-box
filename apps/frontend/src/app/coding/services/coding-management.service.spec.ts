@@ -1,6 +1,4 @@
-import {
-  TestBed, fakeAsync, tick
-} from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
@@ -111,49 +109,54 @@ describe('CodingManagementService', () => {
   });
 
   describe('fetchCodingStatistics', () => {
-    it('should create a job and poll for results when workspaceId is present', fakeAsync(() => {
-      // Arrange
-      const jobId = 'job-123';
-      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+    it('should create a job and poll for results when workspaceId is present', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        // Arrange
+        const jobId = 'job-123';
+        executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
 
-      // First poll: processing
-      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
-        status: 'processing',
-        progress: 50,
-        result: undefined
-      } as CodingJobStatus));
+        // First poll: processing
+        executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
+          status: 'processing',
+          progress: 50,
+          result: undefined
+        } as CodingJobStatus));
 
-      // Second poll: completed
-      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
-        status: 'completed',
-        progress: 100,
-        result: mockCodingStatistics
-      } as CodingJobStatus));
+        // Second poll: completed
+        executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
+          status: 'completed',
+          progress: 100,
+          result: mockCodingStatistics
+        } as CodingJobStatus));
 
-      // Mock reference stats calls (v1 is default fallback)
-      statisticsServiceMock.getCodingStatistics.mockReturnValue(of({ totalResponses: 0, statusCounts: {} }));
+        // Mock reference stats calls (v1 is default fallback)
+        statisticsServiceMock.getCodingStatistics.mockReturnValue(of({ totalResponses: 0, statusCounts: {} }));
 
-      // Act
-      service.fetchCodingStatistics('v1');
+        // Act
+        service.fetchCodingStatistics('v1');
 
-      // Assert
-      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1, 'v1');
+        // Assert
+        expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1, 'v1');
 
-      // Advance time for polling (timer(0, 2000))
-      tick(0); // initial
-      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
-      expect(executionServiceMock.getCodingJobStatus).not.toHaveBeenCalled();
+        // Advance time for polling (timer(0, 2000))
+        await jest.advanceTimersByTimeAsync(0); // initial
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+        expect(executionServiceMock.getCodingJobStatus).not.toHaveBeenCalled();
 
-      tick(2000); // next poll
-      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
+        await jest.advanceTimersByTimeAsync(2000); // next poll
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
 
-      // Check if statistics were emitted
-      let currentStats: CodingStatistics | null | undefined;
-      service.codingStatistics$.subscribe(stats => {
-        currentStats = stats;
-      });
-      expect(currentStats).toEqual(mockCodingStatistics);
-    }));
+        // Check if statistics were emitted
+        let currentStats: CodingStatistics | null | undefined;
+        service.codingStatistics$.subscribe(stats => {
+          currentStats = stats;
+        });
+        expect(currentStats).toEqual(mockCodingStatistics);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should handle missing workspaceId', () => {
       Object.defineProperty(appServiceMock, 'selectedWorkspaceId', { get: () => null });
@@ -171,59 +174,69 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(1);
     });
 
-    it('should cancel view-bound statistics polling without cancelling other background operations', fakeAsync(() => {
-      const jobId = 'statistics-job-1';
-      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
-      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
-      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValue(of({
-        status: 'processing',
-        progress: 50,
-        result: undefined
-      } as CodingJobStatus));
-      let isLoading: boolean | undefined;
-      service.isLoadingStatistics$.subscribe(value => {
-        isLoading = value;
-      });
-
-      service.fetchCodingStatistics('v1');
-
-      tick(0);
-      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
-      expect(isLoading).toBe(true);
-
-      service.cancelViewBoundStatisticsFetches(1);
-      tick(2000);
-
-      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
-      expect(isLoading).toBe(false);
-      expect(setJobRunningSpy).not.toHaveBeenCalled();
-    }));
-
-    it('should allow statistics to be fetched again after a view-bound polling cancellation', fakeAsync(() => {
-      const jobId = 'statistics-job-1';
-      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
-      executionServiceMock.getCodingStatisticsJobStatus
-        .mockReturnValueOnce(of({
+    it('should cancel view-bound statistics polling without cancelling other background operations', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const jobId = 'statistics-job-1';
+        const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+        executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+        executionServiceMock.getCodingStatisticsJobStatus.mockReturnValue(of({
           status: 'processing',
           progress: 50,
           result: undefined
-        } as CodingJobStatus))
-        .mockReturnValueOnce(of({
-          status: 'completed',
-          progress: 100,
-          result: mockCodingStatistics
         } as CodingJobStatus));
+        let isLoading: boolean | undefined;
+        service.isLoadingStatistics$.subscribe(value => {
+          isLoading = value;
+        });
 
-      service.fetchCodingStatistics('v1');
-      tick(0);
+        service.fetchCodingStatistics('v1');
 
-      service.cancelViewBoundStatisticsFetches(1);
-      service.fetchCodingStatistics('v1');
-      tick(0);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+        expect(isLoading).toBe(true);
 
-      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(2);
-      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
-    }));
+        service.cancelViewBoundStatisticsFetches(1);
+        await jest.advanceTimersByTimeAsync(2000);
+
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+        expect(isLoading).toBe(false);
+        expect(setJobRunningSpy).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should allow statistics to be fetched again after a view-bound polling cancellation', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const jobId = 'statistics-job-1';
+        executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+        executionServiceMock.getCodingStatisticsJobStatus
+          .mockReturnValueOnce(of({
+            status: 'processing',
+            progress: 50,
+            result: undefined
+          } as CodingJobStatus))
+          .mockReturnValueOnce(of({
+            status: 'completed',
+            progress: 100,
+            result: mockCodingStatistics
+          } as CodingJobStatus));
+
+        service.fetchCodingStatistics('v1');
+        await jest.advanceTimersByTimeAsync(0);
+
+        service.cancelViewBoundStatisticsFetches(1);
+        service.fetchCodingStatistics('v1');
+        await jest.advanceTimersByTimeAsync(0);
+
+        expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(2);
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should not synchronously fetch statistics when job creation fails', () => {
       executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
@@ -246,58 +259,63 @@ describe('CodingManagementService', () => {
   });
 
   describe('resetCodingVersion', () => {
-    it('should keep the reset guard active after a transient polling error', fakeAsync(() => {
-      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
-      versionServiceMock.resetCodingVersion.mockReturnValue(of({
-        jobId: 'reset-job-1',
-        message: 'started'
-      }));
-      versionServiceMock.getResetVersionJobStatus
-        .mockReturnValueOnce(of({
-          status: 'failed',
-          progress: 0,
-          error: RESET_VERSION_JOB_STATUS_POLL_ERROR
-        }))
-        .mockReturnValueOnce(of({
-          status: 'completed',
-          progress: 100,
-          result: {
-            affectedResponseCount: 3,
-            cascadeResetVersions: [],
-            message: 'completed'
-          }
+    it('should keep the reset guard active after a transient polling error', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+        versionServiceMock.resetCodingVersion.mockReturnValue(of({
+          jobId: 'reset-job-1',
+          message: 'started'
         }));
+        versionServiceMock.getResetVersionJobStatus
+          .mockReturnValueOnce(of({
+            status: 'failed',
+            progress: 0,
+            error: RESET_VERSION_JOB_STATUS_POLL_ERROR
+          }))
+          .mockReturnValueOnce(of({
+            status: 'completed',
+            progress: 100,
+            result: {
+              affectedResponseCount: 3,
+              cascadeResetVersions: [],
+              message: 'completed'
+            }
+          }));
 
-      service.resetCodingVersion('v1');
+        service.resetCodingVersion('v1');
 
-      expect(setJobRunningSpy).toHaveBeenCalledWith(
-        1,
-        'autocoder-reset',
-        true,
-        'reset-job-1'
-      );
-      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
+        expect(setJobRunningSpy).toHaveBeenCalledWith(
+          1,
+          'autocoder-reset',
+          true,
+          'reset-job-1'
+        );
+        expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
 
-      tick(0);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(setJobRunningSpy).not.toHaveBeenCalledWith(
-        1,
-        'autocoder-reset',
-        false,
-        'reset-job-1'
-      );
-      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
+        expect(setJobRunningSpy).not.toHaveBeenCalledWith(
+          1,
+          'autocoder-reset',
+          false,
+          'reset-job-1'
+        );
+        expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
 
-      tick(2000);
+        await jest.advanceTimersByTimeAsync(2000);
 
-      expect(setJobRunningSpy).toHaveBeenLastCalledWith(
-        1,
-        'autocoder-reset',
-        false,
-        'reset-job-1'
-      );
-      expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
-    }));
+        expect(setJobRunningSpy).toHaveBeenLastCalledWith(
+          1,
+          'autocoder-reset',
+          false,
+          'reset-job-1'
+        );
+        expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('searchResponses', () => {

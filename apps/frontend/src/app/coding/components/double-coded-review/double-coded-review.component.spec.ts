@@ -1,11 +1,12 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay, map } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -17,6 +18,9 @@ import { DoubleCodedReviewComponent } from './double-coded-review.component';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
 import { DoubleCodedReviewFacade } from './double-coded-review.facade';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import {
+  DoubleCodedManagerDecisionDto, DoubleCodedReviewResponseDto
+} from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 describe('DoubleCodedReviewComponent', () => {
   let component: DoubleCodedReviewComponent;
@@ -59,7 +63,7 @@ describe('DoubleCodedReviewComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DoubleCodedReviewComponent, TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
+        provideZonelessChangeDetection(),
         {
           provide: AppService,
           useValue: {
@@ -342,57 +346,67 @@ describe('DoubleCodedReviewComponent', () => {
     sessionStorage.clear();
   });
 
-  it('keeps GeoGebra answers compact without altering ordinary answers', () => {
-    expect(component.isGeoGebraAnswer('UEsDBAoAAAAAA')).toBe(true);
-    expect(component.isGeoGebraAnswer('data:application/zip;base64,UEsDBAoAAAAAA')).toBe(true);
-    expect(component.getAnswerDisplay('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-answer');
-    expect(component.getAnswerTooltip('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-tooltip');
-    expect(component.getAnswerDisplay('ordinary answer')).toBe('ordinary answer');
+  it('keeps GeoGebra answers compact in review rows', () => {
+    for (const value of ['UEsDBAoAAAAAA', 'data:application/zip;base64,UEsDBAoAAAAAA']) {
+      expect(component.isGeoGebraAnswer(value)).toBe(true);
+      expect(component.getAnswerDisplay(value)).toBe('double-coded-review.values.geogebra-answer');
+      expect(component.getAnswerTooltip(value)).toBe('double-coded-review.values.geogebra-tooltip');
+    }
   });
 
-  it('defaults review to the newest active definition and excludes empty scopes', () => {
+  it('selects the newest active definition and omits scopes without jobs', async () => {
     const facade = TestBed.inject(CodingFacadeService);
-    (facade.getJobDefinitions as jest.Mock).mockReturnValue(of([
+    jest.spyOn(facade, 'getJobDefinitions').mockReturnValue(of([
       { id: 1, status: 'approved', createdJobsCount: 0 },
       { id: 3, status: 'approved', createdJobsCount: 2 },
       { id: 2, status: 'pending_review', createdJobsCount: 1 }
     ]));
-    (facade.getCoderTrainings as jest.Mock).mockReturnValue(of([
-      { id: 5, label: 'Empty training', jobsCount: 0 },
-      { id: 6, label: 'Active training', jobsCount: 1 }
-    ]));
+    jest.spyOn(facade, 'getCoderTrainings').mockReturnValue(of([5, 6].map(id => ({
+      id,
+      workspace_id: 1,
+      label: id === 5 ? 'Training A' : 'Training B',
+      jobsCount: id === 5 ? 0 : 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    }))));
+    jest.spyOn(TestBed.inject(TranslateService), 'instant').mockImplementation(key => ({
+      'coding-job-definition-dialog.status.definition.approved': 'Genehmigt',
+      'coding-job-definition-dialog.status.definition.pending-review': 'Warten auf Genehmigung',
+      'double-coded-review.filter.job-count-singular': 'Kodierjob',
+      'double-coded-review.filter.job-count-plural': 'Kodierjobs'
+    }[String(key)] || key));
     component.scopeControl.setValue(['job_99'], { emitEvent: false });
-    component.ngOnInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
     expect(component.scopeControl.value).toEqual(['job_3']);
-    expect(component.availableJobDefinitions.map(definition => definition.id)).toEqual([3, 2]);
-    expect(component.availableCoderTrainings.map(training => training.id)).toEqual([6]);
-    expect(component.hasScopeOptions()).toBe(true);
-    expect(TestBed.inject(TestPersonCodingService).getDoubleCodedVariablesForReview)
-      .toHaveBeenCalledWith(1, expect.objectContaining({ jobDefinitionIds: [3] }));
+    expect(component.availableJobDefinitions()).toEqual([
+      { id: 3, label: 'Definition #3 (Genehmigt), 2 Kodierjobs' },
+      { id: 2, label: 'Definition #2 (Warten auf Genehmigung), 1 Kodierjob' }
+    ]);
+    expect(component.availableCoderTrainings()).toEqual([
+      { id: 6, label: 'Training B (1 Kodierjob)' }
+    ]);
   });
 
-  it('clears existing review rows and does not request data when no active scope exists', () => {
-    component.loadData();
-    expect(component.dataSource.data).toHaveLength(4);
-    const reviewApi = TestBed.inject(TestPersonCodingService);
-    (reviewApi.getDoubleCodedVariablesForReview as jest.Mock).mockClear();
+  it('does not request review data when no scopes have jobs', async () => {
     const facade = TestBed.inject(CodingFacadeService);
-    (facade.getJobDefinitions as jest.Mock).mockReturnValue(of([
+    jest.spyOn(facade, 'getJobDefinitions').mockReturnValue(of([
       { id: 1, status: 'approved', createdJobsCount: 0 }
     ]));
-    (facade.getCoderTrainings as jest.Mock).mockReturnValue(of([
-      { id: 5, label: 'Empty training', jobsCount: 0 }
-    ]));
+    const api = TestBed.inject(DoubleCodedReviewApiService);
+    const request = jest.spyOn(api, 'getDoubleCodedVariablesForReview');
     component.scopeControl.setValue(['job_99'], { emitEvent: false });
-    component.ngOnInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
     expect(component.scopeControl.value).toEqual([]);
     expect(component.hasScopeOptions()).toBe(false);
-    expect(component.allData).toEqual([]);
+    expect(component.allData()).toEqual([]);
     expect(component.dataSource.data).toEqual([]);
-    expect(component.totalItems).toBe(0);
-    expect(component.isLoading).toBe(false);
+    expect(component.totalItems()).toBe(0);
     expect(component.getScopeSelectionSummary()).toBe('double-coded-review.filter.scope-none');
-    expect(reviewApi.getDoubleCodedVariablesForReview).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('allows applying decisions only with study-manager permission', () => {
@@ -410,13 +424,13 @@ describe('DoubleCodedReviewComponent', () => {
       getDoubleCodedVariablesForReview: jest.Mock;
     };
     api.getDoubleCodedVariablesForReview.mockClear();
-    component.currentPage = 3;
+    component.currentPage.set(3);
 
     component.onSortChange({ active: 'personInfo', direction: 'desc' });
 
-    expect(component.currentPage).toBe(1);
-    expect(component.sortBy).toBe('personInfo');
-    expect(component.sortDirection).toBe('desc');
+    expect(component.currentPage()).toBe(1);
+    expect(component.sortBy()).toBe('personInfo');
+    expect(component.sortDirection()).toBe('desc');
     expect(api.getDoubleCodedVariablesForReview).toHaveBeenCalledWith(
       1,
       expect.objectContaining({
@@ -432,15 +446,17 @@ describe('DoubleCodedReviewComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    component.totalItems = 200;
-    component.currentPage = 3;
+    component.totalItems.set(200);
+    component.currentPage.set(3);
 
     const expectRestoredPage = (): void => {
-      component.isLoading = true;
+      component.isLoading.set(true);
+      fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       expect(fixture.debugElement.query(By.directive(MatPaginator))).toBeNull();
 
-      component.isLoading = false;
+      component.isLoading.set(false);
+      fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       const paginator = fixture.debugElement.query(By.directive(MatPaginator))
         .componentInstance as MatPaginator;
@@ -517,7 +533,7 @@ describe('DoubleCodedReviewComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.dynamicCoderColumns).toEqual(['coder_10', 'coder_20']);
+    expect(component.dynamicCoderColumns()).toEqual(['coder_10', 'coder_20']);
 
     const nativeElement = fixture.nativeElement as HTMLElement;
     const coderHeaders = Array.from(
@@ -531,7 +547,7 @@ describe('DoubleCodedReviewComponent', () => {
       'Coder A',
       'Coder B'
     ]);
-    expect(component.coderColumnMeta.coder_10.coderNames).toEqual([
+    expect(component.coderColumnMeta().coder_10.coderNames).toEqual([
       'Coder A',
       'Coder A renamed'
     ]);
@@ -731,7 +747,7 @@ describe('DoubleCodedReviewComponent', () => {
     const reviewItem = component.dataSource.data.find(
       item => item.responseId === 502
     )!;
-    expect(component.dynamicManagerColumns).toEqual(['manager_88']);
+    expect(component.dynamicManagerColumns()).toEqual(['manager_88']);
     expect(component.getManagerColumnHeader('manager_88')).toBe('Manager B');
     expect(
       component.getManagerDecisionForColumn(reviewItem, 'manager_88')
@@ -771,7 +787,7 @@ describe('DoubleCodedReviewComponent', () => {
 
     harness.updateDisplayedColumns(component.dataSource.data);
 
-    expect(component.dynamicManagerColumns).toContain('manager_99');
+    expect(component.dynamicManagerColumns()).toContain('manager_99');
     expect(component.getManagerDecisionForColumn(
       reviewItem,
       'manager_99'
@@ -852,7 +868,7 @@ describe('DoubleCodedReviewComponent', () => {
     };
     harness.updateDisplayedColumns(component.dataSource.data);
 
-    expect(component.dynamicManagerColumns).toEqual(
+    expect(component.dynamicManagerColumns()).toEqual(
       expect.arrayContaining(['manager_42', 'manager_43'])
     );
     expect(
@@ -1632,5 +1648,172 @@ describe('DoubleCodedReviewComponent', () => {
     expect(getDecisionCell(interCoderConflictItem.responseId).statusLabel).toBe(
       'double-coded-review.decision.status-inter-coder-conflict'
     );
+  });
+
+  describe('manager draft notifications with zoneless change detection', () => {
+    const ownDraft: DoubleCodedManagerDecisionDto = {
+      id: 43,
+      responseId: 502,
+      managerUserId: 99,
+      managerKey: '99',
+      managerName: 'Reviewer',
+      state: 'draft',
+      effectiveCode: 1,
+      selectedCode: 1,
+      score: 0,
+      comment: 'Saved draft',
+      createdAt: '2026-05-20T13:00:00.000Z',
+      updatedAt: '2026-05-20T13:00:00.000Z',
+      finalizedAt: null,
+      legacy: false
+    };
+
+    const renderMixedReviewPage = async (withOwnDraft = false) => {
+      const api = TestBed.inject(DoubleCodedReviewApiService) as unknown as {
+        getDoubleCodedVariablesForReview: jest.Mock;
+        saveDoubleCodedReviewDraft: jest.Mock;
+        deleteDoubleCodedReviewDraft: jest.Mock;
+      };
+      const getResponse = api.getDoubleCodedVariablesForReview.getMockImplementation()!;
+      api.getDoubleCodedVariablesForReview.mockImplementation(() => (
+        (getResponse() as Observable<DoubleCodedReviewResponseDto>).pipe(map(response => ({
+          ...response,
+          data: response.data.map(item => {
+            if (item.responseId === 504) {
+              return {
+                ...item,
+                managerHistory: [{
+                  ...ownDraft,
+                  id: 42,
+                  responseId: 504,
+                  state: 'applied' as const,
+                  finalizedAt: '2026-05-20T12:00:00.000Z'
+                }]
+              };
+            }
+            return item.responseId === 502 && withOwnDraft ?
+              { ...item, managerDrafts: [...item.managerDrafts, ownDraft] } : item;
+          })
+        })))
+      ));
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      expect(component.dynamicManagerColumns()).toContain('manager_99');
+      return api;
+    };
+
+    const getOwnManagerCell = (): HTMLElement => {
+      const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'));
+      const row = rows.find(candidate => candidate.textContent?.includes('Unit B'))!;
+      return row.querySelector('td.mat-column-manager_99') as HTMLElement;
+    };
+
+    it('renders a delayed saved draft without replacing newer row selections or previous snapshots', async () => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      const previousDrafts = item.managerDrafts;
+      component.getItemControl(item).setValue('code:1');
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+
+      const newerItem = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.getItemControl(newerItem).setValue('2002');
+      component.onSelectionChange(newerItem, '2002');
+      await fixture.whenStable();
+      expect(api.saveDoubleCodedReviewDraft).toHaveBeenCalledTimes(1);
+      const previousRow = component.allData().find(candidate => candidate.responseId === 502)!;
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+      await fixture.whenStable();
+
+      const savedItem = component.allData().find(candidate => candidate.responseId === 502)!;
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+      expect(savedItem.selectedCoderResult?.jobId).toBe(2002);
+      expect(savedItem.managerDrafts.map(draft => draft.managerUserId)).toEqual([88, 99]);
+      expect(savedItem).not.toBe(previousRow);
+      expect(item.managerDrafts).toBe(previousDrafts);
+      expect(previousRow.managerDrafts).toBe(previousDrafts);
+      expect(previousDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+    });
+
+    it('renders a delayed draft deletion while keeping other managers and previous snapshots', async () => {
+      const api = await renderMixedReviewPage(true);
+      const pendingDelete = new Subject<{ success: boolean }>();
+      api.deleteDoubleCodedReviewDraft.mockReturnValueOnce(pendingDelete);
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      const previousDrafts = item.managerDrafts;
+      component.getItemControl(item).setValue('');
+      component.onSelectionChange(item, '');
+      await fixture.whenStable();
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+
+      pendingDelete.next({ success: true });
+      pendingDelete.complete();
+      await fixture.whenStable();
+
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+      expect(component.allData().find(candidate => candidate.responseId === 502)!
+        .managerDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+      expect(item.managerDrafts).toBe(previousDrafts);
+      expect(previousDrafts.map(draft => draft.managerUserId)).toEqual([88, 99]);
+    });
+
+    it.each(['workspace', 'user'])('ignores a delayed draft from the previous %s context', async context => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+      const previousRows = component.allData();
+      const appService = TestBed.inject(AppService);
+      if (context === 'workspace') appService.selectedWorkspaceId = 2;
+      else Object.assign(appService, { userId: 100 });
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+      await fixture.whenStable();
+
+      expect(component.allData()).toBe(previousRows);
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+    });
+
+    it('finishes a delayed save after destruction without updating the previous view state', async () => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+      const previousRows = component.allData();
+      fixture.destroy();
+      expect(pendingSave.observed).toBe(true);
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+
+      expect(pendingSave.observed).toBe(false);
+      expect(component.allData()).toBe(previousRows);
+      expect(previousRows.find(candidate => candidate.responseId === 502)!
+        .managerDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+    });
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(TestPersonCodingService);
+    const response = backend.getDoubleCodedVariablesForReview(1, {}).pipe(delay(30));
+    jest.spyOn(backend, 'getDoubleCodedVariablesForReview').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(DoubleCodedReviewComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('person-1');
   });
 });

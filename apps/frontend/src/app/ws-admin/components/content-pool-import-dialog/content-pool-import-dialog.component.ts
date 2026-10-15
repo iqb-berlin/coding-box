@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, inject
+  Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -35,6 +36,7 @@ export interface ContentPoolImportDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-content-pool-import-dialog',
   templateUrl: './content-pool-import-dialog.component.html',
   styleUrls: ['./content-pool-import-dialog.component.scss'],
@@ -52,6 +54,10 @@ export interface ContentPoolImportDialogResult {
   ]
 })
 export class ContentPoolImportDialogComponent implements OnDestroy {
+  readonly data = inject<ContentPoolImportDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly contentPoolIntegrationService = inject(
     ContentPoolIntegrationService
   );
@@ -60,67 +66,60 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolImportDialogComponent>
   );
 
-  acps: ContentPoolAcpSummary[] = [];
+  protected readonly acps = signal<ContentPoolAcpSummary[]>([]);
 
-  selectedAcpId = '';
+  readonly selectedAcpId = signal('');
 
-  isLoadingAcps = false;
+  protected readonly isLoadingAcps = signal(false);
 
-  isImporting = false;
+  protected readonly isImporting = signal(false);
 
-  hasLoadedAcps = false;
+  protected readonly hasLoadedAcps = signal(false);
 
-  errorMessage = '';
+  protected readonly errorMessage = signal('');
 
-  importProgress?: ContentPoolImportAcpProgress;
+  readonly importProgress = signal<ContentPoolImportAcpProgress | undefined>(undefined);
 
   private importSubscription?: Subscription;
-
-  constructor(
-    @Inject(MAT_DIALOG_DATA) readonly data: ContentPoolImportDialogData
-  ) {}
 
   ngOnDestroy(): void {
     this.importSubscription?.unsubscribe();
   }
 
-  loadAcps(): void {
-    this.errorMessage = '';
-    this.isLoadingAcps = true;
-    this.hasLoadedAcps = false;
-    this.selectedAcpId = '';
-    this.acps = [];
+  protected loadAcps(): void {
+    this.errorMessage.set('');
+    this.isLoadingAcps.set(true);
+    this.hasLoadedAcps.set(false);
+    this.selectedAcpId.set('');
+    this.acps.set([]);
 
     this.contentPoolIntegrationService
-      .listAccessibleAcps(this.data.workspaceId)
+      .listAccessibleAcps(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
-          this.isLoadingAcps = false;
-          this.hasLoadedAcps = true;
-          this.acps = response.acps || [];
-          if (this.acps.length === 0) {
-            this.errorMessage = 'Keine ACPs gefunden oder kein Zugriff vorhanden.';
+          this.isLoadingAcps.set(false);
+          this.hasLoadedAcps.set(true);
+          this.acps.set(response.acps || []);
+          if (this.acps().length === 0) {
+            this.errorMessage.set('Keine ACPs gefunden oder kein Zugriff vorhanden.');
           }
         },
         error: error => {
-          this.isLoadingAcps = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'
-          );
+          this.isLoadingAcps.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'));
         }
       });
   }
 
-  importAcp(): void {
-    if (!this.selectedAcpId) {
-      this.errorMessage = 'Bitte ein ACP auswählen.';
+  protected importAcp(): void {
+    if (!this.selectedAcpId()) {
+      this.errorMessage.set('Bitte ein ACP auswählen.');
       return;
     }
 
-    this.errorMessage = '';
-    this.isImporting = true;
-    this.importProgress = {
+    this.errorMessage.set('');
+    this.isImporting.set(true);
+    this.importProgress.set({
       jobId: '',
       status: 'pending',
       phase: 'queued',
@@ -130,73 +129,72 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       progress: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
+    });
     this.importSubscription?.unsubscribe();
 
     this.importSubscription = this.contentPoolIntegrationService
       .importAcpWithProgress(this.data.workspaceId, {
-        acpId: this.selectedAcpId
+        acpId: this.selectedAcpId()
       })
       .subscribe({
         next: progress => {
-          this.importProgress = progress;
+          this.importProgress.set(progress);
 
           if (progress.status === 'failed') {
-            this.isImporting = false;
-            this.errorMessage = progress.error ||
-              'ACP konnte nicht importiert werden.';
+            this.isImporting.set(false);
+            this.errorMessage.set(progress.error ||
+    'ACP konnte nicht importiert werden.');
             return;
           }
 
           if (progress.status === 'completed' && progress.result) {
-            this.isImporting = false;
+            this.isImporting.set(false);
             this.dialogRef.close({
               success: true,
-              acpId: this.selectedAcpId,
+              acpId: this.selectedAcpId(),
               result: progress.result
             });
           }
         },
         error: error => {
-          this.isImporting = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'ACP konnte nicht importiert werden.'
-          );
+          this.isImporting.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'ACP konnte nicht importiert werden.'));
         }
       });
   }
 
-  get importProgressMode(): 'determinate' | 'indeterminate' {
-    return this.importProgress?.totalFiles || this.importProgress?.progress ?
+  protected get importProgressMode(): 'determinate' | 'indeterminate' {
+    return this.importProgress()?.totalFiles || this.importProgress()?.progress ?
       'determinate' :
       'indeterminate';
   }
 
-  get importProgressValue(): number {
-    const progress = this.importProgress?.progress || 0;
+  protected get importProgressValue(): number {
+    const progress = this.importProgress()?.progress || 0;
     return Math.max(0, Math.min(100, progress));
   }
 
-  get importProgressText(): string {
-    if (!this.importProgress) {
+  protected get importProgressText(): string {
+    const importProgressSnapshot = this.importProgress();
+
+    if (!importProgressSnapshot) {
       return '';
     }
 
     if (
-      this.importProgress.phase === 'downloading-files' &&
-      this.importProgress.totalFiles > 0
+      importProgressSnapshot.phase === 'downloading-files' &&
+      importProgressSnapshot.totalFiles > 0
     ) {
-      const currentFile = this.importProgress.currentFileName ?
-        `: ${this.importProgress.currentFileName}` :
+      const currentFile = importProgressSnapshot.currentFileName ?
+        `: ${importProgressSnapshot.currentFileName}` :
         '';
-      return `Datei ${this.importProgress.processedFiles} von ${this.importProgress.totalFiles}${currentFile}`;
+      return `Datei ${importProgressSnapshot.processedFiles} von ${importProgressSnapshot.totalFiles}${currentFile}`;
     }
 
-    return this.importProgress.message;
+    return importProgressSnapshot.message;
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close({ success: false });
   }
 

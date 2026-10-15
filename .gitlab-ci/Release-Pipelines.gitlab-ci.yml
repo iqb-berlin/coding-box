@@ -5,15 +5,12 @@
 .main_pr_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
     - if: $CI_COMMIT_TAG
       when: never
 
 .main_pr_manual_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
-      when: manual
-    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
       when: manual
     - if: $CI_COMMIT_TAG
       when: never
@@ -162,7 +159,7 @@ build-main-pr-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -174,7 +171,7 @@ build-main-pr-base-image:
         .
     - docker push --quiet --all-tags ${BASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-backend-test-image:
@@ -199,7 +196,7 @@ build-main-pr-backend-test-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -216,7 +213,7 @@ build-main-pr-backend-test-image:
         .
     - docker push --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-frontend-test-image:
@@ -241,7 +238,7 @@ build-main-pr-frontend-test-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -260,15 +257,12 @@ build-main-pr-frontend-test-image:
         .
     - docker push --quiet ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-db-image:
-  stage: build-images
+  stage: build
   interruptible: true
-  needs:
-    - job: test-workflows-live
-      artifacts: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -285,7 +279,7 @@ build-main-pr-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -300,15 +294,12 @@ build-main-pr-db-image:
         .
     - docker push --quiet --all-tags ${DB_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-liquibase-image:
-  stage: build-images
+  stage: build
   interruptible: true
-  needs:
-    - job: test-workflows-live
-      artifacts: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -325,7 +316,7 @@ build-main-pr-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -340,19 +331,17 @@ build-main-pr-liquibase-image:
         .
     - docker push --quiet --all-tags ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-main-pr-backend-image:
-  stage: build-images
+  stage: build
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
     - build-main-pr-base-image
     - build-main-pr-backend-test-image
-    - job: test-workflows-live
-      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -369,7 +358,7 @@ build-main-pr-backend-image:
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
   script:
     - docker build
           --progress plain
@@ -386,19 +375,17 @@ build-main-pr-backend-image:
         .
     - docker push --quiet --all-tags ${BACKEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-frontend-image:
-  stage: build-images
+  stage: build
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
     - build-main-pr-base-image
     - build-main-pr-frontend-test-image
-    - job: test-workflows-live
-      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -415,7 +402,7 @@ build-main-pr-frontend-image:
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
   script:
     - docker build
           --progress plain
@@ -432,11 +419,11 @@ build-main-pr-frontend-image:
         .
     - docker push --quiet --all-tags ${FRONTEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 test-main-pr-db:
-  stage: build-images
+  stage: test-db
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
@@ -534,10 +521,96 @@ test-main-pr-db:
   after_script:
     - docker logout ${CI_REGISTRY}
 
+test-main-pr-backend:
+  stage: test-units
+  interruptible: true
+  allow_failure: false
+  rules:
+    - !reference [ .main_pr_rules, rules ]
+  needs:
+    - build-main-pr-backend-test-image
+  image: ${DOCKER_IMAGE}
+  services:
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
+      alias: docker
+  variables:
+    BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
+  before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
+    - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
+  script:
+    - docker run --name backend-unit-${CI_JOB_ID} ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
+  coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
+  artifacts:
+    when: always
+    paths:
+      - coverage/apps/backend/
+    reports:
+      junit: coverage/apps/backend/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/backend/cobertura-coverage.xml
+  after_script:
+    - mkdir -p coverage/apps
+    - docker cp backend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/coverage/apps/backend coverage/apps/backend
+    - docker rm backend-unit-${CI_JOB_ID}
+    - docker logout ${CI_REGISTRY}
+
+test-main-pr-frontend:
+  stage: test-units
+  interruptible: true
+  allow_failure: false
+  rules:
+    - !reference [ .main_pr_rules, rules ]
+  needs:
+    - build-main-pr-frontend-test-image
+  image: ${DOCKER_IMAGE}
+  services:
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
+      alias: docker
+  variables:
+    FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
+  before_script:
+    - docker --version
+    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
+    - ip a | grep mtu
+    - docker network inspect bridge | grep mtu
+    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
+    - docker pull --quiet ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
+  script:
+    - docker run --rm ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run frontend:test-quality-gates
+    - docker run --name frontend-unit-${CI_JOB_ID} ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test frontend --configuration=ci --maxWorkers=2
+  coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - coverage/apps/frontend/
+    reports:
+      junit: coverage/apps/frontend/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/frontend/cobertura-coverage.xml
+  after_script:
+    - mkdir -p coverage/apps
+    - docker cp frontend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/coverage/apps/frontend coverage/apps/frontend
+    - docker rm frontend-unit-${CI_JOB_ID}
+    - docker logout ${CI_REGISTRY}
+
 lint-main-pr-backend:
   stage: lint
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -566,7 +639,7 @@ lint-main-pr-backend:
 lint-main-pr-frontend:
   stage: lint
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -650,9 +723,6 @@ audit-main-pr-frontend:
 
 build-main-commit-db-image:
   stage: build-images
-  needs:
-    - job: test-workflows-live
-      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -669,7 +739,7 @@ build-main-commit-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -683,14 +753,11 @@ build-main-commit-db-image:
         .
     - docker push --quiet ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-commit-liquibase-image:
   stage: build-images
-  needs:
-    - job: test-workflows-live
-      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -707,7 +774,7 @@ build-main-commit-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -721,14 +788,11 @@ build-main-commit-liquibase-image:
         .
     - docker push --quiet ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-main-commit-base-image:
   stage: build-images
-  needs:
-    - job: test-workflows-live
-      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -745,7 +809,7 @@ build-main-commit-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -759,7 +823,7 @@ build-main-commit-base-image:
         .
     - docker push --quiet --all-tags ${BASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-commit-backend-image:
@@ -767,6 +831,18 @@ build-main-commit-backend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: lint-app
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-auth-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -783,7 +859,7 @@ build-main-commit-backend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -800,7 +876,7 @@ build-main-commit-backend-image:
         .
     - docker push ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-main-commit-frontend-image:
@@ -808,6 +884,18 @@ build-main-commit-frontend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: lint-app
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-auth-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -824,7 +912,7 @@ build-main-commit-frontend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -841,7 +929,7 @@ build-main-commit-frontend-image:
         .
     - docker push ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 scan-main-commit-db-image:
@@ -1142,7 +1230,11 @@ build-release:
       artifacts: false
     - job: test-frontend
       artifacts: false
+    - job: lint-app
+      artifacts: false
     - job: test-replay-live
+      artifacts: false
+    - job: test-auth-live
       artifacts: false
     - job: test-workflows-live
       artifacts: false

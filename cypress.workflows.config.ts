@@ -20,6 +20,9 @@ export default defineConfig({
         'workflows:prepare-imported-coding': () => harness.prepareImportedCoding(),
         'workflows:cleanup': () => harness.cleanup()
       });
+      on('after:spec', (spec, results) => {
+        if (!results?.tests?.length) throw new Error(`Workflow spec executed no tests: ${spec.relative}`);
+      });
       on('after:run', () => harness.cleanup());
     }
   }

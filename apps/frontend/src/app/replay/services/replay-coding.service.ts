@@ -1,7 +1,11 @@
-import { Injectable, inject, signal } from '@angular/core';
+import {
+  Injectable, inject, signal, OnDestroy
+} from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { firstValueFrom } from 'rxjs';
+import {
+  firstValueFrom, forkJoin, Subject, takeUntil
+} from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import {
   Code, CodingScheme, CodeSelectedEvent
@@ -40,7 +44,20 @@ interface CodingContextSnapshot {
 @Injectable({
   providedIn: 'root'
 })
-export class ReplayCodingService {
+export class ReplayCodingService implements OnDestroy {
+  private progressLoadRunId = 0;
+  private readonly progressLoadCancelled = new Subject<void>();
+
+  private cancelProgressLoad(): void {
+    this.progressLoadRunId += 1;
+    this.progressLoadCancelled.next();
+  }
+
+  ngOnDestroy(): void {
+    this.resetCodingData();
+    this.progressLoadCancelled.complete();
+  }
+
   private codingJobBackendService = inject(CodingJobBackendService);
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
@@ -50,22 +67,138 @@ export class ReplayCodingService {
   private readonly codingStateVersion = signal(0);
   private readonly saveError = signal(false);
 
-  codingScheme: CodingScheme | null = null;
-  currentVariableId: string = '';
-  codingJobId: number | null = null;
+  private readonly codingSchemeState = signal<CodingScheme | null>(null);
+
+  get codingScheme(): CodingScheme | null {
+    return this.codingSchemeState();
+  }
+
+  set codingScheme(value: CodingScheme | null) {
+    this.codingSchemeState.set(value);
+  }
+
+  private readonly currentVariableIdState = signal<string>('');
+
+  get currentVariableId(): string {
+    return this.currentVariableIdState();
+  }
+
+  set currentVariableId(value: string) {
+    this.currentVariableIdState.set(value);
+  }
+
+  private readonly codingJobIdState = signal<number | null>(null);
+
+  get codingJobId(): number | null {
+    return this.codingJobIdState();
+  }
+
+  set codingJobId(value: number | null) {
+    this.codingJobIdState.set(value);
+  }
+
   selectedCodes: Map<string, SavedCode> = new Map();
   openUnitKeys: Set<string> = new Set();
   notes: Map<string, string> = new Map();
-  codingJobComment: string = '';
-  isPausingJob: boolean = false;
-  isCodingJobCompleted: boolean = false;
-  isCodingJobPaused: boolean = false;
-  isSubmittingJob: boolean = false;
-  isResumingJob: boolean = false;
-  isCodingJobFinalized: boolean = false;
-  isCompletedJobReview: boolean = false;
-  isReviewMode: boolean = false;
-  isCodingIssueReviewMode: boolean = false;
+  private readonly codingJobCommentState = signal<string>('');
+
+  get codingJobComment(): string {
+    return this.codingJobCommentState();
+  }
+
+  set codingJobComment(value: string) {
+    this.codingJobCommentState.set(value);
+  }
+
+  private readonly isPausingJobState = signal<boolean>(false);
+
+  get isPausingJob(): boolean {
+    return this.isPausingJobState();
+  }
+
+  set isPausingJob(value: boolean) {
+    this.isPausingJobState.set(value);
+  }
+
+  private readonly isCodingJobCompletedState = signal<boolean>(false);
+
+  get isCodingJobCompleted(): boolean {
+    return this.isCodingJobCompletedState();
+  }
+
+  set isCodingJobCompleted(value: boolean) {
+    this.isCodingJobCompletedState.set(value);
+  }
+
+  private readonly isCodingJobPausedState = signal<boolean>(false);
+
+  get isCodingJobPaused(): boolean {
+    return this.isCodingJobPausedState();
+  }
+
+  set isCodingJobPaused(value: boolean) {
+    this.isCodingJobPausedState.set(value);
+  }
+
+  private readonly isSubmittingJobState = signal<boolean>(false);
+
+  get isSubmittingJob(): boolean {
+    return this.isSubmittingJobState();
+  }
+
+  set isSubmittingJob(value: boolean) {
+    this.isSubmittingJobState.set(value);
+  }
+
+  private readonly isResumingJobState = signal<boolean>(false);
+
+  get isResumingJob(): boolean {
+    return this.isResumingJobState();
+  }
+
+  set isResumingJob(value: boolean) {
+    this.isResumingJobState.set(value);
+  }
+
+  private readonly isCodingJobFinalizedState = signal<boolean>(false);
+
+  get isCodingJobFinalized(): boolean {
+    return this.isCodingJobFinalizedState();
+  }
+
+  set isCodingJobFinalized(value: boolean) {
+    this.isCodingJobFinalizedState.set(value);
+  }
+
+  private readonly isCompletedJobReviewState = signal<boolean>(false);
+
+  get isCompletedJobReview(): boolean {
+    return this.isCompletedJobReviewState();
+  }
+
+  set isCompletedJobReview(value: boolean) {
+    this.isCompletedJobReviewState.set(value);
+  }
+
+  private readonly isReviewModeState = signal<boolean>(false);
+
+  get isReviewMode(): boolean {
+    return this.isReviewModeState();
+  }
+
+  set isReviewMode(value: boolean) {
+    this.isReviewModeState.set(value);
+  }
+
+  private readonly isCodingIssueReviewModeState = signal<boolean>(false);
+
+  get isCodingIssueReviewMode(): boolean {
+    return this.isCodingIssueReviewModeState();
+  }
+
+  set isCodingIssueReviewMode(value: boolean) {
+    this.isCodingIssueReviewModeState.set(value);
+  }
 
   get hasSaveError(): boolean {
     return this.saveError();
@@ -75,24 +208,71 @@ export class ReplayCodingService {
     this.saveError.set(value);
   }
 
-  lastSaveError: string | null = null;
+  private readonly lastSaveErrorState = signal<string | null>(null);
+
+  get lastSaveError(): string | null {
+    return this.lastSaveErrorState();
+  }
+
+  set lastSaveError(value: string | null) {
+    this.lastSaveErrorState.set(value);
+  }
+
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
   private pendingRowMutations = new Set<Promise<void>>();
+  private pendingNoteMutations = new Map<string, Promise<void>>();
   private latestSelectionRevisionByKey = new Map<string, number>();
   private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
   private codingDataRunId = 0;
   private codingSchemeSource: string | null = null;
-  currentCodingJobStatus: string | null = null;
-  showScore = false;
-  allowComments = true;
-  suppressGeneralInstructions = false;
+  private readonly currentCodingJobStatusState = signal<string | null>(null);
+
+  get currentCodingJobStatus(): string | null {
+    return this.currentCodingJobStatusState();
+  }
+
+  set currentCodingJobStatus(value: string | null) {
+    this.currentCodingJobStatusState.set(value);
+  }
+
+  private readonly showScoreState = signal<boolean>(false);
+
+  get showScore(): boolean {
+    return this.showScoreState();
+  }
+
+  set showScore(value: boolean) {
+    this.showScoreState.set(value);
+  }
+
+  private readonly allowCommentsState = signal<boolean>(true);
+
+  get allowComments(): boolean {
+    return this.allowCommentsState();
+  }
+
+  set allowComments(value: boolean) {
+    this.allowCommentsState.set(value);
+  }
+
+  private readonly suppressGeneralInstructionsState = signal<boolean>(false);
+
+  get suppressGeneralInstructions(): boolean {
+    return this.suppressGeneralInstructionsState();
+  }
+
+  set suppressGeneralInstructions(value: boolean) {
+    this.suppressGeneralInstructionsState.set(value);
+  }
+
   private codingJobCommentRevision = 0;
   private savedCodingJobCommentRevision = 0;
   private recoveredCodingJobCommentChanged = false;
 
   resetCodingData() {
+    this.cancelProgressLoad();
     this.codingDataRunId += 1;
     this.codingScheme = null;
     this.codingSchemeSource = null;
@@ -117,6 +297,7 @@ export class ReplayCodingService {
     this.failedSaveKeys.clear();
     this.rowMutationChains.clear();
     this.pendingRowMutations.clear();
+    this.pendingNoteMutations.clear();
     this.latestSelectionRevisionByKey.clear();
     this.latestRequestedSelectionByKey.clear();
     this.selectionRevision = 0;
@@ -312,31 +493,26 @@ export class ReplayCodingService {
   }
 
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {
+    this.cancelProgressLoad();
     if (!jobId || !workspaceId) return;
 
+    const runId = this.progressLoadRunId;
+    const authTokenArg = this.authTokenArg;
     this.resetLoadedCodingState();
 
-    try {
-      const savedProgress = await firstValueFrom(
-        this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
-      ) as { [key: string]: SavedCode };
-      this.applySavedProgress(savedProgress);
-
-      const savedNotes = await firstValueFrom(
-        this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...this.authTokenArg)
-      );
-      this.applySavedNotes(savedNotes ?? {});
-
-      const codingJob = await firstValueFrom(
-        this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
-      );
-      this.setCodingJobMetadata(codingJob);
-    } catch (error) {
-      // Ignore errors when loading saved coding progress
-    }
+    const saved = await firstValueFrom(forkJoin({
+      progress: this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...authTokenArg),
+      notes: this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...authTokenArg),
+      job: this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...authTokenArg)
+    }).pipe(takeUntil(this.progressLoadCancelled)), { defaultValue: null });
+    if (!saved || runId !== this.progressLoadRunId) return;
+    this.applySavedProgress(saved.progress as Record<string, SavedCode>);
+    this.applySavedNotes(saved.notes ?? {});
+    this.setCodingJobMetadata(saved.job);
   }
 
   applyReplayCodingSession(session: ReplayCodingSessionDto): void {
+    this.cancelProgressLoad();
     this.resetLoadedCodingState();
     const progress = Object.fromEntries(
       Object.entries(session.progress)
@@ -688,6 +864,7 @@ export class ReplayCodingService {
   }
 
   getOpenCount(unitsData: UnitsReplay | null = null): number {
+    this.codingStateVersion();
     if (!unitsData) return this.openUnitKeys.size;
 
     return unitsData.units.filter((unit: UnitsReplayUnit) => {
@@ -707,18 +884,21 @@ export class ReplayCodingService {
   }
 
   getPreSelectedCodeId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
   }
 
   getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
   }
 
   getNotes(testPerson: string, unitId: string, variableId: string): string {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     return this.notes.get(compositeKey) || '';
   }
@@ -751,13 +931,18 @@ export class ReplayCodingService {
     const selectionRevisionAtStart = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const saveFailureKey = this.getSaveFailureKey('notes', compositeKey);
     const trimmedNotes = notes.trim();
-    // Keep the form model current while older HTTP writes wait in the queue.
-    this.updateLocalNotes(testPerson, unitId, variableId, notes);
     if (!jobId || !workspaceId) {
+      this.updateLocalNotes(testPerson, unitId, variableId, notes);
       return;
     }
 
-    await this.enqueueRowMutation(compositeKey, async () => {
+    // Show the latest keystroke immediately. Earlier queued saves must never
+    // write their captured note text back over a newer local draft.
+    if (this.isCurrentCodingContext(contextSnapshot)) {
+      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+    }
+
+    const noteMutation = this.enqueueRowMutation(compositeKey, async () => {
       try {
         await firstValueFrom(
           this.codingJobBackendService.saveCodingNotes(workspaceId, jobId, {
@@ -786,7 +971,13 @@ export class ReplayCodingService {
         }
         throw error;
       }
-    });
+    }, true);
+    await noteMutation;
+
+    // An older note save must not persist the latest local text before a newer
+    // queued note has reached the backend. The newest save will sync the code.
+    const latestNoteMutation = this.pendingNoteMutations.get(compositeKey);
+    if (latestNoteMutation && latestNoteMutation !== noteMutation) return;
 
     if (this.isCurrentCodingContext(contextSnapshot)) {
       await this.syncNewCodeNeededProgressAfterNotes(
@@ -983,6 +1174,9 @@ export class ReplayCodingService {
     selectedCode: SavedCode
   ): Promise<void> {
     if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
+    // A new-code-needed choice requires a saved note. The pending note save
+    // persists this choice after it succeeds.
+    if (this.isNewCodeNeededSelection(selectedCode) && this.pendingNoteMutations.has(compositeKey)) return;
 
     await this.saveCodingProgress(
       workspaceId,
@@ -1079,12 +1273,16 @@ export class ReplayCodingService {
     return -1;
   }
 
-  private enqueueRowMutation(key: string, operation: () => Promise<void>): Promise<void> {
+  private enqueueRowMutation(key: string, operation: () => Promise<void>, isNoteMutation = false): Promise<void> {
     const previous = this.rowMutationChains.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(operation);
     this.pendingRowMutations.add(next);
+    if (isNoteMutation) this.pendingNoteMutations.set(key, next);
     const tracked = next.catch(() => undefined).finally(() => {
       this.pendingRowMutations.delete(next);
+      if (this.pendingNoteMutations.get(key) === next) {
+        this.pendingNoteMutations.delete(key);
+      }
       if (this.rowMutationChains.get(key) === tracked) {
         this.rowMutationChains.delete(key);
         this.codingStateVersion.update(version => version + 1);
