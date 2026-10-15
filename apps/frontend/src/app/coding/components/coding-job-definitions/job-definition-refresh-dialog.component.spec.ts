@@ -1,4 +1,5 @@
-import { MatDialogRef } from '@angular/material/dialog';
+import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateService } from '@ngx-translate/core';
 import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { JobDefinitionRefreshDialogComponent } from './job-definition-refresh-dialog.component';
@@ -26,11 +27,14 @@ describe('JobDefinitionRefreshDialogComponent', () => {
       instant: jest.fn((key: string) => key)
     } as unknown as TranslateService;
 
-    return new JobDefinitionRefreshDialogComponent(
-      dialogRef,
-      { definitionId: 42, preview },
-      translateService
-    );
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: { definitionId: 42, preview } },
+        { provide: TranslateService, useValue: translateService }
+      ]
+    });
+    return TestBed.runInInjectionContext(() => new JobDefinitionRefreshDialogComponent());
   };
 
   it('labels freshness count as stale jobs instead of replaceable jobs', () => {

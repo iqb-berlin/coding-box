@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -127,6 +127,7 @@ export type TestFilesUploadResultDialogData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files-upload-result-dialog',
   standalone: true,
   imports: [
@@ -144,14 +145,12 @@ export type TestFilesUploadResultDialogData = {
   styleUrls: ['./test-files-upload-result-dialog.component.scss']
 })
 export class TestFilesUploadResultDialogComponent {
-  filterText = '';
+  private dialogRef = inject<MatDialogRef<TestFilesUploadResultDialogComponent>>(MatDialogRef);
+  data = inject<TestFilesUploadResultDialogData>(MAT_DIALOG_DATA);
+  private router = inject(Router);
+  private translate = inject(TranslateService);
 
-  constructor(
-    private dialogRef: MatDialogRef<TestFilesUploadResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestFilesUploadResultDialogData,
-    private router: Router,
-    private translate: TranslateService
-  ) {}
+  filterText = '';
 
   get attempted(): number {
     return this.data?.attempted || 0;
@@ -283,7 +282,7 @@ export class TestFilesUploadResultDialogComponent {
     return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
   }
 
-  getFailureSuggestions(
+  protected getFailureSuggestions(
     file: TestFilesUploadFailedDto
   ): TestFilesUploadFailureSuggestion[] {
     return getTestFilesUploadFailureSuggestions(file);

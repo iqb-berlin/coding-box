@@ -1,4 +1,7 @@
-import { Component, inject } from '@angular/core';
+import {
+  Component, inject, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -9,6 +12,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-user-access-rights-dialog',
   templateUrl: './user-access-rights-dialog.component.html',
   styleUrls: ['./user-access-rights-dialog.component.scss'],
@@ -23,40 +27,42 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 })
 
 export class UserAccessRightsDialogComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   data = inject<{
     selectedWorkspace: number[];
   }>(MAT_DIALOG_DATA);
 
   private workspaceBackendService = inject(WorkspaceBackendService);
 
-  selectedUserIds: number[] = [];
-  isLoadingWorkspaceUsers = false;
-  workspaceUsersLoadingFailed = false;
-  result: number[] = [];
+  readonly selectedUserIds = signal<number[]>([]);
+  readonly isLoadingWorkspaceUsers = signal(false);
+  readonly workspaceUsersLoadingFailed = signal(false);
+  readonly result = signal<number[]>([]);
 
   constructor() {
     if (this.data.selectedWorkspace?.length > 0) {
-      this.isLoadingWorkspaceUsers = true;
-      this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0])
+      this.isLoadingWorkspaceUsers.set(true);
+      this.workspaceBackendService.getAllWorkspaceUsers(this.data.selectedWorkspace[0]).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: users => {
             if (Array.isArray(users)) {
-              this.selectedUserIds = users.map(user => user.userId);
-              this.result = [...this.selectedUserIds];
+              this.selectedUserIds.set(users.map(user => user.userId));
+              this.result.set([...this.selectedUserIds()]);
             }
-            this.isLoadingWorkspaceUsers = false;
+            this.isLoadingWorkspaceUsers.set(false);
           },
           error: () => {
-            this.selectedUserIds = [];
-            this.result = [];
-            this.workspaceUsersLoadingFailed = true;
-            this.isLoadingWorkspaceUsers = false;
+            this.selectedUserIds.set([]);
+            this.result.set([]);
+            this.workspaceUsersLoadingFailed.set(true);
+            this.isLoadingWorkspaceUsers.set(false);
           }
         });
     }
   }
 
-  setUsersSelection(result: UserFullDto[]): void {
-    this.result = result.map(workspace => workspace.id);
+  protected setUsersSelection(result: UserFullDto[]): void {
+    this.result.set(result.map(workspace => workspace.id));
   }
 }

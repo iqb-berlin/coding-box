@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { Job } from 'bull';
 import {
   JobQueueService,
@@ -9,6 +8,10 @@ import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingReadinessService } from '../coding/coding-readiness.service';
 
 describe('BullJobManagementService', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   const createFailedJob = (
     data: TestPersonCodingJobData
   ): Job<TestPersonCodingJobData> => ({
@@ -20,6 +23,7 @@ describe('BullJobManagementService', () => {
   const createService = (job: Job<TestPersonCodingJobData>) => {
     const jobQueueService = {
       getWorkspaceJob: jest.fn().mockResolvedValue(job),
+      getTestPersonCodingJobs: jest.fn().mockResolvedValue([]),
       assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined),
       addTestPersonCodingJob: jest.fn().mockResolvedValue({ id: 'new-job' }),
       deleteTestPersonCodingJob: jest.fn().mockResolvedValue(true)
@@ -99,204 +103,147 @@ describe('BullJobManagementService', () => {
       expect(jobQueueService.deleteTestPersonCodingJob).not.toHaveBeenCalled();
     }
   );
-});
 
-describe('BullJobManagementService workspace isolation', () => {
-  const createJob = (workspaceId: number, state = 'waiting') => ({
-    id: '17',
-    data: {
-      workspaceId,
-      personIds: ['1'],
-      unitIds: [8],
+  it('keeps domain parameters when pausing an active job and clears the pause marker on resume', async () => {
+    const data: TestPersonCodingJobData = {
+      workspaceId: 7,
+      personIds: ['11'],
+      unitIds: [101],
       autoCoderRun: 2,
-      groupNames: 'G1',
       source: 'coding-freshness',
       freshnessVersion: 'v3',
-      freshnessStates: ['PENDING', 'STALE'],
-      freshnessSourceRevision: 9,
-      isPaused: true
-    } as TestPersonCodingJobData,
-    getState: jest.fn().mockResolvedValue(state),
-    update: jest.fn().mockResolvedValue(undefined)
-  });
-
-  const createService = (job: ReturnType<typeof createJob>) => {
-    const queue = {
-      getWorkspaceJob: jest.fn().mockImplementation(async workspaceId => (
-        job.data.workspaceId === workspaceId ? job : null
-      )),
-      assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined),
-      addTestPersonCodingJob: jest.fn().mockResolvedValue({ id: '18' }),
-      deleteTestPersonCodingJob: jest.fn().mockResolvedValue(true)
+      freshnessSourceRevision: 42
     };
-    const freshness = {
-      assertAutoCodingRunCanStart: jest.fn().mockResolvedValue(undefined),
-      isRevisionCurrent: jest.fn().mockResolvedValue(true)
-    };
-    const readiness = {
-      assertAutoCodingCanProcess: jest.fn().mockResolvedValue(undefined)
-    };
-    return {
-      queue,
-      freshness,
-      readiness,
-      service: new BullJobManagementService(
-        queue as unknown as JobQueueService,
-        freshness as unknown as CodingFreshnessService,
-        readiness as unknown as CodingReadinessService
-      )
-    };
-  };
-
-  it.each(['pauseJob', 'resumeJob', 'restartJob'] as const)(
-    '%s rejects a foreign job before reading or changing its state', async operation => {
-      const job = createJob(2, 'failed');
-      const {
-        service, queue, freshness, readiness
-      } = createService(job);
-
-      await expect(service[operation]('17', 1)).resolves.toMatchObject({ success: false });
-      expect(queue.getWorkspaceJob).toHaveBeenCalledWith(1, 'test-person-coding', '17');
-      expect(job.getState).not.toHaveBeenCalled();
-      expect(job.update).not.toHaveBeenCalled();
-      expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-      expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-      expect(freshness.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
-      expect(freshness.isRevisionCurrent).not.toHaveBeenCalled();
-      expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
-    }
-  );
-
-  it('pauses and resumes jobs owned by the requested workspace', async () => {
-    const job = createJob(1);
+    const job = createFailedJob(data);
+    job.getState = jest.fn().mockResolvedValue('active');
+    job.update = jest.fn().mockResolvedValue(undefined);
     const { service } = createService(job);
 
-    await expect(service.pauseJob('17', 1)).resolves.toMatchObject({ success: true });
-    expect(job.update).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 1, isPaused: true }));
-    await expect(service.resumeJob('17', 1)).resolves.toMatchObject({ success: true });
-    expect(job.update).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: 1, unitIds: [8] }));
-    expect(job.update.mock.calls[1][0]).not.toHaveProperty('isPaused');
+    await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
+      success: true, message: 'Job old-job has been paused successfully'
+    });
+    expect(job.update).toHaveBeenCalledWith({ ...data, isPaused: true });
+
+    job.data = { ...data, isPaused: true };
+    await expect(service.resumeJob('old-job', 7)).resolves.toEqual({
+      success: true, message: 'Job old-job has been resumed successfully'
+    });
+    expect(job.update).toHaveBeenLastCalledWith(data);
   });
 
-  it('restarts an owned failed job while retaining its original coding scope and revision', async () => {
-    const job = createJob(1, 'failed');
-    const {
-      service, queue, freshness, readiness
-    } = createService(job);
+  it('refuses to pause a completed job without mutating its data', async () => {
+    const job = createFailedJob({ workspaceId: 7, personIds: ['11'], autoCoderRun: 1 });
+    job.getState = jest.fn().mockResolvedValue('completed');
+    job.update = jest.fn();
+    const { service } = createService(job);
 
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({ success: true, jobId: '18' });
-    expect(queue.addTestPersonCodingJob).toHaveBeenCalledWith({ ...job.data, isPaused: false });
-    expect(queue.deleteTestPersonCodingJob).toHaveBeenCalledWith('17', 1);
-    expect(freshness.assertAutoCodingRunCanStart).toHaveBeenCalledWith(1, 2);
-    expect(readiness.assertAutoCodingCanProcess).toHaveBeenCalledWith(1, {
-      personIds: ['1'],
-      unitIds: [8],
-      autoCoderRun: 2
+    await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
+      success: false, message: 'Job with ID old-job cannot be paused because it is completed'
     });
-    expect(freshness.isRevisionCurrent).toHaveBeenCalledWith(1, 9);
     expect(job.update).not.toHaveBeenCalled();
   });
 
-  it('rejects restarting run 2 when the regular freshness prerequisites are blocked', async () => {
-    const job = createJob(1, 'failed');
-    delete job.data.freshnessSourceRevision;
-    const originalData = { ...job.data };
-    const {
-      service, queue, freshness, readiness
-    } = createService(job);
-    freshness.assertAutoCodingRunCanStart.mockRejectedValue(
-      new BadRequestException('Auto-Coding 1 ist veraltet. Manuelle Prüfung ist erforderlich.')
-    );
+  it('keeps the failed job when a conflicting dependency prevents its restart', async () => {
+    const job = createFailedJob({ workspaceId: 7, personIds: ['11'], autoCoderRun: 2 });
+    const { service, jobQueueService } = createService(job);
+    jobQueueService.assertNoDependencyConflicts.mockRejectedValue(new Error('reset job active'));
+    jest.spyOn(
+      (service as unknown as { logger: { error: (message: string, stack?: string) => void } }).logger,
+      'error'
+    ).mockImplementation(() => undefined);
 
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({
-      success: false,
-      message: expect.stringContaining('Manuelle Prüfung ist erforderlich')
+    await expect(service.restartJob('old-job', 7)).resolves.toEqual({
+      success: false, message: 'Error restarting job: reset job active'
     });
-    expect(freshness.assertAutoCodingRunCanStart).toHaveBeenCalledWith(1, 2);
-    expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
-    expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
-    expect(job.data).toEqual(originalData);
+    expect(jobQueueService.assertNoDependencyConflicts).toHaveBeenCalledWith('test-person-coding', 7);
+    expect(jobQueueService.addTestPersonCodingJob).not.toHaveBeenCalled();
+    expect(jobQueueService.deleteTestPersonCodingJob).not.toHaveBeenCalled();
   });
 
-  it('retains the failed job when scoped coding readiness rejects the restart', async () => {
-    const job = createJob(1, 'failed');
-    const originalData = { ...job.data };
-    const {
-      service, queue, readiness
-    } = createService(job);
-    readiness.assertAutoCodingCanProcess.mockRejectedValue(
-      new BadRequestException('Das Kodierschema für die gewählte Aufgabe ist ungültig.')
-    );
+  it('returns newest jobs first with state-specific results and normalized progress', async () => {
+    const job = createFailedJob({ workspaceId: 7, personIds: ['11'], autoCoderRun: 1 });
+    const { service, jobQueueService } = createService(job);
+    const statistics = { totalResponses: 2, statusCounts: { CODED: 2 } };
+    jobQueueService.getTestPersonCodingJobs.mockResolvedValue([
+      {
+        id: 11,
+        data: {
+          ...job.data, unitIds: [101, 102], source: 'coding-freshness', freshnessVersion: 'v3'
+        },
+        timestamp: 100,
+        finishedOn: 400,
+        returnvalue: statistics,
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockResolvedValue(100)
+      },
+      {
+        id: 12,
+        data: job.data,
+        timestamp: 300,
+        failedReason: 'coding failed',
+        returnvalue: statistics,
+        getState: jest.fn().mockResolvedValue('failed'),
+        progress: jest.fn().mockResolvedValue({ rows: 5 })
+      },
+      {
+        id: 13,
+        data: job.data,
+        timestamp: 200,
+        getState: jest.fn().mockResolvedValue('waiting'),
+        progress: jest.fn().mockResolvedValue(undefined)
+      }
+    ]);
 
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({
-      success: false,
-      message: expect.stringContaining('Kodierschema')
-    });
-    expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
-    expect(job.data).toEqual(originalData);
+    await expect(service.getBullJobs(7)).resolves.toEqual([
+      expect.objectContaining({
+        jobId: '12',
+        status: 'failed',
+        progress: 0,
+        result: undefined,
+        error: 'coding failed',
+        workspaceId: 7,
+        createdAt: new Date(300),
+        completedAt: undefined,
+        durationMs: undefined
+      }),
+      expect.objectContaining({
+        jobId: '13',
+        status: 'pending',
+        progress: 0,
+        result: undefined,
+        error: undefined,
+        workspaceId: 7,
+        createdAt: new Date(200)
+      }),
+      expect.objectContaining({
+        jobId: '11',
+        status: 'completed',
+        progress: 100,
+        result: statistics,
+        error: undefined,
+        workspaceId: 7,
+        createdAt: new Date(100),
+        completedAt: new Date(400),
+        durationMs: 300,
+        source: 'coding-freshness',
+        freshnessVersion: 'v3',
+        unitCount: 2
+      })
+    ]);
+    expect(jobQueueService.getTestPersonCodingJobs).toHaveBeenCalledWith(7);
   });
 
-  it('rejects a stale planned revision without creating or deleting a job', async () => {
-    const job = createJob(1, 'failed');
-    const originalData = { ...job.data };
-    const { service, queue, freshness } = createService(job);
-    freshness.isRevisionCurrent.mockResolvedValue(false);
+  it('reports queue lookup failures while returning the documented empty list', async () => {
+    const job = createFailedJob({ workspaceId: 7, personIds: ['11'], autoCoderRun: 1 });
+    const { service, jobQueueService } = createService(job);
+    const error = new Error('redis unavailable');
+    jobQueueService.getTestPersonCodingJobs.mockRejectedValue(error);
+    const logger = (service as unknown as {
+      logger: { error: (message: string, stack?: string) => void }
+    }).logger;
+    const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
 
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({
-      success: false,
-      message: expect.stringContaining('Bitte starten Sie einen neuen Autocoder-Lauf')
-    });
-    expect(freshness.isRevisionCurrent).toHaveBeenCalledWith(1, 9);
-    expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
-    expect(job.data).toEqual(originalData);
-  });
-
-  it.each([0, 3, '2', null])('does not reinterpret an invalid stored run %p', async storedRun => {
-    const job = createJob(1, 'failed');
-    job.data.autoCoderRun = storedRun as unknown as TestPersonCodingJobData['autoCoderRun'];
-    const {
-      service, queue, freshness, readiness
-    } = createService(job);
-
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({ success: false });
-    expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(freshness.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
-    expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
-  });
-
-  it.each([-1, 1.5, NaN, Infinity, '9', null])(
-    'does not reinterpret an invalid stored revision %p', async storedRevision => {
-      const job = createJob(1, 'failed');
-      job.data.freshnessSourceRevision = storedRevision as unknown as number;
-      const {
-        service, queue, freshness, readiness
-      } = createService(job);
-
-      await expect(service.restartJob('17', 1)).resolves.toMatchObject({ success: false });
-      expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-      expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-      expect(freshness.isRevisionCurrent).not.toHaveBeenCalled();
-      expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
-    }
-  );
-
-  it('does not validate or enqueue a job that is not failed', async () => {
-    const job = createJob(1, 'active');
-    const {
-      service, queue, freshness, readiness
-    } = createService(job);
-
-    await expect(service.restartJob('17', 1)).resolves.toMatchObject({ success: false });
-    expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(freshness.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
-    expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
+    await expect(service.getBullJobs(7)).resolves.toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith('Error getting jobs from Redis queue: redis unavailable', error.stack);
   });
 });

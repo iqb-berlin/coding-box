@@ -111,6 +111,18 @@ export class PersonPersistenceService {
     return service;
   }
 
+  private async completeWrites(writes: Promise<unknown>[]): Promise<void> {
+    if (!this.importTransaction) {
+      await Promise.all(writes);
+      return;
+    }
+    // Let all writes on this manager settle before the transaction can roll back.
+    const results = await Promise.allSettled(writes);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  }
+
   private recordImportBatch(manager: EntityManager, audit: TestResultsImportAuditContext,
                             success: boolean, details: Record<string, unknown>) {
     const { source, ...provenance } = audit;
@@ -314,6 +326,7 @@ export class PersonPersistenceService {
               }
             }
           } catch (bookletError) {
+            if (this.importTransaction) throw bookletError;
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${person.id}: ${bookletError.message}`
             );
@@ -327,6 +340,7 @@ export class PersonPersistenceService {
         `${totalResponsesProcessed} responses processed, ${totalResponsesSkipped} responses skipped.`
       );
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
 
@@ -387,7 +401,7 @@ export class PersonPersistenceService {
       const batchSize = 10;
       for (let i = 0; i < booklet.units.length; i += batchSize) {
         const unitBatch = booklet.units.slice(i, i + batchSize);
-        await Promise.all(
+        await this.completeWrites(
           unitBatch.map(async unit => {
             if (!unit || !unit.id) {
               return;
@@ -415,7 +429,7 @@ export class PersonPersistenceService {
               );
 
               if (targetUnit) {
-                await Promise.all([
+                await this.completeWrites([
                   this.saveUnitLastState(unit, targetUnit),
                   this.processChunks(unit, targetUnit, booklet)
                 ]);
@@ -442,6 +456,7 @@ export class PersonPersistenceService {
                 }
               }
             } catch (unitError) {
+              if (this.importTransaction) throw unitError;
               const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
               this.logger.error(msg);
               issues.push({ level: 'error', message: msg, category: 'other' });
@@ -482,6 +497,7 @@ export class PersonPersistenceService {
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save last state for unit ${unit.id}: ${error.message}`);
     }
   }
@@ -508,6 +524,7 @@ export class PersonPersistenceService {
         success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
       return {
         success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
@@ -575,6 +592,7 @@ export class PersonPersistenceService {
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
     }
   }
@@ -677,6 +695,7 @@ export class PersonPersistenceService {
         addedResponseIds: Array.from(new Set(addedResponseIds))
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
       return {
         success: false,
@@ -704,6 +723,7 @@ export class PersonPersistenceService {
       const fallbackIds = await this.findResponseIdsForEntries(entries);
       return this.uniquePositiveIds([...savedIds, ...fallbackIds]);
     } catch (error) {
+      if (this.importTransaction) throw error;
       const detail = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn(`Could not resolve saved response ids after import: ${detail}`);
       return savedIds;
@@ -954,6 +974,7 @@ export class PersonPersistenceService {
             totalLogsSkipped += unitLogsResult.skipped;
             success = success && unitLogsResult.success;
           } catch (error) {
+            if (this.importTransaction) throw error;
             success = false;
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${originalPerson.code}: ${error.message}`
@@ -975,6 +996,7 @@ export class PersonPersistenceService {
         issues: issues.length > 0 ? issues : undefined
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Critical error while processing person logs: ${error.message}`
       );
@@ -1031,6 +1053,7 @@ export class PersonPersistenceService {
 
       return { success: true, saved: booklet.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for booklet ${booklet.id}: ${error.message}`
       );
@@ -1241,6 +1264,7 @@ export class PersonPersistenceService {
       this.logger.log(`Saved ${unit.logs.length} logs for unit ${unit.id}`);
       return { success: true, saved: unit.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for unit ${unit.id}: ${error.message}`
       );

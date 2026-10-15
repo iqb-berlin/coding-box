@@ -10,6 +10,10 @@ import { UsersService } from '../../database/services/users';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AuthService } from '../../auth/service/auth.service';
+import { AdminGuard } from '../admin.guard';
+import { WorkspaceGuard } from '../workspace/workspace.guard';
+import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 
@@ -17,7 +21,8 @@ import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 @Controller('admin/users')
 export class UsersController {
   constructor(
-    private usersService: UsersService
+    private usersService: UsersService,
+    private authService: AuthService
   ) {}
 
   @Get('access/:workspaceId')
@@ -32,12 +37,32 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('users access')
-  async getUsersWithWorkspaceAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number): Promise<WorkspaceUserInListDto[] | UserFullDto[]> {
+  async getUsersWithWorkspaceAccess(
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
+      @Req() request: { user: { id: number } }
+  ): Promise<WorkspaceUserInListDto[]> {
+    // The frontend uses this read to resolve route permissions. An authenticated
+    // nonmember gets no directory data and can still reach its access-denied UI.
+    if (!await this.authService.canAccessWorkSpace(request.user.id, workspaceId)) {
+      return [];
+    }
     return this.usersService.getUsersWithWorkspaceAccess(workspaceId);
   }
 
+  @Get('directory/:workspaceId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get users available for workspace assignment' })
+  @ApiParam({ name: 'workspaceId', type: Number, description: 'Workspace whose study manager selects users' })
+  async getWorkspaceUserDirectory(): Promise<Pick<UserFullDto, 'id' | 'username'>[]> {
+    const users = await this.usersService.getAllUsers();
+    return users.map(({ id, username }) => ({ id, username }));
+  }
+
   @Patch('access/:workspaceId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update users access', description: 'Updates access levels for users in a specific workspace' })
   @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
@@ -55,7 +80,7 @@ export class UsersController {
   }
 
   @Get('full')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all users with full details', description: 'Retrieves all users with their complete details' })
   @ApiOkResponse({
@@ -69,7 +94,7 @@ export class UsersController {
   }
 
   @Patch(':userId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update user', description: 'Updates a user\'s details' })
   @ApiParam({ name: 'userId', type: Number, description: 'ID of the user to update' })
@@ -83,7 +108,7 @@ export class UsersController {
   }
 
   @Get(':userId/workspaces')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user workspaces', description: 'Retrieves all workspaces associated with a user' })
   @ApiParam({ name: 'userId', type: Number, description: 'ID of the user' })
@@ -105,7 +130,7 @@ export class UsersController {
   }
 
   @Delete(':ids')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete users by IDs',
@@ -128,7 +153,7 @@ export class UsersController {
   }
 
   @Delete()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete users by query',
@@ -151,7 +176,7 @@ export class UsersController {
   }
 
   @Post(':userId/workspaces')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Assign user workspaces',
@@ -185,7 +210,7 @@ export class UsersController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create a new user',

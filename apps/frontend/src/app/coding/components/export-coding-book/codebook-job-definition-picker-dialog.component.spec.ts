@@ -56,10 +56,8 @@ describe('CodebookJobDefinitionPickerDialogComponent', () => {
     const dialogRef = {
       close: jest.fn()
     };
-    const component = new CodebookJobDefinitionPickerDialogComponent(
-      dialogRef as never,
-      data
-    );
+    TestBed.overrideProvider(MatDialogRef, { useValue: dialogRef });
+    const component = TestBed.runInInjectionContext(() => new CodebookJobDefinitionPickerDialogComponent());
     return { component, dialogRef };
   };
 

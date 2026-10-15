@@ -47,7 +47,10 @@ protokollieren Abschluss, Fehler und Abbruch im Worker.
 
 Upload- und Testcenter-Importe speichern jeden Persistenzstapel zusammen mit
 einem Ereignis mit Mengen, Phase und Herkunft. Ein Audit-Fehler rollt den
-betroffenen Stapel einschliesslich ersetzter Daten zurueck. Der Gesamtimport ist
+betroffenen Stapel einschliesslich ersetzter Daten zurueck. Auch Persistenzfehler
+vor einer SQL-Abfrage brechen den auditierten Stapel ab; sie duerfen nicht als
+erfolgreicher Teilimport protokolliert werden. Parallel gestartete Schreibvorgaenge
+werden vor dem Rollback vollstaendig abgewartet. Der Gesamtimport ist
 nicht atomar: Fruehere bestaetigte Stapel und ihre Ereignisse bleiben bei spaeteren
 Fehlern erhalten. Zusaetzliche Abschlussereignisse fassen den Lauf zusammen;
 ihr Ausfall wird als Warnung gemeldet und darf keinen erneuten Import ausloesen.

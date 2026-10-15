@@ -1,4 +1,7 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +16,7 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit-player.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-definition-player-dialog',
   templateUrl: './unit-definition-player-dialog.component.html',
   styleUrls: ['./unit-definition-player-dialog.component.scss'],
@@ -27,28 +31,32 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  dialogRef = inject<MatDialogRef<UnitDefinitionPlayerDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    workspaceId: number;
+    unitId: string;
+  }>(MAT_DIALOG_DATA);
 
-  unitDef: string | undefined;
-  unitPlayer: string | undefined;
+  private fileService = inject(FileService);
 
-  constructor(
-    public dialogRef: MatDialogRef<UnitDefinitionPlayerDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; unitId: string },
-    private fileService: FileService
-  ) { }
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected readonly isLoading = signal(true);
+  protected readonly errorMessage = signal<string | null>(null);
+
+  protected readonly unitDef = signal<string | undefined>(undefined);
+  protected readonly unitPlayer = signal<string | undefined>(undefined);
 
   ngOnInit(): void {
     if (this.data.workspaceId && this.data.unitId) {
       this.loadUnitData();
     } else {
-      this.errorMessage = 'Ungültige Parameter für die Aufgabendefinition.';
-      this.isLoading = false;
+      this.errorMessage.set('Ungültige Parameter für die Aufgabendefinition.');
+      this.isLoading.set(false);
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
@@ -56,11 +64,11 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     const unitId = this.data.unitId.toUpperCase();
 
-    this.fileService.getUnit(workspaceId, unitId).subscribe({
+    this.fileService.getUnit(workspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
-          this.errorMessage = `Aufgabe ${unitId} wurde nicht gefunden.`;
-          this.isLoading = false;
+          this.errorMessage.set(`Aufgabe ${unitId} wurde nicht gefunden.`);
+          this.isLoading.set(false);
           return;
         }
 
@@ -80,8 +88,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         }
 
         if (!playerRef) {
-          this.errorMessage = 'Kein Player in der Aufgabendefinition gefunden.';
-          this.isLoading = false;
+          this.errorMessage.set('Kein Player in der Aufgabendefinition gefunden.');
+          this.isLoading.set(false);
           return;
         }
 
@@ -92,12 +100,12 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           player: this.fileService.getPlayer(workspaceId, normalizedPlayerId)
         }).pipe(
           catchError(() => {
-            this.errorMessage = 'Fehler beim Laden der Aufgabendefinition.';
-            this.isLoading = false;
+            this.errorMessage.set('Fehler beim Laden der Aufgabendefinition.');
+            this.isLoading.set(false);
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
-        ).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
-          if (this.errorMessage) {
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
+          if (this.errorMessage()) {
             return;
           }
 
@@ -105,19 +113,19 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           const playerFile = result.player[0];
 
           if (!defFile || !playerFile) {
-            this.errorMessage = 'Aufgabendefinition oder Player konnten nicht geladen werden.';
-            this.isLoading = false;
+            this.errorMessage.set('Aufgabendefinition oder Player konnten nicht geladen werden.');
+            this.isLoading.set(false);
             return;
           }
 
-          this.unitDef = defFile.data;
-          this.unitPlayer = playerFile.data;
-          this.isLoading = false;
+          this.unitDef.set(defFile.data);
+          this.unitPlayer.set(playerFile.data);
+          this.isLoading.set(false);
         });
       },
       error: () => {
-        this.errorMessage = 'Fehler beim Laden der Aufgabendaten.';
-        this.isLoading = false;
+        this.errorMessage.set('Fehler beim Laden der Aufgabendaten.');
+        this.isLoading.set(false);
       }
     });
   }
