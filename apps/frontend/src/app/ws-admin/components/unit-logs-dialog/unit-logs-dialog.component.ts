@@ -13,7 +13,7 @@ import { MatButton } from '@angular/material/button';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-unit-logs-dialog',
+  selector: 'coding-box-unit-logs-dialog',
   template: `
     <div class="dialog-header">
       <h1 mat-dialog-title>Unit Logs</h1>
@@ -234,7 +234,7 @@ import { MatButton } from '@angular/material/button';
 })
 export class UnitLogsDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<UnitLogsDialogComponent>>(MatDialogRef);
-  data = inject<{
+  protected data = inject<{
     logs: {
       id: number;
       unitid: number;
@@ -245,7 +245,7 @@ export class UnitLogsDialogComponent implements OnInit {
     title?: string;
   }>(MAT_DIALOG_DATA);
 
-  filteredLogs: {
+  protected filteredLogs: {
     id: number;
     unitid: number;
     ts: string;
@@ -253,7 +253,7 @@ export class UnitLogsDialogComponent implements OnInit {
     parameter: string;
   }[] = [];
 
-  processingDuration: string | null = null;
+  protected processingDuration: string | null = null;
 
   ngOnInit(): void {
     this.filteredLogs = [...this.data.logs];
@@ -303,7 +303,7 @@ export class UnitLogsDialogComponent implements OnInit {
   /**
    * Formats a timestamp to a readable date and time
    */
-  formatTimestamp(timestamp: string): string {
+  protected formatTimestamp(timestamp: string): string {
     const date = new Date(Number(timestamp));
     return date.toLocaleString('de-DE', {
       year: 'numeric',
@@ -318,7 +318,7 @@ export class UnitLogsDialogComponent implements OnInit {
   /**
    * Filters logs based on search input
    */
-  filterLogs(event: Event): void {
+  protected filterLogs(event: Event): void {
     const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
 
     if (!searchTerm) {
@@ -350,7 +350,7 @@ export class UnitLogsDialogComponent implements OnInit {
   /**
    * Closes the dialog
    */
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 }

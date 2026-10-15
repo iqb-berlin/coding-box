@@ -408,9 +408,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private deleteTaskSubscription: Subscription | null = null;
   private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
-  selection = new SelectionModel<P>(true, []);
-  dataSource!: MatTableDataSource<P>;
-  displayedColumns: string[] = [
+  protected selection = new SelectionModel<P>(true, []);
+  protected dataSource!: MatTableDataSource<P>;
+  protected displayedColumns: string[] = [
     'select',
     'code',
     'group',
@@ -430,20 +430,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     [key: string]: unknown;
   }[]>([]);
 
-  readonly totalRecords = signal<number>(0);
-  readonly pageSize = signal<number>(50);
-  readonly pageIndex = signal<number>(0);
+  protected readonly totalRecords = signal<number>(0);
+  protected readonly pageSize = signal<number>(50);
+  protected readonly pageIndex = signal<number>(0);
   readonly selectedUnit = signal<Unit | undefined>(undefined);
   readonly testPerson = signal<P | null>(null);
-  readonly selectedBooklet = signal<Booklet | string>('');
-  readonly isLoading = signal<boolean>(true);
-  readonly isUploadingResults = signal<boolean>(false);
-  readonly isSearching = signal<boolean>(false);
+  protected readonly selectedBooklet = signal<Booklet | string>('');
+  protected readonly isLoading = signal<boolean>(true);
+  protected readonly isUploadingResults = signal<boolean>(false);
+  protected readonly isSearching = signal<boolean>(false);
   readonly isLoadingBooklets = signal<boolean>(false);
-  readonly isDeletingTestPersons = signal<boolean>(false);
+  protected readonly isDeletingTestPersons = signal<boolean>(false);
   readonly activeDeleteTask = signal<ValidationTaskDto | null>(null);
-  readonly deleteProgress = signal<number>(0);
-  readonly deleteProgressMessage = signal<string>('');
+  protected readonly deleteProgress = signal<number>(0);
+  protected readonly deleteProgressMessage = signal<string>('');
   readonly unitTags = signal<UnitTagDto[]>([]);
   readonly unitTagsMap = signal<Map<number, UnitTagDto[]>>(new Map());
   readonly unitNotes = signal<UnitNoteDto[]>([]);
@@ -473,11 +473,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private codingFreshnessStatusRequestGeneration = 0;
 
   readonly exportJobId = signal<string | null>(null);
-  readonly isExporting = signal<boolean>(false);
+  protected readonly isExporting = signal<boolean>(false);
   readonly exportJobStatus = signal<string | null>(null);
   readonly exportJobProgress = signal<number>(0);
   readonly exportTypeInProgress = signal<'test-results' | 'test-logs' | null>(null);
-  readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
+  protected readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -565,7 +565,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.stopExportStatusPolling();
   }
 
-  toggleTableView(): void {
+  protected toggleTableView(): void {
     this.isTableView.set(!this.isTableView());
   }
 
@@ -624,7 +624,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  isAnyValidationRunning(): boolean {
+  protected isAnyValidationRunning(): boolean {
     if (!this.appService.selectedWorkspaceId) {
       return false;
     }
@@ -733,7 +733,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  getUnitTags(unitId: number): UnitTagDto[] {
+  protected getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap().get(unitId) || [];
   }
 
@@ -872,7 +872,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  canReplayBooklet(): boolean {
+  protected canReplayBooklet(): boolean {
     return !!this.testPerson()?.login?.trim();
   }
 
@@ -890,7 +890,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     ].join('@');
   }
 
-  replayUnit() {
+  protected replayUnit() {
     if (
       !this.selectedUnit() ||
       !this.testPerson() ||
@@ -937,13 +937,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  applyFilter(event: Event): void {
+  protected applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
     this.isSearching.set(true);
     this.searchSubject.next(filterValue);
   }
 
-  openBookletLogsDialog(booklet: Booklet) {
+  protected openBookletLogsDialog(booklet: Booklet) {
     if (!booklet.logs || booklet.logs.length === 0) {
       this.snackBar.open('Keine Logs für dieses Testheft vorhanden', 'Info', {
         duration: 3000
@@ -961,7 +961,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openUnitLogsDialog() {
+  protected openUnitLogsDialog() {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !this.logs() || this.logs().length === 0) {
@@ -982,7 +982,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openTagsDialog() {
+  protected openTagsDialog() {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
@@ -1013,7 +1013,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openNotesDialog() {
+  protected openNotesDialog() {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
@@ -1044,7 +1044,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  onUnitClick(unit: Unit, booklet: Booklet): void {
+  protected onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
       status: response.status,
@@ -1115,7 +1115,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  hasUnitNotes(unitId: number): boolean {
+  protected hasUnitNotes(unitId: number): boolean {
     if (!unitId || !this.unitNotesMap().has(unitId)) {
       return false;
     }
@@ -1123,7 +1123,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return notes.length > 0;
   }
 
-  setSelectedBooklet(booklet: Booklet) {
+  protected setSelectedBooklet(booklet: Booklet) {
     this.selectedBooklet.set(booklet.name);
   }
 
@@ -1154,7 +1154,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  isBookletComplete(booklet: Booklet): boolean {
+  protected isBookletComplete(booklet: Booklet): boolean {
     if (
       !booklet.logs ||
       !Array.isArray(booklet.logs) ||
@@ -1183,7 +1183,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return allUnitsVisited && unitAliases.length > 0;
   }
 
-  hasShortProcessingTime(booklet: Booklet): boolean {
+  protected hasShortProcessingTime(booklet: Booklet): boolean {
     if (
       !booklet.logs ||
       !Array.isArray(booklet.logs) ||
@@ -1199,7 +1199,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  hasGeogebraResponse(unit: Unit): boolean {
+  protected hasGeogebraResponse(unit: Unit): boolean {
     if (!unit || !unit.results || !Array.isArray(unit.results)) {
       return false;
     }
@@ -1209,7 +1209,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getColor(status: string): string {
+  protected getColor(status: string): string {
     switch (status) {
       case 'VALUE_CHANGED':
         return 'green';
@@ -1231,7 +1231,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return searchInput ? searchInput.value : '';
   }
 
-  clearSearch(): void {
+  protected clearSearch(): void {
     const searchInput = document.querySelector(
       '.search-input'
     ) as HTMLInputElement;
@@ -1241,7 +1241,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  onPaginatorChange(event: PageEvent): void {
+  protected onPaginatorChange(event: PageEvent): void {
     this.pageSize.set(event.pageSize);
     this.pageIndex.set(event.pageIndex);
     this.createTestResultsList(
@@ -1402,7 +1402,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  loadLogAnomalySummaryOnDemand(): void {
+  protected loadLogAnomalySummaryOnDemand(): void {
     this.loadLogAnomalySummary();
   }
 
@@ -1414,7 +1414,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   readonly hasLogAnomalySummary = computed<boolean>(() => !!this.logAnomalySummary());
 
-  readonly logAnomalyAffectedPercent = computed<number>(() => {
+  protected readonly logAnomalyAffectedPercent = computed<number>(() => {
     const total = Number(this.logAnomalySummary()?.totalBooklets || 0);
     if (total <= 0) {
       return 0;
@@ -1424,7 +1424,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     ) / 10;
   });
 
-  get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
+  protected get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
     const byCode = this.logAnomalySummary()?.byCode || {};
     return Object.entries(byCode)
       .map(([code, count]) => ({
@@ -1466,7 +1466,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.isUploadingResults.set(false);
   }
 
-  openLogAnomalyDetailsDialog(): void {
+  protected openLogAnomalyDetailsDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -1638,7 +1638,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly overviewResponseStatusTotal = computed<number>(() => Object.values(this.overview()?.responseStatusCounts || {})
     .reduce((sum, count) => sum + (Number(count) || 0), 0));
 
-  get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
+  protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
     const map = (this.overview()?.responseStatusCounts || {}) as Record<
     string,
     number
@@ -1699,7 +1699,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
   }
 
-  get codingFreshnessExplanationText(): string {
+  protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
@@ -1735,7 +1735,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       'Kodierung öffnen';
   });
 
-  readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
+  protected readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
     'keyboard' :
     'rule'));
 
@@ -1801,7 +1801,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  openCodingFreshnessTarget(): void {
+  protected openCodingFreshnessTarget(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -1867,7 +1867,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Math.round((Number(count) / t) * 1000) / 10;
   }
 
-  openSessionDistributionsDialog(): void {
+  protected openSessionDistributionsDialog(): void {
     const overviewValue = this.overview();
 
     if (!overviewValue) {
@@ -1885,7 +1885,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openResponseStatusInTable(status: string): void {
+  protected openResponseStatusInTable(status: string): void {
     this.quickSearchTableFilters.set({ responseStatus: status });
     this.forceShowLogAnomalyTableColumn.set(false);
     this.isTableView.set(true);
@@ -1908,13 +1908,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return `${status}${descriptionPart}`;
   }
 
-  isAllSelected(): boolean {
+  protected isAllSelected(): boolean {
     const numSelected = this.selection.selected.length;
     const numRows = this.dataSource?.data.length ?? 0;
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     if (this.isAllSelected()) {
       this.selection.clear();
     } else {
@@ -1922,7 +1922,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  toggleRowSelection(row: P): void {
+  protected toggleRowSelection(row: P): void {
     this.selection.toggle(row);
   }
 
@@ -2421,7 +2421,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  deleteSelectedPersons(): void {
+  protected deleteSelectedPersons(): void {
     const selectedTestPersons = this.selection.selected;
     if (selectedTestPersons.length === 0) {
       return;
@@ -2433,14 +2433,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteFilteredPersons(): void {
+  protected deleteFilteredPersons(): void {
     this.confirmAndStartDelete({
       scope: 'filteredPersons',
       searchText: this.getCurrentSearchText()
     });
   }
 
-  deleteSelectedGroups(): void {
+  protected deleteSelectedGroups(): void {
     const groups = Array.from(
       new Set(
         this.selection.selected
@@ -2462,7 +2462,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteBookletsByName(bookletName: string): void {
+  protected deleteBookletsByName(bookletName: string): void {
     if (!bookletName) {
       return;
     }
@@ -2473,7 +2473,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteUnitsByName(unit: Unit): void {
+  protected deleteUnitsByName(unit: Unit): void {
     const unitName = unit.alias || unit.name;
     if (!unitName) {
       return;
@@ -2485,7 +2485,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openResponseCleanupDialog(): void {
+  protected openResponseCleanupDialog(): void {
     if (this.isDeleteJobRunning()) {
       return;
     }
@@ -2507,7 +2507,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  isDeleteJobRunning(): boolean {
+  protected isDeleteJobRunning(): boolean {
     return this.activeDeleteTask()?.status === 'pending' ||
       this.activeDeleteTask()?.status === 'processing' ||
       this.isDeletingTestPersons();
@@ -2786,7 +2786,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.unitNotesMap.set(new Map());
   }
 
-  openTestResultsSearchDialog(): void {
+  protected openTestResultsSearchDialog(): void {
     const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
@@ -3051,7 +3051,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openValidationDialog(): void {
+  protected openValidationDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const shouldAutoStart = workspaceId ?
       !this.validationTaskStateService.hasAnyValidationResult(workspaceId) :
@@ -3088,7 +3088,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  openVariableAnalysisDialog(): void {
+  protected openVariableAnalysisDialog(): void {
     const loadingSnackBar = this.snackBar.open('Lade Analyse-Aufträge...', '', {
       duration: 3000
     });
@@ -3218,7 +3218,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  openExportDialog(): void {
+  protected openExportDialog(): void {
     const dialogRef = this.dialog.open(TestResultsExportDialogComponent, {
       width: '500px',
       data: {

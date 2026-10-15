@@ -312,17 +312,17 @@ export interface CodingImportFormatDialogResult {
   `]
 })
 export class CodingImportFormatDialogComponent {
-  selectedVersion?: 'v1' | 'v2' | 'v3';
-  existingCodingMode: CodingImportExistingCodingMode = 'skip-conflicts';
+  protected selectedVersion?: 'v1' | 'v2' | 'v3';
+  protected existingCodingMode: CodingImportExistingCodingMode = 'skip-conflicts';
 
   constructor(
     private dialogRef: MatDialogRef<CodingImportFormatDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingImportFormatDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: CodingImportFormatDialogData
   ) {
     this.selectedVersion = data.selectedVersion || data.availableVersions?.[0];
   }
 
-  getFormatLabel(): string {
+  protected getFormatLabel(): string {
     switch (this.data.detectedFormat) {
       case 'external-coding':
         return 'Kodierungen aus Datei';
@@ -339,7 +339,7 @@ export class CodingImportFormatDialogComponent {
     }
   }
 
-  getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
+  protected getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
     const labels = {
       v1: 'v1 - erster Autocoder-Lauf',
       v2: 'v2 - manuelle Kodierung',
@@ -348,7 +348,7 @@ export class CodingImportFormatDialogComponent {
     return labels[version];
   }
 
-  confirm(): void {
+  protected confirm(): void {
     if (!this.data.canImport) {
       return;
     }
@@ -362,7 +362,7 @@ export class CodingImportFormatDialogComponent {
     } satisfies CodingImportFormatDialogResult);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }

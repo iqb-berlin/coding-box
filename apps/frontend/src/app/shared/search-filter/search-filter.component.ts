@@ -40,7 +40,7 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly filterInput = viewChild.required<ElementRef<HTMLInputElement>>('filterInput');
 
-  readonly value = signal<string>('');
+  protected readonly value = signal<string>('');
   readonly title = input.required<string>();
   readonly initialValue = input<string>('');
   readonly invalid = input<boolean>(false);
@@ -75,7 +75,7 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  clearFilter(): void {
+  protected clearFilter(): void {
     this.value.set('');
     this.filterInput().nativeElement.value = '';
     this.valueChange.emit(this.value());

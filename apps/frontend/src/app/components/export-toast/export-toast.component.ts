@@ -251,7 +251,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     this.exportJobService.cancelJob(job);
   }
 
-  isItemMatrixResolutionError(
+  protected isItemMatrixResolutionError(
     job: ExportJob
   ): job is ExportJob & ItemMatrixExportJobErrorDto {
     return job.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;

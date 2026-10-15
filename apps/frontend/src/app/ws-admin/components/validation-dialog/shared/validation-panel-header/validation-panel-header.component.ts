@@ -13,13 +13,13 @@ export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="validation-panel-header" [ngClass]="'validation-' + status">
+    <div class="validation-panel-header" [class]="'validation-' + status">
       <div class="header-title">
         <mat-icon>{{ getStatusIcon() }}</mat-icon>
         <span class="title-text">{{ title }}</span>
       </div>
       <div class="header-badge">
-        <span class="validation-badge" [ngClass]="'validation-' + status">
+        <span class="validation-badge" [class]="'validation-' + status">
           {{ getBadgeText() }}
         </span>
       </div>
@@ -103,7 +103,7 @@ export class ValidationPanelHeaderComponent {
   @Input() badgeText?: string;
   @Input() errorCount?: number;
 
-  getStatusIcon(): string {
+  protected getStatusIcon(): string {
     switch (this.status) {
       case 'running':
         return 'hourglass_empty';
@@ -116,7 +116,7 @@ export class ValidationPanelHeaderComponent {
     }
   }
 
-  getBadgeText(): string {
+  protected getBadgeText(): string {
     if (this.badgeText) {
       return this.badgeText;
     }

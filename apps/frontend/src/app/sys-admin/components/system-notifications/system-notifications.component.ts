@@ -80,17 +80,17 @@ export class SystemNotificationsComponent implements OnInit {
 
   private readonly dialog = inject(MatDialog);
 
-  readonly types = Object.values(SystemNotificationType);
+  protected readonly types = Object.values(SystemNotificationType);
 
-  readonly severities = Object.values(SystemNotificationSeverity);
+  protected readonly severities = Object.values(SystemNotificationSeverity);
 
-  readonly columns = ['status', 'type', 'title', 'window', 'actions'];
+  protected readonly columns = ['status', 'type', 'title', 'window', 'actions'];
 
-  readonly notifications = signal<SystemNotificationDto[]>([]);
+  protected readonly notifications = signal<SystemNotificationDto[]>([]);
 
-  readonly editingId = signal<number | null>(null);
+  protected readonly editingId = signal<number | null>(null);
 
-  readonly loading = signal(false);
+  protected readonly loading = signal(false);
 
   readonly form = this.formBuilder.nonNullable.group({
     type: [SystemNotificationType.Info, Validators.required],
@@ -123,7 +123,7 @@ export class SystemNotificationsComponent implements OnInit {
     });
   }
 
-  edit(notification: SystemNotificationDto): void {
+  protected edit(notification: SystemNotificationDto): void {
     this.editingId.set(notification.id);
     this.form.reset({
       type: notification.type,
@@ -139,7 +139,7 @@ export class SystemNotificationsComponent implements OnInit {
     });
   }
 
-  cancelEdit(): void {
+  protected cancelEdit(): void {
     this.editingId.set(null);
     this.form.reset({
       type: SystemNotificationType.Info,
@@ -222,7 +222,7 @@ export class SystemNotificationsComponent implements OnInit {
     return 'active';
   }
 
-  preview(): SystemNotificationDto {
+  protected preview(): SystemNotificationDto {
     const value = this.form.getRawValue();
     return {
       id: this.editingId() ?? 0,

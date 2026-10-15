@@ -174,18 +174,18 @@ export type TestResultsExportDialogData = {
 export class TestResultsExportDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<TestResultsExportDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsExportDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: TestResultsExportDialogData
   ) {}
 
-  selectExportType(type: 'results' | 'logs'): void {
+  protected selectExportType(type: 'results' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
-  downloadExport(): void {
+  protected downloadExport(): void {
     this.dialogRef.close({ type: 'download', jobId: this.data.exportJobId });
   }
 
-  cancel(): void {
+  protected cancel(): void {
     if (this.data.isExporting && this.data.exportJobId) {
       this.dialogRef.close({ type: 'cancel', jobId: this.data.exportJobId });
       return;

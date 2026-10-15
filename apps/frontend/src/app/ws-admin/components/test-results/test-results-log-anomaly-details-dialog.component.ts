@@ -219,14 +219,14 @@ export class TestResultsLogAnomalyDetailsDialogComponent {
     TestResultsLogAnomalyDetailsDialogComponent,
     TestResultsLogAnomalyDetailsDialogResult | undefined
     >,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsLogAnomalyDetailsDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: TestResultsLogAnomalyDetailsDialogData
   ) {}
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  getSeverityLabel(severity: LogAnomalySummary['severity']): string {
+  protected getSeverityLabel(severity: LogAnomalySummary['severity']): string {
     switch (severity) {
       case 'critical':
         return 'kritisch';
@@ -239,7 +239,7 @@ export class TestResultsLogAnomalyDetailsDialogComponent {
     }
   }
 
-  getAnomalyTooltip(anomaly: LogAnomalySummary): string {
+  protected getAnomalyTooltip(anomaly: LogAnomalySummary): string {
     const count = anomaly.count > 1 ? ` (${anomaly.count}x)` : '';
     return `${anomaly.label}${count}: ${anomaly.evidence}`;
   }

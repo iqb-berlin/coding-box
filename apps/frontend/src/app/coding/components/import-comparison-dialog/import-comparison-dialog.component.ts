@@ -59,7 +59,7 @@ export interface ImportComparisonData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-import-comparison-dialog',
+  selector: 'coding-box-import-comparison-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -463,7 +463,7 @@ export interface ImportComparisonData {
   `]
 })
 export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'unitAlias',
     'variableId',
     'personLogin',
@@ -479,8 +479,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     'updatedScore'
   ];
 
-  dataSource = new MatTableDataSource<ImportComparisonRow>([]);
-  pageSize = 100;
+  protected dataSource = new MatTableDataSource<ImportComparisonRow>([]);
+  protected pageSize = 100;
   isLoading = false;
   applyProgress = -1;
 
@@ -488,7 +488,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     public dialogRef: MatDialogRef<ImportComparisonDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ImportComparisonData,
+    @Inject(MAT_DIALOG_DATA) protected data: ImportComparisonData,
     private translateService: TranslateService,
     private testPersonCodingService: TestPersonCodingService,
     private snackBar: MatSnackBar
@@ -502,16 +502,16 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     this.pollingSubscription?.unsubscribe();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageSize = event.pageSize;
     this.updateDataSource();
   }
 
-  onPageSizeChange(): void {
+  protected onPageSizeChange(): void {
     this.updateDataSource();
   }
 
-  getActionLabel(row: ImportComparisonRow): string {
+  protected getActionLabel(row: ImportComparisonRow): string {
     if (row.importAction === 'skip') {
       return row.hasConflict ? 'Konflikt übersprungen' : 'Übersprungen';
     }
@@ -532,7 +532,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     // In a real implementation, you might want to slice the data manually
   }
 
-  downloadComparisonTable(): void {
+  protected downloadComparisonTable(): void {
     if (!this.data.affectedRows || this.data.affectedRows.length === 0) {
       return;
     }
@@ -625,11 +625,11 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 
-  applyImport(): void {
+  protected applyImport(): void {
     if (!this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
       return;
     }

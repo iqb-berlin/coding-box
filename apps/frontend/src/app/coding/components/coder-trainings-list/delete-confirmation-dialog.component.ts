@@ -9,7 +9,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'delete-confirmation-dialog',
+  selector: 'coding-box-delete-confirmation-dialog',
   standalone: true,
   imports: [MatButtonModule, MatDialogTitle, MatDialogContent, MatDialogActions, TranslateModule],
   template: `
@@ -34,14 +34,14 @@ import { CoderTraining } from '../../models/coder-training.model';
 export class DeleteConfirmationDialog {
   constructor(
     public dialogRef: MatDialogRef<DeleteConfirmationDialog>,
-    @Inject(MAT_DIALOG_DATA) public data: { training: CoderTraining }
+    @Inject(MAT_DIALOG_DATA) protected data: { training: CoderTraining }
   ) {}
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 }

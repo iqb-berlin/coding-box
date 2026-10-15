@@ -151,7 +151,7 @@ implements AfterViewInit, OnChanges {
   @Output() selectionChange = new EventEmitter<Set<unknown>>();
   @Output() linkClick = new EventEmitter<{ item: T; columnKey: string }>();
 
-  dataSource = new MatTableDataSource<T>([]);
+  protected dataSource = new MatTableDataSource<T>([]);
 
   ngAfterViewInit(): void {
     this.updateDataSource();
@@ -163,20 +163,20 @@ implements AfterViewInit, OnChanges {
     }
   }
 
-  get displayedColumns(): string[] {
+  protected get displayedColumns(): string[] {
     return this.columns.map(col => col.key);
   }
 
-  getValue(item: T, key: string): unknown {
+  protected getValue(item: T, key: string): unknown {
     return (item as Record<string, unknown>)[key];
   }
 
-  isSelected(item: T): boolean {
+  protected isSelected(item: T): boolean {
     const itemKey = this.getValue(item, this.selectionKey);
     return this.selectedItems.has(itemKey);
   }
 
-  canSelect(item: T): boolean {
+  protected canSelect(item: T): boolean {
     const itemKey = this.getValue(item, this.selectionKey);
     return itemKey !== null && itemKey !== undefined;
   }
@@ -197,11 +197,11 @@ implements AfterViewInit, OnChanges {
     this.selectionChange.emit(newSelection);
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageChange.emit(event);
   }
 
-  onLinkClick(item: T, columnKey: string): void {
+  protected onLinkClick(item: T, columnKey: string): void {
     this.linkClick.emit({ item, columnKey });
   }
 

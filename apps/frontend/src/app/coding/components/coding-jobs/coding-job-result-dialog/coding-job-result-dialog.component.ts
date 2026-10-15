@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { CommonModule, NgClass } from '@angular/common';
+import { CommonModule } from '@angular/common';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -114,7 +114,6 @@ interface MissingPreviewLookup {
     MatProgressSpinner,
     MatButtonModule,
     MatIcon,
-    NgClass,
     MatTooltip
   ]
 })
@@ -132,9 +131,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   readonly isLoading = signal(true);
   readonly isNotesUnavailable = signal(false);
-  readonly isMissingProfileUnavailable = signal(false);
+  protected readonly isMissingProfileUnavailable = signal(false);
   dataSource = new MatTableDataSource<CodingResult>([]);
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'unitName',
     'testPerson',
     'variableId',
@@ -155,12 +154,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     [-4, 'mci']
   ]);
 
-  readonly pageSize = 50;
-  readonly pageSizeOptions = [25, 50, 100];
+  protected readonly pageSize = 50;
+  protected readonly pageSizeOptions = [25, 50, 100];
 
-  readonly unitNameFilter = signal('');
-  readonly variableFilter = signal('');
-  readonly codingIssueFilter = signal('');
+  protected readonly unitNameFilter = signal('');
+  protected readonly variableFilter = signal('');
+  protected readonly codingIssueFilter = signal('');
   readonly testPersonFilter = signal('');
 
   constructor(
@@ -496,43 +495,43 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.paginator?.firstPage();
   }
 
-  onUnitNameFilterChange(): void {
+  protected onUnitNameFilterChange(): void {
     this.applyFilters();
   }
 
-  onVariableFilterChange(): void {
+  protected onVariableFilterChange(): void {
     this.applyFilters();
   }
 
-  onCodingIssueFilterChange(): void {
+  protected onCodingIssueFilterChange(): void {
     this.applyFilters();
   }
 
-  onTestPersonFilterChange(): void {
+  protected onTestPersonFilterChange(): void {
     this.applyFilters();
   }
 
-  clearUnitNameFilter(): void {
+  protected clearUnitNameFilter(): void {
     this.unitNameFilter.set('');
     this.applyFilters();
   }
 
-  clearVariableFilter(): void {
+  protected clearVariableFilter(): void {
     this.variableFilter.set('');
     this.applyFilters();
   }
 
-  clearCodingIssueFilter(): void {
+  protected clearCodingIssueFilter(): void {
     this.codingIssueFilter.set('');
     this.applyFilters();
   }
 
-  clearTestPersonFilter(): void {
+  protected clearTestPersonFilter(): void {
     this.testPersonFilter.set('');
     this.applyFilters();
   }
 
-  clearAllFilters(): void {
+  protected clearAllFilters(): void {
     this.unitNameFilter.set('');
     this.variableFilter.set('');
     this.codingIssueFilter.set('');
@@ -540,7 +539,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.applyFilters();
   }
 
-  hasActiveFilters(): boolean {
+  protected hasActiveFilters(): boolean {
     return [
       this.unitNameFilter(),
       this.variableFilter(),
@@ -553,7 +552,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return this.dataSource.filteredData.length;
   }
 
-  getTotalResultCount(): number {
+  protected getTotalResultCount(): number {
     return this.dataSource.data.length;
   }
 
@@ -561,7 +560,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return this.dataSource.data.filter(result => this.hasCode(result)).length;
   }
 
-  getReviewIssueCount(): number {
+  protected getReviewIssueCount(): number {
     return this.dataSource.data.filter(result => this.isCodingIssueOption(result)).length;
   }
 
@@ -606,7 +605,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return freshnessStatus !== 'stale_source';
   }
 
-  getOtherCodersTooltip(result: CodingResult): string {
+  protected getOtherCodersTooltip(result: CodingResult): string {
     const otherCoders = result.otherCoders || [];
     if (otherCoders.length === 0) {
       return 'Doppelkodierung erkannt';
@@ -680,7 +679,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     });
   }
 
-  getAggregationSettingsText(): string {
+  protected getAggregationSettingsText(): string {
     const job = this.data.codingJob;
 
     if (!job.aggregationSettingsVersion) {
@@ -848,7 +847,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return null;
   }
 
-  isCodingIssueOption(result: CodingResult): boolean {
+  protected isCodingIssueOption(result: CodingResult): boolean {
     return result.codingIssueOption === -1 || result.codingIssueOption === -2;
   }
 
@@ -872,7 +871,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return 'Kodierungs-Hinweis überprüfen';
   }
 
-  getEditCodingSchemeTooltip(result: CodingResult): string {
+  protected getEditCodingSchemeTooltip(result: CodingResult): string {
     if (!this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result)) {
       return 'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden';
     }
@@ -899,7 +898,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return 'Unknown';
   }
 
-  getCellClasses(result: CodingResult): string {
+  protected getCellClasses(result: CodingResult): string {
     if (this.isCodingIssueOption(result)) {
       if (result.givenCode !== undefined && result.givenCode !== null) {
         return 'uncertain-with-code';
@@ -963,7 +962,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
-  editCodingScheme(result: CodingResult): void {
+  protected editCodingScheme(result: CodingResult): void {
     if (!result || !this.isNewCodeNeeded(result)) {
       this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
       return;

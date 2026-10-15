@@ -59,7 +59,7 @@ export class UserAccessRightsDialogComponent {
     }
   }
 
-  setUsersSelection(result: UserFullDto[]): void {
+  protected setUsersSelection(result: UserFullDto[]): void {
     this.result.set(result.map(workspace => workspace.id));
   }
 }

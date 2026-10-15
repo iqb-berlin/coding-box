@@ -50,7 +50,7 @@ export class ImpressumDialogComponent implements OnInit {
 
   private readonly sanitizer = inject(DomSanitizer);
 
-  readonly legalNoticeHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
+  protected readonly legalNoticeHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
 
   ngOnInit(): void {
     this.systemSettingsService.getLegalNotice()

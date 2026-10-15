@@ -74,16 +74,16 @@ describe('VOCS preview without Zone.js', () => {
 
   function openPreview(): void {
     cy.contains('mat-row', 'DLB004.vocs').find('button').click();
-    cy.get('app-scheme-editor-dialog mat-spinner').should('be.visible');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('be.visible');
     cy.then(() => { releaseSchemerList(); });
   }
 
   it('opens the referenced 2.5.0 after delayed responses and passes the XML scheme type to the iframe', () => {
     openPreview();
     cy.wait('@schemerDownload');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('not.exist');
-    cy.get<HTMLIFrameElement>('app-scheme-editor-dialog iframe').should('be.visible').should($iframe => {
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('not.exist');
+    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should('be.visible').should($iframe => {
       expect($iframe[0].contentDocument?.body.textContent).to.contain('Schemer 2.5.0: iqb@3.0');
     });
   });
@@ -91,18 +91,18 @@ describe('VOCS preview without Zone.js', () => {
   it('explains an unavailable 2.5 reference instead of using the newer 2.8 Schemer', () => {
     missingReference = true;
     openPreview();
-    cy.get('app-scheme-editor-dialog [role="alert"]').should('contain.text', 'iqb-schemer@2.5');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
-    cy.get('app-scheme-editor-dialog iframe').should('not.exist');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog [role="alert"]').should('contain.text', 'iqb-schemer@2.5');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
+    cy.get('coding-box-scheme-editor-dialog iframe').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
   });
 
   it('ends loading with a readable explanation after a failed Schemer download', () => {
     failDownload = true;
     openPreview();
     cy.wait('@schemerDownload');
-    cy.get('app-scheme-editor-dialog [role="alert"]').should('contain.text', 'Herunterladen');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
+    cy.get('coding-box-scheme-editor-dialog [role="alert"]').should('contain.text', 'Herunterladen');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
   });
 });

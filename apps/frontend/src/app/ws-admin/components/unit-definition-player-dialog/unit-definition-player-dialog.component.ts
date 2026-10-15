@@ -30,15 +30,15 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
-  readonly isLoading = signal(true);
-  readonly errorMessage = signal<string | null>(null);
+  protected readonly isLoading = signal(true);
+  protected readonly errorMessage = signal<string | null>(null);
 
-  readonly unitDef = signal<string | undefined>(undefined);
-  readonly unitPlayer = signal<string | undefined>(undefined);
+  protected readonly unitDef = signal<string | undefined>(undefined);
+  protected readonly unitPlayer = signal<string | undefined>(undefined);
 
   constructor(
     public dialogRef: MatDialogRef<UnitDefinitionPlayerDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; unitId: string },
+    @Inject(MAT_DIALOG_DATA) protected data: { workspaceId: number; unitId: string },
     private fileService: FileService
   ) { }
 
@@ -51,7 +51,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 

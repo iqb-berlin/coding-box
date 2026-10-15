@@ -167,14 +167,14 @@ export interface ApplyDuplicateAggregationDialogData {
 export class ApplyDuplicateAggregationDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ApplyDuplicateAggregationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyDuplicateAggregationDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ApplyDuplicateAggregationDialogData
   ) { }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 }

@@ -861,7 +861,7 @@
             <div class="response-header">
               <div class="response-content">
                 <div
-                  [ngStyle]="{ 'background-color': getColor(response.status) }"
+                  [style.background-color]="getColor(response.status)"
                   class="status-indicator"
                 ></div>
                 <span class="variable-id">{{ response.variableid }}</span>

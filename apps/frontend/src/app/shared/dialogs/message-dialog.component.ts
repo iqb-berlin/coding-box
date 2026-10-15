@@ -39,7 +39,7 @@ export enum MessageType {
   imports: [MatDialogTitle, MatIcon, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class MessageDialogComponent implements OnInit {
-  messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
+  protected messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
   ngOnInit(): void {
     if ((typeof this.messageData.title === 'undefined') || (this.messageData.title.length === 0)) {
       switch (this.messageData.type) {
