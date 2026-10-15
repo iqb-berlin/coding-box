@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -55,7 +55,6 @@ interface CodebookUnitOption {
 }
 
 @Component({
-  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-coding-book',
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
