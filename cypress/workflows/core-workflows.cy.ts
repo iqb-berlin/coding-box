@@ -47,7 +47,8 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
       cy.get('#kc-login').click();
     });
     cy.wait('@loginToken', { log: false }).its('response.statusCode').should('eq', 200);
-    cy.wait('@authData', { log: false }).its('response.statusCode').should('eq', 200);
+    // Re-login can validate unchanged browser-cached auth data with an ETag.
+    cy.wait('@authData', { log: false }).its('response.statusCode').should('be.oneOf', [200, 304]);
     cy.get('coding-box-home').should('be.visible');
   }
 
