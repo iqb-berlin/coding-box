@@ -779,9 +779,22 @@ export class CodingJobService {
       );
     }
 
+    await this.assertAssignedCoderAccess(codingJobId, workspaceId, userId);
+  }
+
+  private async assertAssignedCoderAccess(
+    codingJobId: number,
+    workspaceId: number,
+    userId: number,
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      throw new ForbiddenException('An authenticated assigned coder is required');
+    }
     const canCode = await this.usersService.canUserCodeInWorkspace(
       userId,
-      workspaceId
+      workspaceId,
+      manager
     );
     if (!canCode) {
       throw new ForbiddenException(
@@ -789,7 +802,8 @@ export class CodingJobService {
       );
     }
 
-    const assignedCount = await this.codingJobCoderRepository.count({
+    const repository = manager ? manager.getRepository(CodingJobCoder) : this.codingJobCoderRepository;
+    const assignedCount = await repository.count({
       where: {
         coding_job_id: codingJobId,
         user_id: userId
@@ -2666,7 +2680,7 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     return this.withLockedCodingJob(id, workspaceId, async (codingJob, manager) => {
       if (assignedCoderAction) {
-        await this.assertUserCanCodeCodingJob(id, workspaceId, actorUserId as number);
+        await this.assertAssignedCoderAccess(id, workspaceId, actorUserId as number, manager);
         if (Object.keys(updateCodingJobDto).some(key => key !== 'status')) {
           throw new ForbiddenException('Assigned coders may only change their coding status');
         }
@@ -2900,6 +2914,7 @@ export class CodingJobService {
     actorUserId?: number
   ): Promise<CodingJob> {
     return this.withLockedCodingJob(id, workspaceId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(id, workspaceId, actorUserId as number, manager);
       if (
         isProtectedCodingJobStatus(codingJob.status) ||
         (codingJob.status === 'completed' && status === 'paused') ||
@@ -3382,9 +3397,11 @@ export class CodingJobService {
 
   async saveCodingProgress(
     codingJobId: number,
-    progress: SaveCodingProgressDto
+    progress: SaveCodingProgressDto,
+    actorUserId: number
   ): Promise<CodingJob> {
     return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(codingJobId, codingJob.workspace_id, actorUserId, manager);
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
@@ -4231,9 +4248,11 @@ export class CodingJobService {
 
   async saveCodingNotes(
     codingJobId: number,
-    notesDto: SaveCodingNotesDto
+    notesDto: SaveCodingNotesDto,
+    actorUserId: number
   ): Promise<CodingJob> {
     return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(codingJobId, codingJob.workspace_id, actorUserId, manager);
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
