@@ -8,6 +8,7 @@ import { VariableBundleManagerComponent } from './variable-bundle-manager.compon
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import { UserService } from '../../../shared/services/user/user.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 
 const bundle: VariableBundle = {
@@ -16,7 +17,7 @@ const bundle: VariableBundle = {
 
 describe('Variable bundle request ownership without ZoneJS', () => {
   let fixture: ComponentFixture<VariableBundleManagerComponent>;
-  let workspace: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number> };
+  let workspace: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number>; authData: { userId: number; isAdmin: boolean } };
   let lists: Subject<PaginatedBundles>[];
   let preparations: Subject<Variable[]>[];
   let result: Subject<VariableBundle | boolean>;
@@ -26,7 +27,7 @@ describe('Variable bundle request ownership without ZoneJS', () => {
   let snackBar: { open: jest.Mock };
 
   beforeEach(async () => {
-    workspace = { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>() };
+    workspace = { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>(), authData: { userId: 7, isAdmin: false } };
     lists = [];
     preparations = [];
     result = new Subject<VariableBundle | boolean>();
@@ -43,6 +44,7 @@ describe('Variable bundle request ownership without ZoneJS', () => {
       imports: [VariableBundleManagerComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
         { provide: AppService, useValue: workspace },
         { provide: VariableBundleService, useValue: service },
         { provide: MatDialog, useValue: dialogs },

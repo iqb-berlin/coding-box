@@ -11,12 +11,13 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { AppService } from '../../../core/services/app.service';
+import { UserService } from '../../../shared/services/user/user.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 
 describe('CodingJobDefinitionsComponent in zoneless mode', () => {
   async function createBulkWorkflow() {
-    const appService = { selectedWorkspaceId: 1 };
+    const appService = { selectedWorkspaceId: 1, authData: { userId: 7, isAdmin: false } };
     const backend = {
       getJobDefinitions: jest.fn().mockReturnValue(of([])),
       previewCodingJobFromDefinition: jest.fn().mockReturnValue(of({
@@ -38,6 +39,7 @@ describe('CodingJobDefinitionsComponent in zoneless mode', () => {
       providers: [
         provideZonelessChangeDetection(), provideHttpClient(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
+        { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
         { provide: AppService, useValue: appService },
         { provide: MatDialog, useValue: dialog },
         { provide: MatSnackBar, useValue: snackBar },
@@ -135,7 +137,8 @@ describe('CodingJobDefinitionsComponent in zoneless mode', () => {
         provideHttpClient(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, authData: { userId: 7, isAdmin: false } } },
         { provide: CodingJobService, useValue: { jobsCreatedEvent: { emit: jest.fn() } } },
         { provide: CoderService, useValue: { getCoders: jest.fn().mockReturnValue(of([])) } },
         {
