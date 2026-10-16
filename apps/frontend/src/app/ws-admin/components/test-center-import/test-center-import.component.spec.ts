@@ -93,6 +93,322 @@ describe('TestCenterImportComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('interrupted result imports', () => {
+    const result = (group: string, success = true): Result => ({
+      success,
+      testFiles: 0,
+      responses: 1,
+      logs: 0,
+      persons: 10,
+      booklets: 20,
+      units: 30,
+      importedGroups: success ? [group] : [],
+      issues: success ? [] : [{ level: 'error', message: 'Antworten konnten nicht gespeichert werden.' }]
+    });
+    const progress = (status: 'running' | 'completed' | 'failed', importResult?: Result) => ({
+      importRunId: 'run',
+      status,
+      totalPlanned: 1,
+      totalProcessed: 0,
+      totalUploaded: 0,
+      totalFailed: 0,
+      options: [],
+      updatedAt: Date.now(),
+      currentGroup: 'g1',
+      result: importResult
+    });
+
+    beforeEach(() => {
+      mockDialogRef.close.mockClear();
+      component.authenticated.set(true);
+      component.showTestGroups.set(true);
+      component.workspaces.set([{
+        id: 'tc', label: 'TC', type: 'tc', flags: { mode: 'full' }
+      }]);
+      component.loginForm.patchValue({ testCenter: 1 });
+      component.importFilesForm.patchValue({ workspace: 'tc', responses: true });
+      component.testGroups.set(['g1', 'g2', 'g3'].map(groupName => ({
+        groupName,
+        groupLabel: groupName,
+        bookletsStarted: 1,
+        numUnitsTotal: 1,
+        numUnitsMin: 1,
+        numUnitsMax: 1,
+        numUnitsAvg: 1,
+        lastChange: 0,
+        existsInDatabase: false,
+        hasBookletLogs: false
+      })));
+      component.selectedRows = [...component.testGroups()];
+    });
+
+    it('keeps confirmed groups and leaves only the failed and unstarted groups selected', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(of(result('g1')))
+        .mockReturnValueOnce(of(result('g2', false)));
+      component.getTestData();
+      await fixture.whenStable();
+      expect(importService.importWorkspaceFiles).toHaveBeenCalledTimes(2);
+      expect(component.completedUploads()).toBe(1);
+      expect(component.completedGroupNames()).toEqual(['g1']);
+      expect(component.failedGroupName()).toBe('g2');
+      expect(component.selectedRows.map(group => group.groupName)).toEqual(['g2', 'g3']);
+      expect(component.uploadData()?.importedGroups).toEqual(['g1']);
+      expect(component.uploadData()?.persons).toBe(10);
+      expect(component.uploadError()).toContain('Antworten');
+      expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it.each([401, 403])('allows recovery after an HTTP %s rejection before the import started', async status => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(throwError(() => ({
+        status, error: { message: 'Access level not sufficient' }
+      })));
+      component.getTestData();
+      await fixture.whenStable();
+      expect(component.resultStatusUncertain()).toBe(false);
+      expect(component.failedGroupName()).toBe('g1');
+      expect(component.uploadError()).toContain('Access level not sufficient');
+      expect(component.isUploadingTestResults()).toBe(false);
+      expect(component.selectedRows.map(group => group.groupName)).toEqual(['g1', 'g2', 'g3']);
+      const importButton = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('Importieren'));
+      expect(importButton?.disabled).toBe(false);
+    });
+
+    it('restores only remaining groups after changing retry options and reloading the group list', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(of(result('g1')))
+        .mockReturnValueOnce(of(result('g2', false)))
+        .mockReturnValueOnce(of(result('g2'))).mockReturnValueOnce(of(result('g3')));
+      component.getTestData();
+      await fixture.whenStable();
+      component.goBackToOptions();
+      component.importFilesForm.patchValue({ responseOverwriteMode: 'merge' });
+      const refreshed = component.testGroups().map(group => ({ ...group, existsInDatabase: true }));
+      importService.importTestcenterGroups.mockReturnValue(of(refreshed));
+      component.getTestGroups();
+      expect(component.selectedRows).toEqual([refreshed[1], refreshed[2]]);
+      component.getTestData();
+      await fixture.whenStable();
+      expect(importService.importWorkspaceFiles.mock.calls.map(call => call[6])).toEqual([['g1'], ['g2'], ['g2'], ['g3']]);
+      expect(importService.importWorkspaceFiles.mock.calls.slice(2).map(call => call[10])).toEqual(['merge', 'merge']);
+    });
+
+    it('retains the retry selection when reloading test groups fails temporarily', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(of(result('g1')))
+        .mockReturnValueOnce(of(result('g2', false)));
+      component.getTestData();
+      await fixture.whenStable();
+      const refreshed = component.testGroups().map(group => ({ ...group }));
+      component.goBackToOptions();
+      importService.importTestcenterGroups.mockReturnValueOnce(throwError(() => new Error('network')))
+        .mockReturnValueOnce(of(refreshed));
+      component.getTestGroups();
+      component.getTestGroups();
+      expect(component.selectedRows.map(group => group.groupName)).toEqual(['g2', 'g3']);
+    });
+
+    it('does not restore a retry selection in another Testcenter workspace', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(of(result('g1')))
+        .mockReturnValueOnce(of(result('g2', false)));
+      component.getTestData();
+      await fixture.whenStable();
+      component.goBackToOptions();
+      component.importFilesForm.patchValue({ workspace: 'other-tc' });
+      importService.importTestcenterGroups.mockReturnValue(of(component.testGroups().map(group => ({ ...group }))));
+      component.getTestGroups();
+      expect(component.selectedRows).toEqual([]);
+      expect(component.failedGroupName()).toBeNull();
+      expect(component.completedGroupNames()).toEqual([]);
+    });
+
+    it('recovers a completed server result after a lost HTTP response without repeating the group', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(throwError(() => new Error('network')))
+        .mockReturnValueOnce(of(result('g2'))).mockReturnValueOnce(of(result('g3')));
+      importService.getImportWorkspaceFilesProgress.mockReturnValue(of(progress('completed', result('g1'))));
+      component.getTestData();
+      await fixture.whenStable();
+      expect(importService.importWorkspaceFiles.mock.calls.map(call => call[6])).toEqual([['g1'], ['g2'], ['g3']]);
+      expect(component.completedUploads()).toBe(3);
+      expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ didImport: true }));
+    });
+
+    it('blocks retries while the server outcome is unknown and resumes after a status check', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(throwError(() => new Error('network')))
+        .mockReturnValueOnce(of(result('g2'))).mockReturnValueOnce(of(result('g3')));
+      importService.getImportWorkspaceFilesProgress.mockReturnValue(of(progress('running')));
+      component.getTestData();
+      await fixture.whenStable();
+      expect(component.resultStatusUncertain()).toBe(true);
+      expect(component.isUploadingTestResults()).toBe(false);
+      expect(component.uploadError()).toContain('network');
+      component.getTestData();
+      expect(importService.importWorkspaceFiles).toHaveBeenCalledTimes(1);
+      expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeTruthy();
+
+      importService.getImportWorkspaceFilesProgress.mockReturnValue(of(progress('completed', result('g1'))));
+      await component.checkTestResultsImportStatus();
+      expect(importService.importWorkspaceFiles.mock.calls.map(call => call[6])).toEqual([['g1'], ['g2'], ['g3']]);
+      expect(component.resultStatusUncertain()).toBe(false);
+      expect(component.completedUploads()).toBe(3);
+    });
+
+    it('does not start a second import while a request is pending', async () => {
+      const response$ = new Subject<Result>();
+      component.selectedRows = [component.testGroups()[0]];
+      importService.importWorkspaceFiles.mockReturnValue(response$);
+      component.getTestData();
+      component.getTestData();
+      expect(importService.importWorkspaceFiles).toHaveBeenCalledTimes(1);
+      response$.next(result('g1'));
+      await fixture.whenStable();
+    });
+
+    it('does not claim completion when closing an import with an uncertain server outcome', async () => {
+      importService.importWorkspaceFiles.mockReturnValue(throwError(() => new Error('network')));
+      importService.getImportWorkspaceFilesProgress.mockReturnValue(of(progress('running')));
+      component.getTestData();
+      await fixture.whenStable();
+      const close = fixture.nativeElement.querySelector('mat-dialog-actions button:last-child') as HTMLButtonElement;
+      expect(close.disabled).toBe(false);
+      close.click();
+      expect(mockDialogRef.close).toHaveBeenCalledWith({ didImport: false });
+    });
+
+    it('returns partial failure details when closing a confirmed failed import', async () => {
+      importService.importWorkspaceFiles.mockReturnValueOnce(of(result('g1')))
+        .mockReturnValueOnce(of(result('g2', false)));
+      component.getTestData();
+      await fixture.whenStable();
+      component.importFilesForm.patchValue({ responses: false, logs: true });
+      const close = fixture.nativeElement.querySelector('mat-dialog-actions button:last-child') as HTMLButtonElement;
+      close.click();
+      expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({
+        didImport: true,
+        resultType: 'responses',
+        importedResponses: true,
+        importedLogs: false,
+        uploadResult: expect.objectContaining({
+          success: false,
+          importedGroups: ['g1'],
+          issues: expect.arrayContaining([expect.objectContaining({ level: 'error' })])
+        })
+      }));
+    });
+
+    it('renders a delayed partial result through native zoneless notifications', async () => {
+      const first = new Subject<Result>();
+      const second = new Subject<Result>();
+      importService.importWorkspaceFiles.mockReturnValueOnce(first)
+        .mockReturnValueOnce(second);
+      component.getTestData();
+      await fixture.whenStable();
+      first.next(result('g1'));
+      await fixture.whenStable();
+      expect(importService.importWorkspaceFiles).toHaveBeenCalledTimes(2);
+      second.next(result('g2', false));
+      await fixture.whenStable();
+      const alert = fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement;
+      expect(alert.textContent).toContain('g1');
+      expect(alert.textContent).toContain('g2');
+      expect(component.completedUploads()).toBe(1);
+      expect(component.selectedRows.map(group => group.groupName)).toEqual(['g2', 'g3']);
+    });
+
+    it('does not continue the server import sequence after the dialog is destroyed', async () => {
+      const first = new Subject<Result>();
+      importService.importWorkspaceFiles.mockReturnValue(first);
+      component.getTestData();
+      fixture.destroy();
+      first.next(result('g1'));
+      await Promise.resolve();
+      expect(first.observed).toBe(false);
+      expect(importService.importWorkspaceFiles).toHaveBeenCalledTimes(1);
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+
+    it('keeps a running original request uncertain when a duplicate request is rejected', async () => {
+      importService.importWorkspaceFiles.mockReturnValue(throwError(() => ({
+        status: 409, error: { importNotStarted: true, message: 'Import läuft bereits.' }
+      })));
+      importService.getImportWorkspaceFilesProgress.mockReturnValue(of(progress('running')));
+      component.getTestData();
+      await fixture.whenStable();
+      expect(component.resultStatusUncertain()).toBe(true);
+      expect(component.failedGroupName()).toBeNull();
+      expect(component.completedUploads()).toBe(0);
+    });
+  });
+
+  describe('group request isolation', () => {
+    const group = (groupName: string): TestGroupsInfoDto => ({
+      groupName,
+      groupLabel: groupName,
+      bookletsStarted: 1,
+      numUnitsTotal: 1,
+      numUnitsMin: 1,
+      numUnitsMax: 1,
+      numUnitsAvg: 1,
+      lastChange: 0,
+      existsInDatabase: false,
+      hasBookletLogs: false
+    });
+
+    beforeEach(() => {
+      component.authenticated.set(true);
+      component.authToken = 'fixture-token';
+      component.loginForm.patchValue({ testCenter: 1 });
+      component.importFilesForm.patchValue({ workspace: 'old-workspace', responses: true });
+    });
+
+    it('discards a delayed list after the Testcenter workspace changes', async () => {
+      const response = new Subject<TestGroupsInfoDto[]>();
+      importService.importTestcenterGroups.mockReturnValue(response);
+      component.getTestGroups();
+      component.importFilesForm.patchValue({ workspace: 'new-workspace' });
+      component.getTestData();
+      expect(importService.importWorkspaceFiles).not.toHaveBeenCalled();
+      response.next([group('stale')]);
+      await fixture.whenStable();
+      expect(component.testGroups()).toEqual([]);
+      expect(component.selectedRows).toEqual([]);
+      expect(component.showTestGroups()).toBe(false);
+      expect(component.isLoadingTestGroups()).toBe(false);
+    });
+
+    it('keeps the newer request loading and preserves its result when the older request finishes', async () => {
+      const oldResponse = new Subject<TestGroupsInfoDto[]>();
+      const newResponse = new Subject<TestGroupsInfoDto[]>();
+      importService.importTestcenterGroups.mockReturnValueOnce(oldResponse).mockReturnValueOnce(newResponse);
+      component.getTestGroups();
+      component.importFilesForm.patchValue({ workspace: 'new-workspace' });
+      component.getTestGroups();
+      oldResponse.next([group('stale')]);
+      await fixture.whenStable();
+      expect(component.isLoadingTestGroups()).toBe(true);
+      expect(component.testGroups()).toEqual([]);
+      newResponse.next([group('current')]);
+      await fixture.whenStable();
+      oldResponse.error(new Error('obsolete failure'));
+      await fixture.whenStable();
+      expect(component.testGroups()).toEqual([group('current')]);
+      expect(component.showTestGroups()).toBe(true);
+      expect(component.isLoadingTestGroups()).toBe(false);
+    });
+
+    it('ignores the group response after logout', async () => {
+      const response = new Subject<TestGroupsInfoDto[]>();
+      importService.importTestcenterGroups.mockReturnValue(response);
+      component.getTestGroups();
+      component.logout();
+      response.next([group('stale')]);
+      await fixture.whenStable();
+      expect(component.authenticated()).toBe(false);
+      expect(component.testGroups()).toEqual([]);
+      expect(component.isLoadingTestGroups()).toBe(false);
+      expect(component.showTestGroups()).toBe(false);
+    });
+  });
+
   it('should complete the whole user flow for testResults import', async () => {
     // 1. Initial state: authenticated = false
     expect(component.authenticated()).toBe(false);
@@ -189,7 +505,7 @@ describe('TestCenterImportComponent', () => {
       ['group1'],
       true,
       undefined,
-      undefined,
+      expect.stringMatching(/^tc-import-/),
       'skip'
     );
 
@@ -251,7 +567,7 @@ describe('TestCenterImportComponent', () => {
       ['group1'],
       true,
       undefined,
-      undefined,
+      expect.stringMatching(/^tc-import-/),
       'merge'
     );
   });
