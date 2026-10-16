@@ -3,12 +3,13 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, Subject } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { UserService } from '../../../shared/services/user/user.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { PostMessageService } from '../../../core/services/post-message.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
@@ -57,7 +58,8 @@ describe('Coding comparison without Zone', () => {
         { provide: CodingTrainingBackendService, useValue: { getCoderTrainings, getTrainingCohensKappa: () => kappaResponse, saveDiscussionResult: () => saveResponse } },
         { provide: CodingStatisticsService, useValue: {} },
         { provide: TestPersonCodingService, useValue: {} },
-        { provide: AppService, useValue: { authData: { userName: 'Manager' }, needsReAuthentication: false } },
+        { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, authData: { userId: 7, userName: 'Manager', isAdmin: false }, needsReAuthentication: false } },
         { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => regexResponse } },
         { provide: PostMessageService, useValue: { getMessages: () => new Subject<void>() } },
         {
