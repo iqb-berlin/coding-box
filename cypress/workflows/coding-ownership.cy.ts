@@ -4,7 +4,7 @@ type OwnershipRows = Record<OwnershipKind, { own: number; foreign: number; legac
 };
 
 describe('coding ownership with real role login and PostgreSQL', () => {
-  let setup: { apiUrl: string; keycloakUrl: string; password: string; workspaceId: number };
+  let setup: { apiUrl: string; keycloakUrl: string; password: string; workspaceId: number; fileAccessUserIds: Record<string, number> };
   let rows: OwnershipRows;
   let token: string;
 
@@ -29,6 +29,7 @@ describe('coding ownership with real role login and PostgreSQL', () => {
     });
     cy.wait('@roleToken', { log: false }).its('response.statusCode').should('eq', 200);
     cy.get('coding-box-home').should('be.visible');
+    api('/auth-data').its('body.userId').should('eq', setup.fileAccessUserIds[username]);
   }
 
   function api(route: string, method = 'GET', body?: unknown) {
@@ -82,7 +83,7 @@ describe('coding ownership with real role login and PostgreSQL', () => {
             const route = resource(kind, rows[kind][ownership]);
             api(route.read).its('status').should('eq', 200);
             api(route.edit, 'PUT', route.body).then(response => {
-              expect(response.status, `${kind}/${ownership}`).to.equal(username === 'file-access-2' && ownership !== 'own' ? 403 : 200);
+              expect(response.status, `${kind}/${ownership}: ${JSON.stringify(response.body)}`).to.equal(username === 'file-access-2' && ownership !== 'own' ? 403 : 200);
               if (response.status === 200 && kind === 'training') expect(response.body.success).to.equal(true);
             });
           });
