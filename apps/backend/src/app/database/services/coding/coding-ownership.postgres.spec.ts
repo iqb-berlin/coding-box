@@ -117,6 +117,17 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     expect(events).toEqual([{ actor_user_id: study.id }]);
   });
 
+  it('keeps every deleted job id in the audit after a successful owned bulk deletion', async () => {
+    const created = await db.getRepository(CodingJob).save([1, 2].map(index => ({
+      workspace_id: workspaceId, creatorUserId: owner.id, name: `Bulk proof ${index}`
+    })));
+    const ids = created.map(job => job.id);
+    await jobs.deleteCodingJobs(workspaceId, ids, owner.id);
+    const events = await db.query('SELECT entity_id FROM journal_entries WHERE workspace_id=$1 AND event_type=$2 AND actor_user_id=$3 ORDER BY entity_id::integer', [workspaceId, 'CODING_JOB_DELETED', owner.id]);
+    expect(events).toEqual(ids.sort((a, b) => a - b).map(id => ({ entity_id: String(id) })));
+    expect(await db.getRepository(CodingJob).countBy({ workspace_id: workspaceId, creatorUserId: owner.id })).toBe(1);
+  });
+
   it('rechecks creation rights after waiting for the workspace mutation lock', async () => {
     const holder = db.createQueryRunner();
     await holder.connect();
