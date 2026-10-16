@@ -1,11 +1,11 @@
-@if (isLoading) {
+@if (isLoading()) {
 <div class="loading-container">
     <mat-spinner diameter="40"></mat-spinner>
     <p class="loading-text">{{ 'coding-management.loading.processing-data' | translate }}</p>
 </div>
 }
 
-@if (!isLoading && data.length > 0) {
+@if (!isLoading() && data().length > 0) {
 <div class="data-card">
     <div class="card-header">
         <div class="title-block">
@@ -14,10 +14,10 @@
                 {{ 'coding-management.filters.active-run' | translate:{run: getSelectedVersionLabel()} }}
             </div>
         </div>
-        @if (currentStatusFilter) {
+        @if (currentStatusFilter()) {
         <div class="current-status">
             <h3>
-                @if (currentStatusFilter === 'null') {
+                @if (currentStatusFilter() === 'null') {
                 {{ 'coding-management.statistics.uncoded-responses-title' | translate }}
                 } @else {
                 {{ 'coding-management.statistics.responses-with-status-title' | translate:{status:
@@ -26,15 +26,15 @@
             </h3>
         </div>
         }
-        @if (isDerivedFilterActive) {
+        @if (isDerivedFilterActive()) {
         <div class="current-status">
             <h3>{{ 'coding-management.statistics.derived-answers-title' | translate }}</h3>
         </div>
         }
-        @if (isGeogebraFilterActive) {
+        @if (isGeogebraFilterActive()) {
         <div class="header-actions">
-            <button mat-raised-button color="primary" [disabled]="isReviewLoading" (click)="onReviewClick()">
-                @if (isReviewLoading) {
+            <button mat-raised-button color="primary" [disabled]="isReviewLoading()" (click)="onReviewClick()">
+                @if (isReviewLoading()) {
                 <mat-spinner diameter="18"></mat-spinner>
                 } @else {
                 <mat-icon>rate_review</mat-icon>
@@ -46,15 +46,15 @@
     </div>
     <mat-divider></mat-divider>
     <div class="table-container">
-        <table mat-table [dataSource]="dataSource" matSort [matSortActive]="sortBy"
-            [matSortDirection]="sortDirection" (matSortChange)="onSortChange($event)" class="coding-table">
-            @for (column of displayedColumns; track column) {
+        <table mat-table [dataSource]="dataSource" matSort [matSortActive]="sortBy()"
+            [matSortDirection]="sortDirection()" (matSortChange)="onSortChange($event)" class="coding-table">
+            @for (column of displayedColumns(); track column) {
             <ng-container matColumnDef="{{ column }}">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header [disabled]="column === 'actions'">
                     {{ getColumnHeader(column) }}
                 </th>
                 <td mat-cell *matCellDef="let element"
-                    [attr.colspan]="element.id === 0 ? displayedColumns.length : null">
+                    [attr.colspan]="element.id === 0 ? displayedColumns().length : null">
                     @if (element.id === 0) {
                     <ng-container class="group-header">
                         <strong class="group-header-text">{{ element.unitname || element.variableid }}</strong>
@@ -76,7 +76,11 @@
                     </div>
                     } @else if (column === 'unitname') {
                     <span class="clickable-cell" (click)="onShowUnitXml(element.unit.name)"
-                        [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate">
+                        [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate"
+                      role="button"
+                      tabindex="0"
+                      (keydown.enter)="onActionKeydown($event)"
+                      (keydown.space)="onActionKeydown($event)">
                         {{ element[column] }}
                     </span>
                     } @else if (column === 'value') {
@@ -121,17 +125,17 @@
                 </td>
             </ng-container>
             }
-            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="data-row"></tr>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns(); sticky: true"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns();" class="data-row"></tr>
         </table>
-        <mat-paginator [length]="totalRecords" [pageSize]="pageSize" [pageIndex]="pageIndex"
-            [pageSizeOptions]="pageSizeOptions" showFirstLastButtons (page)="onPageChange($event)">
+        <mat-paginator [length]="totalRecords()" [pageSize]="pageSize()" [pageIndex]="pageIndex()"
+            [pageSizeOptions]="pageSizeOptions()" showFirstLastButtons (page)="onPageChange($event)">
         </mat-paginator>
     </div>
 </div>
 }
 
-@if (!isLoading && data.length === 0) {
+@if (!isLoading() && data().length === 0) {
 <div class="empty-state">
     <mat-icon class="empty-icon">code</mat-icon>
     <h3>{{ 'coding-management.descriptions.no-data' | translate }}</h3>

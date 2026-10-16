@@ -336,6 +336,9 @@ describe('test results export/import roundtrip', () => {
         invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
       }),
       {
+        transaction: jest.fn(callback => callback({
+          getRepository: () => ({ create: entry => entry, save: async entry => entry })
+        })),
         createQueryRunner: jest.fn().mockReturnValue({
           connect: jest.fn().mockResolvedValue(undefined),
           query: jest.fn().mockResolvedValue([]),

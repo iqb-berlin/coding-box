@@ -12,16 +12,12 @@ import {
   MatRow
 } from '@angular/material/table';
 import {
-  Component,
-  ElementRef,
-  inject,
-  OnDestroy,
-  OnInit,
-  ViewChild
+  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, signal, computed, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MatPaginator,
@@ -31,6 +27,7 @@ import {
 } from '@angular/material/paginator';
 import {
   BehaviorSubject,
+  ReplaySubject,
   Subject,
   Subscription,
   catchError,
@@ -41,6 +38,7 @@ import {
   forkJoin,
   of,
   switchMap,
+  takeUntil,
   takeWhile,
   timeout,
   timer as rxjsTimer
@@ -61,7 +59,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -164,11 +162,9 @@ import {
   isSecondAutocodingWaitingForManualCoding,
   SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
-import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import {
   TestResultsImportProgressDialogComponent,
-  TestResultsImportProgressHandle,
   TestResultsImportProgressState
 } from './test-results-import-progress-dialog.component';
 import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
@@ -195,6 +191,7 @@ import {
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 
 interface BookletLog {
   id: number;
@@ -341,6 +338,7 @@ string,
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results',
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],
@@ -386,6 +384,9 @@ string,
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
+  private readonly selectedResultRequestsCancelled = new Subject<void>();
+  private unitNotesRequest?: Subscription;
+  private cancelTestCenterImport: (() => void) | null = null;
   private dialog = inject(MatDialog);
   private testResultBackendService = inject(TestResultBackendService);
   private validationService = inject(ValidationService);
@@ -405,14 +406,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private readonly destroyRef = inject(DestroyRef);
+
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private deleteTaskSubscription: Subscription | null = null;
   private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
-  selection = new SelectionModel<P>(true, []);
-  dataSource!: MatTableDataSource<P>;
-  displayedColumns: string[] = [
+  protected selection = new SelectionModel<P>(true, []);
+  protected dataSource!: MatTableDataSource<P>;
+  protected displayedColumns: string[] = [
     'select',
     'code',
     'group',
@@ -420,107 +423,116 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     'uploaded_at'
   ];
 
-  isTableView: boolean = false;
-  quickSearchTableFilters: Partial<FlatResponseFilters> | null = null;
-  forceShowLogAnomalyTableColumn = false;
+  readonly isTableView = signal<boolean>(false);
+  readonly quickSearchTableFilters = signal<Partial<FlatResponseFilters> | null>(null);
+  readonly forceShowLogAnomalyTableColumn = signal(false);
   data: P[] = [];
-  booklets!: Booklet[];
+  readonly booklets = signal<Booklet[]>([]);
   results: { [key: string]: unknown }[] = [];
-  responses: Response[] = [];
-  logs: UnitLog[] = [];
-  bookletLogs: { [key: string]: unknown }[] = [];
-  totalRecords: number = 0;
-  pageSize: number = 50;
-  pageIndex: number = 0;
-  selectedUnit: Unit | undefined;
-  testPerson: P | null = null;
-  selectedBooklet!: Booklet | string;
-  isLoading: boolean = true;
-  isUploadingResults: boolean = false;
-  isSearching: boolean = false;
-  isLoadingBooklets: boolean = false;
-  isDeletingTestPersons: boolean = false;
-  activeDeleteTask: ValidationTaskDto | null = null;
-  deleteProgress: number = 0;
-  deleteProgressMessage: string = '';
-  unitTags: UnitTagDto[] = [];
-  unitTagsMap: Map<number, UnitTagDto[]> = new Map();
-  unitNotes: UnitNoteDto[] = [];
-  unitNotesMap: Map<number, UnitNoteDto[]> = new Map();
-  isVariableValidationRunning: boolean = false;
-  variableValidationResult: VariableValidationDto | null = null;
+  readonly responses = signal<Response[]>([]);
+  readonly logs = signal<UnitLog[]>([]);
+  readonly bookletLogs = signal<{
+    [key: string]: unknown;
+  }[]>([]);
+
+  protected readonly totalRecords = signal<number>(0);
+  protected readonly pageSize = signal<number>(50);
+  protected readonly pageIndex = signal<number>(0);
+  readonly selectedUnit = signal<Unit | undefined>(undefined);
+  readonly testPerson = signal<P | null>(null);
+  protected readonly selectedBooklet = signal<Booklet | string>('');
+  protected readonly isLoading = signal<boolean>(true);
+  protected readonly isUploadingResults = signal<boolean>(false);
+  protected readonly isSearching = signal<boolean>(false);
+  readonly isLoadingBooklets = signal<boolean>(false);
+  protected readonly isDeletingTestPersons = signal<boolean>(false);
+  readonly activeDeleteTask = signal<ValidationTaskDto | null>(null);
+  protected readonly deleteProgress = signal<number>(0);
+  protected readonly deleteProgressMessage = signal<string>('');
+  readonly unitTags = signal<UnitTagDto[]>([]);
+  readonly unitTagsMap = signal<Map<number, UnitTagDto[]>>(new Map());
+  readonly unitNotes = signal<UnitNoteDto[]>([]);
+  readonly unitNotesMap = signal<Map<number, UnitNoteDto[]>>(new Map());
+  readonly isVariableValidationRunning = signal<boolean>(false);
+  readonly variableValidationResult = signal<VariableValidationDto | null>(null);
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
   private validationStatusInterval: number | null = null;
   private exportStatusInterval: number | null = null;
   private isInitialized: boolean = false;
 
-  overview: TestResultsOverviewResponse | null = null;
-  isLoadingOverview: boolean = false;
-  showTestResultsLogAnomalies: boolean = false;
-  enableRegexSearch: boolean = false;
-  logAnomalySummary: LogAnomalyDashboardSummary | null = null;
-  isLoadingLogAnomalySummary: boolean = false;
-  logAnomalySummaryLoadFailed: boolean = false;
-  logAnomalySummaryRequested: boolean = false;
-  codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
-  manualAppliedResultsOverview: AppliedResultsOverview | null = null;
-  manualAppliedResultsOverviewLoadFailed: boolean = false;
-  isLoadingManualAppliedResultsOverview: boolean = false;
-  autoRefreshCodingStatus: boolean = true;
-  codingFreshnessStatusChecked: boolean = false;
-  isLoadingCodingFreshnessStatus: boolean = false;
+  readonly overview = signal<TestResultsOverviewResponse | null>(null);
+  readonly isLoadingOverview = signal<boolean>(false);
+  readonly showTestResultsLogAnomalies = signal<boolean>(false);
+  readonly enableRegexSearch = signal<boolean>(false);
+  readonly logAnomalySummary = signal<LogAnomalyDashboardSummary | null>(null);
+  readonly isLoadingLogAnomalySummary = signal<boolean>(false);
+  readonly logAnomalySummaryLoadFailed = signal<boolean>(false);
+  readonly logAnomalySummaryRequested = signal<boolean>(false);
+  readonly codingFreshnessSummary = signal<CodingFreshnessSummaryDto | null>(null);
+  readonly manualAppliedResultsOverview = signal<AppliedResultsOverview | null>(null);
+  readonly manualAppliedResultsOverviewLoadFailed = signal<boolean>(false);
+  readonly isLoadingManualAppliedResultsOverview = signal<boolean>(false);
+  readonly autoRefreshCodingStatus = signal<boolean>(true);
+  readonly codingFreshnessStatusChecked = signal<boolean>(false);
+  readonly isLoadingCodingFreshnessStatus = signal<boolean>(false);
   private codingFreshnessStatusRequestGeneration = 0;
 
-  exportJobId: string | null = null;
-  isExporting: boolean = false;
-  exportJobStatus: string | null = null;
-  exportJobProgress: number = 0;
-  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
-  uploadingMessage = 'Ergebnisse werden hochgeladen...';
+  readonly exportJobId = signal<string | null>(null);
+  protected readonly isExporting = signal<boolean>(false);
+  readonly exportJobStatus = signal<string | null>(null);
+  readonly exportJobProgress = signal<number>(0);
+  readonly exportTypeInProgress = signal<'test-results' | 'test-logs' | null>(null);
+  protected readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild('hiddenResponsesFileInput')
-    hiddenResponsesFileInput!: ElementRef<HTMLInputElement>;
+  readonly paginator = viewChild(MatPaginator);
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    if (this.dataSource) this.dataSource.sort = this.sort() ?? null;
+  });
 
-  @ViewChild('hiddenLogsFileInput')
-    hiddenLogsFileInput!: ElementRef<HTMLInputElement>;
+  readonly hiddenResponsesFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenResponsesFileInput');
+
+  readonly hiddenLogsFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenLogsFileInput');
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.resetSelectedResultDetails();
+      this.testPerson.set(null);
+    });
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
       .subscribe(searchText => {
-        this.createTestResultsList(0, this.pageSize, searchText);
+        this.createTestResultsList(0, this.pageSize(), searchText);
       });
 
     // Sync with upload state service
-    this.uploadStateService.uploadingBatches$.subscribe(
+    this.uploadStateService.uploadingBatches$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       (batches: PendingUploadBatch[]) => {
         const myBatch = batches.find(
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
         );
         if (myBatch) {
-          this.isUploadingResults = true;
-          this.uploadingMessage = `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`;
-          this.isLoading = true;
+          this.isUploadingResults.set(true);
+          this.uploadingMessage.set(`Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`);
+          this.isLoading.set(true);
         } else {
-          this.isUploadingResults = false;
+          this.isUploadingResults.set(false);
         }
       }
     );
 
-    this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
+    this.uploadStateService.uploadsFinished$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
         this.reloadLogAnomalySummaryIfRequested();
         this.refreshCodingFreshnessStatusAfterChange();
         this.createTestResultsList(
-          this.pageIndex,
-          this.pageSize,
+          this.pageIndex(),
+          this.pageSize(),
           this.getCurrentSearchText()
         );
-        this.isLoading = false;
-        this.isUploadingResults = false;
+        this.isLoading.set(false);
+        this.isUploadingResults.set(false);
       }
     });
 
@@ -529,18 +541,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         if (request.workspaceId !== this.appService.selectedWorkspaceId) {
           return;
         }
-        this.quickSearchTableFilters = { ...(request.filters || {}) };
-        this.forceShowLogAnomalyTableColumn =
-          this.showTestResultsLogAnomalies && !!request.forceShowLogAnomalies;
-        this.isTableView = true;
-        this.isLoading = false;
-        this.isUploadingResults = false;
+        this.quickSearchTableFilters.set({ ...(request.filters || {}) });
+        this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies() && !!request.forceShowLogAnomalies);
+        this.isTableView.set(true);
+        this.isLoading.set(false);
+        this.isUploadingResults.set(false);
       });
 
     this.loadTestResultsLogAnomalySetting();
     this.loadRegexSearchSetting();
     this.loadCodingStatusAutoRefreshSetting();
-    this.createTestResultsList(0, this.pageSize);
+    this.createTestResultsList(0, this.pageSize());
     this.loadWorkspaceOverview();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
@@ -565,8 +576,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.stopExportStatusPolling();
   }
 
-  toggleTableView(): void {
-    this.isTableView = !this.isTableView;
+  protected toggleTableView(): void {
+    this.isTableView.set(!this.isTableView());
   }
 
   private startValidationStatusCheck(): void {
@@ -596,7 +607,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (Object.keys(taskIds).length > 0) {
       for (const [type, task] of Object.entries(taskIds)) {
         this.validationService
-          .getValidationTask(this.appService.selectedWorkspaceId, task.id)
+          .getValidationTask(this.appService.selectedWorkspaceId, task.id).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: updatedTask => {
               if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
@@ -624,7 +635,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  isAnyValidationRunning(): boolean {
+  protected isAnyValidationRunning(): boolean {
     if (!this.appService.selectedWorkspaceId) {
       return false;
     }
@@ -676,86 +687,97 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   onRowClick(row: P): void {
-    this.testPerson = row;
-    this.responses = [];
-    this.logs = [];
-    this.bookletLogs = [];
-    this.selectedUnit = undefined;
-    this.unitTagsMap.clear();
-    this.unitNotesMap.clear();
-    this.isLoadingBooklets = true;
+    this.resetSelectedResultDetails();
+    this.testPerson.set(row);
+    this.isLoadingBooklets.set(true);
     this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
+      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
+      )
       .subscribe({
         next: (booklets: PersonTestResult[]) => {
-          this.selectedBooklet = '';
-          this.booklets = booklets as unknown as Booklet[];
+          this.selectedBooklet.set('');
+          this.booklets.set(booklets as unknown as Booklet[]);
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
           this.loadAllUnitNotes();
-          this.isLoadingBooklets = false;
+          this.isLoadingBooklets.set(false);
         },
         error: () => {
-          this.isLoadingBooklets = false;
+          this.isLoadingBooklets.set(false);
         }
       });
   }
 
   sortBooklets(): void {
-    if (!this.booklets || this.booklets.length === 0) {
+    if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
-    this.booklets.sort((a, b) => {
-      const nameA = a.name || '';
-      const nameB = b.name || '';
-      return nameA.localeCompare(nameB);
+    this.booklets.update(value => {
+      const next = [...value];
+      next.sort((a, b) => {
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        return nameA.localeCompare(nameB);
+      });
+      return next;
     });
   }
 
   sortBookletUnits(): void {
-    if (!this.booklets || this.booklets.length === 0) {
+    if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
 
-    this.booklets.forEach(booklet => {
+    this.booklets.update(booklets => booklets.map(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.sort((a, b) => {
+        const units = [...booklet.units].sort((a, b) => {
           const aliasA = a.alias || a.name || '';
           const aliasB = b.alias || b.name || '';
           return aliasA.localeCompare(aliasB);
         });
+        return { ...booklet, units };
       }
-    });
+      return booklet;
+    }));
   }
 
-  getUnitTags(unitId: number): UnitTagDto[] {
-    return this.unitTagsMap.get(unitId) || [];
+  protected getUnitTags(unitId: number): UnitTagDto[] {
+    return this.unitTagsMap().get(unitId) || [];
+  }
+
+  toggleResponseExpansion(responseId: number): void {
+    this.responses.update(responses => responses.map(response => (response.id === responseId ? {
+      ...response, expanded: !response.expanded
+    } : response)));
   }
 
   loadAllUnitTags(): void {
-    if (!this.booklets || this.booklets.length === 0) {
+    if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
-    this.unitTagsMap.clear();
-    this.booklets.forEach(booklet => {
+    const next = new Map<number, UnitTagDto[]>();
+    this.booklets().forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
           if (unit.id && unit.tags) {
-            this.unitTagsMap.set(unit.id, unit.tags);
+            next.set(unit.id, unit.tags);
           }
         });
       }
     });
+    this.unitTagsMap.set(next);
   }
 
   loadAllUnitNotes(): void {
-    if (!this.booklets || this.booklets.length === 0) {
+    this.unitNotesRequest?.unsubscribe();
+    if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
-    this.unitNotesMap.clear();
+    this.unitNotesMap.set(new Map());
     const unitIds: number[] = [];
-    this.booklets.forEach(booklet => {
+    this.booklets().forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
           if (unit.id) {
@@ -769,12 +791,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.unitNoteService
-      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
+    this.unitNotesRequest = this.unitNoteService
+      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe({
         next: notesByUnitId => {
-          Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-            this.unitNotesMap.set(Number(unitId), notes as UnitNoteDto[]);
+          this.unitNotesMap.update(value => {
+            const next = new Map(value);
+            Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
+              next.set(Number(unitId), notes as UnitNoteDto[]);
+            });
+            return next;
           });
         },
         error: () => {
@@ -808,7 +836,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.appService.selectedWorkspaceId,
         booklet.name,
         testPerson
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: bookletReplay => {
           loadingSnackBar.dismiss();
@@ -863,28 +891,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  canReplayBooklet(): boolean {
-    return !!this.testPerson?.login?.trim();
+  protected canReplayBooklet(): boolean {
+    return !!this.testPerson()?.login?.trim();
   }
 
   private buildReplayTestPerson(bookletName: string): string | null {
-    const login = this.testPerson?.login?.trim();
+    const login = this.testPerson()?.login?.trim();
     if (!login) {
       return null;
     }
 
     return [
       login,
-      this.testPerson?.code ?? '',
-      this.testPerson?.group ?? '',
+      this.testPerson()?.code ?? '',
+      this.testPerson()?.group ?? '',
       bookletName
     ].join('@');
   }
 
-  replayUnit() {
+  protected replayUnit() {
     if (
-      !this.selectedUnit ||
-      !this.testPerson ||
+      !this.selectedUnit() ||
+      !this.testPerson() ||
       !this.appService.selectedWorkspaceId
     ) {
       this.snackBar.open(
@@ -895,17 +923,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.responses || this.responses.length === 0) {
+    if (!this.responses() || this.responses().length === 0) {
       this.snackBar.open('Keine Antworten für diese Unit vorhanden', 'Info', {
         duration: 3000
       });
       return;
     }
 
-    const firstResponse = this.responses[0];
+    const firstResponse = this.responses()[0];
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, firstResponse.id)
+      .getReplayUrl(this.appService.selectedWorkspaceId, firstResponse.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result && result.replayUrl) {
@@ -928,13 +956,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  applyFilter(event: Event): void {
+  protected applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.isSearching = true;
+    this.isSearching.set(true);
     this.searchSubject.next(filterValue);
   }
 
-  openBookletLogsDialog(booklet: Booklet) {
+  protected openBookletLogsDialog(booklet: Booklet) {
     if (!booklet.logs || booklet.logs.length === 0) {
       this.snackBar.open('Keine Logs für dieses Testheft vorhanden', 'Info', {
         duration: 3000
@@ -952,8 +980,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openUnitLogsDialog() {
-    if (!this.selectedUnit || !this.logs || this.logs.length === 0) {
+  protected openUnitLogsDialog() {
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    if (!selectedUnitSnapshot || !this.logs() || this.logs().length === 0) {
       this.snackBar.open('Keine Logs für diese Unit vorhanden', 'Info', {
         duration: 3000
       });
@@ -963,16 +993,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.dialog.open(UnitLogsDialogComponent, {
       width: '700px',
       data: {
-        logs: this.logs,
+        logs: this.logs(),
         title: `Logs für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
         }`
       }
     });
   }
 
-  openTagsDialog() {
-    if (!this.selectedUnit || !this.selectedUnit.id) {
+  protected openTagsDialog() {
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
       this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
@@ -980,24 +1012,30 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(TagDialogComponent, {
       width: '500px',
       data: {
-        unitId: this.selectedUnit.id as number,
-        tags: this.unitTags,
+        unitId: selectedUnitSnapshot.id as number,
+        tags: this.unitTags(),
         title: `Tags für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
         }`
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.unitTags = result;
-        this.unitTagsMap.set(this.selectedUnit?.id as number, result);
+        this.unitTags.set(result);
+        this.unitTagsMap.update(value => {
+          const next = new Map(value);
+          next.set(selectedUnitSnapshot?.id as number, result);
+          return next;
+        });
       }
     });
   }
 
-  openNotesDialog() {
-    if (!this.selectedUnit || !this.selectedUnit.id) {
+  protected openNotesDialog() {
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
       this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
@@ -1005,69 +1043,84 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(NoteDialogComponent, {
       width: '600px',
       data: {
-        unitId: this.selectedUnit.id as number,
-        notes: this.unitNotes,
+        unitId: selectedUnitSnapshot.id as number,
+        notes: this.unitNotes(),
         title: `Notizen für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
         }`
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.unitNotes = result;
-        this.unitNotesMap.set(this.selectedUnit?.id as number, result);
+        this.unitNotes.set(result);
+        this.unitNotesMap.update(value => {
+          const next = new Map(value);
+          next.set(selectedUnitSnapshot?.id as number, result);
+          return next;
+        });
       }
     });
   }
 
-  onUnitClick(unit: Unit, booklet: Booklet): void {
+  protected onUnitClick(unit: Unit, booklet: Booklet): void {
     const mappedResponses = unit.results.map((response: UnitResult) => ({
       ...response,
       status: response.status,
       expanded: false
     }));
-    this.responses = Array.from(mappedResponses);
-    this.selectedBooklet = booklet.name;
+    this.responses.set(Array.from(mappedResponses));
+    this.selectedBooklet.set(booklet.name);
 
-    this.responses.sort((a: Response, b: Response) => {
-      if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
-        return -1;
-      }
-      if (a.status !== 'VALUE_CHANGED' && b.status === 'VALUE_CHANGED') {
-        return 1;
-      }
-      return a.variableid.localeCompare(b.variableid);
+    this.responses.update(value => {
+      const next = [...value];
+      next.sort((a: Response, b: Response) => {
+        if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
+          return -1;
+        }
+        if (a.status !== 'VALUE_CHANGED' && b.status === 'VALUE_CHANGED') {
+          return 1;
+        }
+        return a.variableid.localeCompare(b.variableid);
+      });
+      return next;
     });
 
-    this.logs = unit.logs;
-    this.selectedUnit = unit;
+    this.logs.set(unit.logs);
+    this.selectedUnit.set(unit);
 
     this.loadUnitTags();
     this.loadUnitNotes();
   }
 
   loadUnitTags(): void {
-    if (this.selectedUnit && this.selectedUnit.id) {
-      this.unitTags =
-        this.unitTagsMap.get(this.selectedUnit.id as number) || [];
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    if (selectedUnitSnapshot && selectedUnitSnapshot.id) {
+      this.unitTags.set(this.unitTagsMap().get(selectedUnitSnapshot.id as number) || []);
     } else {
-      this.unitTags = [];
+      this.unitTags.set([]);
     }
   }
 
   loadUnitNotes(): void {
-    if (this.selectedUnit && this.selectedUnit.id) {
-      const unitId = this.selectedUnit.id as number;
-      if (this.unitNotesMap.has(unitId)) {
-        this.unitNotes = this.unitNotesMap.get(unitId) || [];
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    if (selectedUnitSnapshot && selectedUnitSnapshot.id) {
+      const unitId = selectedUnitSnapshot.id as number;
+      if (this.unitNotesMap().has(unitId)) {
+        this.unitNotes.set(this.unitNotesMap().get(unitId) || []);
       } else {
         this.unitNoteService
-          .getUnitNotes(this.appService.selectedWorkspaceId, unitId)
+          .getUnitNotes(this.appService.selectedWorkspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: notes => {
-              this.unitNotes = notes;
-              this.unitNotesMap.set(unitId, notes);
+              this.unitNotes.set(notes);
+              this.unitNotesMap.update(value => {
+                const next = new Map(value);
+                next.set(unitId, notes);
+                return next;
+              });
             },
             error: () => {
               this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
@@ -1077,20 +1130,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
       }
     } else {
-      this.unitNotes = [];
+      this.unitNotes.set([]);
     }
   }
 
-  hasUnitNotes(unitId: number): boolean {
-    if (!unitId || !this.unitNotesMap.has(unitId)) {
+  protected hasUnitNotes(unitId: number): boolean {
+    if (!unitId || !this.unitNotesMap().has(unitId)) {
       return false;
     }
-    const notes = this.unitNotesMap.get(unitId) || [];
+    const notes = this.unitNotesMap().get(unitId) || [];
     return notes.length > 0;
   }
 
-  setSelectedBooklet(booklet: Booklet) {
-    this.selectedBooklet = booklet.name;
+  protected setSelectedBooklet(booklet: Booklet) {
+    this.selectedBooklet.set(booklet.name);
   }
 
   calculateBookletProcessingTime(booklet: Booklet): number | null {
@@ -1120,7 +1173,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return null;
   }
 
-  isBookletComplete(booklet: Booklet): boolean {
+  protected isBookletComplete(booklet: Booklet): boolean {
     if (
       !booklet.logs ||
       !Array.isArray(booklet.logs) ||
@@ -1149,7 +1202,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return allUnitsVisited && unitAliases.length > 0;
   }
 
-  hasShortProcessingTime(booklet: Booklet): boolean {
+  protected hasShortProcessingTime(booklet: Booklet): boolean {
     if (
       !booklet.logs ||
       !Array.isArray(booklet.logs) ||
@@ -1165,7 +1218,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  hasGeogebraResponse(unit: Unit): boolean {
+  protected hasGeogebraResponse(unit: Unit): boolean {
     if (!unit || !unit.results || !Array.isArray(unit.results)) {
       return false;
     }
@@ -1175,7 +1228,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getColor(status: string): string {
+  protected getColor(status: string): string {
     switch (status) {
       case 'VALUE_CHANGED':
         return 'green';
@@ -1197,22 +1250,22 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return searchInput ? searchInput.value : '';
   }
 
-  clearSearch(): void {
+  protected clearSearch(): void {
     const searchInput = document.querySelector(
       '.search-input'
     ) as HTMLInputElement;
     if (searchInput) {
       searchInput.value = '';
-      this.createTestResultsList(0, this.pageSize);
+      this.createTestResultsList(0, this.pageSize());
     }
   }
 
-  onPaginatorChange(event: PageEvent): void {
-    this.pageSize = event.pageSize;
-    this.pageIndex = event.pageIndex;
+  protected onPaginatorChange(event: PageEvent): void {
+    this.pageSize.set(event.pageSize);
+    this.pageIndex.set(event.pageIndex);
     this.createTestResultsList(
-      this.pageIndex,
-      this.pageSize,
+      this.pageIndex(),
+      this.pageSize(),
       this.getCurrentSearchText()
     );
   }
@@ -1222,40 +1275,40 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     limit: number = 50,
     searchText: string = ''
   ): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.testResultService
       .getTestResults(
         this.appService.selectedWorkspaceId,
         page,
         limit,
         searchText
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
-          this.isLoading = false;
-          this.isSearching = false;
+          this.isLoading.set(false);
+          this.isSearching.set(false);
           const { data, total } = response;
           this.updateTable(data, total);
         },
         error: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
   private loadWorkspaceOverview(): void {
-    this.isLoadingOverview = true;
+    this.isLoadingOverview.set(true);
     this.testResultService
-      .getWorkspaceOverview(this.appService.selectedWorkspaceId)
+      .getWorkspaceOverview(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result) {
-            this.overview = result;
+            this.overview.set(result);
           }
-          this.isLoadingOverview = false;
+          this.isLoadingOverview.set(false);
         },
         error: () => {
-          this.isLoadingOverview = false;
+          this.isLoadingOverview.set(false);
         }
       });
   }
@@ -1268,7 +1321,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.workspaceSettingsService
-      .getShowTestResultsLogAnomalies(workspaceId)
+      .getShowTestResultsLogAnomalies(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
         this.setShowTestResultsLogAnomalies(enabled);
       });
@@ -1277,14 +1330,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private loadRegexSearchSetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.enableRegexSearch = false;
+      this.enableRegexSearch.set(false);
       return;
     }
 
     this.workspaceSettingsService
-      .getEnableRegexSearch(workspaceId)
+      .getEnableRegexSearch(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
-        this.enableRegexSearch = enabled;
+        this.enableRegexSearch.set(enabled);
       });
   }
 
@@ -1296,14 +1349,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.workspaceSettingsService
-      .getAutoRefreshManualCodingJobs(workspaceId)
+      .getAutoRefreshManualCodingJobs(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
         this.setAutoRefreshCodingStatus(enabled);
       });
   }
 
   private setAutoRefreshCodingStatus(enabled: boolean): void {
-    this.autoRefreshCodingStatus = enabled;
+    this.autoRefreshCodingStatus.set(enabled);
 
     if (enabled) {
       this.loadCodingFreshnessStatus({ force: true });
@@ -1315,32 +1368,32 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private clearCodingFreshnessStatus(): void {
     this.codingFreshnessStatusRequestGeneration += 1;
-    this.codingFreshnessSummary = null;
-    this.manualAppliedResultsOverview = null;
-    this.manualAppliedResultsOverviewLoadFailed = false;
-    this.isLoadingManualAppliedResultsOverview = false;
-    this.isLoadingCodingFreshnessStatus = false;
-    this.codingFreshnessStatusChecked = false;
+    this.codingFreshnessSummary.set(null);
+    this.manualAppliedResultsOverview.set(null);
+    this.manualAppliedResultsOverviewLoadFailed.set(false);
+    this.isLoadingManualAppliedResultsOverview.set(false);
+    this.isLoadingCodingFreshnessStatus.set(false);
+    this.codingFreshnessStatusChecked.set(false);
   }
 
   private setShowTestResultsLogAnomalies(enabled: boolean): void {
-    this.showTestResultsLogAnomalies = enabled;
+    this.showTestResultsLogAnomalies.set(enabled);
 
     if (!enabled) {
-      this.logAnomalySummary = null;
-      this.logAnomalySummaryLoadFailed = false;
-      this.isLoadingLogAnomalySummary = false;
-      this.logAnomalySummaryRequested = false;
+      this.logAnomalySummary.set(null);
+      this.logAnomalySummaryLoadFailed.set(false);
+      this.isLoadingLogAnomalySummary.set(false);
+      this.logAnomalySummaryRequested.set(false);
     }
   }
 
   private loadLogAnomalySummary(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.showTestResultsLogAnomalies) {
-      this.logAnomalySummary = null;
-      this.logAnomalySummaryLoadFailed = false;
-      this.isLoadingLogAnomalySummary = false;
-      this.logAnomalySummaryRequested = false;
+    if (!workspaceId || !this.showTestResultsLogAnomalies()) {
+      this.logAnomalySummary.set(null);
+      this.logAnomalySummaryLoadFailed.set(false);
+      this.isLoadingLogAnomalySummary.set(false);
+      this.logAnomalySummaryRequested.set(false);
       return;
     }
 
@@ -1350,50 +1403,48 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.logAnomalySummaryRequested = true;
-    this.isLoadingLogAnomalySummary = true;
-    this.logAnomalySummaryLoadFailed = false;
+    this.logAnomalySummaryRequested.set(true);
+    this.isLoadingLogAnomalySummary.set(true);
+    this.logAnomalySummaryLoadFailed.set(false);
     getLogAnomalySummary.call(this.testResultService, workspaceId)
       .pipe(finalize(() => {
-        this.isLoadingLogAnomalySummary = false;
-      }))
+        this.isLoadingLogAnomalySummary.set(false);
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: summary => {
-          this.logAnomalySummary = summary;
+          this.logAnomalySummary.set(summary);
         },
         error: () => {
-          this.logAnomalySummary = null;
-          this.logAnomalySummaryLoadFailed = true;
+          this.logAnomalySummary.set(null);
+          this.logAnomalySummaryLoadFailed.set(true);
         }
       });
   }
 
-  loadLogAnomalySummaryOnDemand(): void {
+  protected loadLogAnomalySummaryOnDemand(): void {
     this.loadLogAnomalySummary();
   }
 
   private reloadLogAnomalySummaryIfRequested(): void {
-    if (this.showTestResultsLogAnomalies && this.logAnomalySummaryRequested) {
+    if (this.showTestResultsLogAnomalies() && this.logAnomalySummaryRequested()) {
       this.loadLogAnomalySummary();
     }
   }
 
-  get hasLogAnomalySummary(): boolean {
-    return !!this.logAnomalySummary;
-  }
+  readonly hasLogAnomalySummary = computed<boolean>(() => !!this.logAnomalySummary());
 
-  get logAnomalyAffectedPercent(): number {
-    const total = Number(this.logAnomalySummary?.totalBooklets || 0);
+  protected readonly logAnomalyAffectedPercent = computed<number>(() => {
+    const total = Number(this.logAnomalySummary()?.totalBooklets || 0);
     if (total <= 0) {
       return 0;
     }
     return Math.round(
-      (Number(this.logAnomalySummary?.affectedBooklets || 0) / total) * 1000
+      (Number(this.logAnomalySummary()?.affectedBooklets || 0) / total) * 1000
     ) / 10;
-  }
+  });
 
-  get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
-    const byCode = this.logAnomalySummary?.byCode || {};
+  protected get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
+    const byCode = this.logAnomalySummary()?.byCode || {};
     return Object.entries(byCode)
       .map(([code, count]) => ({
         code,
@@ -1427,14 +1478,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   showLogAnomaliesInTable(): void {
-    this.quickSearchTableFilters = { logAnomalies: 'any' };
-    this.forceShowLogAnomalyTableColumn = this.showTestResultsLogAnomalies;
-    this.isTableView = true;
-    this.isLoading = false;
-    this.isUploadingResults = false;
+    this.quickSearchTableFilters.set({ logAnomalies: 'any' });
+    this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies());
+    this.isTableView.set(true);
+    this.isLoading.set(false);
+    this.isUploadingResults.set(false);
   }
 
-  openLogAnomalyDetailsDialog(): void {
+  protected openLogAnomalyDetailsDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -1452,7 +1503,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: undefined }
     );
 
-    getLogAnomalyDetails.call(this.testResultService, workspaceId)
+    getLogAnomalyDetails.call(this.testResultService, workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: details => {
           loadingSnackBar.dismiss();
@@ -1478,13 +1529,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             maxWidth: '95vw',
             data: {
               affectedBooklets:
-                this.logAnomalySummary?.affectedBooklets || details.total,
+                this.logAnomalySummary()?.affectedBooklets || details.total,
               rows: details.data,
               truncated: details.total > details.data.length
             }
           });
 
-          dialogRef.afterClosed().subscribe(result => {
+          dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
             if (result?.showTable) {
               this.showLogAnomaliesInTable();
             }
@@ -1510,7 +1561,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.isLoadingCodingFreshnessStatus && !options.force) {
+    if (this.isLoadingCodingFreshnessStatus() && !options.force) {
       return;
     }
 
@@ -1528,10 +1579,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const requestGeneration =
       this.codingFreshnessStatusRequestGeneration + 1;
     this.codingFreshnessStatusRequestGeneration = requestGeneration;
-    this.codingFreshnessStatusChecked = true;
-    this.isLoadingCodingFreshnessStatus = true;
-    this.isLoadingManualAppliedResultsOverview = true;
-    this.manualAppliedResultsOverviewLoadFailed = false;
+    this.codingFreshnessStatusChecked.set(true);
+    this.isLoadingCodingFreshnessStatus.set(true);
+    this.isLoadingManualAppliedResultsOverview.set(true);
+    this.manualAppliedResultsOverviewLoadFailed.set(false);
 
     forkJoin([
       codingFreshness$,
@@ -1540,25 +1591,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     ])
       .pipe(finalize(() => {
         if (this.codingFreshnessStatusRequestGeneration === requestGeneration) {
-          this.isLoadingCodingFreshnessStatus = false;
-          this.isLoadingManualAppliedResultsOverview = false;
+          this.isLoadingCodingFreshnessStatus.set(false);
+          this.isLoadingManualAppliedResultsOverview.set(false);
         }
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: ([summary, overview]) => {
           if (this.codingFreshnessStatusRequestGeneration !== requestGeneration) {
             return;
           }
 
-          this.codingFreshnessSummary = summary;
-          this.manualAppliedResultsOverview = overview;
-          this.manualAppliedResultsOverviewLoadFailed = overview === null;
+          this.codingFreshnessSummary.set(summary);
+          this.manualAppliedResultsOverview.set(overview);
+          this.manualAppliedResultsOverviewLoadFailed.set(overview === null);
         }
       });
   }
 
   private refreshCodingFreshnessStatusAfterChange(): void {
-    if (this.autoRefreshCodingStatus) {
+    if (this.autoRefreshCodingStatus()) {
       this.loadCodingFreshnessStatus({ force: true });
       return;
     }
@@ -1603,17 +1654,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  get overviewResponseStatusTotal(): number {
-    return Object.values(this.overview?.responseStatusCounts || {})
-      .reduce((sum, count) => sum + (Number(count) || 0), 0);
-  }
+  readonly overviewResponseStatusTotal = computed<number>(() => Object.values(this.overview()?.responseStatusCounts || {})
+    .reduce((sum, count) => sum + (Number(count) || 0), 0));
 
-  get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
-    const map = (this.overview?.responseStatusCounts || {}) as Record<
+  protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
+    const map = (this.overview()?.responseStatusCounts || {}) as Record<
     string,
     number
     >;
-    const total = this.overviewResponseStatusTotal;
+    const total = this.overviewResponseStatusTotal();
     return Object.entries(map)
       .map(([status, count]) => {
         const normalizedCount = Number(count) || 0;
@@ -1626,67 +1675,51 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   }
 
-  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return (this.codingFreshnessSummary?.items || [])
-      .filter(isCodingFreshnessOpenWarning)
-      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
-  }
+  private readonly allCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => (this.codingFreshnessSummary()?.items || [])
+    .filter(isCodingFreshnessOpenWarning)
+    .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state)));
 
-  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return this.allCodingFreshnessWarnings
-      .filter(item => !(item.version === 'v3' && (
-        this.isSecondAutocodingManualStatusPending ||
-        this.isSecondAutocodingWaitingForManualCoding
-      )));
-  }
+  readonly codingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => this.allCodingFreshnessWarnings()
+    .filter(item => !(item.version === 'v3' && (
+      this.isSecondAutocodingManualStatusPending() ||
+        this.isSecondAutocodingWaitingForManualCoding()
+    ))));
 
-  get hasCodingFreshnessWarning(): boolean {
-    return this.codingFreshnessWarnings.length > 0 ||
-      this.shouldShowSecondAutocodingWaitingState;
-  }
+  readonly hasCodingFreshnessWarning = computed<boolean>(() => this.codingFreshnessWarnings().length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState());
 
-  get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
-    if (this.codingFreshnessWarnings.length > 0) {
-      return this.codingFreshnessWarnings;
+  readonly codingFreshnessDisplayWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => {
+    if (this.codingFreshnessWarnings().length > 0) {
+      return this.codingFreshnessWarnings();
     }
 
-    if (this.shouldShowSecondAutocodingWaitingState) {
-      return this.secondAutocodingFreshnessWarnings;
+    if (this.shouldShowSecondAutocodingWaitingState()) {
+      return this.secondAutocodingFreshnessWarnings();
     }
 
     return [];
-  }
+  });
 
-  get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings);
-  }
+  readonly autoCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings()));
 
-  get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
-  }
+  readonly manualCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings()));
 
-  get hasOnlyManualCodingFreshnessWarnings(): boolean {
-    return hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings);
-  }
+  readonly hasOnlyManualCodingFreshnessWarnings = computed<boolean>(() => hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings()));
 
-  get codingFreshnessAffectedUnitVersions(): number {
-    return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
-  }
+  readonly codingFreshnessAffectedUnitVersions = computed<number>(() => getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings()));
 
-  get codingFreshnessAffectedResponses(): number {
-    return getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings);
-  }
+  readonly codingFreshnessAffectedResponses = computed<number>(() => getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings()));
 
   get codingFreshnessSummaryText(): string {
-    if (this.shouldShowSecondAutocodingWaitingState) {
+    if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.getSecondAutocodingWaitingSummaryText();
     }
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
   }
 
-  get codingFreshnessExplanationText(): string {
-    if (this.shouldShowSecondAutocodingWaitingState) {
+  protected get codingFreshnessExplanationText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
         { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
@@ -1694,7 +1727,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     const guidanceText = getCodingFreshnessManualReviewGuidanceText(
-      this.codingFreshnessWarnings
+      this.codingFreshnessWarnings()
     );
     if (guidanceText) {
       return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
@@ -1704,28 +1737,26 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessBannerTitle(): string {
-    if (this.shouldShowSecondAutocodingWaitingState) {
+    if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
     }
 
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings());
   }
 
-  get codingFreshnessActionLabel(): string {
-    if (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) {
+  readonly codingFreshnessActionLabel = computed<string>(() => {
+    if (this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) {
       return 'Manuelle Kodierung öffnen';
     }
 
-    return this.autoCodingFreshnessWarnings.length > 0 ?
+    return this.autoCodingFreshnessWarnings().length > 0 ?
       'Auto-Coding öffnen' :
       'Kodierung öffnen';
-  }
+  });
 
-  get codingFreshnessActionIcon(): string {
-    return (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
-      'keyboard' :
-      'rule';
-  }
+  protected readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
+    'keyboard' :
+    'rule'));
 
   getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
     return getCodingFreshnessVersionLabel(version);
@@ -1736,7 +1767,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
-    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding()) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
         {
@@ -1749,39 +1780,33 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return getCodingFreshnessChipLabel(item);
   }
 
-  private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
-  }
+  private readonly secondAutocodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings()));
 
-  private get isSecondAutocodingWaitingForManualCoding(): boolean {
-    return isSecondAutocodingWaitingForManualCoding(
-      this.allCodingFreshnessWarnings,
-      this.manualAppliedResultsOverview,
-      this.manualAppliedResultsOverviewLoadFailed
-    );
-  }
+  private readonly isSecondAutocodingWaitingForManualCoding = computed<boolean>(() => isSecondAutocodingWaitingForManualCoding(
+    this.allCodingFreshnessWarnings(),
+    this.manualAppliedResultsOverview(),
+    this.manualAppliedResultsOverviewLoadFailed()
+  ));
 
-  private get isSecondAutocodingManualStatusPending(): boolean {
-    return this.secondAutocodingFreshnessWarnings.length > 0 &&
-      this.isLoadingManualAppliedResultsOverview &&
-      !this.manualAppliedResultsOverviewLoadFailed;
-  }
+  private readonly isSecondAutocodingManualStatusPending = computed<boolean>(() => this.secondAutocodingFreshnessWarnings().length > 0 &&
+      this.isLoadingManualAppliedResultsOverview() &&
+      !this.manualAppliedResultsOverviewLoadFailed());
 
-  private get shouldShowSecondAutocodingWaitingState(): boolean {
-    if (this.isSecondAutocodingManualStatusPending) {
+  private readonly shouldShowSecondAutocodingWaitingState = computed<boolean>(() => {
+    if (this.isSecondAutocodingManualStatusPending()) {
       return false;
     }
 
-    return this.isSecondAutocodingWaitingForManualCoding &&
-      this.codingFreshnessWarnings.length === 0;
-  }
+    return this.isSecondAutocodingWaitingForManualCoding() &&
+      this.codingFreshnessWarnings().length === 0;
+  });
 
   private getSecondAutocodingWaitingSummaryText(): string {
-    if (this.manualAppliedResultsOverviewLoadFailed) {
+    if (this.manualAppliedResultsOverviewLoadFailed()) {
       return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
     }
 
-    const remaining = this.manualAppliedResultsOverview?.remainingResponses || 0;
+    const remaining = this.manualAppliedResultsOverview()?.remainingResponses || 0;
     const remainingText = remaining > 0 ?
       this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,
@@ -1795,13 +1820,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  openCodingFreshnessTarget(): void {
+  protected openCodingFreshnessTarget(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
-    const target = (this.shouldShowSecondAutocodingWaitingState || this.hasOnlyManualCodingFreshnessWarnings) ?
+    const target = (this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
       'manual' :
       'management';
     this.router.navigate([`/workspace-admin/${workspaceId}/coding/${target}`]);
@@ -1830,15 +1855,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get overviewBrowserCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview?.sessionBrowserCounts);
+    return this.toSortedCountList(this.overview()?.sessionBrowserCounts);
   }
 
   get overviewOsCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview?.sessionOsCounts);
+    return this.toSortedCountList(this.overview()?.sessionOsCounts);
   }
 
   get overviewScreenCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview?.sessionScreenCounts);
+    return this.toSortedCountList(this.overview()?.sessionScreenCounts);
   }
 
   getBrowserTotal(): number {
@@ -1861,8 +1886,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Math.round((Number(count) / t) * 1000) / 10;
   }
 
-  openSessionDistributionsDialog(): void {
-    if (!this.overview) {
+  protected openSessionDistributionsDialog(): void {
+    const overviewValue = this.overview();
+
+    if (!overviewValue) {
       return;
     }
 
@@ -1870,19 +1897,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '900px',
       maxWidth: '95vw',
       data: {
-        browserCounts: this.overview.sessionBrowserCounts || {},
-        osCounts: this.overview.sessionOsCounts || {},
-        screenCounts: this.overview.sessionScreenCounts || {}
+        browserCounts: overviewValue.sessionBrowserCounts || {},
+        osCounts: overviewValue.sessionOsCounts || {},
+        screenCounts: overviewValue.sessionScreenCounts || {}
       }
     });
   }
 
-  openResponseStatusInTable(status: string): void {
-    this.quickSearchTableFilters = { responseStatus: status };
-    this.forceShowLogAnomalyTableColumn = false;
-    this.isTableView = true;
-    this.isLoading = false;
-    this.isUploadingResults = false;
+  protected openResponseStatusInTable(status: string): void {
+    this.quickSearchTableFilters.set({ responseStatus: status });
+    this.forceShowLogAnomalyTableColumn.set(false);
+    this.isTableView.set(true);
+    this.isLoading.set(false);
+    this.isUploadingResults.set(false);
   }
 
   getResponseStatusTooltip(status: string): string {
@@ -1900,13 +1927,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return `${status}${descriptionPart}`;
   }
 
-  isAllSelected(): boolean {
+  protected isAllSelected(): boolean {
     const numSelected = this.selection.selected.length;
     const numRows = this.dataSource?.data.length ?? 0;
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     if (this.isAllSelected()) {
       this.selection.clear();
     } else {
@@ -1914,7 +1941,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  toggleRowSelection(row: P): void {
+  protected toggleRowSelection(row: P): void {
     this.selection.toggle(row);
   }
 
@@ -1928,8 +1955,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       uploaded_at: result.uploaded_at as Date
     }));
     this.dataSource = new MatTableDataSource(mappedResults);
-    this.totalRecords = total;
-    this.dataSource.sort = this.sort;
+    this.totalRecords.set(total);
+    this.dataSource.sort = this.sort() ?? null;
   }
 
   openImportDialog(): void {
@@ -1937,17 +1964,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe(async result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(async result => {
       if (result) {
         switch (result.type) {
           case 'testcenter':
             await this.testCenterImport();
             break;
           case 'responses':
-            this.hiddenResponsesFileInput.nativeElement.click();
+            this.hiddenResponsesFileInput().nativeElement.click();
             break;
           case 'logs':
-            this.hiddenLogsFileInput.nativeElement.click();
+            this.hiddenLogsFileInput().nativeElement.click();
             break;
           default:
             break;
@@ -1957,6 +1984,30 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   async testCenterImport(): Promise<void> {
+    if (this.destroyRef.destroyed) return;
+    this.cancelTestCenterImport?.();
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const cancellation = new ReplaySubject<void>(1);
+    const ownedDialogs = new Set<MatDialogRef<unknown>>();
+    let cancelled = false;
+    let workspaceChanges: Subscription | undefined;
+    let unregisterDestroy = () => {};
+    const cancel = (): void => {
+      if (cancelled) return;
+      cancelled = true;
+      cancellation.next();
+      cancellation.complete();
+      workspaceChanges?.unsubscribe();
+      unregisterDestroy();
+      ownedDialogs.forEach(ref => ref.close());
+      ownedDialogs.clear();
+      if (this.cancelTestCenterImport === cancel) this.cancelTestCenterImport = null;
+    };
+    this.cancelTestCenterImport = cancel;
+    unregisterDestroy = this.destroyRef.onDestroy(cancel);
+    workspaceChanges = this.appService.selectedWorkspaceId$.subscribe(id => {
+      if (id !== workspaceId) cancel();
+    });
     const fallbackOverview: TestResultsOverviewResponse = {
       testPersons: 0,
       testGroups: 0,
@@ -1969,19 +2020,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       sessionScreenCounts: {}
     };
 
-    const workspaceId = this.appService.selectedWorkspaceId;
     let loadedBeforeOverview: TestResultsOverviewResponse | null = null;
     if (workspaceId) {
       try {
         loadedBeforeOverview = await firstValueFrom(
-          this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(5000))
+          this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(5000), takeUntil(cancellation)),
+          { defaultValue: null }
         );
       } catch {
         loadedBeforeOverview = null;
       }
     }
+    if (cancelled) return;
     const beforeOverview =
-      loadedBeforeOverview || this.overview || fallbackOverview;
+      loadedBeforeOverview || this.overview() || fallbackOverview;
 
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '1200px',
@@ -1992,10 +2044,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         importType: 'testResults'
       }
     });
+    ownedDialogs.add(dialogRef);
 
-    const sleep = (ms: number) => new Promise<void>(resolve => {
-      window.setTimeout(() => resolve(), ms);
-    });
+    const sleep = (ms: number) => firstValueFrom(rxjsTimer(ms).pipe(takeUntil(cancellation)), { defaultValue: null });
 
     const hasOverviewChanged = (current: TestResultsOverviewResponse) => (
       current.testPersons !== beforeOverview.testPersons ||
@@ -2013,7 +2064,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }> => {
         if (!workspaceId) {
           return {
-            overview: this.overview || fallbackOverview,
+            overview: this.overview() || fallbackOverview,
             loaded: false,
             changed: false
           };
@@ -2023,6 +2074,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         // when an import only confirms already existing data.
         const deadline = Date.now() + 20000;
         for (let i = 0; i < 4 && Date.now() < deadline; i += 1) {
+          if (cancelled) return { overview: beforeOverview, loaded: false, changed: false };
           progressState$?.next({
             title: 'Testcenter-Import',
             icon: 'upload_file',
@@ -2035,7 +2087,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           let current: TestResultsOverviewResponse | null = null;
           try {
             current = await firstValueFrom(
-              this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(Math.min(5000, Math.max(1, deadline - Date.now()))))
+              this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(Math.min(5000, Math.max(1, deadline - Date.now()))), takeUntil(cancellation)),
+              { defaultValue: null }
             );
           } catch {
             current = null;
@@ -2047,20 +2100,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           return { overview: current, loaded: true, changed: hasOverviewChanged(current) };
         }
         return {
-          overview: this.overview || beforeOverview,
+          overview: this.overview() || beforeOverview,
           loaded: false,
           changed: false
         };
       };
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntil(cancellation), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+      ownedDialogs.delete(dialogRef);
+      let awaitingOverview = false;
       const maybePayload = result as
         | {
           didImport?: boolean;
           resultType?: 'logs' | 'responses';
         }
         | boolean
-        | UntypedFormGroup
         | undefined;
 
       if (
@@ -2069,6 +2123,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         'didImport' in maybePayload &&
         (maybePayload as { didImport?: boolean }).didImport
       ) {
+        awaitingOverview = true;
         (async () => {
           const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
             title: 'Testcenter-Import',
@@ -2087,13 +2142,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               data: { state$: progressState$ }
             }
           );
+          ownedDialogs.add(progressDialogRef);
 
           let overviewResult: {
             overview: TestResultsOverviewResponse;
             loaded: boolean;
             changed: boolean;
           } = {
-            overview: this.overview || beforeOverview,
+            overview: this.overview() || beforeOverview,
             loaded: false,
             changed: false
           };
@@ -2104,6 +2160,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             }
 
             overviewResult = await pollOverviewAfterImport(progressState$);
+            if (cancelled) return;
 
             progressState$.next({
               title: 'Testcenter-Import',
@@ -2115,7 +2172,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               mode: 'determinate'
             });
           } finally {
-            progressDialogRef.close();
+            if (ownedDialogs.delete(progressDialogRef)) progressDialogRef.close();
             progressState$.complete();
           }
 
@@ -2168,17 +2225,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (!codingFreshness && workspaceId) {
             codingFreshness = await this.fetchCodingFreshnessSummary(workspaceId);
           }
+          if (cancelled) return;
           if (codingFreshness) {
-            this.codingFreshnessSummary = codingFreshness;
+            this.codingFreshnessSummary.set(codingFreshness);
           }
           const manualOverviewResult = workspaceId ?
             await this.fetchManualAppliedResultsOverview(workspaceId) :
             {
-              overview: this.manualAppliedResultsOverview,
-              loadFailed: this.manualAppliedResultsOverviewLoadFailed
+              overview: this.manualAppliedResultsOverview(),
+              loadFailed: this.manualAppliedResultsOverviewLoadFailed()
             };
-          this.manualAppliedResultsOverview = manualOverviewResult.overview;
-          this.manualAppliedResultsOverviewLoadFailed = manualOverviewResult.loadFailed;
+          if (cancelled) return;
+          this.manualAppliedResultsOverview.set(manualOverviewResult.overview);
+          this.manualAppliedResultsOverviewLoadFailed.set(manualOverviewResult.loadFailed);
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -2219,21 +2278,22 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               manualAppliedResultsOverviewLoadFailed: manualOverviewResult.loadFailed
             }
           });
-        })();
+        })().finally(cancel);
       }
 
-      if (result instanceof UntypedFormGroup || result) {
+      if (result) {
         if (workspaceId) {
           this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
         this.refreshCodingFreshnessStatusAfterChange();
         this.createTestResultsList(
-          this.pageIndex,
-          this.pageSize,
+          this.pageIndex(),
+          this.pageSize(),
           this.getCurrentSearchText()
         );
       }
+      if (!awaitingOverview) cancel();
     });
   }
 
@@ -2258,7 +2318,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         });
 
         optionsRef
-          .afterClosed()
+          .afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe(
             (options: TestResultsUploadOptionsDialogResult | undefined) => {
               if (!options) {
@@ -2276,136 +2336,43 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               };
 
               const overwriteExisting = overwriteMode !== 'skip';
-              const uploadTitle =
-                resultType === 'logs' ?
-                  'Upload-Ergebnis (Logs)' :
-                  'Upload-Ergebnis (Antworten)';
-              const uploadIcon = resultType === 'logs' ? 'article' : 'upload_file';
-              const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
-                title: uploadTitle,
-                icon: uploadIcon,
-                phase: 'uploading',
-                phaseLabel: 'Datei wird hochgeladen',
-                message: resultType === 'logs' ?
-                  'Die Log-Datei wird in Teilen übertragen.' :
-                  'Die Antwortdatei wird in Teilen übertragen.',
-                percent: 0,
-                mode: 'determinate'
-              });
-              const progressDialogRef = this.dialog.open(
-                TestResultsImportProgressDialogComponent,
-                {
-                  width: '560px',
-                  maxWidth: '95vw',
-                  disableClose: true,
-                  data: { state$: progressState$ }
-                }
-              );
-              const progressHandle: TestResultsImportProgressHandle = {
-                dialogRef: progressDialogRef,
-                state$: progressState$
+              const workspaceId = this.appService.selectedWorkspaceId;
+              const beforeOverview = this.overview() || {
+                testPersons: 0,
+                testGroups: 0,
+                uniqueBooklets: 0,
+                uniqueUnits: 0,
+                uniqueResponses: 0,
+                responseStatusCounts: {},
+                sessionBrowserCounts: {},
+                sessionOsCounts: {},
+                sessionScreenCounts: {}
               };
-
-              this.isLoading = true;
-              this.isUploadingResults = true;
-
-              if (resultType === 'responses') {
-                this.uploadingMessage = 'Importiere Antworten... (0%)';
-              } else if (resultType === 'logs') {
-                this.uploadingMessage = 'Importiere Logs... (0%)';
-              } else {
-                this.uploadingMessage = 'Ergebnisse werden hochgeladen... (0%)';
-              }
-
-              const file = inputElement.files![0];
-              this.fileService
-                .uploadTestResultsChunked(
-                  this.appService.selectedWorkspaceId,
-                  file,
-                  resultType,
-                  {
-                    overwriteExisting,
-                    overwriteMode,
-                    scope,
-                    filters
-                  },
-                  (percent: number) => {
-                    if (resultType === 'responses') {
-                      this.uploadingMessage = `Importiere Antworten... (${percent}%)`;
-                    } else if (resultType === 'logs') {
-                      this.uploadingMessage = `Importiere Logs... (${percent}%)`;
-                    } else {
-                      this.uploadingMessage = `Ergebnisse werden hochgeladen... (${percent}%)`;
-                    }
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'uploading',
-                      phaseLabel: 'Datei wird hochgeladen',
-                      message: resultType === 'logs' ?
-                        'Die Log-Datei wird in Teilen übertragen.' :
-                        'Die Antwortdatei wird in Teilen übertragen.',
-                      percent,
-                      mode: 'determinate'
-                    });
-                  }
-                )
-                .subscribe({
-                  next: (jobs: TestResultsUploadJobDto[]) => {
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'processing',
-                      phaseLabel: 'Verarbeitung läuft',
-                      message: 'Upload abgeschlossen. Der Server verarbeitet die Datei.',
-                      percent: 0,
-                      completed: 0,
-                      total: jobs.length,
-                      mode: 'determinate'
-                    });
-
-                    const beforeOverview = this.overview || {
-                      testPersons: 0,
-                      testGroups: 0,
-                      uniqueBooklets: 0,
-                      uniqueUnits: 0,
-                      uniqueResponses: 0,
-                      responseStatusCounts: {},
-                      sessionBrowserCounts: {},
-                      sessionOsCounts: {},
-                      sessionScreenCounts: {}
-                    };
-
-                    this.uploadStateService.registerBatch({
-                      workspaceId: this.appService.selectedWorkspaceId,
-                      jobIds: jobs.map(j => j.jobId),
-                      resultType,
-                      beforeOverview,
-                      initialIssues: [],
-                      progress: 0,
-                      completedCount: 0,
-                      totalJobs: jobs.length
-                    }, progressHandle);
-                  },
-                  error: err => {
-                    progressDialogRef.close();
-                    progressState$.complete();
-                    this.isLoading = false;
-                    this.isUploadingResults = false;
-                    this.snackBar.open(
-                      `Fehler beim Upload-Start: ${err.message}`,
-                      'Fehler',
-                      { duration: 5000 }
-                    );
-                  }
-                });
+              this.isLoading.set(true);
+              this.isUploadingResults.set(true);
+              this.uploadingMessage.set(resultType === 'responses' ?
+                'Importiere Antworten... (0%)' : 'Importiere Logs... (0%)');
+              this.uploadStateService.startChunkedUpload(
+                workspaceId,
+                inputElement.files![0],
+                resultType,
+                {
+                  overwriteExisting, overwriteMode, scope, filters
+                },
+                beforeOverview
+              ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+                error: () => {
+                  this.isLoading.set(false);
+                  this.isUploadingResults.set(false);
+                }
+              });
             }
           );
       }
     }
   }
 
-  deleteSelectedPersons(): void {
+  protected deleteSelectedPersons(): void {
     const selectedTestPersons = this.selection.selected;
     if (selectedTestPersons.length === 0) {
       return;
@@ -2417,14 +2384,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteFilteredPersons(): void {
+  protected deleteFilteredPersons(): void {
     this.confirmAndStartDelete({
       scope: 'filteredPersons',
       searchText: this.getCurrentSearchText()
     });
   }
 
-  deleteSelectedGroups(): void {
+  protected deleteSelectedGroups(): void {
     const groups = Array.from(
       new Set(
         this.selection.selected
@@ -2446,7 +2413,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteBookletsByName(bookletName: string): void {
+  protected deleteBookletsByName(bookletName: string): void {
     if (!bookletName) {
       return;
     }
@@ -2457,7 +2424,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteUnitsByName(unit: Unit): void {
+  protected deleteUnitsByName(unit: Unit): void {
     const unitName = unit.alias || unit.name;
     if (!unitName) {
       return;
@@ -2469,7 +2436,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openResponseCleanupDialog(): void {
+  protected openResponseCleanupDialog(): void {
     if (this.isDeleteJobRunning()) {
       return;
     }
@@ -2482,7 +2449,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(
       (request: TestResultsResponseCleanupRequestDto | false | undefined) => {
         if (request) {
           this.confirmAndStartResponseCleanup(request);
@@ -2491,10 +2458,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
   }
 
-  isDeleteJobRunning(): boolean {
-    return this.activeDeleteTask?.status === 'pending' ||
-      this.activeDeleteTask?.status === 'processing' ||
-      this.isDeletingTestPersons;
+  protected isDeleteJobRunning(): boolean {
+    return this.activeDeleteTask()?.status === 'pending' ||
+      this.activeDeleteTask()?.status === 'processing' ||
+      this.isDeletingTestPersons();
   }
 
   private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void {
@@ -2502,13 +2469,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isDeletingTestPersons = true;
+    this.isDeletingTestPersons.set(true);
 
     this.testResultService
-      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
+      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
-          this.isDeletingTestPersons = false;
+          this.isDeletingTestPersons.set(false);
           if (!preview) {
             this.snackBar.open(
               'Die Löschvorschau konnte nicht berechnet werden.',
@@ -2521,7 +2488,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.openDeletePreviewDialog(request, preview);
         },
         error: () => {
-          this.isDeletingTestPersons = false;
+          this.isDeletingTestPersons.set(false);
           this.snackBar.open(
             'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
@@ -2538,16 +2505,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isDeletingTestPersons = true;
+    this.isDeletingTestPersons.set(true);
 
     this.testResultService
       .previewDeleteTestResultResponses(
         this.appService.selectedWorkspaceId,
         request
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
-          this.isDeletingTestPersons = false;
+          this.isDeletingTestPersons.set(false);
           if (!preview) {
             this.snackBar.open(
               'Die Löschvorschau konnte nicht berechnet werden.',
@@ -2560,7 +2527,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.openResponseCleanupPreviewDialog(request, preview);
         },
         error: () => {
-          this.isDeletingTestPersons = false;
+          this.isDeletingTestPersons.set(false);
           this.snackBar.open(
             'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
@@ -2582,7 +2549,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.startDeleteJob(request);
       }
@@ -2601,7 +2568,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.startResponseCleanupJob(request);
       }
@@ -2610,20 +2577,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private startDeleteJob(request: TestResultsDeleteRequestDto): void {
     this.resetSelectedResultDetails();
-    this.isDeletingTestPersons = true;
-    this.deleteProgress = 0;
-    this.deleteProgressMessage = 'Löschung wird gestartet...';
+    this.isDeletingTestPersons.set(true);
+    this.deleteProgress.set(0);
+    this.deleteProgressMessage.set('Löschung wird gestartet...');
 
     this.testResultService
-      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
-          this.activeDeleteTask = task;
+          this.activeDeleteTask.set(task);
           this.pollDeleteTask(task.id);
         },
         error: () => {
-          this.isDeletingTestPersons = false;
-          this.activeDeleteTask = null;
+          this.isDeletingTestPersons.set(false);
+          this.activeDeleteTask.set(null);
           this.snackBar.open(
             'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
@@ -2637,23 +2604,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     request: TestResultsResponseCleanupRequestDto
   ): void {
     this.resetSelectedResultDetails();
-    this.isDeletingTestPersons = true;
-    this.deleteProgress = 0;
-    this.deleteProgressMessage = 'Antwort-Löschung wird gestartet...';
+    this.isDeletingTestPersons.set(true);
+    this.deleteProgress.set(0);
+    this.deleteProgressMessage.set('Antwort-Löschung wird gestartet...');
 
     this.testResultService
       .createDeleteTestResultResponsesJob(
         this.appService.selectedWorkspaceId,
         request
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
-          this.activeDeleteTask = task;
+          this.activeDeleteTask.set(task);
           this.pollDeleteTask(task.id);
         },
         error: () => {
-          this.isDeletingTestPersons = false;
-          this.activeDeleteTask = null;
+          this.isDeletingTestPersons.set(false);
+          this.activeDeleteTask.set(null);
           this.snackBar.open(
             'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
@@ -2681,16 +2648,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: task => {
-          this.activeDeleteTask = task;
-          this.deleteProgress = task.progress || 0;
-          this.deleteProgressMessage =
-            task.progress_message || 'Löschung läuft...';
+          this.activeDeleteTask.set(task);
+          this.deleteProgress.set(task.progress || 0);
+          this.deleteProgressMessage.set(task.progress_message || 'Löschung läuft...');
 
           if (task.status === 'completed') {
             this.finishDeleteTask(task.id);
           } else if (task.status === 'failed') {
-            this.isDeletingTestPersons = false;
-            this.activeDeleteTask = null;
+            this.isDeletingTestPersons.set(false);
+            this.activeDeleteTask.set(null);
             this.snackBar.open(
               task.error || 'Die Löschung ist fehlgeschlagen.',
               'Fehler',
@@ -2699,8 +2665,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
-          this.isDeletingTestPersons = false;
-          this.activeDeleteTask = null;
+          this.isDeletingTestPersons.set(false);
+          this.activeDeleteTask.set(null);
           this.snackBar.open(
             'Der Fortschritt der Löschung konnte nicht gelesen werden.',
             'Fehler',
@@ -2712,13 +2678,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private finishDeleteTask(taskId: number): void {
     this.validationService
-      .getValidationResults(this.appService.selectedWorkspaceId, taskId)
+      .getValidationResults(this.appService.selectedWorkspaceId, taskId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           const deleteResult = result as TestResultsDeleteResultDto;
-          this.isDeletingTestPersons = false;
-          this.activeDeleteTask = null;
-          this.deleteProgress = 100;
+          this.isDeletingTestPersons.set(false);
+          this.activeDeleteTask.set(null);
+          this.deleteProgress.set(100);
           this.selection.clear();
           this.testResultService.invalidateCache(
             this.appService.selectedWorkspaceId
@@ -2730,8 +2696,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.refreshCodingFreshnessStatusAfterChange();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
-            this.pageIndex,
-            this.pageSize,
+            this.pageIndex(),
+            this.pageSize(),
             this.getCurrentSearchText()
           );
           this.snackBar.open(
@@ -2741,8 +2707,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
-          this.isDeletingTestPersons = false;
-          this.activeDeleteTask = null;
+          this.isDeletingTestPersons.set(false);
+          this.activeDeleteTask.set(null);
           this.snackBar.open(
             'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
             'Info',
@@ -2752,8 +2718,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.refreshCodingFreshnessStatusAfterChange();
           this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
-            this.pageIndex,
-            this.pageSize,
+            this.pageIndex(),
+            this.pageSize(),
             this.getCurrentSearchText()
           );
         }
@@ -2761,17 +2727,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private resetSelectedResultDetails(): void {
-    this.booklets = [];
-    this.responses = [];
-    this.logs = [];
-    this.bookletLogs = [];
-    this.selectedUnit = undefined;
-    this.selectedBooklet = '';
-    this.unitTagsMap.clear();
-    this.unitNotesMap.clear();
+    this.selectedResultRequestsCancelled.next();
+    this.isLoadingBooklets.set(false);
+    this.booklets.set([]);
+    this.responses.set([]);
+    this.logs.set([]);
+    this.bookletLogs.set([]);
+    this.selectedUnit.set(undefined);
+    this.selectedBooklet.set('');
+    this.unitTagsMap.set(new Map());
+    this.unitNotesMap.set(new Map());
   }
 
-  openTestResultsSearchDialog(): void {
+  protected openTestResultsSearchDialog(): void {
     const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
@@ -2779,15 +2747,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result?: QuickSearchDialogResult) => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe((result?: QuickSearchDialogResult) => {
       if (!result) {
         return;
       }
 
       if (result.action === 'table') {
-        this.quickSearchTableFilters = result.filters || null;
-        this.forceShowLogAnomalyTableColumn = false;
-        this.isTableView = true;
+        this.quickSearchTableFilters.set(result.filters || null);
+        this.forceShowLogAnomalyTableColumn.set(false);
+        this.isTableView.set(true);
         return;
       }
 
@@ -2805,27 +2773,29 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isTableView = false;
-    this.testPerson = {
+    this.isTableView.set(false);
+    this.testPerson.set({
       id: item.personId,
       code: item.personCode || '',
       group: item.personGroup || '',
       login: item.personLogin || '',
       uploaded_at: new Date()
-    };
+    });
     this.resetSelectedResultDetails();
-    this.isLoadingBooklets = true;
+    this.isLoadingBooklets.set(true);
 
     this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId)
+      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId).pipe(
+        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
+      )
       .subscribe({
         next: (booklets: PersonTestResult[]) => {
-          this.booklets = booklets as unknown as Booklet[];
+          this.booklets.set(booklets as unknown as Booklet[]);
           this.sortBooklets();
           this.sortBookletUnits();
           this.loadAllUnitTags();
           this.loadAllUnitNotes();
-          this.isLoadingBooklets = false;
+          this.isLoadingBooklets.set(false);
 
           const targetBooklet = this.findQuickSearchBooklet(item);
           if (!targetBooklet) {
@@ -2840,14 +2810,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.onUnitClick(targetUnit, targetBooklet);
 
           if (item.kind === 'response' && item.variableId) {
-            this.responses = this.responses.map(response => ({
+            this.responses.set(this.responses().map(response => ({
               ...response,
               expanded: response.variableid === item.variableId
-            }));
+            })));
           }
         },
         error: () => {
-          this.isLoadingBooklets = false;
+          this.isLoadingBooklets.set(false);
           this.snackBar.open(
             'Fehler beim Öffnen des Treffers im Ergebnisbrowser',
             'Fehler',
@@ -2860,11 +2830,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private findQuickSearchBooklet(
     item: QuickSearchResultItem
   ): Booklet | undefined {
-    if (!this.booklets || (!item.bookletId && !item.bookletName)) {
+    if (!this.booklets() || (!item.bookletId && !item.bookletName)) {
       return undefined;
     }
 
-    return this.booklets.find(booklet => {
+    return this.booklets().find(booklet => {
       if (item.bookletId && booklet.id === item.bookletId) {
         return true;
       }
@@ -2913,24 +2883,23 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.unitService
-          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number)
+          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               if (result.success) {
-                const unitIndex = booklet.units.findIndex(
-                  u => u.id === unit.id
-                );
-                if (unitIndex !== -1) {
-                  booklet.units.splice(unitIndex, 1);
-                }
+                this.booklets.update(booklets => booklets.map(current => (
+                  current.id === booklet.id ? {
+                    ...current, units: current.units.filter(candidate => candidate.id !== unit.id)
+                  } : current
+                )));
 
-                if (this.selectedUnit && this.selectedUnit.id === unit.id) {
-                  this.selectedUnit = undefined;
-                  this.responses = [];
-                  this.logs = [];
+                if (this.selectedUnit()?.id === unit.id) {
+                  this.selectedUnit.set(undefined);
+                  this.responses.set([]);
+                  this.logs.set([]);
                 }
 
                 this.snackBar.open(
@@ -2985,21 +2954,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.responseService
           .deleteResponse(
             this.appService.selectedWorkspaceId,
             response.id as number
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               if (result.success) {
-                const responseIndex = this.responses.findIndex(
+                const responseIndex = this.responses().findIndex(
                   r => r.id === response.id
                 );
                 if (responseIndex !== -1) {
-                  this.responses.splice(responseIndex, 1);
+                  this.responses.update(value => {
+                    const next = [...value];
+                    next.splice(responseIndex, 1);
+                    return next;
+                  });
                 }
 
                 this.snackBar.open(
@@ -3032,7 +3005,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  openValidationDialog(): void {
+  protected openValidationDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const shouldAutoStart = workspaceId ?
       !this.validationTaskStateService.hasAnyValidationResult(workspaceId) :
@@ -3048,11 +3021,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         if (result.variableValidationResult) {
-          this.variableValidationResult = result.variableValidationResult;
-          this.isVariableValidationRunning = false;
+          this.variableValidationResult.set(result.variableValidationResult);
+          this.isVariableValidationRunning.set(false);
         }
         this.checkValidationStatus();
         this.getOverallValidationStatus();
@@ -3069,13 +3042,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
   }
 
-  openVariableAnalysisDialog(): void {
+  protected openVariableAnalysisDialog(): void {
     const loadingSnackBar = this.snackBar.open('Lade Analyse-Aufträge...', '', {
       duration: 3000
     });
 
     this.variableAnalysisService
-      .getAllJobs(this.appService.selectedWorkspaceId)
+      .getAllJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: jobs => {
           loadingSnackBar.dismiss();
@@ -3088,7 +3061,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             width: 'min(96vw, 1320px)',
             maxWidth: '96vw',
             data: {
-              unitId: this.selectedUnit?.id,
+              unitId: this.selectedUnit()?.id,
               title: 'Antwortwertanalyse',
               workspaceId: this.appService.selectedWorkspaceId,
               jobs: variableAnalysisJobs
@@ -3107,6 +3080,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openBookletInfo(bookletName: string): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     const loadingSnackBar = this.snackBar.open(
       'Lade Booklet-Informationen...',
       '',
@@ -3114,9 +3088,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     this.fileService
-      .getBookletInfo(this.appService.selectedWorkspaceId, bookletName)
+      .getBookletInfo(workspaceId, bookletName)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: (bookletInfo: BookletInfoDto) => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
@@ -3131,6 +3107,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Booklet-Informationen',
@@ -3142,12 +3119,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openUnitInfoForSelectedUnit(): void {
-    if (!this.selectedUnit || !this.selectedUnit.name) {
+    const selectedUnitSnapshot = this.selectedUnit();
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!selectedUnitSnapshot || !selectedUnitSnapshot.name) {
       this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
 
-    const unitFileId = String(this.selectedUnit.name || '')
+    const unitFileId = String(selectedUnitSnapshot.name || '')
       .trim()
       .toUpperCase();
     if (!unitFileId) {
@@ -3162,9 +3142,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     this.fileService
-      .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+      .getUnitInfo(workspaceId, unitFileId)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: (unitInfo: UnitInfoDto) => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(UnitInfoDialogComponent, {
@@ -3179,6 +3161,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Unit-Informationen',
@@ -3189,19 +3172,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  openExportDialog(): void {
+  protected openExportDialog(): void {
     const dialogRef = this.dialog.open(TestResultsExportDialogComponent, {
       width: '500px',
       data: {
-        isExporting: this.isExporting,
-        exportTypeInProgress: this.exportTypeInProgress,
-        exportJobStatus: this.exportJobStatus,
-        exportJobProgress: this.exportJobProgress,
-        exportJobId: this.exportJobId
+        isExporting: this.isExporting(),
+        exportTypeInProgress: this.exportTypeInProgress(),
+        exportJobStatus: this.exportJobStatus(),
+        exportJobProgress: this.exportJobProgress(),
+        exportJobId: this.exportJobId()
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         if (result.type === 'download' && result.jobId) {
           this.downloadExportResult(result.jobId);
@@ -3227,7 +3210,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe((result: ExportOptions | undefined) => {
       if (result) {
         const filters = {
           groupNames:
@@ -3252,9 +3235,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               undefined
         };
 
-        this.isExporting = true;
-        this.exportTypeInProgress =
-          exportType === 'results' ? 'test-results' : 'test-logs';
+        this.isExporting.set(true);
+        this.exportTypeInProgress.set(exportType === 'results' ? 'test-results' : 'test-logs');
         const exportMethod =
           exportType === 'results' ?
             this.testResultBackendService.startExportTestResultsJob(
@@ -3266,10 +3248,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               filters
             );
 
-        exportMethod.subscribe({
+        exportMethod.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: response => {
-            this.exportJobId = response.jobId;
-            this.exportJobStatus = 'active';
+            this.exportJobId.set(response.jobId);
+            this.exportJobStatus.set('active');
             this.snackBar.open(
               'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
               'OK',
@@ -3278,8 +3260,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.pollExportJobStatus(response.jobId);
           },
           error: () => {
-            this.isExporting = false;
-            this.exportTypeInProgress = null;
+            this.isExporting.set(false);
+            this.exportTypeInProgress.set(null);
             this.snackBar.open('Fehler beim Starten des Exports', 'Fehler', {
               duration: 3000
             });
@@ -3294,7 +3276,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
     this.testResultBackendService
-      .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+      .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
@@ -3308,11 +3290,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               j.status === 'delayed'
           );
           if (activeJob) {
-            this.exportJobId = activeJob.jobId;
-            this.isExporting = true;
-            this.exportTypeInProgress = activeJob.exportType as
-              | 'test-results'
-              | 'test-logs';
+            this.exportJobId.set(activeJob.jobId);
+            this.isExporting.set(true);
+            this.exportTypeInProgress.set(activeJob.exportType as 'test-results' | 'test-logs');
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -3328,28 +3308,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         return;
       }
       this.testResultBackendService
-        .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+        .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (jobs: TestResultExportJob[]) => {
             const job = jobs.find(j => j.jobId === jobId);
             if (job) {
-              this.exportJobStatus = job.status;
-              this.exportJobProgress = job.progress;
+              this.exportJobStatus.set(job.status);
+              this.exportJobProgress.set(job.progress);
 
               if (job.status === 'completed') {
                 this.stopExportStatusPolling();
-                this.isExporting = false;
+                this.isExporting.set(false);
                 const snackBarRef = this.snackBar.open(
                   'Export abgeschlossen',
                   'Herunterladen',
                   { duration: 10000 }
                 );
-                snackBarRef.onAction().subscribe(() => {
+                snackBarRef.onAction().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
                   this.downloadExportResult(jobId);
                 });
               } else if (job.status === 'failed') {
                 this.stopExportStatusPolling();
-                this.isExporting = false;
+                this.isExporting.set(false);
                 this.snackBar.open('Export fehlgeschlagen', 'Fehler', {
                   duration: 5000
                 });
@@ -3376,7 +3356,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.testResultBackendService
-      .cancelTestResultExportJob(this.appService.selectedWorkspaceId, jobId)
+      .cancelTestResultExportJob(this.appService.selectedWorkspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           if (response.success) {
@@ -3401,11 +3381,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private resetExportState(): void {
     this.stopExportStatusPolling();
-    this.isExporting = false;
-    this.exportJobStatus = null;
-    this.exportJobProgress = 0;
-    this.exportJobId = null;
-    this.exportTypeInProgress = null;
+    this.isExporting.set(false);
+    this.exportJobStatus.set(null);
+    this.exportJobProgress.set(0);
+    this.exportJobId.set(null);
+    this.exportTypeInProgress.set(null);
   }
 
   private stopExportStatusPolling(): void {
@@ -3420,7 +3400,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
     this.testResultBackendService
-      .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
+      .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           const url = window.URL.createObjectURL(blob);
@@ -3428,7 +3408,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           link.href = url;
           const datePart = new Date().toISOString().split('T')[0];
           const suffix =
-            this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
+            this.exportTypeInProgress() === 'test-logs' ? 'logs' : 'results';
           link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
@@ -3441,7 +3421,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             .deleteTestResultExportJob(
               this.appService.selectedWorkspaceId,
               jobId
-            )
+            ).pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe();
         },
         error: () => {

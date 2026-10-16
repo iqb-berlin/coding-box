@@ -1101,6 +1101,23 @@ describe('VariableAnalysisService', () => {
     });
   });
 
+  it('does not delete a foreign variable analysis job or its cached results', async () => {
+    const job = createJob();
+    job.data.workspaceId = 2;
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(job);
+
+    await expect(service.deleteJob(1, 'job-1')).resolves.toBe(false);
+    expect(jobQueueService.deleteVariableAnalysisJob).not.toHaveBeenCalled();
+    expect(cacheService.delete).not.toHaveBeenCalled();
+  });
+
+  it('passes workspace ownership to variable analysis cancellation', async () => {
+    jobQueueService.cancelVariableAnalysisJob.mockResolvedValue(false);
+
+    await expect(service.cancelJob(1, 'job-1')).resolves.toBe(false);
+    expect(jobQueueService.cancelVariableAnalysisJob).toHaveBeenCalledWith('job-1', 1);
+  });
+
   it('lists, deletes and cancels jobs', async () => {
     jobQueueService.getVariableAnalysisJobs.mockResolvedValue([
       createJob({ id: 'newer', state: 'active' }),
@@ -1115,6 +1132,7 @@ describe('VariableAnalysisService', () => {
     expect(jobs).toHaveLength(2);
     expect(jobs[0].status).toBe('processing');
     await expect(service.deleteJob(1, 'job-1')).resolves.toBe(true);
+    expect(jobQueueService.deleteVariableAnalysisJob).toHaveBeenCalledWith('job-1', 1);
     expect(cacheService.delete).toHaveBeenCalledWith(
       'variable-analysis:1:job-1'
     );

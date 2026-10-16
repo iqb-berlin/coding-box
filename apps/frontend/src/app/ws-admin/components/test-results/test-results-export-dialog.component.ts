@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import {
   MAT_DIALOG_DATA,
@@ -26,6 +26,7 @@ export type TestResultsExportDialogData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-export-dialog',
   standalone: true,
   imports: [
@@ -171,20 +172,18 @@ export type TestResultsExportDialogData = {
   ]
 })
 export class TestResultsExportDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsExportDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsExportDialogData
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsExportDialogComponent>>(MatDialogRef);
+  protected data = inject<TestResultsExportDialogData>(MAT_DIALOG_DATA);
 
-  selectExportType(type: 'results' | 'logs'): void {
+  protected selectExportType(type: 'results' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
-  downloadExport(): void {
+  protected downloadExport(): void {
     this.dialogRef.close({ type: 'download', jobId: this.data.exportJobId });
   }
 
-  cancel(): void {
+  protected cancel(): void {
     if (this.data.isExporting && this.data.exportJobId) {
       this.dialogRef.close({ type: 'cancel', jobId: this.data.exportJobId });
       return;

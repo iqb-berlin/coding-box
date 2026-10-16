@@ -1,4 +1,6 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  Component, inject, OnInit, ChangeDetectionStrategy
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,6 +29,7 @@ export interface NavigateCodingCasesDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-navigate-coding-cases-dialog',
   templateUrl: './navigate-coding-cases-dialog.component.html',
   styleUrls: ['./navigate-coding-cases-dialog.component.scss'],
@@ -46,8 +49,8 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
   data = inject<NavigateCodingCasesDialogData>(MAT_DIALOG_DATA);
   private translateService = inject(TranslateService);
 
-  displayedColumns: string[] = ['position', 'caseNumberVariable', 'testPerson', 'givenCode', 'codingIssue', 'comments'];
-  dataSource = new MatTableDataSource<NavigationUnit>([]);
+  protected displayedColumns: string[] = ['position', 'caseNumberVariable', 'testPerson', 'givenCode', 'codingIssue', 'comments'];
+  protected dataSource = new MatTableDataSource<NavigationUnit>([]);
 
   ngOnInit(): void {
     this.loadNavigationUnits();
@@ -142,11 +145,11 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
     return '';
   }
 
-  onRowClicked(selectedUnit: NavigationUnit): void {
+  protected onRowClicked(selectedUnit: NavigationUnit): void {
     this.dialogRef.close(selectedUnit.unit);
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 }

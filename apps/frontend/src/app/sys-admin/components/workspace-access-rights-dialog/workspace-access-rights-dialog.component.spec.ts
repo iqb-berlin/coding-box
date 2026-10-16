@@ -1,3 +1,4 @@
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
@@ -11,18 +12,20 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
   let component: WorkspaceAccessRightsDialogComponent;
   let fixture: ComponentFixture<WorkspaceAccessRightsDialogComponent>;
   let workspacesByUser$: Subject<number[]>;
+  let workspaceList$: Subject<unknown>;
   let userBackendService: {
     getWorkspacesByUserListOrFail: jest.Mock;
   };
 
   beforeEach(async () => {
     workspacesByUser$ = new Subject<number[]>();
+    workspaceList$ = new Subject<unknown>();
     userBackendService = {
       getWorkspacesByUserListOrFail: jest.fn().mockReturnValue(workspacesByUser$)
     };
 
     await TestBed.configureTestingModule({
-      providers: [{
+      providers: [provideZonelessChangeDetection(), {
         provide: MAT_DIALOG_DATA,
         useValue: {
           selectedUser: [{ id: 5, username: 'user-5' }]
@@ -35,7 +38,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
       {
         provide: WorkspaceBackendService,
         useValue: {
-          getAllWorkspacesList: jest.fn().mockReturnValue(of({
+          getAllWorkspacesListOrFail: jest.fn().mockReturnValue(of({
             data: [
               { id: 2, name: 'Workspace 2' },
               { id: 3, name: 'Workspace 3' }
@@ -70,10 +73,10 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     fixture.detectChanges();
 
     expect(userBackendService.getWorkspacesByUserListOrFail).toHaveBeenCalledWith(5);
-    expect(component.selectedWorkspacesIds).toEqual([2, 3]);
-    expect(component.result).toEqual([2, 3]);
-    expect(component.isLoadingUserWorkspaces).toBe(false);
-    expect(component.userWorkspacesLoadingFailed).toBe(false);
+    expect(component.selectedWorkspacesIds()).toEqual([2, 3]);
+    expect(component.result()).toEqual([2, 3]);
+    expect(component.isLoadingUserWorkspaces()).toBe(false);
+    expect(component.userWorkspacesLoadingFailed()).toBe(false);
   });
 
   it('disables save while user workspaces are loading', () => {
@@ -81,7 +84,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
 
     const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
 
-    expect(component.isLoadingUserWorkspaces).toBe(true);
+    expect(component.isLoadingUserWorkspaces()).toBe(true);
     expect(saveButton.disabled).toBe(true);
   });
 
@@ -93,10 +96,81 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
 
     const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
 
-    expect(component.selectedWorkspacesIds).toEqual([]);
-    expect(component.result).toEqual([]);
-    expect(component.isLoadingUserWorkspaces).toBe(false);
-    expect(component.userWorkspacesLoadingFailed).toBe(true);
+    expect(component.selectedWorkspacesIds()).toEqual([]);
+    expect(component.result()).toEqual([]);
+    expect(component.isLoadingUserWorkspaces()).toBe(false);
+    expect(component.userWorkspacesLoadingFailed()).toBe(true);
     expect(saveButton.disabled).toBe(true);
+  });
+  it('preserves rights and blocks saving until the workspace list arrives', () => {
+    jest.spyOn(TestBed.inject(WorkspaceBackendService), 'getAllWorkspacesListOrFail')
+      .mockReturnValue(workspaceList$ as never);
+    fixture.detectChanges();
+    workspacesByUser$.next([2, 3]);
+    workspacesByUser$.complete();
+    fixture.detectChanges();
+    const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
+    expect(component.result()).toEqual([2, 3]);
+    expect(saveButton.disabled).toBe(true);
+
+    workspaceList$.next({ data: [{ id: 2, name: 'Two' }, { id: 3, name: 'Three' }], total: 2 });
+    workspaceList$.complete();
+    fixture.detectChanges();
+    expect(component.result()).toEqual([2, 3]);
+    expect(saveButton.disabled).toBe(false);
+  });
+
+  it('preserves rights and blocks saving when the workspace list fails', () => {
+    jest.spyOn(TestBed.inject(WorkspaceBackendService), 'getAllWorkspacesListOrFail')
+      .mockReturnValue(workspaceList$ as never);
+    fixture.detectChanges();
+    workspacesByUser$.next([2, 3]);
+    workspacesByUser$.complete();
+    fixture.detectChanges();
+    workspaceList$.error(new Error('list unavailable'));
+    fixture.detectChanges();
+    expect(component.result()).toEqual([2, 3]);
+    expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
+  });
+
+  it('blocks selection until delayed user rights arrive and keeps the result consistent with the checkboxes', async () => {
+    await fixture.whenStable();
+    const checkboxes = Array.from(
+      fixture.nativeElement.querySelectorAll('mat-table input[type="checkbox"]')
+    ) as HTMLInputElement[];
+    const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button') as HTMLButtonElement;
+    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes.every(checkbox => checkbox.disabled)).toBe(true);
+    expect(saveButton.disabled).toBe(true);
+
+    checkboxes[2].click();
+    await fixture.whenStable();
+    expect(component.result()).toEqual([]);
+
+    workspacesByUser$.next([2]);
+    workspacesByUser$.complete();
+    await fixture.whenStable();
+    expect(checkboxes.every(checkbox => !checkbox.disabled)).toBe(true);
+    expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([true, false]);
+    expect(component.result()).toEqual([2]);
+    expect(saveButton.disabled).toBe(false);
+
+    checkboxes[1].click();
+    checkboxes[2].click();
+    await fixture.whenStable();
+    expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([false, true]);
+    expect(component.result()).toEqual([3]);
+  });
+
+  it('keeps selection disabled after user rights fail to load', async () => {
+    await fixture.whenStable();
+    workspacesByUser$.error(new Error('rights unavailable'));
+    await fixture.whenStable();
+
+    const checkboxes = Array.from(
+      fixture.nativeElement.querySelectorAll('mat-table input[type="checkbox"]')
+    ) as HTMLInputElement[];
+    expect(checkboxes.every(checkbox => checkbox.disabled)).toBe(true);
+    expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { map, switchMap, take } from 'rxjs/operators';
 import { ValidationService } from './validation.service';
@@ -31,7 +31,7 @@ export interface DeleteTaskResult {
   providedIn: 'root'
 })
 export class ValidationTaskRunnerService {
-  constructor(private validationService: ValidationService) { }
+  private validationService = inject(ValidationService);
 
   runTask<T = unknown>(
     workspaceId: number,
