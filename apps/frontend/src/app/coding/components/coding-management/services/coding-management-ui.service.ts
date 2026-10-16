@@ -1,4 +1,5 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Observable, of, switchMap, catchError
 } from 'rxjs';
@@ -9,12 +10,16 @@ import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
 import { ContentDialogComponent } from '../../../../shared/dialogs/content-dialog/content-dialog.component';
+import { UnitCodingSchemeRefDto } from '../../../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
+import { readCodingSchemeReference } from '../../../utils/coding-scheme-reference';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
+import { takeUntilWorkspaceChanged } from '../../../../shared/utils/workspace-request.operator';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CodingManagementUiService {
+  private readonly destroyRef = inject(DestroyRef);
   private appService = inject(AppService);
   private fileService = inject(FileService);
   private statisticsService = inject(CodingStatisticsService);
@@ -67,7 +72,7 @@ export class CodingManagementUiService {
   /**
      * Gets coding scheme reference from unit XML
      */
-  getCodingSchemeFromUnit(unitId: number): Observable<string | null> {
+  getCodingSchemeFromUnit(unitId: number): Observable<UnitCodingSchemeRefDto | null> {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     return this.fileService.getUnitContentXml(workspaceId, unitId.toString()).pipe(
@@ -84,7 +89,7 @@ export class CodingManagementUiService {
           return of(null);
         }
 
-        const codingSchemeRef = this.extractCodingSchemeRefFromXml(xmlContent);
+        const codingSchemeRef = readCodingSchemeReference(xmlContent);
         if (!codingSchemeRef) {
           this.snackBar.open(
             `Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`,
@@ -117,13 +122,7 @@ export class CodingManagementUiService {
      */
   extractCodingSchemeRefFromXml(xmlContent: string): string | null {
     try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-      const codingSchemeRefElement = xmlDoc.querySelector('CodingSchemeRef');
-
-      if (codingSchemeRefElement && codingSchemeRefElement.textContent) {
-        return codingSchemeRefElement.textContent.trim();
-      }
+      return readCodingSchemeReference(xmlContent)?.content || null;
     } catch (error) {
       this.snackBar.open(
         'Fehler beim Verarbeiten der Unit-XML-Daten',
@@ -141,12 +140,15 @@ export class CodingManagementUiService {
   /**
      * Shows coding scheme in a dialog
      */
-  showCodingSchemeDialog(codingSchemeRef: string): void {
+  showCodingSchemeDialog(reference: string | UnitCodingSchemeRefDto, owner = this.destroyRef): void {
+    const codingSchemeRef = typeof reference === 'string' ? reference : reference.content;
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.fileService
       .getCodingSchemeFile(workspaceId, codingSchemeRef)
       .pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntilDestroyed(owner),
         catchError(() => {
           this.snackBar.open(
             `Fehler beim Abrufen des Kodierschemas '${codingSchemeRef}'`,
@@ -182,7 +184,8 @@ export class CodingManagementUiService {
               fileId: codingSchemeRef,
               fileName: codingSchemeRef,
               content: decodedData,
-              readOnly: true
+              readOnly: true,
+              ...(typeof reference === 'string' ? {} : { codingSchemeRef: reference })
             },
             panelClass: 'scheme-editor-dialog-container'
           });
@@ -202,12 +205,14 @@ export class CodingManagementUiService {
   /**
      * Shows unit XML in a dialog
      */
-  showUnitXmlDialog(unitId: number): void {
+  showUnitXmlDialog(unitId: number, owner = this.destroyRef): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.fileService
       .getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntilDestroyed(owner),
         catchError(() => {
           this.snackBar.open(
             `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,

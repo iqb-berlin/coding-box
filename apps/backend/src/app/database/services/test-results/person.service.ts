@@ -16,6 +16,7 @@ import {
 import { PersonQueryService } from './person-query.service';
 import {
   PersonPersistenceService,
+  TestResultsImportAuditContext,
   TestResultsMutationSummary
 } from './person-persistence.service';
 
@@ -566,9 +567,10 @@ export class PersonService {
     workspace_id: number,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
-    issues: TestResultsUploadIssueDto[] = []
+    issues: TestResultsUploadIssueDto[] = [],
+    audit?: TestResultsImportAuditContext
   ): Promise<TestResultsMutationSummary> {
-    return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
+    return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues, audit);
   }
 
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[], issues?: TestResultsUploadIssueDto[], filename?: string): TcMergeBooklet {
@@ -643,7 +645,8 @@ export class PersonService {
     persons: Person[],
     unitLogs: Log[],
     bookletLogs: Log[],
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    audit?: TestResultsImportAuditContext
   ): Promise<{
       success: boolean;
       totalBooklets: number;
@@ -651,6 +654,6 @@ export class PersonService {
       totalLogsSkipped: number;
       issues?: TestResultsUploadIssueDto[];
     }> {
-    return this.personPersistenceService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs);
+    return this.personPersistenceService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs, audit);
   }
 }

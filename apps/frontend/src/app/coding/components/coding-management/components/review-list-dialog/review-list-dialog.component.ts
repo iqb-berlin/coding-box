@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy
+  ChangeDetectorRef, Component, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -25,7 +26,8 @@ interface ReviewItem {
 }
 
 @Component({
-  selector: 'app-review-list-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-review-list-dialog',
   templateUrl: './review-list-dialog.component.html',
   styleUrls: ['./review-list-dialog.component.scss'],
   standalone: true,
@@ -38,6 +40,12 @@ interface ReviewItem {
   ]
 })
 export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<ReviewListDialogComponent>>(MatDialogRef);
+  protected data = inject<ReviewListDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
   private uiService = inject(CodingManagementUiService);
 
@@ -46,12 +54,8 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
   private inViewIndices = new Set<number>();
   private isAnyItemLoading = false;
 
-  @ViewChildren('reviewItemRef') reviewItemRefs!: QueryList<ElementRef>;
-
-  constructor(
-    public dialogRef: MatDialogRef<ReviewListDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ReviewListDialogData
-  ) { }
+  readonly reviewItemRefs = viewChildren<ElementRef<HTMLElement>>('reviewItemRef');
+  private readonly synchronizeObserver = afterRenderEffect(() => this.updateObserver());
 
   ngOnInit(): void {
     this.reviewItems = this.data.responses.map(response => ({
@@ -74,7 +78,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     });
   }
 
-  getResolvedCode(response: Success): number | null {
+  protected getResolvedCode(response: Success): number | null {
     if (response.code_v3 !== undefined && response.code_v3 !== null) return response.code_v3;
     if (response.code_v2 !== undefined && response.code_v2 !== null) return response.code_v2;
     if (response.code_v1 !== undefined && response.code_v1 !== null) return response.code_v1;
@@ -84,7 +88,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     return Number.isNaN(genericCode as number) ? null : genericCode;
   }
 
-  getResolvedStatus(response: Success): string {
+  protected getResolvedStatus(response: Success): string {
     if (response.status_v3 && response.status_v3 !== 'UNSET') return response.status_v3;
     if (response.status_v2 && response.status_v2 !== 'UNSET') return response.status_v2;
     if (response.status_v1 && response.status_v1 !== 'UNSET') return response.status_v1;
@@ -112,16 +116,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
       });
     }, options);
 
-    this.reviewItemRefs.changes.subscribe(() => {
-      this.updateObserver();
-    });
-
     this.updateObserver();
   }
 
   private updateObserver(): void {
+    const items = this.reviewItemRefs();
     if (this.observer) {
-      this.reviewItemRefs.forEach(ref => {
+      this.observer.disconnect();
+      items.forEach(ref => {
         this.observer?.observe(ref.nativeElement);
       });
     }
@@ -155,8 +157,9 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
     item.isLoading = true;
     this.isAnyItemLoading = true;
+    this.changeDetectorRef.markForCheck();
 
-    this.uiService.openReplayForResponse(item.response).subscribe({
+    this.uiService.openReplayForResponse(item.response).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: url => {
         item.isLoading = false;
         if (url) {
@@ -166,12 +169,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
           item.hasError = true;
         }
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue(); // Check if next visible item can start loading
       },
       error: () => {
         item.isLoading = false;
         item.hasError = true;
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue();
       }
     });
@@ -185,7 +190,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     this.loadReplay(index);
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

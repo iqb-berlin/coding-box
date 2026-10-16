@@ -45,6 +45,8 @@ describe('VariableAnalysisService', () => {
   });
 
   afterEach(() => {
+    service.ngOnDestroy();
+    jest.useRealTimers();
     httpMock.verify();
   });
 
@@ -114,6 +116,33 @@ describe('VariableAnalysisService', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('cancels an in-flight guard poll when the guard is cleared and does not restart it', () => {
+    jest.useFakeTimers();
+    const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs`;
+    const invalidate = jest.spyOn(testPersonCodingService, 'invalidateCodingStatusCache');
+    service.trackVariableAnalysisGuardUntilComplete(mockWorkspaceId);
+    jest.advanceTimersByTime(5000);
+    const pending = httpMock.expectOne(url);
+    service.setVariableAnalysisGuardRunning(mockWorkspaceId, false);
+    expect(pending.cancelled).toBe(true);
+    jest.advanceTimersByTime(15000);
+    httpMock.expectNone(url);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  it('keeps background polling across views but stops all requests and timers on service destruction', () => {
+    jest.useFakeTimers();
+    service.trackVariableAnalysisGuardUntilComplete(1);
+    service.trackVariableAnalysisGuardUntilComplete(2);
+    jest.advanceTimersByTime(5000);
+    const pending = httpMock.match(request => request.url.endsWith('/variable-analysis/jobs'));
+    expect(pending).toHaveLength(2);
+    service.ngOnDestroy();
+    expect(pending.every(request => request.cancelled)).toBe(true);
+    jest.advanceTimersByTime(15000);
+    httpMock.expectNone(request => request.url.endsWith('/variable-analysis/jobs'));
   });
 
   describe('createAnalysisJob', () => {

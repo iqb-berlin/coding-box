@@ -1,14 +1,7 @@
 import {
-  Component,
-  OnDestroy,
-  OnChanges,
-  OnInit,
-  inject,
-  Input,
-  Output,
-  EventEmitter,
-  SimpleChanges
+  Component, OnDestroy, OnChanges, OnInit, inject, SimpleChanges, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -51,6 +44,7 @@ interface TrainingNameFilterOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coder-trainings-list',
   standalone: true,
   imports: [
@@ -77,6 +71,8 @@ interface TrainingNameFilterOption {
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
   readonly permissions = inject(CodingPermissionsService);
+  private readonly destroyRef = inject(DestroyRef);
+
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -86,20 +82,20 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   private destroy$ = new Subject<void>();
   private loadRequestId = 0;
 
-  @Input() showCreateButton = true;
-  @Input() workspaceId?: number;
-  @Output() onCreateTraining = new EventEmitter<void>();
-  @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
+  readonly showCreateButton = input(true);
+  readonly workspaceId = input<number>();
+  readonly trainingCreationRequested = output<void>();
+  readonly trainingEditRequested = output<CoderTraining>();
 
-  coderTrainings: CoderTraining[] = [];
-  originalData: CoderTraining[] = [];
-  trainingNameFilterOptions: TrainingNameFilterOption[] = [];
-  duplicateTrainingLabels = new Set<string>();
-  selectedTrainingName: string | null = null;
-  isLoading = false;
+  readonly coderTrainings = signal<CoderTraining[]>([]);
+  readonly originalData = signal<CoderTraining[]>([]);
+  protected readonly trainingNameFilterOptions = signal<TrainingNameFilterOption[]>([]);
+  readonly duplicateTrainingLabels = signal(new Set<string>());
+  readonly selectedTrainingName = signal<string | null>(null);
+  protected readonly isLoading = signal(false);
   private loadCoderTrainingsPromise?: Promise<void>;
   private loadCoderTrainingsWorkspaceId?: number;
-  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
+  protected displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
     if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
@@ -120,28 +116,28 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   private getCurrentWorkspaceId(): number {
-    return this.workspaceId || this.appService.selectedWorkspaceId;
+    return this.workspaceId() || this.appService.selectedWorkspaceId;
   }
 
   private clearTrainingState(options: { resetFilters?: boolean } = {}): void {
-    this.coderTrainings = [];
-    this.originalData = [];
-    this.trainingNameFilterOptions = [];
-    this.duplicateTrainingLabels.clear();
+    this.coderTrainings.set([]);
+    this.originalData.set([]);
+    this.trainingNameFilterOptions.set([]);
+    this.duplicateTrainingLabels.set(new Set());
     if (options.resetFilters) {
-      this.selectedTrainingName = null;
+      this.selectedTrainingName.set(null);
     }
   }
 
   private clearUnavailableTrainingNameFilter(): void {
-    if (!this.selectedTrainingName) {
+    if (!this.selectedTrainingName()) {
       return;
     }
 
-    const selectedOptionExists = this.trainingNameFilterOptions
-      .some(option => option.label === this.selectedTrainingName);
+    const selectedOptionExists = this.trainingNameFilterOptions()
+      .some(option => option.label === this.selectedTrainingName());
     if (!selectedOptionExists) {
-      this.selectedTrainingName = null;
+      this.selectedTrainingName.set(null);
     }
   }
 
@@ -150,7 +146,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     if (!workspaceId) {
       this.loadRequestId += 1;
       this.clearTrainingState({ resetFilters: true });
-      this.isLoading = false;
+      this.isLoading.set(false);
       this.loadCoderTrainingsPromise = undefined;
       this.loadCoderTrainingsWorkspaceId = undefined;
       return Promise.reject();
@@ -158,7 +154,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
 
     if (
       !options.resetFilters &&
-      this.isLoading &&
+      this.isLoading() &&
       this.loadCoderTrainingsPromise &&
       this.loadCoderTrainingsWorkspaceId === workspaceId
     ) {
@@ -167,7 +163,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
 
     this.loadRequestId += 1;
     const requestId = this.loadRequestId;
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.loadCoderTrainingsWorkspaceId = workspaceId;
     this.clearTrainingState({ resetFilters: options.resetFilters });
 
@@ -188,11 +184,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
             return;
           }
 
-          this.originalData = trainings;
+          this.originalData.set(trainings);
           this.rebuildTrainingNameFilterOptions();
           this.clearUnavailableTrainingNameFilter();
           this.applyAllFilters();
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.loadCoderTrainingsPromise = undefined;
           this.loadCoderTrainingsWorkspaceId = undefined;
           resolveLoad();
@@ -204,7 +200,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
           }
 
           this.clearTrainingState({ resetFilters: options.resetFilters });
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.loadCoderTrainingsPromise = undefined;
           this.loadCoderTrainingsWorkspaceId = undefined;
           rejectLoad();
@@ -214,13 +210,13 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     return loadPromise;
   }
 
-  requestFullEdit(training: CoderTraining): void {
-    this.onEditTraining.emit(training);
+  protected requestFullEdit(training: CoderTraining): void {
+    this.trainingEditRequested.emit(training);
   }
 
-  createTraining(): void {
+  protected createTraining(): void {
     if (!this.permissions.canCreate) return;
-    this.onCreateTraining.emit();
+    this.trainingCreationRequested.emit();
   }
 
   onTrainingNameFilterChange(): void {
@@ -228,23 +224,23 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   private applyAllFilters(): void {
-    if (!this.originalData) {
-      this.coderTrainings = [];
+    if (!this.originalData()) {
+      this.coderTrainings.set([]);
       return;
     }
 
-    if (this.selectedTrainingName === null || this.selectedTrainingName === '') {
-      this.coderTrainings = [...this.originalData];
+    if (this.selectedTrainingName() === null || this.selectedTrainingName() === '') {
+      this.coderTrainings.set([...this.originalData()]);
       return;
     }
 
-    this.coderTrainings = this.originalData.filter(training => training.label === this.selectedTrainingName);
+    this.coderTrainings.set(this.originalData().filter(training => training.label === this.selectedTrainingName()));
   }
 
   rebuildTrainingNameFilterOptions(): void {
     const options = new Map<string, TrainingNameFilterOption>();
     const normalizedCounts = new Map<string, number>();
-    this.originalData.forEach(training => {
+    this.originalData().forEach(training => {
       const current = options.get(training.label);
       if (current) {
         current.count += 1;
@@ -257,16 +253,14 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
         normalizedCounts.set(normalizedLabel, (normalizedCounts.get(normalizedLabel) || 0) + 1);
       }
     });
-    this.trainingNameFilterOptions = Array.from(options.values());
-    this.duplicateTrainingLabels = new Set(
-      Array.from(normalizedCounts.entries())
-        .filter(([, count]) => count > 1)
-        .map(([label]) => label)
-    );
+    this.trainingNameFilterOptions.set(Array.from(options.values()));
+    this.duplicateTrainingLabels.set(new Set(Array.from(normalizedCounts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([label]) => label)));
   }
 
   getTrainingNameFilterOptions(): TrainingNameFilterOption[] {
-    return this.trainingNameFilterOptions;
+    return this.trainingNameFilterOptions();
   }
 
   getTrainingNameFilterLabel(option: TrainingNameFilterOption): string {
@@ -286,7 +280,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   isDuplicateTrainingLabel(training: CoderTraining): boolean {
-    return this.duplicateTrainingLabels.has(normalizeTrainingLabel(training.label));
+    return this.duplicateTrainingLabels().has(normalizeTrainingLabel(training.label));
   }
 
   openResultsComparison(training?: CoderTraining, initialMode?: CodingResultsComparisonMode): void {
@@ -326,7 +320,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste zuerst';
@@ -343,7 +337,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste verfügbare Fälle pro Variable';
@@ -360,11 +354,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
     }
   }
 
-  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+  protected getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
     return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
-  showTrainingJobs(training: CoderTraining): void {
+  protected showTrainingJobs(training: CoderTraining): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
@@ -397,14 +391,14 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       });
   }
 
-  deleteTraining(training: CoderTraining): void {
+  protected deleteTraining(training: CoderTraining): void {
     if (!this.permissions.canEdit(training)) return;
     const dialogRef = this.dialog.open(DeleteConfirmationDialog, {
       width: '400px',
       data: { training }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.performDelete(training);
       }

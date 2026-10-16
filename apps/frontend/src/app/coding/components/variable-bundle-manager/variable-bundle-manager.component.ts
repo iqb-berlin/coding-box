@@ -1,6 +1,8 @@
+import { Subscription } from 'rxjs';
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  Component, OnInit, inject, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -15,7 +17,7 @@ import {
   MatTableModule
 } from '@angular/material/table';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButton, MatIconButton } from '@angular/material/button';
@@ -30,8 +32,10 @@ import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variabl
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-bundle-manager',
   templateUrl: './variable-bundle-manager.component.html',
   styleUrls: ['./variable-bundle-manager.component.scss'],
@@ -63,58 +67,88 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
     MatMenuModule
   ]
 })
-export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
+export class VariableBundleManagerComponent implements OnInit {
   readonly permissions = inject(CodingPermissionsService);
+  private loadRequest?: Subscription;
+  private preparationRequest?: Subscription;
+  private readonly ownedDialogs = new Set<MatDialogRef<unknown>>();
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private variableBundleGroupService = inject(VariableBundleService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private appService = inject(AppService);
   private codingJobBackendService = inject(CodingJobBackendService);
 
-  displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
-  dataSource = new MatTableDataSource<VariableBundle>([]);
-  isLoading = false;
+  protected displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
+  protected dataSource = new MatTableDataSource<VariableBundle>([]);
+  readonly isLoading = signal(false);
 
-  selectedName: string | null = null;
-  originalData: VariableBundle[] = [];
+  protected readonly selectedName = signal<string | null>(null);
+  protected readonly originalData = signal<VariableBundle[]>([]);
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
+
+  constructor() {
+    this.destroyRef.onDestroy(() => this.closeOwnedDialogs());
+  }
 
   ngOnInit(): void {
-    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
+      this.closeOwnedDialogs();
+      this.selectedName.set(null);
+      this.originalData.set([]);
+      this.dataSource.data = [];
+      this.loadVariableBundleGroups();
+    });
     this.loadVariableBundleGroups();
   }
 
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
+  private closeOwnedDialogs(): void {
+    this.ownedDialogs.forEach(ref => ref.close());
+    this.ownedDialogs.clear();
   }
 
-  loadVariableBundleGroups(): void {
-    this.isLoading = true;
+  private ownDialog<T>(ref: MatDialogRef<T>): MatDialogRef<T> {
+    this.ownedDialogs.add(ref);
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.ownedDialogs.delete(ref));
+    return ref;
+  }
 
-    this.variableBundleGroupService.getBundles(1, 10000).subscribe({
+  private readonly synchronizeSort = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+  });
+
+  loadVariableBundleGroups(): void {
+    this.loadRequest?.unsubscribe();
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.isLoading.set(true);
+
+    this.loadRequest = this.variableBundleGroupService.getBundles(1, 10000).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (paginatedResult: PaginatedBundles) => {
-        this.originalData = paginatedResult.bundles;
+        this.originalData.set(paginatedResult.bundles);
         this.dataSource.data = paginatedResult.bundles;
         this.applyFilters();
-        this.isLoading = false;
+        this.isLoading.set(false);
       },
       error: () => {
-        this.isLoading = false;
+        this.isLoading.set(false);
         this.snackBar.open('Fehler beim Laden der Variablenbündel', 'Schließen', { duration: 3000 });
       }
     });
   }
 
-  onNameFilterChange(): void {
+  protected onNameFilterChange(): void {
     this.applyFilters();
   }
 
   private applyFilters(): void {
-    let filteredData = this.originalData;
+    let filteredData = this.originalData();
 
-    if (this.selectedName) {
-      filteredData = filteredData.filter(bundle => bundle.name === this.selectedName);
+    if (this.selectedName()) {
+      filteredData = filteredData.filter(bundle => bundle.name === this.selectedName());
     }
 
     this.dataSource.data = filteredData;
@@ -122,25 +156,26 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
   createVariableBundleGroup(): void {
     if (!this.permissions.canCreate) return;
+    this.preparationRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
       return;
     }
 
-    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
+    this.preparationRequest = this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (incompleteVariables: Variable[]) => {
-        const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
+        const dialogRef = this.ownDialog(this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
           data: {
             isEdit: false,
             preloadedIncompleteVariables: incompleteVariables
           }
-        });
+        }));
 
-        dialogRef.afterClosed().subscribe(result => {
-          if (result) {
-            this.variableBundleGroupService.createBundle(result).subscribe({
+        dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+          if (result && this.appService.selectedWorkspaceId === workspaceId) {
+            this.variableBundleGroupService.createBundle(result).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
               next: newBundleGroup => {
                 this.loadVariableBundleGroups();
                 this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
@@ -159,15 +194,16 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   editVariableBundleGroup(bundleGroup: VariableBundle): void {
+    this.preparationRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
       return;
     }
 
-    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
+    this.preparationRequest = this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (incompleteVariables: Variable[]) => {
-        const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
+        const dialogRef = this.ownDialog(this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
           data: {
             bundleGroup,
@@ -175,12 +211,11 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
             readOnly: !this.permissions.canEdit(bundleGroup),
             preloadedIncompleteVariables: incompleteVariables
           }
-        });
+        }));
 
-        dialogRef.afterClosed().subscribe(result => {
-          if (result) {
-            if (!this.permissions.canEdit(bundleGroup)) return;
-            this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
+        dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+          if (result && this.permissions.canEdit(bundleGroup) && this.appService.selectedWorkspaceId === workspaceId) {
+            this.variableBundleGroupService.updateBundle(bundleGroup.id, result).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
               next: updatedBundleGroup => {
                 if (updatedBundleGroup) {
                   this.loadVariableBundleGroups();
@@ -202,18 +237,20 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
   deleteVariableBundleGroup(bundleGroup: VariableBundle): void {
     if (!this.permissions.canEdit(bundleGroup)) return;
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+    const dialogRef = this.ownDialog(this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Variablenbündel löschen',
         content: `Sind Sie sicher, dass Sie das Variablenbündel "${bundleGroup.name}" löschen möchten?`,
         confirmButtonLabel: 'Löschen',
         showCancel: true
       } as ConfirmDialogData
-    });
+    }));
 
-    dialogRef.afterClosed().subscribe(result => {
-      if (result) {
-        this.variableBundleGroupService.deleteBundle(bundleGroup.id).subscribe({
+    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+      if (result && this.appService.selectedWorkspaceId === workspaceId) {
+        this.variableBundleGroupService.deleteBundle(bundleGroup.id).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
           next: success => {
             if (success) {
               this.loadVariableBundleGroups();

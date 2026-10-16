@@ -54,12 +54,13 @@ export async function assertCodingResourceMutation(
   id: number,
   userId?: number | null
 ): Promise<{ id: number; workspace_id: number; creatorUserId: number | null }> {
-  const actor = await getCodingActor(manager, workspaceId, userId);
   const resource = await manager.findOne<{ id: number; workspace_id: number; creatorUserId: number | null }>(codingResourceEntities[kind], {
     where: { id, workspace_id: workspaceId },
     ...(manager.queryRunner?.isTransactionActive ? { lock: { mode: 'pessimistic_write' as const } } : {})
   });
   if (!resource) throw new NotFoundException('Coding resource not found in this workspace');
+  // A competing mutation may have changed membership while the row lock waited.
+  const actor = await getCodingActor(manager, workspaceId, userId);
   if (!canMutateCodingResource(actor, resource.creatorUserId)) {
     throw new ForbiddenException('Only the creator may change this coding resource');
   }

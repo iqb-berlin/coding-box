@@ -1821,7 +1821,7 @@ export class WorkspaceCodingExportController {
 
       await this.exportArtifactService.deleteArtifacts(jobId);
 
-      const success = await this.jobQueueService.deleteExportJob(jobId);
+      const success = await this.jobQueueService.deleteExportJob(jobId, workspace_id);
       if (success) {
         return {
           success: true,
@@ -1901,10 +1901,10 @@ export class WorkspaceCodingExportController {
       }
 
       // Mark the job as cancelled (for active jobs to check)
-      const marked = await this.jobQueueService.markExportJobCancelled(jobId);
+      const marked = await this.jobQueueService.markExportJobCancelled(jobId, workspace_id);
 
       // Try to remove the job from queue
-      const removed = await this.jobQueueService.cancelExportJob(jobId);
+      const removed = await this.jobQueueService.cancelExportJob(jobId, workspace_id);
 
       const stateAfterCancellationRequest = await job.getState();
       if (stateAfterCancellationRequest === 'completed') {

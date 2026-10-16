@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -19,7 +19,7 @@ import type {
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 
 @Injectable({ providedIn: 'root' })
-export class SystemNotificationService {
+export class SystemNotificationService implements OnDestroy {
   private readonly http = inject(HttpClient);
 
   private readonly serverUrl = inject(SERVER_URL);
@@ -67,6 +67,11 @@ export class SystemNotificationService {
   stopPolling(): void {
     this.pollingSubscription?.unsubscribe();
     this.pollingSubscription = null;
+  }
+
+  ngOnDestroy(): void {
+    this.stopPolling();
+    this.notificationsSubject.complete();
   }
 
   dismiss(notification: SystemNotificationDto): void {

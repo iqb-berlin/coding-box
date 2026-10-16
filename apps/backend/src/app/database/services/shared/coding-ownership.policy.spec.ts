@@ -59,7 +59,8 @@ describe('Coding resource ownership', () => {
   it('locks the resource when already inside a transaction', async () => {
     const manager = { ...makeManager(2, 7), queryRunner: { isTransactionActive: true } };
     await assertCodingResourceMutation(manager as unknown as EntityManager, 1, 'job', 9, 7);
-    expect(manager.findOne).toHaveBeenLastCalledWith(codingResourceEntities.job, expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+    expect(manager.findOne).toHaveBeenCalledWith(codingResourceEntities.job, expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+    expect(manager.findOne.mock.calls[0][0]).toBe(codingResourceEntities.job);
   });
 
   const unit = (jobId: number, coderId: number, creatorUserId: number | null) => ({

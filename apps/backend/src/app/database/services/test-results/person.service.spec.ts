@@ -804,14 +804,18 @@ describe('PersonService', () => {
         }
       ];
 
-      await service.processPersonBooklets(personList, 1, 'skip', 'person', []);
+      const audit = {
+        workspaceId: 1, actorUserId: 7, source: 'upload' as const, jobId: 'upload-1'
+      };
+      await service.processPersonBooklets(personList, 1, 'skip', 'person', [], audit);
 
       expect(mockPersistenceService.processPersonBooklets).toHaveBeenCalledWith(
         personList,
         1,
         'skip',
         'person',
-        []
+        [],
+        audit
       );
     });
 
@@ -833,7 +837,8 @@ describe('PersonService', () => {
         1,
         'skip',
         'person',
-        []
+        [],
+        undefined
       );
     });
   });
@@ -968,19 +973,24 @@ describe('PersonService', () => {
         totalLogsSkipped: 0
       };
       mockPersistenceService.processPersonLogs.mockResolvedValue(expected);
+      const audit = {
+        workspaceId: 1, actorUserId: 7, source: 'testcenter' as const, correlationId: 'import-1'
+      };
 
       const result = await service.processPersonLogs(
         persons,
         unitLogs,
         bookletLogs,
-        true
+        true,
+        audit
       );
 
       expect(mockPersistenceService.processPersonLogs).toHaveBeenCalledWith(
         persons,
         unitLogs,
         bookletLogs,
-        true
+        true,
+        audit
       );
       expect(result).toEqual(expected);
     });

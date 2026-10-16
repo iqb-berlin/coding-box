@@ -1,6 +1,4 @@
-import {
-  Component, Inject
-} from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -28,6 +26,7 @@ export interface TransferCodingCasesDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-transfer-coding-cases-dialog',
   standalone: true,
   templateUrl: './transfer-coding-cases-dialog.component.html',
@@ -45,18 +44,17 @@ export interface TransferCodingCasesDialogResult {
   ]
 })
 export class TransferCodingCasesDialogComponent {
-  sourceCoderId: number | null = null;
-  targetCoderId: number | null = null;
+  private readonly dialogRef = inject<MatDialogRef<TransferCodingCasesDialogComponent, TransferCodingCasesDialogResult>>(MatDialogRef);
+  data = inject<TransferCodingCasesDialogData>(MAT_DIALOG_DATA);
 
-  readonly coders: Coder[];
+  protected sourceCoderId: number | null = null;
+  protected targetCoderId: number | null = null;
 
-  constructor(
-    private readonly dialogRef: MatDialogRef<
-    TransferCodingCasesDialogComponent,
-    TransferCodingCasesDialogResult
-    >,
-    @Inject(MAT_DIALOG_DATA) public data: TransferCodingCasesDialogData
-  ) {
+  protected readonly coders: Coder[];
+
+  constructor() {
+    const data = this.data;
+
     this.coders = [...(data.coders || [])].sort((a, b) => {
       const labelA = a.displayName || a.name || '';
       const labelB = b.displayName || b.name || '';
@@ -64,11 +62,11 @@ export class TransferCodingCasesDialogComponent {
     });
   }
 
-  get submitDisabled(): boolean {
+  protected get submitDisabled(): boolean {
     return !this.sourceCoderId || !this.targetCoderId || this.sourceCoderId === this.targetCoderId;
   }
 
-  submit(): void {
+  protected submit(): void {
     if (this.submitDisabled) {
       return;
     }

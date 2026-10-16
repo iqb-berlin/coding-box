@@ -1,4 +1,3 @@
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { BehaviorSubject, of } from 'rxjs';
@@ -12,11 +11,11 @@ describe('Itemdatensatz-Export', () => {
   it('selects items and starts a configured background export job', () => {
     const startedJobs: unknown[] = [];
     const selectedWorkspaceId$ = new BehaviorSubject(5);
+    const profiles = [{ id: 4, label: 'IQB-Standard' }];
 
     cy.mount(ExportComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {
@@ -34,9 +33,8 @@ describe('Itemdatensatz-Export', () => {
         {
           provide: MissingsProfileService,
           useValue: {
-            getMissingsProfilesOrThrow: () => of([
-              { id: 4, label: 'IQB-Standard' }
-            ])
+            getExportMissingsProfilesOrThrow: () => of(profiles),
+            getMissingsProfilesOrThrow: () => of(profiles)
           }
         },
         {
@@ -87,12 +85,16 @@ describe('Itemdatensatz-Export', () => {
     cy.get('mat-option[value="item-matrix"]').click();
     cy.get('input').should('exist');
     cy.get('[data-cy="item-dataset-mapping-warnings"]')
+      .should('not.contain.text', 'unit-one.vomd');
+    cy.get('[data-cy="item-dataset-mapping-warnings-details"]').click();
+    cy.get('[data-cy="item-dataset-diagnostics-dialog"]')
       .should('contain.text', 'eindeutiger Fallback verwendet')
       .and('contain.text', 'variableId korrigieren')
       .and('contain.text', 'unit-one.vomd')
       .and('contain.text', 'VAR1');
-    cy.get('[data-cy="item-dataset-mapping-warnings"] .mapping-diagnostic')
+    cy.get('[data-cy="item-dataset-diagnostics-dialog"] .mapping-diagnostic')
       .should('have.length', 1);
+    cy.get('[data-cy="item-dataset-diagnostics-dialog"] mat-dialog-actions button').click();
     cy.get('mat-select[multiple]').click();
     cy.contains('mat-option', 'Aufgabe2_ITEM2').click();
     cy.get('body').type('{esc}');

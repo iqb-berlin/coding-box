@@ -1,21 +1,23 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  @if (isLoading) {
+  @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner></mat-spinner>
     </div>
   }
-  @if (!isLoading) {
+  @if (!isLoading()) {
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
-      <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()" *ngIf="permissions.canCreate">
+      @if (permissions.canCreate) {
+      <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()">
         <mat-icon>add</mat-icon>
         Variablenbündel erstellen
       </button>
+      }
 
       <mat-form-field appearance="outline" class="filter-field">
         <mat-label>Name filtern</mat-label>
         <mat-select [(value)]="selectedName" (selectionChange)="onNameFilterChange()">
           <mat-option [value]="null">Alle Namen</mat-option>
-          @for (bundle of originalData; track bundle) {
+          @for (bundle of originalData(); track bundle) {
             <mat-option [value]="bundle.name">
               {{bundle.name}}
             </mat-option>
