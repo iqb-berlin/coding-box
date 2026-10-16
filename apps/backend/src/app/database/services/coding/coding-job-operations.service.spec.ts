@@ -88,7 +88,7 @@ describe('CodingJobOperationsService', () => {
       messageParams: { count: 1 }
     });
 
-    const result = await service.bulkApplyCodingResults(5);
+    const result = await service.bulkApplyCodingResults(5, 7);
 
     expect(codingJobRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 5 },
@@ -102,7 +102,7 @@ describe('CodingJobOperationsService', () => {
       ]
     });
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
-    expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, {});
+    expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, { actorUserId: 7 });
     expect(codingJobService.hasCodingIssues).not.toHaveBeenCalled();
     expect(result.jobsProcessed).toBe(0);
     expect(result.totalUpdatedResponses).toBe(0);

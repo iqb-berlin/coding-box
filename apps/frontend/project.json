@@ -27,9 +27,7 @@
           "browser": ""
         },
         "index": "apps/frontend/src/index.html",
-        "polyfills": [
-          "apps/frontend/src/polyfills.ts"
-        ],
+        "polyfills": [],
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
         "assets": [
@@ -101,7 +99,8 @@
         "lintFilePatterns": [
           "apps/frontend/src/**/*.ts",
           "apps/frontend/src/**/*.html"
-        ]
+        ],
+        "maxWarnings": 0
       }
     },
     "test": {
@@ -111,11 +110,26 @@
       ],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
-        "passWithNoTests": true
+        "passWithNoTests": false
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
       }
     },
     "e2e": {
       "executor": "@nx/cypress:cypress",
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e",
+        "{workspaceRoot}/scripts/qa/hash-frontend-artifact.mjs",
+        {
+          "runtime": "node scripts/qa/hash-frontend-artifact.mjs"
+        }
+      ],
       "options": {
         "cypressConfig": "cypress.config.ts",
         "testingType": "e2e",
@@ -124,7 +138,50 @@
       "configurations": {
         "production": {
           "devServerTarget": "frontend:serve:production"
+        },
+        "ci": {
+          "devServerTarget": "frontend:serve-static"
         }
+      }
+    },
+    "component-test": {
+      "executor": "@nx/cypress:cypress",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e"
+      ],
+      "outputs": [
+        "{workspaceRoot}/cypress/component-screenshots",
+        "{workspaceRoot}/cypress/component-videos"
+      ],
+      "options": {
+        "cypressConfig": "cypress.config.ts",
+        "testingType": "component",
+        "devServerTarget": "frontend:build",
+        "skipServe": true
+      }
+    },
+    "test-quality-gates": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs scripts/qa/functional-quality-gates.test.mjs scripts/qa/junit-reporter.test.cjs"
+      }
+    },
+    "test-dependency-patches": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/dependency-patches.test.mjs"
+      }
+    },
+    "test-e2e-harness": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/e2e/replay/loopback-forwarders.test.mjs"
       }
     },
     "e2e-replay-live": {
@@ -132,6 +189,11 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
+      },
+      "configurations": {
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --production"
+        }
       }
     },
     "e2e-replay-existing": {
@@ -139,6 +201,70 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-existing-replay-e2e.mjs"
+      }
+    },
+    "e2e-auth-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth"
+      },
+      "configurations": {
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --production"
+        }
+      }
+    },
+    "zoneless-inventory": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs"
+      }
+    },
+    "zoneless-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-risk-coverage"
+      }
+    },
+    "zoneless-exhaustive-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-complete"
+      }
+    },
+    "zoneless-inventory-test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
+      }
+    },
+    "serve-static": {
+      "executor": "@nx/web:file-server",
+      "continuous": true,
+      "cache": false,
+      "options": {
+        "staticFilePath": "dist/apps/frontend",
+        "watch": false,
+        "spa": true,
+        "host": "127.0.0.1",
+        "port": 4200
+      }
+    },
+    "e2e-workflows": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --workflows"
+      },
+      "configurations": {
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --workflows --production"
+        }
       }
     }
   }

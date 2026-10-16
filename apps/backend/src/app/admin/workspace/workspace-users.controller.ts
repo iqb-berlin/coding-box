@@ -218,7 +218,8 @@ export class WorkspaceUsersController {
 
   @Post(':workspace_id/users')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({
@@ -237,8 +238,9 @@ export class WorkspaceUsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspace_id', ParseIntPipe) workspaceId: number) {
-    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() request?: RequestWithUser) {
+    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds, request ? Number(request.user.id) : undefined);
   }
 
   @Get(':workspace_id/coders')

@@ -1,8 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
-import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatInputModule } from '@angular/material/input';
@@ -21,7 +20,6 @@ describe('EditUserComponent', () => {
         MatIconModule,
         HttpClientModule,
         ReactiveFormsModule,
-        NoopAnimationsModule,
         MatDialogModule,
         MatCheckboxModule,
         TranslateModule.forRoot()
@@ -29,11 +27,7 @@ describe('EditUserComponent', () => {
       providers: [
         {
           provide: MAT_DIALOG_DATA,
-          useValue: {}
-        },
-        {
-          provide: FormBuilder,
-          useValue: {}
+          useValue: { username: 'existing-user', isAdmin: true }
         },
         {
           provide: 'SERVER_URL',
@@ -53,5 +47,18 @@ describe('EditUserComponent', () => {
   it('should create', () => {
     expect(component)
       .toBeTruthy();
+  });
+
+  it('keeps an unchecked admin flag valid and includes the disabled username in saved values', () => {
+    component.editUserForm.controls.username.disable();
+    component.editUserForm.controls.isAdmin.setValue(false);
+    expect(component.editUserForm.valid).toBe(true);
+    expect(component.editUserForm.getRawValue()).toEqual({ username: 'existing-user', isAdmin: false });
+  });
+
+  it('restores the original non-null values on reset', () => {
+    component.editUserForm.controls.isAdmin.setValue(false);
+    component.editUserForm.reset();
+    expect(component.editUserForm.getRawValue()).toEqual({ username: 'existing-user', isAdmin: true });
   });
 });

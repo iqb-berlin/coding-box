@@ -1,7 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy,
-  ChangeDetectorRef
+  Component, OnInit, OnDestroy, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
@@ -44,6 +44,7 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
  * });
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-dialog',
   templateUrl: './validation-dialog.component.html',
   standalone: true,
@@ -91,36 +92,23 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   `]
 })
 export class ValidationDialogComponent implements OnInit, OnDestroy {
+  data = inject<{
+    autoStart?: boolean;
+  }>(MAT_DIALOG_DATA);
+
+  private dialogRef = inject<MatDialogRef<ValidationDialogComponent>>(MatDialogRef);
+  private dialog = inject(MatDialog);
+  private appService = inject(AppService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
+  private batchRunnerService = inject(ValidationBatchRunnerService);
+  private fileService = inject(FileService);
+  private snackBar = inject(MatSnackBar);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private subscriptions: Subscription[] = [];
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { autoStart?: boolean },
-    private dialogRef: MatDialogRef<ValidationDialogComponent>,
-    private dialog: MatDialog,
-    private appService: AppService,
-    private validationTaskStateService: ValidationTaskStateService,
-    private batchRunnerService: ValidationBatchRunnerService,
-    private cdr: ChangeDetectorRef,
-    private fileService: FileService,
-    private snackBar: MatSnackBar
-  ) {}
-
   ngOnInit(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    // Subscribe to state changes to ensure UI updates correctly
-    const sub1 = this.validationTaskStateService.observeValidationResults(workspaceId)
-      .subscribe(() => {
-        this.cdr.markForCheck();
-      });
-    this.subscriptions.push(sub1);
-
-    const sub2 = this.validationTaskStateService.observeTaskIds(workspaceId)
-      .subscribe(() => {
-        this.cdr.markForCheck();
-      });
-    this.subscriptions.push(sub2);
-
     // Auto-start functionality
     if (this.data?.autoStart) {
       this.startAllValidations();
@@ -141,7 +129,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Check if any validation is currently running
    */
-  isAnyValidationRunning(): boolean {
+  protected isAnyValidationRunning(): boolean {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
     return Object.values(taskIds).some(id => id !== null && id !== undefined);
@@ -153,7 +141,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   showUnitXml(fileName: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.fileService.getUnitContentXml(workspaceId, fileName).subscribe(xmlContent => {
+    const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(xmlContent => {
       if (!xmlContent) {
         this.snackBar.open(
           `Fehler beim Abrufen der Unit-XML für ${fileName}`,
@@ -173,6 +161,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
         }
       });
     });
+    this.subscriptions.push(subscription);
   }
 
   /**
@@ -211,7 +200,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get overall headline text
    */
-  getOverallHeadline(): string {
+  protected getOverallHeadline(): string {
     const status = this.getOverallStatus();
     switch (status) {
       case 'running':
@@ -230,7 +219,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get overall subline text
    */
-  getOverallSubline(): string {
+  protected getOverallSubline(): string {
     const status = this.getOverallStatus();
     if (status === 'running') {
       return 'Bitte warten Sie, bis alle Validierungen abgeschlossen sind.';
@@ -250,7 +239,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get recommended next step
    */
-  getRecommendedNextStep(): string {
+  protected getRecommendedNextStep(): string {
     const status = this.getOverallStatus();
     if (status === 'failed') {
       return 'Beheben Sie die Fehler und führen Sie die Prüfungen erneut durch.';

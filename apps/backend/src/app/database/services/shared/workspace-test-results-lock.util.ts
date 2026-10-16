@@ -23,6 +23,8 @@ export type WorkspaceTestResultsMutationLockAttempt<T> =
   | { acquired: true; value: T }
   | { acquired: false };
 
+export class WorkspaceTestcenterImportBusyError extends Error {}
+
 function normalizeWorkspaceId(workspaceId: number): number {
   const normalized = Number(workspaceId);
   if (!Number.isInteger(normalized) || normalized < 1) {
@@ -202,4 +204,16 @@ export async function tryWithWorkspaceTestResultsMutationLock<T>(
       await queryRunner.release();
     }
   }
+}
+
+export async function withWorkspaceTestcenterImportLock<T>(
+  connection: QueryRunnerFactory,
+  workspaceId: number,
+  callback: () => Promise<T>
+): Promise<T> {
+  const attempt = await tryWithWorkspaceTestResultsMutationLock(connection, workspaceId, callback);
+  if (attempt.acquired === false) {
+    throw new WorkspaceTestcenterImportBusyError('In diesem Arbeitsbereich werden bereits Testdaten verarbeitet. Bitte deren Abschluss abwarten.');
+  }
+  return attempt.value;
 }

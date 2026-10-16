@@ -1,11 +1,7 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
@@ -42,6 +38,7 @@ interface VariablesValidationResult {
  * Displays validation results for variables and allows deletion of invalid responses.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variables-validation-panel',
   standalone: true,
   imports: [
@@ -124,30 +121,35 @@ interface VariablesValidationResult {
   ]
 })
 export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
-  @Output() showUnitXml = new EventEmitter<string>();
+  private variableValidationService = inject(VariableValidationService);
+  private snackBar = inject(MatSnackBar);
 
-  isRunning = false;
-  wasRun = false;
-  isLoadingPage = false;
-  errorMessage: string | null = null;
-  invalidVariables: InvalidVariableDto[] = [];
-  totalInvalid = 0;
-  summary: VariableValidationSummaryDto = {
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly disabled = input(false);
+  readonly validate = output<void>();
+  readonly showUnitXml = output<string>();
+
+  protected readonly isRunning = signal(false);
+  protected readonly wasRun = signal(false);
+  protected readonly isLoadingPage = signal(false);
+  protected readonly errorMessage = signal<string | null>(null);
+  protected readonly invalidVariables = signal<InvalidVariableDto[]>([]);
+  protected readonly totalInvalid = signal(0);
+  protected readonly summary = signal<VariableValidationSummaryDto>({
     unitFileNotFound: 0,
     variableNotDefinedInUnit: 0
-  };
+  });
 
-  currentPage = 1;
-  pageSize = 10;
-  selectedResponses: Set<number> = new Set();
-  expandedPanel = false;
-  isDeletingResponses = false;
-  isExporting = false;
-  activeTask: ValidationTaskDto | null = null;
+  protected readonly currentPage = signal(1);
+  protected readonly pageSize = signal(10);
+  protected readonly selectedResponses = signal<Set<number>>(new Set());
+  protected readonly expandedPanel = signal(false);
+  protected readonly isDeletingResponses = signal(false);
+  protected readonly isExporting = signal(false);
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
-  tableColumns: ValidationTableColumn[] = [
+  protected tableColumns: ValidationTableColumn[] = [
     {
       key: 'select',
       label: 'Auswählen',
@@ -164,38 +166,33 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
 
-  constructor(
-    private variableValidationService: VariableValidationService,
-    private snackBar: MatSnackBar
-  ) {}
-
   ngOnInit(): void {
     const cachedResult =
       this.variableValidationService.observeValidationResult();
 
     this.stateSubscription = cachedResult.subscribe(result => {
-      if (result && !this.isRunning) {
-        this.wasRun = true;
+      if (result && !this.isRunning()) {
+        this.wasRun.set(true);
         const details = result.details as Record<string, unknown>;
         if (result.status === 'failed' && details?.error) {
-          this.errorMessage = details.error as string;
-          this.invalidVariables = [];
-          this.totalInvalid = 0;
-          this.summary = {
+          this.errorMessage.set(details.error as string);
+          this.invalidVariables.set([]);
+          this.totalInvalid.set(0);
+          this.summary.set({
             unitFileNotFound: 0,
             variableNotDefinedInUnit: 0
-          };
+          });
         } else if (result.details) {
           const variablesResult = result.details as VariablesValidationResult;
-          this.errorMessage = null;
-          this.invalidVariables = variablesResult.data || [];
-          this.totalInvalid = variablesResult.total || 0;
-          this.currentPage = variablesResult.page || 1;
-          this.pageSize = variablesResult.limit || 10;
-          this.summary = variablesResult.summary || {
+          this.errorMessage.set(null);
+          this.invalidVariables.set(variablesResult.data || []);
+          this.totalInvalid.set(variablesResult.total || 0);
+          this.currentPage.set(variablesResult.page || 1);
+          this.pageSize.set(variablesResult.limit || 10);
+          this.summary.set(variablesResult.summary || {
             unitFileNotFound: 0,
             variableNotDefinedInUnit: 0
-          };
+          });
         }
       }
     });
@@ -204,8 +201,8 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
     this.taskSubscription = this.variableValidationService
       .observeValidationTask()
       .subscribe(task => {
-        this.activeTask = task;
-        this.isRunning = !!task;
+        this.activeTask.set(task);
+        this.isRunning.set(!!task);
       });
   }
 
@@ -215,37 +212,35 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
     this.taskSubscription?.unsubscribe();
   }
 
-  get status(): ValidationStatus {
+  protected get status(): ValidationStatus {
     return this.variableValidationService.getValidationStatus();
   }
 
-  get errorCount(): number {
-    return this.totalInvalid;
-  }
+  protected readonly errorCount = computed<number>(() => this.totalInvalid());
 
-  onValidate(): void {
-    if (this.isRunning || this.disabled) {
+  protected onValidate(): void {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 
-    this.isRunning = true;
+    this.isRunning.set(true);
     this.subscription = this.variableValidationService
-      .validate(this.currentPage, this.pageSize)
+      .validate(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.invalidVariables = result.data;
-          this.totalInvalid = result.total;
-          this.currentPage = result.page;
-          this.pageSize = result.limit;
-          this.summary = result.summary || {
+          this.invalidVariables.set(result.data);
+          this.totalInvalid.set(result.total);
+          this.currentPage.set(result.page);
+          this.pageSize.set(result.limit);
+          this.summary.set(result.summary || {
             unitFileNotFound: 0,
             variableNotDefinedInUnit: 0
-          };
-          this.wasRun = true;
-          this.isRunning = false;
+          });
+          this.wasRun.set(true);
+          this.isRunning.set(false);
         },
         error: () => {
-          this.isRunning = false;
+          this.isRunning.set(false);
           this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
             duration: 5000
           });
@@ -255,27 +250,28 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
     this.validate.emit();
   }
 
-  onPageChange(event: PageEvent): void {
-    this.currentPage = event.pageIndex + 1;
-    this.pageSize = event.pageSize;
-    this.isLoadingPage = true;
+  protected onPageChange(event: PageEvent): void {
+    this.currentPage.set(event.pageIndex + 1);
+    this.pageSize.set(event.pageSize);
+    this.isLoadingPage.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.variableValidationService
-      .fetchPage(this.currentPage, this.pageSize)
+      .fetchPage(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.invalidVariables = result.data;
-          this.totalInvalid = result.total;
-          this.currentPage = result.page;
-          this.pageSize = result.limit;
-          this.summary = result.summary || {
+          this.invalidVariables.set(result.data);
+          this.totalInvalid.set(result.total);
+          this.currentPage.set(result.page);
+          this.pageSize.set(result.limit);
+          this.summary.set(result.summary || {
             unitFileNotFound: 0,
             variableNotDefinedInUnit: 0
-          };
-          this.isLoadingPage = false;
+          });
+          this.isLoadingPage.set(false);
         },
         error: () => {
-          this.isLoadingPage = false;
+          this.isLoadingPage.set(false);
+
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -283,51 +279,51 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
       });
   }
 
-  onSelectionChange(newSelection: Set<unknown>): void {
-    this.selectedResponses = newSelection as Set<number>;
+  protected onSelectionChange(newSelection: Set<unknown>): void {
+    this.selectedResponses.set(newSelection as Set<number>);
   }
 
-  onLinkClick(event: { item: InvalidVariableDto; columnKey: string }): void {
+  protected onLinkClick(event: { item: InvalidVariableDto; columnKey: string }): void {
     if (event.columnKey === 'fileName') {
       this.showUnitXml.emit(event.item.fileName);
     }
   }
 
-  toggleExpansion(): void {
-    this.expandedPanel = !this.expandedPanel;
+  protected toggleExpansion(): void {
+    this.expandedPanel.set(!this.expandedPanel());
   }
 
-  selectAll(): void {
-    this.selectedResponses = new Set(
-      this.invalidVariables
-        .filter(v => v.responseId !== undefined)
-        .map(v => v.responseId!)
-    );
+  protected selectAll(): void {
+    this.selectedResponses.set(new Set(this.invalidVariables().filter(v => v.responseId !== undefined)
+      .map(v => v.responseId!)));
   }
 
-  deselectAll(): void {
-    this.selectedResponses.clear();
+  protected deselectAll(): void {
+    this.selectedResponses.set(new Set());
   }
 
-  deleteSelected(): void {
-    if (this.selectedResponses.size === 0 || this.isDeletingResponses) {
+  protected deleteSelected(): void {
+    if (this.selectedResponses().size === 0 || this.isDeletingResponses()) {
       return;
     }
 
-    this.isDeletingResponses = true;
+    this.isDeletingResponses.set(true);
     this.variableValidationService
-      .deleteSelected(Array.from(this.selectedResponses))
+      .deleteSelected(Array.from(this.selectedResponses()))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.isDeletingResponses = false;
-          this.selectedResponses.clear();
+          this.isDeletingResponses.set(false);
+
+          this.selectedResponses.set(new Set());
           this.snackBar.open('Ausgewählte Antworten wurden gelöscht', 'OK', {
             duration: 3000
           });
           this.onValidate(); // Refresh results
         },
         error: () => {
-          this.isDeletingResponses = false;
+          this.isDeletingResponses.set(false);
+
           this.snackBar.open('Fehler beim Löschen', 'Schließen', {
             duration: 5000
           });
@@ -335,23 +331,25 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
       });
   }
 
-  deleteAll(): void {
-    if (this.invalidVariables.length === 0 || this.isDeletingResponses) {
+  protected deleteAll(): void {
+    if (this.invalidVariables().length === 0 || this.isDeletingResponses()) {
       return;
     }
 
-    this.isDeletingResponses = true;
-    this.variableValidationService.deleteAll().subscribe({
+    this.isDeletingResponses.set(true);
+    this.variableValidationService.deleteAll().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.isDeletingResponses = false;
-        this.selectedResponses.clear();
+        this.isDeletingResponses.set(false);
+
+        this.selectedResponses.set(new Set());
         this.snackBar.open('Alle ungültigen Antworten wurden gelöscht', 'OK', {
           duration: 3000
         });
         this.onValidate(); // Refresh results
       },
       error: () => {
-        this.isDeletingResponses = false;
+        this.isDeletingResponses.set(false);
+
         this.snackBar.open('Fehler beim Löschen', 'Schließen', {
           duration: 5000
         });
@@ -359,12 +357,12 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
     });
   }
 
-  exportCsv(): void {
-    if (this.isExporting) {
+  protected exportCsv(): void {
+    if (this.isExporting()) {
       return;
     }
 
-    this.isExporting = true;
+    this.isExporting.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.variableValidationService
       .fetchPage(1, Number.MAX_SAFE_INTEGER)
@@ -382,10 +380,11 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
             duration: 3000
           });
-          this.isExporting = false;
+          this.isExporting.set(false);
         },
         error: () => {
-          this.isExporting = false;
+          this.isExporting.set(false);
+
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });

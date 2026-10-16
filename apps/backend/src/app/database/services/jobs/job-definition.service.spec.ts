@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { In } from 'typeorm';
 import type { DistributionVariableUsageByStatus } from '../coding/coding-job.service';
 import { JobDefinitionService } from './job-definition.service';
+import { JournalService } from '../shared/journal.service';
 // Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
 jest.mock('../shared/coding-ownership.policy', () => ({
   ...jest.requireActual('../shared/coding-ownership.policy'),
@@ -65,6 +66,7 @@ describe('JobDefinitionService', () => {
   let service: JobDefinitionService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
     usersRepository = createRepo();
@@ -2370,6 +2372,9 @@ describe('JobDefinitionService', () => {
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 2,
       max_coding_cases: 4
+    }));
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 7, entityId: 2, eventType: 'JOB_DEFINITION_UPDATED'
     }));
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [

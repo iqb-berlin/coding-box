@@ -898,7 +898,9 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
   };
 
   const mockWorkspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
   };
 
   function makeService(): WorkspaceFilesService {
@@ -940,6 +942,16 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
 
     expect(deletedCount).toBe(0);
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
+  });
+
+  it('invalidates all affected views after a later deletion batch fails', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockRejectedValueOnce(new Error('audit unavailable'));
+    await expect(service.deleteInvalidResponses(1, [10, 11], { actorUserId: 7, jobId: 'task-1' })).rejects.toThrow('audit unavailable');
+    expect(mockWorkspaceResponseValidationService.deleteInvalidResponses).toHaveBeenCalledWith(1, [10, 11], { actorUserId: 7, jobId: 'task-1' });
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
   });
 
   it('should invalidate workspace stats after deleting all invalid responses', async () => {

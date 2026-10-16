@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -26,6 +26,7 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-apply-training-discussion-results-dialog',
   standalone: true,
   imports: [
@@ -196,16 +197,13 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   `]
 })
 export class ApplyTrainingDiscussionResultsDialogComponent {
-  existingResultStrategy: TrainingDiscussionExistingResultStrategy = 'skip';
-  jobConflictStrategy: TrainingDiscussionJobConflictStrategy = 'skip';
+  protected dialogRef = inject<MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>>(MatDialogRef);
+  protected data = inject<ApplyTrainingDiscussionResultsDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>,
-    @Inject(MAT_DIALOG_DATA)
-    public data: ApplyTrainingDiscussionResultsDialogData
-  ) { }
+  protected existingResultStrategy: TrainingDiscussionExistingResultStrategy = 'skip';
+  protected jobConflictStrategy: TrainingDiscussionJobConflictStrategy = 'skip';
 
-  confirm(): void {
+  protected confirm(): void {
     this.dialogRef.close({
       existingResultStrategy: this.existingResultStrategy,
       jobConflictStrategy: this.jobConflictStrategy

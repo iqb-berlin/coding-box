@@ -7,6 +7,7 @@ import {
   JobDefinitionVariable
 } from '../../entities/job-definition.entity';
 import { JobDefinitionService } from './job-definition.service';
+import { JournalService } from '../shared/journal.service';
 
 type ScenarioResponse = {
   id: number;
@@ -123,6 +124,7 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
   const changedVariables = [mv14828, mv14855, mv15484];
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     const codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();

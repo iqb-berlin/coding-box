@@ -1,3 +1,6 @@
+@let selectedFileValue = selectedFile();
+@let previewUrlValue = previewUrl();
+@let databaseExportErrorValue = databaseExportError();
 <div class="wrapper">
   <mat-card class="logo-settings-card">
     <mat-card-header>
@@ -8,10 +11,10 @@
         <h3>Aktuelles Logo</h3>
         <div class="current-logo">
           <img [src]="appService.appLogo.data" alt="Aktuelles Logo" class="logo-preview">
-          @if (isDefaultLogo) {
+          @if (isDefaultLogo()) {
             <p class="default-logo-text">Standard-Logo</p>
           }
-          @if (!isDefaultLogo) {
+          @if (!isDefaultLogo()) {
             <p class="custom-logo-text">Benutzerdefiniertes Logo</p>
           }
         </div>
@@ -31,16 +34,16 @@
             <mat-icon>cloud_upload</mat-icon>
             Datei auswählen
           </label>
-          @if (selectedFile) {
-            <span class="file-name">{{ selectedFile.name }}</span>
+          @if (selectedFileValue) {
+            <span class="file-name">{{ selectedFileValue.name }}</span>
           }
           <p class="file-hint">Erlaubte Dateitypen: JPEG, PNG, GIF, SVG, WebP. Maximale Größe: 4MB.</p>
         </div>
 
-        @if (previewUrl) {
+        @if (previewUrlValue) {
           <div class="preview-container">
             <h4>Vorschau</h4>
-            <img [src]="previewUrl" alt="Logo Vorschau" class="logo-preview">
+            <img [src]="previewUrlValue" alt="Logo Vorschau" class="logo-preview">
             <div class="preview-actions">
               <button mat-raised-button color="primary" (click)="uploadLogo()">
                 <mat-icon>save</mat-icon> Logo speichern
@@ -65,7 +68,7 @@
           </button>
         </div>
       </div>
-      @if (!isDefaultLogo) {
+      @if (!isDefaultLogo()) {
         <div class="reset-container">
           <button mat-raised-button color="warn" (click)="resetToDefaultLogo()">
             <mat-icon>restore</mat-icon> Zum Standard-Logo zurücksetzen
@@ -102,7 +105,7 @@
     <mat-card-header>
       <mat-card-title>Impressum/Datenschutz</mat-card-title>
     </mat-card-header>
-    @if (isLoadingLegalNotice) {
+    @if (isLoadingLegalNotice()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
     }
     <mat-card-content>
@@ -113,7 +116,7 @@
             matInput
             [(ngModel)]="legalNoticeHtml"
             (ngModelChange)="updateLegalNoticePreview()"
-            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            [disabled]="isLoadingLegalNotice() || isSavingLegalNotice()"
             rows="14"></textarea>
           <mat-hint>HTML wird beim Anzeigen bereinigt.</mat-hint>
         </mat-form-field>
@@ -122,15 +125,15 @@
           <button
             mat-raised-button
             color="primary"
-            [disabled]="isLoadingLegalNotice || isSavingLegalNotice"
+            [disabled]="isLoadingLegalNotice() || isSavingLegalNotice()"
             (click)="saveLegalNotice()">
             <mat-icon>save</mat-icon>
-            {{ isSavingLegalNotice ? 'Speichere...' : 'Text speichern' }}
+            {{ isSavingLegalNotice() ? 'Speichere...' : 'Text speichern' }}
           </button>
           <button
             mat-stroked-button
             color="primary"
-            [disabled]="isLoadingLegalNotice || isSavingLegalNotice || isLegalNoticeDefault"
+            [disabled]="isLoadingLegalNotice() || isSavingLegalNotice() || isLegalNoticeDefault()"
             (click)="resetLegalNoticeToDefault()">
             <mat-icon>restore</mat-icon>
             Standard wiederherstellen
@@ -140,7 +143,7 @@
 
       <div class="legal-notice-preview-container">
         <h3>Vorschau</h3>
-        <div class="legal-notice-preview" [innerHTML]="legalNoticePreviewHtml"></div>
+        <div class="legal-notice-preview" [innerHTML]="legalNoticePreviewHtml()"></div>
       </div>
     </mat-card-content>
   </mat-card>
@@ -149,7 +152,7 @@
     <mat-card-header>
       <mat-card-title>Content-Pool Integration</mat-card-title>
     </mat-card-header>
-    @if (isLoadingContentPoolSettings) {
+    @if (isLoadingContentPoolSettings()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
     }
     <mat-card-content>
@@ -161,8 +164,8 @@
         </p>
 
         <div class="content-pool-toggle">
-          <mat-slide-toggle [(ngModel)]="contentPoolSettings.enabled">
-            {{ contentPoolSettings.enabled ? 'Feature aktiv' : 'Feature inaktiv' }}
+          <mat-slide-toggle [ngModel]="contentPoolSettings().enabled" (ngModelChange)="setContentPoolSettingsField('enabled', $event)">
+            {{ contentPoolSettings().enabled ? 'Feature aktiv' : 'Feature inaktiv' }}
           </mat-slide-toggle>
         </div>
 
@@ -170,9 +173,9 @@
           <mat-label>Content-Pool URL oder Domain</mat-label>
           <input
             matInput
-            [(ngModel)]="contentPoolSettings.baseUrl"
-            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
-            placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201">
+            [ngModel]="contentPoolSettings().baseUrl"
+            [disabled]="isSavingContentPoolSettings() || isTestingContentPoolConnection()"
+            placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201" (ngModelChange)="setContentPoolSettingsField('baseUrl', $event)">
           <mat-hint>
             Wenn kein Protokoll gesetzt ist, wird HTTPS verwendet. Der API-Pfad wird automatisch ergänzt.
           </mat-hint>
@@ -186,12 +189,12 @@
             autocomplete="new-password"
             [(ngModel)]="contentPoolApplicationToken"
             (ngModelChange)="onContentPoolTokenInputChange($event)"
-            [disabled]="isSavingContentPoolSettings || isTestingContentPoolConnection"
+            [disabled]="isSavingContentPoolSettings() || isTestingContentPoolConnection()"
             placeholder="Neues Token eintragen">
           <mat-hint>
-            @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+            @if (contentPoolSettings().hasApplicationToken && !clearContentPoolApplicationToken()) {
               Token ist gespeichert. Feld nur zum Ersetzen ausfüllen.
-            } @else if (clearContentPoolApplicationToken) {
+            } @else if (clearContentPoolApplicationToken()) {
               Gespeichertes Token wird beim Speichern entfernt.
             } @else {
               Token wird nur backendseitig gespeichert und nicht wieder angezeigt.
@@ -208,24 +211,24 @@
           <button
             mat-raised-button
             color="primary"
-            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+            [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
             (click)="saveContentPoolSettings()">
             <mat-icon>save</mat-icon>
-            {{ isSavingContentPoolSettings ? 'Speichere...' : 'Einstellungen speichern' }}
+            {{ isSavingContentPoolSettings() ? 'Speichere...' : 'Einstellungen speichern' }}
           </button>
           <button
             mat-stroked-button
             color="primary"
-            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+            [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
             (click)="testContentPoolConnection()">
-            <mat-icon>{{ isTestingContentPoolConnection ? 'hourglass_empty' : 'wifi_tethering' }}</mat-icon>
-            {{ isTestingContentPoolConnection ? 'Teste...' : 'Verbindung testen' }}
+            <mat-icon>{{ isTestingContentPoolConnection() ? 'hourglass_empty' : 'wifi_tethering' }}</mat-icon>
+            {{ isTestingContentPoolConnection() ? 'Teste...' : 'Verbindung testen' }}
           </button>
-          @if (contentPoolSettings.hasApplicationToken && !clearContentPoolApplicationToken) {
+          @if (contentPoolSettings().hasApplicationToken && !clearContentPoolApplicationToken()) {
             <button
               mat-stroked-button
               color="warn"
-              [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings || isTestingContentPoolConnection"
+              [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
               (click)="clearStoredContentPoolToken()">
               <mat-icon>delete</mat-icon>
               Token entfernen
@@ -258,22 +261,22 @@
             mat-raised-button
             color="primary"
             (click)="exportDatabase()"
-            [disabled]="isExporting">
-            <mat-icon>{{isExporting ? 'hourglass_empty' : 'download'}}</mat-icon>
-            {{isExporting ? 'Export läuft...' : 'Datenbank als SQLite exportieren'}}
+            [disabled]="isExporting()">
+            <mat-icon>{{isExporting() ? 'hourglass_empty' : 'download'}}</mat-icon>
+            {{isExporting() ? 'Export läuft...' : 'Datenbank als SQLite exportieren'}}
           </button>
         </div>
-        @if (isExporting) {
+        @if (isExporting()) {
           <div class="export-progress">
-            <mat-progress-bar mode="determinate" [value]="databaseExportProgress"></mat-progress-bar>
+            <mat-progress-bar mode="determinate" [value]="databaseExportProgress()"></mat-progress-bar>
             <p class="progress-text">
-              Status: {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress }}%
+              Status: {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress() }}%
             </p>
             <p class="progress-text">Dies kann bei großen Datenbanken einige Minuten dauern.</p>
           </div>
         }
-        @if (databaseExportError) {
-          <p class="export-error">{{ databaseExportError }}</p>
+        @if (databaseExportErrorValue) {
+          <p class="export-error">{{ databaseExportErrorValue }}</p>
         }
       </div>
     </mat-card-content>

@@ -78,17 +78,17 @@
     }
 
     <div class="results-container">
-      @if (isLoading) {
+      @if (isLoading()) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
           <p>Suche läuft...</p>
         </div>
-      } @else if (searchMode === 'unit' && unitSearchResults.length === 0 && searchText.trim().length > 2) {
+      } @else if (searchMode === 'unit' && unitSearchResults().length === 0 && searchText.trim().length > 2) {
         <div class="no-results">
           <mat-icon>search_off</mat-icon>
           <p>Keine Ergebnisse gefunden für "{{ searchText }}"</p>
         </div>
-      } @else if (searchMode === 'response' && responseSearchResults.length === 0 &&
+      } @else if (searchMode === 'response' && responseSearchResults().length === 0 &&
                  (searchValue.trim() !== '' || searchVariableId.trim() !== '' || searchUnitName.trim() !== '' ||
                   searchStatus.trim() !== '' || searchCodedStatus.trim() !== '' || searchGroup.trim() !== '' ||
                   searchCode.trim() !== '')) {
@@ -96,7 +96,7 @@
           <mat-icon>search_off</mat-icon>
           <p>Keine Ergebnisse gefunden für die angegebenen Suchkriterien</p>
         </div>
-      } @else if (searchMode === 'booklet' && bookletSearchResults.length === 0 && bookletSearchText.trim().length > 2) {
+      } @else if (searchMode === 'booklet' && bookletSearchResults().length === 0 && bookletSearchText.trim().length > 2) {
         <div class="no-results">
           <mat-icon>search_off</mat-icon>
           <p>Keine Ergebnisse gefunden für "{{ bookletSearchText }}"</p>
@@ -127,15 +127,15 @@
         <!-- Unit Search Results -->
         @if (searchMode === 'unit') {
           <!-- Delete All Button for Units -->
-          @if (unitSearchResults.length > 0) {
+          @if (unitSearchResults().length > 0) {
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllUnits()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ unitSearchResults.length }} gefilterten Aufgaben löschen
+                Alle {{ unitSearchResults().length }} gefilterten Aufgaben löschen
               </button>
             </div>
           }
-          <table mat-table [dataSource]="unitSearchResults" class="results-table">
+          <table mat-table [dataSource]="unitSearchResults()" class="results-table">
             <!-- Unit Name Column -->
             <ng-container matColumnDef="unitName">
               <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
@@ -232,15 +232,15 @@
         <!-- Response Search Results -->
         @if (searchMode === 'response') {
           <!-- Delete All Button for Responses -->
-          @if (responseSearchResults.length > 0) {
+          @if (responseSearchResults().length > 0) {
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllResponses()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ responseSearchResults.length }} gefilterten Antworten löschen
+                Alle {{ responseSearchResults().length }} gefilterten Antworten löschen
               </button>
             </div>
           }
-          <table mat-table [dataSource]="responseSearchResults" class="results-table">
+          <table mat-table [dataSource]="responseSearchResults()" class="results-table">
             <!-- Variable ID Column -->
             <ng-container matColumnDef="variableId">
               <th mat-header-cell *matHeaderCellDef>Variable ID</th>
@@ -324,15 +324,15 @@
         <!-- Booklet Search Results -->
         @if (searchMode === 'booklet') {
           <!-- Delete All Button for Booklets -->
-          @if (bookletSearchResults.length > 0) {
+          @if (bookletSearchResults().length > 0) {
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllBooklets()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ bookletSearchResults.length }} gefilterten Booklets löschen
+                Alle {{ bookletSearchResults().length }} gefilterten Booklets löschen
               </button>
             </div>
           }
-          <table mat-table [dataSource]="bookletSearchResults" class="results-table">
+          <table mat-table [dataSource]="bookletSearchResults()" class="results-table">
             <!-- Booklet Name Column -->
             <ng-container matColumnDef="bookletName">
               <th mat-header-cell *matHeaderCellDef>Booklet Name</th>
@@ -383,7 +383,7 @@
 
         <!-- Pagination -->
         <mat-paginator
-          [length]="totalItems"
+          [length]="totalItems()"
           [pageSize]="pageSize"
           [pageIndex]="pageIndex"
           [pageSizeOptions]="pageSizeOptions"

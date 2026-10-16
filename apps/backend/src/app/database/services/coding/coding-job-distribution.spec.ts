@@ -5,6 +5,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { JournalService } from '../shared/journal.service';
 // Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
 jest.mock('../shared/coding-ownership.policy', () => ({
   ...jest.requireActual('../shared/coding-ownership.policy'),
@@ -114,6 +115,7 @@ describe('CodingJobService distribution from job definitions', () => {
   let cacheService: { delete: jest.Mock; incr: jest.Mock };
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();

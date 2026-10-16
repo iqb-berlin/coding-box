@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -44,6 +44,7 @@ export interface ManualCodingExportDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-manual-coding-export-dialog',
   templateUrl: './manual-coding-export-dialog.component.html',
   styleUrls: ['./manual-coding-export-dialog.component.scss'],
@@ -61,28 +62,26 @@ export interface ManualCodingExportDialogResult {
   ]
 })
 export class ManualCodingExportDialogComponent {
+  dialogRef = inject<MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>>(MatDialogRef);
+  protected data = inject<ManualCodingExportDialogData>(MAT_DIALOG_DATA);
+
   readonly selectAllOptionId = -1;
 
   exportMode: ManualCodingExportMode = 'review';
   reportExportType: Exclude<ManualCodingExportType, 'aggregated'> = 'detailed';
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
-  outputCommentsInsteadOfCodes = false;
-  includeComments = true;
-  includeModalValue = true;
+  protected outputCommentsInsteadOfCodes = false;
+  protected includeComments = true;
+  protected includeModalValue = true;
   includeReplayUrl = false;
   includeResponseValues = false;
-  anonymizeCoders = false;
-  usePseudoCoders = false;
+  protected anonymizeCoders = false;
+  protected usePseudoCoders = false;
   selectedJobDefinitionIds: number[] = [];
   selectedCoderTrainingIds: number[] = [];
-  selectedCoderIds: number[] = [];
+  protected selectedCoderIds: number[] = [];
 
-  constructor(
-    public dialogRef: MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: ManualCodingExportDialogData
-  ) { }
-
-  get contextSubtitleKey(): string {
+  protected get contextSubtitleKey(): string {
     return this.data.context === 'training' ?
       'manual-coding-export.subtitle-training' :
       'manual-coding-export.subtitle-execution';

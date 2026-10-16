@@ -1,3 +1,4 @@
+@let matrixValue = matrix();
 <div class="access-matrix-dialog">
   <h2 mat-dialog-title>{{ 'access-matrix.title' | translate }}</h2>
 
@@ -23,16 +24,16 @@
     <p class="matrix-description">{{ 'access-matrix.description' | translate }}</p>
 
     <!-- Loading Spinner -->
-    @if (loading) {
+    @if (loading()) {
       <div class="loading-container">
         <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
       </div>
     }
 
     <!-- Access Rights Matrix Table -->
-    @if (!loading && matrix) {
+    @if (!loading() && matrixValue) {
       <div class="table-container">
-        <table mat-table [dataSource]="dataSource" class="access-matrix-table">
+        <table mat-table [dataSource]="dataSource()" class="access-matrix-table">
           <!-- Feature Column -->
           <ng-container matColumnDef="feature">
             <th mat-header-cell *matHeaderCellDef class="feature-header">
@@ -47,7 +48,7 @@
             </td>
           </ng-container>
           <!-- Access Level Columns -->
-          @for (level of levels; track level) {
+          @for (level of levels(); track level) {
             <ng-container [matColumnDef]="'level-' + level.level">
               <th mat-header-cell *matHeaderCellDef class="level-header">
                 <div class="level-header-content">
@@ -71,8 +72,8 @@
               </td>
             </ng-container>
           }
-          <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          <tr mat-header-row *matHeaderRowDef="displayedColumns(); sticky: true"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns();"></tr>
         </table>
       </div>
     }
