@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, OnInit, ChangeDetectionStrategy, inject
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,6 +14,7 @@ import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/boo
 import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-booklet-info-dialog',
   templateUrl: './booklet-info-dialog.component.html',
   styleUrls: ['./booklet-info-dialog.component.scss'],
@@ -27,16 +30,14 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class BookletInfoDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  dialogRef = inject<MatDialogRef<BookletInfoDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    bookletInfo: BookletInfoDto;
+    bookletId: string;
+  }>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<BookletInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      bookletInfo: BookletInfoDto;
-      bookletId: string;
-    }
-  ) {}
+  protected isLoading = true;
+  protected errorMessage: string | null = null;
 
   ngOnInit(): void {
     if (this.data.bookletInfo) {
@@ -44,7 +45,7 @@ export class BookletInfoDialogComponent implements OnInit {
     }
   }
 
-  get unitsOutsideTestlets(): BookletUnitDto[] {
+  protected get unitsOutsideTestlets(): BookletUnitDto[] {
     const info = this.data.bookletInfo;
 
     if (!info || !info.units || info.units.length === 0) {
@@ -65,11 +66,11 @@ export class BookletInfoDialogComponent implements OnInit {
     return info.units.filter((unit: BookletUnitDto) => !unitsInTestlets.has(unit.id));
   }
 
-  get hasUnitsTab(): boolean {
+  protected get hasUnitsTab(): boolean {
     return this.unitsOutsideTestlets.length > 0;
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

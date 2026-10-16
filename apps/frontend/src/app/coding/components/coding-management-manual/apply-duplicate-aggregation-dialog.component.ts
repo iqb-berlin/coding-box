@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -15,6 +15,7 @@ export interface ApplyDuplicateAggregationDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-apply-duplicate-aggregation-dialog',
   standalone: true,
   imports: [
@@ -164,16 +165,14 @@ export interface ApplyDuplicateAggregationDialogData {
   `]
 })
 export class ApplyDuplicateAggregationDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<ApplyDuplicateAggregationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyDuplicateAggregationDialogData
-  ) { }
+  dialogRef = inject<MatDialogRef<ApplyDuplicateAggregationDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyDuplicateAggregationDialogData>(MAT_DIALOG_DATA);
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 }

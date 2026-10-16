@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ViewChild } from '@angular/core';
+import {
+  Component, viewChild, ChangeDetectionStrategy, OnDestroy, inject
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -48,6 +50,7 @@ type LogUnitDetail = { bookletName: string; unitKey: string; hasLog: boolean };
 type ImportOutcomeMetric = { label: string; value: number };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-upload-result-dialog',
   standalone: true,
   imports: [
@@ -67,9 +70,19 @@ type ImportOutcomeMetric = { label: string; value: number };
   templateUrl: './test-results-upload-result-dialog.component.html',
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
-export class TestResultsUploadResultDialogComponent {
-  @ViewChild('issuesViewport')
-    issuesViewport?: CdkVirtualScrollViewport;
+export class TestResultsUploadResultDialogComponent implements OnDestroy {
+  private dialogRef = inject<MatDialogRef<TestResultsUploadResultDialogComponent>>(MatDialogRef);
+  private translateService = inject(TranslateService);
+  data = inject<TestResultsUploadResultDialogData>(MAT_DIALOG_DATA);
+
+  private readonly viewportRefreshTimers = new Set<number>();
+
+  ngOnDestroy(): void {
+    this.viewportRefreshTimers.forEach(timeout => window.clearTimeout(timeout));
+    this.viewportRefreshTimers.clear();
+  }
+
+  readonly issuesViewport = viewChild<CdkVirtualScrollViewport>('issuesViewport');
 
   private issueFilterText = '';
   private issueCategory: string | null = null;
@@ -80,12 +93,6 @@ export class TestResultsUploadResultDialogComponent {
     query: string;
     result: TestResultsUploadIssueDto[];
   } | null = null;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsUploadResultDialogComponent>,
-    private translateService: TranslateService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadResultDialogData
-  ) { }
 
   get result(): TestResultsUploadResultDto {
     return this.data.result;
@@ -334,7 +341,7 @@ export class TestResultsUploadResultDialogComponent {
       .sort((a, b) => a.status.localeCompare(b.status));
   }
 
-  get hasZeroDelta(): boolean {
+  protected get hasZeroDelta(): boolean {
     const delta = this.result.delta;
     return (delta.testPersons || 0) === 0 &&
       (delta.testGroups || 0) === 0 &&
@@ -395,7 +402,7 @@ export class TestResultsUploadResultDialogComponent {
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
-  get codingFreshnessExplanationText(): string {
+  protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
@@ -506,7 +513,7 @@ export class TestResultsUploadResultDialogComponent {
     return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
   }
 
-  exportIssues(): void {
+  protected exportIssues(): void {
     const issuesToExport = this.filteredIssues;
     if (issuesToExport.length === 0) {
       return;
@@ -545,7 +552,7 @@ export class TestResultsUploadResultDialogComponent {
     );
   }
 
-  detailView: 'booklets' | 'units' = 'booklets';
+  protected detailView: 'booklets' | 'units' = 'booklets';
   detailStatusFilter: 'all' | 'withLogs' | 'withoutLogs' = 'all';
   detailFilterText = '';
 
@@ -647,7 +654,7 @@ export class TestResultsUploadResultDialogComponent {
     this.scheduleIssueViewportRefresh(true);
   }
 
-  onTabChange(): void {
+  protected onTabChange(): void {
     this.scheduleIssueViewportRefresh();
   }
 
@@ -660,12 +667,14 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   private scheduleIssueViewportRefresh(resetScroll = false): void {
-    window.setTimeout(() => {
+    const timeout = window.setTimeout(() => {
+      this.viewportRefreshTimers.delete(timeout);
       if (resetScroll) {
-        this.issuesViewport?.scrollToIndex(0);
+        this.issuesViewport()?.scrollToIndex(0);
       }
-      this.issuesViewport?.checkViewportSize();
+      this.issuesViewport()?.checkViewportSize();
     });
+    this.viewportRefreshTimers.add(timeout);
   }
 
   private getIssueExportFileName(): string {

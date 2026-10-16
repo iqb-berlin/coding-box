@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,6 +27,7 @@ export type TestResultsUploadOptionsDialogResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-upload-options-dialog',
   standalone: true,
   imports: [
@@ -41,27 +42,29 @@ export type TestResultsUploadOptionsDialogResult = {
   styleUrls: ['./test-results-upload-options-dialog.component.scss']
 })
 export class TestResultsUploadOptionsDialogComponent {
-  overwriteMode: OverwriteMode;
-  scope: UploadScope;
-  groupName = '';
-  bookletName = '';
-  unitNameOrAlias = '';
-  variableId = '';
-  subform = '';
+  private dialogRef = inject<MatDialogRef<TestResultsUploadOptionsDialogComponent, TestResultsUploadOptionsDialogResult | undefined>>(MatDialogRef);
+  protected data = inject<TestResultsUploadOptionsDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsUploadOptionsDialogComponent, TestResultsUploadOptionsDialogResult | undefined>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadOptionsDialogData
-  ) {
+  protected overwriteMode: OverwriteMode;
+  protected scope: UploadScope;
+  protected groupName = '';
+  protected bookletName = '';
+  protected unitNameOrAlias = '';
+  protected variableId = '';
+  protected subform = '';
+
+  constructor() {
+    const data = this.data;
+
     this.overwriteMode = data.defaultOverwriteMode || 'skip';
     this.scope = data.defaultScope || 'person';
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  confirm(): void {
+  protected confirm(): void {
     this.dialogRef.close({
       overwriteMode: this.overwriteMode,
       scope: this.scope,

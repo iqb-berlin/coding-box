@@ -1,5 +1,4 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -21,7 +20,7 @@ describe('Testcenter interrupted import feedback', () => {
 
   const mountImport = (importWorkspaceFiles: unknown, getProgress: unknown) => cy.mount(TestCenterImportComponent, {
     imports: [TranslateModule.forRoot()],
-    providers: [provideHttpClient(), provideNoopAnimations(),
+    providers: [provideHttpClient(),
       { provide: MAT_DIALOG_DATA, useValue: { importType: 'testResults' } },
       { provide: MatDialogRef, useValue: { close: cy.stub().as('closeDialog') } },
       { provide: UserBackendService, useValue: {} },
@@ -35,14 +34,14 @@ describe('Testcenter interrupted import feedback', () => {
     const translate = fixture.debugElement.injector.get(TranslateService);
     translate.setTranslation('de', translations);
     translate.use('de');
-    component.authenticated = true;
-    component.showTestGroups = true;
+    component.authenticated.set(true);
+    component.showTestGroups.set(true);
     component.authToken = 'test-token';
-    component.workspaces = [{ id: 'tc', label: 'Testcenter', type: 'tc', flags: { mode: 'full' } }];
+    component.workspaces.set([{ id: 'tc', label: 'Testcenter', type: 'tc', flags: { mode: 'full' } }]);
     component.loginForm.patchValue({ testCenter: 1 });
     component.importFilesForm.patchValue({ workspace: 'tc', responses: true });
-    component.testGroups = groups();
-    component.selectedRows = [...component.testGroups];
+    component.testGroups.set(groups());
+    component.selectedRows = [...component.testGroups()];
     fixture.autoDetectChanges();
     fixture.detectChanges();
   });

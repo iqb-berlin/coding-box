@@ -1,4 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Subscription } from 'rxjs';
+import {
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -16,12 +20,14 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
 import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 import { JournalFilters, JournalService, JournalEntry } from '../../../core/services/journal.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import {
   auditEventResults,
   auditEventTypes
 } from '../../../../../../../api-dto/audit-journal/audit-journal.dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-journal',
   templateUrl: './journal.component.html',
   styleUrls: ['./journal.component.scss'],
@@ -41,13 +47,17 @@ import {
   ]
 })
 export class JournalComponent implements OnInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private appService = inject(AppService);
   private journalService = inject(JournalService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  journalEntries: JournalEntry[] = [];
-  displayedColumns: string[] = [
+  readonly journalEntries = signal<JournalEntry[]>([]);
+  protected displayedColumns: string[] = [
     'timestamp',
     'actor',
     'eventType',
@@ -58,85 +68,96 @@ export class JournalComponent implements OnInit {
     'details'
   ];
 
-  totalEntries = 0;
-  pageSize = 20;
-  pageIndex = 0;
-  loading = false;
-  loadError = false;
-  loadErrorMessage = '';
-  loadErrorRequestId = '';
-  eventTypes = auditEventTypes;
-  resultTypes = auditEventResults;
-  filters: JournalFilters = {};
+  readonly totalEntries = signal(0);
+  protected readonly pageSize = signal(20);
+  protected readonly pageIndex = signal(0);
+  protected readonly loading = signal(false);
+  readonly loadError = signal(false);
+  readonly loadErrorMessage = signal('');
+  readonly loadErrorRequestId = signal('');
+  protected eventTypes = auditEventTypes;
+  protected resultTypes = auditEventResults;
+  readonly filters = signal<JournalFilters>({});
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.journalEntries.set([]);
+      this.pageIndex.set(0);
+      this.loadJournalEntries();
+    });
     this.loadJournalEntries();
   }
 
   loadJournalEntries(): void {
+    this.loadRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.journalEntries = [];
-      this.totalEntries = 0;
-      this.loadError = false;
-      this.loadErrorMessage = '';
-      this.loadErrorRequestId = '';
+      this.journalEntries.set([]);
+      this.totalEntries.set(0);
+      this.loadError.set(false);
+      this.loadErrorMessage.set('');
+      this.loadErrorRequestId.set('');
+      this.loading.set(false);
       return;
     }
 
-    this.loading = true;
-    this.loadError = false;
-    this.loadErrorMessage = '';
-    this.loadErrorRequestId = '';
+    this.loading.set(true);
+    this.loadError.set(false);
+    this.loadErrorMessage.set('');
+    this.loadErrorRequestId.set('');
 
-    this.journalService.getJournalEntries(
+    this.loadRequest = this.journalService.getJournalEntries(
       workspaceId,
-      this.pageIndex + 1,
-      this.pageSize,
-      this.filters,
+      this.pageIndex() + 1,
+      this.pageSize(),
+      this.filters(),
       { suppressGlobalError: true }
-    )
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
-          this.journalEntries = response.data;
-          this.totalEntries = response.total;
-          this.loadError = false;
-          this.loading = false;
+          this.journalEntries.set(response.data);
+          this.totalEntries.set(response.total);
+          this.loadError.set(false);
+          this.loading.set(false);
         },
         error: error => {
-          this.journalEntries = [];
-          this.totalEntries = 0;
-          this.loadError = true;
+          this.journalEntries.set([]);
+          this.totalEntries.set(0);
+          this.loadError.set(true);
           this.setLoadErrorDetails(error);
-          this.loading = false;
+          this.loading.set(false);
         }
       });
   }
 
-  handlePageEvent(event: PageEvent): void {
-    this.pageSize = event.pageSize;
-    this.pageIndex = event.pageIndex;
+  protected handlePageEvent(event: PageEvent): void {
+    this.pageSize.set(event.pageSize);
+    this.pageIndex.set(event.pageIndex);
     this.loadJournalEntries();
   }
 
-  applyFilters(): void {
-    this.pageIndex = 0;
+  protected applyFilters(): void {
+    this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
-  clearFilters(): void {
-    this.filters = {};
-    this.pageIndex = 0;
+  protected updateFilter<K extends keyof JournalFilters>(field: K, value: JournalFilters[K]): void {
+    this.filters.update(current => ({ ...current, [field]: value }));
+  }
+
+  protected clearFilters(): void {
+    this.filters.set({});
+    this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
-  downloadCsv(): void {
+  protected downloadCsv(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
-    this.journalService.downloadJournalEntriesAsCsv(workspaceId, { suppressGlobalError: true })
+    this.journalService.downloadJournalEntriesAsCsv(workspaceId, { suppressGlobalError: true }).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           const url = window.URL.createObjectURL(blob);
@@ -158,7 +179,7 @@ export class JournalComponent implements OnInit {
       });
   }
 
-  getActorLabel(entry: JournalEntry): string {
+  protected getActorLabel(entry: JournalEntry): string {
     if (entry.actorId) {
       return entry.actorId;
     }
@@ -168,7 +189,7 @@ export class JournalComponent implements OnInit {
     return entry.actorType;
   }
 
-  formatDetails(details: Record<string, unknown> | null): string {
+  protected formatDetails(details: Record<string, unknown> | null): string {
     if (!details) {
       return '';
     }
@@ -192,12 +213,12 @@ export class JournalComponent implements OnInit {
   private setLoadErrorDetails(error: unknown): void {
     if (error instanceof HttpErrorResponse) {
       const httpError = new AppHttpError(error);
-      this.loadErrorMessage = httpError.userMessage;
-      this.loadErrorRequestId = httpError.requestId;
+      this.loadErrorMessage.set(httpError.userMessage);
+      this.loadErrorRequestId.set(httpError.requestId);
       return;
     }
 
-    this.loadErrorMessage = this.translateService.instant('journal.load-error-message');
-    this.loadErrorRequestId = this.extractRequestId(error);
+    this.loadErrorMessage.set(this.translateService.instant('journal.load-error-message'));
+    this.loadErrorRequestId.set(this.extractRequestId(error));
   }
 }

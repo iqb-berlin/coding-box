@@ -1,5 +1,5 @@
 import {
-  Component, Inject, ViewChild, AfterViewInit
+  Component, viewChild, ChangeDetectionStrategy, inject
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -21,6 +21,7 @@ export type TestFilesZipExportOptionsDialogData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files-zip-export-options-dialog',
   standalone: true,
   imports: [
@@ -45,7 +46,7 @@ export type TestFilesZipExportOptionsDialogData = {
           (selectionChange)="onSelectionChange()"
         >
           @for (type of dialogData.availableFileTypes; track type) {
-          <mat-list-option [value]="type">{{ getFileTypeLabel(type) }}</mat-list-option>
+          <mat-list-option [value]="type" [selected]="data.fileTypes.includes(type)">{{ getFileTypeLabel(type) }}</mat-list-option>
           }
         </mat-selection-list>
       </div>
@@ -76,58 +77,47 @@ export type TestFilesZipExportOptionsDialogData = {
     `
   ]
 })
-export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
-  @ViewChild('fileTypesList') fileTypesList!: MatSelectionList;
+export class TestFilesZipExportOptionsDialogComponent {
+  private dialogRef = inject<MatDialogRef<TestFilesZipExportOptionsDialogComponent>>(MatDialogRef);
+  protected dialogData = inject<TestFilesZipExportOptionsDialogData>(MAT_DIALOG_DATA);
 
-  data: TestFilesZipExportOptions = {
+  readonly fileTypesList = viewChild.required<MatSelectionList>('fileTypesList');
+
+  protected data: TestFilesZipExportOptions = {
     fileTypes: []
   };
 
-  getFileTypeLabel = getFileTypeLabel;
+  protected getFileTypeLabel = getFileTypeLabel;
 
-  constructor(
-    private dialogRef: MatDialogRef<TestFilesZipExportOptionsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA)
-    public dialogData: TestFilesZipExportOptionsDialogData
-  ) {
+  constructor() {
+    const dialogData = this.dialogData;
+
     this.data.fileTypes = [
       ...(dialogData.selectedFileTypes || dialogData.availableFileTypes || [])
     ];
   }
 
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      if (this.fileTypesList && this.data.fileTypes.length > 0) {
-        this.fileTypesList.options.forEach(option => {
-          if (this.data.fileTypes.includes(option.value)) {
-            option.selected = true;
-          }
-        });
-      }
-    });
-  }
-
-  onSelectionChange(): void {
-    this.data.fileTypes = this.fileTypesList.selectedOptions.selected.map(
+  protected onSelectionChange(): void {
+    this.data.fileTypes = this.fileTypesList().selectedOptions.selected.map(
       option => option.value
     );
   }
 
-  selectAll(): void {
-    this.fileTypesList.selectAll();
+  protected selectAll(): void {
+    this.fileTypesList().selectAll();
     this.onSelectionChange();
   }
 
-  deselectAll(): void {
-    this.fileTypesList.deselectAll();
+  protected deselectAll(): void {
+    this.fileTypesList().deselectAll();
     this.onSelectionChange();
   }
 
-  download(): void {
+  protected download(): void {
     this.dialogRef.close(this.data);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }

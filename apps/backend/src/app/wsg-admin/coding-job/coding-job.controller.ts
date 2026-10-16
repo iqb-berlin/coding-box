@@ -517,7 +517,8 @@ export class WsgCodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+      @Body() createCodingJobDto: CreateCodingJobDto,
+      @Req() req?: Request
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -537,7 +538,8 @@ export class WsgCodingJobController {
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
-        createCodingJobDto
+        createCodingJobDto,
+        req ? this.getRequestUserId(req) : undefined
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -588,7 +590,8 @@ export class WsgCodingJobController {
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      updateCodingJobDto
+      updateCodingJobDto,
+      this.getRequestUserId(req)
     );
   }
 
@@ -628,7 +631,8 @@ export class WsgCodingJobController {
     const codingJob = await this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      { status: 'review' }
+      { status: 'review' },
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -679,7 +683,7 @@ export class WsgCodingJobController {
     if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
-      });
+      }, this.getRequestUserId(req));
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
@@ -717,7 +721,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.pauseCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -754,7 +759,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.resumeCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -794,7 +800,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.submitCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -872,9 +879,10 @@ export class WsgCodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req?: Request
   ): Promise<{ success: boolean }> {
-    return this.codingJobService.deleteCodingJob(id, workspaceId);
+    return this.codingJobService.deleteCodingJob(id, workspaceId, req ? this.getRequestUserId(req) : undefined);
   }
 
   @Post(':id/progress')

@@ -15,6 +15,19 @@ describe('PostMessageService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('removes the global listener and completes its stream on destruction', () => {
+    const remove = jest.spyOn(window, 'removeEventListener');
+    const received = jest.fn();
+    const completed = jest.fn();
+    service.messages$.subscribe({ next: received, complete: completed });
+    service.ngOnDestroy();
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'late' } }));
+    expect(remove).toHaveBeenCalledWith('message', expect.any(Function));
+    expect(received).not.toHaveBeenCalled();
+    expect(completed).toHaveBeenCalledTimes(1);
+    remove.mockRestore();
+  });
+
   describe('sendMessage', () => {
     it('should send post message', () => {
       // Mock window.postMessage? Or just spy on it?

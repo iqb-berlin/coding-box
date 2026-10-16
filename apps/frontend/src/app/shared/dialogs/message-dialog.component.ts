@@ -1,7 +1,9 @@
 import {
   MAT_DIALOG_DATA, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, ChangeDetectionStrategy
+} from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 
@@ -12,6 +14,7 @@ export enum MessageType {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1 mat-dialog-title>
       @if (messageData.type === 0) {
@@ -36,7 +39,7 @@ export enum MessageType {
   imports: [MatDialogTitle, MatIcon, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class MessageDialogComponent implements OnInit {
-  messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
+  protected messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
   ngOnInit(): void {
     if ((typeof this.messageData.title === 'undefined') || (this.messageData.title.length === 0)) {
       switch (this.messageData.type) {

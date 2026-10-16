@@ -214,7 +214,7 @@ describe('WsgCodingJobController', () => {
     ).not.toHaveBeenCalled();
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
       status: 'active'
-    });
+    }, 5);
   });
 
   it.each(['review', 'results_applied'])(
@@ -253,7 +253,7 @@ describe('WsgCodingJobController', () => {
     );
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
       status: 'review'
-    });
+    }, 5);
   });
 
   it.each([
@@ -271,7 +271,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47);
+    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47, 5);
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {

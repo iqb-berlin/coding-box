@@ -1,3 +1,6 @@
+@let unitDefValue = unitDef();
+@let unitPlayerValue = unitPlayer();
+@let errorMessageValue = errorMessage();
 <div class="dialog-container">
   <div class="dialog-header">
     <h2 class="dialog-title">Aufgabendefinition: {{ data.unitId }}</h2>
@@ -9,25 +12,25 @@
   <mat-divider></mat-divider>
 
   <mat-dialog-content>
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p>Aufgabendefinition wird geladen...</p>
       </div>
     }
 
-    @if (!isLoading && errorMessage) {
+    @if (!isLoading() && errorMessageValue) {
       <div class="error-container">
         <mat-icon color="warn">error</mat-icon>
-        <p>{{ errorMessage }}</p>
+        <p>{{ errorMessageValue }}</p>
       </div>
     }
 
-    @if (!isLoading && !errorMessage && unitDef && unitPlayer) {
+    @if (!isLoading() && !errorMessageValue && unitDefValue && unitPlayerValue) {
       <div class="player-container">
         <coding-box-unit-player
-          [unitDef]="unitDef"
-          [unitPlayer]="unitPlayer"
+          [unitDef]="unitDefValue"
+          [unitPlayer]="unitPlayerValue"
           [printMode]="true">
         </coding-box-unit-player>
       </div>
