@@ -172,6 +172,8 @@
         "cypress/e2e/export-item-dataset.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.spec.ts",
+        "cypress/component/test-center-import.component.cy.ts",
         "cypress/zoneless/testcenter-import.cy.ts",
         "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/async-coding-dialogs.cy.ts",

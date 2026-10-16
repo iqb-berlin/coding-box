@@ -40,6 +40,7 @@ import {
   switchMap,
   takeUntil,
   takeWhile,
+  timeout,
   timer as rxjsTimer
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -1627,7 +1628,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     try {
       return await firstValueFrom(
-        getCodingFreshness.call(this.statisticsService, workspaceId)
+        getCodingFreshness.call(this.statisticsService, workspaceId).pipe(timeout(5000))
       );
     } catch {
       return null;
@@ -1639,7 +1640,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   ): Promise<{ overview: AppliedResultsOverview | null; loadFailed: boolean }> {
     try {
       const overview = await firstValueFrom(
-        this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+        this.testPersonCodingService.getAppliedResultsOverview(workspaceId).pipe(timeout(5000))
       );
       return {
         overview,
@@ -2023,7 +2024,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       try {
         loadedBeforeOverview = await firstValueFrom(
-          this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+          this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(5000), takeUntil(cancellation)),
           { defaultValue: null }
         );
       } catch {
@@ -2071,7 +2072,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
         // A loaded overview is the reliable result. It may legitimately be unchanged
         // when an import only confirms already existing data.
-        for (let i = 0; i < 12; i += 1) {
+        const deadline = Date.now() + 20000;
+        for (let i = 0; i < 4 && Date.now() < deadline; i += 1) {
           if (cancelled) return { overview: beforeOverview, loaded: false, changed: false };
           progressState$?.next({
             title: 'Testcenter-Import',
@@ -2079,38 +2081,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             phase: 'refreshingOverview',
             phaseLabel: 'Übersicht wird aktualisiert',
             message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
-            percent: Math.min(95, Math.round(((i + 1) / 12) * 100)),
-            mode: 'determinate'
+            mode: 'indeterminate'
           });
 
           let current: TestResultsOverviewResponse | null = null;
           try {
             current = await firstValueFrom(
-              this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+              this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(Math.min(5000, Math.max(1, deadline - Date.now()))), takeUntil(cancellation)),
               { defaultValue: null }
             );
           } catch {
             current = null;
           }
           if (!current) {
-            await sleep(1000);
+            if (Date.now() < deadline) await sleep(Math.min(1000, deadline - Date.now()));
             continue;
           }
           return { overview: current, loaded: true, changed: hasOverviewChanged(current) };
         }
-        let finalOverview: TestResultsOverviewResponse | null = null;
-        try {
-          finalOverview = await firstValueFrom(
-            this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
-            { defaultValue: null }
-          );
-        } catch {
-          finalOverview = null;
-        }
         return {
-          overview: finalOverview || this.overview() || beforeOverview,
-          loaded: !!finalOverview,
-          changed: !!finalOverview && hasOverviewChanged(finalOverview)
+          overview: this.overview() || beforeOverview,
+          loaded: false,
+          changed: false
         };
       };
 
@@ -2271,7 +2263,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             importedResponses: payload.importedResponses,
             overviewPending,
             overviewMessage: overviewPending ?
-              'Der Import wurde vom Server angenommen, aber die aktualisierte Übersicht konnte noch nicht zuverlässig gelesen werden. Bitte diese Ansicht in Kürze aktualisieren.' :
+              this.translateService.instant('testcenter-import.overview-pending') :
               undefined,
             codingFreshness: codingFreshness || undefined
           };

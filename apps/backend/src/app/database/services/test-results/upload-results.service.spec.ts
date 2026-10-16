@@ -1074,6 +1074,9 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         [Persons, personsRepository], [Booklet, bookletRepository], [BookletInfo, bookletInfoRepository],
         [BookletLog, bookletLogRepository], [Session, sessionRepository], [UnitLog, unitLogRepository]
       ]);
+      jest.spyOn(unitRepository.manager, 'query').mockResolvedValue([]);
+      jest.spyOn(unitRepository.manager, 'getRepository')
+        .mockImplementation(entity => transactionRepositories.get(entity) as never);
       jest.spyOn(unitRepository.manager, 'transaction').mockImplementation((async callback => callback({
         query: jest.fn().mockResolvedValue([]), getRepository: entity => transactionRepositories.get(entity)
       })) as never);

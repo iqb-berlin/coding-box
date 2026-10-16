@@ -49,6 +49,7 @@ stack logs under `cypress/replay-artifacts/` and `tmp/replay-e2e-artifacts/`.
 | Unit failures are hidden in a green pipeline | Blocking complete suites, 60% coverage checks and JUnit failure/initialization-error reporting |
 | A manual note impersonates a backend action or actor | Real authenticated API rejects event/actor/job claims; persisted notes use the authenticated user and manual event type; journal CSV neutralizes formula cells |
 | Persisted import data loses its provenance | Browser upload checks the persisted batch event against its exact Bull job, workspace and authenticated user without raw response values |
+| Interrupted Testcenter requests cause duplicate imports or hide partial failure | Native zoneless dialog and browser component regressions; opt-in PostgreSQL tests verify durable replay, rollback, lock contention and refusal to replay an unconfirmed run |
 | A failed audit or persistence write leaves a partial mutation | Import rollback regressions include pre-query failures and pending concurrent writes; isolated PostgreSQL fault injection proves deletion rollback with dependent rows, followed by a successful data-and-audit commit |
 | A permitted workspace route exposes or mutates another workspace's Bull job | Real API/Redis acceptance passes both workspace guards, rejects foreign analysis cancel/delete and statistics reads, preserves owner results and verifies owner deletion |
 
@@ -109,6 +110,43 @@ observation intercepts do not replace successful server responses.
 For Docker-in-Docker, CI sets `REPLAY_E2E_CONNECT_HOST=docker` and
 `REPLAY_E2E_PUBLISH_HOST=0.0.0.0`. Authentication runs forward these services to
 browser loopback origins so native Web Crypto and Keycloak PKCE remain enabled.
+
+## Testcenter import recovery on PostgreSQL
+
+Use a disposable PostgreSQL 14 database with the full Liquibase changelog applied.
+The opt-in fixtures create and remove only their own synthetic rows; never point
+these tests at an existing development or production database. Run the complete
+PostgreSQL group sequentially through Nx, with connection values for that database:
+
+```sh
+POSTGRES_INTEGRATION_TESTS=true POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 \
+POSTGRES_USER=fixture POSTGRES_PASSWORD=fixture POSTGRES_DB=fixture \
+  npx nx test backend --runInBand --skipNxCache --testPathPatterns=postgres.spec.ts
+```
+
+`testcenter-import-recovery.postgres.spec.ts` uses the real Testcenter service,
+person parser, persistence services, PostgreSQL transactions and advisory locks.
+Its synthetic Testcenter upstream is an actual loopback HTTP server. It checks
+committed response values, chunks, last states and trusted audit metadata; a new
+service instance reads the durable outcome without fetching or importing again.
+Database fault injection verifies complete batch rollback, terminal failed-run
+recovery, a safe new run, rejection of concurrent imports, and rejection of an
+unconfirmed run after terminal status writes fail. The migrated composite key,
+workspace isolation and cascading deletion are checked on the actual schema.
+The per-unit persistence fixture additionally verifies rollback without auditing.
+
+For migration acceptance, first apply the root changelog without the new
+`coding-box.changelog-testcenter-import-runs.sql` include to a disposable database
+and tag that baseline. Then apply the actual root changelog, repeat the update,
+roll back to the baseline tag, and apply the actual root again. Expect one new
+changeset, zero on repetition, one rollback, and one reapplication. Apply the
+migration before starting the updated backend; TypeORM synchronization is disabled.
+
+Local acceptance used PostgreSQL 14.24 and Liquibase 4.28.0. These cases prove
+service-instance recovery and controlled failures, with the optional progress
+cache unavailable. They do not simulate an operating-system crash, a browser
+reload during import, or an external production Testcenter. The PostgreSQL group
+remains an additional opt-in check, separate from the required pipeline gates.
 
 ## Remaining specialist checks
 
