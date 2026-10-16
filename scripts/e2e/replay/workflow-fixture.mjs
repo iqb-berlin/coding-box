@@ -80,5 +80,17 @@ export async function prepareOwnership(state) {
       throw new Error(`Incomplete ownership fixture: ${kind}`);
     }
   }
+  if (!Number.isSafeInteger(browser.codingJobId)) throw new Error('Missing source coding job for the assigned-coder fixture.');
+  const legacyId = result.job.legacy;
+  const { stdout: legacyCoding } = await exec('docker', [
+    'exec', dbContainer, 'psql', '-U', 'replay_e2e', '-d', 'replay_e2e', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c',
+    `INSERT INTO coding_job_coder(coding_job_id,user_id)
+     VALUES (${legacyId},(SELECT id FROM "user" WHERE username='file-access-1'));
+     WITH inserted AS (INSERT INTO coding_job_unit(coding_job_id,workspace_id,response_id,unit_name,unit_alias,variable_id,variable_anchor,booklet_name,person_login,person_code,person_group,is_open)
+     SELECT ${legacyId}, ${workspaceId},response_id,unit_name,unit_alias,variable_id,variable_anchor,booklet_name,person_login,person_code,person_group,true
+     FROM coding_job_unit WHERE coding_job_id=${browser.codingJobId} AND workspace_id=${workspaceId} ORDER BY id LIMIT 1 RETURNING *)
+     SELECT json_build_object('testPerson',concat_ws('@',person_login,person_code,person_group,booklet_name),'unitId',unit_name,'variableId',variable_id) FROM inserted`
+  ]);
+  result.legacyCoding = JSON.parse(legacyCoding.trim());
   return result;
 }
