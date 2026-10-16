@@ -167,6 +167,7 @@ export class VariableBundleController {
       );
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       throw new BadRequestException(`Failed to create variable bundle: ${error.message}`);
     }
   }
