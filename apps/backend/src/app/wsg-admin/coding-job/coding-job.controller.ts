@@ -940,7 +940,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     const userId = saveCodingProgressDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingProgressDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -953,7 +953,8 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingProgress(
         id,
-        saveCodingProgressDto
+        saveCodingProgressDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -998,7 +999,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     const userId = saveCodingNotesDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingNotesDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -1011,7 +1012,8 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingNotes(
         id,
-        saveCodingNotesDto
+        saveCodingNotesDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }

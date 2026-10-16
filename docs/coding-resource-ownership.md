@@ -27,3 +27,22 @@ to verify legacy/foreign/owned authorization, immutable creators, atomic mixed
 bulk deletion, audit persistence, and competing row-lock/state/role changes.
 `cypress/workflows/coding-ownership.cy.ts` exercises real Keycloak role login and
 HTTP authorization for all four resource types in the disposable workflow stack.
+
+## Protected coding job states
+
+New jobs accept only pending, active, paused or open status. Review and applied
+states cannot be manufactured at creation. Restart requires at least one open
+unit and rejects review/applied jobs. A stale client request to change an applied
+job receives a bad-request response without changing its state.
+
+Progress, notes, pause/resume, manager updates, restarts and result application
+coordinate through the workspace mutation lock and the coding-job row lock.
+They re-read state after waiting for concurrent changes. Applying results reuses
+the caller's transaction; it does not commit an independent partial operation.
+The PostgreSQL tests exercise real lock waiters, including progress and notes
+that arrive while a job is being submitted for review.
+
+Coder writes also recheck the current workspace coding capability and job
+assignment after acquiring those locks, using the caller's transaction manager.
+Removing an assignment or disabling coding while a request waits therefore
+prevents a late pause, resume, submission, progress write or note write.

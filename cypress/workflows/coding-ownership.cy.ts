@@ -1,21 +1,39 @@
 type OwnershipKind = 'bundle' | 'definition' | 'job' | 'training';
-type OwnershipRows = Record<OwnershipKind, { own: number; foreign: number; legacy: number }> & {
-  legacyCoding: { testPerson: string; unitId: string; variableId: string };
+type OwnershipRows = Record<OwnershipKind, {
+  own: number;
+  foreign: number;
+  legacy: number;
+}> & {
+  legacyCoding: {
+    testPerson: string;
+    unitId: string;
+    variableId: string;
+  };
+} & {
+  job: {
+    review: number;
+    results_applied: number;
+  };
 };
-
 describe('coding ownership with real role login and PostgreSQL', () => {
-  let setup: { apiUrl: string; keycloakUrl: string; password: string; workspaceId: number; fileAccessUserIds: Record<string, number> };
+  let setup: {
+    apiUrl: string;
+    keycloakUrl: string;
+    password: string;
+    workspaceId: number;
+    userId: number;
+    username: string;
+    fileAccessUserIds: Record<string, number>;
+  };
   let rows: OwnershipRows;
   let token: string;
-
   before(() => {
-    cy.task('workflows:setup', null, { log: false, timeout: 180_000 }).then(value => { setup = value as typeof setup; });
-  });
-  beforeEach(() => {
-    cy.task('workflows:prepare-ownership', null, { log: false }).then(value => { rows = value as OwnershipRows; });
+    cy.task('workflows:setup', null, { log: false, timeout: 180000 }).then(value => { setup = value as typeof setup; });
   });
   after(() => { cy.task('workflows:cleanup', null, { log: false }); });
-
+  function prepareOwnershipRows() {
+    cy.task('workflows:prepare-ownership', null, { log: false }).then(value => { rows = value as OwnershipRows; });
+  }
   function login(username: string) {
     cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
       request.continue(response => { token = response.body.access_token; });
@@ -31,14 +49,16 @@ describe('coding ownership with real role login and PostgreSQL', () => {
     cy.get('coding-box-home').should('be.visible');
     api('/auth-data').its('body.userId').should('eq', setup.fileAccessUserIds[username]);
   }
-
   function api(route: string, method = 'GET', body?: unknown) {
     return cy.then(() => cy.request({
-      url: `${setup.apiUrl}/api${route}`, method, body,
-      headers: { authorization: `Bearer ${token}` }, failOnStatusCode: false, log: false
+      url: `${setup.apiUrl}/api${route}`,
+      method,
+      body,
+      headers: { authorization: `Bearer ${token}` },
+      failOnStatusCode: false,
+      log: false
     }));
   }
-
   function resource(kind: OwnershipKind, id: number) {
     const admin = `/admin/workspace/${setup.workspaceId}`;
     switch (kind) {
@@ -49,8 +69,8 @@ describe('coding ownership with real role login and PostgreSQL', () => {
       default: throw new Error(`Unsupported ownership kind: ${kind}`);
     }
   }
-
   it('denies manager actions while preserving assigned-coder writes on a legacy job', () => {
+    prepareOwnershipRows();
     login('file-access-1');
     api(`/admin/workspace/${setup.workspaceId}/variable-bundle`, 'POST', {
       name: 'Forbidden bundle', variables: []
@@ -73,12 +93,12 @@ describe('coding ownership with real role login and PostgreSQL', () => {
       });
     });
   });
-
-  for (const username of ['file-access-2', 'file-access-3', 'file-access-admin']) {
+  (['file-access-2', 'file-access-3', 'file-access-admin']).forEach(username => {
     it(`${username} can read all resources and mutate only permitted owners, including legacy rows`, () => {
+      prepareOwnershipRows();
       login(username);
-      for (const kind of ['bundle', 'definition', 'job', 'training'] as const) {
-        for (const ownership of ['own', 'foreign', 'legacy'] as const) {
+      (['bundle', 'definition', 'job', 'training'] as const).forEach(kind => {
+        (['own', 'foreign', 'legacy'] as const).forEach(ownership => {
           cy.then(() => {
             const route = resource(kind, rows[kind][ownership]);
             api(route.read).its('status').should('eq', 200);
@@ -87,36 +107,100 @@ describe('coding ownership with real role login and PostgreSQL', () => {
               if (response.status === 200 && kind === 'training') expect(response.body.success).to.equal(true);
             });
           });
-        }
-      }
+        });
+      });
       if (username === 'file-access-2') {
+        (['completed', 'review', 'results_applied']).forEach(status => {
+          api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job`, 'POST', { name: 'Invalid initial state', status })
+            .its('status').should('eq', 400);
+        });
+        cy.then(() => api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job/${rows.job.own}/restart-open-units`, 'POST'))
+          .its('status').should('eq', 400);
+        (['review', 'results_applied'] as const).forEach(status => {
+          cy.then(() => {
+            const route = resource('job', rows.job[status]);
+            api(route.edit, 'PUT', { status: 'active' }).its('status').should('eq', 400);
+            api(`${route.edit}/restart-open-units`, 'POST').its('status').should('eq', 400);
+            api(route.read).its('body.status').should('eq', status);
+          });
+        });
         api(`/admin/workspace/${setup.workspaceId}/coding/double-coded-review/apply-resolutions`, 'POST', { decisions: [] })
           .its('status').should('eq', 401);
         api(`/admin/workspace/${setup.workspaceId}/coding/coder-trainings/${rows.training.own}/apply-discussion-results`, 'POST', { source: 'manual' })
           .its('status').should('eq', 401);
-        api('/auth-data').then(({ body: actor }) => {
-          api(`/admin/users/access/${setup.workspaceId}`).then(({ status, body }) => {
-            expect(status).to.equal(200);
-            expect(body.find((user: { id: number }) => user.id === actor.userId).accessLevel).to.equal(2);
-          });
-          api(`/admin/workspace/${setup.workspaceId}/variable-bundle`, 'POST', {
-            name: 'Created by manager', variables: [], creatorUserId: -1
-          }).then(({ status, body }) => {
-            expect(status).to.equal(201);
-            expect(body.creatorUserId).to.equal(actor.userId);
-            api(`/admin/workspace/${setup.workspaceId}/variable-bundle/${body.id}`, 'PUT', {
-              name: 'Renamed', creatorUserId: -1
-            }).then(response => {
-              expect(response.status).to.equal(200);
-              expect(response.body.creatorUserId).to.equal(actor.userId);
-            });
-          });
-        });
         api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job/bulk-delete`, 'POST', {
           ids: [rows.job.own, rows.job.foreign]
         }).its('status').should('eq', 403);
         cy.then(() => api(resource('job', rows.job.own).read)).its('status').should('eq', 200);
       }
     });
-  }
+  });
+  it('creates all four resources as Level 2 and preserves creator inheritance', () => {
+    // The permission matrix deliberately reserves its cases with synthetic definitions.
+    // Creation gets its own real, unreserved imported data instead.
+    cy.task('workflows:cleanup', null, { log: false });
+    cy.task('workflows:setup', null, { log: false, timeout: 180000 }).then(value => {
+      setup = value as typeof setup;
+      login('file-access-2');
+      api(`/admin/workspace/${setup.workspaceId}/coding/job-definitions`).its('body').should('deep.equal', []);
+      api('/auth-data').then(({ body: actor }) => {
+        api(`/admin/users/access/${setup.workspaceId}`).then(({ status, body }) => {
+          expect(status).to.equal(200);
+          expect(body.find((user: {
+            id: number;
+          }) => user.id === actor.userId).accessLevel).to.equal(2);
+        });
+        api(`/admin/workspace/${setup.workspaceId}/coding/job-definitions`, 'POST', {
+          name: 'Created by manager',
+          status: 'draft',
+          maxCodingCases: 1,
+          assignedVariables: [{ unitName: 'UNIT-REPLAY', variableId: 'answer_1' }],
+          assignedCoders: [setup.userId]
+        }).then(({ status, body }) => {
+          expect(status, JSON.stringify(body)).to.equal(201);
+          expect(body.creatorUserId).to.equal(actor.userId);
+          // Release this definition's reservation before the training creation.
+          api(`/admin/workspace/${setup.workspaceId}/coding/job-definitions/${body.id}`, 'DELETE')
+            .its('status').should('eq', 200);
+        });
+        api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job`, 'POST', {
+          name: 'Created by manager', assignedCoders: [], variables: [], creatorUserId: -1
+        }).then(({ status, body }) => {
+          expect(status, JSON.stringify(body)).to.equal(201);
+          expect(body.creatorUserId).to.equal(actor.userId);
+        });
+        api(`/admin/workspace/${setup.workspaceId}/coding/coder-training-jobs`, 'POST', {
+          trainingLabel: 'Created by manager',
+          selectedCoders: [{ id: setup.userId, name: setup.username }],
+          variableConfigs: [{ unitId: 'UNIT-REPLAY', variableId: 'answer_1', sampleCount: 1 }]
+        }).then(({ status, body }) => {
+          expect(status, JSON.stringify(body)).to.equal(201);
+          expect(body.success, body.message).to.equal(true);
+          expect(body.jobsCreated).to.be.greaterThan(0);
+          api(`/admin/workspace/${setup.workspaceId}/coding/coder-trainings`).then(response => {
+            expect(response.body.find((training: {
+              id: number;
+            }) => training.id === body.trainingId).creatorUserId).to.equal(actor.userId);
+          });
+          (body.jobs as {
+            jobId: number;
+          }[]).forEach(job => {
+            api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job/${job.jobId}`).its('body.creatorUserId').should('eq', actor.userId);
+          });
+        });
+        api(`/admin/workspace/${setup.workspaceId}/variable-bundle`, 'POST', {
+          name: 'Created by manager', variables: [], creatorUserId: -1
+        }).then(({ status, body }) => {
+          expect(status, JSON.stringify(body)).to.equal(201);
+          expect(body.creatorUserId).to.equal(actor.userId);
+          api(`/admin/workspace/${setup.workspaceId}/variable-bundle/${body.id}`, 'PUT', {
+            name: 'Renamed', creatorUserId: -1
+          }).then(response => {
+            expect(response.status).to.equal(200);
+            expect(response.body.creatorUserId).to.equal(actor.userId);
+          });
+        });
+      });
+    });
+  });
 });

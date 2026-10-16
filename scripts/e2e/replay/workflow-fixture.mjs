@@ -86,6 +86,14 @@ export async function prepareOwnership(state) {
       throw new Error(`Incomplete ownership fixture: ${kind}`);
     }
   }
+  const { stdout } = await exec('docker', [
+    'exec', dbContainer, 'psql', '-U', 'replay_e2e', '-d', 'replay_e2e', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c',
+    `WITH inserted AS (INSERT INTO coding_job(workspace_id,creator_user_id,name,status)
+     SELECT ${workspaceId}, ${ownerId}, 'Protected ownership proof', status
+     FROM (VALUES ('review'), ('results_applied')) states(status) RETURNING id,status)
+     SELECT json_object_agg(status,id) FROM inserted`
+  ]);
+  Object.assign(result.job, JSON.parse(stdout.trim()));
   if (!Number.isSafeInteger(browser.codingJobId)) throw new Error('Missing source coding job for the assigned-coder fixture.');
   const legacyId = result.job.legacy;
   const { stdout: legacyCoding } = await exec('docker', [
