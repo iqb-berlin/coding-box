@@ -25,6 +25,9 @@ import { JournalService } from '../shared/journal.service';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import {
+  canTransitionCodingJobStatus, CODING_JOB_UPDATABLE_STATUSES, isInitialCodingJobStatus, isProtectedCodingJobStatus
+} from './coding-job-status-policy';
+import {
   sortUnitsContinuous,
   sortUnitsAlternating,
   getLatestCode
@@ -440,14 +443,7 @@ type InternalCreateCodingJobDto = CreateCodingJobDto & {
   jobDefinitionId?: number;
 };
 
-const UPDATABLE_CODING_JOB_STATUSES = new Set([
-  'pending',
-  'active',
-  'paused',
-  'open',
-  'completed',
-  'review'
-]);
+const UPDATABLE_CODING_JOB_STATUSES = new Set<string>(CODING_JOB_UPDATABLE_STATUSES);
 
 export interface CodingJobAggregationSettings {
   aggregationEnabled: boolean;
@@ -783,9 +779,22 @@ export class CodingJobService {
       );
     }
 
+    await this.assertAssignedCoderAccess(codingJobId, workspaceId, userId);
+  }
+
+  private async assertAssignedCoderAccess(
+    codingJobId: number,
+    workspaceId: number,
+    userId: number,
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      throw new ForbiddenException('An authenticated assigned coder is required');
+    }
     const canCode = await this.usersService.canUserCodeInWorkspace(
       userId,
-      workspaceId
+      workspaceId,
+      manager
     );
     if (!canCode) {
       throw new ForbiddenException(
@@ -793,7 +802,8 @@ export class CodingJobService {
       );
     }
 
-    const assignedCount = await this.codingJobCoderRepository.count({
+    const repository = manager ? manager.getRepository(CodingJobCoder) : this.codingJobCoderRepository;
+    const assignedCount = await repository.count({
       where: {
         coding_job_id: codingJobId,
         user_id: userId
@@ -2574,7 +2584,7 @@ export class CodingJobService {
           creatorUserId,
           name: normalizedCreateCodingJobDto.name,
           description: normalizedCreateCodingJobDto.description,
-          status: normalizedCreateCodingJobDto.status || 'pending',
+          status: this.getInitialCodingJobStatus(normalizedCreateCodingJobDto.status),
           showScore: normalizedCreateCodingJobDto.showScore ?? false,
           allowComments: normalizedCreateCodingJobDto.allowComments ?? true,
           suppressGeneralInstructions:
@@ -2670,7 +2680,7 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     return this.withLockedCodingJob(id, workspaceId, async (codingJob, manager) => {
       if (assignedCoderAction) {
-        await this.assertUserCanCodeCodingJob(id, workspaceId, actorUserId as number);
+        await this.assertAssignedCoderAccess(id, workspaceId, actorUserId as number, manager);
         if (Object.keys(updateCodingJobDto).some(key => key !== 'status')) {
           throw new ForbiddenException('Assigned coders may only change their coding status');
         }
@@ -2691,7 +2701,7 @@ export class CodingJobService {
           );
         }
         if (codingJob.status === 'results_applied') {
-          throw new Error(
+          throw new BadRequestException(
             `Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`
           );
         }
@@ -2903,32 +2913,21 @@ export class CodingJobService {
     status: 'active' | 'paused',
     actorUserId?: number
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
-      const repository = manager.getRepository(CodingJob);
-      const codingJob = await repository.findOne({
-        where: { id, workspace_id: workspaceId }
-      });
-
-      if (!codingJob) {
-        throw new NotFoundException(`Coding job with ID ${id} not found`);
-      }
-
-      if (['review', 'results_applied'].includes(codingJob.status)) {
+    return this.withLockedCodingJob(id, workspaceId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(id, workspaceId, actorUserId as number, manager);
+      if (
+        isProtectedCodingJobStatus(codingJob.status) ||
+        (codingJob.status === 'completed' && status === 'paused') ||
+        codingJob.status === status
+      ) {
         return codingJob;
       }
-
-      if (codingJob.status === 'completed' && status === 'paused') {
-        return codingJob;
+      if (!canTransitionCodingJobStatus(codingJob.status, status)) {
+        throw new BadRequestException(`Cannot change coding job ${id} from ${codingJob.status} to ${status}`);
       }
-
-      if (codingJob.status === status) {
-        return codingJob;
-      }
-
       const previousStatus = codingJob.status;
       codingJob.status = status;
-      const saved = await repository.save(codingJob);
+      const saved = await manager.getRepository(CodingJob).save(codingJob);
       await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
         changedFields: ['status'], previousStatus, status
       });
@@ -2941,31 +2940,21 @@ export class CodingJobService {
     workspaceId: number,
     manager?: EntityManager
   ): Promise<CodingJob> {
-    const codingJobRepository = this.getCodingJobRepository(manager);
-    const codingJob = await this.getCodingJobByIdForWorkspace(
-      id,
-      workspaceId,
-      manager
-    );
-
-    if (codingJob.status === 'results_applied') {
-      return codingJob;
-    }
-
-    if (codingJob.freshness_status === 'stale_source') {
-      throw new BadRequestException(
-        `Cannot apply results for coding job ${id} because its source responses changed`
-      );
-    }
-
-    if (!['completed', 'review'].includes(codingJob.status)) {
-      throw new BadRequestException(
-        `Cannot apply results for coding job ${id} because it is not completed or submitted for review`
-      );
-    }
-
-    codingJob.status = 'results_applied';
-    return codingJobRepository.save(codingJob);
+    return this.withLockedCodingJob(id, workspaceId, async (codingJob, transactionManager) => {
+      if (codingJob.status === 'results_applied') return codingJob;
+      if (codingJob.freshness_status === 'stale_source') {
+        throw new BadRequestException(
+          `Cannot apply results for coding job ${id} because its source responses changed`
+        );
+      }
+      if (!canTransitionCodingJobStatus(codingJob.status, 'results_applied', 'apply')) {
+        throw new BadRequestException(
+          `Cannot apply results for coding job ${id} because it is not completed or submitted for review`
+        );
+      }
+      codingJob.status = 'results_applied';
+      return transactionManager.getRepository(CodingJob).save(codingJob);
+    }, manager);
   }
 
   async getCodingJobByIdForWorkspace(
@@ -3408,20 +3397,12 @@ export class CodingJobService {
 
   async saveCodingProgress(
     codingJobId: number,
-    progress: SaveCodingProgressDto
+    progress: SaveCodingProgressDto,
+    actorUserId: number
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      const codingJobRepository = manager.getRepository(CodingJob);
+    return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(codingJobId, codingJob.workspace_id, actorUserId, manager);
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
-      const codingJob = await codingJobRepository.findOne({
-        where: { id: codingJobId }
-      });
-
-      if (!codingJob) {
-        throw new NotFoundException(
-          `Coding job with ID ${codingJobId} not found`
-        );
-      }
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
         throw new BadRequestException(
@@ -3441,7 +3422,8 @@ export class CodingJobService {
         progress,
         codingJobUnit,
         codingJob.workspace_id,
-        codingJob.allowComments !== false
+        codingJob.allowComments !== false,
+        manager
       );
 
       this.applyProgressToCodingJobUnit(
@@ -4266,20 +4248,12 @@ export class CodingJobService {
 
   async saveCodingNotes(
     codingJobId: number,
-    notesDto: SaveCodingNotesDto
+    notesDto: SaveCodingNotesDto,
+    actorUserId: number
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      const codingJobRepository = manager.getRepository(CodingJob);
+    return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
+      await this.assertAssignedCoderAccess(codingJobId, codingJob.workspace_id, actorUserId, manager);
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
-      const codingJob = await codingJobRepository.findOne({
-        where: { id: codingJobId }
-      });
-
-      if (!codingJob) {
-        throw new NotFoundException(
-          `Coding job with ID ${codingJobId} not found`
-        );
-      }
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
         throw new BadRequestException(
@@ -5500,6 +5474,13 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     return this.withLockedCodingJob(codingJobId, workspaceId, async (codingJob, manager) => {
       await assertCodingResourceMutation(manager, workspaceId, 'job', codingJobId, actorUserId);
+      if (!canTransitionCodingJobStatus(codingJob.status, 'open', 'restart')) {
+        throw new BadRequestException(`Cannot restart a coding job with status ${codingJob.status}`);
+      }
+      const progress = await this.getCodingJobProgress(codingJobId, manager);
+      if (progress.open === 0) {
+        throw new BadRequestException('Cannot restart a coding job without open units');
+      }
       codingJob.status = 'open';
       return manager.getRepository(CodingJob).save(codingJob);
     });
@@ -5586,7 +5567,7 @@ export class CodingJobService {
       creatorUserId: createCodingJobDto.creatorUserId ?? null,
       name: createCodingJobDto.name,
       description: createCodingJobDto.description,
-      status: createCodingJobDto.status || 'pending',
+      status: this.getInitialCodingJobStatus(createCodingJobDto.status),
       showScore: createCodingJobDto.showScore ?? false,
       allowComments: createCodingJobDto.allowComments ?? true,
       suppressGeneralInstructions:
@@ -8363,6 +8344,25 @@ export class CodingJobService {
     }
 
     return filteredResponses;
+  }
+
+  private getInitialCodingJobStatus(status?: string): string {
+    const initialStatus = status ?? 'pending';
+    if (!isInitialCodingJobStatus(initialStatus)) {
+      throw new BadRequestException(`Unsupported initial coding job status: ${initialStatus}`);
+    }
+    return initialStatus;
+  }
+
+  private async withLockedCodingJobById<T>(
+    id: number,
+    callback: (codingJob: CodingJob, manager: EntityManager) => Promise<T>
+  ): Promise<T> {
+    const scope = await this.codingJobRepository.findOne({
+      where: { id }, select: ['id', 'workspace_id']
+    });
+    if (!scope) throw new NotFoundException(`Coding job with ID ${id} not found`);
+    return this.withLockedCodingJob(id, scope.workspace_id, callback);
   }
 
   private async withLockedCodingJob<T>(

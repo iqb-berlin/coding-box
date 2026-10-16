@@ -195,6 +195,7 @@ describe('CodingJobService', () => {
     jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     codingJobRepository = createRepo();
     codingJobCoderRepository = createRepo();
+    codingJobCoderRepository.count.mockResolvedValue(1);
     codingJobVariableRepository = createRepo();
     codingJobVariableBundleRepository = createRepo();
     codingJobUnitRepository = createRepo();
@@ -737,7 +738,7 @@ describe('CodingJobService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
 
     expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
-    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7, undefined);
     expect(codingJobCoderRepository.count).not.toHaveBeenCalled();
   });
 
@@ -749,7 +750,7 @@ describe('CodingJobService', () => {
       service.assertUserCanCodeCodingJob(12, 7, 5)
     ).resolves.toBeUndefined();
 
-    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7, undefined);
     expect(codingJobCoderRepository.count).toHaveBeenCalledWith({
       where: {
         coding_job_id: 12,
@@ -2052,7 +2053,8 @@ describe('CodingJobService', () => {
     });
 
     expect(codingJobRepository.findOne).toHaveBeenCalledWith({
-      where: { id: 1, workspace_id: 3 }
+      where: { id: 1, workspace_id: 3 },
+      lock: { mode: 'pessimistic_write' }
     });
     expect(codingJobRepository.save).toHaveBeenCalledWith({
       ...codingJob,
@@ -2080,7 +2082,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(codingJob);
 
-    await expect(service.pauseCodingJob(1, 3)).resolves.toBe(codingJob);
+    await expect(service.pauseCodingJob(1, 3, 7)).resolves.toBe(codingJob);
 
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
@@ -2093,7 +2095,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(codingJob);
 
-    await expect(service.resumeCodingJob(1, 3)).resolves.toMatchObject({
+    await expect(service.resumeCodingJob(1, 3, 7)).resolves.toMatchObject({
       status: 'active'
     });
 
@@ -2106,10 +2108,46 @@ describe('CodingJobService', () => {
   it('rejects coder status actions for unknown coding jobs', async () => {
     codingJobRepository.findOne.mockResolvedValue(null);
 
-    await expect(service.pauseCodingJob(1, 3)).rejects.toBeInstanceOf(
+    await expect(service.pauseCodingJob(1, 3, 7)).rejects.toBeInstanceOf(
       NotFoundException
     );
     expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it.each(['review', 'results_applied'])('does not restart a protected %s job', async status => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status });
+    const progress = jest.spyOn(service, 'getCodingJobProgress');
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).rejects.toBeInstanceOf(BadRequestException);
+    expect(progress).not.toHaveBeenCalled();
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
+  });
+
+  it('does not restart a job without open units', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'active' });
+    jest.spyOn(service, 'getCodingJobProgress').mockResolvedValue({ total: 1, coded: 1, open: 0 } as never);
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).rejects.toThrow('without open units');
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('restarts an active job with open units using the same transaction', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'active' });
+    const progress = jest.spyOn(service, 'getCodingJobProgress')
+      .mockResolvedValue({ total: 1, coded: 0, open: 1 } as never);
+    await expect(service.restartCodingJobWithOpenUnits(1, 3)).resolves.toMatchObject({ status: 'open' });
+    expect(progress).toHaveBeenCalledWith(1, expect.any(Object));
+  });
+
+  it.each(['review', 'results_applied'])('preserves a %s status when a pause arrives late', async status => {
+    const job = { id: 1, workspace_id: 3, status };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    await expect(service.pauseCodingJob(1, 3, 7)).resolves.toBe(job);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
   });
 
   it('validates updated coders before saving job fields or deleting existing assignments', async () => {
@@ -2788,7 +2826,7 @@ describe('CodingJobService', () => {
       variableId: 'VAR',
       selectedCode: { id: 7, score: 2, codingIssueOption: -1 },
       notes: 'note'
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2806,7 +2844,7 @@ describe('CodingJobService', () => {
       variableId: 'VAR',
       selectedCode: { id: 7 },
       isOpen: true
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -2833,7 +2871,7 @@ describe('CodingJobService', () => {
           unitId: 'UNIT',
           variableId: 'VAR',
           selectedCode: { id: 7 }
-        } as never)
+        } as never, 7)
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
       expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3274,7 +3312,7 @@ describe('CodingJobService', () => {
       variableId: 'VAR',
       selectedCode: { id: 7, score: 2 },
       isOpen: false
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3312,7 +3350,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: null
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3353,7 +3391,7 @@ describe('CodingJobService', () => {
           unitId: 'UNIT',
           variableId: 'VAR',
           selectedCode
-        } as never)
+        } as never, 7)
       ).rejects.toThrow(
         'Coding issue options requiring comments are disabled for this coding job'
       );
@@ -3386,7 +3424,7 @@ describe('CodingJobService', () => {
         unitId: 'UNIT',
         variableId: 'VAR',
         selectedCode: { id: -1, codingIssueOption: -1 }
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('Code assignment uncertain requires a regular code');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3416,7 +3454,7 @@ describe('CodingJobService', () => {
         unitId: 'UNIT',
         variableId: 'VAR',
         selectedCode: { id: -2, codingIssueOption: -1 }
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('Code assignment uncertain requires a regular code');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3446,7 +3484,7 @@ describe('CodingJobService', () => {
         unitId: 'UNIT',
         variableId: 'VAR',
         selectedCode: { id: -2, codingIssueOption: -2 }
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('New code needed requires coder notes');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3478,7 +3516,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: { id: -2, codingIssueOption: -2 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3515,7 +3553,7 @@ describe('CodingJobService', () => {
         variableId: 'VAR',
         selectedCode: { id: -2, codingIssueOption: -2 },
         notes: null
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('New code needed requires coder notes');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3545,7 +3583,7 @@ describe('CodingJobService', () => {
         unitId: 'UNIT',
         variableId: 'VAR',
         selectedCode: { id: -99 }
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('Unsupported coding issue code');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3577,7 +3615,7 @@ describe('CodingJobService', () => {
         unitId: 'UNIT',
         variableId: 'VAR',
         selectedCode: { id: 999 }
-      } as never)
+      } as never, 7)
     ).rejects.toThrow('Unsupported code for variable VAR: 999');
 
     expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3619,7 +3657,7 @@ describe('CodingJobService', () => {
           unitId: 'UNIT',
           variableId: 'VAR',
           selectedCode: { id: 7 }
-        } as never)
+        } as never, 7)
       ).rejects.toThrow('Code is not available for manual coding: 7');
 
       expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -3684,7 +3722,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: { id: 7, score: 999 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3729,7 +3767,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: { id: 7, score: 999 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3776,7 +3814,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR_ALIAS',
       selectedCode: { id: 7, score: 999 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3856,7 +3894,7 @@ describe('CodingJobService', () => {
       unitId: 'DHB003',
       variableId: '04',
       selectedCode: { id: 4, score: 999 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3896,7 +3934,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: { id: 7 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
       lock: { mode: 'pessimistic_write' },
@@ -3933,7 +3971,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       notes: ' remember '
-    });
+    }, 7);
 
     expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
       lock: { mode: 'pessimistic_write' },
@@ -3979,7 +4017,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       notes: '   '
-    });
+    }, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -4017,7 +4055,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       notes: '   '
-    });
+    }, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -4046,7 +4084,7 @@ describe('CodingJobService', () => {
           unitId: 'UNIT',
           variableId: 'VAR',
           notes: 'remember'
-        })
+        }, 7)
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(codingJobUnitRepository.findOne).not.toHaveBeenCalled();
       expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
@@ -4082,7 +4120,7 @@ describe('CodingJobService', () => {
       unitId: 'UNIT',
       variableId: 'VAR',
       selectedCode: { id: 7, score: 2 }
-    } as never);
+    } as never, 7);
 
     expect(codingJobUnitRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({

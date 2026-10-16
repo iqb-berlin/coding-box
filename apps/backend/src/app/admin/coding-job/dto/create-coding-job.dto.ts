@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsArray,
   ArrayUnique,
+  IsIn,
   IsEnum,
   IsBoolean,
   IsNumber,
@@ -12,6 +13,7 @@ import {
 import { Type } from 'class-transformer';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
 import { SimpleVariableBundleDto } from '../../variable-bundle/dto/simple-variable-bundle.dto';
+import { CODING_JOB_INITIAL_STATUSES } from '../../../database/services/coding/coding-job-status-policy';
 
 /**
  * DTO for creating a coding job
@@ -36,10 +38,10 @@ export class CreateCodingJobDto {
   @ApiProperty({
     description: 'Status of the coding job',
     example: 'pending',
-    enum: ['pending', 'active', 'paused', 'completed'],
+    enum: [...CODING_JOB_INITIAL_STATUSES],
     default: 'pending'
   })
-  @IsEnum(['pending', 'active', 'paused', 'completed'])
+  @IsIn(CODING_JOB_INITIAL_STATUSES)
   @IsOptional()
     status?: string;
 
