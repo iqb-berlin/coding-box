@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -24,6 +24,7 @@ export interface ExportSelectionDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-selection-dialog',
   standalone: true,
   imports: [
@@ -44,7 +45,8 @@ export interface ExportSelectionDialogResult {
         <mat-tab label="Jobdefinitionen">
           <div class="section">
             <div class="list">
-              <mat-expansion-panel *ngFor="let def of data.jobDefinitions" class="definition-panel">
+              @for (def of data.jobDefinitions; track def.id) {
+              <mat-expansion-panel class="definition-panel">
                 <mat-expansion-panel-header>
                   <mat-panel-title>
                     <mat-checkbox
@@ -76,8 +78,11 @@ export interface ExportSelectionDialogResult {
                   </div>
                 </div>
               </mat-expansion-panel>
+              }
 
-              <div *ngIf="!data.jobDefinitions?.length" class="empty">Keine Jobdefinitionen vorhanden.</div>
+              @if (!data.jobDefinitions?.length) {
+                <div class="empty">Keine Jobdefinitionen vorhanden.</div>
+              }
             </div>
           </div>
         </mat-tab>
@@ -85,14 +90,18 @@ export interface ExportSelectionDialogResult {
         <mat-tab label="Coder-Trainings">
           <div class="section">
             <div class="list">
-              <div *ngFor="let training of data.coderTrainings" class="training-row">
+              @for (training of data.coderTrainings; track training.id) {
+              <div class="training-row">
                 <mat-checkbox
                   [checked]="isSelected(trainingValue(training))"
                   (change)="toggle(trainingValue(training))">
                   {{ training.label || ('Training #' + training.id) }}
                 </mat-checkbox>
               </div>
-              <div *ngIf="!data.coderTrainings?.length" class="empty">Keine Coder-Trainings vorhanden.</div>
+              }
+              @if (!data.coderTrainings?.length) {
+                <div class="empty">Keine Coder-Trainings vorhanden.</div>
+              }
             </div>
           </div>
         </mat-tab>
@@ -169,66 +178,66 @@ export interface ExportSelectionDialogResult {
   `]
 })
 export class ExportSelectionDialogComponent {
+  dialogRef = inject<MatDialogRef<ExportSelectionDialogComponent>>(MatDialogRef);
+  protected data = inject<ExportSelectionDialogData>(MAT_DIALOG_DATA);
+
   private selected = new Set<string>();
 
-  constructor(
-    public dialogRef: MatDialogRef<ExportSelectionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ExportSelectionDialogData
-  ) {
-    for (const id of data.selectedCombinedJobIds ?? []) {
+  constructor() {
+    for (const id of this.data.selectedCombinedJobIds ?? []) {
       this.selected.add(id);
     }
   }
 
-  jobValue(def: JobDefinition): string {
+  protected jobValue(def: JobDefinition): string {
     return `job_${def.id}`;
   }
 
-  getDefinitionLabel(definition: JobDefinition): string {
+  protected getDefinitionLabel(definition: JobDefinition): string {
     return getJobDefinitionDisplayLabel(definition);
   }
 
-  trainingValue(training: CoderTraining): string {
+  protected trainingValue(training: CoderTraining): string {
     return `training_${training.id}`;
   }
 
-  isSelected(value: string): boolean {
+  protected isSelected(value: string): boolean {
     return this.selected.has(value);
   }
 
-  toggle(value: string): void {
+  protected toggle(value: string): void {
     if (this.selected.has(value)) this.selected.delete(value);
     else this.selected.add(value);
   }
 
-  clear(): void {
+  protected clear(): void {
     this.selected.clear();
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close();
   }
 
-  apply(): void {
+  protected apply(): void {
     const result: ExportSelectionDialogResult = {
       selectedCombinedJobIds: Array.from(this.selected)
     };
     this.dialogRef.close(result);
   }
 
-  getDefinitionSummary(def: JobDefinition): string {
+  protected getDefinitionSummary(def: JobDefinition): string {
     const varsCount = def.assignedVariables?.length ?? 0;
     const bundlesCount = def.assignedVariableBundles?.length ?? 0;
     const codersCount = def.assignedCoders?.length ?? 0;
     return `${varsCount} Variablen, ${bundlesCount} Bündel, ${codersCount} Kodierer`;
   }
 
-  getDefinitionVariables(def: JobDefinition): string {
+  protected getDefinitionVariables(def: JobDefinition): string {
     const vars = def.assignedVariables ?? [];
     return vars.map(v => `${v.unitName}_${v.variableId}`).join(', ');
   }
 
-  getDefinitionBundles(def: JobDefinition): string {
+  protected getDefinitionBundles(def: JobDefinition): string {
     const bundles = def.assignedVariableBundles ?? [];
     return bundles
       .map(b => {
@@ -238,7 +247,7 @@ export class ExportSelectionDialogComponent {
       .join(', ');
   }
 
-  getDefinitionCoders(def: JobDefinition): string {
+  protected getDefinitionCoders(def: JobDefinition): string {
     const coderIds = def.assignedCoders ?? [];
     const codersById = new Map<number, Coder>();
     for (const coder of this.data.coders ?? []) {

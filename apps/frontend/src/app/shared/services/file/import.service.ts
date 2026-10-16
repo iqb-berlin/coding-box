@@ -1,17 +1,22 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { catchError, Observable, of } from 'rxjs';
+import {
+  catchError, Observable, of, timeout
+} from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import {
-  ImportOptionsDto as ImportOptions,
+  ImportOptionsDto,
   ImportResultDto as Result,
   TestResultsOverwriteMode
 } from '../../../../../../../api-dto/files/import-options.dto';
 import { ImportWorkspaceFilesProgressDto } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 
-export { ImportOptions, Result };
+export { Result };
+
+// Checkbox values stay boolean until HttpParams serializes the request.
+export type ImportOptions = { [Key in keyof ImportOptionsDto]: boolean };
 
 @Injectable({
   providedIn: 'root'
@@ -65,11 +70,13 @@ export class ImportService {
       .set('importRunId', String(importRunId || ''))
       .set('responseOverwriteMode', responseOverwriteMode);
 
-    return this.http
+    const request = this.http
       .get<Result>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
       { params }
     );
+    return String(responses) === 'true' || String(logs) === 'true' ?
+      request.pipe(timeout(180000)) : request;
   }
 
   getImportWorkspaceFilesProgress(
@@ -82,7 +89,7 @@ export class ImportService {
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
       { params }
     )
-      .pipe(catchError(() => of(null)));
+      .pipe(timeout(10000), catchError(() => of(null)));
   }
 
   importTestcenterGroups(

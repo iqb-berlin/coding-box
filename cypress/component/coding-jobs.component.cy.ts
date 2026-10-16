@@ -1,4 +1,3 @@
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -40,7 +39,6 @@ describe('CodingJobsComponent', () => {
     return cy.mount(CodingJobsComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: CodingJobBackendService,
           useValue: {

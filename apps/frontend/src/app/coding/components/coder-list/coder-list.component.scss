@@ -17,7 +17,7 @@
   margin-bottom: 16px;
 }
 
-a {
+button {
   min-width: auto;
   padding: 12px 24px;
   font-size: 16px;
@@ -128,7 +128,7 @@ mat-cell {
     gap: 12px;
   }
 
-  a {
+  button {
     padding: 10px 16px;
     font-size: 14px;
   }
@@ -152,7 +152,7 @@ mat-cell {
     align-items: stretch;
   }
 
-  a {
+  button {
     width: 100%;
   }
 

@@ -1,8 +1,5 @@
 import { Clipboard } from '@angular/cdk/clipboard';
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { XmlViewerComponent } from './xml-viewer.component';
 
@@ -15,7 +12,7 @@ describe('XmlViewerComponent', () => {
     clipboard = { copy: jest.fn().mockReturnValue(true) };
 
     await TestBed.configureTestingModule({
-      imports: [XmlViewerComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      imports: [XmlViewerComponent, TranslateModule.forRoot()],
       providers: [
         { provide: Clipboard, useValue: clipboard }
       ]
@@ -30,8 +27,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<Unit>',
       '  <Metadata id="u1"/>',
       '  <Definition>',
@@ -46,8 +43,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(true);
-    expect(component.formattedXml).toBe('<Unit><Metadata></Unit>');
+    expect(component.hasParseError()).toBe(true);
+    expect(component.formattedXml()).toBe('<Unit><Metadata></Unit>');
   });
 
   it('should pretty-print XML without splitting tags on greater-than signs in attributes', () => {
@@ -55,8 +52,8 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<Unit>',
       '  <Metadata label="a > b"/>',
       '</Unit>'
@@ -68,35 +65,40 @@ describe('XmlViewerComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.hasParseError).toBe(false);
-    expect(component.formattedXml).toBe([
+    expect(component.hasParseError()).toBe(false);
+    expect(component.formattedXml()).toBe([
       '<!DOCTYPE Unit [<!ELEMENT Unit ANY>]>',
       '<Unit/>'
     ].join('\n'));
   });
 
   it('should toggle line wrapping', () => {
-    expect(component.lineWrap).toBe(false);
+    expect(component.lineWrap()).toBe(false);
 
     component.toggleLineWrap();
 
-    expect(component.lineWrap).toBe(true);
+    expect(component.lineWrap()).toBe(true);
   });
 
-  it('should copy the original XML', fakeAsync(() => {
-    const rawXml = '<Unit><Value>42</Value></Unit>';
-    fixture.componentRef.setInput('xml', rawXml);
-    fixture.detectChanges();
+  it('should copy the original XML', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const rawXml = '<Unit><Value>42</Value></Unit>';
+      fixture.componentRef.setInput('xml', rawXml);
+      fixture.detectChanges();
 
-    expect(component.formattedXml).not.toBe(rawXml);
+      expect(component.formattedXml()).not.toBe(rawXml);
 
-    component.copyToClipboard();
+      component.copyToClipboard();
 
-    expect(clipboard.copy).toHaveBeenCalledWith(rawXml);
-    expect(component.copySucceeded).toBe(true);
+      expect(clipboard.copy).toHaveBeenCalledWith(rawXml);
+      expect(component.copySucceeded()).toBe(true);
 
-    tick(1500);
+      await jest.advanceTimersByTimeAsync(1500);
 
-    expect(component.copySucceeded).toBe(false);
-  }));
+      expect(component.copySucceeded()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

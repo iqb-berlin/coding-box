@@ -271,11 +271,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    if (serviceMethod === 'submitCodingJob') {
-      expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47, 5);
-    } else {
-      expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47);
-    }
+    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47, 5);
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {

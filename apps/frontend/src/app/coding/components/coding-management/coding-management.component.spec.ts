@@ -6,7 +6,6 @@ import {
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import {
   BehaviorSubject,
   of,
@@ -257,8 +256,7 @@ describe('CodingManagementComponent', () => {
       ],
       imports: [
         TranslateModule.forRoot(),
-        CodingManagementComponent,
-        NoopAnimationsModule
+        CodingManagementComponent
       ]
     }).compileComponents();
 
@@ -314,9 +312,9 @@ describe('CodingManagementComponent', () => {
 
   it('keeps all five read-only overview actions visible for level 2', () => {
     Object.assign(component.permissions, { canApply: false });
-    component.hideActionButtons = true;
+    fixture.componentRef.setInput('hideActionButtons', true);
     fixture.detectChanges();
-    const icons = Array.from(fixture.nativeElement.querySelectorAll('.action-buttons-toolbar a mat-icon'))
+    const icons = Array.from(fixture.nativeElement.querySelectorAll('.action-buttons-toolbar button mat-icon'))
       .map(icon => (icon as HTMLElement).textContent?.trim());
     expect(icons).toEqual(['list', 'book', 'list_alt', 'analytics', 'list_alt']);
     expect(icons).not.toContain('auto_fix_high');
@@ -325,11 +323,11 @@ describe('CodingManagementComponent', () => {
 
   describe('Component Initialization', () => {
     it('should subscribe to coding statistics on init', () => {
-      expect(component.codingStatistics).toEqual({
+      expect(component.codingStatistics()).toEqual({
         totalResponses: 100,
         statusCounts: { 200: 50, 300: 50 }
       });
-      expect(component.statisticsLoaded).toBe(true);
+      expect(component.statisticsLoaded()).toBe(true);
     });
 
     it('should check auto-fetch setting on init', () => {
@@ -376,8 +374,8 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.detectChanges();
 
       const text = isolatedFixture.nativeElement.textContent;
-      expect(isolatedComponent.isLoadingCodingFreshness).toBe(true);
-      expect(isolatedComponent.isFullCodingStatusCheckLoading).toBe(false);
+      expect(isolatedComponent.isLoadingCodingFreshness()).toBe(true);
+      expect(isolatedComponent.isFullCodingStatusCheckLoading()).toBe(false);
       expect(text).toContain('Der vollständige Kodierstand wurde noch nicht geprüft');
       expect(text).not.toContain('Zustand wird geprüft');
       expect(isolatedFixture.nativeElement.querySelector('.coding-freshness-state-spinner')).toBeNull();
@@ -442,11 +440,11 @@ describe('CodingManagementComponent', () => {
       const isolatedComponent = isolatedFixture.componentInstance;
       isolatedFixture.detectChanges();
 
-      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(isolatedComponent.autoRefreshManualCodingJobs()).toBe(false);
       expect(mockTestPersonCodingService.getCachedCodingStatusOverview).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
-      expect(isolatedComponent.autocodingReadiness?.readiness).toBe('READY');
-      expect(isolatedComponent.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(isolatedComponent.autocodingReadiness()?.readiness).toBe('READY');
+      expect(isolatedComponent.hasLoadedFullCodingStatusOverview()).toBe(true);
       expect(isolatedComponent.isCodingStatusOverviewPendingManualRefresh).toBe(false);
 
       isolatedFixture.destroy();
@@ -483,7 +481,7 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCachedCodingStatusOverview).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
-      expect(isolatedComponent.autocodingReadiness?.readiness).toBe('READY');
+      expect(isolatedComponent.autocodingReadiness()?.readiness).toBe('READY');
       expect(isolatedComponent.shouldShowManualCodingStatusRefresh()).toBe(true);
       expect(isolatedComponent.isCodingStatusOverviewPendingManualRefresh).toBe(true);
 
@@ -545,7 +543,7 @@ describe('CodingManagementComponent', () => {
       component.refreshCodingStatusOverview();
       fixture.detectChanges();
 
-      expect(component.isFullCodingStatusCheckLoading).toBe(true);
+      expect(component.isFullCodingStatusCheckLoading()).toBe(true);
       expect(fixture.nativeElement.textContent).toContain('Zustand wird geprüft');
       expect(fixture.nativeElement.querySelector('.coding-freshness-state-spinner')).not.toBeNull();
 
@@ -639,7 +637,7 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
       component.refreshCodingStatusOverview();
-      component.activeFreshnessJobId = 'freshness-job-1';
+      component.activeFreshnessJobId.set('freshness-job-1');
       autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
 
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
@@ -669,7 +667,7 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
       component.refreshCodingStatusOverview();
-      component.activeFreshnessJobId = 'freshness-job-1';
+      component.activeFreshnessJobId.set('freshness-job-1');
       mockCodingBackgroundJobsService.setJobRunning?.(
         1,
         'freshness-coding',
@@ -682,7 +680,7 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(1);
       expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledTimes(1);
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
-      expect(component.activeFreshnessJobId).toBeNull();
+      expect(component.activeFreshnessJobId()).toBeNull();
     });
 
     it('should not refresh twice when reset progress clears after a guarded pending refresh was handled', () => {
@@ -728,7 +726,7 @@ describe('CodingManagementComponent', () => {
       const isolatedComponent = isolatedFixture.componentInstance;
       isolatedFixture.detectChanges();
 
-      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(isolatedComponent.autoRefreshManualCodingJobs()).toBe(false);
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
@@ -755,8 +753,8 @@ describe('CodingManagementComponent', () => {
       const isolatedComponent = isolatedFixture.componentInstance;
       isolatedFixture.detectChanges();
 
-      expect(isolatedComponent.evaluationMode).toBe(true);
-      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(isolatedComponent.evaluationMode()).toBe(true);
+      expect(isolatedComponent.autoRefreshManualCodingJobs()).toBe(false);
       expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
@@ -782,7 +780,7 @@ describe('CodingManagementComponent', () => {
       const isolatedComponent = isolatedFixture.componentInstance;
       isolatedFixture.detectChanges();
 
-      expect(isolatedComponent.selectedStatisticsVersion).toBe('v2');
+      expect(isolatedComponent.selectedStatisticsVersion()).toBe('v2');
       expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
 
       isolatedFixture.destroy();
@@ -830,7 +828,7 @@ describe('CodingManagementComponent', () => {
 
   describe('Autocoding Readiness', () => {
     it('should treat blocked readiness as coding attention with diagnostic text', () => {
-      component.autocodingReadiness = {
+      component.autocodingReadiness.set({
         workspaceId: 1,
         autoCoderRun: 1,
         readiness: 'BLOCKED',
@@ -853,7 +851,7 @@ describe('CodingManagementComponent', () => {
           sampleVariableIds: ['VAR_A', 'VAR_B', 'VAR_C', 'VAR_D', 'VAR_E'],
           knownVariableIds: ['KNOWN_A']
         }]
-      };
+      });
 
       expect(component.hasCodingFreshnessAttention).toBe(true);
       expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding 1 nicht möglich');
@@ -870,7 +868,7 @@ describe('CodingManagementComponent', () => {
 
       component.loadAutocodingReadiness();
 
-      expect(component.hasAutocodingReadinessLoadFailed).toBe(true);
+      expect(component.hasAutocodingReadinessLoadFailed()).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
       expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding-Prüfung nicht verfügbar');
     });
@@ -884,8 +882,8 @@ describe('CodingManagementComponent', () => {
 
   describe('Coding Freshness', () => {
     it('should show pending manual status refresh as an attention state', () => {
-      component.autoRefreshManualCodingJobs = false;
-      component.hasLoadedFullCodingStatusOverview = false;
+      component.autoRefreshManualCodingJobs.set(false);
+      component.hasLoadedFullCodingStatusOverview.set(false);
 
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
@@ -901,7 +899,7 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should keep second auto-coding waiting while manual coding results are still open', () => {
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -912,8 +910,8 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 5098
           }
         ]
-      };
-      component.manualAppliedResultsOverview = {
+      });
+      component.manualAppliedResultsOverview.set({
         totalIncompleteResponses: 671,
         appliedResponses: 210,
         remainingResponses: 461,
@@ -924,16 +922,16 @@ describe('CodingManagementComponent', () => {
         aggregationActive: false,
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
-      };
+      });
 
-      expect(component.hasCodingFreshnessWarnings).toBe(true);
+      expect(component.hasCodingFreshnessWarnings()).toBe(true);
       expect(component.codingFreshnessPanelTitle).toBe('Manuelle Kodierung abschließen');
       expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
       expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
-      expect(component.hasManualCodingFreshnessAction).toBe(true);
-      expect(component.codingFreshnessChipWarnings).toHaveLength(1);
-      expect(component.getFreshnessChipLabel(component.codingFreshnessChipWarnings[0])).toBe(
+      expect(component.hasManualCodingFreshnessAction()).toBe(true);
+      expect(component.codingFreshnessChipWarnings()).toHaveLength(1);
+      expect(component.getFreshnessChipLabel(component.codingFreshnessChipWarnings()[0])).toBe(
         'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
       );
 
@@ -955,7 +953,7 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should keep earlier coding freshness warnings visible while second auto-coding waits', () => {
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -972,8 +970,8 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 5098
           }
         ]
-      };
-      component.manualAppliedResultsOverview = {
+      });
+      component.manualAppliedResultsOverview.set({
         totalIncompleteResponses: 671,
         appliedResponses: 210,
         remainingResponses: 461,
@@ -984,7 +982,7 @@ describe('CodingManagementComponent', () => {
         aggregationActive: false,
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
-      };
+      });
 
       expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding starten');
       expect(component.codingFreshnessSummaryText).toBe(
@@ -993,13 +991,13 @@ describe('CodingManagementComponent', () => {
       );
       expect(component.hasFreshnessAutoCodingWork('v1')).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
-      expect(component.codingFreshnessChipWarnings).toEqual([
+      expect(component.codingFreshnessChipWarnings()).toEqual([
         expect.objectContaining({ version: 'v1' })
       ]);
     });
 
     it('should expose second auto-coding work after manual coding results are complete', () => {
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -1010,8 +1008,8 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 5098
           }
         ]
-      };
-      component.manualAppliedResultsOverview = {
+      });
+      component.manualAppliedResultsOverview.set({
         totalIncompleteResponses: 671,
         appliedResponses: 671,
         remainingResponses: 0,
@@ -1022,9 +1020,9 @@ describe('CodingManagementComponent', () => {
         aggregationActive: false,
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
-      };
+      });
 
-      expect(component.hasCodingFreshnessWarnings).toBe(true);
+      expect(component.hasCodingFreshnessWarnings()).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(true);
       expect(component.codingFreshnessSummaryText).toBe(
         '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
@@ -1033,7 +1031,7 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should keep second auto-coding blocked when manual result overview cannot be loaded', () => {
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -1044,19 +1042,19 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 5098
           }
         ]
-      };
+      });
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockReturnValueOnce(of(null));
 
       component.loadManualAppliedResultsOverview();
 
-      expect(component.manualAppliedResultsOverview).toBeNull();
-      expect(component.manualAppliedResultsOverviewLoadFailed).toBe(true);
+      expect(component.manualAppliedResultsOverview()).toBeNull();
+      expect(component.manualAppliedResultsOverviewLoadFailed()).toBe(true);
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
       expect(component.codingFreshnessSummaryText).toContain('konnte nicht geprüft werden');
     });
 
     it('should not start second auto-coding while manual coding results are still open', () => {
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -1067,8 +1065,8 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 5098
           }
         ]
-      };
-      component.manualAppliedResultsOverview = {
+      });
+      component.manualAppliedResultsOverview.set({
         totalIncompleteResponses: 671,
         appliedResponses: 210,
         remainingResponses: 461,
@@ -1079,7 +1077,7 @@ describe('CodingManagementComponent', () => {
         aggregationActive: false,
         aggregationThreshold: null,
         aggregatedDuplicateCases: 0
-      };
+      });
       (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockClear();
 
       component.startFreshnessCoding('v3');
@@ -1095,7 +1093,7 @@ describe('CodingManagementComponent', () => {
     it('should show a start indicator while the freshness coding request is pending', () => {
       const startRequest$ = new Subject<never>();
       (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(startRequest$);
-      component.codingFreshnessSummary = {
+      component.codingFreshnessSummary.set({
         workspaceId: 1,
         currentRevision: 2,
         items: [
@@ -1106,7 +1104,7 @@ describe('CodingManagementComponent', () => {
             affectedResponseCount: 42
           }
         ]
-      };
+      });
 
       component.startFreshnessCoding('v1');
       fixture.detectChanges();
@@ -1172,12 +1170,14 @@ describe('CodingManagementComponent', () => {
 
         component.startFreshnessCoding('v1');
 
-        expect(jest.getTimerCount()).toBe(0);
+        expect((component as unknown as { freshnessJobPollingInterval: number | null })
+          .freshnessJobPollingInterval).toBeNull();
 
         afterClosed$.next();
         afterClosed$.complete();
 
-        expect(jest.getTimerCount()).toBe(1);
+        expect((component as unknown as { freshnessJobPollingInterval: number | null })
+          .freshnessJobPollingInterval).not.toBeNull();
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();
@@ -1230,8 +1230,9 @@ describe('CodingManagementComponent', () => {
         });
         afterClosed$.complete();
 
-        expect(jest.getTimerCount()).toBe(0);
-        expect(component.activeFreshnessJobId).toBeNull();
+        expect((component as unknown as { freshnessJobPollingInterval: number | null })
+          .freshnessJobPollingInterval).toBeNull();
+        expect(component.activeFreshnessJobId()).toBeNull();
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();
@@ -1354,7 +1355,7 @@ describe('CodingManagementComponent', () => {
       };
 
       try {
-        component.autoRefreshManualCodingJobs = false;
+        component.autoRefreshManualCodingJobs.set(false);
         (mockDialog.open as jest.Mock).mockReturnValueOnce(dialogRef);
         (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(of({
           totalResponses: 42,
@@ -1420,7 +1421,8 @@ describe('CodingManagementComponent', () => {
         });
         afterClosed$.complete();
 
-        expect(jest.getTimerCount()).toBe(1);
+        expect((component as unknown as { freshnessJobPollingInterval: number | null })
+          .freshnessJobPollingInterval).not.toBeNull();
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();
@@ -1428,18 +1430,18 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should keep active freshness tracking when a different auto-coding job completes', () => {
-      component.activeFreshnessJobId = 'freshness-job-1';
-      component.activeFreshnessJobProgress = 42;
+      component.activeFreshnessJobId.set('freshness-job-1');
+      component.activeFreshnessJobProgress.set(42);
 
       autoCodingCompletedSubject.next({ jobId: 'other-job' });
 
-      expect(component.activeFreshnessJobId).toBe('freshness-job-1');
-      expect(component.activeFreshnessJobProgress).toBe(42);
+      expect(component.activeFreshnessJobId()).toBe('freshness-job-1');
+      expect(component.activeFreshnessJobProgress()).toBe(42);
 
       autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
 
-      expect(component.activeFreshnessJobId).toBeNull();
-      expect(component.activeFreshnessJobProgress).toBeNull();
+      expect(component.activeFreshnessJobId()).toBeNull();
+      expect(component.activeFreshnessJobProgress()).toBeNull();
     });
   });
 
@@ -1447,11 +1449,11 @@ describe('CodingManagementComponent', () => {
     it('should handle version change from statistics card', () => {
       component.onVersionChange('v2');
 
-      expect(component.selectedStatisticsVersion).toBe('v2');
-      expect(component.filterParams.version).toBe('v2');
+      expect(component.selectedStatisticsVersion()).toBe('v2');
+      expect(component.filterParams().version).toBe('v2');
       expect(component.data).toEqual([]);
-      expect(component.currentStatusFilter).toBeNull();
-      expect(component.totalRecords).toBe(0);
+      expect(component.currentStatusFilter()).toBeNull();
+      expect(component.totalRecords()).toBe(0);
     });
 
     it('should fetch statistics when statistics card emits loadStatistics', () => {
@@ -1467,8 +1469,8 @@ describe('CodingManagementComponent', () => {
 
         testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
 
-        expect(component.selectedStatisticsVersion).toBe('v2');
-        expect(component.filterParams.version).toBe('v2');
+        expect(component.selectedStatisticsVersion()).toBe('v2');
+        expect(component.filterParams().version).toBe('v2');
         expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
 
         jest.advanceTimersByTime(250);
@@ -1484,14 +1486,14 @@ describe('CodingManagementComponent', () => {
 
       testResultsChangedSubject.next({ workspaceId: 2, statisticsVersion: 'v2' });
 
-      expect(component.selectedStatisticsVersion).toBe('v1');
-      expect(component.filterParams.version).toBe('v1');
+      expect(component.selectedStatisticsVersion()).toBe('v1');
+      expect(component.filterParams().version).toBe('v1');
       expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
     });
 
     it('should not refresh coding status after a reset completes when auto-refresh is disabled', () => {
-      component.autoRefreshManualCodingJobs = false;
-      component.hasLoadedFullCodingStatusOverview = true;
+      component.autoRefreshManualCodingJobs.set(false);
+      component.hasLoadedFullCodingStatusOverview.set(true);
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
@@ -1508,7 +1510,7 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.invalidateCodingStatusCache)
         .toHaveBeenCalledWith(1);
-      expect(component.hasLoadedFullCodingStatusOverview).toBe(false);
+      expect(component.hasLoadedFullCodingStatusOverview()).toBe(false);
     });
 
     it('should consume a pending statistics version when opened after results changed', () => {
@@ -1522,26 +1524,26 @@ describe('CodingManagementComponent', () => {
       component = fixture.componentInstance;
       fixture.detectChanges();
 
-      expect(component.selectedStatisticsVersion).toBe('v2');
-      expect(component.filterParams.version).toBe('v2');
+      expect(component.selectedStatisticsVersion()).toBe('v2');
+      expect(component.filterParams().version).toBe('v2');
       expect(mockTestPersonCodingService.consumePendingStatisticsVersion).toHaveBeenCalledWith(1);
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
     });
 
     it('should handle status click from statistics card through the normal table filter', () => {
-      component.filterParams.group = 'ID26010601';
+      component.filterParams.update(value => ({ ...value, group: 'ID26010601' }));
 
       component.onStatusClick('200');
 
-      expect(component.currentStatusFilter).toBeNull();
-      expect(component.filterParams).toEqual(expect.objectContaining({
+      expect(component.currentStatusFilter()).toBeNull();
+      expect(component.filterParams()).toEqual(expect.objectContaining({
         codedStatus: '200',
         group: 'ID26010601',
         responseSource: 'all',
         version: 'v1'
       }));
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         100,
         undefined,
@@ -1567,11 +1569,11 @@ describe('CodingManagementComponent', () => {
 
       component.onFilterChange(filterParams);
 
-      expect(component.filterParams).toEqual(filterParams);
+      expect(component.filterParams()).toEqual(filterParams);
     });
 
     it('should keep filter version aligned with selected statistics version', () => {
-      component.selectedStatisticsVersion = 'v2';
+      component.selectedStatisticsVersion.set('v2');
 
       component.onFilterChange({
         unitName: 'test',
@@ -1586,9 +1588,9 @@ describe('CodingManagementComponent', () => {
         personLogin: ''
       });
 
-      expect(component.filterParams.version).toBe('v2');
+      expect(component.filterParams().version).toBe('v2');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         100,
         undefined,
@@ -1610,9 +1612,9 @@ describe('CodingManagementComponent', () => {
         personLogin: ''
       });
 
-      expect(component.filterParams.responseSource).toBe('base');
+      expect(component.filterParams().responseSource).toBe('base');
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         100,
         undefined,
@@ -1622,7 +1624,7 @@ describe('CodingManagementComponent', () => {
 
     it('should clear data when filter status is empty', () => {
       component.data = [{ id: 1 } as Success];
-      component.totalRecords = 10;
+      component.totalRecords.set(10);
 
       const filterParams = {
         unitName: '',
@@ -1640,17 +1642,17 @@ describe('CodingManagementComponent', () => {
       component.onFilterChange(filterParams);
 
       expect(component.data).toEqual([]);
-      expect(component.totalRecords).toBe(0);
-      expect(component.currentStatusFilter).toBeNull();
+      expect(component.totalRecords()).toBe(0);
+      expect(component.currentStatusFilter()).toBeNull();
       expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
     });
 
     it('should apply derived response source when derived statistics are clicked', () => {
-      component.selectedStatisticsVersion = 'v2';
+      component.selectedStatisticsVersion.set('v2');
 
       component.onDerivedClick();
 
-      expect(component.filterParams).toEqual({
+      expect(component.filterParams()).toEqual({
         value: '',
         unitName: '',
         codedStatus: '',
@@ -1665,10 +1667,10 @@ describe('CodingManagementComponent', () => {
         responseSource: 'derived',
         personLogin: ''
       });
-      expect(component.currentStatusFilter).toBeNull();
-      expect(component.pageIndex).toBe(0);
+      expect(component.currentStatusFilter()).toBeNull();
+      expect(component.pageIndex()).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         100,
         undefined,
@@ -1677,33 +1679,33 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should handle clear filters event', () => {
-      component.selectedStatisticsVersion = 'v3';
-      component.filterParams = {
-        ...component.filterParams,
+      component.selectedStatisticsVersion.set('v3');
+      component.filterParams.set({
+        ...component.filterParams(),
         version: 'v3',
         unitName: 'test'
-      };
+      });
       component.data = [{ id: 1 } as Success];
 
       component.onClearFilters();
 
-      expect(component.filterParams.unitName).toBe('');
-      expect(component.filterParams.version).toBe('v3');
-      expect(component.filterParams.responseSource).toBe('all');
+      expect(component.filterParams().unitName).toBe('');
+      expect(component.filterParams().version).toBe('v3');
+      expect(component.filterParams().responseSource).toBe('all');
       expect(component.data).toEqual([]);
-      expect(component.totalRecords).toBe(0);
+      expect(component.totalRecords()).toBe(0);
     });
   });
 
   describe('Response Table Integration', () => {
     it('should handle page change from table component', () => {
-      component.currentStatusFilter = '200';
+      component.currentStatusFilter.set('200');
       const event = { pageIndex: 1, pageSize: 200, length: 400 } as PageEvent;
 
       component.onPageChange(event);
 
-      expect(component.pageSize).toBe(200);
-      expect(component.pageIndex).toBe(1);
+      expect(component.pageSize()).toBe(200);
+      expect(component.pageIndex()).toBe(1);
       expect(mockCodingManagementService.fetchResponsesByStatus).toHaveBeenCalledWith(
         '200',
         'v1',
@@ -1715,19 +1717,19 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should reset to the first page and reload data when sorting changes', () => {
-      component.filterParams = {
-        ...component.filterParams,
+      component.filterParams.set({
+        ...component.filterParams(),
         codedStatus: '200'
-      };
-      component.pageIndex = 2;
+      });
+      component.pageIndex.set(2);
 
       component.onSortChange({ active: 'score', direction: 'desc' });
 
-      expect(component.sortBy).toBe('score');
-      expect(component.sortDirection).toBe('desc');
-      expect(component.pageIndex).toBe(0);
+      expect(component.sortBy()).toBe('score');
+      expect(component.sortDirection()).toBe('desc');
+      expect(component.pageIndex()).toBe(0);
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         100,
         'score',
@@ -1752,17 +1754,17 @@ describe('CodingManagementComponent', () => {
     it('should handle show unit XML from table component', () => {
       component.onShowUnitXml(789);
 
-      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789);
+      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789, expect.anything());
     });
 
     it('should load all filtered responses before opening the review dialog', () => {
       (mockDialog.open as jest.Mock).mockClear();
-      component.filterParams = {
-        ...component.filterParams,
+      component.filterParams.set({
+        ...component.filterParams(),
         geogebra: true
-      };
+      });
       component.data = [{ id: 1 } as Success];
-      component.totalRecords = 2;
+      component.totalRecords.set(2);
       mockCodingManagementService.searchResponses = jest.fn().mockReturnValue(of({
         total: 2,
         data: [
@@ -1802,7 +1804,7 @@ describe('CodingManagementComponent', () => {
       component.onReviewClick();
 
       expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
-        expect.objectContaining({ ...component.filterParams, regexSearch: false }),
+        expect.objectContaining({ ...component.filterParams(), regexSearch: false }),
         1,
         2,
         undefined,
@@ -1823,12 +1825,12 @@ describe('CodingManagementComponent', () => {
 
     it('should load review responses in batches for large filtered result sets', () => {
       (mockDialog.open as jest.Mock).mockClear();
-      component.filterParams = {
-        ...component.filterParams,
+      component.filterParams.set({
+        ...component.filterParams(),
         geogebra: true
-      };
+      });
       component.data = [{ id: 1 } as Success];
-      component.totalRecords = 1200;
+      component.totalRecords.set(1200);
       mockCodingManagementService.searchResponses = jest.fn().mockImplementation(
         (_params, page: number) => of({
           total: 1200,
@@ -1895,12 +1897,12 @@ describe('CodingManagementComponent', () => {
       (mockCodingManagementService.searchResponses as jest.Mock).mockClear();
       (mockSnackBar.open as jest.Mock).mockClear();
       (mockDialog.open as jest.Mock).mockClear();
-      component.filterParams = {
-        ...component.filterParams,
+      component.filterParams.set({
+        ...component.filterParams(),
         geogebra: true
-      };
+      });
       component.data = [{ id: 1 } as Success];
-      component.totalRecords = 5001;
+      component.totalRecords.set(5001);
 
       component.onReviewClick();
 
@@ -1944,14 +1946,14 @@ describe('CodingManagementComponent', () => {
 
   describe('Data Fetching', () => {
     it('should get available statuses from coding statistics', () => {
-      component.codingStatistics = {
+      component.codingStatistics.set({
         totalResponses: 103,
         statusCounts: {
           4: 3,
           200: 50,
           300: 50
         }
-      };
+      });
 
       const statuses = component.getAvailableStatuses();
 
@@ -1985,4 +1987,20 @@ describe('CodingManagementComponent', () => {
       expect(completeSpy).toHaveBeenCalled();
     });
   });
+
+  it.each([[10, 55, 100], [55, 10, 100], [0, 100]])(
+    'renders successive reset progress events %j without another action', async (...values: number[]) => {
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      await new Promise<void>(resolve => { setTimeout(resolve, 30); });
+      for (const value of values) {
+        resetProgressSubject.next(value);
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('.reset-progress-label')?.textContent).toContain(`${value}%`);
+      }
+      resetProgressSubject.next(null);
+      await fixture.whenStable();
+      expect(fixture.nativeElement.querySelector('.reset-progress-label')).toBeNull();
+    }
+  );
 });

@@ -6,13 +6,13 @@
       <div class="unit-selection-panel mat-elevation-z1">
         <div class="panel-header">
           <h3>{{'coding.select-units' | translate}}</h3>
-          <span class="selection-count">{{ unitList.length }} / {{ availableUnits.length }}</span>
+          <span class="selection-count">{{ unitList().length }} / {{ availableUnits().length }}</span>
         </div>
 
         <div class="select-all-container">
           <mat-checkbox
-            [checked]="unitList.length === availableUnits.length && availableUnits.length > 0"
-            [indeterminate]="unitList.length > 0 && unitList.length < availableUnits.length"
+            [checked]="unitList().length === availableUnits().length && availableUnits().length > 0"
+            [indeterminate]="unitList().length > 0 && unitList().length < availableUnits().length"
             (change)="toggleAllUnits($event.checked)"
             color="primary">
             {{'coding.select-all-units' | translate}}
@@ -23,10 +23,10 @@
         <div class="search-container">
           <mat-form-field appearance="outline" class="search-field">
             <mat-label>{{'search' | translate}}</mat-label>
-            <input matInput [(ngModel)]="filterValue" (input)="filterTextChanged.next($event)" placeholder="{{'search-units' | translate}}">
+            <input matInput [ngModel]="filterValue()" (ngModelChange)="filterValue.set($event)" (input)="filterTextChanged.next($event)" placeholder="{{'search-units' | translate}}">
             <mat-icon matSuffix>search</mat-icon>
-            @if (filterValue) {
-              <button mat-icon-button matSuffix aria-label="Clear" (click)="filterValue=''; filterTextChanged.next($event)">
+            @if (filterValue()) {
+              <button mat-icon-button matSuffix aria-label="Clear" (click)="filterValue.set(''); filterTextChanged.next($event)">
                 <mat-icon>close</mat-icon>
               </button>
             }
@@ -34,7 +34,7 @@
         </div>
 
         <!-- Loading indicator -->
-        @if (isLoading) {
+        @if (isLoading()) {
           <div class="loading-container">
             <mat-spinner diameter="40"></mat-spinner>
             <p class="loading-text">{{'loading-units' | translate}}</p>
@@ -42,7 +42,7 @@
         }
 
         <!-- Units table -->
-        @if (!isLoading) {
+        @if (!isLoading()) {
           <div class="units-table-container">
             <table mat-table [dataSource]="dataSource" class="units-table">
               <!-- Select Column -->
@@ -70,8 +70,8 @@
               <!-- No data row -->
               <tr class="mat-row" *matNoDataRow>
                 <td class="mat-cell" colspan="2">
-                  @if (filterValue) {
-                    {{'no-units-matching' | translate}} "{{filterValue}}"
+                  @if (filterValue()) {
+                    {{'no-units-matching' | translate}} "{{filterValue()}}"
                   } @else {
                     {{'no-units-available' | translate}}
                   }
@@ -90,7 +90,7 @@
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>{{'coding.training-requirement-filter' | translate}}</mat-label>
             <mat-select
-              [(ngModel)]="contentOptions.trainingRequirement"
+              [ngModel]="contentOptions().trainingRequirement" (ngModelChange)="updateContentOption('trainingRequirement', $event)"
               (selectionChange)="onTrainingRequirementChange($event.value)">
               <mat-option value="all">{{'coding.training-requirement-all' | translate}}</mat-option>
               <mat-option value="required">{{'coding.training-requirement-required' | translate}}</mat-option>
@@ -104,13 +104,13 @@
               <button
                 type="button"
                 class="job-definition-selection-main"
-                [disabled]="isLoadingJobDefinitions"
+                [disabled]="isLoadingJobDefinitions()"
                 (click)="openJobDefinitionPicker()">
                 <mat-icon>rule_folder</mat-icon>
                 <span class="job-definition-picker-text">
-                  <span class="job-definition-picker-title">{{ selectedJobDefinitionLabel }}</span>
-                  @if (selectedJobDefinitionSummary) {
-                    <span class="job-definition-picker-summary">{{ selectedJobDefinitionSummary }}</span>
+                  <span class="job-definition-picker-title">{{ selectedJobDefinitionLabel() }}</span>
+                  @if (selectedJobDefinitionSummary()) {
+                    <span class="job-definition-picker-summary">{{ selectedJobDefinitionSummary() }}</span>
                   } @else {
                     <span class="job-definition-picker-summary">
                       {{ 'coding.job-definition-picker-all-summary' | translate }}
@@ -122,13 +122,13 @@
                 <button
                   mat-icon-button
                   type="button"
-                  [disabled]="isLoadingJobDefinitions"
+                  [disabled]="isLoadingJobDefinitions()"
                   [attr.aria-label]="'coding.job-definition-picker-title' | translate"
                   [matTooltip]="'coding.job-definition-picker-title' | translate"
                   (click)="openJobDefinitionPicker()">
                   <mat-icon>edit</mat-icon>
                 </button>
-                @if (selectedJobDefinitionId !== null) {
+                @if (selectedJobDefinitionId() !== null) {
                   <button
                     mat-icon-button
                     type="button"
@@ -146,15 +146,15 @@
             <mat-label>{{'coding.variable-bundle-filter' | translate}}</mat-label>
             <mat-select
               multiple
-              [(ngModel)]="selectedVariableBundleIds"
+              [ngModel]="selectedVariableBundleIds()" (ngModelChange)="selectedVariableBundleIds.set($event)"
               (selectionChange)="onVariableBundleFilterChange($event.value)"
-              [disabled]="isLoadingVariableBundles">
-              @for (variableBundle of availableVariableBundles; track variableBundle.id) {
+              [disabled]="isLoadingVariableBundles()">
+              @for (variableBundle of availableVariableBundles(); track variableBundle.id) {
                 <mat-option [value]="variableBundle.id">
                   {{ variableBundle.name }}
                 </mat-option>
               }
-              @if (!isLoadingVariableBundles && availableVariableBundles.length === 0) {
+              @if (!isLoadingVariableBundles() && availableVariableBundles().length === 0) {
                 <mat-option disabled>{{'coding.variable-bundle-none' | translate}}</mat-option>
               }
             </mat-select>
@@ -168,56 +168,56 @@
           <h3>{{'coding.codebook-content' | translate}}</h3>
           <div class="options-grid">
             <mat-checkbox
-              [(ngModel)]="contentOptions.hasOnlyVarsWithCodes"
+              [ngModel]="contentOptions().hasOnlyVarsWithCodes" (ngModelChange)="updateContentOption('hasOnlyVarsWithCodes', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.has-only-vars-with-codes' | translate}}">
               {{'coding.has-only-vars-with-codes' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.hasGeneralInstructions"
+              [ngModel]="contentOptions().hasGeneralInstructions" (ngModelChange)="updateContentOption('hasGeneralInstructions', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.has-general-instructions' | translate}}">
               {{'coding.has-general-instructions' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.hideItemVarRelation"
+              [ngModel]="contentOptions().hideItemVarRelation" (ngModelChange)="updateContentOption('hideItemVarRelation', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.hide-item-var-relation' | translate}}">
               {{'coding.hide-item-var-relation' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.hasDerivedVars"
+              [ngModel]="contentOptions().hasDerivedVars" (ngModelChange)="updateContentOption('hasDerivedVars', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.has-derived-vars' | translate}}">
               {{'coding.has-derived-vars' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.hasOnlyManualCoding"
+              [ngModel]="contentOptions().hasOnlyManualCoding" (ngModelChange)="updateContentOption('hasOnlyManualCoding', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.has-only-manual-coding' | translate}}">
               {{'coding.has-only-manual-coding' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.hasClosedVars"
+              [ngModel]="contentOptions().hasClosedVars" (ngModelChange)="updateContentOption('hasClosedVars', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.has-closed-vars' | translate}}">
               {{'coding.has-closed-vars' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.showScore"
+              [ngModel]="contentOptions().showScore" (ngModelChange)="updateContentOption('showScore', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.show-score' | translate}}">
               {{'coding.show-score' | translate}}
             </mat-checkbox>
 
             <mat-checkbox
-              [(ngModel)]="contentOptions.codeLabelToUpper"
+              [ngModel]="contentOptions().codeLabelToUpper" (ngModelChange)="updateContentOption('codeLabelToUpper', $event)"
               color="primary"
               matTooltip="{{'coding.tooltip.code-label-to-upper' | translate}}">
               {{'coding.code-label-to-upper' | translate}}
@@ -233,9 +233,9 @@
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>{{'workspace.select-missings-profile' | translate }}</mat-label>
             <mat-select
-              [(value)]="selectedMissingsProfile"
+              [value]="selectedMissingsProfile()" (valueChange)="selectedMissingsProfile.set($event)"
               (click)="$event.stopPropagation()">
-              @for (missingsProfile of missingsProfiles; track missingsProfile) {
+              @for (missingsProfile of missingsProfiles(); track missingsProfile) {
                 <mat-option [value]="missingsProfile.id">
                   @if (missingsProfile.id === 0) {
                     {{ 'Keines' }}
@@ -254,7 +254,7 @@
         <div class="settings-section">
           <h3>{{'coding.export-format' | translate}}</h3>
           <mat-radio-group
-            [(ngModel)]="contentOptions.exportFormat"
+            [ngModel]="contentOptions().exportFormat" (ngModelChange)="updateContentOption('exportFormat', $event)"
             aria-label="Exportformat"
             class="export-format-group">
             <mat-radio-button value="json" color="primary">JSON</mat-radio-button>
@@ -262,7 +262,7 @@
           </mat-radio-group>
         </div>
 
-        @if(workspaceChanges) {
+        @if(workspaceChanges()) {
           <mat-divider></mat-divider>
           <div class="settings-section warning-section">
             <mat-error>{{'coding.error-save-changes' | translate}}</mat-error>
@@ -273,34 +273,34 @@
   </mat-dialog-content>
 
   <!-- Codebook generation progress -->
-  @if (codebookJobStatus !== 'idle') {
+  @if (codebookJobStatus() !== 'idle') {
     <div class="codebook-progress-section">
-      @if (codebookJobStatus === 'pending' || codebookJobStatus === 'processing') {
+      @if (codebookJobStatus() === 'pending' || codebookJobStatus() === 'processing') {
         <div class="progress-container">
           <div class="progress-header">
             <mat-icon class="spinning">hourglass_empty</mat-icon>
             <span class="progress-label">
               {{ 'coding.codebook-generating' | translate }}
             </span>
-            <span class="progress-percentage">{{ codebookJobProgress }}%</span>
+            <span class="progress-percentage">{{ codebookJobProgress() }}%</span>
           </div>
           <mat-progress-bar
             mode="determinate"
-            [value]="codebookJobProgress"
+            [value]="codebookJobProgress()"
             color="primary">
           </mat-progress-bar>
         </div>
       }
-      @if (codebookJobStatus === 'completed') {
+      @if (codebookJobStatus() === 'completed') {
         <div class="progress-container completed">
           <mat-icon color="primary">check_circle</mat-icon>
           <span class="progress-label">{{ 'coding.codebook-completed' | translate }}</span>
         </div>
       }
-      @if (codebookJobStatus === 'failed') {
+      @if (codebookJobStatus() === 'failed') {
         <div class="progress-container failed">
           <mat-icon color="warn">error</mat-icon>
-          <span class="progress-label">{{ codebookJobError }}</span>
+          <span class="progress-label">{{ codebookJobError() }}</span>
           <button mat-icon-button (click)="resetCodebookJob()" matTooltip="Reset">
             <mat-icon>refresh</mat-icon>
           </button>
@@ -315,7 +315,7 @@
       color="primary"
       type="submit"
       (click)="exportCodingBook()"
-      [disabled]="unitList.length === 0 || codebookJobStatus === 'pending' || codebookJobStatus === 'processing'">
+      [disabled]="unitList().length === 0 || codebookJobStatus() === 'pending' || codebookJobStatus() === 'processing'">
       <mat-icon>download</mat-icon>
       {{ 'export' | translate }}
     </button>

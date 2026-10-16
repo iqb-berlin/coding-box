@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
+import { switchMap, tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 import {
   InvalidVariableDto,
@@ -34,13 +34,8 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIds)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 
@@ -55,13 +50,8 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
         this.validationType as 'variables'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 
@@ -92,7 +82,7 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService
       .validateVariables(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result)));
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
   }
 
   /**

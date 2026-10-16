@@ -1,6 +1,8 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 
-import { Component, Input, OnChanges } from '@angular/core';
+import {
+  Component, OnChanges, OnDestroy, signal, input, ChangeDetectionStrategy, inject
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -12,6 +14,7 @@ type XmlFormatResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-xml-viewer',
   standalone: true,
   imports: [
@@ -23,38 +26,45 @@ type XmlFormatResult = {
   templateUrl: './xml-viewer.component.html',
   styleUrls: ['./xml-viewer.component.scss']
 })
-export class XmlViewerComponent implements OnChanges {
-  @Input() xml: string | null | undefined = '';
+export class XmlViewerComponent implements OnChanges, OnDestroy {
+  private clipboard = inject(Clipboard);
 
-  formattedXml = '';
-  hasParseError = false;
-  lineWrap = false;
-  copySucceeded = false;
+  readonly xml = input<string | null | undefined>('');
+
+  readonly formattedXml = signal('');
+  readonly hasParseError = signal(false);
+  readonly lineWrap = signal(false);
+  readonly copySucceeded = signal(false);
 
   private readonly indentUnit = '  ';
   private rawXml = '';
-
-  constructor(private clipboard: Clipboard) {}
+  private copyResetTimer?: number;
 
   ngOnChanges(): void {
-    this.rawXml = this.xml ?? '';
+    this.rawXml = this.xml() ?? '';
 
     const result = this.formatXml(this.rawXml);
 
-    this.formattedXml = result.content;
-    this.hasParseError = result.hasParseError;
+    this.formattedXml.set(result.content);
+    this.hasParseError.set(result.hasParseError);
   }
 
   toggleLineWrap(): void {
-    this.lineWrap = !this.lineWrap;
+    this.lineWrap.set(!this.lineWrap());
+  }
+
+  ngOnDestroy(): void {
+    window.clearTimeout(this.copyResetTimer);
   }
 
   copyToClipboard(): void {
-    this.copySucceeded = this.clipboard.copy(this.rawXml);
+    window.clearTimeout(this.copyResetTimer);
+    this.copySucceeded.set(this.clipboard.copy(this.rawXml));
 
-    if (this.copySucceeded) {
-      window.setTimeout(() => {
-        this.copySucceeded = false;
+    if (this.copySucceeded()) {
+      this.copyResetTimer = window.setTimeout(() => {
+        this.copySucceeded.set(false);
+        this.copyResetTimer = undefined;
       }, 1500);
     }
   }

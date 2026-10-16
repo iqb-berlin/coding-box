@@ -95,7 +95,8 @@
         "default",
         "^production",
         "{workspaceRoot}/jest.config.ts",
-        "{workspaceRoot}/jest.preset.js"
+        "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/qa/**/*"
       ]
     },
     "e2e": {
@@ -117,13 +118,14 @@
       "{workspaceRoot}/.nvmrc",
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/package-lock.json",
+      "{workspaceRoot}/vendor/**/*",
       "{workspaceRoot}/tsconfig.base.json"
     ],
     "sharedApiDto": [
       "{workspaceRoot}/api-dto/**/*"
     ],
     "frontendE2e": [
-      "{workspaceRoot}/cypress.config.ts",
+      "{workspaceRoot}/cypress*.config.ts",
       "{workspaceRoot}/cypress/**/*"
     ],
     "production": [

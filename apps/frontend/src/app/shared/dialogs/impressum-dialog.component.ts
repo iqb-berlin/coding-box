@@ -2,8 +2,9 @@ import {
   MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
 import {
-  Component, OnInit, SecurityContext, inject
+  Component, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatButton } from '@angular/material/button';
 import { catchError, of } from 'rxjs';
@@ -11,10 +12,11 @@ import { defaultLegalNoticeHtml } from '../../../../../../api-dto/legal-notice/d
 import { SystemSettingsService } from '../../core/services/system-settings.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1 mat-dialog-title>IQB-Kodierbox - Impressum/Datenschutz</h1>
     <mat-dialog-content>
-      <div class="legal-notice-content" [innerHTML]="legalNoticeHtml"></div>
+      <div class="legal-notice-content" [innerHTML]="legalNoticeHtml()"></div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-raised-button color="primary" [mat-dialog-close]="true">Schließen</button>
@@ -45,17 +47,19 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
   imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class ImpressumDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly systemSettingsService = inject(SystemSettingsService);
 
   private readonly sanitizer = inject(DomSanitizer);
 
-  legalNoticeHtml = this.sanitizeHtml(defaultLegalNoticeHtml);
+  protected readonly legalNoticeHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
 
   ngOnInit(): void {
     this.systemSettingsService.getLegalNotice()
-      .pipe(catchError(() => of({ html: defaultLegalNoticeHtml, isDefault: true })))
+      .pipe(catchError(() => of({ html: defaultLegalNoticeHtml, isDefault: true }))).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(legalNotice => {
-        this.legalNoticeHtml = this.sanitizeHtml(legalNotice.html);
+        this.legalNoticeHtml.set(this.sanitizeHtml(legalNotice.html));
       });
   }
 

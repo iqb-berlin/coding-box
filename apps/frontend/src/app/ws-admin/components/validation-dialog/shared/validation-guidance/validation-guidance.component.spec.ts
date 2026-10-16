@@ -23,14 +23,14 @@ describe('ValidationGuidanceComponent', () => {
   });
 
   it('should display the description', () => {
-    component.description = 'Follow these steps';
+    fixture.componentRef.setInput('description', 'Follow these steps');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.validation-details-intro')?.textContent).toContain('Follow these steps');
   });
 
   it('should display whyText when provided', () => {
-    component.whyText = 'It is crucial for data integrity';
+    fixture.componentRef.setInput('whyText', 'It is crucial for data integrity');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Warum ist das wichtig?');
@@ -38,7 +38,7 @@ describe('ValidationGuidanceComponent', () => {
   });
 
   it('should display fixHint when provided', () => {
-    component.fixHint = 'Click the fix button';
+    fixture.componentRef.setInput('fixHint', 'Click the fix button');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('So beheben Sie es:');

@@ -62,7 +62,7 @@ import {
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
-import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+import { ResponseDeletionAuditContext, WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
@@ -200,6 +200,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private unitRepository: Repository<Unit>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
+    @Inject(forwardRef(() => CodingStatisticsService))
     private codingStatisticsService: CodingStatisticsService,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceFileStorageService: WorkspaceFileStorageService,
@@ -209,8 +210,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
+    @Inject(forwardRef(() => CodingFreshnessService))
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
     private readonly codingFileCacheService?: CodingFileCacheService,
@@ -3085,18 +3088,21 @@ ${bookletRefs}
 
   async deleteInvalidResponses(
     workspaceId: number,
-    responseIds: number[]
+    responseIds: number[],
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
-      workspaceId,
-      responseIds
-    );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
+    try {
+      const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
+        workspaceId,
+        responseIds,
+        audit
       );
+      if (deletedCount > 0) await this.invalidateResponseDeletionCaches(workspaceId);
+      return deletedCount;
+    } catch (error) {
+      await this.invalidateResponseDeletionCaches(workspaceId);
+      throw error;
     }
-    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -3105,18 +3111,33 @@ ${bookletRefs}
     | 'variables'
     | 'variableTypes'
     | 'responseStatus'
-    | 'duplicateResponses'
+    | 'duplicateResponses',
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
-      workspaceId,
-      validationType
-    );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
+    try {
+      const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
+        workspaceId,
+        validationType,
+        audit
       );
+      if (deletedCount > 0) await this.invalidateResponseDeletionCaches(workspaceId);
+      return deletedCount;
+    } catch (error) {
+      await this.invalidateResponseDeletionCaches(workspaceId);
+      throw error;
     }
-    return deletedCount;
+  }
+
+  private async invalidateResponseDeletionCaches(workspaceId: number): Promise<void> {
+    try {
+      await Promise.all([
+        this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
+      ]);
+    } catch (error) {
+      this.logger.error(`Could not invalidate response deletion caches for workspace ${workspaceId}: ${error.message}`);
+    }
   }
 
   async onModuleInit(): Promise<void> {

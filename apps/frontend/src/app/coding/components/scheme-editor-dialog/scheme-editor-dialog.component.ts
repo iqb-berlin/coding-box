@@ -1,13 +1,22 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, OnInit, DestroyRef, inject, signal, computed, ChangeDetectionStrategy
+} from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions
 } from '@angular/material/dialog';
 import { MatButton } from '@angular/material/button';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import {
+  of, catchError, finalize, map, switchMap, take, takeUntil
+} from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
+import { selectSchemerFile } from '../../utils/coding-scheme-reference';
+import { UnitCodingSchemeRefDto } from '../../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -22,10 +31,12 @@ export interface SchemeEditorDialogData {
   fileName: string;
   content: string;
   readOnly?: boolean;
+  codingSchemeRef?: UnitCodingSchemeRefDto;
 }
 
 @Component({
-  selector: 'app-scheme-editor-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-scheme-editor-dialog',
   standalone: true,
   imports: [
     MatDialogTitle,
@@ -33,28 +44,35 @@ export interface SchemeEditorDialogData {
     MatDialogActions,
     MatButton,
     MatDivider,
+    MatProgressSpinnerModule,
     TranslateModule,
     StandaloneUnitSchemerComponent
   ],
   template: `
     <h2 mat-dialog-title>{{ data.fileName }}</h2>
     <mat-dialog-content>
-      @if (schemerHtml && !isLoading) {
-        <unit-schemer-standalone
-          [schemerHtml]="schemerHtml"
-          [unitScheme]="unitScheme"
+      @if (isLoading()) {
+        <mat-spinner diameter="40" [attr.aria-label]="'coding.schemer.loading' | translate"></mat-spinner>
+      } @else if (schemerHtml()) {
+        <coding-box-unit-schemer
+          [schemerHtml]="schemerHtml()"
+          [unitScheme]="unitScheme()"
+          [schemerConfig]="{ definitionReportPolicy: 'eager', role: data.readOnly ? 'viewer' : 'editor' }"
           (schemeChanged)="onSchemeChanged($event)"
-          (error)="onError($event)">
-        </unit-schemer-standalone>
+          (schemerError)="onError($event)">
+        </coding-box-unit-schemer>
       } @else {
-        <pre class="raw-json">{{ prettyScheme }}</pre>
+        @if (loadError()) {
+          <p role="alert">{{ loadError() }}</p>
+        }
+        <pre class="raw-json">{{ prettyScheme() }}</pre>
       }
     </mat-dialog-content>
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
       <button mat-button (click)="close()">{{ 'close' | translate }}</button>
       @if (!data.readOnly) {
-        <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">{{ 'save' | translate }}</button>
+        <button mat-button color="primary" [disabled]="!hasChanges()" (click)="save()">{{ 'save' | translate }}</button>
       }
     </mat-dialog-actions>
   `,
@@ -66,20 +84,27 @@ export interface SchemeEditorDialogData {
     }
 
     mat-dialog-content {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       padding: 0 !important;
       margin: 0 !important;
       overflow: hidden !important;
     }
 
-    unit-schemer-standalone {
+    coding-box-unit-schemer {
       display: block;
       height: 100%;
       width: 100%;
     }
 
+    mat-spinner {
+      margin: auto;
+    }
+
     .raw-json {
-      height: 100%;
+      flex: 1;
+      min-height: 0;
       width: 100%;
       box-sizing: border-box;
       margin: 0;
@@ -99,17 +124,27 @@ export interface SchemeEditorDialogData {
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
-  schemerHtml = '';
-  isLoading = true;
-  hasChanges = false;
+  dialogRef = inject<MatDialogRef<SchemeEditorDialogComponent>>(MatDialogRef);
+  protected data = inject<SchemeEditorDialogData>(MAT_DIALOG_DATA);
+  private snackBar = inject(MatSnackBar);
+  private fileService = inject(FileService);
+  private translate = inject(TranslateService);
+  private dialog = inject(MatDialog);
+  private router = inject(Router);
 
-  unitScheme: UnitScheme = {
+  private readonly destroyRef = inject(DestroyRef);
+  protected readonly loadError = signal('');
+  readonly schemerHtml = signal('');
+  readonly isLoading = signal(true);
+  readonly hasChanges = signal(false);
+
+  readonly unitScheme = signal<UnitScheme>({
     scheme: '',
     schemeType: 'iqb-standard@3.2'
-  };
+  });
 
-  get prettyScheme(): string {
-    const raw = this.unitScheme?.scheme ?? '';
+  readonly prettyScheme = computed<string>(() => {
+    const raw = this.unitScheme()?.scheme ?? '';
     if (!raw) return '';
     try {
       const parsed = JSON.parse(raw);
@@ -117,33 +152,23 @@ export class SchemeEditorDialogComponent implements OnInit {
     } catch {
       return raw.toString?.() ?? String(raw);
     }
-  }
-
-  constructor(
-    public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
-    private snackBar: MatSnackBar,
-    private fileService: FileService,
-    private translate: TranslateService,
-    private dialog: MatDialog,
-    private router: Router
-  ) { }
+  });
 
   ngOnInit(): void {
-    this.loadSchemerHtml();
-
-    this.unitScheme = {
+    this.unitScheme.set({
       scheme: this.data.content,
-      schemeType: 'iqb-standard@3.2'
-    };
+      schemeType: this.data.codingSchemeRef?.schemeType || this.inferSchemeType()
+    });
+    this.loadSchemerHtml();
     this.fileService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
           if (variables && variables.length > 0) {
-            this.unitScheme = {
-              ...this.unitScheme,
+            this.unitScheme.set({
+              ...this.unitScheme(),
               variables
-            };
+            });
           }
         },
         error: () => {
@@ -156,60 +181,73 @@ export class SchemeEditorDialogComponent implements OnInit {
       });
   }
 
+  private inferSchemeType(): string {
+    try {
+      const { version } = JSON.parse(this.data.content);
+      if (typeof version === 'string' && /^\d+\.\d+$/.test(version)) return `iqb@${version}`;
+    } catch {
+      // Keep a readable preview for invalid or older schemes.
+    }
+    return 'iqb-standard@3.2';
+  }
+
   loadSchemerHtml(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
+    this.loadError.set('');
+    const reference$ = this.data.codingSchemeRef || !this.data.fileName.toLowerCase().endsWith('.vocs') ?
+      of(this.data.codingSchemeRef) :
+      this.fileService.getUnitInfo(this.data.workspaceId, this.data.fileName.replace(/\.vocs$/i, '').toUpperCase())
+        .pipe(
+          map(unit => (unit.codingSchemeRef?.content.toLowerCase() === this.data.fileName.toLowerCase() ?
+            unit.codingSchemeRef : undefined)),
+          catchError(() => of(undefined))
+        );
 
-    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer')
-      .subscribe({
-        next: response => {
-          if (response.data && response.data.length > 0) {
-            const sortedFiles = [...response.data].sort((a, b) => {
-              if (!a.created_at || !b.created_at) return 0;
-              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            });
-
-            const latestFile = sortedFiles[0];
-
-            this.fileService.downloadFile(this.data.workspaceId, latestFile.id)
-              .subscribe({
-                next: fileDownload => {
-                  try {
-                    this.schemerHtml = base64ToUtf8(fileDownload.base64Data);
-                    this.isLoading = false;
-                  } catch (error) {
-                    this.snackBar.open(
-                      this.translate.instant('coding.schemer.decode-error'),
-                      'Error',
-                      { duration: 3000 }
-                    );
-                  }
-                },
-                error: () => {
-                  this.snackBar.open(
-                    this.translate.instant('coding.schemer.download-error'),
-                    'Error',
-                    { duration: 3000 }
-                  );
-                }
-              });
-          }
-        },
-        error: () => {
-          this.snackBar.open(
-            this.translate.instant('coding.schemer.fetch-error'),
-            'Error',
-            { duration: 3000 }
-          );
+    reference$.pipe(
+      switchMap(reference => {
+        if (reference?.schemeType) this.unitScheme.set({ ...this.unitScheme(), schemeType: reference.schemeType });
+        return this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer').pipe(
+          switchMap(response => {
+            const file = selectSchemerFile(response.data || [], reference?.schemer);
+            if (!file) {
+              this.loadError.set(this.translate.instant('coding.schemer.not-found', { schemer: reference?.schemer || '' }));
+              return of(null);
+            }
+            return this.fileService.downloadFile(this.data.workspaceId, file.id).pipe(
+              catchError(() => {
+                this.loadError.set(this.translate.instant('coding.schemer.download-error'));
+                return of(null);
+              })
+            );
+          })
+        );
+      }),
+      catchError(() => {
+        this.loadError.set(this.translate.instant('coding.schemer.fetch-error'));
+        return of(null);
+      }),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => {
+        this.isLoading.set(false);
+      })
+    ).subscribe(file => {
+      if (file) {
+        this.schemerHtml.set(base64ToUtf8(file.base64Data));
+        if (!this.schemerHtml().trim()) {
+          this.schemerHtml.set('');
+          this.loadError.set(this.translate.instant('coding.schemer.decode-error'));
         }
-      });
+      }
+    });
   }
 
   onSchemeChanged(scheme: UnitScheme): void {
-    if (!scheme.variables && this.unitScheme.variables) {
-      scheme.variables = this.unitScheme.variables;
+    if (this.data.readOnly) return;
+    if (!scheme.variables && this.unitScheme().variables) {
+      scheme.variables = this.unitScheme().variables;
     }
-    this.unitScheme = scheme;
-    this.hasChanges = true;
+    this.unitScheme.set(scheme);
+    this.hasChanges.set(true);
   }
 
   onError(error: string): void {
@@ -221,7 +259,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   close(): void {
-    if (this.hasChanges) {
+    if (this.hasChanges()) {
       const confirmRef = this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
@@ -232,7 +270,7 @@ export class SchemeEditorDialogComponent implements OnInit {
         }
       });
 
-      confirmRef.afterClosed().subscribe(result => {
+      confirmRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result === true) {
           this.dialogRef.close(false);
         }
@@ -243,13 +281,13 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   save(): void {
-    if (!this.hasChanges) {
+    if (!this.hasChanges()) {
       this.dialogRef.close(false);
       return;
     }
 
     const schemeFilename = this.data.fileName;
-    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
+    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource').pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
@@ -270,7 +308,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     overwriteExisting: boolean = false,
     overwriteFileIds?: string[]
   ): void {
-    const blob = new Blob([this.unitScheme.scheme], { type: 'application/octet-stream' });
+    const blob = new Blob([this.unitScheme().scheme], { type: 'application/octet-stream' });
     const file = new File([blob], filename, { type: 'application/octet-stream' });
 
     const formData = new FormData();
@@ -281,7 +319,7 @@ export class SchemeEditorDialogComponent implements OnInit {
       formData,
       overwriteExisting,
       overwriteFileIds
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
@@ -331,9 +369,12 @@ export class SchemeEditorDialogComponent implements OnInit {
   private navigateToCodingStatusOnAction(
     snackBarRef: ReturnType<MatSnackBar['open']> | undefined
   ): void {
-    snackBarRef?.onAction().subscribe(() => {
-      this.router.navigate(
-        [`/workspace-admin/${this.data.workspaceId}/coding/management`],
+    if (!snackBarRef) return;
+    const workspaceId = this.data.workspaceId;
+    const router = this.router;
+    snackBarRef.onAction().pipe(take(1), takeUntil(snackBarRef.afterDismissed())).subscribe(() => {
+      router.navigate(
+        [`/workspace-admin/${workspaceId}/coding/management`],
         { queryParams: { refreshCodingFreshness: '1' } }
       );
     });

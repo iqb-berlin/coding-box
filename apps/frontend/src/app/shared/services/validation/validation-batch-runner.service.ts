@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   Observable, Subscription, from, of, throwError, interval
 } from 'rxjs';
@@ -33,6 +33,9 @@ export type BatchValidationType =
   providedIn: 'root'
 })
 export class ValidationBatchRunnerService {
+  private validationService = inject(ValidationService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
+
   private readonly steps: BatchValidationType[] = [
     'testTakers',
     'variables',
@@ -43,11 +46,6 @@ export class ValidationBatchRunnerService {
   ];
 
   private runningBatches: Record<number, Subscription> = {};
-
-  constructor(
-    private validationService: ValidationService,
-    private validationTaskStateService: ValidationTaskStateService
-  ) {}
 
   startBatch(
     workspaceId: number,
