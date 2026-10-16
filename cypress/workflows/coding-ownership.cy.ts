@@ -94,6 +94,10 @@ describe('coding ownership with real role login and PostgreSQL', () => {
         api(`/admin/workspace/${setup.workspaceId}/coding/coder-trainings/${rows.training.own}/apply-discussion-results`, 'POST', { source: 'manual' })
           .its('status').should('eq', 401);
         api('/auth-data').then(({ body: actor }) => {
+          api(`/admin/users/access/${setup.workspaceId}`).then(({ status, body }) => {
+            expect(status).to.equal(200);
+            expect(body.find((user: { id: number }) => user.id === actor.userId).accessLevel).to.equal(2);
+          });
           api(`/admin/workspace/${setup.workspaceId}/variable-bundle`, 'POST', {
             name: 'Created by manager', variables: [], creatorUserId: -1
           }).then(({ status, body }) => {

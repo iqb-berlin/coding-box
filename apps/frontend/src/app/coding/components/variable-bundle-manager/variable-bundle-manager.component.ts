@@ -95,6 +95,7 @@ export class VariableBundleManagerComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
       this.closeOwnedDialogs();
