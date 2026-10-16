@@ -5,6 +5,7 @@ export const auditEventResults = ['started', 'success', 'failure'] as const;
 export type AuditEventResult = typeof auditEventResults[number];
 
 export const auditEventTypes = [
+  'MANUAL_NOTE_CREATED',
   'TEST_RESULTS_IMPORTED',
   'TEST_RESULTS_EXPORT_STARTED',
   'TEST_RESULTS_DELETED',
@@ -22,6 +23,7 @@ export const auditEventTypes = [
   'CODING_JOB_UPDATED',
   'CODING_JOB_DELETED',
   'JOB_DEFINITION_CREATED',
+  'JOB_DEFINITION_UPDATED',
   'JOB_DEFINITION_APPROVED',
   'JOB_DEFINITION_DELETED',
   'WORKSPACE_SETTINGS_CHANGED',

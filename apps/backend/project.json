@@ -67,11 +67,18 @@
         "^production",
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/qa/**/*",
         "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*"
       ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
-        "passWithNoTests": true
+        "passWithNoTests": false
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
       }
     },
     "docker-build": {

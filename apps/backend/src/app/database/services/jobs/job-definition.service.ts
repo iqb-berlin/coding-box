@@ -33,6 +33,7 @@ import {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { sanitizeCsvText } from '../../../utils/csv.util';
+import { JournalService } from '../shared/journal.service';
 
 type JobDefinitionBundleForUsage = JobDefinitionVariableBundle & {
   variables?: JobDefinitionVariable[];
@@ -1095,7 +1096,9 @@ export class JobDefinitionService {
         suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
       });
 
-      return repository.save(jobDefinition);
+      const saved = await repository.save(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, saved.id, 'JOB_DEFINITION_CREATED', actorUserId);
+      return saved;
     });
   }
 
@@ -1980,12 +1983,13 @@ export class JobDefinitionService {
           actorUserId
         );
 
+        await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
         return savedDefinition;
       }
 
-      return repository.save(
-        preparedUpdate.updatedDefinition
-      );
+      const saved = await repository.save(preparedUpdate.updatedDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
+      return saved;
     });
   }
 
@@ -2047,6 +2051,7 @@ export class JobDefinitionService {
       );
 
       const savedDefinition = await repository.save(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, approveDto.status === 'approved' ? 'JOB_DEFINITION_APPROVED' : 'JOB_DEFINITION_UPDATED', actorUserId);
       return savedDefinition;
     });
   }
@@ -2085,6 +2090,7 @@ export class JobDefinitionService {
       const jobDefinition = await this.getJobDefinition(id, workspaceId);
       await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
       await repository.remove(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_DELETED', actorUserId);
     });
   }
 
@@ -2328,6 +2334,7 @@ export class JobDefinitionService {
         await manager.getRepository(JobDefinition).save(
           preparedUpdate.updatedDefinition
         );
+        await this.recordDefinitionEvent(manager, workspaceId, jobDefinitionId, 'JOB_DEFINITION_UPDATED', actorUserId);
         await this.appendDistributionSnapshot(
           jobDefinitionId,
           'refresh',
@@ -2349,5 +2356,19 @@ export class JobDefinitionService {
       preview: result.preview,
       jobsCreated: result.jobsCreated
     };
+  }
+
+  private recordDefinitionEvent(manager: EntityManager, workspaceId: number, id: number,
+                                eventType: string, actorUserId?: number) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      eventType,
+      entityType: 'job-definition',
+      entityId: id,
+      result: 'success',
+      summary: eventType
+    });
   }
 }

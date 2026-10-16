@@ -21,10 +21,11 @@ import {
 } from 'typeorm';
 import * as cheerio from 'cheerio';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
+import { JournalService } from '../shared/journal.service';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import {
-  canTransitionCodingJobStatus, isInitialCodingJobStatus, isProtectedCodingJobStatus
+  canTransitionCodingJobStatus, CODING_JOB_UPDATABLE_STATUSES, isInitialCodingJobStatus, isProtectedCodingJobStatus
 } from './coding-job-status-policy';
 import {
   sortUnitsContinuous,
@@ -442,14 +443,7 @@ type InternalCreateCodingJobDto = CreateCodingJobDto & {
   jobDefinitionId?: number;
 };
 
-const UPDATABLE_CODING_JOB_STATUSES = new Set([
-  'pending',
-  'active',
-  'paused',
-  'open',
-  'completed',
-  'review'
-]);
+const UPDATABLE_CODING_JOB_STATUSES = new Set<string>(CODING_JOB_UPDATABLE_STATUSES);
 
 export interface CodingJobAggregationSettings {
   aggregationEnabled: boolean;
@@ -2004,7 +1998,9 @@ export class CodingJobService {
       await assertCodingResourceMutation(manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
       const jobs = await manager.find(CodingJob, { where: { workspace_id: workspaceId, job_definition_id: jobDefinitionId } });
       for (const job of jobs) await assertCodingResourceMutation(manager, workspaceId, 'job', job.id, actorUserId);
-      return this.deleteCodingJobsByDefinitionInManager(manager, workspaceId, jobDefinitionId);
+      const count = await this.deleteCodingJobsByDefinitionInManager(manager, workspaceId, jobDefinitionId);
+      for (const job of jobs) await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_DELETED', actorUserId);
+      return count;
     });
     await this.invalidateIncompleteVariablesCache(workspaceId);
     return deletedJobs;
@@ -2561,11 +2557,11 @@ export class CodingJobService {
 
     const createdCodingJob = await this.connection.transaction(
       async manager => {
-        const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
         await lockWorkspaceTestResultsMutationInTransaction(
           manager,
           workspaceId
         );
+        const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
         const codingJobRepo = manager.getRepository(CodingJob);
         const aggregationSettings =
           await this.getCurrentAggregationSettingsSnapshot(workspaceId, manager);
@@ -2652,7 +2648,7 @@ export class CodingJobService {
           normalizedCreateCodingJobDto.maxCodingCases,
           manager
         );
-
+        await this.recordJobEvent(manager, workspaceId, savedCodingJob.id, 'CODING_JOB_CREATED', actorUserId);
         return savedCodingJob;
       }
     );
@@ -2691,7 +2687,7 @@ export class CodingJobService {
           );
         }
         if (codingJob.status === 'results_applied') {
-          throw new Error(
+          throw new BadRequestException(
             `Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`
           );
         }
@@ -2824,6 +2820,9 @@ export class CodingJobService {
         }
       }
 
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: Object.keys(updateCodingJobDto), status: savedCodingJob.status
+      });
       return savedCodingJob;
     });
   }
@@ -2865,9 +2864,7 @@ export class CodingJobService {
       return 0;
     }
 
-    const repository = manager ?
-      manager.getRepository(CodingJob) :
-      this.codingJobRepository;
+    const repository = manager.getRepository(CodingJob);
     const result = await repository.update(
       {
         workspace_id: workspaceId,
@@ -2876,15 +2873,20 @@ export class CodingJobService {
       updateValues
     );
 
+    for (const job of jobs) {
+      await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: Object.keys(updateValues)
+      });
+    }
     return result.affected || 0;
   }
 
-  async pauseCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
-    return this.setOwnCodingJobStatus(id, workspaceId, 'paused');
+  async pauseCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'paused', actorUserId);
   }
 
-  async resumeCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
-    return this.setOwnCodingJobStatus(id, workspaceId, 'active');
+  async resumeCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'active', actorUserId);
   }
 
   async submitCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
@@ -2894,7 +2896,8 @@ export class CodingJobService {
   private async setOwnCodingJobStatus(
     id: number,
     workspaceId: number,
-    status: 'active' | 'paused'
+    status: 'active' | 'paused',
+    actorUserId?: number
   ): Promise<CodingJob> {
     return this.withLockedCodingJob(id, workspaceId, async (codingJob, manager) => {
       if (
@@ -2907,8 +2910,13 @@ export class CodingJobService {
       if (!canTransitionCodingJobStatus(codingJob.status, status)) {
         throw new BadRequestException(`Cannot change coding job ${id} from ${codingJob.status} to ${status}`);
       }
+      const previousStatus = codingJob.status;
       codingJob.status = status;
-      return manager.getRepository(CodingJob).save(codingJob);
+      const saved = await manager.getRepository(CodingJob).save(codingJob);
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: ['status'], previousStatus, status
+      });
+      return saved;
     });
   }
 
@@ -2970,6 +2978,7 @@ export class CodingJobService {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       const codingJob = await assertCodingResourceMutation(manager, workspaceId, 'job', id, actorUserId);
       await manager.getRepository(CodingJob).delete({ id: codingJob.id, workspace_id: workspaceId });
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_DELETED', actorUserId);
     });
 
     // Invalidate the incomplete variables cache since coding job units were deleted
@@ -2993,6 +3002,22 @@ export class CodingJobService {
     );
   }
 
+  private recordJobEvent(manager: EntityManager, workspaceId: number, id: number,
+                         eventType: 'CODING_JOB_CREATED' | 'CODING_JOB_UPDATED' | 'CODING_JOB_DELETED',
+                         actorUserId?: number, details?: Record<string, unknown>) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      eventType,
+      entityType: 'coding-job',
+      entityId: id,
+      result: 'success',
+      summary: eventType,
+      details
+    });
+  }
+
   async assignCoders(
     codingJobId: number,
     userIds: number[],
@@ -3013,7 +3038,11 @@ export class CodingJobService {
     if (!job) throw new NotFoundException('Coding job not found');
     await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId ?? job.workspace_id);
     await assertCodingResourceMutation(manager, workspaceId ?? job.workspace_id, 'job', codingJobId, actorUserId);
-    return this.withLockedCodingJob(codingJobId, workspaceId ?? job.workspace_id, (_job, transactionManager) => this.assignCodersInManager(codingJobId, userIds, transactionManager, job.workspace_id), manager);
+    return this.withLockedCodingJob(codingJobId, workspaceId ?? job.workspace_id, async (_job, transactionManager) => {
+      const coders = await this.assignCodersInManager(codingJobId, userIds, transactionManager, job.workspace_id);
+      await this.recordJobEvent(transactionManager, job.workspace_id, codingJobId, 'CODING_JOB_UPDATED', actorUserId, { assignedCoderIds: userIds });
+      return coders;
+    }, manager);
   }
 
   private assertAssignedCoderIdsAreUnique(userIds: number[]): void {
@@ -3355,18 +3384,8 @@ export class CodingJobService {
     codingJobId: number,
     progress: SaveCodingProgressDto
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      const codingJobRepository = manager.getRepository(CodingJob);
+    return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
-      const codingJob = await codingJobRepository.findOne({
-        where: { id: codingJobId }
-      });
-
-      if (!codingJob) {
-        throw new NotFoundException(
-          `Coding job with ID ${codingJobId} not found`
-        );
-      }
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
         throw new BadRequestException(
@@ -3386,7 +3405,8 @@ export class CodingJobService {
         progress,
         codingJobUnit,
         codingJob.workspace_id,
-        codingJob.allowComments !== false
+        codingJob.allowComments !== false,
+        manager
       );
 
       this.applyProgressToCodingJobUnit(
@@ -4213,18 +4233,8 @@ export class CodingJobService {
     codingJobId: number,
     notesDto: SaveCodingNotesDto
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      const codingJobRepository = manager.getRepository(CodingJob);
+    return this.withLockedCodingJobById(codingJobId, async (codingJob, manager) => {
       const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
-      const codingJob = await codingJobRepository.findOne({
-        where: { id: codingJobId }
-      });
-
-      if (!codingJob) {
-        throw new NotFoundException(
-          `Coding job with ID ${codingJobId} not found`
-        );
-      }
 
       if (['review', 'results_applied'].includes(codingJob.status)) {
         throw new BadRequestException(
@@ -5522,7 +5532,8 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: InternalCreateCodingJobDto,
     unitSubset: SlimResponse[],
-    manager: EntityManager
+    manager: EntityManager,
+    actorUserId?: number
   ): Promise<CodingJob> {
     const codingJobRepo = manager.getRepository(CodingJob);
     const aggregationSettings =
@@ -5625,7 +5636,7 @@ export class CodingJobService {
       unitSubsetWithBundleIds,
       manager
     );
-
+    await this.recordJobEvent(manager, workspaceId, savedCodingJob.id, 'CODING_JOB_CREATED', actorUserId);
     return savedCodingJob;
   }
 
@@ -7909,6 +7920,9 @@ export class CodingJobService {
           workspaceId,
           jobDefinitionId
         );
+        for (const job of affectedJobs) {
+          await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_DELETED', actorUserId);
+        }
       }
 
       createdJobs.push(
@@ -7916,7 +7930,8 @@ export class CodingJobService {
           workspaceId,
           ownedRequest,
           transactionPlan,
-          manager
+          manager,
+          actorUserId
         ))
       );
 
@@ -7948,7 +7963,8 @@ export class CodingJobService {
     workspaceId: number,
     request: DistributionPlanRequest,
     plan: DistributionPlan,
-    manager: EntityManager
+    manager: EntityManager,
+    actorUserId?: number
   ): Promise<DistributionCreatedJob[]> {
     const createdJobs: DistributionCreatedJob[] = [];
 
@@ -7975,7 +7991,8 @@ export class CodingJobService {
         workspaceId,
         createCodingJobDto,
         job.unitSubset,
-        manager
+        manager,
+        actorUserId
       );
 
       createdJobs.push({
@@ -8063,7 +8080,8 @@ export class CodingJobService {
               workspaceId,
               ownedRequest,
               plan,
-              manager
+              manager,
+              actorUserId
             ))
           );
 
@@ -8317,6 +8335,17 @@ export class CodingJobService {
     return initialStatus;
   }
 
+  private async withLockedCodingJobById<T>(
+    id: number,
+    callback: (codingJob: CodingJob, manager: EntityManager) => Promise<T>
+  ): Promise<T> {
+    const scope = await this.codingJobRepository.findOne({
+      where: { id }, select: ['id', 'workspace_id']
+    });
+    if (!scope) throw new NotFoundException(`Coding job with ID ${id} not found`);
+    return this.withLockedCodingJob(id, scope.workspace_id, callback);
+  }
+
   private async withLockedCodingJob<T>(
     id: number,
     workspaceId: number,
@@ -8350,6 +8379,7 @@ export class CodingJobService {
       const jobs = await manager.find(CodingJob, { where: { workspace_id: workspaceId, id: In(jobIds) } });
       if (jobs.length !== jobIds.length) throw new NotFoundException('Coding job not found');
       await manager.remove(CodingJob, jobs);
+      for (const id of jobIds) await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_DELETED', actorUserId);
     });
     await this.invalidateIncompleteVariablesCache(workspaceId);
     return { success: true };

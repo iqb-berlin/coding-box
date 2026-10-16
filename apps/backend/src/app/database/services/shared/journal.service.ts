@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { JournalEntry } from '../../entities/journal-entry.entity';
+import { sanitizeCsvText } from '../../../utils/csv.util';
 import {
   AuditActorType,
   AuditEventResult,
@@ -41,11 +42,57 @@ export interface RecordAuditJournalEventInput {
   jobId?: string | number | null;
 }
 
+interface WorkspaceAccessState {
+  userId: number;
+  accessLevel: number;
+  canCode?: boolean;
+}
+
 /**
  * Service for managing journal entries
  */
 @Injectable()
 export class JournalService {
+  static recordEventInTransaction(
+    manager: EntityManager,
+    event: RecordAuditJournalEventInput
+  ): Promise<JournalEntry> {
+    return new JournalService(manager.getRepository(JournalEntry)).recordEvent(event);
+  }
+
+  static async recordAccessChangesInTransaction(
+    manager: EntityManager,
+    workspaceId: number,
+    previous: WorkspaceAccessState[],
+    next: WorkspaceAccessState[],
+    actorUserId?: number
+  ): Promise<void> {
+    const beforeByUser = new Map(previous.map(entry => [entry.userId, entry]));
+    const afterByUser = new Map(next.map(entry => [entry.userId, entry]));
+    for (const userId of new Set([...beforeByUser.keys(), ...afterByUser.keys()])) {
+      const before = beforeByUser.get(userId);
+      const after = afterByUser.get(userId);
+      const previousAccessLevel = before?.accessLevel ?? 0;
+      const accessLevel = after?.accessLevel ?? 0;
+      const previousCanCode = before?.canCode ?? (previousAccessLevel === 1);
+      const canCode = after?.canCode ?? (accessLevel === 1);
+      if (previousAccessLevel === accessLevel && previousCanCode === canCode) continue;
+      await JournalService.recordEventInTransaction(manager, {
+        workspaceId,
+        actorUserId,
+        actorType: actorUserId ? 'user' : 'system',
+        eventType: 'ACCESS_LEVEL_CHANGED',
+        entityType: 'workspace-user',
+        entityId: userId,
+        result: 'success',
+        summary: 'Workspace access changed',
+        details: {
+          previousAccessLevel, accessLevel, previousCanCode, canCode
+        }
+      });
+    }
+  }
+
   private readonly logger = new Logger(JournalService.name);
   private readonly sensitiveDetailKeys = new Set([
     'auth',
@@ -619,11 +666,11 @@ export class JournalService {
   }
 
   private escapeCsvValue(value: string): string {
-    const normalized = value.replace(/\r?\n/g, ' ');
-    if (!/[",\n\r]/.test(normalized)) {
-      return normalized;
+    const safeValue = sanitizeCsvText(value);
+    if (!/[",\n\r]/.test(safeValue)) {
+      return safeValue;
     }
-    return `"${normalized.replace(/"/g, '""')}"`;
+    return `"${safeValue.replace(/"/g, '""')}"`;
   }
 
   private normalizeActorId(

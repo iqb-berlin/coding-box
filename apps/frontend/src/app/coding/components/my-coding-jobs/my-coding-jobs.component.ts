@@ -1,13 +1,7 @@
 import {
-  Component,
-  OnInit,
-  OnDestroy,
-  inject,
-  ChangeDetectorRef,
-  Input,
-  OnChanges,
-  ViewChild
+  Component, OnInit, OnDestroy, inject, DestroyRef, OnChanges, signal, input, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -44,7 +38,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
-import { DatePipe, NgClass } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import {
   debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
@@ -62,6 +56,7 @@ import {
 } from '../../utils/replay-url.util';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-my-coding-jobs',
   templateUrl: './my-coding-jobs.component.html',
   styleUrls: ['./my-coding-jobs.component.scss'],
@@ -70,7 +65,6 @@ import {
     TranslateModule,
     FormsModule,
     DatePipe,
-    NgClass,
     MatIcon,
     MatHeaderCell,
     MatCell,
@@ -102,11 +96,12 @@ implements OnInit, OnDestroy, OnChanges {
   codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
-  private cdr = inject(ChangeDetectorRef);
+
+  private readonly destroyRef = inject(DestroyRef);
   private translateService = inject(TranslateService);
   private route = inject(ActivatedRoute);
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'actions',
     'name',
     'description',
@@ -119,48 +114,43 @@ implements OnInit, OnDestroy, OnChanges {
   ];
 
   dataSource = new MatTableDataSource<CodingJob>([]);
-  selection = new SelectionModel<CodingJob>(true, []);
-  isLoading = false;
-  currentUserId = 0;
-  isAuthorized = false;
+  protected selection = new SelectionModel<CodingJob>(true, []);
+  readonly isLoading = signal(false);
+  readonly currentUserId = signal(0);
+  readonly isAuthorized = signal(false);
 
-  totalProgress = 0;
-  totalCodedUnits = 0;
-  totalUnits = 0;
-  incompleteJobs = 0;
-  completedJobs = 0;
+  readonly totalProgress = signal(0);
+  readonly totalCodedUnits = signal(0);
+  readonly totalUnits = signal(0);
+  readonly incompleteJobs = signal(0);
+  readonly completedJobs = signal(0);
 
-  selectedStatus: string | null = null;
-  selectedJobName: string | null = null;
-  selectedWorkspaceIds: number[] = [];
-  originalData: CodingJob[] = [];
-  currentWorkspaces: WorkspaceFullDto[] = [];
-  jobsTotal = 0;
-  pageSize = 50;
-  pageIndex = 0;
-  serverPagingEnabled = false;
+  protected readonly selectedStatus = signal<string | null>(null);
+  protected readonly selectedJobName = signal<string | null>(null);
+  readonly selectedWorkspaceIds = signal<number[]>([]);
+  readonly originalData = signal<CodingJob[]>([]);
+  readonly currentWorkspaces = signal<WorkspaceFullDto[]>([]);
+  readonly jobsTotal = signal(0);
+  protected readonly pageSize = signal(50);
+  protected readonly pageIndex = signal(0);
+  readonly serverPagingEnabled = signal(false);
   private authWorkspaces: WorkspaceFullDto[] = [];
   private loadJobsSubscription?: Subscription;
   private jobNameFilterSubscription?: Subscription;
   private workspaceToggleInProgress = false;
   private workspaceSelectionInitialized = false;
   private initialWorkspaceFilterId: number | null = null;
-  private paginator?: MatPaginator;
   private readonly jobNameFilterChanges = new Subject<string>();
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
 
-  @Input() workspaceId: number | null = null;
+  readonly workspaceId = input<number | null>(null);
 
-  @ViewChild(MatPaginator) set paginatorRef(
-    paginator: MatPaginator | undefined
-  ) {
-    this.paginator = paginator;
-    this.configureClientPaginator();
-  }
+  readonly paginatorRef = viewChild(MatPaginator);
+  private readonly synchronizePaginator = effect(() => this.configureClientPaginator());
 
   private handleWindowFocus = () => {
-    if (!this.isAuthorized || this.isLoading) {
+    if (!this.isAuthorized() || this.isLoading()) {
       return;
     }
     const now = Date.now();
@@ -180,9 +170,9 @@ implements OnInit, OnDestroy, OnChanges {
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe(() => this.reloadFirstPage());
 
-    this.appService.authData$.subscribe(authData => {
-      this.currentUserId = authData.userId;
-      this.isAuthorized = true;
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
+      this.currentUserId.set(authData.userId);
+      this.isAuthorized.set(true);
       const workspaces = authData.workspaces || [];
       this.authWorkspaces = workspaces;
       this.loadMyCodingJobs(workspaces);
@@ -204,32 +194,33 @@ implements OnInit, OnDestroy, OnChanges {
 
   loadMyCodingJobs(workspaces: [] | WorkspaceFullDto[]): void {
     const targetWorkspaces = this.getTargetWorkspaces(workspaces || []);
-    this.currentWorkspaces = targetWorkspaces;
-    this.isLoading = true;
+    this.currentWorkspaces.set(targetWorkspaces);
+    this.isLoading.set(true);
+
     this.loadJobsSubscription?.unsubscribe();
 
     if (targetWorkspaces.length > 0) {
       if (this.shouldResetWorkspaceFilter()) {
-        this.selectedWorkspaceIds = this.getDefaultSelectedWorkspaceIds();
+        this.selectedWorkspaceIds.set(this.getDefaultSelectedWorkspaceIds());
         this.workspaceSelectionInitialized = true;
       }
       const selectedWorkspaces = this.getSelectedWorkspaces();
       if (selectedWorkspaces.length === 0) {
         this.clearLoadedJobData();
-        this.isLoading = false;
+        this.isLoading.set(false);
         return;
       }
 
-      this.serverPagingEnabled = selectedWorkspaces.length === 1;
+      this.serverPagingEnabled.set(selectedWorkspaces.length === 1);
       this.configureClientPaginator();
       const workspaceJobsObservables = selectedWorkspaces.map(workspace => this.codingJobBackendService
         .getCodingJobs(
           workspace.id,
-          this.serverPagingEnabled ? this.pageIndex + 1 : undefined,
-          this.serverPagingEnabled ? this.pageSize : undefined,
+          this.serverPagingEnabled() ? this.pageIndex() + 1 : undefined,
+          this.serverPagingEnabled() ? this.pageSize() : undefined,
           {
             assignedTo: 'me',
-            status: this.selectedStatus || undefined,
+            status: this.selectedStatus() || undefined,
             jobName: this.normalizeJobNameFilter()
           }
         )
@@ -244,15 +235,12 @@ implements OnInit, OnDestroy, OnChanges {
           const assignedJobs = workspaceJobResponses.flatMap(
             response => response.data
           );
-          this.originalData = [...assignedJobs];
+          this.originalData.set([...assignedJobs]);
           this.dataSource.data = assignedJobs;
-          this.jobsTotal = workspaceJobResponses.reduce(
-            (sum, response) => sum + response.total,
-            0
-          );
+          this.jobsTotal.set(workspaceJobResponses.reduce((sum, response) => sum + response.total, 0));
           this.calculateTotalProgress(assignedJobs);
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          this.isLoading.set(false);
+
           this.configureClientPaginator();
         },
         error: () => {
@@ -265,73 +253,73 @@ implements OnInit, OnDestroy, OnChanges {
             { duration: 3000 }
           );
           this.clearLoadedJobs();
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
     } else {
       this.clearLoadedJobs();
-      this.isLoading = false;
+      this.isLoading.set(false);
     }
   }
 
   private clearLoadedJobData(): void {
     this.dataSource.data = [];
-    this.originalData = [];
-    this.jobsTotal = 0;
-    this.serverPagingEnabled = false;
-    this.totalProgress = 0;
-    this.totalCodedUnits = 0;
-    this.totalUnits = 0;
-    this.incompleteJobs = 0;
-    this.completedJobs = 0;
+    this.originalData.set([]);
+    this.jobsTotal.set(0);
+    this.serverPagingEnabled.set(false);
+    this.totalProgress.set(0);
+    this.totalCodedUnits.set(0);
+    this.totalUnits.set(0);
+    this.incompleteJobs.set(0);
+    this.completedJobs.set(0);
     this.configureClientPaginator();
   }
 
   private clearLoadedJobs(): void {
     this.clearLoadedJobData();
-    this.selectedWorkspaceIds = [];
+    this.selectedWorkspaceIds.set([]);
     this.workspaceSelectionInitialized = false;
   }
 
   private configureClientPaginator(): void {
-    this.dataSource.paginator = !this.serverPagingEnabled ?
-      this.paginator ?? null :
+    this.dataSource.paginator = !this.serverPagingEnabled() ?
+      this.paginatorRef() ?? null :
       null;
   }
 
   private getTargetWorkspaces(
     workspaces: WorkspaceFullDto[]
   ): WorkspaceFullDto[] {
-    if (!this.workspaceId) {
+    if (!this.workspaceId()) {
       return workspaces;
     }
 
-    return workspaces.filter(workspace => workspace.id === this.workspaceId);
+    return workspaces.filter(workspace => workspace.id === this.workspaceId());
   }
 
   private getSelectedWorkspaces(): WorkspaceFullDto[] {
-    const selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
+    const selectedWorkspaceIds = this.selectedWorkspaceIds().filter(
       id => id !== -1
     );
-    return this.currentWorkspaces.filter(workspace => selectedWorkspaceIds.includes(workspace.id)
+    return this.currentWorkspaces().filter(workspace => selectedWorkspaceIds.includes(workspace.id)
     );
   }
 
   private normalizeJobNameFilter(): string | undefined {
-    const normalized = this.selectedJobName?.trim();
+    const normalized = this.selectedJobName()?.trim();
     return normalized || undefined;
   }
 
   private getDefaultSelectedWorkspaceIds(): number[] {
-    const requestedWorkspaceId = this.workspaceId || this.initialWorkspaceFilterId;
+    const requestedWorkspaceId = this.workspaceId() || this.initialWorkspaceFilterId;
     if (
       requestedWorkspaceId &&
-      this.currentWorkspaces.some(workspace => workspace.id === requestedWorkspaceId)
+      this.currentWorkspaces().some(workspace => workspace.id === requestedWorkspaceId)
     ) {
       return [requestedWorkspaceId];
     }
 
-    return this.currentWorkspaces.map(workspace => workspace.id);
+    return this.currentWorkspaces().map(workspace => workspace.id);
   }
 
   private getInitialWorkspaceFilterIdFromRoute(): number | null {
@@ -362,10 +350,10 @@ implements OnInit, OnDestroy, OnChanges {
   }
 
   private shouldResetWorkspaceFilter(): boolean {
-    const currentWorkspaceIds = this.currentWorkspaces.map(
+    const currentWorkspaceIds = this.currentWorkspaces().map(
       workspace => workspace.id
     );
-    const selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
+    const selectedWorkspaceIds = this.selectedWorkspaceIds().filter(
       workspaceId => workspaceId !== -1
     );
     return (
@@ -376,36 +364,34 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  onStatusFilterChange(): void {
+  protected onStatusFilterChange(): void {
     this.reloadFirstPage();
   }
 
-  onJobNameFilterChange(): void {
-    this.jobNameFilterChanges.next(this.selectedJobName ?? '');
+  protected onJobNameFilterChange(): void {
+    this.jobNameFilterChanges.next(this.selectedJobName() ?? '');
   }
 
-  onWorkspaceFilterChange(): void {
+  protected onWorkspaceFilterChange(): void {
     if (this.workspaceToggleInProgress) {
       return;
     }
-    this.selectedWorkspaceIds = this.selectedWorkspaceIds.filter(
-      id => id !== -1
-    );
+    this.selectedWorkspaceIds.set(this.selectedWorkspaceIds().filter(id => id !== -1));
     this.reloadFirstPage();
   }
 
-  isAllWorkspacesSelected(): boolean {
-    if (this.currentWorkspaces.length === 0) return false;
-    return this.currentWorkspaces.every(ws => this.selectedWorkspaceIds.includes(ws.id)
+  protected isAllWorkspacesSelected(): boolean {
+    if (this.currentWorkspaces().length === 0) return false;
+    return this.currentWorkspaces().every(ws => this.selectedWorkspaceIds().includes(ws.id)
     );
   }
 
   toggleAllWorkspaces(): void {
     this.workspaceToggleInProgress = true;
     if (this.isAllWorkspacesSelected()) {
-      this.selectedWorkspaceIds = [];
+      this.selectedWorkspaceIds.set([]);
     } else {
-      this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
+      this.selectedWorkspaceIds.set(this.currentWorkspaces().map(ws => ws.id));
     }
     this.reloadFirstPage();
     queueMicrotask(() => {
@@ -419,7 +405,7 @@ implements OnInit, OnDestroy, OnChanges {
       return '';
     }
 
-    if (selectedWorkspaces.length === this.currentWorkspaces.length) {
+    if (selectedWorkspaces.length === this.currentWorkspaces().length) {
       return this.translateService.instant(
         'coding.my-coding-jobs.all-workspaces-selected'
       );
@@ -440,22 +426,22 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  onPageChange(event: PageEvent): void {
-    this.pageIndex = event.pageIndex;
-    this.pageSize = event.pageSize;
+  protected onPageChange(event: PageEvent): void {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
     this.selection.clear();
-    if (this.serverPagingEnabled) {
+    if (this.serverPagingEnabled()) {
       this.loadMyCodingJobs(this.authWorkspaces);
     }
   }
 
   private reloadFirstPage(): void {
-    this.pageIndex = 0;
+    this.pageIndex.set(0);
     this.selection.clear();
     this.loadMyCodingJobs(this.authWorkspaces);
   }
 
-  selectRow(row: CodingJob): void {
+  protected selectRow(row: CodingJob): void {
     this.selection.toggle(row);
   }
 
@@ -476,7 +462,7 @@ implements OnInit, OnDestroy, OnChanges {
       ) :
       this.codingJobBackendService.startCodingJob(job.workspace_id, job.id);
 
-    replayRequest
+    replayRequest.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           loadingSnack.dismiss();
@@ -550,7 +536,7 @@ implements OnInit, OnDestroy, OnChanges {
     return this.translateService.instant('coding.my-coding-jobs.start-coding');
   }
 
-  getStartCodingJobIcon(job: CodingJob): string {
+  protected getStartCodingJobIcon(job: CodingJob): string {
     if (this.isReadOnlyReviewJob(job)) {
       return 'visibility';
     }
@@ -558,11 +544,11 @@ implements OnInit, OnDestroy, OnChanges {
     return 'play_arrow';
   }
 
-  canSubmitForReview(job: CodingJob): boolean {
+  protected canSubmitForReview(job: CodingJob): boolean {
     return job.status === 'completed';
   }
 
-  getSubmitForReviewLabel(): string {
+  protected getSubmitForReviewLabel(): string {
     return this.translateService.instant(
       'coding.my-coding-jobs.submit-for-review'
     );
@@ -589,13 +575,13 @@ implements OnInit, OnDestroy, OnChanges {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (!confirmed) {
         return;
       }
 
       this.codingJobBackendService
-        .submitCodingJobForReview(job.workspace_id, job.id)
+        .submitCodingJobForReview(job.workspace_id, job.id).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(
@@ -621,7 +607,7 @@ implements OnInit, OnDestroy, OnChanges {
     });
   }
 
-  getStatusClass(status: string): string {
+  protected getStatusClass(status: string): string {
     switch (status) {
       case 'active':
         return 'status-active';
@@ -642,7 +628,7 @@ implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getStatusText(status: string): string {
+  protected getStatusText(status: string): string {
     switch (status) {
       case 'active':
         return this.translateService.instant(
@@ -677,7 +663,7 @@ implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getVariables(job: CodingJob): string {
+  protected getVariables(job: CodingJob): string {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       return this.formatAssignedVariables(job.assignedVariables);
     }
@@ -687,7 +673,7 @@ implements OnInit, OnDestroy, OnChanges {
     return this.translateService.instant('coding.my-coding-jobs.no-variables');
   }
 
-  getVariableBundles(job: CodingJob): string {
+  protected getVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const count = job.assignedVariableBundles.length;
       const maxToShow = 2;
@@ -708,7 +694,7 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  getProgress(job: CodingJob): string {
+  protected getProgress(job: CodingJob): string {
     if (!job.totalUnits || job.totalUnits === 0) {
       return this.translateService.instant('coding.my-coding-jobs.no-tasks');
     }
@@ -721,22 +707,13 @@ implements OnInit, OnDestroy, OnChanges {
 
   private calculateTotalProgress(assignedJobs: CodingJob[]): void {
     const activeJobs = assignedJobs.filter(job => job.status !== 'review');
-    this.totalCodedUnits = activeJobs.reduce(
-      (sum, job) => sum + (job.codedUnits || 0),
-      0
-    );
-    this.totalUnits = activeJobs.reduce(
-      (sum, job) => sum + (job.totalUnits || 0),
-      0
-    );
-    this.totalProgress =
-      this.totalUnits > 0 ?
-        Math.round((this.totalCodedUnits / this.totalUnits) * 100) :
-        0;
-    this.incompleteJobs = assignedJobs.filter(job => !this.isFinishedJob(job)
-    ).length;
-    this.completedJobs = assignedJobs.filter(job => this.isFinishedJob(job)
-    ).length;
+    this.totalCodedUnits.set(activeJobs.reduce((sum, job) => sum + (job.codedUnits || 0), 0));
+    this.totalUnits.set(activeJobs.reduce((sum, job) => sum + (job.totalUnits || 0), 0));
+    this.totalProgress.set(this.totalUnits() > 0 ?
+      Math.round((this.totalCodedUnits() / this.totalUnits()) * 100) :
+      0);
+    this.incompleteJobs.set(assignedJobs.filter(job => !this.isFinishedJob(job)).length);
+    this.completedJobs.set(assignedJobs.filter(job => this.isFinishedJob(job)).length);
   }
 
   private isFinishedJob(job: CodingJob): boolean {

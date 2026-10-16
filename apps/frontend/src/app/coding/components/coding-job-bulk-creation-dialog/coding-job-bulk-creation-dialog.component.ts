@@ -1,4 +1,6 @@
-import { Component, Inject, inject } from '@angular/core';
+import {
+  Component, inject, signal, ChangeDetectionStrategy
+} from '@angular/core';
 
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
@@ -114,6 +116,7 @@ interface DistributionMatrixRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-bulk-creation-dialog',
   templateUrl: './coding-job-bulk-creation-dialog.component.html',
   styleUrls: ['./coding-job-bulk-creation-dialog.component.scss'],
@@ -134,26 +137,26 @@ interface DistributionMatrixRow {
   ]
 })
 export class CodingJobBulkCreationDialogComponent {
+  dialogRef = inject<MatDialogRef<CodingJobBulkCreationDialogComponent>>(MatDialogRef);
+  protected data = inject<BulkCreationData>(MAT_DIALOG_DATA);
+
   private fb = inject(FormBuilder);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
-  displayOptionsForm!: FormGroup;
-  jobPreviews: JobPreview[] = [];
-  distributionMatrix: DistributionMatrixRow[] = [];
-  doubleCodingPreview?: DoubleCodingPreview;
-  warnings: JobCreationWarning[] = [];
-  showWarningsPanel = false;
-  warningsConfirmed = false;
-  isLoading = false;
+  protected displayOptionsForm!: FormGroup;
+  readonly jobPreviews = signal<JobPreview[]>([]);
+  protected readonly distributionMatrix = signal<DistributionMatrixRow[]>([]);
+  protected readonly doubleCodingPreview = signal<DoubleCodingPreview | undefined>(undefined);
+  readonly warnings = signal<JobCreationWarning[]>([]);
+  readonly showWarningsPanel = signal(false);
+  protected readonly warningsConfirmed = signal(false);
+  readonly isLoading = signal(false);
   private readonly defaultCoderCapacityPercent = 100;
   private readonly minCoderCapacityPercent = 10;
   private readonly maxCoderCapacityPercent = 300;
 
-  constructor(
-    public dialogRef: MatDialogRef<CodingJobBulkCreationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: BulkCreationData
-  ) {
+  constructor() {
     this.initForm();
 
     if (this.data.distribution && this.data.doubleCodingInfo) {
@@ -166,12 +169,11 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   private async calculateDistributionWithBackend(): Promise<void> {
-    this.isLoading = true;
+    this.isLoading.set(true);
     try {
       const workspaceId = this.appService.selectedWorkspaceId;
       if (!workspaceId) {
         this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
-        this.isLoading = false;
         return;
       }
 
@@ -200,13 +202,11 @@ export class CodingJobBulkCreationDialogComponent {
 
       if (!result || Object.keys(result.distribution || {}).length === 0) {
         this.snackBar.open('No distribution calculated', 'Close', { duration: 3000 });
-        this.isLoading = false;
-      } else {
-        this.isLoading = false;
       }
     } catch (error) {
       this.snackBar.open(`Failed to calculate distribution: ${error instanceof Error ? error.message : error}`, 'Close', { duration: 5000 });
-      this.isLoading = false;
+    } finally {
+      this.isLoading.set(false);
     }
   }
 
@@ -226,16 +226,16 @@ export class CodingJobBulkCreationDialogComponent {
   private initializeFromData(): void {
     if (!this.data.distribution || !this.data.doubleCodingInfo) return;
 
-    this.warnings = this.data.warnings || [];
-    this.showWarningsPanel = this.warnings.length > 0;
-    this.distributionMatrix = [];
+    this.warnings.set([...(this.data.warnings || [])]);
+    this.showWarningsPanel.set(this.warnings().length > 0);
+    const distributionMatrix: DistributionMatrixRow[] = [];
     for (const [variableKey, coderCases] of Object.entries(this.data.distribution)) {
       const coderCasesById = this.data.distributionByCoderId?.[variableKey];
       const totalCases = Object.values(coderCasesById || coderCases).reduce((sum, count) => sum + count, 0);
 
       if (this.isVariableItemKey(variableKey)) {
         const [unitName, variableId] = variableKey.split('::');
-        this.distributionMatrix.push({
+        distributionMatrix.push({
           variable: { unitName, variableId },
           variableKey,
           totalCases,
@@ -244,7 +244,7 @@ export class CodingJobBulkCreationDialogComponent {
         });
       } else {
         const bundle = this.findBundleForItemKey(variableKey);
-        this.distributionMatrix.push({
+        distributionMatrix.push({
           bundle,
           variableKey,
           totalCases,
@@ -254,11 +254,10 @@ export class CodingJobBulkCreationDialogComponent {
       }
     }
 
-    if (Object.keys(this.data.doubleCodingInfo).length > 0) {
-      this.doubleCodingPreview = { doubleCodingInfo: this.data.doubleCodingInfo };
-    }
-
-    this.jobPreviews = this.createJobPreviews();
+    this.distributionMatrix.set(distributionMatrix);
+    this.doubleCodingPreview.set(Object.keys(this.data.doubleCodingInfo).length > 0 ?
+      { doubleCodingInfo: this.data.doubleCodingInfo } : undefined);
+    this.jobPreviews.set(this.createJobPreviews());
   }
 
   private initializeFromCreationResults(): void {
@@ -375,7 +374,7 @@ export class CodingJobBulkCreationDialogComponent {
     return this.data.selectedVariableBundles?.find(bundle => bundle.name === itemKey);
   }
 
-  getBundleDisplayName(bundle: PreviewVariableBundle): string {
+  protected getBundleDisplayName(bundle: PreviewVariableBundle): string {
     const sameNameCount = (this.data.selectedVariableBundles || [])
       .filter(selectedBundle => selectedBundle.name === bundle.name)
       .length;
@@ -450,23 +449,23 @@ export class CodingJobBulkCreationDialogComponent {
     });
   }
 
-  getVariableDisplayName(variable: { unitName: string; variableId: string }): string {
+  protected getVariableDisplayName(variable: { unitName: string; variableId: string }): string {
     return `${variable.unitName} → ${variable.variableId}`;
   }
 
   getCoderTotal(coderName: string): number {
-    return this.distributionMatrix.reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
+    return this.distributionMatrix().reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
   }
 
-  getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
+  protected getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
     return row.coderCasesById?.[String(coder.id)] ?? row.coderCases[coder.name] ?? 0;
   }
 
-  getCoderTotalById(coder: Coder): number {
-    return this.distributionMatrix.reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
+  protected getCoderTotalById(coder: Coder): number {
+    return this.distributionMatrix().reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
   }
 
-  getDoubleCodedCasesForCoder(
+  protected getDoubleCodedCasesForCoder(
     info: { doubleCodedCasesPerCoder: Record<string, number> },
     coder: Coder
   ): number {
@@ -478,13 +477,13 @@ export class CodingJobBulkCreationDialogComponent {
     return info.doubleCodedCasesPerCoder[duplicateSafeKey] || 0;
   }
 
-  getGrandTotal(): number {
-    return this.distributionMatrix.reduce((total, row) => total + row.totalCases, 0);
+  protected getGrandTotal(): number {
+    return this.distributionMatrix().reduce((total, row) => total + row.totalCases, 0);
   }
 
   private getActiveDoubleCodingInfo(): BulkCreationData['doubleCodingInfo'] | undefined {
     return this.data.creationResults?.doubleCodingInfo ||
-      this.doubleCodingPreview?.doubleCodingInfo ||
+      this.doubleCodingPreview()?.doubleCodingInfo ||
       this.data.doubleCodingInfo;
   }
 
@@ -500,7 +499,7 @@ export class CodingJobBulkCreationDialogComponent {
     );
   }
 
-  getJobCaseCount(job: JobPreview): number {
+  protected getJobCaseCount(job: JobPreview): number {
     if (job.caseCount !== undefined) {
       return job.caseCount;
     }
@@ -535,21 +534,21 @@ export class CodingJobBulkCreationDialogComponent {
     return Number.isNaN(caseCount) ? 0 : caseCount;
   }
 
-  objectKeys(obj: Record<string, unknown>): string[] {
+  protected objectKeys(obj: Record<string, unknown>): string[] {
     return Object.keys(obj);
   }
 
-  getDoubleCodingGridTemplate(): string {
+  protected getDoubleCodingGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
     return `minmax(180px, 1.6fr) minmax(88px, 1fr) minmax(88px, 1fr) minmax(88px, 1fr) ${coderColumns}`.trim();
   }
 
-  getDistributionGridTemplate(): string {
+  protected getDistributionGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
     return `minmax(180px, 1.6fr) ${coderColumns}minmax(70px, .8fr)`.trim();
   }
 
-  getVariableDisplayNameFromKey(variableKey: string): string {
+  protected getVariableDisplayNameFromKey(variableKey: string): string {
     const bundle = this.findBundleForItemKey(variableKey);
     if (bundle) {
       return this.getBundleDisplayName(bundle);
@@ -562,11 +561,11 @@ export class CodingJobBulkCreationDialogComponent {
     return variableKey;
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     if (this.data.maxCodingCases !== undefined && this.data.maxCodingCases !== null && this.data.maxCodingCases > 0) {
       const uniqueCases = this.getUniqueCaseTotal();
       if (uniqueCases > this.data.maxCodingCases) {
@@ -580,8 +579,8 @@ export class CodingJobBulkCreationDialogComponent {
     }
 
     // If there are warnings and user hasn't confirmed, just mark warnings as confirmed and return
-    if (this.warnings.length > 0 && !this.warningsConfirmed) {
-      this.warningsConfirmed = true;
+    if (this.warnings().length > 0 && !this.warningsConfirmed()) {
+      this.warningsConfirmed.set(true);
       return;
     }
 

@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -19,6 +19,7 @@ export interface ApplyCodingResultsDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-apply-coding-results-dialog',
   standalone: true,
   imports: [
@@ -160,29 +161,27 @@ export interface ApplyCodingResultsDialogResult {
   `]
 })
 export class ApplyCodingResultsDialogComponent {
-  overwriteExisting = false;
+  dialogRef = inject<MatDialogRef<ApplyCodingResultsDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyCodingResultsDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<ApplyCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyCodingResultsDialogData
-  ) {}
+  protected overwriteExisting = false;
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close({ overwriteExisting: this.overwriteExisting });
   }
 
-  hasSummary(): boolean {
+  protected hasSummary(): boolean {
     return this.data.totalResults !== undefined ||
       this.data.codedResults !== undefined ||
       this.data.reviewIssues !== undefined ||
       this.data.hasReviewIssues !== undefined;
   }
 
-  hasReviewIssues(): boolean {
+  protected hasReviewIssues(): boolean {
     if (this.data.reviewIssues !== undefined) {
       return this.data.reviewIssues > 0;
     }

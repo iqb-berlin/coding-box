@@ -8,7 +8,8 @@ import {
   Query,
   ParseIntPipe,
   Logger,
-  UseGuards
+  UseGuards,
+  Req
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -121,7 +122,8 @@ export class ValidationTaskController {
       @Query('page') page?: string,
       @Query('limit') limit?: string,
       @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
-      @Body() body?: CreateValidationTaskRequestDto
+      @Body() body?: CreateValidationTaskRequestDto,
+      @Req() request?: { user: { id: number | string } }
   ): Promise<ValidationTaskDto> {
     this.logger.log(`Creating validation task of type ${type} for workspace ${workspaceId}`);
 
@@ -137,7 +139,10 @@ export class ValidationTaskController {
       type,
       ValidationTaskController.parseOptionalPositiveInt(page, 'page'),
       ValidationTaskController.parseOptionalPositiveInt(limit, 'limit'),
-      ValidationTaskController.getAdditionalData(body, allQueryParams)
+      {
+        ...ValidationTaskController.getAdditionalData(body, allQueryParams),
+        userId: request?.user.id === undefined ? '' : String(request.user.id)
+      }
     );
     return ValidationTaskDto.fromEntity(task);
   }

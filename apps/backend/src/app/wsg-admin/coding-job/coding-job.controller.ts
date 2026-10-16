@@ -736,7 +736,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.pauseCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -773,7 +774,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.resumeCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }

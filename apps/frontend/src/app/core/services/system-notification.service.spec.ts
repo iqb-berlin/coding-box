@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { SERVER_URL } from '../../injection-tokens';
@@ -51,6 +51,21 @@ describe('SystemNotificationService', () => {
     httpMock.verify();
   });
 
+  it('cancels an in-flight poll and stops its timer on service destruction', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service.startPolling(1000);
+      await jest.advanceTimersByTimeAsync(0);
+      const pending = httpMock.expectOne('/api/system-notifications/active');
+      service.ngOnDestroy();
+      expect(pending.cancelled).toBe(true);
+      await jest.advanceTimersByTimeAsync(5000);
+      httpMock.expectNone('/api/system-notifications/active');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('uses the public endpoint for active notifications', () => {
     service.getActive().subscribe();
     const request = httpMock.expectOne('/api/system-notifications/active');
@@ -80,24 +95,29 @@ describe('SystemNotificationService', () => {
     remove.flush(null);
   });
 
-  it('hides a dismissed version and shows an edited version again', fakeAsync(() => {
-    const visible: SystemNotificationDto[][] = [];
-    service.visibleNotifications$.subscribe(items => visible.push(items));
-    service.startPolling(60_000);
-    tick();
-    httpMock.expectOne('/api/system-notifications/active').flush([notification()]);
-    expect(visible[visible.length - 1]).toHaveLength(1);
+  it('hides a dismissed version and shows an edited version again', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const visible: SystemNotificationDto[][] = [];
+      service.visibleNotifications$.subscribe(items => visible.push(items));
+      service.startPolling(60_000);
+      await jest.advanceTimersByTimeAsync(0);
+      httpMock.expectOne('/api/system-notifications/active').flush([notification()]);
+      expect(visible[visible.length - 1]).toHaveLength(1);
 
-    service.dismiss(notification());
-    expect(visible[visible.length - 1]).toHaveLength(0);
+      service.dismiss(notification());
+      expect(visible[visible.length - 1]).toHaveLength(0);
 
-    service.stopPolling();
-    service.startPolling(60_000);
-    tick();
-    httpMock.expectOne('/api/system-notifications/active').flush([
-      notification('2026-07-02T10:00:00Z')
-    ]);
-    expect(visible[visible.length - 1]).toHaveLength(1);
-    service.stopPolling();
-  }));
+      service.stopPolling();
+      service.startPolling(60_000);
+      await jest.advanceTimersByTimeAsync(0);
+      httpMock.expectOne('/api/system-notifications/active').flush([
+        notification('2026-07-02T10:00:00Z')
+      ]);
+      expect(visible[visible.length - 1]).toHaveLength(1);
+      service.stopPolling();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

@@ -24,8 +24,8 @@
     <div class="filter-section">
       <h3>{{ 'export-dialog.filter.section-title' | translate }}</h3>
       <div class="filter-option">
-        <label class="filter-label">{{ 'export-dialog.filter.training-effort' | translate }}</label>
-        <mat-button-toggle-group [(ngModel)]="trainingRequiredFilter" name="trainingRequiredFilter">
+        <span class="filter-label" id="training-effort-filter-label">{{ 'export-dialog.filter.training-effort' | translate }}</span>
+        <mat-button-toggle-group [(ngModel)]="trainingRequiredFilter" name="trainingRequiredFilter" aria-labelledby="training-effort-filter-label">
           <mat-button-toggle value="all">{{ 'export-dialog.filter.all' | translate }}</mat-button-toggle>
           <mat-button-toggle value="true">{{ 'export-dialog.filter.increased' | translate }}</mat-button-toggle>
           <mat-button-toggle value="false">{{ 'export-dialog.filter.normal' | translate }}</mat-button-toggle>
@@ -39,7 +39,7 @@
     <div class="validation-section">
       <h3>{{ 'export-dialog.validation.section-title' | translate }}</h3>
       <div class="validation-controls">
-        <button mat-button color="" (click)="validationFileInput.click()" [disabled]="isValidating">
+        <button mat-button color="" (click)="validationFileInput.click()" [disabled]="isValidating()">
           <mat-icon>file_upload</mat-icon>
           {{ 'export-dialog.validation.upload-button' | translate }}
         </button>
@@ -47,22 +47,22 @@
       </div>
 
       <!-- Validation Progress -->
-      @if (validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')) {
+      @if (validationProgress().status === 'loading' || validationProgress().status === 'processing') {
         <div class="validation-progress-section">
           <h4>{{ 'export-dialog.validation.running-title' | translate }}</h4>
-          <p>{{validationProgress.message}}</p>
-          <mat-progress-bar mode="determinate" [value]="validationProgress.progress"></mat-progress-bar>
+          <p>{{validationProgress().message}}</p>
+          <mat-progress-bar mode="determinate" [value]="validationProgress().progress"></mat-progress-bar>
           <p>{{ 'export-dialog.validation.running-description' | translate }}</p>
         </div>
       }
 
       <!-- Validation Error -->
-      @if (validationProgress && validationProgress.status === 'error') {
+      @if (validationProgress().status === 'error') {
         <div class="validation-error-section">
           <h4>{{ 'export-dialog.validation.error-title' | translate }}</h4>
-          <p>{{validationProgress.message}}</p>
-          @if (validationProgress.error) {
-            <p>{{validationProgress.error}}</p>
+          <p>{{validationProgress().message}}</p>
+          @if (validationProgress().error) {
+            <p>{{validationProgress().error}}</p>
           }
           <button mat-button color="primary" (click)="validationFileInput.click()">
             <mat-icon>refresh</mat-icon>
@@ -72,13 +72,13 @@
       }
 
       <!-- Validation Results -->
-      @if (validationResults && validationProgress && validationProgress.status === 'completed') {
+      @if (validationProgress().status === 'completed' && validationResults(); as results) {
         <div class="validation-results-section">
-          <button mat-button (click)="openValidationResultsDialog(validationResults)">
+          <button mat-button (click)="openValidationResultsDialog(results)">
             <mat-icon>visibility</mat-icon>
             {{ 'export-dialog.validation.view-results-button' | translate }}
           </button>
-          <button mat-button (click)="downloadValidationExcel()" [disabled]="isValidating || !validationCacheKey">
+          <button mat-button (click)="downloadValidationExcel()" [disabled]="isValidating() || !validationCacheKey()">
             <mat-icon>download</mat-icon>
             {{ 'export-dialog.validation.download-button' | translate }}
           </button>

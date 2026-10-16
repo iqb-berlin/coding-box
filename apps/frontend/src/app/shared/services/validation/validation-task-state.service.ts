@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
@@ -38,13 +38,13 @@ const ALL_VALIDATION_TYPES: ValidationType[] = [
 })
 export class ValidationTaskStateService {
   // Store task details by workspace ID and validation type
-  private activeTasks: Record<number, Record<string, ValidationTaskDto>> = {};
+  private readonly activeTasks = signal<Record<number, Record<string, ValidationTaskDto>>>({});
 
   // Store validation results by workspace ID and validation type
-  private validationResults: Record<number, Record<string, ValidationResult>> = {};
+  private readonly validationResults = signal<Record<number, Record<string, ValidationResult>>>({});
 
   // Store batch status by workspace ID
-  private batchState: Record<number, ValidationBatchState> = {};
+  private readonly batchState = signal<Record<number, ValidationBatchState>>({});
 
   private activeTasks$ = new BehaviorSubject<Record<number, Record<string, ValidationTaskDto>>>({});
   private validationResults$ = new BehaviorSubject<Record<number, Record<string, ValidationResult>>>({});
@@ -72,51 +72,40 @@ export class ValidationTaskStateService {
   }
 
   getBatchState(workspaceId: number): ValidationBatchState {
-    return this.batchState[workspaceId] || { status: 'idle' };
+    return this.batchState()[workspaceId] || { status: 'idle' };
   }
 
   setBatchState(workspaceId: number, state: ValidationBatchState): void {
-    this.batchState[workspaceId] = state;
-    this.batchState$.next({ ...this.batchState });
+    this.batchState.update(all => ({ ...all, [workspaceId]: state }));
+    this.batchState$.next(this.batchState());
   }
 
-  setTaskId(
-    workspaceId: number,
-    type: ValidationType,
-    task: ValidationTaskDto
-  ): void {
-    if (!this.activeTasks[workspaceId]) {
-      this.activeTasks[workspaceId] = {};
-    }
-    this.activeTasks[workspaceId][type] = task;
-    this.activeTasks$.next({ ...this.activeTasks });
+  setTaskId(workspaceId: number, type: ValidationType, task: ValidationTaskDto): void {
+    this.activeTasks.update(all => ({ ...all, [workspaceId]: { ...all[workspaceId], [type]: task } }));
+    this.activeTasks$.next(this.activeTasks());
   }
 
   removeTaskId(workspaceId: number, type: ValidationType): void {
-    if (this.activeTasks[workspaceId]) {
-      delete this.activeTasks[workspaceId][type];
-      this.activeTasks$.next({ ...this.activeTasks });
-    }
+    if (!this.activeTasks()[workspaceId]) return;
+    this.activeTasks.update(all => {
+      const tasks = { ...all[workspaceId] };
+      delete tasks[type];
+      return { ...all, [workspaceId]: tasks };
+    });
+    this.activeTasks$.next(this.activeTasks());
   }
 
   getAllTaskIds(workspaceId: number): Record<string, ValidationTaskDto> {
-    return this.activeTasks[workspaceId] || {};
+    return this.activeTasks()[workspaceId] || {};
   }
 
-  setValidationResult(
-    workspaceId: number,
-    type: ValidationType,
-    result: ValidationResult
-  ): void {
-    if (!this.validationResults[workspaceId]) {
-      this.validationResults[workspaceId] = {};
-    }
-    this.validationResults[workspaceId][type] = result;
-    this.validationResults$.next({ ...this.validationResults });
+  setValidationResult(workspaceId: number, type: ValidationType, result: ValidationResult): void {
+    this.validationResults.update(all => ({ ...all, [workspaceId]: { ...all[workspaceId], [type]: result } }));
+    this.validationResults$.next(this.validationResults());
   }
 
   getAllValidationResults(workspaceId: number): Record<string, ValidationResult> {
-    return this.validationResults[workspaceId] || {};
+    return this.validationResults()[workspaceId] || {};
   }
 
   hasAnyValidationResult(workspaceId: number): boolean {
@@ -130,19 +119,29 @@ export class ValidationTaskStateService {
   }
 
   invalidateWorkspace(workspaceId: number): void {
-    if (this.activeTasks[workspaceId]) {
-      delete this.activeTasks[workspaceId];
-      this.activeTasks$.next({ ...this.activeTasks });
+    if (this.activeTasks()[workspaceId]) {
+      this.activeTasks.update(all => {
+        const next = { ...all };
+        delete next[workspaceId];
+        return next;
+      });
+      this.activeTasks$.next(this.activeTasks());
     }
-
-    if (this.validationResults[workspaceId]) {
-      delete this.validationResults[workspaceId];
-      this.validationResults$.next({ ...this.validationResults });
+    if (this.validationResults()[workspaceId]) {
+      this.validationResults.update(all => {
+        const next = { ...all };
+        delete next[workspaceId];
+        return next;
+      });
+      this.validationResults$.next(this.validationResults());
     }
-
-    if (this.batchState[workspaceId]) {
-      delete this.batchState[workspaceId];
-      this.batchState$.next({ ...this.batchState });
+    if (this.batchState()[workspaceId]) {
+      this.batchState.update(all => {
+        const next = { ...all };
+        delete next[workspaceId];
+        return next;
+      });
+      this.batchState$.next(this.batchState());
     }
   }
 }

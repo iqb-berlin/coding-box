@@ -1,15 +1,5 @@
 import {
-  Component,
-  OnInit,
-  OnDestroy,
-  inject,
-  output,
-  input,
-  DestroyRef,
-  effect,
-  untracked,
-  ChangeDetectionStrategy,
-  ChangeDetectorRef
+  Component, OnInit, OnDestroy, inject, output, input, DestroyRef, ChangeDetectionStrategy, signal, effect, untracked
 } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -146,12 +136,12 @@ interface BundleOrderingOverride {
 })
 export class CoderTrainingComponent implements OnInit, OnDestroy {
   readonly permissions = inject(CodingPermissionsService);
-  readonly close = output<void>();
+  readonly trainingClosed = output<void>();
   readonly startTraining = output<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
   readonly editTraining = input<CoderTraining | null>(null);
 
   private readonly destroyRef = inject(DestroyRef);
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
   private readonly coderService = inject(CoderService);
@@ -166,26 +156,27 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private hasRestoredRecoveryDraft = false;
 
   // Cached grouped variables data
-  private _groupedVariables: VariableGrouping = { manual: [], bundles: [] };
+  // Cached grouped variables data
+  private readonly _groupedVariables = signal<VariableGrouping>({ manual: [], bundles: [] });
 
   // Public getters for template access
   get groupedVariables(): VariableGrouping {
-    return this._groupedVariables;
+    return this._groupedVariables();
   }
 
-  get isEditMode(): boolean {
+  protected get isEditMode(): boolean {
     return !!this.editTraining();
   }
 
-  coders: Coder[] = [];
-  selectedCoders: Set<number> = new Set();
-  availableVariables: Variable[] = [];
-  availableTrainings: CoderTraining[] = [];
-  availableBundles: VariableBundle[] = [];
-  selectedBundleIds: Set<number> = new Set();
-  isLoading = false;
-  isLoadingVariables = false;
-  isLoadingBundles = false;
+  readonly coders = signal<Coder[]>([]);
+  readonly selectedCoders = signal<Set<number>>(new Set());
+  readonly availableVariables = signal<Variable[]>([]);
+  readonly availableTrainings = signal<CoderTraining[]>([]);
+  readonly availableBundles = signal<VariableBundle[]>([]);
+  readonly selectedBundleIds = signal<Set<number>>(new Set());
+  readonly isLoading = signal(false);
+  protected readonly isLoadingVariables = signal(false);
+  protected readonly isLoadingBundles = signal(false);
 
   private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
 
@@ -296,7 +287,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       startWith(''),
       map(filter => {
         const search = (filter || '').toLowerCase();
-        return this.availableBundles.filter(b => b.name.toLowerCase().includes(search) ||
+        return this.availableBundles().filter(b => b.name.toLowerCase().includes(search) ||
           (b.description && b.description.toLowerCase().includes(search))
         );
       })
@@ -327,7 +318,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           referenceModeControl.setValue(null, { emitEvent: false });
         }
         referenceModeControl?.updateValueAndValidity({ emitEvent: false });
-        this.changeDetectorRef.markForCheck();
       });
   }
 
@@ -359,8 +349,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     ]).pipe(
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(([variables, bundles]: [Variable[], VariableBundle[]]) => {
-      this.availableVariables = variables;
-      this.availableBundles = bundles;
+      this.availableVariables.set(variables);
+      this.availableBundles.set(bundles);
 
       if (
         this.editTraining() &&
@@ -372,9 +362,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       }
 
       this.restoreTrainingRecoveryDraft();
-      this.isLoadingVariables = false;
-      this.isLoadingBundles = false;
-      this.changeDetectorRef.markForCheck();
+      this.isLoadingVariables.set(false);
+      this.isLoadingBundles.set(false);
     });
   }
 
@@ -412,7 +401,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     );
 
     if (editTraining.assigned_coders) {
-      this.selectedCoders = new Set(editTraining.assigned_coders);
+      this.selectedCoders.set(new Set(editTraining.assigned_coders));
     }
 
     this.hasPopulatedTrainingSettings = true;
@@ -440,7 +429,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (editTraining.assigned_variable_bundles) {
       editTraining.assigned_variable_bundles.forEach(b => {
-        const bundle = this.availableBundles.find(avail => avail.id === b.id);
+        const bundle = this.availableBundles().find(avail => avail.id === b.id);
         if (bundle) {
           const firstVarInBundle = editTraining?.assigned_variables?.find(v => bundle.variables.some(bv => bv.variableId === v.variableId && bv.unitName === v.unitName)
           );
@@ -454,11 +443,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
           this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
           if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
-            this.selectedBundleIds.add(b.id);
+            this.selectedBundleIds.update(value => {
+              const next = new Set(value);
+              next.add(b.id);
+              return next;
+            });
           }
         }
       });
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
 
     this.updateGroupedVariables();
@@ -492,8 +485,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       mode: this.isEditMode ? 'edit' : 'create',
       editTraining: editTraining ? { ...editTraining } : null,
       formValue: this.getTrainingRecoveryFormValue(),
-      selectedCoderIds: Array.from(this.selectedCoders),
-      selectedBundleIds: Array.from(this.selectedBundleIds),
+      selectedCoderIds: Array.from(this.selectedCoders()),
+      selectedBundleIds: Array.from(this.selectedBundleIds()),
       manualVariableKeys: this.manualVariablesSelectControl.value || [],
       variables: this.variablesFormArray.controls.map(control => ({
         variableId: control.get('variableId')?.value || '',
@@ -543,8 +536,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       !formValue.includeDerivedVariables ||
       formValue.referenceTrainingIds.length > 0 ||
       !!formValue.referenceMode ||
-      this.selectedCoders.size > 0 ||
-      this.selectedBundleIds.size > 0 ||
+      this.selectedCoders().size > 0 ||
+      this.selectedBundleIds().size > 0 ||
       this.variablesFormArray.length > 0 ||
       !!this.variableFilterCtrl.value ||
       !!this.bundleFilterCtrl.value;
@@ -601,16 +594,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.variablesFormArray.removeAt(0);
     }
 
-    this.selectedCoders = new Set(draft.selectedCoderIds);
-    this.selectedBundleIds = new Set(draft.selectedBundleIds);
-    this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+    this.selectedCoders.set(new Set(draft.selectedCoderIds));
+    this.selectedBundleIds.set(new Set(draft.selectedBundleIds));
+    this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
 
     draft.variables.forEach(variable => {
       if (variable.bundleId && variable.bundleCaseOrderingMode) {
-        const bundle = this.availableBundles.find(candidate => candidate.id === variable.bundleId);
-        if (bundle) {
-          bundle.caseOrderingMode = variable.bundleCaseOrderingMode;
-        }
+        this.setAvailableBundleCaseOrderingMode(variable.bundleId, variable.bundleCaseOrderingMode);
       }
 
       this.addVariable(
@@ -636,7 +626,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     this.updateGroupedVariables();
     this.checkForOverlaps();
-    this.changeDetectorRef.markForCheck();
   }
 
   private clearTrainingRecoveryDraft(): void {
@@ -644,13 +633,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private loadAvailableVariables(): void {
-    this.isLoadingVariables = true;
+    this.isLoadingVariables.set(true);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
       this.showError('Kein Arbeitsbereich ausgewählt');
-      this.isLoadingVariables = false;
-      this.changeDetectorRef.markForCheck();
+      this.isLoadingVariables.set(false);
+
       return;
     }
 
@@ -658,18 +647,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
-          this.availableVariables = variables;
+          this.availableVariables.set(variables);
           this.availableVariablesLoaded = true;
           this._availableVariables$.next(variables);
-          this.isLoadingVariables = false;
-          this.changeDetectorRef.markForCheck();
+          this.isLoadingVariables.set(false);
         },
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.availableVariablesLoaded = true;
           this._availableVariables$.next([]);
-          this.isLoadingVariables = false;
-          this.changeDetectorRef.markForCheck();
+          this.isLoadingVariables.set(false);
         }
       });
   }
@@ -683,12 +670,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: trainings => {
           const editTrainingId = this.editTraining()?.id;
-          this.availableTrainings = (trainings || []).filter(t => t.id !== editTrainingId);
-          this.changeDetectorRef.markForCheck();
+          this.availableTrainings.set((trainings || []).filter(t => t.id !== editTrainingId));
         },
         error: () => {
-          this.availableTrainings = [];
-          this.changeDetectorRef.markForCheck();
+          this.availableTrainings.set([]);
         }
       });
   }
@@ -702,7 +687,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getPrimaryActionLabel(): string {
-    if (this.isLoading) {
+    if (this.isLoading()) {
       return this.isEditMode ? 'Schulung wird aktualisiert...' : 'Kodierungsaufträge werden erstellt...';
     }
 
@@ -711,7 +696,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   getDuplicateTrainingLabelMatches(): CoderTraining[] {
     return getDuplicateTrainingLabelMatches(
-      this.availableTrainings,
+      this.availableTrainings(),
       this.trainingForm.get('trainingLabel')?.value,
       this.editTraining()?.id
     );
@@ -755,7 +740,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getDerivedVariablesCount(): number {
-    return this.availableVariables.filter(variable => this.isVariableDerived(variable)).length;
+    return this.availableVariables().filter(variable => this.isVariableDerived(variable)).length;
   }
 
   getSelectedDerivedVariablesCount(): number {
@@ -766,7 +751,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return bundle.variables.filter(variable => this.isVariableDerived(variable)).length;
   }
 
-  getBundleEffectiveVariableCount(bundle: VariableBundle): number {
+  protected getBundleEffectiveVariableCount(bundle: VariableBundle): number {
     if (this.includeDerivedVariables) {
       return bundle.variables.length;
     }
@@ -774,7 +759,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return bundle.variables.filter(variable => !this.isVariableDerived(variable)).length;
   }
 
-  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste Fälle zuerst';
@@ -791,7 +776,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
@@ -808,7 +793,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+  protected getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
     return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
@@ -825,8 +810,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private addMissingDerivedBundleVariables(): void {
-    Array.from(this.selectedBundleIds).forEach(bundleId => {
-      const bundle = this.availableBundles.find(b => b.id === bundleId);
+    Array.from(this.selectedBundleIds()).forEach(bundleId => {
+      const bundle = this.availableBundles().find(b => b.id === bundleId);
       if (!bundle) return;
 
       const bundleSampleCount = this.getBundleSampleCount(bundleId);
@@ -883,17 +868,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         .map(control => control.get('bundleId')?.value as number | null)
         .filter((bundleId): bundleId is number => !!bundleId)
     );
-    const selectedBundleIds = Array.from(this.selectedBundleIds);
+    const selectedBundleIds = Array.from(this.selectedBundleIds());
     const prunedBundleIds = selectedBundleIds.filter(bundleId => bundleIdsWithVariables.has(bundleId));
 
     if (prunedBundleIds.length !== selectedBundleIds.length) {
-      this.selectedBundleIds = new Set(prunedBundleIds);
+      this.selectedBundleIds.set(new Set(prunedBundleIds));
       this.bundleSelection$.next(prunedBundleIds);
     }
   }
 
   private isDerivedVariableKey(unitId: string | undefined, variableId: string | undefined): boolean {
-    return !!this.availableVariables.find(variable => (
+    return !!this.availableVariables().find(variable => (
       variable.unitName === unitId &&
       variable.variableId === variableId &&
       variable.isDerived
@@ -907,7 +892,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private getVariablesInSelectedBundles(selectedBundleIds: number[] = this.selectedBundleArray): Set<string> {
     const variablesInBundles = new Set<string>();
     selectedBundleIds.forEach(bundleId => {
-      const bundle = this.availableBundles.find(b => b.id === bundleId);
+      const bundle = this.availableBundles().find(b => b.id === bundleId);
       bundle?.variables.forEach(variable => {
         variablesInBundles.add(this.getVariableKey(variable));
       });
@@ -919,7 +904,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     filter = this.variableFilterCtrl.value || '',
     selectedBundleIds: number[] = this.selectedBundleArray,
     includeDerivedVariables = this.includeDerivedVariables,
-    availableVariables: Variable[] = this.availableVariables
+    availableVariables: Variable[] = this.availableVariables()
   ): Variable[] {
     const search = filter.toLowerCase();
     const variablesInBundles = this.getVariablesInSelectedBundles(selectedBundleIds);
@@ -942,7 +927,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.getSelectableManualVariableKeys().some(key => !selectedManualKeys.has(key));
   }
 
-  hasManualVariablesSelected(): boolean {
+  protected hasManualVariablesSelected(): boolean {
     return this.getManualVariablesCount() > 0;
   }
 
@@ -998,7 +983,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onVariableChange(variableId: string, index: number): void {
     const control = this.variablesFormArray.at(index);
-    const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
+    const selectedVariable = this.availableVariables().find(v => v.variableId === variableId);
     if (selectedVariable) {
       control.get('unitId')?.setValue(selectedVariable.unitName);
       control.get('unitId')?.updateValueAndValidity();
@@ -1018,18 +1003,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (coders: Coder[]) => {
-          this.coders = coders;
-          this.changeDetectorRef.markForCheck();
+          this.coders.set(coders);
         },
         error: () => {
           this.showError('Fehler beim Laden der Kodierer');
-          this.changeDetectorRef.markForCheck();
         }
       });
   }
 
   addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
-    const bundle = this.availableBundles.find(b => b.id === bundleId);
+    const bundle = this.availableBundles().find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variablenbündel nicht gefunden');
       return;
@@ -1087,7 +1070,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
 
-    bundle.caseOrderingMode = effectiveCaseOrderingMode;
+    this.setAvailableBundleCaseOrderingMode(bundleId, effectiveCaseOrderingMode);
 
     this.checkForOverlaps();
   }
@@ -1122,15 +1105,19 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   onBundleSelectionChange(selectedBundleIds: number[]): void {
     if (!this.canEditTraining) return;
     if (selectedBundleIds) {
-      const currentSelectedIds = Array.from(this.selectedBundleIds);
-      const newBundleIds = selectedBundleIds.filter(id => !this.selectedBundleIds.has(id));
+      const currentSelectedIds = Array.from(this.selectedBundleIds());
+      const newBundleIds = selectedBundleIds.filter(id => !this.selectedBundleIds().has(id));
       const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
         const defaultMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
         this.addBundleVariables(bundleId, undefined, defaultMode);
         if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === bundleId)) {
-          this.selectedBundleIds.add(bundleId);
+          this.selectedBundleIds.update(value => {
+            const next = new Set(value);
+            next.add(bundleId);
+            return next;
+          });
         }
       });
 
@@ -1138,7 +1125,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         this.removeBundle(bundleId);
       });
 
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
   }
 
@@ -1187,7 +1174,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   removeBundle(bundleId: number): void {
     if (!this.canEditTraining) return;
-    const bundle = this.availableBundles.find(b => b.id === bundleId);
+    const bundle = this.availableBundles().find(b => b.id === bundleId);
     if (!bundle) return;
 
     const variablesToRemove: number[] = [];
@@ -1201,8 +1188,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.variablesFormArray.removeAt(index);
     });
 
-    this.selectedBundleIds.delete(bundleId);
-    this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+    this.selectedBundleIds.update(value => {
+      const next = new Set(value);
+      next.delete(bundleId);
+      return next;
+    });
+    this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     this.updateGroupedVariables();
     this.showSuccess(`Variablenbündel "${bundle.name}" entfernt.`);
     this.checkForOverlaps();
@@ -1210,32 +1201,41 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   toggleCoderSelection(coder: Coder): void {
     if (!this.canEditTraining) return;
-    if (this.selectedCoders.has(coder.id)) {
-      this.selectedCoders.delete(coder.id);
+    if (this.selectedCoders().has(coder.id)) {
+      this.selectedCoders.update(value => {
+        const next = new Set(value);
+        next.delete(coder.id);
+        return next;
+      });
     } else {
-      this.selectedCoders.add(coder.id);
+      this.selectedCoders.update(value => {
+        const next = new Set(value);
+        next.add(coder.id);
+        return next;
+      });
     }
-    this.changeDetectorRef.markForCheck();
   }
 
   isCoderSelected(coder: Coder): boolean {
-    return this.selectedCoders.has(coder.id);
+    return this.selectedCoders().has(coder.id);
   }
 
   selectAllCoders(): void {
     if (!this.canEditTraining) return;
-    this.coders.forEach(coder => this.selectedCoders.add(coder.id));
-    this.changeDetectorRef.markForCheck();
+    this.selectedCoders.update(value => {
+      const next = new Set(value);
+      this.coders().forEach(coder => next.add(coder.id));
+      return next;
+    });
   }
 
   deselectAllCoders(): void {
     if (!this.canEditTraining) return;
-    this.selectedCoders.clear();
-    this.changeDetectorRef.markForCheck();
+    this.selectedCoders.set(new Set());
   }
 
   getSelectedCoders(): Coder[] {
-    return this.coders.filter(coder => this.selectedCoders.has(coder.id));
+    return this.coders().filter(coder => this.selectedCoders().has(coder.id));
   }
 
   canStartTraining(): boolean {
@@ -1254,7 +1254,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasSelectedCoders(): boolean {
-    return this.selectedCoders.size > 0;
+    return this.selectedCoders().size > 0;
   }
 
   hasVariableSelection(): boolean {
@@ -1271,7 +1271,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       !this.hasAnyInsufficientCases();
   }
 
-  getValidationItems(): ValidationItem[] {
+  protected getValidationItems(): ValidationItem[] {
     return [
       { id: 'label', label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
       { id: 'coders', label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
@@ -1363,11 +1363,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   get selectedBundleArray(): number[] {
-    return Array.from(this.selectedBundleIds);
+    return Array.from(this.selectedBundleIds());
   }
 
   getBundleName(bundleId: number): string {
-    const bundle = this.availableBundles.find(b => b.id === bundleId);
+    const bundle = this.availableBundles().find(b => b.id === bundleId);
     return bundle?.name || 'Unbekannt';
   }
 
@@ -1386,7 +1386,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       if (bundleId && bundleName) {
         const bundleModeFromControl = control.get('bundleCaseOrderingMode')?.value as 'continuous' | 'alternating' | null;
         if (!bundleGroups[bundleId]) {
-          const bundle = this.availableBundles.find(b => b.id === bundleId);
+          const bundle = this.availableBundles().find(b => b.id === bundleId);
           bundleGroups[bundleId] = {
             bundle: {
               id: bundleId,
@@ -1416,11 +1416,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private updateGroupedVariables(): void {
-    this._groupedVariables = this.getVariablesGroupedByBundle();
-    this.changeDetectorRef.markForCheck();
+    this._groupedVariables.set(this.getVariablesGroupedByBundle());
   }
 
-  trackBundleGroupById(
+  protected trackBundleGroupById(
     _index: number,
     bundleGroup: VariableGrouping['bundles'][number]
   ): number {
@@ -1444,7 +1443,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     this.variablesFormArray.updateValueAndValidity();
-    this.changeDetectorRef.markForCheck();
   }
 
   getBundleSampleCount(bundleId: number): number {
@@ -1454,17 +1452,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
     if (!this.canEditTraining) return;
-    const bundle = this.availableBundles.find(b => b.id === bundleId);
-    if (bundle) {
-      bundle.caseOrderingMode = mode;
-    }
+    this.setAvailableBundleCaseOrderingMode(bundleId, mode);
     this.variablesFormArray.controls.forEach(control => {
       if (control.get('bundleId')?.value === bundleId) {
         control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
       }
     });
     this.updateGroupedVariables();
-    this.changeDetectorRef.markForCheck();
+  }
+
+  private setAvailableBundleCaseOrderingMode(bundleId: number, caseOrderingMode: 'continuous' | 'alternating'): void {
+    this.availableBundles.update(bundles => bundles.map(bundle => (bundle.id === bundleId ?
+      { ...bundle, caseOrderingMode } : bundle)));
   }
 
   hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {
@@ -1523,23 +1522,23 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private getAvailableVariable(unitId: string | undefined, variableId: string | undefined): Variable | undefined {
-    return this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+    return this.availableVariables().find(avail => avail.unitName === unitId && avail.variableId === variableId);
   }
 
-  hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
+  protected hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
     const unitId = control.get('unitId')?.value;
     const variableId = control.get('variableId')?.value;
     const variable = this.getAvailableVariable(unitId, variableId);
     return (variable?.deriveErrorResponseCount ?? 0) > 0 || control.get('includeDeriveError')?.value === true;
   }
 
-  getDeriveErrorResponseCountForControl(control: FormGroup): number {
+  protected getDeriveErrorResponseCountForControl(control: FormGroup): number {
     const unitId = control.get('unitId')?.value;
     const variableId = control.get('variableId')?.value;
     return this.getAvailableVariable(unitId, variableId)?.deriveErrorResponseCount ?? 0;
   }
 
-  isDeriveErrorIncludedForControl(control: FormGroup): boolean {
+  protected isDeriveErrorIncludedForControl(control: FormGroup): boolean {
     return control.get('includeDeriveError')?.value === true;
   }
 
@@ -1560,7 +1559,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.updateGroupedVariables();
   }
 
-  getSelectedDeriveErrorOptInCount(): number {
+  protected getSelectedDeriveErrorOptInCount(): number {
     return this.variablesFormArray.controls.filter(control => (
       control.get('includeDeriveError')?.value === true
     )).length;
@@ -1590,7 +1589,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
+  protected getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
     return bundleGroup.variables.filter(item => this.hasDeriveErrorResponsesForControl(item.control));
   }
 
@@ -1605,7 +1604,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     const selectedCoders = this.getSelectedCoders();
     const variableConfigs: VariableConfig[] = this.variablesFormArray.controls.map(control => {
       const variableId = control.get('variableId')?.value || '';
@@ -1620,8 +1619,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.showError('Kein Arbeitsbereich ausgewählt');
-      this.isLoading = false;
-      this.changeDetectorRef.markForCheck();
+      this.isLoading.set(false);
+
       return;
     }
 
@@ -1649,7 +1648,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const bundleId = c.get('bundleId')?.value;
       if (bundleId && !seenBundleIds.has(bundleId)) {
         seenBundleIds.add(bundleId);
-        const bundle = this.availableBundles.find(b => b.id === bundleId);
+        const bundle = this.availableBundles().find(b => b.id === bundleId);
         const bundleCaseOrderingMode = c.get('bundleCaseOrderingMode')?.value || bundle?.caseOrderingMode;
         assignedVariableBundles.push({
           id: bundleId,
@@ -1710,8 +1709,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (result: { success: boolean; message: string; jobsCreated?: number; jobs?: unknown[] }) => {
-        this.isLoading = false;
-        this.changeDetectorRef.markForCheck();
+        this.isLoading.set(false);
+
         if (result.success) {
           let translatedMessage: string;
           if (result.message) {
@@ -1734,8 +1733,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
-        this.isLoading = false;
-        this.changeDetectorRef.markForCheck();
+        this.isLoading.set(false);
+
         this.showError('Fehler beim Speichern der Kodierungsaufträge');
       }
     });
@@ -1743,10 +1742,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onClose(): void {
     this.clearTrainingRecoveryDraft();
-    this.close.emit();
+    this.trainingClosed.emit();
   }
 
-  openImportDialog(): void {
+  protected openImportDialog(): void {
     const dialogRef = this.dialog.open(JobDefinitionSelectionDialogComponent, {
       width: '1200px',
       height: '80vh',
@@ -1802,18 +1801,22 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     if (jobDef.assignedVariableBundles && jobDef.assignedVariableBundles.length > 0) {
-      const currentSelectedIds = Array.from(this.selectedBundleIds);
+      const currentSelectedIds = Array.from(this.selectedBundleIds());
       jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
         if (!currentSelectedIds.includes(b.id)) {
           this.addBundleVariables(b.id, defaultSampleCount, b.caseOrderingMode);
           if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
-            this.selectedBundleIds.add(b.id);
+            this.selectedBundleIds.update(value => {
+              const next = new Set(value);
+              next.add(b.id);
+              return next;
+            });
             bundlesAdded += 1;
           }
         }
         this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
       });
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
 
     this.updateGroupedVariables();

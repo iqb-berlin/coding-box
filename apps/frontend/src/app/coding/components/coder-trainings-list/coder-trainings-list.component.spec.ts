@@ -1,5 +1,6 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -59,10 +60,10 @@ describe('CoderTrainingsListComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         CoderTrainingsListComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         {
           provide: CodingPermissionsService,
           useValue: {
@@ -83,8 +84,8 @@ describe('CoderTrainingsListComponent', () => {
     fixture = TestBed.createComponent(CoderTrainingsListComponent);
     component = fixture.componentInstance;
     (component as unknown as { dialog: MatDialog }).dialog = matDialogMock as unknown as MatDialog;
-    component.originalData = trainings;
-    component.coderTrainings = trainings;
+    component.originalData.set(trainings);
+    component.coderTrainings.set(trainings);
     component.rebuildTrainingNameFilterOptions();
   });
 
@@ -101,20 +102,20 @@ describe('CoderTrainingsListComponent', () => {
     expect(component.getTrainingTableMeta(trainings[0])).toContain('ID 10');
     expect(component.getTrainingTableMeta(trainings[0])).toContain('2 Jobs');
 
-    component.selectedTrainingName = 'Duplicate Label';
+    component.selectedTrainingName.set('Duplicate Label');
     component.onTrainingNameFilterChange();
 
-    expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+    expect(component.coderTrainings().map(training => training.id)).toEqual([10, 11]);
   });
 
   it('keeps the selected training name filter across normal reloads', async () => {
-    component.selectedTrainingName = 'Duplicate Label';
+    component.selectedTrainingName.set('Duplicate Label');
     codingTrainingBackendServiceMock.getCoderTrainings.mockReturnValue(of(trainings));
 
     await component.loadCoderTrainings();
 
-    expect(component.selectedTrainingName).toBe('Duplicate Label');
-    expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+    expect(component.selectedTrainingName()).toBe('Duplicate Label');
+    expect(component.coderTrainings().map(training => training.id)).toEqual([10, 11]);
   });
 
   it('reuses an in-flight training list request', async () => {
@@ -193,9 +194,9 @@ describe('CoderTrainingsListComponent', () => {
       workspaceId === 1 ? workspace1$.asObservable() : of(workspace2Trainings)
     ));
 
-    component.workspaceId = 1;
+    fixture.componentRef.setInput('workspaceId', 1);
     component.ngOnInit();
-    component.workspaceId = 2;
+    fixture.componentRef.setInput('workspaceId', 2);
     component.ngOnChanges({
       workspaceId: {
         currentValue: 2,
@@ -209,6 +210,19 @@ describe('CoderTrainingsListComponent', () => {
 
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(1);
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(2);
-    expect(component.coderTrainings).toEqual(workspace2Trainings);
+    expect(component.coderTrainings()).toEqual(workspace2Trainings);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(CodingTrainingBackendService);
+    const response = backend.getCoderTrainings(1).pipe(delay(30));
+    jest.spyOn(backend, 'getCoderTrainings').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(CoderTrainingsListComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Unique Label');
   });
 });

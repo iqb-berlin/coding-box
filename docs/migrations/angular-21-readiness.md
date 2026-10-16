@@ -43,3 +43,14 @@ Checked 2026-09-24. Status: implemented and locally validated on branch
 The remaining Cypress live/replay specs were not run: they require an isolated
 test backend and data set. The local landing-page E2E does not validate those
 backend-backed flows.
+
+## Follow-up verification on 2026-09-25
+
+The template tracking, lifecycle, reactive code-selector and render-callback
+improvements are now included in `upgrade-angular-21` through commit `375c43f3`.
+That version passed 2,094 frontend tests, lint, a production build and 3 smoke tests.
+
+Further lifecycle fixes and an opt-in zoneless configuration are prepared
+separately on `refactor/angular-21-zoneless-preparation`. See
+[zoneless preparation and verification](angular-21-zoneless.md) for the current
+results, live replay coverage and outstanding authentication release gates.

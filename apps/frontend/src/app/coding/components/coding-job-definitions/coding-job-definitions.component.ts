@@ -1,12 +1,7 @@
 import {
-  Component,
-  OnDestroy,
-  OnInit,
-  inject,
-  Output,
-  EventEmitter,
-  Input
+  Component, OnDestroy, OnInit, inject, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule } from '@angular/material/table';
@@ -15,7 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
@@ -87,6 +82,7 @@ interface Coder {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
   styleUrls: ['./coding-job-definitions.component.scss'],
@@ -107,6 +103,8 @@ interface Coder {
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   readonly permissions = inject(CodingPermissionsService);
+  private readonly destroyRef = inject(DestroyRef);
+
   private codingJobBackendService = inject(CodingJobBackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -115,20 +113,23 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
   private sessionRecoveryService = inject(SessionRecoveryService);
-  private destroy$ = new Subject<void>();
 
-  jobDefinitions: JobDefinition[] = [];
-  isLoading = false;
-  isBulkCreating = false;
-  refreshingDefinitionIds = new Set<number>();
-  exportingDistributionDefinitionIds = new Set<number>();
-  coders: Coder[] = [];
-  showInfo = false;
+  private destroy$ = new Subject<void>();
+  private destroyed = false;
+  private bulkCreationDialogRef?: MatDialogRef<CodingJobBulkCreationDialogComponent>;
+
+  readonly jobDefinitions = signal<JobDefinition[]>([]);
+  readonly isLoading = signal(false);
+  protected readonly isBulkCreating = signal(false);
+  readonly refreshingDefinitionIds = signal(new Set<number>());
+  readonly exportingDistributionDefinitionIds = signal(new Set<number>());
+  readonly coders = signal<Coder[]>([]);
+  protected readonly showInfo = signal(false);
   private readonly variablePreviewLimit = 12;
   private expandedVariableDefinitions = new WeakSet<JobDefinition>();
   private definitionDialogOpen = false;
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'actions',
     'identity',
     'status',
@@ -137,10 +138,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     'bundlesCount'
   ];
 
-  @Output() bulkCreationCompleted = new EventEmitter<void>();
-  @Output() jobDefinitionChanged = new EventEmitter<void>();
-  @Input() selectionMode = false;
-  @Output() definitionSelected = new EventEmitter<JobDefinition>();
+  readonly bulkCreationCompleted = output<void>();
+  readonly jobDefinitionChanged = output<void>();
+  readonly selectionMode = input(false);
+  readonly definitionSelected = output<JobDefinition>();
 
   ngOnInit(): void {
     if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
@@ -153,6 +154,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.bulkCreationDialogRef?.close();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -170,16 +173,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: coders => {
-          this.coders = coders || [];
+          this.coders.set(coders || []);
         },
         error: () => {
-          this.coders = [];
+          this.coders.set([]);
         }
       });
   }
 
   private loadJobDefinitions(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -188,7 +191,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           'coding-job-definitions.messages.snackbar.no-workspace'
         )
       );
-      this.isLoading = false;
+      this.isLoading.set(false);
       return;
     }
 
@@ -197,8 +200,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: definitions => {
-          this.jobDefinitions = definitions;
-          this.isLoading = false;
+          this.jobDefinitions.set(definitions);
+          this.isLoading.set(false);
         },
         error: error => {
           this.showError(
@@ -206,23 +209,23 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
               error: error.message
             })
           );
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
-  getCoderNames(definition: JobDefinition): string {
+  protected getCoderNames(definition: JobDefinition): string {
     if (!definition.assignedCoders || definition.assignedCoders.length === 0) {
       return '-';
     }
     const coderNames = definition.assignedCoders
-      .map(id => this.coders.find(c => c.id === id)?.name)
+      .map(id => this.coders().find(c => c.id === id)?.name)
       .filter(name => name)
       .join(', ');
     return coderNames || '-';
   }
 
-  getBundleNames(definition: JobDefinition): string {
+  protected getBundleNames(definition: JobDefinition): string {
     if (
       !definition.assignedVariableBundles ||
       definition.assignedVariableBundles.length === 0
@@ -246,7 +249,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  getVariableItems(definition: JobDefinition): string[] {
+  protected getVariableItems(definition: JobDefinition): string[] {
     if (!definition.assignedVariables || definition.assignedVariables.length === 0) {
       return [];
     }
@@ -260,7 +263,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return variable.includeDeriveError ? `${displayName} (DERIVE_ERROR)` : displayName;
   }
 
-  getVisibleVariableItems(definition: JobDefinition): string[] {
+  protected getVisibleVariableItems(definition: JobDefinition): string[] {
     const variables = this.getVariableItems(definition);
     if (this.isVariableListExpanded(definition)) {
       return variables;
@@ -268,19 +271,19 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return variables.slice(0, this.variablePreviewLimit);
   }
 
-  hasHiddenVariables(definition: JobDefinition): boolean {
+  protected hasHiddenVariables(definition: JobDefinition): boolean {
     return this.getVariableItems(definition).length > this.variablePreviewLimit;
   }
 
-  getHiddenVariableCount(definition: JobDefinition): number {
+  protected getHiddenVariableCount(definition: JobDefinition): number {
     return Math.max(0, this.getVariableItems(definition).length - this.variablePreviewLimit);
   }
 
-  isVariableListExpanded(definition: JobDefinition): boolean {
+  protected isVariableListExpanded(definition: JobDefinition): boolean {
     return this.expandedVariableDefinitions.has(definition);
   }
 
-  toggleVariableList(definition: JobDefinition, event: Event): void {
+  protected toggleVariableList(definition: JobDefinition, event: Event): void {
     event.stopPropagation();
     if (this.expandedVariableDefinitions.has(definition)) {
       this.expandedVariableDefinitions.delete(definition);
@@ -289,7 +292,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.expandedVariableDefinitions.add(definition);
   }
 
-  getStatusLabel(status?: string): string {
+  protected getStatusLabel(status?: string): string {
     if (!status) {
       return '-';
     }
@@ -303,15 +306,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getDefinitionCountByStatus(
+  protected getDefinitionCountByStatus(
     status: NonNullable<JobDefinition['status']>
   ): number {
-    return this.jobDefinitions.filter(definition => definition.status === status)
+    return this.jobDefinitions().filter(definition => definition.status === status)
       .length;
   }
 
   getDefinitionsReadyForJobsCount(): number {
-    return this.jobDefinitions.filter(definition => this.canCreateCodingJobs(definition)).length;
+    return this.jobDefinitions().filter(definition => this.canCreateCodingJobs(definition)).length;
   }
 
   getStatusHint(status?: JobDefinition['status']): string {
@@ -324,7 +327,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getDefinitionStatusHint(definition: JobDefinition): string {
+  protected getDefinitionStatusHint(definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
 
     if (definition.status === 'approved' && createdJobsCount === undefined) {
@@ -343,7 +346,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.getStatusHint(definition.status);
   }
 
-  getDefinitionWorkflowLabel(definition: JobDefinition): string {
+  protected getDefinitionWorkflowLabel(definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
     const label = this.getDefinitionDisplayLabel(definition);
 
@@ -380,7 +383,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getActionAriaLabel(action: string, definition: JobDefinition): string {
+  protected getActionAriaLabel(action: string, definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
     const actionKey = action === 'jobs-already-created' && createdJobsCount === undefined ?
       'jobs-count-unavailable' :
@@ -400,7 +403,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return `${actionLabel}: ${this.getDefinitionDisplayLabel(definition)}`;
   }
 
-  getDefinitionDisplayLabel(definition: JobDefinition): string {
+  protected getDefinitionDisplayLabel(definition: JobDefinition): string {
     return getJobDefinitionDisplayLabel(definition);
   }
 
@@ -439,19 +442,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.getBlockingCreatedJobsCount(definition) === 0;
   }
 
-  canRefreshDefinition(definition: JobDefinition): boolean {
-    if (!this.permissions.canEdit(definition)) return false;
+  protected canRefreshDefinition(definition: JobDefinition): boolean {
     const createdJobsCount = this.getCreatedJobsCount(definition);
     return definition.status === 'approved' && createdJobsCount !== undefined && createdJobsCount > 0;
   }
 
-  canViewDistributionSummary(definition: JobDefinition): boolean {
+  protected canViewDistributionSummary(definition: JobDefinition): boolean {
     const createdJobsCount = this.getCreatedJobsCount(definition);
     return this.hasDistributionSnapshots(definition) ||
       (createdJobsCount !== undefined && createdJobsCount > 0);
   }
 
-  canExportDistributionCsv(definition: JobDefinition): boolean {
+  protected canExportDistributionCsv(definition: JobDefinition): boolean {
     return !!definition.id && this.hasDistributionSnapshots(definition);
   }
 
@@ -470,15 +472,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return definition.distributionSnapshots![definition.distributionSnapshots!.length - 1];
   }
 
-  isRefreshingDefinition(definition: JobDefinition): boolean {
-    return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
+  protected isRefreshingDefinition(definition: JobDefinition): boolean {
+    return !!definition.id && this.refreshingDefinitionIds().has(definition.id);
   }
 
-  isExportingDistribution(definition: JobDefinition): boolean {
-    return !!definition.id && this.exportingDistributionDefinitionIds.has(definition.id);
+  protected isExportingDistribution(definition: JobDefinition): boolean {
+    return !!definition.id && this.exportingDistributionDefinitionIds().has(definition.id);
   }
 
-  getEditDefinitionLabel(definition: JobDefinition): string {
+  protected getEditDefinitionLabel(definition: JobDefinition): string {
     return this.translateService.instant(
       this.canModifyDefinition(definition) ?
         'coding-job-definitions.actions.edit' :
@@ -486,11 +488,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getEditDefinitionIcon(definition: JobDefinition): string {
+  protected getEditDefinitionIcon(definition: JobDefinition): string {
     return this.canModifyDefinition(definition) ? 'edit' : 'visibility';
   }
 
-  getEditDefinitionTooltip(definition: JobDefinition): string {
+  protected getEditDefinitionTooltip(definition: JobDefinition): string {
     if (this.canModifyDefinition(definition)) {
       return this.translateService.instant('coding-job-definitions.actions.edit');
     }
@@ -498,7 +500,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.translateService.instant('coding-job-definitions.actions.view-readonly');
   }
 
-  getCreateCodingJobsTooltip(definition: JobDefinition): string {
+  protected getCreateCodingJobsTooltip(definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
 
     if (createdJobsCount === undefined) {
@@ -517,7 +519,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.translateService.instant('coding-job-definitions.actions.create-coding-jobs');
   }
 
-  getCreateCodingJobsActionLabel(definition: JobDefinition): string {
+  protected getCreateCodingJobsActionLabel(definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
 
     if (createdJobsCount === undefined) {
@@ -532,7 +534,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getDeleteDefinitionTooltip(definition: JobDefinition): string {
+  protected getDeleteDefinitionTooltip(definition: JobDefinition): string {
     if (this.canDeleteDefinition(definition)) {
       return this.translateService.instant('coding-job-definitions.actions.delete');
     }
@@ -550,7 +552,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
-  createDefinition(): void {
+  protected createDefinition(): void {
     if (!this.permissions.canCreate) return;
     const dialogData: CodingJobDefinitionDialogData = {
       isEdit: false,
@@ -560,8 +562,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.openDefinitionDialog(dialogData);
   }
 
-  selectDefinition(definition: JobDefinition): void {
-    if (this.selectionMode) {
+  protected selectDefinition(definition: JobDefinition): void {
+    if (this.selectionMode()) {
       this.definitionSelected.emit(definition);
     }
   }
@@ -602,7 +604,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private restoreRecoveredDefinitionDialog(): void {
-    if (this.selectionMode || this.definitionDialogOpen) {
+    if (this.selectionMode() || this.definitionDialogOpen) {
       return;
     }
 
@@ -648,7 +650,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       });
   }
 
-  submitForReview(definition: JobDefinition): void {
+  protected submitForReview(definition: JobDefinition): void {
     if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
@@ -665,7 +667,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.codingJobBackendService
       .updateJobDefinition(workspaceId, definition.id, {
         status: 'pending_review'
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -689,7 +691,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       });
   }
 
-  approveDefinition(definition: JobDefinition): void {
+  protected approveDefinition(definition: JobDefinition): void {
     if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
@@ -704,7 +706,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .approveJobDefinition(workspaceId, definition.id, 'approved')
+      .approveJobDefinition(workspaceId, definition.id, 'approved').pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -728,7 +730,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       });
   }
 
-  rejectDefinition(definition: JobDefinition): void {
+  protected rejectDefinition(definition: JobDefinition): void {
     if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
@@ -743,7 +745,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
+      .updateJobDefinition(workspaceId, definition.id, { status: 'draft' }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -787,7 +789,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .deleteJobDefinition(workspaceId, definition.id)
+      .deleteJobDefinition(workspaceId, definition.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -827,7 +829,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.refreshingDefinitionIds.add(definition.id);
+    this.refreshingDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(definition.id!);
+      return next;
+    });
     try {
       const preview = await firstValueFrom(
         this.codingJobBackendService.previewJobDefinitionRefresh(
@@ -858,7 +864,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         )
       );
     } finally {
-      this.refreshingDefinitionIds.delete(definition.id);
+      this.refreshingDefinitionIds.update(value => {
+        const next = new Set(value);
+        next.delete(definition.id!);
+        return next;
+      });
     }
   }
 
@@ -875,7 +885,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         definitionLabel: this.getDefinitionDisplayLabel(definition),
         snapshot: this.getLatestDistributionSnapshot(definition),
         snapshots: definition.distributionSnapshots || [],
-        coders: this.coders,
+        coders: this.coders(),
         createdJobsCount: this.getCreatedJobsCount(definition)
       },
       autoFocus: false
@@ -906,12 +916,20 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.exportingDistributionDefinitionIds.add(definition.id);
+    this.exportingDistributionDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(definition.id!);
+      return next;
+    });
     this.codingJobBackendService
       .exportJobDefinitionDistributionCsv(workspaceId, definition.id)
       .pipe(
         finalize(() => {
-          this.exportingDistributionDefinitionIds.delete(definition.id!);
+          this.exportingDistributionDefinitionIds.update(value => {
+            const next = new Set(value);
+            next.delete(definition.id!);
+            return next;
+          });
         }),
         takeUntil(this.destroy$)
       )
@@ -937,7 +955,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     workspaceId: number,
     jobDefinitionId: number
   ): Promise<void> {
-    this.refreshingDefinitionIds.add(jobDefinitionId);
+    this.refreshingDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(jobDefinitionId);
+      return next;
+    });
     try {
       const result = await firstValueFrom(
         this.codingJobBackendService.applyJobDefinitionRefresh(
@@ -965,7 +987,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         )
       );
     } finally {
-      this.refreshingDefinitionIds.delete(jobDefinitionId);
+      this.refreshingDefinitionIds.update(value => {
+        const next = new Set(value);
+        next.delete(jobDefinitionId);
+        return next;
+      });
     }
   }
 
@@ -997,14 +1023,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     let preview: JobDefinitionDistributionPreviewResponse;
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
     try {
       preview = await firstValueFrom(
         this.codingJobBackendService.previewCodingJobFromDefinition(
           workspaceId,
           definition.id
-        )
+        ).pipe(takeUntil(this.destroy$))
       );
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.showError(
         this.translateService.instant(
           'coding-job-definitions.messages.snackbar.create-preview-failed',
@@ -1013,6 +1041,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       );
       return;
     }
+
+    if (!isCurrentContext()) return;
 
     const selectedCoders = this.mapPreviewSelectedCoders(preview.selectedCoders);
     if (selectedCoders.length === 0) {
@@ -1053,10 +1083,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       width: '1200px',
       data: dialogData
     });
+    this.bulkCreationDialogRef = dialogRef;
 
     const result = await firstValueFrom(dialogRef.afterClosed());
+    if (this.bulkCreationDialogRef === dialogRef) {
+      this.bulkCreationDialogRef = undefined;
+    }
 
-    if (result && result.confirmed) {
+    if (isCurrentContext() && result && result.confirmed) {
       await this.createBulkJobsFromDefinition(
         workspaceId,
         definition.id
@@ -1085,7 +1119,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     workspaceId: number,
     jobDefinitionId: number
   ): Promise<void> {
-    this.isBulkCreating = true;
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
+    this.isBulkCreating.set(true);
     try {
       const result = await firstValueFrom(
         this.codingJobBackendService.createCodingJobFromDefinition(
@@ -1093,6 +1128,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           jobDefinitionId
         )
       );
+
+      if (!isCurrentContext()) return;
 
       if (result && result.success) {
         this.snackBar.open(
@@ -1122,6 +1159,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         );
       }
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.snackBar.open(
         this.translateService.instant(
           'coding-job-definition-dialog.snackbars.bulk-creation-failed',
@@ -1131,7 +1169,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         { duration: 5000 }
       );
     } finally {
-      this.isBulkCreating = false;
+      this.isBulkCreating.set(false);
     }
 
     this.loadJobDefinitions();

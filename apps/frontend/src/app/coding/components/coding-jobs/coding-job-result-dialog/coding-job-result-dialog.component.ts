@@ -1,9 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit,
-  ViewChild,
-  inject,
-  HostListener
+  Component, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
 } from 'rxjs';
@@ -21,7 +19,7 @@ import { FormsModule } from '@angular/forms';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
-import { CommonModule, NgClass } from '@angular/common';
+import { CommonModule } from '@angular/common';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -99,6 +97,7 @@ interface MissingPreviewLookup {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-result-dialog',
   templateUrl: './coding-job-result-dialog.component.html',
   styleUrls: ['./coding-job-result-dialog.component.scss'],
@@ -116,13 +115,22 @@ interface MissingPreviewLookup {
     MatProgressSpinner,
     MatButtonModule,
     MatIcon,
-    NgClass,
     MatTooltip
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator?: MatPaginator;
+  dialogRef = inject<MatDialogRef<CodingJobResultDialogComponent>>(MatDialogRef);
+  data = inject<{
+    codingJob: CodingJob;
+    workspaceId: number;
+    canApplyResults?: boolean;
+    canEdit?: boolean;
+  }>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly sort = viewChild(MatSort);
+  readonly paginator = viewChild(MatPaginator);
 
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
@@ -132,11 +140,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private router = inject(Router);
   private dialog = inject(MatDialog);
 
-  isLoading = true;
-  isNotesUnavailable = false;
-  isMissingProfileUnavailable = false;
+  readonly isLoading = signal(true);
+  readonly isNotesUnavailable = signal(false);
+  protected readonly isMissingProfileUnavailable = signal(false);
   dataSource = new MatTableDataSource<CodingResult>([]);
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'unitName',
     'testPerson',
     'variableId',
@@ -157,18 +165,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     [-4, 'mci']
   ]);
 
-  readonly pageSize = 50;
-  readonly pageSizeOptions = [25, 50, 100];
+  protected readonly pageSize = 50;
+  protected readonly pageSizeOptions = [25, 50, 100];
 
-  unitNameFilter = '';
-  variableFilter = '';
-  codingIssueFilter = '';
-  testPersonFilter = '';
-
-  constructor(
-    public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number; canApplyResults?: boolean; canEdit?: boolean }
-  ) { }
+  protected readonly unitNameFilter = signal('');
+  protected readonly variableFilter = signal('');
+  protected readonly codingIssueFilter = signal('');
+  readonly testPersonFilter = signal('');
 
   ngOnInit(): void {
     this.loadCodingResults();
@@ -199,18 +202,21 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.refreshSubject.next();
   }
 
+  private readonly synchronizeTable = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+    this.dataSource.paginator = this.paginator() ?? null;
+  });
+
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator || null;
     this.dataSource.sortingDataAccessor = this.createSortingDataAccessor();
     this.dataSource.filterPredicate = this.createFilterPredicate();
     this.applyFilters();
   }
 
   loadCodingResults(): void {
-    this.isLoading = true;
-    this.isNotesUnavailable = false;
-    this.isMissingProfileUnavailable = false;
+    this.isLoading.set(true);
+    this.isNotesUnavailable.set(false);
+    this.isMissingProfileUnavailable.set(false);
 
     forkJoin({
       units: this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id),
@@ -218,7 +224,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       missingProfile: this.getMissingProfileForJob(),
       notes: this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).pipe(
         catchError(() => {
-          this.isNotesUnavailable = true;
+          this.isNotesUnavailable.set(true);
           this.snackBar.open('Notizen konnten nicht geladen werden. Ergebnisse werden trotzdem angezeigt.', 'Schließen', { duration: 4000 });
           return of({});
         })
@@ -226,7 +232,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }).pipe(
       takeUntil(this.destroy$),
       finalize(() => {
-        this.isLoading = false;
+        this.isLoading.set(false);
       })
     ).subscribe({
       next: ({
@@ -239,9 +245,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           notes as Record<string, string>,
           missingPreviewLookup
         ));
-        this.isMissingProfileUnavailable = this.getUnresolvedMissingCount() > 0;
+        this.isMissingProfileUnavailable.set(this.getUnresolvedMissingCount() > 0);
         this.applyFilters();
-        this.paginator?.firstPage();
+        this.paginator()?.firstPage();
       },
       error: () => {
         this.dataSource.data = [];
@@ -489,65 +495,65 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   applyFilters(): void {
     const filterObj = {
-      unitName: this.unitNameFilter,
-      variable: this.variableFilter,
-      codingIssue: this.codingIssueFilter,
-      testPerson: this.testPersonFilter
+      unitName: this.unitNameFilter(),
+      variable: this.variableFilter(),
+      codingIssue: this.codingIssueFilter(),
+      testPerson: this.testPersonFilter()
     };
     this.dataSource.filter = JSON.stringify(filterObj);
-    this.paginator?.firstPage();
+    this.paginator()?.firstPage();
   }
 
-  onUnitNameFilterChange(): void {
+  protected onUnitNameFilterChange(): void {
     this.applyFilters();
   }
 
-  onVariableFilterChange(): void {
+  protected onVariableFilterChange(): void {
     this.applyFilters();
   }
 
-  onCodingIssueFilterChange(): void {
+  protected onCodingIssueFilterChange(): void {
     this.applyFilters();
   }
 
-  onTestPersonFilterChange(): void {
+  protected onTestPersonFilterChange(): void {
     this.applyFilters();
   }
 
-  clearUnitNameFilter(): void {
-    this.unitNameFilter = '';
+  protected clearUnitNameFilter(): void {
+    this.unitNameFilter.set('');
     this.applyFilters();
   }
 
-  clearVariableFilter(): void {
-    this.variableFilter = '';
+  protected clearVariableFilter(): void {
+    this.variableFilter.set('');
     this.applyFilters();
   }
 
-  clearCodingIssueFilter(): void {
-    this.codingIssueFilter = '';
+  protected clearCodingIssueFilter(): void {
+    this.codingIssueFilter.set('');
     this.applyFilters();
   }
 
-  clearTestPersonFilter(): void {
-    this.testPersonFilter = '';
+  protected clearTestPersonFilter(): void {
+    this.testPersonFilter.set('');
     this.applyFilters();
   }
 
-  clearAllFilters(): void {
-    this.unitNameFilter = '';
-    this.variableFilter = '';
-    this.codingIssueFilter = '';
-    this.testPersonFilter = '';
+  protected clearAllFilters(): void {
+    this.unitNameFilter.set('');
+    this.variableFilter.set('');
+    this.codingIssueFilter.set('');
+    this.testPersonFilter.set('');
     this.applyFilters();
   }
 
-  hasActiveFilters(): boolean {
+  protected hasActiveFilters(): boolean {
     return [
-      this.unitNameFilter,
-      this.variableFilter,
-      this.codingIssueFilter,
-      this.testPersonFilter
+      this.unitNameFilter(),
+      this.variableFilter(),
+      this.codingIssueFilter(),
+      this.testPersonFilter()
     ].some(value => value.trim().length > 0);
   }
 
@@ -555,7 +561,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return this.dataSource.filteredData.length;
   }
 
-  getTotalResultCount(): number {
+  protected getTotalResultCount(): number {
     return this.dataSource.data.length;
   }
 
@@ -563,7 +569,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return this.dataSource.data.filter(result => this.hasCode(result)).length;
   }
 
-  getReviewIssueCount(): number {
+  protected getReviewIssueCount(): number {
     return this.dataSource.data.filter(result => this.isCodingIssueOption(result)).length;
   }
 
@@ -572,7 +578,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   canApplyCodingResults(): boolean {
-    return !this.isLoading &&
+    return !this.isLoading() &&
       this.data.codingJob.status !== 'results_applied' &&
       this.isCodingJobFreshnessApplyable() &&
       !this.data.codingJob.training?.id &&
@@ -608,7 +614,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return freshnessStatus !== 'stale_source';
   }
 
-  getOtherCodersTooltip(result: CodingResult): string {
+  protected getOtherCodersTooltip(result: CodingResult): string {
     const otherCoders = result.otherCoders || [];
     if (otherCoders.length === 0) {
       return 'Doppelkodierung erkannt';
@@ -629,17 +635,19 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }
     });
 
-    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
       if (!dialogResult) {
         return;
       }
 
-      this.isLoading = true;
+      this.isLoading.set(true);
+
       this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
         overwriteExisting: dialogResult.overwriteExisting
-      }).subscribe({
+      }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: result => {
-          this.isLoading = false;
+          this.isLoading.set(false);
+
           let message = this.translateService.instant(result.messageKey, result.messageParams || {});
           if (result.success) {
             this.hasAppliedResults = true;
@@ -672,14 +680,15 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: error => {
-          this.isLoading = false;
+          this.isLoading.set(false);
+
           this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
         }
       });
     });
   }
 
-  getAggregationSettingsText(): string {
+  protected getAggregationSettingsText(): string {
     const job = this.data.codingJob;
 
     if (!job.aggregationSettingsVersion) {
@@ -847,7 +856,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return null;
   }
 
-  isCodingIssueOption(result: CodingResult): boolean {
+  protected isCodingIssueOption(result: CodingResult): boolean {
     return result.codingIssueOption === -1 || result.codingIssueOption === -2;
   }
 
@@ -871,7 +880,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return 'Kodierungs-Hinweis überprüfen';
   }
 
-  getEditCodingSchemeTooltip(result: CodingResult): string {
+  protected getEditCodingSchemeTooltip(result: CodingResult): string {
     if (!this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result)) {
       return 'Kodierungsschema kann erst im Status "Zur Überprüfung" bearbeitet werden';
     }
@@ -898,7 +907,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return 'Unknown';
   }
 
-  getCellClasses(result: CodingResult): string {
+  protected getCellClasses(result: CodingResult): string {
     if (this.isCodingIssueOption(result)) {
       if (result.givenCode !== undefined && result.givenCode !== null) {
         return 'uncertain-with-code';
@@ -962,7 +971,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
-  editCodingScheme(result: CodingResult): void {
+  protected editCodingScheme(result: CodingResult): void {
     if (!result || !this.isNewCodeNeeded(result)) {
       this.snackBar.open('Nur "Neuer Code erforderlich" Fälle können bearbeitet werden', 'Schließen', { duration: 3000 });
       return;
@@ -983,7 +992,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
           this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
@@ -1004,7 +1013,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           }
         });
 
-        dialogRef.afterClosed().subscribe(dialogResult => {
+        dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(dialogResult => {
           if (dialogResult === true) {
             this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
             this.loadCodingResults();

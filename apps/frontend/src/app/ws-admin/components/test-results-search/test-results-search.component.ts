@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, OnInit
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -50,6 +51,7 @@ interface QuickSearchTypeOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-search',
   templateUrl: './test-results-search.component.html',
   styleUrls: ['./test-results-search.component.scss'],
@@ -66,9 +68,23 @@ interface QuickSearchTypeOption {
   ]
 })
 export class TestResultsSearchComponent implements OnInit, OnDestroy {
-  searchText = '';
-  isLoading = false;
-  hasSearched = false;
+  private dialogRef = inject<MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>>(MatDialogRef);
+  protected data = inject<{
+    title: string;
+  }>(MAT_DIALOG_DATA);
+
+  private testResultService = inject(TestResultService);
+  private appService = inject(AppService);
+  private statisticsService = inject(CodingStatisticsService);
+  private snackBar = inject(MatSnackBar);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
+  protected searchText = '';
+  protected isLoading = false;
+  protected hasSearched = false;
   selectedKinds = new Set<QuickSearchResultKind>([
     'person',
     'booklet',
@@ -76,28 +92,19 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     'response'
   ]);
 
-  readonly typeOptions: QuickSearchTypeOption[] = [
+  protected readonly typeOptions: QuickSearchTypeOption[] = [
     { kind: 'person', label: 'Personen', icon: 'person' },
     { kind: 'booklet', label: 'Testhefte', icon: 'menu_book' },
     { kind: 'unit', label: 'Aufgaben', icon: 'extension' },
     { kind: 'response', label: 'Antworten', icon: 'question_answer' }
   ];
 
-  readonly MIN_SEARCH_LENGTH = 2;
+  protected readonly MIN_SEARCH_LENGTH = 2;
   readonly SEARCH_DEBOUNCE_TIME = 350;
 
   results: QuickSearchResult = this.createEmptyResult('');
   private searchSubject = new Subject<string>();
   private searchSubscription?: Subscription;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: { title: string },
-    private testResultService: TestResultService,
-    private appService: AppService,
-    private statisticsService: CodingStatisticsService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject
@@ -109,11 +116,11 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     this.searchSubscription?.unsubscribe();
   }
 
-  onSearchChange(): void {
+  protected onSearchChange(): void {
     this.searchSubject.next(this.searchText);
   }
 
-  toggleKind(kind: QuickSearchResultKind): void {
+  protected toggleKind(kind: QuickSearchResultKind): void {
     if (this.selectedKinds.has(kind)) {
       if (this.selectedKinds.size === 1) {
         return;
@@ -124,11 +131,11 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
   }
 
-  isKindSelected(kind: QuickSearchResultKind): boolean {
+  protected isKindSelected(kind: QuickSearchResultKind): boolean {
     return this.selectedKinds.has(kind);
   }
 
-  getVisibleResults(kind: QuickSearchResultKind): QuickSearchResultItem[] {
+  protected getVisibleResults(kind: QuickSearchResultKind): QuickSearchResultItem[] {
     if (!this.selectedKinds.has(kind)) {
       return [];
     }
@@ -147,17 +154,17 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
   }
 
-  getTotal(kind: QuickSearchResultKind): number {
+  protected getTotal(kind: QuickSearchResultKind): number {
     return this.results.totals[kind] || 0;
   }
 
-  getVisibleCount(): number {
+  protected getVisibleCount(): number {
     return this.typeOptions
       .map(option => this.getVisibleResults(option.kind).length)
       .reduce((sum, count) => sum + count, 0);
   }
 
-  openInTable(item: QuickSearchResultItem): void {
+  protected openInTable(item: QuickSearchResultItem): void {
     this.dialogRef.close({
       action: 'table',
       item,
@@ -165,14 +172,14 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     });
   }
 
-  openInBrowser(item: QuickSearchResultItem): void {
+  protected openInBrowser(item: QuickSearchResultItem): void {
     this.dialogRef.close({
       action: 'browser',
       item
     });
   }
 
-  replay(item: QuickSearchResultItem): void {
+  protected replay(item: QuickSearchResultItem): void {
     const responseId = item.responseId;
     if (!responseId || !this.appService.selectedWorkspaceId) {
       this.snackBar.open(
@@ -184,7 +191,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, responseId)
+      .getReplayUrl(this.appService.selectedWorkspaceId, responseId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           if (result?.replayUrl) {
@@ -207,7 +214,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
       });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
@@ -217,21 +224,25 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
       this.results = this.createEmptyResult(trimmedQuery);
       this.hasSearched = false;
       this.isLoading = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
     this.isLoading = true;
     this.hasSearched = true;
+    this.changeDetectorRef.markForCheck();
     this.testResultService
-      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8)
+      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: results => {
           this.results = results || this.createEmptyResult(trimmedQuery);
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.results = this.createEmptyResult(trimmedQuery);
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }

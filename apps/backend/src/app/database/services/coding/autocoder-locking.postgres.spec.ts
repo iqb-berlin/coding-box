@@ -13,6 +13,7 @@ import {
 } from '../shared/workspace-files-lock.util';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
+import { JournalEntry } from '../../entities/journal-entry.entity';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
@@ -36,7 +37,7 @@ describePostgres('Autocoder PostgreSQL locking', () => {
     dataSource = new DataSource({
       type: 'postgres',
       ...postgresConfig,
-      entities: [Workspace, FileUpload],
+      entities: [Workspace, FileUpload, JournalEntry],
       extra: { max: 2 }
     });
     await dataSource.initialize();
@@ -298,6 +299,8 @@ describePostgres('Autocoder PostgreSQL locking', () => {
       expect(workspace.settings).toMatchObject({
         ignoredUnits: ['UNIT-NEWLY-IGNORED']
       });
+      expect(await dataSource.getRepository(JournalEntry).findBy({ workspaceId }))
+        .toContainEqual(expect.objectContaining({ eventType: 'WORKSPACE_SETTINGS_CHANGED', result: 'success' }));
     } finally {
       try {
         if (autocoder && filesLocked) {
@@ -309,6 +312,7 @@ describePostgres('Autocoder PostgreSQL locking', () => {
             await unlockWorkspaceTestResultsMutation(autocoder, workspaceId);
           }
         } finally {
+          await dataSource.getRepository(JournalEntry).delete({ workspaceId });
           await dataSource.getRepository(Workspace).delete({ id: workspaceId });
         }
       }
