@@ -51,6 +51,14 @@ export function createReplayHarness(environment = process.env) {
       return prepareImportedCoding(activeState);
     },
 
+    async prepareOwnership() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Ownership setup requires the isolated authentication fixture.');
+      }
+      const { prepareOwnership } = await import('./workflow-fixture.mjs');
+      return prepareOwnership(activeState);
+    },
+
     async verifyAuditRollback() {
       if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
         throw new Error('Audit rollback verification requires the isolated authentication fixture.');

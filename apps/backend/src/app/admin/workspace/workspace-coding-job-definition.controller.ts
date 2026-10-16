@@ -192,12 +192,12 @@ export class WorkspaceCodingJobDefinitionController {
   async createJobDefinition(
     @WorkspaceId() workspace_id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) createDto: CreateJobDefinitionDto,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.createJobDefinition(
       createDto,
       workspace_id,
-      req?.user?.id
+      ownershipRequest.user?.id
     );
   }
 
@@ -370,9 +370,9 @@ export class WorkspaceCodingJobDefinitionController {
     @WorkspaceId() workspace_id: number,
       @Param('id', ParseIntPipe) id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto, req?.user?.id);
+    return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto, ownershipRequest.user?.id);
   }
 
   @Put(':workspace_id/coding/job-definitions/:id/approve')
@@ -392,9 +392,9 @@ export class WorkspaceCodingJobDefinitionController {
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) approveDto: ApproveJobDefinitionDto,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.approveJobDefinition(id, workspace_id, approveDto, req?.user?.id);
+    return this.jobDefinitionService.approveJobDefinition(id, workspace_id, approveDto, ownershipRequest.user?.id);
   }
 
   @Delete(':workspace_id/coding/job-definitions/:id')
@@ -416,9 +416,9 @@ export class WorkspaceCodingJobDefinitionController {
   async deleteJobDefinition(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
-    await this.jobDefinitionService.deleteJobDefinition(id, workspace_id, req?.user?.id);
+    await this.jobDefinitionService.deleteJobDefinition(id, workspace_id, ownershipRequest.user?.id);
     return { success: true, message: 'Job definition deleted successfully' };
   }
 
@@ -434,12 +434,12 @@ export class WorkspaceCodingJobDefinitionController {
   async createCodingJobFromDefinition(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<Awaited<ReturnType<JobDefinitionService['createCodingJobFromDefinition']>>> {
     return this.jobDefinitionService.createCodingJobFromDefinition(
       id,
       workspace_id,
-      req?.user?.id
+      ownershipRequest.user?.id
     );
   }
 
@@ -651,12 +651,12 @@ export class WorkspaceCodingJobDefinitionController {
   async applyJobDefinitionRefresh(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     return this.jobDefinitionService.refreshCodingJobFromDefinition(
       id,
       workspace_id,
-      req?.user?.id
+      ownershipRequest.user?.id
     );
   }
 
@@ -677,13 +677,13 @@ export class WorkspaceCodingJobDefinitionController {
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
-      @Req() req?: { user?: { id: number } }
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     return this.jobDefinitionService.refreshCodingJobFromUpdatedDefinition(
       id,
       workspace_id,
       updateDto,
-      req?.user?.id
+      ownershipRequest.user?.id
     );
   }
 }

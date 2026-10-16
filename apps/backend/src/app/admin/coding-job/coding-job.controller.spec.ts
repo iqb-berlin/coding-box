@@ -17,13 +17,13 @@ describe('CodingJobController', () => {
     await expect(controller.createCodingJob(47, {
       name: 'Direct job',
       jobDefinitionId: 9
-    } as never)).rejects.toBeInstanceOf(BadRequestException);
+    } as never, { user: { id: 7 } } as never)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
   });
 
   it('rejects direct admin coding job creates without a request body', async () => {
-    await expect(controller.createCodingJob(47, undefined as never))
+    await expect(controller.createCodingJob(47, undefined as never, { user: { id: 7 } } as never))
       .rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();

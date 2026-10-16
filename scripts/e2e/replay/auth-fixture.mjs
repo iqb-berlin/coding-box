@@ -25,29 +25,34 @@ export async function setupCodingFixture(state, environment) {
     const text = await response.text();
     return text ? JSON.parse(text) : null;
   };
-  const userId = Number(
-    await api('/admin/users', {
-      username: 'coding-e2e',
-      identity: '11111111-1111-4111-8111-111111111111',
-      issuer: config.issuer,
-      isAdmin: true,
-      firstName: 'Coding',
-      lastName: 'E2E'
-    })
-  );
-  if (!Number.isInteger(userId) || userId <= 0)
-    throw new Error('Invalid coding fixture user id');
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
+  // Logins may change display usernames. Reuse the OIDC principal across specs.
+  const ensureUser = async user => {
+    const sqlString = value => "'" + value.replaceAll("'", "''") + "'";
+    const { stdout } = await exec('docker', [
+      'exec', dbContainer, 'psql', '-U', 'replay_e2e', '-d', 'replay_e2e', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c',
+      `SELECT id FROM "user" WHERE identity=${sqlString(user.identity)} AND issuer=${sqlString(config.issuer)}`
+    ]);
+    const matches = stdout.trim().split(/\s+/).filter(Boolean);
+    if (matches.length > 1) throw new Error(`Duplicate fixture principal: ${user.identity}`);
+    const id = Number(matches[0] ?? await api('/admin/users', { ...user, issuer: config.issuer }));
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error(`Invalid fixture user id for ${user.username}`);
+    return id;
+  };
+  const userId = await ensureUser({
+    username: 'coding-e2e',
+    identity: '11111111-1111-4111-8111-111111111111',
+    isAdmin: true,
+    firstName: 'Coding',
+    lastName: 'E2E'
+  });
   await api(`/admin/users/${userId}/workspaces`, [workspaceId]);
+  const fileAccessUserIds = {};
   for (const user of FILE_ACCESS_USERS) {
-    const fileUserId = Number(await api('/admin/users', {
-      username: user.username,
-      identity: user.identity,
-      issuer: config.issuer,
-      isAdmin: user.isAdmin
-    }));
-    if (!Number.isInteger(fileUserId) || fileUserId <= 0) {
-      throw new Error(`Invalid file access fixture user id for ${user.username}`);
-    }
+    const fileUserId = await ensureUser({
+      username: user.username, identity: user.identity, isAdmin: user.isAdmin
+    });
+    fileAccessUserIds[user.username] = fileUserId;
     if (user.accessLevel > 0) {
       await api(`/admin/users/access/${workspaceId}`, [{
         id: fileUserId,
@@ -129,7 +134,6 @@ export async function setupCodingFixture(state, environment) {
     );
 
   // Limit seeding to the disposable fixture workspace. Status 8 = CODING_INCOMPLETE.
-  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   await exec('docker', [
     'exec',
     dbContainer,
@@ -155,6 +159,7 @@ export async function setupCodingFixture(state, environment) {
   return {
     codingJobId: job.id,
     userId,
+    fileAccessUserIds,
     username: 'coding-e2e',
     password: environment.REPLAY_E2E_AUTH_PASSWORD,
     keycloakUrl: environment.REPLAY_E2E_KEYCLOAK_URL,

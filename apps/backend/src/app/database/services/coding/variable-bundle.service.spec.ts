@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { VariableBundleService } from './variable-bundle.service';
+import User from '../../entities/user.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 
 const createRepo = () => ({
   count: jest.fn(),
@@ -16,6 +18,17 @@ describe('VariableBundleService', () => {
 
   beforeEach(() => {
     repo = createRepo();
+    const manager = {
+      getRepository: jest.fn(() => repo),
+      transaction: jest.fn(),
+      findOne: jest.fn(async (entity, options) => {
+        if (entity === User) return { id: 7, isAdmin: false };
+        if (entity === WorkspaceUser) return { accessLevel: 3 };
+        return repo.findOne(options);
+      })
+    };
+    manager.transaction.mockImplementation(async callback => callback(manager));
+    Object.assign(repo, { manager, findOneOrFail: repo.findOne });
     service = new VariableBundleService(repo as never);
   });
 
@@ -38,9 +51,9 @@ describe('VariableBundleService', () => {
     await expect(service.createVariableBundle(3, {
       name: 'Bundle',
       variables: [{ unitName: 'U', variableId: 'V' }]
-    })).resolves.toMatchObject({ name: 'Bundle', workspace_id: 3 });
-    await expect(service.updateVariableBundle(1, 3, { name: 'Renamed' } as never)).resolves.toMatchObject({ name: 'Renamed' });
-    await expect(service.deleteVariableBundle(1, 3)).resolves.toEqual({ success: true });
+    }, 7)).resolves.toMatchObject({ name: 'Bundle', workspace_id: 3, creatorUserId: 7 });
+    await expect(service.updateVariableBundle(1, 3, { name: 'Renamed' } as never, 7)).resolves.toMatchObject({ name: 'Renamed' });
+    await expect(service.deleteVariableBundle(1, 3, 7)).resolves.toEqual({ success: true });
   });
 
   it('throws for missing bundles', async () => {
@@ -53,11 +66,11 @@ describe('VariableBundleService', () => {
     const bundle = { id: 1, variables: [{ unitName: 'U', variableId: 'V' }] };
     repo.findOne.mockResolvedValue(bundle);
 
-    await expect(service.addVariableToBundle(1, 3, { unitName: 'U', variableId: 'V' })).resolves.toBe(bundle);
-    await expect(service.addVariableToBundle(1, 3, { unitName: 'U2', variableId: 'V2' })).resolves.toMatchObject({
+    await expect(service.addVariableToBundle(1, 3, { unitName: 'U', variableId: 'V' }, 7)).resolves.toBe(bundle);
+    await expect(service.addVariableToBundle(1, 3, { unitName: 'U2', variableId: 'V2' }, 7)).resolves.toMatchObject({
       variables: [{ unitName: 'U', variableId: 'V' }, { unitName: 'U2', variableId: 'V2' }]
     });
-    await expect(service.removeVariableFromBundle(1, 3, 'U', 'V')).resolves.toMatchObject({
+    await expect(service.removeVariableFromBundle(1, 3, 'U', 'V', 7)).resolves.toMatchObject({
       variables: [{ unitName: 'U2', variableId: 'V2' }]
     });
   });

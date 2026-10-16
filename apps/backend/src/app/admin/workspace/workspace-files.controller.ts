@@ -15,7 +15,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   Put,
-  Req
+  ParseIntPipe, Req
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -328,6 +328,20 @@ export class WorkspaceFilesController {
           []
       };
     }
+  }
+
+  @Get(':workspace_id/files/:fileId/metadata')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Read a workspace metadata resource' })
+  @ApiOkResponse({ type: FileDownloadDto })
+  @ApiNotFoundResponse({ description: 'Metadata resource not found in this workspace' })
+  async readMetadataFile(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('fileId', ParseIntPipe) fileId: number
+  ): Promise<FileDownloadDto> {
+    return this.workspaceFilesService.readMetadataFile(workspaceId, fileId);
   }
 
   @Get(':workspace_id/files/:fileId/download')

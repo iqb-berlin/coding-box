@@ -51,3 +51,52 @@ export async function prepareImportedCoding(state) {
   }
   return { codingJobId: job.id };
 }
+
+/** Synthetic ownership rows, scoped to this run's disposable workspace. */
+export async function prepareOwnership(state) {
+  const { config, workspaceId, browser } = state;
+  if (!Number.isSafeInteger(workspaceId) || workspaceId <= 0 || !Number.isSafeInteger(browser.userId)) {
+    throw new Error('Ownership setup requires the disposable workspace.');
+  }
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
+  const ownerId = browser.fileAccessUserIds?.['file-access-2'];
+  const coderId = browser.fileAccessUserIds?.['file-access-1'];
+  if (![ownerId, coderId].every(id => Number.isSafeInteger(id) && id > 0)) {
+    throw new Error('Ownership setup requires stable role principal IDs.');
+  }
+  const result = {};
+  for (const [kind, table, columns, values] of [
+    ['bundle', 'variable_bundle', 'name,variables', "'Ownership proof','[]'"],
+    ['definition', 'job_definitions', 'name,distribution_seed,assigned_variables,assigned_coders',
+      `'Ownership proof','ownership-proof','[{"unitName":"UNIT-REPLAY","variableId":"answer_1"}]','[${browser.userId}]'`],
+    ['job', 'coding_job', 'name', "'Ownership proof'"],
+    ['training', 'coder_training', 'label', "'Ownership proof'"]
+  ]) {
+    const { stdout } = await exec('docker', [
+      'exec', dbContainer, 'psql', '-U', 'replay_e2e', '-d', 'replay_e2e', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c',
+      `WITH inserted AS (INSERT INTO ${table}(workspace_id,creator_user_id,${columns})
+       SELECT ${workspaceId}, owner_id, ${values} FROM (VALUES
+       (${ownerId}), (${browser.userId}), (NULL::integer)) owners(owner_id)
+       RETURNING id,creator_user_id)
+       SELECT json_build_object('own',max(id) FILTER(WHERE creator_user_id=${ownerId}),
+       'foreign',max(id) FILTER(WHERE creator_user_id=${browser.userId}), 'legacy',max(id) FILTER(WHERE creator_user_id IS NULL)) FROM inserted`
+    ]);
+    result[kind] = JSON.parse(stdout.trim());
+    if (Object.values(result[kind]).some(id => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new Error(`Incomplete ownership fixture: ${kind}`);
+    }
+  }
+  if (!Number.isSafeInteger(browser.codingJobId)) throw new Error('Missing source coding job for the assigned-coder fixture.');
+  const legacyId = result.job.legacy;
+  const { stdout: legacyCoding } = await exec('docker', [
+    'exec', dbContainer, 'psql', '-U', 'replay_e2e', '-d', 'replay_e2e', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c',
+    `INSERT INTO coding_job_coder(coding_job_id,user_id)
+     VALUES (${legacyId},${coderId});
+     WITH inserted AS (INSERT INTO coding_job_unit(coding_job_id,workspace_id,response_id,unit_name,unit_alias,variable_id,variable_anchor,booklet_name,person_login,person_code,person_group,is_open)
+     SELECT ${legacyId}, ${workspaceId},response_id,unit_name,unit_alias,variable_id,variable_anchor,booklet_name,person_login,person_code,person_group,true
+     FROM coding_job_unit WHERE coding_job_id=${browser.codingJobId} AND workspace_id=${workspaceId} ORDER BY id LIMIT 1 RETURNING *)
+     SELECT json_build_object('testPerson',concat_ws('@',person_login,person_code,person_group,booklet_name),'unitId',unit_name,'variableId',variable_id) FROM inserted`
+  ]);
+  result.legacyCoding = JSON.parse(legacyCoding.trim());
+  return result;
+}

@@ -3,6 +3,7 @@ import { canActivateAuth } from '../core/guards/auth.guard';
 import {
   canActivateAccessLevel,
   canActivateCodingJobs,
+  canActivateCodingExport,
   canActivateCodingManagement
 } from '../core/guards/access-level.guard';
 
@@ -54,7 +55,7 @@ export const wsAdminRoutes: Routes = [
           },
           {
             path: 'export',
-            canActivate: [canActivateAccessLevel(2)],
+            canActivate: [canActivateCodingExport()],
             loadComponent: () => import('./components/export/export.component').then(m => m.ExportComponent)
           }
         ]

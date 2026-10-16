@@ -25,6 +25,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatMenuModule } from '@angular/material/menu';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
@@ -67,6 +68,7 @@ import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-reque
   ]
 })
 export class VariableBundleManagerComponent implements OnInit {
+  readonly permissions = inject(CodingPermissionsService);
   private loadRequest?: Subscription;
   private preparationRequest?: Subscription;
   private readonly ownedDialogs = new Set<MatDialogRef<unknown>>();
@@ -93,7 +95,9 @@ export class VariableBundleManagerComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
       this.closeOwnedDialogs();
       this.selectedName.set(null);
       this.originalData.set([]);
@@ -152,6 +156,7 @@ export class VariableBundleManagerComponent implements OnInit {
   }
 
   createVariableBundleGroup(): void {
+    if (!this.permissions.canCreate) return;
     this.preparationRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -204,12 +209,13 @@ export class VariableBundleManagerComponent implements OnInit {
           data: {
             bundleGroup,
             isEdit: true,
+            readOnly: !this.permissions.canEdit(bundleGroup),
             preloadedIncompleteVariables: incompleteVariables
           }
         }));
 
         dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe(result => {
-          if (result && this.appService.selectedWorkspaceId === workspaceId) {
+          if (result && this.permissions.canEdit(bundleGroup) && this.appService.selectedWorkspaceId === workspaceId) {
             this.variableBundleGroupService.updateBundle(bundleGroup.id, result).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
               next: updatedBundleGroup => {
                 if (updatedBundleGroup) {
@@ -231,6 +237,7 @@ export class VariableBundleManagerComponent implements OnInit {
   }
 
   deleteVariableBundleGroup(bundleGroup: VariableBundle): void {
+    if (!this.permissions.canEdit(bundleGroup)) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
     const dialogRef = this.ownDialog(this.dialog.open(ConfirmDialogComponent, {

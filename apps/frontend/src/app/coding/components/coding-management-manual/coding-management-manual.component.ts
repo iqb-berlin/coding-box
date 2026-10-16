@@ -5120,6 +5120,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected onApplyEmptyResponseCoding(): void {
+    if (!this.canApplyCompletedJobResults()) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     const emptyResponseMissing = this.emptyResponseMissing();
     if (!workspaceId || !this.responseAnalysis() || !emptyResponseMissing) {
