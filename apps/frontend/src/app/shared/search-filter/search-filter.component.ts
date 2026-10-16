@@ -1,11 +1,5 @@
 import {
-  Component,
-  input,
-  output,
-  OnInit,
-  OnDestroy,
-  ViewChild,
-  ElementRef
+  Component, input, output, OnInit, AfterViewInit, OnDestroy, ElementRef, viewChild, ChangeDetectionStrategy, signal
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -20,13 +14,15 @@ import {
 import {
   Subject,
   fromEvent,
-  debounceTime,
-  distinctUntilChanged,
+  switchMap,
+  tap,
+  timer,
   takeUntil
 } from 'rxjs';
 import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-search-filter',
   templateUrl: './search-filter.component.html',
   styleUrls: ['./search-filter.component.scss'],
@@ -42,10 +38,10 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
     TranslateModule
   ]
 })
-export class SearchFilterComponent implements OnInit, OnDestroy {
-  @ViewChild('filterInput', { static: true }) filterInput!: ElementRef;
+export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly filterInput = viewChild.required<ElementRef<HTMLInputElement>>('filterInput');
 
-  value: string = '';
+  protected readonly value = signal<string>('');
   readonly title = input.required<string>();
   readonly initialValue = input<string>('');
   readonly invalid = input<boolean>(false);
@@ -55,36 +51,35 @@ export class SearchFilterComponent implements OnInit, OnDestroy {
   // Debounce time in milliseconds
   private readonly debounceTimeMs = 300;
   private destroy$ = new Subject<void>();
+  private readonly clear$ = new Subject<void>();
 
   ngOnInit(): void {
-    // Set initial value if provided
-    const initialVal = this.initialValue();
-    if (initialVal) {
-      this.value = initialVal;
-      this.filterInput.nativeElement.value = initialVal;
-    }
+    this.value.set(this.initialValue());
+  }
 
-    // Set up debounced input event
-    fromEvent(this.filterInput.nativeElement, 'keyup')
+  ngAfterViewInit(): void {
+    const filterInput = this.filterInput();
+    fromEvent(filterInput.nativeElement, 'input')
       .pipe(
-        debounceTime(this.debounceTimeMs),
-        distinctUntilChanged(),
+        tap(() => this.value.set(filterInput.nativeElement.value)),
+        switchMap(() => timer(this.debounceTimeMs).pipe(takeUntil(this.clear$))),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.value = this.filterInput.nativeElement.value;
-        this.valueChange.emit(this.value);
+        this.valueChange.emit(this.value());
       });
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.clear$.complete();
   }
 
-  clearFilter(): void {
-    this.value = '';
-    this.filterInput.nativeElement.value = '';
-    this.valueChange.emit(this.value);
+  protected clearFilter(): void {
+    this.clear$.next();
+    this.value.set('');
+    this.filterInput().nativeElement.value = '';
+    this.valueChange.emit(this.value());
   }
 }

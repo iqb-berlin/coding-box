@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { TranslateModule } from '@ngx-translate/core';
@@ -13,6 +13,7 @@ export interface ConfirmDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-confirm-dialog',
   templateUrl: './confirm-dialog.component.html',
   standalone: true,
@@ -23,20 +24,18 @@ export interface ConfirmDialogData {
   ]
 })
 export class ConfirmDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<ConfirmDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData
-  ) {}
+  dialogRef = inject<MatDialogRef<ConfirmDialogComponent>>(MatDialogRef);
+  protected data = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 
-  onAlternative(): void {
+  protected onAlternative(): void {
     this.dialogRef.close(this.data.alternativeButtonValue ?? 'alternative');
   }
 }

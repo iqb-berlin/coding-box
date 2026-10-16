@@ -11,6 +11,7 @@ import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Workspace from '../../entities/workspace.entity';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
+import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
 
 import {
   InvalidVariableDto,
@@ -25,6 +26,8 @@ import {
   statusNumberToString
 } from '../../utils/response-status-converter';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+
+export type ResponseDeletionAuditContext = Pick<RecordAuditJournalEventInput, 'actorUserId' | 'jobId'>;
 
 interface UnitVariableDefinitions {
   aliases: Set<string>;
@@ -1419,22 +1422,24 @@ export class WorkspaceResponseValidationService {
 
   async deleteInvalidResponses(
     workspaceId: number,
-    responseIds: number[]
+    responseIds: number[],
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
     if (!workspaceId || !responseIds || responseIds.length === 0) {
-      return this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
+      return this.deleteInvalidResponsesUnlocked(workspaceId, responseIds, audit);
     }
 
     return withWorkspaceTestResultsMutationLock(
       this.responseRepository.manager.connection,
       workspaceId,
-      () => this.deleteInvalidResponsesUnlocked(workspaceId, responseIds)
+      () => this.deleteInvalidResponsesUnlocked(workspaceId, responseIds, audit)
     );
   }
 
   private async deleteInvalidResponsesUnlocked(
     workspaceId: number,
-    responseIds: number[]
+    responseIds: number[],
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
     try {
       if (!workspaceId) {
@@ -1512,8 +1517,22 @@ export class WorkspaceResponseValidationService {
         }
 
         if (validResponseIds.length > 0) {
-          const deleteResult = await this.responseRepository.delete({
-            id: In(validResponseIds)
+          const deleteResult = await this.responseRepository.manager.transaction(async manager => {
+            const result = await manager.getRepository(ResponseEntity).delete({
+              id: In(validResponseIds), unitid: In(allUnitIds)
+            });
+            const actorType = audit.actorUserId ? 'user' : 'system';
+            await JournalService.recordEventInTransaction(manager, {
+              workspaceId,
+              ...audit,
+              actorType: audit.jobId ? 'job' : actorType,
+              eventType: 'TEST_RESULT_RESPONSES_DELETED',
+              entityType: 'responses',
+              result: 'success',
+              summary: 'Invalid response deletion batch committed',
+              details: { source: 'validation', deletedTargetCount: result.affected || 0, batchNumber: Math.floor(i / batchSize) + 1 }
+            });
+            return result;
           });
           totalDeleted += deleteResult.affected || 0;
         }
@@ -1537,19 +1556,21 @@ export class WorkspaceResponseValidationService {
     | 'variables'
     | 'variableTypes'
     | 'responseStatus'
-    | 'duplicateResponses'
+    | 'duplicateResponses',
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
     if (!workspaceId) {
       return this.deleteAllInvalidResponsesUnlocked(
         workspaceId,
-        validationType
+        validationType,
+        audit
       );
     }
 
     return withWorkspaceTestResultsMutationLock(
       this.responseRepository.manager.connection,
       workspaceId,
-      () => this.deleteAllInvalidResponsesUnlocked(workspaceId, validationType)
+      () => this.deleteAllInvalidResponsesUnlocked(workspaceId, validationType, audit)
     );
   }
 
@@ -1559,7 +1580,8 @@ export class WorkspaceResponseValidationService {
     | 'variables'
     | 'variableTypes'
     | 'responseStatus'
-    | 'duplicateResponses'
+    | 'duplicateResponses',
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
     try {
       if (!workspaceId) {
@@ -1608,7 +1630,7 @@ export class WorkspaceResponseValidationService {
           return 0;
         }
 
-        return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
+        return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds, audit);
       }
 
       let invalidResponses: InvalidVariableDto[] = [];
@@ -1654,7 +1676,7 @@ export class WorkspaceResponseValidationService {
         return 0;
       }
 
-      return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
+      return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds, audit);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(

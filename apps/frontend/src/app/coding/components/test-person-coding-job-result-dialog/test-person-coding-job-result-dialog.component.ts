@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +13,7 @@ interface DialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-person-coding-job-result-dialog',
   standalone: true,
   imports: [MatDialogModule, MatButtonModule, MatTableModule, TranslateModule],
@@ -20,15 +21,17 @@ interface DialogData {
   styleUrls: ['./test-person-coding-job-result-dialog.component.scss']
 })
 export class TestPersonCodingJobResultDialogComponent {
-  displayedColumns = ['status', 'count'];
-  statusRows: { status: string; count: number }[] = [];
-  warnings: string[] = [];
-  effectiveTotal = 0;
+  protected data = inject<DialogData>(MAT_DIALOG_DATA);
+  private dialogRef = inject<MatDialogRef<TestPersonCodingJobResultDialogComponent>>(MatDialogRef);
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: DialogData,
-    private dialogRef: MatDialogRef<TestPersonCodingJobResultDialogComponent>
-  ) {
+  protected displayedColumns = ['status', 'count'];
+  protected statusRows: { status: string; count: number }[] = [];
+  warnings: string[] = [];
+  protected effectiveTotal = 0;
+
+  constructor() {
+    const data = this.data;
+
     const result = data.job.result;
     this.warnings = result?.warnings || [];
     if (result?.statusCounts) {
@@ -48,7 +51,7 @@ export class TestPersonCodingJobResultDialogComponent {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

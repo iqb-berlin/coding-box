@@ -15,6 +15,7 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
+import { JournalService } from '../shared/journal.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -172,6 +173,7 @@ describe('CodingJobService', () => {
   };
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     codingJobRepository = createRepo();
     codingJobCoderRepository = createRepo();
     codingJobVariableRepository = createRepo();
@@ -1475,7 +1477,7 @@ describe('CodingJobService', () => {
   it('builds the refresh distribution plan inside the locked transaction context', async () => {
     const callOrder: string[] = [];
     const transactionManager = {
-      getRepository: jest.fn(),
+      getRepository: jest.fn().mockReturnValue({ find: jest.fn().mockResolvedValue([]) }),
       query: jest.fn().mockImplementation(async () => {
         callOrder.push('advisory-lock');
       })
@@ -2013,7 +2015,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(codingJob);
 
-    await expect(service.pauseCodingJob(1, 3)).resolves.toMatchObject({
+    await expect(service.pauseCodingJob(1, 3, 7)).resolves.toMatchObject({
       status: 'paused'
     });
 
@@ -2024,6 +2026,18 @@ describe('CodingJobService', () => {
       ...codingJob,
       status: 'paused'
     });
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 3,
+      actorUserId: 7,
+      eventType: 'CODING_JOB_UPDATED',
+      details: { changedFields: ['status'], previousStatus: 'active', status: 'paused' }
+    }));
+  });
+
+  it('aborts a status transaction when the audit write fails', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'active' });
+    jest.mocked(JournalService.recordEventInTransaction).mockRejectedValueOnce(new Error('audit unavailable'));
+    await expect(service.pauseCodingJob(1, 3, 7)).rejects.toThrow('audit unavailable');
   });
 
   it('leaves completed coding jobs unchanged when a pause arrives late', async () => {
