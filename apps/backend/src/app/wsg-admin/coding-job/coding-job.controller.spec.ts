@@ -326,7 +326,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.saveCodingProgress).toHaveBeenCalled();
+    expect(codingJobService.saveCodingProgress).toHaveBeenCalledWith(123, expect.objectContaining({ unitId: 'u' }), 5);
   });
 
   it('uses manager access for saving coding issue review progress', async () => {
@@ -374,7 +374,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
+    expect(codingJobService.saveCodingNotes).toHaveBeenCalledWith(123, expect.objectContaining({ notes: 'note' }), 5);
   });
 
   it('uses manager access for saving coding issue review notes', async () => {

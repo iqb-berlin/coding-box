@@ -41,3 +41,8 @@ They re-read state after waiting for concurrent changes. Applying results reuses
 the caller's transaction; it does not commit an independent partial operation.
 The PostgreSQL tests exercise real lock waiters, including progress and notes
 that arrive while a job is being submitted for review.
+
+Coder writes also recheck the current workspace coding capability and job
+assignment after acquiring those locks, using the caller's transaction manager.
+Removing an assignment or disabling coding while a request waits therefore
+prevents a late pause, resume, submission, progress write or note write.

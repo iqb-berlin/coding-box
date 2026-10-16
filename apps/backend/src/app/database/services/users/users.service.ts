@@ -195,12 +195,13 @@ export class UsersService {
     }
   }
 
-  async canUserCodeInWorkspace(userId: number, workspaceId: number): Promise<boolean> {
+  async canUserCodeInWorkspace(userId: number, workspaceId: number, manager?: EntityManager): Promise<boolean> {
     if (!Number.isInteger(userId) || userId < 1) {
       return false;
     }
 
-    const workspaceUser = await this.workspaceUserRepository.findOne({
+    const repository = manager ? manager.getRepository(WorkspaceUser) : this.workspaceUserRepository;
+    const workspaceUser = await repository.findOne({
       where: {
         workspaceId,
         userId,

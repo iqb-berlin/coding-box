@@ -11,6 +11,8 @@ import {
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingJobService } from './coding-job.service';
 import { VariableBundleService } from './variable-bundle.service';
+import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
+import { UsersService } from '../users/users.service';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ? describe : describe.skip;
 
@@ -47,7 +49,7 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       isAdmin: index === 3
     })));
     await db.getRepository(WorkspaceUser).save([owner, foreign, study].map((user, i) => ({
-      workspaceId, userId: user.id, accessLevel: i === 2 ? 3 : 2, canCode: false
+      workspaceId, userId: user.id, accessLevel: i === 2 ? 3 : 2, canCode: i === 0
     })));
     for (const [kind, entity] of Object.entries(codingResourceEntities)) {
       const ids: number[] = [];
@@ -64,9 +66,12 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       }
       resources.set(kind, ids);
     }
+    await db.manager.save(CodingJobCoder, { coding_job_id: resources.get('job')![0], user_id: owner.id });
     jobs = Object.assign(Object.create(CodingJobService.prototype), {
       connection: db,
+      usersService: Object.assign(Object.create(UsersService.prototype), { workspaceUserRepository: db.getRepository(WorkspaceUser) }),
       codingJobRepository: db.getRepository(CodingJob),
+      codingJobCoderRepository: db.getRepository(CodingJobCoder),
       cacheService: { incr: async () => 1, delete: async () => undefined },
       logger: { log: () => undefined, error: () => undefined }
     }) as CodingJobService;
@@ -217,8 +222,8 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     let finished = false;
     const actions: Record<string, () => Promise<CodingJob>> = {
       'late-pause': () => jobs.pauseCodingJob(id, workspaceId, owner.id),
-      'late-progress': () => jobs.saveCodingProgress(id, {} as never),
-      'late-notes': () => jobs.saveCodingNotes(id, {} as never),
+      'late-progress': () => jobs.saveCodingProgress(id, {} as never, owner.id),
+      'late-notes': () => jobs.saveCodingNotes(id, {} as never, owner.id),
       'manager-update': () => jobs.updateCodingJob(id, workspaceId, { status: 'paused' }, owner.id)
     };
     const attempt = actions[action]();
@@ -244,4 +249,53 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       await observed;
     }
   });
+
+  it.each(['pause', 'resume', 'submit', 'progress', 'notes'].flatMap(action => ['assignment', 'coding-capability'].map(revoked => ({ action, revoked }))))(
+    'rejects $action after $revoked was revoked while waiting for the lock', async ({ action, revoked }) => {
+      const id = resources.get('job')![0];
+      const status = action === 'resume' ? 'paused' : 'active';
+      await db.manager.update(CodingJob, id, { status });
+      // This is the successful controller-side authorization before the wait.
+      await expect(jobs.assertUserCanCodeCodingJob(id, workspaceId, owner.id)).resolves.toBeUndefined();
+      const holder = db.createQueryRunner();
+      await holder.connect();
+      await holder.startTransaction();
+      await lockWorkspaceTestResultsMutationInTransaction(holder.manager, workspaceId);
+      const actions: Record<string, () => Promise<CodingJob>> = {
+        pause: () => jobs.pauseCodingJob(id, workspaceId, owner.id),
+        resume: () => jobs.resumeCodingJob(id, workspaceId, owner.id),
+        submit: () => jobs.submitCodingJob(id, workspaceId, owner.id),
+        progress: () => jobs.saveCodingProgress(id, {} as never, owner.id),
+        notes: () => jobs.saveCodingNotes(id, {} as never, owner.id)
+      };
+      const attempt = actions[action]();
+      const observed = attempt.then(() => undefined, () => undefined);
+      try {
+        const deadline = Date.now() + 5000;
+        let blocked = false;
+        while (!blocked && Date.now() < deadline) {
+          const [row] = await db.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND pid<>pg_backend_pid()) AS blocked");
+          blocked = row.blocked;
+          if (!blocked) await new Promise(resolve => { setTimeout(resolve, 20); });
+        }
+        expect(blocked).toBe(true);
+        if (revoked === 'assignment') {
+          await holder.manager.delete(CodingJobCoder, { coding_job_id: id, user_id: owner.id });
+        } else {
+          await holder.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { canCode: false });
+        }
+        await holder.commitTransaction();
+        await expect(attempt).rejects.toBeInstanceOf(ForbiddenException);
+        expect(await db.manager.findOneByOrFail(CodingJob, { id })).toMatchObject({ status });
+      } finally {
+        if (holder.isTransactionActive) await holder.rollbackTransaction();
+        await holder.release();
+        await observed;
+        await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { canCode: true });
+        if (!await db.manager.count(CodingJobCoder, { where: { coding_job_id: id, user_id: owner.id } })) {
+          await db.manager.save(CodingJobCoder, { coding_job_id: id, user_id: owner.id });
+        }
+      }
+    }
+  );
 });

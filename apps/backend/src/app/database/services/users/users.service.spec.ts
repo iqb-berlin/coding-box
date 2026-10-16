@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { UsersService } from './users.service';
 import { JournalService } from '../shared/journal.service';
@@ -294,6 +295,19 @@ describe('UsersService', () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce(null);
     await expect(service.canUserCodeInWorkspace(2, 7)).resolves.toBe(false);
     await expect(service.canUserCodeInWorkspace(0, 7)).resolves.toBe(false);
+  });
+
+  it('reads coding capability from the caller transaction when supplied', async () => {
+    const findOne = jest.fn().mockResolvedValue(null);
+    const manager = { getRepository: jest.fn().mockReturnValue({ findOne }) };
+    workspaceUserRepository.findOne.mockResolvedValue({ userId: 1 });
+
+    await expect(service.canUserCodeInWorkspace(1, 7, manager as unknown as EntityManager)).resolves.toBe(false);
+    expect(manager.getRepository).toHaveBeenCalledWith(WorkspaceUser);
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspaceId: 7, userId: 1, canCode: true })
+    }));
+    expect(workspaceUserRepository.findOne).not.toHaveBeenCalled();
   });
 
   it('returns access levels, workspace ids and users by identity or id', async () => {
