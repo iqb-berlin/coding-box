@@ -3,6 +3,9 @@ import { VariableBundle } from '../../../database/entities/variable-bundle.entit
 import { VariableDto } from './variable.dto';
 
 export class VariableBundleDto {
+  @ApiProperty({ type: Number, nullable: true, readOnly: true })
+    creatorUserId: number | null;
+
   @ApiProperty({
     description: 'The ID of the variable bundle',
     example: 1
@@ -52,6 +55,7 @@ export class VariableBundleDto {
   static fromEntity(entity: VariableBundle): VariableBundleDto {
     const dto = new VariableBundleDto();
     dto.id = entity.id;
+    dto.creatorUserId = entity.creatorUserId ?? null;
     dto.workspace_id = entity.workspace_id;
     dto.name = entity.name;
     dto.description = entity.description;

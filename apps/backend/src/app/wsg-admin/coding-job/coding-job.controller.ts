@@ -261,12 +261,14 @@ export class WsgCodingJobController {
   })
   async transferCodingCases(
     @WorkspaceId() workspaceId: number,
-      @Body() transferCodingCasesDto: TransferCodingCasesDto
+      @Body() transferCodingCasesDto: TransferCodingCasesDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<TransferCodingCasesResultDto> {
     return this.codingJobService.transferCodingCases(
       workspaceId,
       transferCodingCasesDto.sourceCoderId,
-      transferCodingCasesDto.targetCoderId
+      transferCodingCasesDto.targetCoderId,
+      ownershipRequest.user?.id
     );
   }
 
@@ -449,6 +451,18 @@ export class WsgCodingJobController {
     };
   }
 
+  @Post('bulk-delete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete owned coding jobs atomically' })
+  async deleteCodingJobs(
+    @WorkspaceId() workspaceId: number,
+      @Body() body: { ids: number[] },
+      @Req() req: Request
+  ): Promise<{ success: boolean }> {
+    return this.codingJobService.deleteCodingJobs(workspaceId, body.ids, this.getRequestUserId(req));
+  }
+
   @Get(':id')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -518,7 +532,7 @@ export class WsgCodingJobController {
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
       @Body() createCodingJobDto: CreateCodingJobDto,
-      @Req() req?: Request
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -539,7 +553,7 @@ export class WsgCodingJobController {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
         createCodingJobDto,
-        req ? this.getRequestUserId(req) : undefined
+        ownershipRequest.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -632,7 +646,8 @@ export class WsgCodingJobController {
       id,
       workspaceId,
       { status: 'review' },
-      this.getRequestUserId(req)
+      this.getRequestUserId(req),
+      true
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -683,7 +698,7 @@ export class WsgCodingJobController {
     if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
-      }, this.getRequestUserId(req));
+      }, this.getRequestUserId(req), true);
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
@@ -880,9 +895,9 @@ export class WsgCodingJobController {
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Req() req?: Request
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    return this.codingJobService.deleteCodingJob(id, workspaceId, req ? this.getRequestUserId(req) : undefined);
+    return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
 
   @Post(':id/progress')
@@ -1039,7 +1054,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }

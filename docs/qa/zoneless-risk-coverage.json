@@ -65,7 +65,10 @@
         "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/review-notifications.cy.ts",
         "cypress/zoneless/manual-preparation.cy.ts",
-        "cypress/zoneless/training-comparison.cy.ts"
+        "cypress/zoneless/training-comparison.cy.ts",
+        "apps/frontend/src/app/coding/services/coding-permissions.service.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.ownership.spec.ts",
+        "cypress/workflows/coding-ownership.cy.ts"
       ]
     },
     {

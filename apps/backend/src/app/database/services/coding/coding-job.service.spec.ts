@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   NotFoundException
 } from '@nestjs/common';
-import { Brackets } from 'typeorm';
+import { Brackets, EntityManager } from 'typeorm';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -13,9 +13,28 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
+import Workspace from '../../entities/workspace.entity';
+import FileUpload from '../../entities/file_upload.entity';
+import { Setting } from '../../entities/setting.entity';
+import { MissingsProfile } from '../../entities/missings-profile.entity';
+import { UsersService } from '../users/users.service';
+import { MissingsProfilesService } from './missings-profiles.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import { JournalService } from '../shared/journal.service';
+// Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -187,7 +206,9 @@ describe('CodingJobService', () => {
     coderTrainingDiscussionResultRepository = createRepo();
     connection = {
       transaction: jest.fn(callback => callback({
+        find: jest.fn().mockResolvedValue([]),
         query: jest.fn().mockResolvedValue([]),
+        transaction: jest.fn(async nestedCallback => nestedCallback({ getRepository: entity => (entity === CodingJob ? codingJobRepository : codingJobCoderRepository) })),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === CodingJobCoder) return codingJobCoderRepository;
@@ -197,6 +218,9 @@ describe('CodingJobService', () => {
           if (entity === JobDefinition) return jobDefinitionRepository;
           if (entity === VariableBundle) return variableBundleRepository;
           if (entity === ResponseEntity) return responseRepository;
+          if (entity === FileUpload) return fileUploadRepository;
+          if (entity === Setting) return settingRepository;
+          if (entity === CoderTrainingDiscussionResult) return coderTrainingDiscussionResultRepository;
           return createRepo();
         }
       })
@@ -440,10 +464,10 @@ describe('CodingJobService', () => {
 
     expect(
       missingsProfilesService.resolveMissingsProfileId
-    ).toHaveBeenCalledWith(7, 55);
+    ).toHaveBeenCalledWith(7, 55, expect.any(Object));
     expect(
       missingsProfilesService.resolveMissingsProfileId
-    ).toHaveBeenCalledWith(7, 77);
+    ).toHaveBeenCalledWith(7, 77, expect.any(Object));
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
@@ -517,7 +541,7 @@ describe('CodingJobService', () => {
             personGroup: string;
           }>,
           manager: {
-            getRepository: (entity: unknown) => unknown;
+            getRepository: (entity: unknown) => unknown; find?: jest.Mock;
           }
         ) => Promise<CodingJob>;
       }
@@ -542,6 +566,7 @@ describe('CodingJobService', () => {
         }
       ],
       {
+        find: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === CodingJobCoder) return codingJobCoderRepository;
@@ -619,7 +644,7 @@ describe('CodingJobService', () => {
             }>;
           },
           manager: {
-            getRepository: (entity: unknown) => unknown;
+            getRepository: (entity: unknown) => unknown; find?: jest.Mock;
           }
         ) => Promise<unknown[]>;
       }
@@ -659,6 +684,7 @@ describe('CodingJobService', () => {
         ]
       },
       {
+        find: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === CodingJobCoder) return codingJobCoderRepository;
@@ -779,9 +805,7 @@ describe('CodingJobService', () => {
       }
     ).checkAndUpdateCodingJobCompletion(7);
 
-    expect(codingJobRepository.update).toHaveBeenCalledWith(7, {
-      status: 'open'
-    });
+    expect(codingJobRepository.update).toHaveBeenCalledWith(7, { status: 'open' });
   });
 
   it('loads coding jobs with assignments, bundles and progress', async () => {
@@ -1477,6 +1501,7 @@ describe('CodingJobService', () => {
   it('builds the refresh distribution plan inside the locked transaction context', async () => {
     const callOrder: string[] = [];
     const transactionManager = {
+      find: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn().mockReturnValue({ find: jest.fn().mockResolvedValue([]) }),
       query: jest.fn().mockImplementation(async () => {
         callOrder.push('advisory-lock');
@@ -1640,6 +1665,7 @@ describe('CodingJobService', () => {
 
   it('does not delete or recreate refresh jobs when the locked recheck finds coding work', async () => {
     const transactionManager = {
+      find: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn(),
       query: jest.fn().mockResolvedValue([])
     };
@@ -1751,8 +1777,11 @@ describe('CodingJobService', () => {
   it('does not persist jobDefinitionId from direct coding job creates', async () => {
     await service.createCodingJob(7, {
       name: 'Direct job',
-      jobDefinitionId: 42
-    } as never);
+      jobDefinitionId: 42,
+      creatorUserId: 99
+    } as never, 7);
+
+    expect(codingJobRepository.create).toHaveBeenCalledWith(expect.objectContaining({ creatorUserId: 7 }));
 
     expect(codingJobRepository.create).toHaveBeenCalledWith(
       expect.not.objectContaining({
@@ -1775,6 +1804,7 @@ describe('CodingJobService', () => {
 
   it('locks workspace test-result mutations before selecting direct coding-job units', async () => {
     const transactionManager = {
+      find: jest.fn().mockResolvedValue([]),
       query: jest.fn().mockResolvedValue([]),
       getRepository: (entity: unknown) => {
         if (entity === CodingJob) return codingJobRepository;
@@ -1893,7 +1923,8 @@ describe('CodingJobService', () => {
 
     expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith(
       [2],
-      3
+      3,
+      undefined
     );
     expect(result).toEqual({
       sourceCoderId: 1,
@@ -1923,7 +1954,8 @@ describe('CodingJobService', () => {
 
     expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith(
       [2],
-      3
+      3,
+      undefined
     );
     expect(connection.transaction).not.toHaveBeenCalled();
   });
@@ -2103,7 +2135,8 @@ describe('CodingJobService', () => {
 
     expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith(
       [99],
-      3
+      3,
+      expect.any(Object)
     );
     expect(codingJobRepository.save).not.toHaveBeenCalled();
     expect(codingJobCoderRepository.delete).not.toHaveBeenCalled();
@@ -2210,6 +2243,8 @@ describe('CodingJobService', () => {
       status: 'completed'
     });
     const manager = {
+      find: jest.fn().mockResolvedValue([]),
+      query: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn().mockReturnValue(transactionalCodingJobRepository)
     };
 
@@ -2242,6 +2277,106 @@ describe('CodingJobService', () => {
       service.markCodingJobResultsApplied(1, 3)
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('updates concurrent jobs when transactions occupy every pool connection', async () => {
+    const poolCapacity = 10;
+    const jobIds = Array.from({ length: poolCapacity }, (_, index) => index + 1);
+    let leasedConnections = 0;
+    let releaseAllTransactions: () => void = () => undefined;
+    const allTransactionsStarted = new Promise<void>(resolve => { releaseAllTransactions = resolve; });
+    let workspaceLockTail = Promise.resolve();
+    const borrowExtraConnection = jest.fn(async () => {
+      if (leasedConnections >= poolCapacity) {
+        throw new Error('Pool exhausted: transaction requested another connection');
+      }
+      return [];
+    });
+    const globalCoderRepository = { find: borrowExtraConnection };
+    const globalMissingRepository = { findOne: borrowExtraConnection, save: borrowExtraConnection };
+    const globalWorkspaceService = { findOne: borrowExtraConnection };
+    const sharedCache = { get: jest.fn(), set: jest.fn() };
+    Object.assign(service, {
+      usersService: new UsersService(createRepo() as never, globalCoderRepository as never),
+      missingsProfilesService: new MissingsProfilesService(
+        globalMissingRepository as never, createRepo() as never, createRepo() as never, sharedCache as never
+      ),
+      workspaceExclusionService: new WorkspaceExclusionService(
+        globalWorkspaceService as never,
+        { find: borrowExtraConnection } as never,
+        sharedCache as never
+      )
+    });
+    const jobs = new Map(jobIds.map(id => [id, {
+      id,
+      workspace_id: 3,
+      status: 'active',
+      missings_profile_id: 7
+    }]));
+    connection.transaction.mockImplementation(async (callback: (manager: EntityManager) => Promise<unknown>) => {
+      leasedConnections += 1;
+      if (leasedConnections === poolCapacity) releaseAllTransactions();
+      await allTransactionsStarted;
+      let releaseWorkspaceLock: (() => void) | undefined;
+      const jobRepo = createRepo();
+      jobRepo.findOne.mockImplementation(async options => ({ ...jobs.get(options.where.id) }));
+      const unitRepo = createRepo();
+      unitRepo.createQueryBuilder.mockImplementation(() => {
+        const query = createQueryBuilder(1);
+        query.andWhere.mockImplementation((condition: string) => {
+          if (condition.includes('is_open')) query.getCount.mockResolvedValue(0);
+          return query;
+        });
+        return query;
+      });
+      const transactionCoderRepository = { find: jest.fn().mockResolvedValue([{ userId: 4 }]) };
+      const transactionMissingRepository = {
+        findOne: jest.fn().mockResolvedValue({
+          id: 7,
+          workspace_id: 3,
+          label: 'Custom',
+          missings: '[]'
+        })
+      };
+      const transactionWorkspaceRepository = { findOne: jest.fn().mockResolvedValue({ settings: {} }) };
+      const repositories = new Map<unknown, unknown>([
+        [CodingJob, jobRepo],
+        [CodingJobUnit, unitRepo],
+        [CodingJobCoder, createRepo()],
+        [WorkspaceUser, transactionCoderRepository],
+        [MissingsProfile, transactionMissingRepository],
+        [Workspace, transactionWorkspaceRepository]
+      ]);
+      const manager = {
+        find: jest.fn().mockResolvedValue([]),
+        query: async () => {
+          const previousLock = workspaceLockTail;
+          workspaceLockTail = new Promise<void>(resolve => { releaseWorkspaceLock = resolve; });
+          await previousLock;
+        },
+        getRepository: (entity: unknown) => repositories.get(entity)
+      } as unknown as EntityManager;
+      try {
+        return await callback(manager);
+      } finally {
+        releaseWorkspaceLock?.();
+        leasedConnections -= 1;
+      }
+    });
+
+    const result = await Promise.all(jobIds.map(id => service.updateCodingJob(id, 3, {
+      name: `Updated ${id}`,
+      status: 'completed',
+      assignedCoders: [4],
+      missingsProfileId: 7
+    })));
+
+    expect(result).toEqual(jobIds.map(id => expect.objectContaining({ id, status: 'completed' })));
+    expect(connection.transaction).toHaveBeenCalledTimes(poolCapacity);
+    expect(borrowExtraConnection).not.toHaveBeenCalled();
+    expect(sharedCache.get).not.toHaveBeenCalled();
+    expect(sharedCache.set).not.toHaveBeenCalled();
+    expect(leasedConnections).toBe(0);
   });
 
   it('builds response queries for coding job variables and bundles', async () => {
@@ -2745,7 +2880,7 @@ describe('CodingJobService', () => {
       coding_issue_option: -2,
       notes: 'source note'
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne
       .mockResolvedValueOnce(sourceUnit)
       .mockResolvedValueOnce(null);
@@ -2834,7 +2969,7 @@ describe('CodingJobService', () => {
       coding_issue_option: -2,
       notes: null
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne
       .mockResolvedValueOnce(sourceUnit)
       .mockResolvedValueOnce(null);
@@ -2879,6 +3014,10 @@ describe('CodingJobService', () => {
         id: 1,
         workspace_id: 3,
         status
+      }).mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
       });
 
       await expect(service.saveCodingIssueReviewProgress(1, 42, {
@@ -2898,6 +3037,10 @@ describe('CodingJobService', () => {
     'rejects coding issue review notes for %s source jobs',
     async status => {
       codingJobRepository.findOne.mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        status
+      }).mockResolvedValueOnce({
         id: 1,
         workspace_id: 3,
         status
@@ -2933,7 +3076,7 @@ describe('CodingJobService', () => {
       score: 2,
       coding_issue_option: null
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
 
     await expect(service.saveCodingIssueReviewProgress(1, 42, {
@@ -2965,7 +3108,7 @@ describe('CodingJobService', () => {
       score: 2,
       coding_issue_option: null
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
 
     await expect(service.saveCodingIssueReviewNotes(1, 42, {
@@ -2997,7 +3140,7 @@ describe('CodingJobService', () => {
       score: null,
       coding_issue_option: -2
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne.mockResolvedValueOnce(sourceUnit);
     codingJobRepository.find.mockResolvedValueOnce([]);
 
@@ -3016,6 +3159,7 @@ describe('CodingJobService', () => {
     const sourceJob = {
       id: 1,
       workspace_id: 3,
+      creatorUserId: 7,
       name: 'Original job',
       description: 'description',
       showScore: true,
@@ -3052,7 +3196,7 @@ describe('CodingJobService', () => {
       coding_issue_option: -2,
       notes: 'source note'
     };
-    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob);
+    codingJobRepository.findOne.mockResolvedValueOnce(sourceJob).mockResolvedValueOnce(sourceJob);
     codingJobUnitRepository.findOne
       .mockResolvedValueOnce(sourceUnit)
       .mockResolvedValueOnce(null);
@@ -3078,6 +3222,7 @@ describe('CodingJobService', () => {
         source_coding_job_id: 1,
         reviewer_user_id: 42,
         job_definition_id: 9,
+        creatorUserId: 7,
         status: 'completed'
       })
     );
@@ -4053,6 +4198,10 @@ describe('CodingJobService', () => {
       id: 1,
       workspace_id: 3,
       job_type: 'regular'
+    }).mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
     });
     codingJobUnitRepository.find
       .mockResolvedValueOnce([
@@ -4116,6 +4265,10 @@ describe('CodingJobService', () => {
 
   it('uses the latest coding issue review progress when multiple managers reviewed the same unit', async () => {
     codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    }).mockResolvedValueOnce({
       id: 1,
       workspace_id: 3,
       job_type: 'regular'
@@ -4222,6 +4375,10 @@ describe('CodingJobService', () => {
         id: 1,
         workspace_id: 3,
         job_type: 'regular'
+      }).mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        job_type: 'regular'
       });
       codingJobUnitRepository.find
         .mockResolvedValueOnce([
@@ -4316,6 +4473,10 @@ describe('CodingJobService', () => {
         id: 1,
         workspace_id: 3,
         job_type: 'regular'
+      }).mockResolvedValueOnce({
+        id: 1,
+        workspace_id: 3,
+        job_type: 'regular'
       });
       codingJobUnitRepository.find
         .mockResolvedValueOnce([
@@ -4406,6 +4567,10 @@ describe('CodingJobService', () => {
 
   it('keeps the source coding issue visible when a review unit has no progress', async () => {
     codingJobRepository.findOne.mockResolvedValueOnce({
+      id: 1,
+      workspace_id: 3,
+      job_type: 'regular'
+    }).mockResolvedValueOnce({
       id: 1,
       workspace_id: 3,
       job_type: 'regular'

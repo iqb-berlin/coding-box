@@ -54,7 +54,7 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.updateJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } })).resolves.toMatchObject({
+    await expect(controller.updateJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } } as never)).resolves.toMatchObject({
       id: 42,
       workspace_id: 5,
       status: 'approved'
@@ -73,7 +73,7 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.approveJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } })).resolves.toMatchObject({
+    await expect(controller.approveJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } } as never)).resolves.toMatchObject({
       id: 42,
       workspace_id: 5,
       status: 'approved'
@@ -88,7 +88,7 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.deleteJobDefinition(5, 42, { user: { id: 7 } })).resolves.toEqual({
+    await expect(controller.deleteJobDefinition(5, 42, { user: { id: 7 } } as never)).resolves.toEqual({
       success: true,
       message: 'Job definition deleted successfully'
     });
@@ -109,7 +109,7 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.createCodingJobFromDefinition(5, 42, { user: { id: 7 } })).resolves.toMatchObject({
+    await expect(controller.createCodingJobFromDefinition(5, 42, { user: { id: 7 } } as never)).resolves.toMatchObject({
       success: true,
       jobsCreated: 2
     });

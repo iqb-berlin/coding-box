@@ -18,6 +18,7 @@ export default defineConfig({
       on('task', {
         'workflows:setup': () => harness.setup(),
         'workflows:prepare-imported-coding': () => harness.prepareImportedCoding(),
+        'workflows:prepare-ownership': () => harness.prepareOwnership(),
         'workflows:verify-audit-rollback': () => harness.verifyAuditRollback(),
         'workflows:verify-job-isolation': () => harness.verifyJobIsolation(),
         'workflows:cleanup': () => harness.cleanup()

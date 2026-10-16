@@ -480,7 +480,8 @@ export class WorkspaceCodingService {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
-    }
+    },
+    actorUserId?: number
   ): Promise<{
       success: boolean;
       jobsCreated: number;
@@ -506,7 +507,8 @@ export class WorkspaceCodingService {
     }> {
     return this.codingJobOperationsService.createDistributedCodingJobs(
       workspaceId,
-      request
+      request,
+      actorUserId
     );
   }
 

@@ -789,12 +789,13 @@ describe('WorkspaceCodingService', () => {
 
       const result = await service.createDistributedCodingJobs(
         workspaceId,
-        request
+        request,
+        7
       );
 
       expect(
         mockCodingJobOperationsService.createDistributedCodingJobs
-      ).toHaveBeenCalledWith(workspaceId, request);
+      ).toHaveBeenCalledWith(workspaceId, request, 7);
       expect(result).toEqual(expectedResult);
     });
   });

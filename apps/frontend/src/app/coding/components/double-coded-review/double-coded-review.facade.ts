@@ -142,11 +142,11 @@ export class DoubleCodedReviewFacade {
 
       const selectionControl = new FormControl({
         value: selectedValue,
-        disabled: item.isResolved
+        disabled: item.isResolved || item.canEditDraft !== true
       });
       const commentControl = new FormControl({
         value: comment,
-        disabled: item.isResolved
+        disabled: item.isResolved || item.canEditDraft !== true
       });
       this.selectionForm.addControl(
         this.getItemControlName(item),
@@ -261,6 +261,7 @@ export class DoubleCodedReviewFacade {
   }
 
   select(item: DoubleCodedItem, selectedValue: string): void {
+    if (item.canEditDraft !== true) return;
     this.replayDecisionByResponseId.delete(item.responseId);
     const selectedResult = item.coderResults.find(
       result => result.jobId.toString() === selectedValue
@@ -279,6 +280,7 @@ export class DoubleCodedReviewFacade {
     notes: string,
     hasNotes: boolean
   ): void {
+    if (item.canEditDraft !== true) return;
     const matchingResults = item.coderResults.filter(
       result => result.code === code
     );
@@ -410,6 +412,10 @@ export class DoubleCodedReviewFacade {
         candidate => candidate.responseId === entry.responseId
       );
       if (!item) {
+        remainingEntries.push(entry);
+        return;
+      }
+      if (item.isResolved || item.canEditDraft !== true) {
         remainingEntries.push(entry);
         return;
       }
@@ -577,7 +583,7 @@ export class DoubleCodedReviewFacade {
   }
 
   private persistManagerDraft(item: DoubleCodedItem): void {
-    if (item.isResolved) return;
+    if (item.isResolved || item.canEditDraft !== true) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     const managerUserId = this.appService.userId;
     const selectedValue = this.getItemControl(item).value;
@@ -616,6 +622,7 @@ export class DoubleCodedReviewFacade {
   }
 
   private enqueueManagerDraftCommand(command: ManagerDraftCommand): void {
+    if (command.item.canEditDraft !== true) return;
     const signature = this.getManagerDraftCommandSignature(command);
     if (
       this.lastManagerDraftCommandSignatureByResponseId.get(
@@ -717,7 +724,7 @@ export class DoubleCodedReviewFacade {
   private createRecoveryEntry(
     item: DoubleCodedItem
   ): ReviewRecoveryEntry | null {
-    if (item.isResolved) return null;
+    if (item.isResolved || item.canEditDraft !== true) return null;
     const selectedValue = this.getItemControl(item).value || '';
     const comment = this.getCommentControl(item).value || '';
     const replayDecision = this.replayDecisionByResponseId.get(item.responseId);

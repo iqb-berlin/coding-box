@@ -5,6 +5,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository, In } from 'typeorm';
 import * as fastCsv from 'fast-csv';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import {
   JobDefinition,
   JobDefinitionCoderConfig,
@@ -32,7 +34,6 @@ import {
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { sanitizeCsvText } from '../../../utils/csv.util';
 import { JournalService } from '../shared/journal.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 
 type JobDefinitionBundleForUsage = JobDefinitionVariableBundle & {
   variables?: JobDefinitionVariable[];
@@ -1015,9 +1016,13 @@ export class JobDefinitionService {
     await repository.save(jobDefinition);
   }
 
-  async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number, actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+  async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number,
+                            actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+      await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
+      const repository = transactionManager.getRepository(JobDefinition);
+
+      const creatorUserId = await assertCodingResourceCreation(transactionManager, workspaceId, actorUserId);
       const coderAssignments = this.resolveCoderAssignments(createDto);
       const distributionSeed = createDto.distributionSeed || this.createDistributionSeed(workspaceId);
       const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
@@ -1067,8 +1072,9 @@ export class JobDefinitionService {
         );
       }
 
-      const jobDefinition = this.jobDefinitionRepository.create({
+      const jobDefinition = repository.create({
         workspace_id: workspaceId,
+        creatorUserId,
         name: createDto.name,
         description: createDto.description ?? null,
         status: createDto.status ?? 'draft',
@@ -1090,8 +1096,8 @@ export class JobDefinitionService {
         suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
       });
 
-      const saved = await manager.getRepository(JobDefinition).save(jobDefinition);
-      await this.recordDefinitionEvent(manager, workspaceId, saved.id, 'JOB_DEFINITION_CREATED', actorUserId);
+      const saved = await repository.save(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, saved.id, 'JOB_DEFINITION_CREATED', actorUserId);
       return saved;
     });
   }
@@ -1929,9 +1935,13 @@ export class JobDefinitionService {
     }
   }
 
-  async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto, actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+  async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto,
+                            actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+      await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
+      const repository = transactionManager.getRepository(JobDefinition);
+
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'definition', id, actorUserId);
       const normalizedId = Number(id);
       const preparedUpdate = await this.prepareJobDefinitionUpdate(
         normalizedId,
@@ -1954,8 +1964,13 @@ export class JobDefinitionService {
         updateDto.suppressGeneralInstructions !== undefined
       );
 
-      const savedDefinition = await manager.getRepository(JobDefinition).save(preparedUpdate.updatedDefinition);
       if (syncExistingJobDisplayOptions) {
+        const manager = transactionManager;
+        await assertCodingResourceMutation(manager, workspaceId, 'definition', normalizedId, actorUserId);
+        const savedDefinition = await manager
+          .getRepository(JobDefinition)
+          .save(preparedUpdate.updatedDefinition);
+
         await this.codingJobService.updateCodingJobDisplayOptionsByDefinitionId(
           workspaceId,
           normalizedId,
@@ -1967,15 +1982,24 @@ export class JobDefinitionService {
           manager,
           actorUserId
         );
+
+        await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
+        return savedDefinition;
       }
-      await this.recordDefinitionEvent(manager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
-      return savedDefinition;
+
+      const saved = await repository.save(preparedUpdate.updatedDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
+      return saved;
     });
   }
 
-  async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto, actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+  async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto,
+                             actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+      await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
+      const repository = transactionManager.getRepository(JobDefinition);
+
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'definition', id, actorUserId);
       const jobDefinition = await this.getJobDefinition(id, workspaceId);
       const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
 
@@ -2026,8 +2050,8 @@ export class JobDefinitionService {
         jobDefinition.missings_profile_id
       );
 
-      const savedDefinition = await manager.getRepository(JobDefinition).save(jobDefinition);
-      await this.recordDefinitionEvent(manager, workspaceId, id, approveDto.status === 'approved' ? 'JOB_DEFINITION_APPROVED' : 'JOB_DEFINITION_UPDATED', actorUserId);
+      const savedDefinition = await repository.save(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, approveDto.status === 'approved' ? 'JOB_DEFINITION_APPROVED' : 'JOB_DEFINITION_UPDATED', actorUserId);
       return savedDefinition;
     });
   }
@@ -2056,13 +2080,17 @@ export class JobDefinitionService {
     }
   }
 
-  async deleteJobDefinition(id: number, workspaceId: number, actorUserId?: number): Promise<void> {
-    await this.jobDefinitionRepository.manager.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+  async deleteJobDefinition(id: number, workspaceId: number,
+                            actorUserId?: number): Promise<void> {
+    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+      await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
+      const repository = transactionManager.getRepository(JobDefinition);
+
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'definition', id, actorUserId);
       const jobDefinition = await this.getJobDefinition(id, workspaceId);
       await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
-      await manager.getRepository(JobDefinition).remove(jobDefinition);
-      await this.recordDefinitionEvent(manager, workspaceId, id, 'JOB_DEFINITION_DELETED', actorUserId);
+      await repository.remove(jobDefinition);
+      await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_DELETED', actorUserId);
     });
   }
 
@@ -2180,7 +2208,9 @@ export class JobDefinitionService {
     };
   }
 
-  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number, actorUserId?: number) {
+  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number,
+                                      actorUserId?: number) {
+    await assertCodingResourceMutation(this.jobDefinitionRepository.manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
     return this.codingJobService.createDistributedCodingJobs(
       workspaceId,
@@ -2248,6 +2278,7 @@ export class JobDefinitionService {
     workspaceId: number,
     actorUserId?: number
   ): Promise<JobDefinitionRefreshApplyResultDto> {
+    await assertCodingResourceMutation(this.jobDefinitionRepository.manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
     const result = await this.codingJobService.refreshDistributedCodingJobs(
       workspaceId,
@@ -2281,6 +2312,7 @@ export class JobDefinitionService {
     updateDto: UpdateJobDefinitionDto,
     actorUserId?: number
   ): Promise<JobDefinitionRefreshApplyResultDto> {
+    await assertCodingResourceMutation(this.jobDefinitionRepository.manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
       jobDefinitionId,
       workspaceId,

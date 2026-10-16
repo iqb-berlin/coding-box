@@ -22,6 +22,7 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 import { AppService } from '../../../core/services/app.service';
@@ -69,6 +70,7 @@ interface TrainingNameFilterOption {
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
+  readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
 
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
@@ -96,6 +98,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   protected displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.loadCoderTrainings();
   }
 
@@ -212,6 +215,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   protected createTraining(): void {
+    if (!this.permissions.canCreate) return;
     this.trainingCreationRequested.emit();
   }
 
@@ -388,6 +392,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   protected deleteTraining(training: CoderTraining): void {
+    if (!this.permissions.canEdit(training)) return;
     const dialogRef = this.dialog.open(DeleteConfirmationDialog, {
       width: '400px',
       data: { training }
@@ -401,6 +406,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   private performDelete(training: CoderTraining): void {
+    if (!this.permissions.canEdit(training)) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
