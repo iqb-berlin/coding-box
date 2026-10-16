@@ -8398,7 +8398,7 @@ export class CodingJobService {
       const jobs = await manager.find(CodingJob, { where: { workspace_id: workspaceId, id: In(jobIds) } });
       if (jobs.length !== jobIds.length) throw new NotFoundException('Coding job not found');
       await manager.remove(CodingJob, jobs);
-      for (const job of jobs) await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_DELETED', actorUserId);
+      for (const id of jobIds) await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_DELETED', actorUserId);
     });
     await this.invalidateIncompleteVariablesCache(workspaceId);
     return { success: true };

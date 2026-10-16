@@ -45,7 +45,6 @@ const createRepo = () => {
       transaction: jest.fn(async (callback: (manager: {
         query: jest.Mock;
         getRepository: jest.Mock;
-        query: jest.Mock;
       }) => Promise<unknown>) => callback({
         query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn(() => repo)
