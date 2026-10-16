@@ -215,10 +215,13 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     await lockWorkspaceTestResultsMutationInTransaction(holder.manager, workspaceId);
     await holder.manager.findOneOrFail(CodingJob, { where: { id }, lock: { mode: 'pessimistic_write' } });
     let finished = false;
-    const attempt = action === 'late-pause' ? jobs.pauseCodingJob(id, workspaceId, owner.id) :
-      action === 'late-progress' ? jobs.saveCodingProgress(id, {} as never) :
-        action === 'late-notes' ? jobs.saveCodingNotes(id, {} as never) :
-          jobs.updateCodingJob(id, workspaceId, { status: 'paused' }, owner.id);
+    const actions: Record<string, () => Promise<CodingJob>> = {
+      'late-pause': () => jobs.pauseCodingJob(id, workspaceId, owner.id),
+      'late-progress': () => jobs.saveCodingProgress(id, {} as never),
+      'late-notes': () => jobs.saveCodingNotes(id, {} as never),
+      'manager-update': () => jobs.updateCodingJob(id, workspaceId, { status: 'paused' }, owner.id)
+    };
+    const attempt = actions[action]();
     const observed = attempt.then(() => { finished = true; }, () => { finished = true; });
     try {
       const deadline = Date.now() + 5000;
