@@ -110,6 +110,8 @@
         "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/services/validation/validation-context.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.spec.ts",
+        "apps/frontend/src/app/shared/services/test-result/test-result-cache.service.spec.ts",
+        "cypress/component/test-results.component.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component.spec.ts",
         "cypress/zoneless/validation-dialog.cy.ts",
         "cypress/zoneless/validation-access.cy.ts",

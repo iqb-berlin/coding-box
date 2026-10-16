@@ -410,6 +410,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
+  private testResultsRequest = { page: 0, limit: 50, searchText: '' };
+  private testResultsRequestGeneration = 0;
   private deleteTaskSubscription: Subscription | null = null;
   private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -442,6 +444,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly testPerson = signal<P | null>(null);
   protected readonly selectedBooklet = signal<Booklet | string>('');
   protected readonly isLoading = signal<boolean>(true);
+  protected readonly testResultsLoadFailed = signal(false);
   protected readonly isUploadingResults = signal<boolean>(false);
   protected readonly isSearching = signal<boolean>(false);
   readonly isLoadingBooklets = signal<boolean>(false);
@@ -559,6 +562,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.testResultsRequestGeneration += 1;
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
@@ -1275,25 +1279,37 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     limit: number = 50,
     searchText: string = ''
   ): void {
+    this.testResultsRequestGeneration += 1;
+    const requestGeneration = this.testResultsRequestGeneration;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.testResultsRequest = { page, limit, searchText };
     this.isLoading.set(true);
+    this.testResultsLoadFailed.set(false);
     this.testResultService
-      .getTestResults(
-        this.appService.selectedWorkspaceId,
-        page,
-        limit,
-        searchText
-      ).pipe(takeUntilDestroyed(this.destroyRef))
+      .getTestResults(workspaceId, page, limit, searchText)
+      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) return;
           this.isLoading.set(false);
           this.isSearching.set(false);
           const { data, total } = response;
           this.updateTable(data, total);
         },
         error: () => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) return;
           this.isLoading.set(false);
+          this.isSearching.set(false);
+          this.testResultsLoadFailed.set(true);
         }
       });
+  }
+
+  retryTestResultsLoad(): void {
+    const { page, limit, searchText } = this.testResultsRequest;
+    this.createTestResultsList(page, limit, searchText);
   }
 
   private loadWorkspaceOverview(): void {

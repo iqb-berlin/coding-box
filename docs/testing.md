@@ -46,6 +46,7 @@ stack logs under `cypress/replay-artifacts/` and `tmp/replay-e2e-artifacts/`.
 | Submitted jobs lose manually saved results | Real submit succeeds, stored job is complete, export includes the imported person, code and note |
 | Exports report success with missing results | Live incomplete item-matrix jobs remain failed and deliver diagnostic ZIP; successful workflow checks downloaded CSV content |
 | Replay mixes people, aliases or pages | Embedded Aspect player, two people, pages, aliases, anchors and delayed navigation regression |
+| Failed or obsolete result requests appear as valid empty/current results | Controlled HTTP cache regressions, native zoneless error/retry and workspace-cancellation tests, and desktop/mobile browser component cases; flat responses remain independent of person-list failures |
 | Unit failures are hidden in a green pipeline | Blocking complete suites, 60% coverage checks and JUnit failure/initialization-error reporting |
 | A manual note impersonates a backend action or actor | Real authenticated API rejects event/actor/job claims; persisted notes use the authenticated user and manual event type; journal CSV neutralizes formula cells |
 | Persisted import data loses its provenance | Browser upload checks the persisted batch event against its exact Bull job, workspace and authenticated user without raw response values |
@@ -110,6 +111,22 @@ observation intercepts do not replace successful server responses.
 For Docker-in-Docker, CI sets `REPLAY_E2E_CONNECT_HOST=docker` and
 `REPLAY_E2E_PUBLISH_HOST=0.0.0.0`. Authentication runs forward these services to
 browser loopback origins so native Web Crypto and Keycloak PKCE remain enabled.
+
+## Result loading and cache invalidation
+
+HTTP failures from the paginated person list remain errors and offer a visible
+retry of the same page, size and query. A successful empty response is still
+cached. Previous rows can remain visible after failure, accompanied by the error
+notice; empty-result messages are suppressed while a query is pending or failed.
+The flat response table loads independently of the person-list request.
+
+Request generation and workspace ownership prevent obsolete replies from changing
+the view. Cache regressions additionally control response order, invalidation
+while pending, delayed subscription, a newer failed request followed by an older
+success, person-detail invalidation and neighbouring workspace IDs. Revoked
+requests can finish for their original subscribers but cannot refill the cache.
+These are controlled HTTP and browser component fixtures; the separate live
+workflow gates provide real application, database and authentication evidence.
 
 ## Testcenter import recovery on PostgreSQL
 
