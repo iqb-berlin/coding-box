@@ -27,6 +27,7 @@ describe('Double-coded review flow', () => {
 
     const buildReviewItem = (): DoubleCodedReviewItemDto => ({
       responseId: 501,
+      canEditDraft: true,
       sourceUnitId: 1501,
       unitName: 'Unit A',
       variableId: 'VAR_1',
@@ -92,6 +93,7 @@ describe('Double-coded review flow', () => {
           excludeTrainings: 'false'
         });
         request.reply({
+          canApplyResults: true,
           data: [buildReviewItem()],
           total: 1,
           page: 1,

@@ -1,5 +1,7 @@
 type OwnershipKind = 'bundle' | 'definition' | 'job' | 'training';
 type OwnershipRows = Record<OwnershipKind, { own: number; foreign: number; legacy: number }> & {
+  legacyCoding: { testPerson: string; unitId: string; variableId: string };
+} & {
   job: { review: number; results_applied: number };
 };
 
@@ -49,11 +51,28 @@ describe('coding ownership with real role login and PostgreSQL', () => {
     }
   }
 
-  it('denies resource creation for a coder without manager rights', () => {
+  it('denies manager actions while preserving assigned-coder writes on a legacy job', () => {
     login('file-access-1');
     api(`/admin/workspace/${setup.workspaceId}/variable-bundle`, 'POST', {
       name: 'Forbidden bundle', variables: []
     }).its('status').should('eq', 403);
+    cy.then(() => {
+      const route = resource('job', rows.job.legacy);
+      api(route.edit, 'PUT', { name: 'Forbidden rename' }).its('status').should('eq', 401);
+      api(`${route.edit}/pause`, 'POST').its('status').should('eq', 201);
+      api(`${route.edit}/resume`, 'POST').its('status').should('eq', 201);
+      api(`${route.edit}/notes`, 'POST', { ...rows.legacyCoding, notes: 'Assigned coder note' }).its('status').should('eq', 201);
+      api(`/admin/workspace/${setup.workspaceId}/coding-job/${rows.job.legacy}/notes`).then(({ body }) => {
+        expect(Object.values(body)).to.include('Assigned coder note');
+      });
+      api(`${route.edit}/progress`, 'POST', { ...rows.legacyCoding, selectedCode: { id: 1, score: 1 }, isOpen: false })
+        .its('status').should('eq', 201);
+      api(`${route.edit}/submit`, 'POST').then(({ status, body }) => {
+        expect(status).to.equal(201);
+        expect(body.status).to.equal('completed');
+        expect(body.creatorUserId).to.equal(null);
+      });
+    });
   });
 
   for (const username of ['file-access-2', 'file-access-3', 'file-access-admin']) {
