@@ -21,6 +21,7 @@ import { UserAccessRightsDialogComponent } from './sys-admin/components/user-acc
 import { FileService } from './shared/services/file/file.service';
 import { SystemSettingsService } from './core/services/system-settings.service';
 import { AppService } from './core/services/app.service';
+import { UserService } from './shared/services/user/user.service';
 import { ResourcePackageService } from './shared/services/response/resource-package.service';
 import { WorkspaceService } from './workspace/services/workspace.service';
 import { VariableBundleService } from './coding/services/variable-bundle.service';
@@ -99,7 +100,8 @@ async function createDialog(c: DialogCase) {
       { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1, unitId: 'UNIT', selectedWorkspace: [1] } },
       { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => of() } },
       { provide: MatSnackBar, useValue: { open: jest.fn(() => ({ dismiss: jest.fn() })) } },
-      { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
+      { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
+      { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of(), authData: { userId: 7, isAdmin: false } } },
       { provide: CodingJobBackendService, useValue: {} },
       { provide: WorkspaceBackendService, useValue: ws },
       { provide: UserBackendService, useValue: { getUsersFull: () => of([{ id: 7, username: 'Audit user' }]), getWorkspacesByUserList: () => of([]) } },
