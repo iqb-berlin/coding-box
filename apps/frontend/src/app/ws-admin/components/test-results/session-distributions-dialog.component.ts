@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +13,7 @@ export type SessionDistributionsDialogData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-session-distributions-dialog',
   standalone: true,
   imports: [
@@ -197,18 +198,15 @@ export type SessionDistributionsDialogData = {
   ]
 })
 export class SessionDistributionsDialogComponent {
-  readonly browserItems = this.toSortedCountList(this.data.browserCounts);
-  readonly osItems = this.toSortedCountList(this.data.osCounts);
-  readonly screenItems = this.toSortedCountList(this.data.screenCounts);
+  data = inject<SessionDistributionsDialogData>(MAT_DIALOG_DATA);
 
-  readonly browserTotal = this.totalCount(this.browserItems);
-  readonly osTotal = this.totalCount(this.osItems);
-  readonly screenTotal = this.totalCount(this.screenItems);
+  protected readonly browserItems = this.toSortedCountList(this.data.browserCounts);
+  protected readonly osItems = this.toSortedCountList(this.data.osCounts);
+  protected readonly screenItems = this.toSortedCountList(this.data.screenCounts);
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA)
-    public data: SessionDistributionsDialogData
-  ) {}
+  protected readonly browserTotal = this.totalCount(this.browserItems);
+  protected readonly osTotal = this.totalCount(this.osItems);
+  protected readonly screenTotal = this.totalCount(this.screenItems);
 
   private toSortedCountList(
     map?: Record<string, number>
@@ -224,7 +222,7 @@ export class SessionDistributionsDialogComponent {
     return list.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
   }
 
-  getPercent(count: number, total: number): number {
+  protected getPercent(count: number, total: number): number {
     const t = Number(total) || 0;
     if (t <= 0) {
       return 0;
@@ -232,7 +230,7 @@ export class SessionDistributionsDialogComponent {
     return Math.round((Number(count) / t) * 1000) / 10;
   }
 
-  getTooltip(label: string, count: number, total: number): string {
+  protected getTooltip(label: string, count: number, total: number): string {
     return `${label}: ${count} (${this.getPercent(count, total)}%)`;
   }
 }

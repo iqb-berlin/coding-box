@@ -1,4 +1,6 @@
-import { Component, Input } from '@angular/core';
+import {
+  Component, input, ChangeDetectionStrategy
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -8,19 +10,20 @@ export type OverallValidationStatus = 'not-run' | 'running' | 'success' | 'faile
  * Component for displaying overall validation status banner
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-result-banner',
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="validation-result" [ngClass]="'validation-' + status">
+    <div class="validation-result" [class]="'validation-' + status()">
       <mat-icon>{{ getStatusIcon() }}</mat-icon>
       <div class="result-content">
-        <div class="headline"><strong>{{ headline }}</strong></div>
-        @if (subline) {
-          <div class="subline">{{ subline }}</div>
+        <div class="headline"><strong>{{ headline() }}</strong></div>
+        @if (subline()) {
+          <div class="subline">{{ subline() }}</div>
         }
-        @if (recommendation) {
-          <div class="recommendation">{{ recommendation }}</div>
+        @if (recommendation()) {
+          <div class="recommendation">{{ recommendation() }}</div>
         }
       </div>
     </div>
@@ -94,13 +97,13 @@ export type OverallValidationStatus = 'not-run' | 'running' | 'success' | 'faile
   `]
 })
 export class ValidationResultBannerComponent {
-  @Input() status: OverallValidationStatus = 'not-run';
-  @Input() headline = '';
-  @Input() subline = '';
-  @Input() recommendation = '';
+  readonly status = input<OverallValidationStatus>('not-run');
+  readonly headline = input('');
+  readonly subline = input('');
+  readonly recommendation = input('');
 
-  getStatusIcon(): string {
-    switch (this.status) {
+  protected getStatusIcon(): string {
+    switch (this.status()) {
       case 'running':
         return 'hourglass_empty';
       case 'failed':

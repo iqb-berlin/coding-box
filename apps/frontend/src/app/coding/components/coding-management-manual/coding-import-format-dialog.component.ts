@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -48,6 +48,7 @@ export interface CodingImportFormatDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-import-format-dialog',
   standalone: true,
   imports: [
@@ -311,17 +312,19 @@ export interface CodingImportFormatDialogResult {
   `]
 })
 export class CodingImportFormatDialogComponent {
-  selectedVersion?: 'v1' | 'v2' | 'v3';
-  existingCodingMode: CodingImportExistingCodingMode = 'skip-conflicts';
+  private dialogRef = inject<MatDialogRef<CodingImportFormatDialogComponent>>(MatDialogRef);
+  protected data = inject<CodingImportFormatDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<CodingImportFormatDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingImportFormatDialogData
-  ) {
+  protected selectedVersion?: 'v1' | 'v2' | 'v3';
+  protected existingCodingMode: CodingImportExistingCodingMode = 'skip-conflicts';
+
+  constructor() {
+    const data = this.data;
+
     this.selectedVersion = data.selectedVersion || data.availableVersions?.[0];
   }
 
-  getFormatLabel(): string {
+  protected getFormatLabel(): string {
     switch (this.data.detectedFormat) {
       case 'external-coding':
         return 'Kodierungen aus Datei';
@@ -338,7 +341,7 @@ export class CodingImportFormatDialogComponent {
     }
   }
 
-  getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
+  protected getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
     const labels = {
       v1: 'v1 - erster Autocoder-Lauf',
       v2: 'v2 - manuelle Kodierung',
@@ -347,7 +350,7 @@ export class CodingImportFormatDialogComponent {
     return labels[version];
   }
 
-  confirm(): void {
+  protected confirm(): void {
     if (!this.data.canImport) {
       return;
     }
@@ -361,7 +364,7 @@ export class CodingImportFormatDialogComponent {
     } satisfies CodingImportFormatDialogResult);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }

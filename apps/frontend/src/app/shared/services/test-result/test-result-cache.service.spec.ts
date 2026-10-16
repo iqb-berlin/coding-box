@@ -119,6 +119,102 @@ describe('TestResultCacheService', () => {
     });
   });
 
+  describe('request ordering and invalidation', () => {
+    const listUrl = (workspaceId = 1) => `${mockServerUrl}admin/workspace/${workspaceId}/test-results/?page=1&limit=10`;
+    const response = (id: number) => ({
+      data: [{
+        id, code: `P${id}`, group: 'G1', login: `person-${id}`, uploaded_at: '2026-10-16T08:00:00.000Z'
+      }],
+      total: 1
+    });
+
+    it.each(['workspace', 'all'])('does not refill the %s cache from a request invalidated while pending', scope => {
+      service.getTestResults(1, 1, 10).subscribe();
+      const oldRequest = httpMock.expectOne(listUrl());
+      if (scope === 'workspace') service.invalidateWorkspaceCache(1);
+      else service.clearCache();
+      oldRequest.flush(response(1));
+
+      const next = jest.fn();
+      service.getTestResults(1, 1, 10).subscribe(next);
+      const freshRequests = httpMock.match(listUrl());
+      freshRequests.forEach(request => request.flush(response(2)));
+      expect(freshRequests).toHaveLength(1);
+      expect(next).toHaveBeenCalledWith(response(2));
+    });
+
+    it('keeps the newest response cached when an older request completes afterwards', () => {
+      service.getTestResults(1, 1, 10).subscribe();
+      const oldRequest = httpMock.expectOne(listUrl());
+      service.getTestResults(1, 1, 10).subscribe();
+      const currentRequest = httpMock.expectOne(listUrl());
+      currentRequest.flush(response(2));
+      oldRequest.flush(response(1));
+
+      const cached = jest.fn();
+      service.getTestResults(1, 1, 10).subscribe(cached);
+      httpMock.expectNone(listUrl());
+      expect(cached).toHaveBeenCalledWith(response(2));
+    });
+
+    it('does not cache an older success after the latest request fails', () => {
+      service.getTestResults(1, 1, 10).subscribe();
+      const oldRequest = httpMock.expectOne(listUrl());
+      const failure = jest.fn();
+      service.getTestResults(1, 1, 10).subscribe({ error: failure });
+      const latestRequest = httpMock.expectOne(listUrl());
+      latestRequest.flush({}, { status: 500, statusText: 'Temporary failure' });
+      oldRequest.flush(response(1));
+
+      const next = jest.fn();
+      service.getTestResults(1, 1, 10).subscribe(next);
+      const freshRequests = httpMock.match(listUrl());
+      freshRequests.forEach(request => request.flush(response(2)));
+      expect(failure).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
+      expect(freshRequests).toHaveLength(1);
+      expect(next).toHaveBeenCalledWith(response(2));
+    });
+
+    it('rechecks the cache when an observable is subscribed after invalidation', () => {
+      service.getTestResults(1, 1, 10).subscribe();
+      httpMock.expectOne(listUrl()).flush(response(1));
+      const deferred = service.getTestResults(1, 1, 10);
+      service.invalidateWorkspaceCache(1);
+      const next = jest.fn();
+      deferred.subscribe(next);
+      const freshRequests = httpMock.match(listUrl());
+      freshRequests.forEach(request => request.flush(response(2)));
+      expect(freshRequests).toHaveLength(1);
+      expect(next).toHaveBeenCalledWith(response(2));
+    });
+
+    it('also prevents invalidated person details from refilling the cache', () => {
+      const url = `${mockServerUrl}admin/workspace/1/test-results/7`;
+      service.getPersonTestResults(1, 7).subscribe();
+      const oldRequest = httpMock.expectOne(url);
+      service.invalidateWorkspaceCache(1);
+      oldRequest.flush([{ name: 'old-booklet' }]);
+      const next = jest.fn();
+      service.getPersonTestResults(1, 7).subscribe(next);
+      const freshRequests = httpMock.match(url);
+      freshRequests.forEach(request => request.flush([{ name: 'new-booklet' }]));
+      expect(freshRequests).toHaveLength(1);
+      expect(next).toHaveBeenCalledWith([{ name: 'new-booklet' }]);
+    });
+
+    it('preserves workspace 10 when invalidating workspace 1', () => {
+      service.getTestResults(10, 1, 10).subscribe();
+      httpMock.expectOne(listUrl(10)).flush(response(10));
+      service.invalidateWorkspaceCache(1);
+      const cached = jest.fn();
+      service.getTestResults(10, 1, 10).subscribe(cached);
+      const unexpectedRequests = httpMock.match(listUrl(10));
+      unexpectedRequests.forEach(request => request.flush(response(10)));
+      expect(unexpectedRequests).toHaveLength(0);
+      expect(cached).toHaveBeenCalledWith(response(10));
+    });
+  });
+
   describe('invalidateWorkspaceCache', () => {
     it('should clear cache for workspace', () => {
       const mockResponse = { data: [], total: 0 };

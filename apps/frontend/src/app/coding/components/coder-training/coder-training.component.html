@@ -92,7 +92,7 @@
     <mat-divider class="section-divider"></mat-divider>
 
     <!-- Reference Trainings Section -->
-    @if (availableTrainings.length > 0) {
+    @if (availableTrainings().length > 0) {
       <div class="section">
         <div class="section-header">
           <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.reference-trainings.title' | translate }}</h3>
@@ -101,7 +101,7 @@
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
           <mat-select formControlName="referenceTrainingIds" multiple>
-            @for (t of availableTrainings; track t.id) {
+            @for (t of availableTrainings(); track t.id) {
               <mat-option [value]="t.id">
                 <div class="training-option">
                   <span class="training-option-title">{{ getTrainingOptionTitle(t) }}</span>
@@ -137,7 +137,7 @@
       <div class="section-header">
         <h3 class="section-subtitle">
           Kodierer-Auswahl
-          <span class="selection-count">({{selectedCoders.size}} ausgewählt)</span>
+          <span class="selection-count">({{selectedCoders().size}} ausgewählt)</span>
         </h3>
         <div class="header-actions">
           <button mat-button type="button" (click)="selectAllCoders()" class="action-link">Alle auswählen</button>
@@ -146,7 +146,7 @@
       </div>
 
       <div class="coder-grid">
-        @for (coder of coders; track trackByCoderId($index, coder)) {
+        @for (coder of coders(); track trackByCoderId($index, coder)) {
           <div class="coder-item"
             [class.selected]="isCoderSelected(coder)" role="button" tabindex="0"
             [attr.aria-pressed]="isCoderSelected(coder)"
@@ -172,7 +172,7 @@
         }
       </div>
 
-      @if (coders.length === 0) {
+      @if (coders().length === 0) {
         <div class="no-coders-message">
           <mat-icon>group_off</mat-icon>
           <p>Keine Kodierer verfügbar</p>
@@ -210,29 +210,29 @@
       <div class="section-header">
         <h3 class="section-subtitle">
           Variablenbündel
-          @if (isLoadingBundles) {
+          @if (isLoadingBundles()) {
             <span class="loading-text">
               <mat-progress-spinner mode="indeterminate" diameter="16"
               style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
               Lade Variablenbündel...
             </span>
           }
-          @if (!isLoadingBundles && availableBundles.length > 0) {
+          @if (!isLoadingBundles() && availableBundles().length > 0) {
             <span class="bundle-count">
-              ({{availableBundles.length}} verfügbare Variablenbündel)
+              ({{availableBundles().length}} verfügbare Variablenbündel)
             </span>
           }
         </h3>
         <div class="header-actions">
           <button mat-stroked-button color="primary" type="button" (click)="openImportDialog()"
-            [disabled]="isLoadingVariables || isLoadingBundles">
+            [disabled]="isLoadingVariables() || isLoadingBundles()">
             <mat-icon>download</mat-icon>
             Aus Jobdefinition importieren
           </button>
         </div>
       </div>
 
-      @if (!isLoadingBundles && availableBundles.length > 0) {
+      @if (!isLoadingBundles() && availableBundles().length > 0) {
         <div class="bundle-selection">
           <div class="bundle-select-container">
             <mat-form-field appearance="outline" class="bundle-select-field">
@@ -343,7 +343,7 @@
         </div>
       }
 
-      @if (!isLoadingBundles && availableBundles.length === 0) {
+      @if (!isLoadingBundles() && availableBundles().length === 0) {
         <div class="no-bundles-message">
           <mat-icon>inventory_2</mat-icon>
           <p>Keine Variablenbündel verfügbar</p>
@@ -358,16 +358,16 @@
       <div class="section-header">
         <h3 class="section-subtitle">
           Variablen
-          @if (isLoadingVariables) {
+          @if (isLoadingVariables()) {
             <span class="loading-text">
               <mat-progress-spinner mode="indeterminate" diameter="16"
               style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
               Lade verfügbare Variablen...
             </span>
           }
-          @if (!isLoadingVariables && availableVariables.length > 0) {
+          @if (!isLoadingVariables() && availableVariables().length > 0) {
             <span class="variable-count">
-              ({{availableVariables.length}} verfügbare Variablen)
+              ({{availableVariables().length}} verfügbare Variablen)
             </span>
           }
         </h3>
@@ -507,7 +507,7 @@
     <div class="summary-card">
       <h4>Schulungs-Übersicht</h4>
       <ul>
-        <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
+        <li>Ausgewählte Kodierer: <strong>{{selectedCoders().size}}</strong></li>
         <li>
           Manuell ausgewählte Variablen: <strong>{{getManualVariablesCount()}}</strong>
         </li>
@@ -564,19 +564,19 @@
 
   <!-- Action Buttons -->
   <div class="action-buttons">
-    <button mat-raised-button color="primary" (click)="onStartTraining()" [disabled]="!canStartTraining() || isLoading"
+    <button mat-raised-button color="primary" (click)="onStartTraining()" [disabled]="!canStartTraining() || isLoading()"
       class="start-training-button"
       [matTooltip]="!canStartTraining() ? getFirstValidationMessage() : ''">
-      @if (!isLoading) {
+      @if (!isLoading()) {
         <mat-icon>{{ isEditMode ? 'save' : 'play_arrow' }}</mat-icon>
       }
-      @if (isLoading) {
+      @if (isLoading()) {
         <mat-progress-spinner mode="indeterminate" diameter="20"></mat-progress-spinner>
       }
       {{ getPrimaryActionLabel() }}
     </button>
 
-    <button mat-button (click)="onClose()" [disabled]="isLoading" class="cancel-button">
+    <button mat-button (click)="onClose()" [disabled]="isLoading()" class="cancel-button">
       <mat-icon>cancel</mat-icon>
       Abbrechen
     </button>

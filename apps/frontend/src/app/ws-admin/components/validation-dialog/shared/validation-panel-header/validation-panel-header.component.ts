@@ -1,4 +1,6 @@
-import { Component, Input } from '@angular/core';
+import {
+  Component, input, ChangeDetectionStrategy
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -8,17 +10,18 @@ export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
  * Reusable component for displaying validation panel headers with status indicators
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-panel-header',
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="validation-panel-header" [ngClass]="'validation-' + status">
+    <div class="validation-panel-header" [class]="'validation-' + status()">
       <div class="header-title">
         <mat-icon>{{ getStatusIcon() }}</mat-icon>
-        <span class="title-text">{{ title }}</span>
+        <span class="title-text">{{ title() }}</span>
       </div>
       <div class="header-badge">
-        <span class="validation-badge" [ngClass]="'validation-' + status">
+        <span class="validation-badge" [class]="'validation-' + status()">
           {{ getBadgeText() }}
         </span>
       </div>
@@ -97,13 +100,13 @@ export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
   `]
 })
 export class ValidationPanelHeaderComponent {
-  @Input() title = '';
-  @Input() status: ValidationStatus = 'not-run';
-  @Input() badgeText?: string;
-  @Input() errorCount?: number;
+  readonly title = input('');
+  readonly status = input<ValidationStatus>('not-run');
+  readonly badgeText = input<string>();
+  readonly errorCount = input<number>();
 
-  getStatusIcon(): string {
-    switch (this.status) {
+  protected getStatusIcon(): string {
+    switch (this.status()) {
       case 'running':
         return 'hourglass_empty';
       case 'failed':
@@ -115,16 +118,18 @@ export class ValidationPanelHeaderComponent {
     }
   }
 
-  getBadgeText(): string {
-    if (this.badgeText) {
-      return this.badgeText;
+  protected getBadgeText(): string {
+    const badgeText = this.badgeText();
+    if (badgeText) {
+      return badgeText;
     }
 
-    switch (this.status) {
+    const errorCount = this.errorCount();
+    switch (this.status()) {
       case 'running':
         return 'Läuft…';
       case 'failed':
-        return this.errorCount !== undefined ? `${this.errorCount} Fehler` : 'Fehler';
+        return errorCount !== undefined ? `${errorCount} Fehler` : 'Fehler';
       case 'success':
         return 'OK';
       default:

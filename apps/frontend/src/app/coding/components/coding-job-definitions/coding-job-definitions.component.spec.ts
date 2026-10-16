@@ -4,7 +4,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
@@ -36,7 +35,6 @@ describe('CodingJobDefinitionsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
-        provideNoopAnimations(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         {
@@ -113,21 +111,21 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('shows explicit loading and empty states', () => {
-    component.isLoading = true;
-    component.jobDefinitions = [];
+    component.isLoading.set(true);
+    component.jobDefinitions.set([]);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.loading-container')).toBeTruthy();
 
-    component.isLoading = false;
+    component.isLoading.set(false);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.empty-state')).toBeTruthy();
   });
 
   it('keeps existing definitions visible while refreshing', () => {
-    component.isLoading = true;
-    component.jobDefinitions = [
+    component.isLoading.set(true);
+    component.jobDefinitions.set([
       {
         id: 1,
         status: 'approved',
@@ -136,7 +134,7 @@ describe('CodingJobDefinitionsComponent', () => {
         assignedCoders: [],
         createdJobsCount: 0
       }
-    ];
+    ]);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
@@ -145,8 +143,8 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('renders a definition name with its id and description', () => {
-    component.isLoading = false;
-    component.jobDefinitions = [{
+    component.isLoading.set(false);
+    component.jobDefinitions.set([{
       id: 42,
       name: 'Lesen Klasse 4',
       description: 'Erste Erhebung',
@@ -154,7 +152,7 @@ describe('CodingJobDefinitionsComponent', () => {
       assignedVariables: [],
       assignedVariableBundles: [],
       assignedCoders: []
-    }];
+    }]);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.definition-name').textContent.trim())
@@ -164,14 +162,14 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('keeps the create action only in the empty state when no definitions exist', () => {
-    component.isLoading = false;
-    component.jobDefinitions = [];
+    component.isLoading.set(false);
+    component.jobDefinitions.set([]);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.header-actions > button')).toBeNull();
     expect(fixture.nativeElement.querySelector('.empty-state button')).toBeTruthy();
 
-    component.jobDefinitions = [
+    component.jobDefinitions.set([
       {
         id: 1,
         status: 'draft',
@@ -179,7 +177,7 @@ describe('CodingJobDefinitionsComponent', () => {
         assignedVariableBundles: [],
         assignedCoders: []
       }
-    ];
+    ]);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.header-actions > button')).toBeTruthy();
@@ -187,16 +185,16 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('separates delete from regular definition actions', async () => {
-    component.isLoading = false;
-    component.selectionMode = false;
-    component.jobDefinitions = [{
+    component.isLoading.set(false);
+    fixture.componentRef.setInput('selectionMode', false);
+    component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
       assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
       assignedCoders: [1],
       createdJobsCount: 0,
       blockingCreatedJobsCount: 0
-    }];
+    }]);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -214,28 +212,28 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('does not offer job creation again once jobs exist for a definition', () => {
-    component.isLoading = false;
-    component.selectionMode = false;
-    component.jobDefinitions = [{
+    component.isLoading.set(false);
+    fixture.componentRef.setInput('selectionMode', false);
+    component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
       assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
       assignedCoders: [1],
       createdJobsCount: 2
-    }];
+    }]);
     fixture.detectChanges();
 
     const rowAction = fixture.nativeElement.querySelector('.primary-row-action') as HTMLButtonElement;
 
     expect(rowAction.disabled).toBe(true);
-    expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBe(2);
-    expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
+    expect(component.getCreatedJobsCount(component.jobDefinitions()[0])).toBe(2);
+    expect(component.canCreateCodingJobs(component.jobDefinitions()[0])).toBe(false);
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
   });
 
   it('opens definitions with known existing jobs editable and blocks delete while jobs still block deletion', async () => {
-    component.isLoading = false;
-    component.selectionMode = false;
+    component.isLoading.set(false);
+    fixture.componentRef.setInput('selectionMode', false);
     const definition = {
       id: 6,
       status: 'approved' as const,
@@ -244,7 +242,7 @@ describe('CodingJobDefinitionsComponent', () => {
       createdJobsCount: 2,
       blockingCreatedJobsCount: 1
     };
-    component.jobDefinitions = [definition];
+    component.jobDefinitions.set([definition]);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -302,21 +300,21 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   it('blocks job creation when the created jobs count is missing', () => {
-    component.isLoading = false;
-    component.selectionMode = false;
-    component.jobDefinitions = [{
+    component.isLoading.set(false);
+    fixture.componentRef.setInput('selectionMode', false);
+    component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
       assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
       assignedCoders: [1]
-    }];
+    }]);
     fixture.detectChanges();
 
     const rowAction = fixture.nativeElement.querySelector('.primary-row-action') as HTMLButtonElement;
 
     expect(rowAction.disabled).toBe(true);
-    expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBeUndefined();
-    expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
+    expect(component.getCreatedJobsCount(component.jobDefinitions()[0])).toBeUndefined();
+    expect(component.canCreateCodingJobs(component.jobDefinitions()[0])).toBe(false);
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
   });
 
@@ -324,10 +322,10 @@ describe('CodingJobDefinitionsComponent', () => {
     const matDialog = TestBed.inject(MatDialog);
     const dialogRefMock = { afterClosed: () => of(false) };
     jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
-    component.coders = [
+    component.coders.set([
       { id: 1, name: 'Ada' },
       { id: 2, name: 'Bea' }
-    ];
+    ]);
     const firstSnapshot = {
       version: 1 as const,
       source: 'initial_creation' as const,
@@ -382,7 +380,7 @@ describe('CodingJobDefinitionsComponent', () => {
           definitionId: 42,
           definitionLabel: 'Definition #42',
           snapshot: latestSnapshot,
-          coders: component.coders,
+          coders: component.coders(),
           createdJobsCount: 2
         })
       })

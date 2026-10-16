@@ -1,4 +1,6 @@
-import { Component, inject, input } from '@angular/core';
+import {
+  Component, inject, input, ChangeDetectionStrategy
+} from '@angular/core';
 import { SafeUrl } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton } from '@angular/material/button';
@@ -6,6 +8,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { ImpressumDialogComponent } from '../../shared/dialogs/impressum-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-app-info',
   templateUrl: './app-info.component.html',
   styleUrls: ['./app-info.component.scss'],
@@ -23,7 +26,7 @@ export class AppInfoComponent {
   readonly userLongName = input.required<string | undefined>();
   readonly isUserLoggedIn = input.required<boolean>();
   readonly isAdmin = input.required<boolean>();
-  openImpressumDialog(): void {
+  protected openImpressumDialog(): void {
     this.dialog.open(ImpressumDialogComponent, {
       width: '600px',
       maxHeight: '90vh'

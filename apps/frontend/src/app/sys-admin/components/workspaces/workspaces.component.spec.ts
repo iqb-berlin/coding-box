@@ -1,17 +1,14 @@
 // eslint-disable-next-line max-classes-per-file
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { UntypedFormControl, UntypedFormGroup } from '@angular/forms';
+import { FormControl, FormGroup } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule } from '@angular/material/dialog';
 
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WorkspacesComponent } from './workspaces.component';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -21,7 +18,7 @@ describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;
   let fixture: ComponentFixture<WorkspacesComponent>;
   let workspaceBackendService: {
-    getAllWorkspacesList: jest.Mock;
+    getAllWorkspacesListOrFail: jest.Mock;
     addWorkspace: jest.Mock;
     changeWorkspace: jest.Mock;
     deleteWorkspace: jest.Mock;
@@ -32,7 +29,7 @@ describe('WorkspaceGroupsComponent', () => {
 
   beforeEach(async () => {
     workspaceBackendService = {
-      getAllWorkspacesList: jest.fn().mockReturnValue(of({
+      getAllWorkspacesListOrFail: jest.fn().mockReturnValue(of({
         data: [], total: 0, page: 1, limit: 10
       })),
       addWorkspace: jest.fn().mockReturnValue(of(17)),
@@ -53,7 +50,6 @@ describe('WorkspaceGroupsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -75,37 +71,50 @@ describe('WorkspaceGroupsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('derives selection IDs and names from the same snapshot', () => {
+    const selection = [{ id: 3, name: 'Selected workspace' }];
+    component.workspaceSelectionChanged(selection);
+    selection.push({ id: 9, name: 'Later selection' });
+    expect(component.selectedWorkspaces()).toEqual([3]);
+    expect(component.selectedWorkspaceRows()).toEqual([{ id: 3, name: 'Selected workspace' }]);
+  });
+
   it('should refresh auth data after creating a workspace', () => {
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
     expect(workspaceBackendService.addWorkspace).toHaveBeenCalledWith({ name: 'New', settings: {} });
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
   });
 
   it('should refresh auth data after renaming a workspace', () => {
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('Renamed') });
+    const form = new FormGroup({ name: new FormControl('Renamed', { nonNullable: true }) });
 
     component.editWorkspace({ selection: [3], formData: form });
 
     expect(workspaceBackendService.changeWorkspace).toHaveBeenCalledWith({ id: 3, name: 'Renamed' });
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
   });
 
-  it('should refresh auth data after deleting a workspace', fakeAsync(() => {
-    component.deleteWorkspace([3]);
-    tick(1000);
+  it('should refresh auth data after deleting a workspace', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.deleteWorkspace([3]);
+      await jest.advanceTimersByTimeAsync(1000);
 
-    expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
-    expect(component.isDeleting).toBe(false);
-  }));
+      expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
+      expect(component.workspacesChanged()).toBe(true);
+      expect(component.isDeleting()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should refresh auth data after changing workspace users', () => {
-    component.selectedWorkspaces = [3];
+    component.workspaceSelectionChanged([{ id: 3, name: 'Selected workspace' }]);
 
     component.setWorkspaceUsersAccessRight([7, 8]);
 
@@ -115,21 +124,21 @@ describe('WorkspaceGroupsComponent', () => {
 
   it('should not refresh auth data after a failed workspace mutation', () => {
     workspaceBackendService.addWorkspace.mockReturnValueOnce(of(null));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
     expect(appService.refreshAuthData).not.toHaveBeenCalled();
-    expect(component.workspacesChanged).toBe(false);
+    expect(component.workspacesChanged()).toBe(false);
   });
 
   it('should keep a successful mutation while reporting a failed auth data refresh', () => {
     appService.refreshAuthData.mockReturnValueOnce(of('failed'));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
       'error',
@@ -139,11 +148,11 @@ describe('WorkspaceGroupsComponent', () => {
 
   it('should not show an obsolete message after the auth context changed', () => {
     appService.refreshAuthData.mockReturnValueOnce(of('invalidated'));
-    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+    const form = new FormGroup({ name: new FormControl('New', { nonNullable: true }) });
 
     component.addWorkspace(form);
 
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 });

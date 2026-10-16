@@ -21,4 +21,4 @@ RUN --mount=type=cache,target=~/.npm \
 # Build project
 RUN npx nx --version
 RUN --mount=type=cache,target=./.nx/cache \
-    npx nx run-many --target=build --all --parallel
+    npx nx run-many --target=build --all --parallel=1

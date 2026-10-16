@@ -1,4 +1,7 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  Component, inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -19,6 +22,7 @@ export interface ExportOptions {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-options-dialog',
   standalone: true,
   imports: [
@@ -52,7 +56,7 @@ export interface ExportOptions {
           </div>
           <div class="list-container">
             <mat-selection-list #groupsList [(ngModel)]="data.groupNames">
-              @for (group of availableOptions.groups; track group) {
+              @for (group of availableOptions().groups; track group) {
                 <mat-list-option [value]="group">
                   {{ group }}
                 </mat-list-option>
@@ -68,7 +72,7 @@ export interface ExportOptions {
           </div>
           <div class="list-container">
             <mat-selection-list #personsList [(ngModel)]="data.personIds">
-              @for (person of availableOptions.testPersons; track person.id) {
+              @for (person of availableOptions().testPersons; track person.id) {
                 <mat-list-option [value]="person.id">
                   {{ person.groupName }} - {{ person.code }} - {{ person.login }}
                 </mat-list-option>
@@ -84,7 +88,7 @@ export interface ExportOptions {
           </div>
           <div class="list-container">
             <mat-selection-list #bookletsList [(ngModel)]="data.bookletNames">
-              @for (booklet of availableOptions.booklets; track booklet) {
+              @for (booklet of availableOptions().booklets; track booklet) {
                 <mat-list-option [value]="booklet">
                   {{ booklet }}
                 </mat-list-option>
@@ -100,7 +104,7 @@ export interface ExportOptions {
           </div>
           <div class="list-container">
             <mat-selection-list #unitsList [(ngModel)]="data.unitNames">
-              @for (unit of availableOptions.units; track unit) {
+              @for (unit of availableOptions().units; track unit) {
                 <mat-list-option [value]="unit">
                   {{ unit }}
                 </mat-list-option>
@@ -139,11 +143,13 @@ export interface ExportOptions {
   `]
 })
 export class ExportOptionsDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly dialogRef = inject(MatDialogRef<ExportOptionsDialogComponent>);
   readonly testResultBackendService = inject(TestResultBackendService);
-  readonly dialogData = inject(MAT_DIALOG_DATA);
+  protected readonly dialogData = inject(MAT_DIALOG_DATA);
 
-  data: ExportOptions = {
+  protected data: ExportOptions = {
     groupNames: [],
     bookletNames: [],
     unitNames: [],
@@ -151,27 +157,32 @@ export class ExportOptionsDialogComponent implements OnInit {
     includeLogAnomalies: false
   };
 
-  availableOptions: {
-    testPersons: { id: number; code: string; groupName: string; login: string }[];
+  protected readonly availableOptions = signal<{
+    testPersons: {
+      id: number;
+      code: string;
+      groupName: string;
+      login: string;
+    }[];
     groups: string[];
     booklets: string[];
     units: string[];
-  } = {
-      testPersons: [],
-      groups: [],
-      booklets: [],
-      units: []
-    };
+  }>({
+    testPersons: [],
+    groups: [],
+    booklets: [],
+    units: []
+  });
 
   ngOnInit(): void {
     if (this.dialogData && this.dialogData.workspaceId) {
-      this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).subscribe((options: typeof this.availableOptions) => {
-        this.availableOptions = options;
+      this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((options: ReturnType<typeof this.availableOptions>) => {
+        this.availableOptions.set(options);
       });
     }
   }
 
-  onNoClick(): void {
+  protected onNoClick(): void {
     this.dialogRef.close();
   }
 }

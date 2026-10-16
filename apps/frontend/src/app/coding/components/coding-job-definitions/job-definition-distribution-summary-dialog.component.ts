@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -38,6 +38,7 @@ export interface JobDefinitionDistributionSummaryDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-job-definition-distribution-summary-dialog',
   standalone: true,
   imports: [
@@ -52,25 +53,23 @@ export interface JobDefinitionDistributionSummaryDialogData {
   styleUrls: ['./job-definition-distribution-summary-dialog.component.scss']
 })
 export class JobDefinitionDistributionSummaryDialogComponent {
-  selectedSnapshotIndex = this.getInitialSnapshotIndex();
+  protected dialogRef = inject<MatDialogRef<JobDefinitionDistributionSummaryDialogComponent>>(MatDialogRef);
+  protected data = inject<JobDefinitionDistributionSummaryDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<JobDefinitionDistributionSummaryDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: JobDefinitionDistributionSummaryDialogData
-  ) {}
+  protected selectedSnapshotIndex = this.getInitialSnapshotIndex();
 
-  get snapshots(): JobDefinitionDistributionSnapshot[] {
+  protected get snapshots(): JobDefinitionDistributionSnapshot[] {
     if (this.data.snapshots?.length) {
       return this.data.snapshots;
     }
     return this.data.snapshot ? [this.data.snapshot] : [];
   }
 
-  get snapshot(): JobDefinitionDistributionSnapshot | undefined {
+  protected get snapshot(): JobDefinitionDistributionSnapshot | undefined {
     return this.snapshots[this.selectedSnapshotIndex];
   }
 
-  get coderColumns(): DialogCoder[] {
+  protected get coderColumns(): DialogCoder[] {
     return this.getCoderColumns();
   }
 
@@ -78,13 +77,13 @@ export class JobDefinitionDistributionSummaryDialogComponent {
     return this.getRows();
   }
 
-  selectSnapshot(index: number): void {
+  protected selectSnapshot(index: number): void {
     if (index >= 0 && index < this.snapshots.length) {
       this.selectedSnapshotIndex = index;
     }
   }
 
-  getSnapshotDate(): string {
+  protected getSnapshotDate(): string {
     if (!this.snapshot?.createdAt) {
       return '';
     }
@@ -92,7 +91,7 @@ export class JobDefinitionDistributionSummaryDialogComponent {
     return new Date(this.snapshot.createdAt).toLocaleString('de-DE');
   }
 
-  getSourceLabelKey(): string {
+  protected getSourceLabelKey(): string {
     return this.snapshot?.source === 'refresh' ?
       'coding-job-definitions.distribution-summary.source.refresh' :
       'coding-job-definitions.distribution-summary.source.initial';
@@ -113,7 +112,7 @@ export class JobDefinitionDistributionSummaryDialogComponent {
     return this.rows.reduce((total, row) => total + row.addedCases, 0);
   }
 
-  getGridTemplate(): string {
+  protected getGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.coderColumns.length);
     const addedCasesColumn = this.hasAddedCases() ? 'minmax(88px, .8fr) ' : '';
     return `minmax(180px, 1.7fr) ${coderColumns}minmax(80px, .8fr) ${addedCasesColumn}minmax(110px, .9fr)`.trim();

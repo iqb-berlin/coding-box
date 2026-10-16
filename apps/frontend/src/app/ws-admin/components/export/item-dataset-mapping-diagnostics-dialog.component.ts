@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -57,6 +57,7 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-item-dataset-mapping-diagnostics-dialog',
   standalone: true,
   imports: [
@@ -76,22 +77,19 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
   styleUrls: ['./item-dataset-mapping-diagnostics-dialog.component.scss']
 })
 export class ItemDatasetMappingDiagnosticsDialogComponent {
+  readonly data = inject<ItemDatasetMappingDiagnosticsDialogData>(MAT_DIALOG_DATA);
+  private dialogRef = inject<MatDialogRef<ItemDatasetMappingDiagnosticsDialogComponent>>(MatDialogRef);
+  private translateService = inject(TranslateService);
+
   readonly pageSizeOptions = [10, 25, 50];
   search = '';
   selectedCode = '';
   expandedCode: string | null = null;
-  availableCauses: Array<{ code: string; label: string; count: number }> = [];
+  protected availableCauses: Array<{ code: string; label: string; count: number }> = [];
   visibleGroups: DiagnosticGroup[] = [];
   private pageStates = new Map<string, DiagnosticPageState>();
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA)
-    readonly data: ItemDatasetMappingDiagnosticsDialogData,
-    private dialogRef: MatDialogRef<
-    ItemDatasetMappingDiagnosticsDialogComponent
-    >,
-    private translateService: TranslateService
-  ) {
+  constructor() {
     this.availableCauses = this.groupDiagnostics(this.data.diagnostics)
       .map(group => ({
         code: group.code,
@@ -101,11 +99,11 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     this.applyFilters();
   }
 
-  get isWarning(): boolean {
+  protected get isWarning(): boolean {
     return this.data.severity === 'warning';
   }
 
-  get totalCount(): number {
+  protected get totalCount(): number {
     return this.data.diagnostics.length;
   }
 
@@ -121,7 +119,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     this.applyFilters();
   }
 
-  onGroupOpened(code: string): void {
+  protected onGroupOpened(code: string): void {
     this.expandedCode = code;
   }
 
@@ -150,7 +148,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     );
   }
 
-  getSourceFileLabel(diagnostic: ItemDatasetMappingDiagnostic): string {
+  protected getSourceFileLabel(diagnostic: ItemDatasetMappingDiagnostic): string {
     const key = diagnostic.code === 'missing-vomd' ?
       'item-dataset-diagnostic-expected-file' :
       'item-dataset-diagnostic-file';
@@ -207,7 +205,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     return `itemdatensatz-${kind}-${datePart}.csv`;
   }
 
-  downloadCsv(): void {
+  protected downloadCsv(): void {
     if (this.filteredCount === 0) return;
     const blob = new Blob([this.buildCsv()], {
       type: 'text/csv;charset=utf-8'

@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -29,7 +28,6 @@ describe('SystemNotificationsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         SystemNotificationsComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

@@ -1,8 +1,5 @@
 import {
-  Component,
-  OnDestroy,
-  ViewChild,
-  inject
+  Component, OnDestroy, inject, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -24,6 +21,7 @@ export interface TestPersonCodingDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-person-coding-dialog',
   templateUrl: './test-person-coding-dialog.component.html',
   styleUrls: ['./test-person-coding-dialog.component.scss'],
@@ -31,14 +29,14 @@ export interface TestPersonCodingDialogResult {
   imports: [TestPersonCodingComponent, MatIconModule, MatButtonModule, TranslateModule]
 })
 export class TestPersonCodingDialogComponent implements OnDestroy {
-  data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
-  @ViewChild(TestPersonCodingComponent) testPersonCodingComponent?: TestPersonCodingComponent;
+  dialogRef = inject<MatDialogRef<TestPersonCodingDialogComponent>>(MatDialogRef);
+
+  protected data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+  readonly testPersonCodingComponent = viewChild(TestPersonCodingComponent);
 
   private destroy$ = new Subject<void>();
 
-  constructor(
-    public dialogRef: MatDialogRef<TestPersonCodingDialogComponent>
-  ) {
+  constructor() {
     this.dialogRef.backdropClick()
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.closeDialog());
@@ -58,7 +56,7 @@ export class TestPersonCodingDialogComponent implements OnDestroy {
     this.destroy$.complete();
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close(this.getDialogResult());
   }
 
@@ -67,8 +65,8 @@ export class TestPersonCodingDialogComponent implements OnDestroy {
 
     return {
       initialJobId: initialJobId ?? undefined,
-      jobId: initialJobId ?? this.testPersonCodingComponent?.lastObservedJobId ?? null,
-      jobStatus: this.testPersonCodingComponent?.getLastObservedJobStatus(initialJobId) ?? null
+      jobId: initialJobId ?? this.testPersonCodingComponent()?.lastObservedJobId ?? null,
+      jobStatus: this.testPersonCodingComponent()?.getLastObservedJobStatus(initialJobId) ?? null
     };
   }
 }

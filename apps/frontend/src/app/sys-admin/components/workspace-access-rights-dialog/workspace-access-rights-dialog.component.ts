@@ -1,4 +1,7 @@
-import { Component, inject } from '@angular/core';
+import {
+  Component, inject, signal, ChangeDetectionStrategy, DestroyRef
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -10,6 +13,7 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspace-access-rights-dialog',
   templateUrl: './workspace-access-rights-dialog.component.html',
   styleUrls: ['./workspace-access-rights-dialog.component.scss'],
@@ -17,41 +21,44 @@ import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/work
 })
 
 export class WorkspaceAccessRightsDialogComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   data = inject<{
     selectedUser: UserFullDto[];
   }>(MAT_DIALOG_DATA);
 
   private userBackendService = inject(UserBackendService);
 
-  selectedWorkspacesIds: number[] = [];
-  isLoadingUserWorkspaces = false;
-  userWorkspacesLoadingFailed = false;
-  result: number[] = [];
+  readonly selectedWorkspacesIds = signal<number[]>([]);
+  readonly isLoadingUserWorkspaces = signal(false);
+  protected readonly workspaceListReady = signal(false);
+  readonly userWorkspacesLoadingFailed = signal(false);
+  readonly result = signal<number[]>([]);
   constructor() {
     if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
-      this.isLoadingUserWorkspaces = true;
-      this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id)
+      this.isLoadingUserWorkspaces.set(true);
+      this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: workspaces => {
-            this.selectedWorkspacesIds = workspaces || [];
-            this.result = [...this.selectedWorkspacesIds];
-            this.isLoadingUserWorkspaces = false;
+            this.selectedWorkspacesIds.set(workspaces || []);
+            this.result.set([...this.selectedWorkspacesIds()]);
+            this.isLoadingUserWorkspaces.set(false);
           },
           error: () => {
-            this.selectedWorkspacesIds = [];
-            this.result = [];
-            this.userWorkspacesLoadingFailed = true;
-            this.isLoadingUserWorkspaces = false;
+            this.selectedWorkspacesIds.set([]);
+            this.result.set([]);
+            this.userWorkspacesLoadingFailed.set(true);
+            this.isLoadingUserWorkspaces.set(false);
           }
         });
     }
   }
 
-  setWorkspacesSelection(result: WorkspaceInListDto[]): void {
+  protected setWorkspacesSelection(result: WorkspaceInListDto[]): void {
     if (result && Array.isArray(result)) {
-      this.result = result.map(workspace => workspace.id);
+      this.result.set(result.map(workspace => workspace.id));
     } else {
-      this.result = [];
+      this.result.set([]);
     }
   }
 }
