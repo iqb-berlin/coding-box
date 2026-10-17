@@ -50,6 +50,19 @@ describe('CodebookGenerationService', () => {
     );
   });
 
+  it.each([0, '0', 99])('preserves missing code %p and its JSON type like Studio', async code => {
+    repository.find.mockResolvedValue([{
+      id: 1, file_id: 'A.VOCS', filename: 'Aufgabe.vocs', data: '{"version":"3.4","variableCodings":[]}', structured_data: null
+    }]);
+    missingsProfilesService.getMissingsProfileDetails.mockResolvedValue({
+      missings: JSON.stringify([{ code, label: 'Missing', description: 'Keine Antwort' }])
+    });
+    await service.generateCodebook(7, 8, contentOptions, [1]);
+    expect(CodebookGenerator.generateCodebook).toHaveBeenCalledWith(
+      expect.any(Array), contentOptions, [{ code, label: 'Missing', description: 'Keine Antwort' }]
+    );
+  });
+
   it('loads codebook units only from the requested workspace and preserves request order', async () => {
     repository.find.mockResolvedValue([
       {

@@ -165,32 +165,48 @@ describe('applyAutocoderSchemaValidationMode', () => {
     });
   });
 
+  it('does not tolerate an INVALID_SOURCE for a matching uppercase NO_VALUE variable', () => {
+    const invalidSource = problem('INVALID_SOURCE');
+    const variable: VariableInfo = JSON.parse(JSON.stringify({
+      ...baseVariable('variable-1', 'no-value'), type: 'NO_VALUE'
+    }));
+    expect(applyAutocoderSchemaValidationMode(
+      [invalidSource], 'compatible', [variable], [coding('variable-1', 'BASE_NO_VALUE')]
+    )).toEqual({ blockingProblems: [invalidSource], toleratedProblems: [] });
+  });
+
   it.each([
-    ['BASE', 'no-value'],
-    ['BASE_NO_VALUE', 'string']
+    ['BASE', 'no-value', false],
+    ['BASE', 'NO_VALUE', false],
+    ['BASE_NO_VALUE', 'string', true],
+    ['BASE_NO_VALUE', 'STRING', true]
   ] as const)(
-    'tolerates the actual validator result for %s against %s',
-    (sourceType, variableType) => {
-      const baseVariables = [baseVariable('variable-1', variableType)];
+    'preserves the current validator contract for %s against %s',
+    (sourceType, variableType, hasSourceMismatch) => {
+      const baseVariables: VariableInfo[] = [JSON.parse(JSON.stringify({
+        ...baseVariable('variable-1', 'string'), type: variableType
+      }))];
       const variableCodings = [coding('variable-1', sourceType)];
       const problems = Autocoder.CodingSchemeFactory.validate(
         baseVariables,
         variableCodings
       );
 
-      expect(problems).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          type: 'INVALID_SOURCE',
-          breaking: true,
-          variableId: 'variable-1'
-        })
-      ]));
+      const breakingProblems = problems.filter(entry => entry.breaking);
+      expect(breakingProblems).toEqual(hasSourceMismatch ? [expect.objectContaining({
+        type: 'INVALID_SOURCE',
+        breaking: true,
+        variableId: 'variable-1'
+      })] : []);
       expect(applyAutocoderSchemaValidationMode(
         problems,
         'compatible',
         baseVariables,
         variableCodings
-      ).blockingProblems).toEqual([]);
+      )).toEqual({ blockingProblems: [], toleratedProblems: breakingProblems });
+      expect(applyAutocoderSchemaValidationMode(
+        problems, 'strict', baseVariables, variableCodings
+      ).blockingProblems).toEqual(breakingProblems);
     }
   );
 

@@ -107,7 +107,7 @@ export class CodebookGenerationService {
                               profile.missings;
             if (Array.isArray(profileMissings) && profileMissings.length > 0) {
               missings = profileMissings.map(m => ({
-                code: m.code.toString(),
+                code: m.code,
                 label: m.label,
                 description: m.description
               }));
@@ -396,6 +396,8 @@ export class CodebookGenerationService {
 
       return {
         ...unit,
+        itemVariableReferences: unit.itemVariableReferences ??
+          scheme.variableCodings.map(({ id, alias }) => ({ id, alias })),
         scheme: JSON.stringify({
           ...scheme,
           variableCodings

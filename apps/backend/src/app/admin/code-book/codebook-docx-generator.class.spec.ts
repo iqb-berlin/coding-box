@@ -1,66 +1,22 @@
+import type { CodeBookContentSetting } from '@iqb/ngx-coding-components/codebook-models';
 import { CodebookDocxGenerator } from './codebook-docx-generator.class';
 
-jest.mock('docx', () => ({
-  ImportedXmlComponent: {
-    fromXmlString: jest.fn().mockReturnValue({})
-  }
-}));
-
-jest.mock('katex', () => ({
-  renderToString: jest.fn().mockReturnValue('<math>mocked-mathml</math>')
-}));
-
-jest.mock('mathml2omml', () => ({
-  mml2omml: jest.fn().mockReturnValue('<m:oMath><m:r><m:t xml:space="preserve">a<b & c</m:t></m:r></m:oMath>')
-}));
-
-describe('CodebookDocxGenerator', () => {
-  describe('OMML sanitizing', () => {
-    it('should sanitize invalid XML chars inside OMML text nodes', () => {
-      const generator = CodebookDocxGenerator as unknown as {
-        sanitizeOmmlXml: (omml: string) => string;
-      };
-      const rawOmml = '<m:oMath><m:r><m:t xml:space="preserve">a<b & c</m:t></m:r></m:oMath>';
-      const sanitizedOmml = generator.sanitizeOmmlXml(rawOmml);
-
-      expect(sanitizedOmml).toContain('a&lt;b &amp; c');
-      expect(sanitizedOmml).not.toContain('a<b & c');
-    });
-
-    it('should sanitize OMML before creating ImportedXmlComponent', () => {
-      const fromXmlString = (
-        jest.requireMock('docx') as {
-          ImportedXmlComponent: { fromXmlString: jest.Mock };
-        }
-      ).ImportedXmlComponent.fromXmlString;
-      fromXmlString.mockClear();
-
-      const generator = CodebookDocxGenerator as unknown as {
-        latexToOmml: (latex: string) => unknown;
-      };
-      const result = generator.latexToOmml('a<b');
-
-      expect(result).toEqual({});
-      expect(fromXmlString).toHaveBeenCalledWith(
-        '<m:oMath><m:r><m:t xml:space="preserve">a&lt;b &amp; c</m:t></m:r></m:oMath>'
-      );
-    });
-
-    it('should unwrap the ImportedXmlComponent wrapper before returning OMML', () => {
-      const fromXmlString = (
-        jest.requireMock('docx') as {
-          ImportedXmlComponent: { fromXmlString: jest.Mock };
-        }
-      ).ImportedXmlComponent.fromXmlString;
-      const ommlRoot = { rootKey: 'm:oMath' };
-      fromXmlString.mockReturnValueOnce({ root: [ommlRoot] });
-
-      const generator = CodebookDocxGenerator as unknown as {
-        latexToOmml: (latex: string) => unknown;
-      };
-      const result = generator.latexToOmml('a<b');
-
-      expect(result).toBe(ommlRoot);
-    });
+describe('CodebookDocxGenerator shared renderer adapter', () => {
+  it('returns a valid DOCX Buffer even for an empty export', async () => {
+    const options: CodeBookContentSetting = {
+      exportFormat: 'docx',
+      missingsProfile: '',
+      hasOnlyManualCoding: false,
+      hasClosedVars: false,
+      hasOnlyVarsWithCodes: false,
+      hasDerivedVars: true,
+      hasGeneralInstructions: true,
+      codeLabelToUpper: false,
+      showScore: true,
+      hideItemVarRelation: true
+    };
+    const buffer = await CodebookDocxGenerator.generateDocx([], options);
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+    expect(buffer.subarray(0, 2).toString()).toBe('PK');
   });
 });

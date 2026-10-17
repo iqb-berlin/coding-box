@@ -1,4 +1,5 @@
 import type { CodingSchemeProblem } from '@iqb/responses/coding-interfaces';
+import { normalizeVariableInfoType } from '@iqb/responses';
 import type { VariableCodingData } from '@iqbspecs/coding-scheme';
 import type { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { AutocoderSchemaValidationMode } from '../../../config/runtime-config.service';
@@ -41,9 +42,8 @@ function isCompatibleLegacyBaseProblem(
     return false;
   }
 
-  return coding.sourceType === 'BASE' ?
-    matchingBaseVariables[0].type === 'no-value' :
-    matchingBaseVariables[0].type !== 'no-value';
+  const variableType = normalizeVariableInfoType(matchingBaseVariables[0].type);
+  return coding.sourceType === 'BASE' ? variableType === 'NO_VALUE' : variableType !== 'NO_VALUE';
 }
 
 export function applyAutocoderSchemaValidationMode(

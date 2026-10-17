@@ -186,16 +186,26 @@ describe('Zoneless replay statistics and codebook export', () => {
     it(`renders delayed codebook progress and the ${outcome} status`, () => {
       let releaseUnits!: () => void;
       const unitsGate = new Promise<void>(resolve => { releaseUnits = resolve; });
-      cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', { body: [] });
+      let releaseProfiles!: () => void;
+      const profilesGate = new Promise<void>(resolve => { releaseProfiles = resolve; });
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', {
+        body: [{ id: 10, name: 'Testfilter', assigned_variables: [{ unitName: 'UNIT', variableId: 'V' }] }]
+      });
       cy.intercept('GET', '**/api/admin/workspace/5/variable-bundle?*', { body: { data: [], total: 0 } });
-      cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', async request => {
+        await profilesGate;
+        request.reply({ body: [{ id: 7, label: 'Profil' }] });
+      }).as('profiles');
       cy.intercept('GET', '**/api/admin/workspace/5/files/units-with-file-ids', async request => {
         await unitsGate;
-        request.reply({ body: [{ id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}' }] });
+        request.reply({ body: [{ id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: JSON.stringify({ variableCodings: [{ id: 'V' }] }) }] });
       }).as('units');
       cy.intercept('POST', '**/api/admin/workspace/5/coding/codebook/job', request => {
         expect(request.body.unitList).to.deep.equal([1]);
         expect(request.body.contentOptions.hasGeneralInstructions).to.equal(false);
+        expect(request.body.contentOptions.showScore).to.equal(false);
+        expect(request.body.contentOptions.exportFormat).to.equal('json');
+        expect(request.body.contentOptions.jobDefinitionId).to.equal(10);
         request.reply({ delay: 300, body: { jobId: 'job-1', message: 'Started' } });
       }).as('startCodebook');
       let finish = false;
@@ -213,12 +223,26 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
       cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Codebook').click();
       cy.get('coding-box-export-coding-book').as('dialog');
-      cy.get('@dialog').find('mat-spinner').should('be.visible');
+      cy.get('@dialog').should('not.contain.text', 'codebook.');
+      cy.get('@dialog').find('button[type="submit"]').should('contain.text', 'Exportieren');
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').should('be.disabled');
       cy.then(() => { releaseUnits(); });
       cy.wait('@units');
-      cy.get('@dialog').find('mat-spinner').should('not.exist');
-      cy.get('@dialog').find('.select-all-container input').check();
-      cy.get('@dialog').find('.options-grid mat-checkbox').eq(1).find('input').uncheck();
+      cy.get('@dialog').contains('button', 'Abbrechen').scrollIntoView().should('be.visible');
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').should('not.be.disabled');
+      cy.get('@dialog').find('ngx-codebook-export mat-header-cell input').check();
+      cy.get('@dialog').should('contain.text', '1 Aufgaben ausgewählt');
+      cy.get('@dialog').contains('mat-checkbox', 'Allgemeine Hinweise für jede Variable').find('input').uncheck();
+      cy.get('@dialog').contains('mat-checkbox', 'Bewertung anzeigen').find('input').uncheck();
+      cy.get('@dialog').find('input[type="radio"][value="json"]').check();
+      cy.get('@dialog').find('.job-definition-selection-main').click();
+      cy.get('.job-definition-picker-content').contains('button.job-definition-row', 'Testfilter').click();
+      cy.get('coding-box-codebook-job-definition-picker-dialog mat-dialog-actions button').last().click();
+      cy.get('@dialog').find('input[type="radio"][value="json"]').should('be.checked');
+      cy.then(() => { releaseProfiles(); });
+      cy.wait('@profiles');
+      cy.get('@dialog').find('input[type="radio"][value="json"]').should('be.checked');
+      cy.get('@dialog').contains('mat-checkbox', 'Bewertung anzeigen').find('input').should('not.be.checked');
       cy.get('@dialog').find('button[type="submit"]').click();
       cy.wait('@startCodebook');
       cy.get('@dialog').find('button[type="submit"]').should('be.disabled');
