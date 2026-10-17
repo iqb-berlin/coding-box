@@ -109,13 +109,7 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.authService.getValidToken(0)
-        .then(token => {
-          if (!token) {
-            this.expireSession();
-          }
-        })
-        .catch(() => this.expireSession());
+      this.refreshSessionAfterActivity();
     }
   }
 
@@ -215,14 +209,23 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.authService.getValidToken(0)
-        .then(token => {
-          if (!token) {
-            this.expireSession();
-          }
-        })
-        .catch(() => this.expireSession());
+      this.refreshSessionAfterActivity();
     }
+  }
+
+  private refreshSessionAfterActivity(): void {
+    const generation = this.authService.getSessionGeneration();
+    const refreshToken = this.authService.getRefreshToken();
+    const expireCurrentSession = () => {
+      if (generation === this.authService.getSessionGeneration() && refreshToken === this.authService.getRefreshToken()) {
+        this.expireSession();
+      }
+    };
+    this.authService.getValidToken(0)
+      .then(token => {
+        if (!token) expireCurrentSession();
+      })
+      .catch(expireCurrentSession);
   }
 
   private parseActivityMessage(rawMessage: string): { source?: string; timestamp?: number } | null {

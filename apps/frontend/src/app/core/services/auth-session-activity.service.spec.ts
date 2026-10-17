@@ -12,7 +12,9 @@ import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-sett
 
 describe('AuthSessionActivityService', () => {
   let service: AuthSessionActivityService;
-  let authService: { isLoggedIn: jest.Mock; getValidToken: jest.Mock };
+  let authService: {
+    isLoggedIn: jest.Mock; getValidToken: jest.Mock; getSessionGeneration: jest.Mock; getRefreshToken: jest.Mock;
+  };
   let appService: {
     selectedWorkspaceId: number;
     selectedWorkspaceId$: Observable<number>;
@@ -37,7 +39,9 @@ describe('AuthSessionActivityService', () => {
   beforeEach(() => {
     authService = {
       isLoggedIn: jest.fn().mockReturnValue(true),
-      getValidToken: jest.fn().mockResolvedValue('token')
+      getValidToken: jest.fn().mockResolvedValue('token'),
+      getSessionGeneration: jest.fn().mockReturnValue(0),
+      getRefreshToken: jest.fn().mockReturnValue('refresh-token')
     };
     selectedWorkspaceIdSubject = new Subject();
     appService = {
@@ -71,6 +75,21 @@ describe('AuthSessionActivityService', () => {
 
   afterEach(() => {
     service?.stop();
+  });
+
+  it('does not expire a new session when an older activity refresh is discarded', async () => {
+    let finishRefresh!: (token: string | undefined) => void;
+    authService.getValidToken.mockReturnValue(new Promise(resolve => { finishRefresh = resolve; }));
+    service.start();
+    appService.sessionExpiryWarning = true;
+    window.dispatchEvent(new Event('keydown'));
+    authService.getSessionGeneration.mockReturnValue(1);
+    authService.getRefreshToken.mockReturnValue('new-refresh-token');
+
+    finishRefresh(undefined);
+    await Promise.resolve();
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it('should show an idle warning before the session expires', async () => {
