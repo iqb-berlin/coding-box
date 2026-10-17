@@ -91,6 +91,9 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
       cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Automatisch Kodieren').click();
       cy.get('coding-box-test-person-coding-dialog coding-box-test-person-coding').as('dialog');
       cy.wait(['@jobs', '@groups']);
+      // Network completion can precede Angular applying the groups to the view.
+      cy.get('@dialog').contains('.group-selection-container button', 'Alle auswählen')
+        .should('be.enabled');
       cy.get('@dialog').contains('.button-container button', 'Alle Testgruppen kodieren')
         .scrollIntoView().should('be.enabled').click({ scrollBehavior: false });
       cy.wait('@startJob');

@@ -22,6 +22,8 @@ import {
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface ImportComparisonRow {
   unitAlias: string;
@@ -250,12 +252,14 @@ export interface ImportComparisonData {
             <mat-icon>cancel</mat-icon>
             Abbrechen
           </button>
+          @if (canApplyImport) {
           <button mat-raised-button color="primary" (click)="applyImport()"
             [disabled]="isLoading() || data.updatedRows === 0"
             matTooltip="Änderungen anwenden">
             <mat-icon>check_circle</mat-icon>
             Änderungen anwenden
           </button>
+          }
         }
 
         <!-- Normal mode button -->
@@ -469,6 +473,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private testPersonCodingService = inject(TestPersonCodingService);
   private snackBar = inject(MatSnackBar);
+  private readonly permissions = inject(CodingPermissionsService);
+  private readonly appService = inject(AppService);
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -496,7 +502,12 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   private pollingSubscription?: Subscription;
 
   ngOnInit(): void {
+    if (this.data.workspaceId) this.permissions.load(this.data.workspaceId);
     this.dataSource.data = this.data.affectedRows;
+  }
+
+  protected get canApplyImport(): boolean {
+    return this.data.workspaceId === this.appService.selectedWorkspaceId && this.permissions.canApply;
   }
 
   ngOnDestroy(): void {
@@ -631,7 +642,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   }
 
   protected applyImport(): void {
-    if (!this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
+    if (!this.canApplyImport || !this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
       return;
     }
 

@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  ForbiddenException, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, QueryRunner, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
@@ -14,6 +16,7 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationPoolSlot } from '../shared/workspace-test-results-lock.util';
+import { getCodingActor } from '../shared/coding-ownership.policy';
 import {
   getCodingIncompleteVariablesCacheKeys,
   getCodingIncompleteVariablesCacheVersionKey
@@ -121,7 +124,8 @@ export class ExternalCodingImportService {
   async importExternalCodingWithProgress(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback: (progress: number, message: string) => void
+    progressCallback: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -146,15 +150,16 @@ export class ExternalCodingImportService {
         hasConflict?: boolean;
       }>;
     }> {
-    return this.importExternalCoding(workspaceId, body, progressCallback);
+    return this.importExternalCoding(workspaceId, body, progressCallback, requestedByUserId);
   }
 
   async importExternalCoding(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback?: (progress: number, message: string) => void
+    progressCallback?: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): ReturnType<ExternalCodingImportService['importExternalCodingInPool']> {
-    const importCoding = () => this.importExternalCodingInPool(workspaceId, body, progressCallback);
+    const importCoding = () => this.importExternalCodingInPool(workspaceId, body, progressCallback, requestedByUserId);
     return body.previewOnly ? importCoding() :
       withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection, importCoding);
   }
@@ -162,7 +167,8 @@ export class ExternalCodingImportService {
   private async importExternalCodingInPool(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback?: (progress: number, message: string) => void
+    progressCallback?: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -268,6 +274,11 @@ export class ExternalCodingImportService {
         await queryRunner.connect();
         await queryRunner.startTransaction('READ COMMITTED');
         await lockWorkspaceTestResultsMutationInTransaction(queryRunner.manager, workspaceId);
+        // A queued import may outlive the requester's workspace permissions.
+        const actor = await getCodingActor(queryRunner.manager, workspaceId, requestedByUserId);
+        if (!actor.isAdmin && actor.accessLevel < 3) {
+          throw new ForbiddenException('Study manager access is required to apply coding results');
+        }
       }
 
       const responseRepository = queryRunner ?
@@ -559,6 +570,7 @@ export class ExternalCodingImportService {
       }
       this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
       progressCallback?.(0, `Import failed: ${error.message}`);
+      if (error instanceof ForbiddenException) throw error;
       throw new Error(`Could not import external coding data: ${error.message}`);
     } finally {
       if (queryRunner) {
@@ -570,7 +582,8 @@ export class ExternalCodingImportService {
   async applyExternalCoding(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback?: (progress: number, message: string) => void
+    progressCallback?: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -596,7 +609,7 @@ export class ExternalCodingImportService {
       }>;
     }> {
     // Set previewOnly to false for actual application
-    return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback);
+    return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback, requestedByUserId);
   }
 
   private async markManualFreshnessCurrent(
