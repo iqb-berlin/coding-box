@@ -137,6 +137,7 @@ export interface VariableAnalysisResultCacheManifest {
 
 export interface ExternalCodingImportJobData {
   workspaceId: number;
+  requestedByUserId: number;
   tempFilePath: string;
   fileName: string;
   sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
