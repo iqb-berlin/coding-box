@@ -151,3 +151,32 @@ Die Korrekturen liegen im Kodierbox-Host und verwenden den vorhandenen gemeinsam
 Bibliotheksbuild `4.1.0-dev.ff15d6d`. DOCX-Dateien können sich wegen erzeugter
 Zeitstempel technisch unterscheiden. Eine erneute Datenbank-/Redis-/Word-Abnahme
 und die entfernte CI sind von diesen lokalen Ergebnissen getrennt zu beurteilen.
+
+## Item-Zuordnung über Job- und Bündelfilter hinweg
+
+`587e0f0a0` erhält die ursprünglichen Variablen-IDs und Aliase in einem internen
+`itemVariableReferences`-Kontext. Der erste Variablenfilter erzeugt diesen Kontext
+aus dem vollständigen Schema; weitere Filter übernehmen ihn. Der Adapter löst
+Item-Referenzen gegen diese ursprünglichen Identitäten auf und übernimmt danach
+nur Zuordnungen zu tatsächlich exportierten Variablen. Die Reihenfolge der
+Variablenfilter verändert damit nicht mehr die Bedeutung einer Item-Referenz.
+
+Acht neue Integrationstests führen den echten `CodebookGenerationService` mit dem
+echten Generator aus. Nur Repository- und Profilgrenzen sind simuliert. Sie decken
+Jobfilter, Bündelfilter, deren Schnittmenge, umgekehrte Alias-Kollisionen,
+ältere Metadatenspalten mit `0`/`false`, ungefilterte Ausgabe sowie aufeinanderfolgende
+Exporte desselben Quelldatensatzes ab. Die Schemata werden dabei als gültig geprüft.
+Vor der Korrektur schlugen sieben der acht Tests wegen falscher Item-Zuordnungen fehl.
+
+Erneut bestanden:
+
+- **3.058 Backendtests in 196 Suites**; **63 Tests in sieben Suites übersprungen**.
+- Backend-Lint und Backend-Build.
+- **4.694 Exportpaare** des bestehenden Studio-/Kodierbox-Vergleichs.
+- Der zusätzliche gültige Scope-Fall ergibt jetzt identisches JSON und identische
+  normalisierte DOCX-Bestandteile: Studio und Kodierbox enthalten ausschließlich
+  `ITEM-A`; das Item der ausgeschlossenen Variable erscheint nicht mehr.
+
+Die Frontendquellen, Paket-Pins und der Bibliotheksbuild sind unverändert. Die zuvor
+dokumentierten Frontend-/Browser-Prüfungen wurden für diese Backendkorrektur nicht
+wiederholt. Die entfernte CI ist am neuen PR-Head separat zu prüfen.
