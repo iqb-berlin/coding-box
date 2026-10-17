@@ -1,6 +1,6 @@
 <ngx-codebook-export [availableUnits]="sharedUnits" [missingsProfiles]="sharedMissingsProfiles"
   [selectedUnitIds]="unitList()" [selectedMissingsProfileId]="selectedMissingsProfile()"
-  [showGroupColumn]="false" [defaultContentOptions]="contentOptions()" [loading]="isLoading()" [busy]="isExportBusy"
+  [showGroupColumn]="false" [defaultContentOptions]="initialContentOptions" [loading]="isLoading()" [busy]="isExportBusy"
   (selectionChanged)="unitList.set($event)" (exportRequested)="onSharedExport($event)" (cancel)="closeDialog()">
         <!-- Quick filters section -->
         <div codebookFilters class="settings-section">

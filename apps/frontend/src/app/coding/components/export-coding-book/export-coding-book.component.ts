@@ -114,6 +114,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     variableBundleIds: []
   });
 
+  // Initialize the shared form once; host filter and request updates must not reset user edits.
+  protected readonly initialContentOptions = this.contentOptions();
+
   private destroy$ = new Subject<void>();
   readonly validationResults = signal<ValidateCodingCompletenessResponseDto | null>(null);
   readonly validationProgress = signal<ValidationProgress | null>(null);
