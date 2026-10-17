@@ -10,7 +10,7 @@ import { UserService } from '../../apps/frontend/src/app/shared/services/user/us
 
 describe('External coding import permissions', () => {
   function mountPreview(level: number, isAdmin = false, roleResponse?: Observable<Array<{ id: number; accessLevel: number }>>) {
-    const start = cy.stub().returns(NEVER).as('startImport');
+    const start = cy.stub().as('startImport').returns(NEVER);
     return cy.mount(ImportComparisonDialogComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [

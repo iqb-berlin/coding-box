@@ -90,6 +90,8 @@
         "cypress/e2e/item-matrix-live.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
+        "cypress/component/unit-player-assets.cy.ts",
+        "cypress/component/unit-player-aspect-assets.cy.ts",
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
