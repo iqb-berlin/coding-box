@@ -133,7 +133,7 @@ describe('WsgCodingJobController', () => {
       WorkspaceGuard
     ]);
     expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
-    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, { status: 'review' });
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, { status: 'review' }, 5, true);
     expect(result.status).toBe('review');
   });
 
@@ -273,7 +273,7 @@ describe('WsgCodingJobController', () => {
     ).not.toHaveBeenCalled();
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
       status: 'active'
-    });
+    }, 5, true);
   });
 
   it.each(['review', 'results_applied'])(
@@ -310,7 +310,7 @@ describe('WsgCodingJobController', () => {
       47,
       5
     );
-    expect(codingJobService.submitCodingJob).toHaveBeenCalledWith(123, 47);
+    expect(codingJobService.submitCodingJob).toHaveBeenCalledWith(123, 47, 5);
   });
 
   it.each([
@@ -328,7 +328,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47);
+    expect(codingJobService[serviceMethod]).toHaveBeenCalledWith(123, 47, 5);
   });
 
   it('prepares read-only reviews with management access and without changing job state', async () => {
@@ -383,7 +383,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.saveCodingProgress).toHaveBeenCalled();
+    expect(codingJobService.saveCodingProgress).toHaveBeenCalledWith(123, expect.objectContaining({ unitId: 'u' }), 5);
   });
 
   it('uses manager access for saving coding issue review progress', async () => {
@@ -431,7 +431,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
+    expect(codingJobService.saveCodingNotes).toHaveBeenCalledWith(123, expect.objectContaining({ notes: 'note' }), 5);
   });
 
   it('uses general access for regular coding job updates', async () => {
@@ -442,7 +442,8 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
       123,
       47,
-      { name: 'New name' }
+      { name: 'New name' },
+      5
     );
   });
 
@@ -454,7 +455,9 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
       123,
       47,
-      { status: 'paused' }
+      { status: 'paused' },
+      5,
+      true
     );
   });
 
@@ -466,7 +469,8 @@ describe('WsgCodingJobController', () => {
     expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(
       123,
       47,
-      { comment: 'review note' }
+      { comment: 'review note' },
+      5
     );
   });
 
@@ -475,7 +479,7 @@ describe('WsgCodingJobController', () => {
       controller.createCodingJob(47, {
         name: 'Direct job',
         jobDefinitionId: 9
-      } as never)
+      } as never, { user: { id: 7 } } as never)
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
@@ -483,7 +487,7 @@ describe('WsgCodingJobController', () => {
 
   it('rejects direct coding job creates without a request body', async () => {
     await expect(
-      controller.createCodingJob(47, undefined as never)
+      controller.createCodingJob(47, undefined as never, { user: { id: 7 } } as never)
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();

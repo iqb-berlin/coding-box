@@ -1,18 +1,19 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { HttpErrorResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { computed } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
+import { DecodedToken } from './auth.models';
 import { AppService, AuthDataRefreshOutcome } from './app.service';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
   BACKEND_CONNECTIVITY_ERROR_MESSAGE
 } from '../interceptors/app-http-error.class';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
-import { DecodedToken } from './auth.models';
-import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { SessionRecoveryService } from './session-recovery.service';
 
 describe('AppService', () => {
@@ -59,6 +60,30 @@ describe('AppService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('tracks shared authentication and grouped errors in derived signal state', () => {
+    const userId = computed(() => service.authData.userId);
+    const status = computed(() => service.authBootstrapStatus);
+    const errorCount = computed(() => service.errorMessages[0]?.requestCount || 0);
+    expect(userId()).toBe(0);
+    expect(status()).toBe('checking');
+    expect(errorCount()).toBe(0);
+
+    service.updateAuthData({ ...AppService.defaultAuthData, userId: 7 });
+    service.setAuthBootstrapStatus('ready');
+    expect(userId()).toBe(7);
+    expect(status()).toBe('ready');
+    const error = {
+      status: 400, message: 'Bad Request', method: 'GET', urlWithParams: '/api/items'
+    } as AppHttpError;
+    service.addErrorMessage(error);
+    const previousErrors = service.errorMessages;
+    expect(errorCount()).toBe(1);
+    service.addErrorMessage({ ...error, requestId: 'second' } as AppHttpError);
+    expect(errorCount()).toBe(2);
+    expect(previousErrors[0].requestCount).toBe(1);
+    expect(previousErrors[0].affectedRequests).toHaveLength(1);
   });
 
   describe('selectedWorkspaceId', () => {
@@ -112,47 +137,118 @@ describe('AppService', () => {
     });
   });
 
-  describe('auth data loading', () => {
-    it('should retry auth data after transient backend errors', fakeAsync(() => {
+  describe('getWorkspaceTokenPolicy', () => {
+    it('should request the workspace token policy', () => {
+      const policy = {
+        scopes: {
+          'replay:read': { maxDurationDays: 90 },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      };
+
+      service.getWorkspaceTokenPolicy().subscribe(result => {
+        expect(result).toEqual(policy);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/token-policy`);
+      expect(req.request.method).toBe('GET');
+      req.flush(policy);
+    });
+  });
+
+  describe('loadAuthenticatedUser', () => {
+    it('should fetch auth data on success', () => {
       const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
-      let result: boolean | undefined;
-      service.loggedUser = { sub: 'user1' } as DecodedToken;
 
-      service.retryAuthDataLoad().subscribe(loadResult => {
-        result = loadResult;
+      service.loadAuthenticatedUser('id1').subscribe(result => {
+        expect(result).toBe(true);
+        expect(service.authBootstrapStatus).toBe('ready');
       });
 
-      const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
-      expect(firstAuthRequest.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
+      expect(service.authBootstrapStatus).toBe('backend-login-running');
 
-      tick(500);
+      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      expect(reqAuth.request.method).toBe('GET');
+      expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      reqAuth.flush(mockAuthData);
+    });
 
-      const secondAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
-      expect(secondAuthRequest.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      secondAuthRequest.flush(mockAuthData);
+    it('should retry auth data after transient backend errors', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
+        let loginResult: boolean | undefined;
 
-      expect(result).toBe(true);
+        service.loadAuthenticatedUser('id1').subscribe(result => {
+          loginResult = result;
+        });
+
+        const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
+
+        await jest.advanceTimersByTimeAsync(500);
+
+        const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+        reqAuth.flush(mockAuthData);
+
+        expect(loginResult).toBe(true);
+        expect(service.authBootstrapStatus).toBe('ready');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should not retry auth data after authorization errors', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        let loginResult: boolean | undefined;
+
+        service.loadAuthenticatedUser('id1').subscribe(result => {
+          loginResult = result;
+        });
+
+        const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        reqAuth.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+        await jest.advanceTimersByTimeAsync(2000);
+
+        httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
+        expect(loginResult).toBe(false);
+        expect(service.authBootstrapStatus).toBe('auth-data-failed');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should return false on auth data failure', () => {
+      service.loadAuthenticatedUser('id1').subscribe(result => {
+        expect(result).toBe(false);
+        expect(service.authBootstrapStatus).toBe('auth-data-failed');
+      });
+
+      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      reqAuth.flush('Error', { status: 401, statusText: 'Unauthorized' });
+    });
+  });
+
+  describe('refreshAuthData', () => {
+    it('should suppress global HTTP errors while manually retrying auth data', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
+
+      service.retryAuthDataLoad().subscribe(result => {
+        expect(result).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      req.flush(mockAuthData);
+
       expect(service.authBootstrapStatus).toBe('ready');
-    }));
-
-    it('should not retry auth data after authorization errors', fakeAsync(() => {
-      let result: boolean | undefined;
-      service.loggedUser = { sub: 'user1' } as DecodedToken;
-
-      service.retryAuthDataLoad().subscribe(loadResult => {
-        result = loadResult;
-      });
-
-      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
-      reqAuth.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
-
-      tick(2000);
-
-      httpMock.expectNone(`${mockServerUrl}auth-data?identity=user1`);
-      expect(result).toBe(false);
-      expect(service.authBootstrapStatus).toBe('auth-data-failed');
-    }));
+    });
 
     it('should refresh data if user is logged in', () => {
       service.loggedUser = { sub: 'user1' } as DecodedToken;
@@ -203,16 +299,14 @@ describe('AppService', () => {
       expect(refreshResult).toBe('invalidated');
     });
 
-    it('should refresh with the current OIDC identity', () => {
-      service.loggedUser = { sub: 'user1' } as DecodedToken;
+    it('invalidates refreshes when no OIDC identity is available', () => {
       service.setAuthBootstrapStatus('ready');
 
       service.refreshAuthData().subscribe(result => {
-        expect(result).toBe('updated');
+        expect(result).toBe('invalidated');
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
-      req.flush({ userId: 1 } as AuthDataDto);
+      httpMock.expectNone(`${mockServerUrl}auth-data?identity=user1`);
     });
 
     it('should not overwrite newer auth data and should report effective refresh success', () => {
@@ -284,7 +378,6 @@ describe('AppService', () => {
 
     it('should not restore auth data from a refresh after auth state was cleared', () => {
       service.loggedUser = { sub: 'user1' } as DecodedToken;
-      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let refreshResult: AuthDataRefreshOutcome | undefined;
 
@@ -301,7 +394,6 @@ describe('AppService', () => {
     });
 
     it('should not overwrite a newly authenticated user with an earlier refresh response', () => {
-      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let refreshResult: AuthDataRefreshOutcome | undefined;
@@ -328,9 +420,9 @@ describe('AppService', () => {
 
   describe('auth state cleanup', () => {
     it('should clear stored auth state', () => {
+      service.user = { username: 'user', isAdmin: false } as CreateUserDto;
       service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.isLoggedIn = true;
-      service.user = { username: 'user', isAdmin: false } as CreateUserDto;
       service.needsReAuthentication = true;
       service.sessionExpiryWarning = true;
       service.reAuthenticationReturnUrl = '/coding';
@@ -363,6 +455,8 @@ describe('AppService', () => {
       service.requireReAuthentication('/coding');
 
       expect(localStorage.removeItem).toHaveBeenCalledWith('auth_token');
+      expect(localStorage.removeItem).toHaveBeenCalledWith('id_token');
+      expect(localStorage.removeItem).toHaveBeenCalledWith('refresh_token');
       expect(service.needsReAuthentication).toBe(true);
       expect(service.sessionExpiryWarning).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBe('/coding');
@@ -425,31 +519,119 @@ describe('AppService', () => {
 
     it('should clear the return URL when reauthentication is dismissed', () => {
       service.requireReAuthentication('/workspace-admin/1');
-      service.clearAuthState({ clearReAuthentication: true, clearReturnUrl: true });
+
+      service.setNeedsReAuthentication(false);
 
       expect(service.needsReAuthentication).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBeUndefined();
     });
-  });
 
-  describe('createLoginRedirectUri', () => {
-    it('should preserve internal return URLs in a hash route', () => {
+    it('should reject external login redirect targets', () => {
+      expect(service.normalizeInternalRoute('https://example.test')).toBeUndefined();
+      expect(service.normalizeInternalRoute('//example.test')).toBeUndefined();
+    });
+
+    it('should create hash-based login redirect URIs for internal routes', () => {
       expect(service.createLoginRedirectUri('/coding')).toBe('http://localhost/#/coding');
     });
 
-    it('should return the current app origin for non-returnable routes', () => {
-      expect(service.createLoginRedirectUri('/home')).toBe('http://localhost/');
-    });
-  });
+    it('should clear stale authentication error messages after backend login succeeds', () => {
+      const authError = { status: 401 } as AppHttpError;
+      const otherError = { status: 500 } as AppHttpError;
+      service.errorMessages = [authError, otherError];
 
-  describe('addErrorMessage', () => {
-    it('should group backend connectivity errors under a user-friendly message', () => {
-      service.addErrorMessage(new AppHttpError(new HttpErrorResponse({ status: 0, error: 'Network Error' })));
-      service.addErrorMessage(new AppHttpError(new HttpErrorResponse({ status: 503, error: 'Service unavailable' })));
+      service.completeBackendLogin();
+
+      expect(service.errorMessages).toEqual([otherError]);
+      expect(service.needsReAuthentication).toBe(false);
+      expect(service.authBootstrapStatus).toBe('ready');
+    });
+
+    it('should group repeated non-connectivity HTTP errors by status and request URL', () => {
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/jobs',
+        message: 'Bad Request'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/jobs',
+        message: 'Bad Request'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/coder-trainings',
+        message: 'Bad Request'
+      } as AppHttpError);
+
+      expect(service.errorMessages).toHaveLength(2);
+      expect(service.errorMessages[0].message).toBe('Bad Request');
+      expect(service.errorMessages[0].requestCount).toBe(2);
+    });
+
+    it('should keep the displayed user message in sync when grouped errors append details', () => {
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/journal',
+        message: 'Das Von-Datum ist ungültig.',
+        userMessage: 'Das Von-Datum ist ungültig.',
+        requestId: 'request-1'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/journal',
+        message: 'Das Bis-Datum ist ungültig.',
+        userMessage: 'Das Bis-Datum ist ungültig.',
+        requestId: 'request-2'
+      } as AppHttpError);
+
+      expect(service.errorMessages).toHaveLength(1);
+      expect(service.errorMessages[0].message).toBe('Das Von-Datum ist ungültig.; Das Bis-Datum ist ungültig.');
+      expect(service.errorMessages[0].userMessage).toBe('Das Von-Datum ist ungültig.; Das Bis-Datum ist ungültig.');
+      expect(service.errorMessages[0].requestCount).toBe(2);
+      expect(service.errorMessages[0].affectedRequests).toEqual([
+        {
+          method: 'GET',
+          urlWithParams: '/api/admin/workspace/5/journal',
+          requestId: 'request-1'
+        },
+        {
+          method: 'GET',
+          urlWithParams: '/api/admin/workspace/5/journal',
+          requestId: 'request-2'
+        }
+      ]);
+    });
+
+    it('should group backend connectivity errors across different request URLs', () => {
+      service.addErrorMessage({
+        status: 504,
+        method: 'GET',
+        urlWithParams: '/api/admin/users/access/5',
+        message: 'Gateway Timeout'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 504,
+        method: 'POST',
+        urlWithParams: '/api/admin/workspace/5/coding/statistics/job?version=v1',
+        message: 'Gateway Timeout'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 0,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/freshness',
+        message: 'Backend nicht erreichbar'
+      } as AppHttpError);
 
       expect(service.errorMessages).toHaveLength(1);
       expect(service.errorMessages[0].message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE);
-      expect(service.errorMessages[0].requestCount).toBe(2);
+      expect(service.errorMessages[0].requestCount).toBe(3);
+      expect(service.errorMessages[0].affectedRequests).toHaveLength(3);
     });
   });
 });

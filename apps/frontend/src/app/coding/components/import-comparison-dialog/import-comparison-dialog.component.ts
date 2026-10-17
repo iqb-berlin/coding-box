@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy
+  Component, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
@@ -21,6 +22,8 @@ import {
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface ImportComparisonRow {
   unitAlias: string;
@@ -58,7 +61,8 @@ export interface ImportComparisonData {
 }
 
 @Component({
-  selector: 'app-import-comparison-dialog',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-import-comparison-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -94,10 +98,10 @@ export interface ImportComparisonData {
               <span>Dies ist eine Vorschau. Die Änderungen wurden noch nicht angewendet.</span>
             </div>
           }
-          @if (applyProgress >= 0) {
+          @if (applyProgress() >= 0) {
             <div class="apply-progress">
-              <p>Import läuft... {{applyProgress}}%</p>
-              <mat-progress-bar mode="determinate" [value]="applyProgress"></mat-progress-bar>
+              <p>Import läuft... {{applyProgress()}}%</p>
+              <mat-progress-bar mode="determinate" [value]="applyProgress()"></mat-progress-bar>
             </div>
           }
         </div>
@@ -236,7 +240,7 @@ export interface ImportComparisonData {
 
       <mat-dialog-actions align="end">
         <button mat-button (click)="downloadComparisonTable()"
-          [disabled]="isLoading || !data.affectedRows.length"
+          [disabled]="isLoading() || !data.affectedRows.length"
           matTooltip="Als Excel herunterladen">
           <mat-icon>download</mat-icon>
           Herunterladen
@@ -248,12 +252,14 @@ export interface ImportComparisonData {
             <mat-icon>cancel</mat-icon>
             Abbrechen
           </button>
+          @if (canApplyImport) {
           <button mat-raised-button color="primary" (click)="applyImport()"
-            [disabled]="isLoading || data.updatedRows === 0"
+            [disabled]="isLoading() || data.updatedRows === 0"
             matTooltip="Änderungen anwenden">
             <mat-icon>check_circle</mat-icon>
             Änderungen anwenden
           </button>
+          }
         }
 
         <!-- Normal mode button -->
@@ -462,7 +468,17 @@ export interface ImportComparisonData {
   `]
 })
 export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
-  displayedColumns: string[] = [
+  dialogRef = inject<MatDialogRef<ImportComparisonDialogComponent>>(MatDialogRef);
+  protected data = inject<ImportComparisonData>(MAT_DIALOG_DATA);
+  private translateService = inject(TranslateService);
+  private testPersonCodingService = inject(TestPersonCodingService);
+  private snackBar = inject(MatSnackBar);
+  private readonly permissions = inject(CodingPermissionsService);
+  private readonly appService = inject(AppService);
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  protected displayedColumns: string[] = [
     'unitAlias',
     'variableId',
     'personLogin',
@@ -478,39 +494,36 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     'updatedScore'
   ];
 
-  dataSource = new MatTableDataSource<ImportComparisonRow>([]);
-  pageSize = 100;
-  isLoading = false;
-  applyProgress = -1;
+  protected dataSource = new MatTableDataSource<ImportComparisonRow>([]);
+  protected pageSize = 100;
+  readonly isLoading = signal(false);
+  readonly applyProgress = signal(-1);
 
   private pollingSubscription?: Subscription;
 
-  constructor(
-    public dialogRef: MatDialogRef<ImportComparisonDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ImportComparisonData,
-    private translateService: TranslateService,
-    private testPersonCodingService: TestPersonCodingService,
-    private snackBar: MatSnackBar
-  ) {}
-
   ngOnInit(): void {
+    if (this.data.workspaceId) this.permissions.load(this.data.workspaceId);
     this.dataSource.data = this.data.affectedRows;
+  }
+
+  protected get canApplyImport(): boolean {
+    return this.data.workspaceId === this.appService.selectedWorkspaceId && this.permissions.canApply;
   }
 
   ngOnDestroy(): void {
     this.pollingSubscription?.unsubscribe();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageSize = event.pageSize;
     this.updateDataSource();
   }
 
-  onPageSizeChange(): void {
+  protected onPageSizeChange(): void {
     this.updateDataSource();
   }
 
-  getActionLabel(row: ImportComparisonRow): string {
+  protected getActionLabel(row: ImportComparisonRow): string {
     if (row.importAction === 'skip') {
       return row.hasConflict ? 'Konflikt übersprungen' : 'Übersprungen';
     }
@@ -531,12 +544,12 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     // In a real implementation, you might want to slice the data manually
   }
 
-  downloadComparisonTable(): void {
+  protected downloadComparisonTable(): void {
     if (!this.data.affectedRows || this.data.affectedRows.length === 0) {
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
 
     try {
       const workbook = new ExcelJS.Workbook();
@@ -620,21 +633,21 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     } catch {
       // Swallow error; UI state is reset in finally block
     } finally {
-      this.isLoading = false;
+      this.isLoading.set(false);
     }
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 
-  applyImport(): void {
-    if (!this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
+  protected applyImport(): void {
+    if (!this.canApplyImport || !this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
       return;
     }
 
-    this.isLoading = true;
-    this.applyProgress = 0;
+    this.isLoading.set(true);
+    this.applyProgress.set(0);
 
     this.testPersonCodingService.startExternalCodingImportJob(
       this.data.workspaceId,
@@ -646,13 +659,13 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         scoreMode: this.data.scoreMode,
         existingCodingMode: this.data.existingCodingMode
       }
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ jobId }) => {
         this.pollImportJob(this.data.workspaceId!, jobId);
       },
       error: error => {
-        this.isLoading = false;
-        this.applyProgress = -1;
+        this.isLoading.set(false);
+        this.applyProgress.set(-1);
         if (error.status === 409) {
           this.snackBar.open(
             'Ein Import läuft bereits für diesen Workspace.',
@@ -676,13 +689,13 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
       takeWhile(status => status.status !== 'completed' && status.status !== 'failed', true)
     ).subscribe({
       next: status => {
-        this.applyProgress = status.progress;
+        this.applyProgress.set(status.progress);
 
         if (status.status === 'completed') {
           this.fetchImportResult(workspaceId, jobId);
         } else if (status.status === 'failed') {
-          this.isLoading = false;
-          this.applyProgress = -1;
+          this.isLoading.set(false);
+          this.applyProgress.set(-1);
           this.snackBar.open(
             `Import fehlgeschlagen: ${status.error || 'Unbekannter Fehler'}`,
             '',
@@ -691,8 +704,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
-        this.isLoading = false;
-        this.applyProgress = -1;
+        this.isLoading.set(false);
+        this.applyProgress.set(-1);
         this.snackBar.open(
           'Fehler beim Abfragen des Import-Status.',
           '',
@@ -703,16 +716,16 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   }
 
   private fetchImportResult(workspaceId: number, jobId: string): void {
-    this.testPersonCodingService.getExternalCodingImportResult(workspaceId, jobId).subscribe({
+    this.testPersonCodingService.getExternalCodingImportResult(workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
-        this.isLoading = false;
-        this.applyProgress = -1;
+        this.isLoading.set(false);
+        this.applyProgress.set(-1);
         this.notifyImportApplied(workspaceId);
         this.dialogRef.close({ applied: true, result });
       },
       error: () => {
-        this.isLoading = false;
-        this.applyProgress = -1;
+        this.isLoading.set(false);
+        this.applyProgress.set(-1);
         this.notifyImportApplied(workspaceId);
         this.snackBar.open(
           'Import abgeschlossen, aber Ergebnis konnte nicht geladen werden.',

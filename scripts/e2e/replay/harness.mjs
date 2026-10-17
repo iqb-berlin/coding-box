@@ -1,10 +1,13 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
+import { findComposeContainer } from './compose-container.mjs';
 
 const REQUIRED_ENV = [
+  'REPLAY_E2E_OIDC_ISSUER',
+  'REPLAY_E2E_AUTH_PASSWORD',
   'REPLAY_E2E_API_URL',
   'REPLAY_E2E_BASE_URL',
   'REPLAY_E2E_CACHE_DIR',
@@ -15,8 +18,6 @@ const REQUIRED_ENV = [
   'REPLAY_E2E_STATE_FILE'
 ];
 
-const ISSUER = 'http://replay-e2e.invalid/realms/replay-e2e';
-const CLIENT_ID = 'replay-e2e';
 
 export function createReplayHarness(environment = process.env) {
   if (environment.REPLAY_E2E_EXISTING_SETUP_FILE) {
@@ -35,7 +36,76 @@ export function createReplayHarness(environment = process.env) {
       }
 
       activeState = await setupReplayWorkspace(config);
+      if (environment.REPLAY_E2E_AUTH === 'true') {
+        const { setupCodingFixture } = await import('./auth-fixture.mjs');
+        Object.assign(activeState.browser, await setupCodingFixture(activeState, environment));
+      }
       return activeState.browser;
+    },
+
+    async prepareImportedCoding() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Imported coding setup requires the isolated authentication fixture.');
+      }
+      const { prepareImportedCoding } = await import('./workflow-fixture.mjs');
+      return prepareImportedCoding(activeState);
+    },
+
+    async prepareOwnership() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Ownership setup requires the isolated authentication fixture.');
+      }
+      const { prepareOwnership } = await import('./workflow-fixture.mjs');
+      return prepareOwnership(activeState);
+    },
+
+    async verifyAuditRollback() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Audit rollback verification requires the isolated authentication fixture.');
+      }
+      const { verifyAuditRollback } = await import('./audit-fixture.mjs');
+      return verifyAuditRollback(activeState);
+    },
+
+    async verifyJobIsolation() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Job isolation verification requires the isolated authentication fixture.');
+      }
+      const { verifyJobIsolation } = await import('./job-isolation-fixture.mjs');
+      return verifyJobIsolation(activeState);
+    },
+
+    async readFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings read requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      return { regex: JSON.parse(regex.value), pool };
+    },
+
+    async prepareFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings setup requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const headers = { 'content-type': 'application/json' };
+      await apiJson(config, `/workspace/${workspaceId}/settings`, {
+        method: 'POST', token: adminToken, headers,
+        body: JSON.stringify({ key: 'enable-regex-search', value: JSON.stringify({ enabled: true }) })
+      });
+      await apiJson(config, '/admin/content-pool/settings', {
+        method: 'PUT', token: adminToken, headers,
+        body: JSON.stringify({ enabled: true, baseUrl: 'https://synthetic.example.invalid',
+          applicationToken: 'file-settings-e2e-synthetic-token' })
+      });
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      if (!JSON.parse(regex.value).enabled || !pool.enabled || !pool.hasApplicationToken) {
+        throw new Error('File settings fixture did not persist.');
+      }
+      return pool;
     },
 
     async verifyItemMatrix() {
@@ -117,7 +187,7 @@ async function setupReplayWorkspace(config) {
     playerSource,
     playerChecksum
   );
-  const adminToken = createAdminToken(config);
+  const adminToken = await createAdminToken(config);
   const workspaceName = `replay-e2e-${config.runId}`;
   let workspaceId;
 
@@ -427,10 +497,11 @@ async function seedIncompleteItemMatrixFixture(config, workspaceId) {
     )
     SELECT COUNT(*) FROM updated_responses;
   `;
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   const output = await runCapture('docker', [
     'exec',
     '-i',
-    `${config.composeProject}-db-1`,
+    dbContainer,
     'psql',
     '--username=replay_e2e',
     '--dbname=replay_e2e',
@@ -490,7 +561,12 @@ async function pollExportJob(config, workspaceId, token, jobId) {
       `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
       { token }
     );
-    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+    // The queue can expose the failed state before failedReason (and therefore
+    // the public diagnostic metadata) is visible through the status endpoint.
+    if (
+      lastStatus.status === 'completed' ||
+      (lastStatus.status === 'failed' && lastStatus.error)
+    ) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -658,7 +734,7 @@ async function deleteWorkspace(config, workspaceId) {
     `${config.apiUrl}/api/admin/workspace?ids=${encodeURIComponent(workspaceId)}`,
     {
       method: 'DELETE',
-      headers: { authorization: `Bearer ${createAdminToken(config)}` }
+      headers: { authorization: `Bearer ${await createAdminToken(config)}` }
     }
   );
 
@@ -699,34 +775,18 @@ async function appendFile(form, filePath, fileName, mimeType) {
   );
 }
 
-function createAdminToken(config) {
-  const now = Math.floor(Date.now() / 1000);
-  return signHs256(
-    {
-      iss: ISSUER,
-      sub: `replay-e2e-admin-${config.runId}`,
-      aud: CLIENT_ID,
-      azp: CLIENT_ID,
-      preferred_username: `replay-e2e-admin-${config.runId}`,
-      realm_access: { roles: ['admin'] },
-      iat: now,
-      exp: now + 3600
-    },
-    config.jwtSecret
-  );
-}
-
-function signHs256(payload, secret) {
-  const header = encodeJwtPart({ alg: 'HS256', typ: 'JWT' });
-  const body = encodeJwtPart(payload);
-  const signature = createHmac('sha256', secret)
-    .update(`${header}.${body}`)
-    .digest('base64url');
-  return `${header}.${body}.${signature}`;
-}
-
-function encodeJwtPart(value) {
-  return Buffer.from(JSON.stringify(value)).toString('base64url');
+export async function createAdminToken(config) {
+  const response = await fetch(`${config.issuer}/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password', client_id: 'replay-e2e-bootstrap',
+      username: 'replay-e2e-bootstrap', password: config.authPassword
+    })
+  });
+  if (!response.ok) throw new Error(`OIDC fixture login failed with HTTP ${response.status}.`);
+  const tokens = await response.json();
+  if (!tokens.access_token) throw new Error('OIDC fixture login returned no access token.');
+  return tokens.access_token;
 }
 
 function safeJobMessage(status) {
@@ -750,6 +810,8 @@ function readConfig(environment) {
   }
 
   return {
+    issuer: environment.REPLAY_E2E_OIDC_ISSUER,
+    authPassword: environment.REPLAY_E2E_AUTH_PASSWORD,
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),

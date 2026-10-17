@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, inject
+  Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -40,6 +41,7 @@ export interface ContentPoolUploadDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-content-pool-upload-dialog',
   templateUrl: './content-pool-upload-dialog.component.html',
   styleUrls: ['./content-pool-upload-dialog.component.scss'],
@@ -57,6 +59,10 @@ export interface ContentPoolUploadDialogResult {
   ]
 })
 export class ContentPoolUploadDialogComponent implements OnDestroy {
+  readonly data = inject<ContentPoolUploadDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly contentPoolIntegrationService = inject(
     ContentPoolIntegrationService
   );
@@ -65,73 +71,68 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolUploadDialogComponent>
   );
 
-  changelog = '';
+  protected readonly changelog = signal('');
 
-  acps: ContentPoolAcpSummary[] = [];
+  protected readonly acps = signal<ContentPoolAcpSummary[]>([]);
 
-  selectedAcpId = '';
+  readonly selectedAcpId = signal('');
 
-  isLoadingAcps = false;
+  protected readonly isLoadingAcps = signal(false);
 
-  isUploading = false;
+  protected readonly isUploading = signal(false);
 
-  hasLoadedAcps = false;
+  protected readonly hasLoadedAcps = signal(false);
 
-  errorMessage = '';
+  protected readonly errorMessage = signal('');
 
-  uploadProgress?: ContentPoolUploadFilesProgress;
+  readonly uploadProgress = signal<ContentPoolUploadFilesProgress | undefined>(undefined);
 
   private uploadSubscription?: Subscription;
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) readonly data: ContentPoolUploadDialogData
-  ) {
-    this.changelog = `Dateien aus Coding-Box ersetzt: ${
-      data.files.map(file => file.filename).join(', ')
-    }`;
+  constructor() {
+    const data = this.data;
+
+    this.changelog.set(`Dateien aus Coding-Box ersetzt: ${data.files.map(file => file.filename).join(', ')}`);
   }
 
   ngOnDestroy(): void {
     this.uploadSubscription?.unsubscribe();
   }
 
-  loadAcps(): void {
-    this.errorMessage = '';
-    this.isLoadingAcps = true;
-    this.hasLoadedAcps = false;
-    this.selectedAcpId = '';
-    this.acps = [];
+  protected loadAcps(): void {
+    this.errorMessage.set('');
+    this.isLoadingAcps.set(true);
+    this.hasLoadedAcps.set(false);
+    this.selectedAcpId.set('');
+    this.acps.set([]);
 
     this.contentPoolIntegrationService
-      .listAccessibleAcps(this.data.workspaceId)
+      .listAccessibleAcps(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
-          this.isLoadingAcps = false;
-          this.hasLoadedAcps = true;
-          this.acps = response.acps || [];
-          if (this.acps.length === 0) {
-            this.errorMessage = 'Keine ACPs gefunden oder kein Zugriff vorhanden.';
+          this.isLoadingAcps.set(false);
+          this.hasLoadedAcps.set(true);
+          this.acps.set(response.acps || []);
+          if (this.acps().length === 0) {
+            this.errorMessage.set('Keine ACPs gefunden oder kein Zugriff vorhanden.');
           }
         },
         error: error => {
-          this.isLoadingAcps = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'
-          );
+          this.isLoadingAcps.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'));
         }
       });
   }
 
-  uploadFiles(): void {
-    if (!this.selectedAcpId) {
-      this.errorMessage = 'Bitte ein ACP auswählen.';
+  protected uploadFiles(): void {
+    if (!this.selectedAcpId()) {
+      this.errorMessage.set('Bitte ein ACP auswählen.');
       return;
     }
 
-    this.errorMessage = '';
-    this.isUploading = true;
-    this.uploadProgress = {
+    this.errorMessage.set('');
+    this.isUploading.set(true);
+    this.uploadProgress.set({
       jobId: '',
       status: 'pending',
       phase: 'queued',
@@ -141,28 +142,28 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       progress: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
+    });
     this.uploadSubscription?.unsubscribe();
 
     this.uploadSubscription = this.contentPoolIntegrationService
       .uploadFilesToAcpWithProgress(this.data.workspaceId, {
-        acpId: this.selectedAcpId,
+        acpId: this.selectedAcpId(),
         fileIds: this.data.files.map(file => file.id),
-        changelog: this.changelog.trim()
+        changelog: this.changelog().trim()
       })
       .subscribe({
         next: progress => {
-          this.uploadProgress = progress;
+          this.uploadProgress.set(progress);
 
           if (progress.status === 'failed') {
-            this.isUploading = false;
-            this.errorMessage = progress.error ||
-              'Dateien konnten nicht in den Content Pool übertragen werden.';
+            this.isUploading.set(false);
+            this.errorMessage.set(progress.error ||
+    'Dateien konnten nicht in den Content Pool übertragen werden.');
             return;
           }
 
           if (progress.status === 'completed' && progress.result) {
-            this.isUploading = false;
+            this.isUploading.set(false);
             this.dialogRef.close({
               success: true,
               result: progress.result
@@ -170,45 +171,44 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           }
         },
         error: error => {
-          this.isUploading = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'Dateien konnten nicht in den Content Pool übertragen werden.'
-          );
+          this.isUploading.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'Dateien konnten nicht in den Content Pool übertragen werden.'));
         }
       });
   }
 
-  get uploadProgressMode(): 'determinate' | 'indeterminate' {
-    return this.uploadProgress?.totalFiles || this.uploadProgress?.progress ?
+  protected get uploadProgressMode(): 'determinate' | 'indeterminate' {
+    return this.uploadProgress()?.totalFiles || this.uploadProgress()?.progress ?
       'determinate' :
       'indeterminate';
   }
 
-  get uploadProgressValue(): number {
-    const progress = this.uploadProgress?.progress || 0;
+  protected get uploadProgressValue(): number {
+    const progress = this.uploadProgress()?.progress || 0;
     return Math.max(0, Math.min(100, progress));
   }
 
-  get uploadProgressText(): string {
-    if (!this.uploadProgress) {
+  protected get uploadProgressText(): string {
+    const uploadProgressSnapshot = this.uploadProgress();
+
+    if (!uploadProgressSnapshot) {
       return '';
     }
 
     if (
-      this.uploadProgress.phase === 'replacing-files' &&
-      this.uploadProgress.totalFiles > 0
+      uploadProgressSnapshot.phase === 'replacing-files' &&
+      uploadProgressSnapshot.totalFiles > 0
     ) {
-      const currentFile = this.uploadProgress.currentFileName ?
-        `: ${this.uploadProgress.currentFileName}` :
+      const currentFile = uploadProgressSnapshot.currentFileName ?
+        `: ${uploadProgressSnapshot.currentFileName}` :
         '';
-      return `Datei ${this.uploadProgress.processedFiles} von ${this.uploadProgress.totalFiles}${currentFile}`;
+      return `Datei ${uploadProgressSnapshot.processedFiles} von ${uploadProgressSnapshot.totalFiles}${currentFile}`;
     }
 
-    return this.uploadProgress.message;
+    return uploadProgressSnapshot.message;
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close({ success: false });
   }
 

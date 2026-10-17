@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import User from '../../entities/user.entity';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingAggregationPeerService } from '../coding/coding-aggregation-peer.service';
 import {
@@ -6,6 +7,7 @@ import {
   JobDefinitionVariable
 } from '../../entities/job-definition.entity';
 import { JobDefinitionService } from './job-definition.service';
+import { JournalService } from '../shared/journal.service';
 
 type ScenarioResponse = {
   id: number;
@@ -39,9 +41,12 @@ const createRepo = () => {
     save: jest.fn(value => Promise.resolve(value)),
     remove: jest.fn(),
     manager: {
+      findOne: jest.fn(async (entity: unknown) => (entity === User ? { id: 7, isAdmin: true } : repo.findOne())),
       transaction: jest.fn(async (callback: (manager: {
+        query: jest.Mock;
         getRepository: jest.Mock;
       }) => Promise<unknown>) => callback({
+        query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn(() => repo)
       }))
     },
@@ -119,6 +124,7 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
   const changedVariables = [mv14828, mv14855, mv15484];
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     const codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();
@@ -226,7 +232,7 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
       assignedVariableBundles: [],
       maxCodingCases: null,
       caseOrderingMode: 'continuous'
-    })).resolves.toMatchObject({
+    }, 7)).resolves.toMatchObject({
       id: 74,
       assigned_variables: changedVariables
     });
@@ -272,7 +278,7 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
         assignedVariableBundles: [],
         maxCodingCases: null,
         caseOrderingMode: 'continuous'
-      });
+      }, 7);
     } catch (error) {
       thrownError = error;
     }

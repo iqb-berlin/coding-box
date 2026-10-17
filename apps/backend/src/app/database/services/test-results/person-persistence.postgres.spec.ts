@@ -13,6 +13,7 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { UnitTag } from '../../entities/unitTag.entity';
 import { UnitNote } from '../../entities/unitNote.entity';
 import { Person } from '../shared';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
 // Opt-in: set POSTGRES_INTEGRATION_TESTS=true and POSTGRES_* if the local
 // development defaults below do not match the target database.
@@ -80,6 +81,51 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
       dataSource.getRepository(Session),
       dataSource.getRepository(UnitLog)
     );
+  }, 30000);
+
+  it('rolls back a failed new unit and imports it successfully on a skip retry', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const person = await personsRepository.save({
+      workspace_id: 900000001,
+      group: `rollback-${suffix}`,
+      login: 'test',
+      code: 'test',
+      booklets: []
+    } as Persons);
+    cleanupPersonIds.push(person.id);
+    const info = await bookletInfoRepository.save({ name: `rollback-${suffix}`, size: 0 } as BookletInfo);
+    cleanupBookletInfoIds.push(info.id);
+    const booklet = {
+      id: info.name,
+      logs: [],
+      sessions: [],
+      units: [{
+        id: 'FAILED_UNIT',
+        alias: 'FAILED_UNIT',
+        laststate: [],
+        chunks: [],
+        logs: [],
+        subforms: [{ id: '', responses: [{ id: 'VAR', status: 'VALUE_CHANGED', value: 'answer' }] }]
+      }]
+    } as Person['booklets'][number];
+    const issues: TestResultsUploadIssueDto[] = [];
+    const failResponses = jest.spyOn(service, 'saveSubformResponsesForUnit').mockImplementationOnce(async () => {
+      throw new Error('simulated response write failure');
+    });
+    const failed = await service.processBookletWithTransaction(booklet, person, 'skip', issues);
+    failResponses.mockRestore();
+
+    const savedBooklet = await bookletRepository.findOneOrFail({ where: { personid: person.id, infoid: info.id } });
+    expect(await unitRepository.count({ where: { bookletid: savedBooklet.id } })).toBe(0);
+    expect(failed.addedUnitIds).toEqual([]);
+    expect(issues).toEqual([expect.objectContaining({ level: 'error' })]);
+
+    const retried = await service.processBookletWithTransaction(booklet, person, 'skip');
+    const savedUnit = await unitRepository.findOneOrFail({ where: { bookletid: savedBooklet.id, name: 'FAILED_UNIT' } });
+    expect(retried.addedUnitIds).toEqual([savedUnit.id]);
+    expect(await responseRepository.find({ where: { unitid: savedUnit.id } })).toEqual([
+      expect.objectContaining({ variableid: 'VAR', value: 'answer' })
+    ]);
   }, 30000);
 
   afterEach(async () => {

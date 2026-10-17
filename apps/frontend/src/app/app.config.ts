@@ -10,7 +10,6 @@ import {
   withInterceptors
 } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { HashLocationStrategy, LocationStrategy, registerLocaleData } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
 import { routes } from './app.routes';
@@ -51,7 +50,6 @@ export const appConfig: ApplicationConfig = {
       }
     })),
     provideRouter(routes),
-    provideAnimationsAsync(),
     {
       provide: SERVER_URL,
       useValue: environment.backendUrl

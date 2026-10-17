@@ -1,9 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { computed } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AuthService } from './auth.service';
 import { AppService } from './app.service';
+
+jest.unmock('jwt-decode');
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -92,6 +95,20 @@ describe('AuthService', () => {
     if (originalCryptoDescriptor) {
       Object.defineProperty(globalThis, 'crypto', originalCryptoDescriptor);
     }
+  });
+
+  it('updates derived authentication state when an OIDC callback stores a token', () => {
+    let storedToken: string | null = null;
+    storageMock.getItem.mockImplementation(key => (key === 'auth_token' ? storedToken : null));
+    storageMock.setItem.mockImplementation((key, value) => {
+      if (key === 'auth_token') storedToken = value;
+    });
+    const isLoggedIn = computed(() => service.isLoggedIn());
+    expect(isLoggedIn()).toBe(false);
+
+    service.setToken(createToken(300));
+
+    expect(isLoggedIn()).toBe(true);
   });
 
   it('should be created', () => {

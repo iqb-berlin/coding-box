@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, OnInit, ChangeDetectionStrategy, inject
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +12,7 @@ import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dt
 import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-info-dialog',
   templateUrl: './unit-info-dialog.component.html',
   styleUrls: ['./unit-info-dialog.component.scss'],
@@ -26,16 +29,14 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class UnitInfoDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  dialogRef = inject<MatDialogRef<UnitInfoDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    unitInfo: UnitInfoDto;
+    unitId: string;
+  }>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<UnitInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
-      unitInfo: UnitInfoDto;
-      unitId: string;
-    }
-  ) {}
+  protected isLoading = true;
+  protected errorMessage: string | null = null;
 
   ngOnInit(): void {
     if (this.data.unitInfo) {
@@ -43,7 +44,7 @@ export class UnitInfoDialogComponent implements OnInit {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

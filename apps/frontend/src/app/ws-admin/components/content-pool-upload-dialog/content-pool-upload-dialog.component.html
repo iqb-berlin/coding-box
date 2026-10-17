@@ -25,20 +25,20 @@
       mat-stroked-button
       color="primary"
       (click)="loadAcps()"
-      [disabled]="isLoadingAcps || isUploading">
+      [disabled]="isLoadingAcps() || isUploading()">
       <mat-icon>sync</mat-icon>
-      {{ isLoadingAcps ? 'Lade ACPs...' : 'ACPs laden' }}
+      {{ isLoadingAcps() ? 'Lade ACPs...' : 'ACPs laden' }}
     </button>
-    @if (isLoadingAcps) {
+    @if (isLoadingAcps()) {
       <mat-spinner diameter="20"></mat-spinner>
     }
   </div>
 
-  @if (hasLoadedAcps) {
+  @if (hasLoadedAcps()) {
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>ACP auswählen</mat-label>
-      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isUploading">
-        @for (acp of acps; track acp.id) {
+      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isUploading()">
+        @for (acp of acps(); track acp.id) {
           <mat-option [value]="acp.id">
             {{ acp.name || acp.packageId || acp.id }}
           </mat-option>
@@ -52,11 +52,11 @@
         matInput
         rows="3"
         [(ngModel)]="changelog"
-        [disabled]="isUploading"></textarea>
+        [disabled]="isUploading()"></textarea>
     </mat-form-field>
   }
 
-  @if (isUploading) {
+  @if (isUploading()) {
     <div class="upload-progress">
       <div class="progress-header">
         <span>{{ uploadProgressText }}</span>
@@ -71,19 +71,19 @@
     </div>
   }
 
-  @if (errorMessage) {
-    <div class="error-message">{{ errorMessage }}</div>
+  @if (errorMessage()) {
+    <div class="error-message">{{ errorMessage() }}</div>
   }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="cancel()" [disabled]="isUploading">Abbrechen</button>
+  <button mat-button (click)="cancel()" [disabled]="isUploading()">Abbrechen</button>
   <button
     mat-raised-button
     color="primary"
     (click)="uploadFiles()"
-    [disabled]="isUploading || !hasLoadedAcps || !selectedAcpId">
+    [disabled]="isUploading() || !hasLoadedAcps() || !selectedAcpId()">
     <mat-icon>publish</mat-icon>
-    {{ isUploading ? 'Übertrage...' : 'Dateien ersetzen' }}
+    {{ isUploading() ? 'Übertrage...' : 'Dateien ersetzen' }}
   </button>
 </mat-dialog-actions>

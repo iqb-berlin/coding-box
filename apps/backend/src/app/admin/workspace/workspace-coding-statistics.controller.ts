@@ -1222,9 +1222,10 @@ export class WorkspaceCodingStatisticsController {
     description: 'Coding statistics job status retrieved successfully.'
   })
   async getCodingStatisticsJobStatus(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspaceId: number,
+      @Param('jobId') jobId: string
   ): Promise<CodingStatisticsJobStatusResponse | { error: string }> {
-    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId);
+    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId, workspaceId);
     if (!status) {
       return { error: `Coding statistics job with ID ${jobId} not found` };
     }
@@ -2999,7 +3000,8 @@ export class WorkspaceCodingStatisticsController {
                      showScore?: boolean;
                      allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
-                   }
+                   },
+                   @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<DistributedCodingJobsResponse> {
     if (!body) {
       throw new BadRequestException('Request body is required');
@@ -3011,6 +3013,6 @@ export class WorkspaceCodingStatisticsController {
       );
     }
 
-    return this.codingJobService.createDistributedCodingJobs(workspace_id, body);
+    return this.codingJobService.createDistributedCodingJobs(workspace_id, body, undefined, ownershipRequest.user?.id);
   }
 }

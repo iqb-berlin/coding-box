@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, inject
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, signal, untracked, ChangeDetectionStrategy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Router, RouterLink, RouterOutlet, NavigationEnd
 } from '@angular/router';
@@ -10,7 +11,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
-import { Subscription, filter, firstValueFrom } from 'rxjs';
+import { filter, firstValueFrom } from 'rxjs';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
@@ -25,7 +27,8 @@ import { SystemNotificationBannerComponent } from './components/system-notificat
 import { SystemNotificationService } from './core/services/system-notification.service';
 
 @Component({
-  selector: 'app-root',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  selector: 'coding-box-root',
   imports: [
     RouterOutlet,
     MatSlideToggleModule,
@@ -44,33 +47,68 @@ import { SystemNotificationService } from './core/services/system-notification.s
   styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, OnDestroy {
-  appService = inject(AppService);
-  authService = inject(AuthService);
+  protected appService = inject(AppService);
+  protected authService = inject(AuthService);
 
-  url = inject(LocationStrategy);
+  protected url = inject(LocationStrategy);
   private router = inject(Router);
   private authSessionActivity = inject(AuthSessionActivityService);
   private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
-  isLoggedIn = false;
-  errorMessage = '';
-  authData: AuthDataDto = AppService.defaultAuthData;
-  currentWorkspaceName = '';
-  private routerSubscription: Subscription | null = null;
-  private authDataSubscription: Subscription | null = null;
+  readonly isLoggedIn = signal(false);
+  readonly errorMessage = signal('');
+  readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
+  protected readonly currentWorkspaceName = signal('');
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly snackBar = inject(MatSnackBar);
 
   constructor() {
-    this.authDataSubscription = this.appService.authData$.subscribe(authData => {
-      this.authData = authData;
+    effect(() => {
+      const sessionActive = this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
+      untracked(() => {
+        if (sessionActive) {
+          this.authSessionActivity.start();
+        } else {
+          this.authSessionActivity.restart();
+        }
+      });
+    });
+
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
+      this.authData.set(authData);
       this.updateCurrentWorkspaceName();
     });
 
-    this.routerSubscription = this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
+    this.router.events
+      .pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.updateCurrentWorkspaceName();
       });
+  }
+
+  async loadAuthData(identity: string): Promise<boolean> {
+    this.errorMessage.set('');
+    this.appService.errorMessagesDisabled = true;
+
+    try {
+      const success = await firstValueFrom(this.appService.loadAuthenticatedUser(identity));
+      if (success) {
+        this.snackBar.dismiss();
+      } else {
+        this.snackBar.open(
+          'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
+          'Schließen',
+          {
+            duration: 8000,
+            panelClass: ['snackbar-error']
+          }
+        );
+      }
+      return success;
+    } finally {
+      this.appService.errorMessagesDisabled = false;
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -80,8 +118,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
     if (activeToken) {
       this.setAuthState();
-      await firstValueFrom(this.appService.loadAuthenticatedUser(this.appService.loggedUser?.sub || ''));
-      this.authSessionActivity.start();
+      await this.loadAuthData(this.appService.loggedUser?.sub || '');
       if (postLoginReturnUrl) {
         this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
       }
@@ -95,19 +132,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.routerSubscription?.unsubscribe();
-    this.authDataSubscription?.unsubscribe();
     this.authSessionActivity.stop();
     this.systemNotifications.stopPolling();
   }
 
   private updateCurrentWorkspaceName(): void {
     const workspaceId = this.getWorkspaceIdFromUrl();
-    if (workspaceId > 0 && this.authData.workspaces) {
-      const workspace = this.authData.workspaces.find(ws => ws.id === workspaceId);
-      this.currentWorkspaceName = workspace?.name || '';
+    if (workspaceId > 0 && this.authData().workspaces) {
+      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
+      this.currentWorkspaceName.set(workspace?.name || '');
     } else {
-      this.currentWorkspaceName = '';
+      this.currentWorkspaceName.set('');
     }
   }
 
@@ -118,9 +153,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private setAuthState(): void {
-    this.isLoggedIn = true;
+    this.isLoggedIn.set(true);
     this.appService.isLoggedIn = true;
     this.appService.loggedUser = this.authService.getLoggedUser();
+    this.appService.userProfile = {
+      username: this.appService.loggedUser?.preferred_username,
+      firstName: this.appService.loggedUser?.given_name || '',
+      lastName: this.appService.loggedUser?.family_name || '',
+      email: this.appService.loggedUser?.email
+    };
   }
 
   private async handleAuthCallback(): Promise<string | undefined> {
@@ -180,7 +221,7 @@ export class AppComponent implements OnInit, OnDestroy {
     );
   }
 
-  isAdminUser(): boolean {
-    return hasAdminBypass(this.authService.getRoles(), this.authData.isAdmin);
+  protected isAdminUser(): boolean {
+    return hasAdminBypass(this.authService.getRoles(), this.authData().isAdmin);
   }
 }

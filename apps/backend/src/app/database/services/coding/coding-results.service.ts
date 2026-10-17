@@ -8,6 +8,7 @@ import {
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
+import { JournalService } from '../shared/journal.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
@@ -24,6 +25,7 @@ import {
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationPoolSlot,
   withWorkspaceTestResultsMutationLock
 } from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
@@ -37,6 +39,7 @@ import {
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
+  actorUserId?: number;
 }
 
 export interface ApplyCodingResultsResult {
@@ -114,6 +117,15 @@ export class CodingResultsService {
     workspaceId: number,
     codingJobId: number,
     options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
+    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection,
+      () => this.applyCodingResultsInPool(workspaceId, codingJobId, options));
+  }
+
+  private async applyCodingResultsInPool(
+    workspaceId: number,
+    codingJobId: number,
+    options: ApplyCodingResultsOptions
   ): Promise<ApplyCodingResultsResult> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
     const overwriteExisting = options.overwriteExisting === true;
@@ -497,6 +509,9 @@ export class CodingResultsService {
               workspaceId,
               queryRunner.manager
             );
+            await this.recordAppliedResults(queryRunner.manager, workspaceId, codingJobId, options, {
+              updatedResponsesCount: 0, skippedReviewCount, skippedAlreadyCodedCount, overwrittenExistingCount
+            });
             await queryRunner.commitTransaction();
           } catch (error) {
             await queryRunner.rollbackTransaction();
@@ -602,6 +617,9 @@ export class CodingResultsService {
           );
         }
 
+        await this.recordAppliedResults(queryRunner.manager, workspaceId, codingJobId, options, {
+          updatedResponsesCount: totalUpdated, skippedReviewCount, skippedAlreadyCodedCount, overwrittenExistingCount
+        });
         await queryRunner.commitTransaction();
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
@@ -633,6 +651,21 @@ export class CodingResultsService {
       this.logger.error(`Error applying coding results: ${error.message}`, error.stack);
       throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
     }
+  }
+
+  private recordAppliedResults(manager: EntityManager, workspaceId: number, codingJobId: number,
+                               options: ApplyCodingResultsOptions, counts: Record<string, number>) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId: options.actorUserId,
+      actorType: options.actorUserId ? 'user' : 'system',
+      eventType: 'CODING_RESULTS_APPLIED',
+      entityType: 'coding-job',
+      entityId: codingJobId,
+      result: 'success',
+      summary: 'Coding results applied',
+      details: { ...counts, overwriteExisting: options.overwriteExisting === true }
+    });
   }
 
   private async markManualFreshnessCurrent(

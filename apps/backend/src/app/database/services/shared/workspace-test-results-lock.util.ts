@@ -5,6 +5,10 @@ const WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE = 774020251;
 type QueryRunnerFactory = Pick<DataSource, 'createQueryRunner'> &
 Partial<Pick<DataSource, 'options'>>;
 
+type MutationPool = Partial<Pick<DataSource, 'options'>>;
+type TransactionFactory = Pick<EntityManager, 'transaction'> &
+Partial<Pick<EntityManager, 'connection'>> & MutationPool;
+
 interface BlockingMutationPoolState {
   active: number;
   limit: number;
@@ -15,13 +19,15 @@ interface BlockingMutationPoolState {
 // for legacy callbacks that still obtain their own connection while allowing
 // independent workspace mutations to use the remaining pool capacity.
 const blockingMutationPoolStates = new WeakMap<
-QueryRunnerFactory,
+MutationPool,
 BlockingMutationPoolState
 >();
 
 export type WorkspaceTestResultsMutationLockAttempt<T> =
   | { acquired: true; value: T }
   | { acquired: false };
+
+export class WorkspaceTestcenterImportBusyError extends Error {}
 
 function normalizeWorkspaceId(workspaceId: number): number {
   const normalized = Number(workspaceId);
@@ -31,7 +37,7 @@ function normalizeWorkspaceId(workspaceId: number): number {
   return normalized;
 }
 
-function getBlockingMutationPoolLimit(connection: QueryRunnerFactory): number {
+function getBlockingMutationPoolLimit(connection: MutationPool): number {
   const options = connection.options as {
     poolSize?: number;
     extra?: { max?: number };
@@ -44,9 +50,12 @@ function getBlockingMutationPoolLimit(connection: QueryRunnerFactory): number {
   return Math.max(1, normalizedPoolSize - 1);
 }
 
+function acquireBlockingMutationPoolSlot(connection: MutationPool, wait?: true): Promise<() => void>;
+function acquireBlockingMutationPoolSlot(connection: MutationPool, wait: false): Promise<(() => void) | undefined>;
 async function acquireBlockingMutationPoolSlot(
-  connection: QueryRunnerFactory
-): Promise<() => void> {
+  connection: MutationPool,
+  wait = true
+): Promise<(() => void) | undefined> {
   let state = blockingMutationPoolStates.get(connection);
   if (!state) {
     state = {
@@ -58,6 +67,7 @@ async function acquireBlockingMutationPoolSlot(
   }
 
   if (state.active >= state.limit) {
+    if (!wait) return undefined;
     await new Promise<void>(resolve => {
       state.waiters.push(resolve);
     });
@@ -83,8 +93,8 @@ async function acquireBlockingMutationPoolSlot(
   };
 }
 
-async function withBlockingMutationPoolSlot<T>(
-  connection: QueryRunnerFactory,
+export async function withWorkspaceTestResultsMutationPoolSlot<T>(
+  connection: MutationPool,
   callback: () => Promise<T>
 ): Promise<T> {
   const releaseSlot = await acquireBlockingMutationPoolSlot(connection);
@@ -93,6 +103,15 @@ async function withBlockingMutationPoolSlot<T>(
   } finally {
     releaseSlot();
   }
+}
+
+/** Admit blocking mutations before BEGIN/connect can consume the reserved connection. */
+export async function withWorkspaceTestResultsMutationTransaction<T>(
+  factory: TransactionFactory,
+  callback: (manager: EntityManager) => Promise<T>
+): Promise<T> {
+  return withWorkspaceTestResultsMutationPoolSlot(factory.connection ?? factory,
+    () => factory.transaction(callback));
 }
 
 export async function lockWorkspaceTestResultsMutationInTransaction(
@@ -141,14 +160,13 @@ export async function withWorkspaceTestResultsMutationLock<T>(
   workspaceId: number,
   callback: (queryRunner: QueryRunner) => Promise<T>
 ): Promise<T> {
-  return withBlockingMutationPoolSlot(connection, async () => {
+  return withWorkspaceTestResultsMutationPoolSlot(connection, async () => {
     const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
     const queryRunner = connection.createQueryRunner();
     let locked = false;
 
-    await queryRunner.connect();
-
     try {
+      await queryRunner.connect();
       await lockWorkspaceTestResultsMutation(queryRunner, normalizedWorkspaceId);
       locked = true;
       return await callback(queryRunner);
@@ -173,12 +191,16 @@ export async function tryWithWorkspaceTestResultsMutationLock<T>(
   callback: (queryRunner: QueryRunner) => Promise<T>
 ): Promise<WorkspaceTestResultsMutationLockAttempt<T>> {
   const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
-  const queryRunner: QueryRunner = connection.createQueryRunner();
+  // A try-lock must not queue behind another import or consume the reserved
+  // connection when blocking transaction waiters already occupy the pool.
+  const releaseSlot = await acquireBlockingMutationPoolSlot(connection, false);
+  if (!releaseSlot) return { acquired: false };
+  let queryRunner: QueryRunner | undefined;
   let locked = false;
 
-  await queryRunner.connect();
-
   try {
+    queryRunner = connection.createQueryRunner();
+    await queryRunner.connect();
     locked = await tryLockWorkspaceTestResultsMutation(
       queryRunner,
       normalizedWorkspaceId
@@ -192,14 +214,30 @@ export async function tryWithWorkspaceTestResultsMutationLock<T>(
     };
   } finally {
     try {
-      if (locked) {
+      if (locked && queryRunner) {
         await unlockWorkspaceTestResultsMutation(
           queryRunner,
           normalizedWorkspaceId
         );
       }
     } finally {
-      await queryRunner.release();
+      try {
+        await queryRunner?.release();
+      } finally {
+        releaseSlot();
+      }
     }
   }
+}
+
+export async function withWorkspaceTestcenterImportLock<T>(
+  connection: QueryRunnerFactory,
+  workspaceId: number,
+  callback: () => Promise<T>
+): Promise<T> {
+  const attempt = await tryWithWorkspaceTestResultsMutationLock(connection, workspaceId, callback);
+  if (attempt.acquired === false) {
+    throw new WorkspaceTestcenterImportBusyError('In diesem Arbeitsbereich werden bereits Testdaten verarbeitet. Bitte deren Abschluss abwarten.');
+  }
+  return attempt.value;
 }

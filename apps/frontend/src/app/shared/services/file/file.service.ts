@@ -160,6 +160,11 @@ export class FileService {
     });
   }
 
+  readMetadataFile(workspaceId: number, fileId: number): Observable<FileDownloadDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/${fileId}/metadata`;
+    return this.http.get<FileDownloadDto>(url, { headers: this.authHeader });
+  }
+
   downloadFile(
     workspaceId: number,
     fileId: number

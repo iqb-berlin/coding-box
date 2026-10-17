@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Controller, Get, Param, Query, UseGuards
+  BadRequestException, Controller, Get, Param, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -163,7 +163,8 @@ export class WorkspaceTestCenterController {
       @Query('overwriteFileIds') overwriteFileIds: string,
       @Query('overwriteExistingLogs') overwriteExistingLogs: string,
       @Query('importRunId') importRunId: string,
-      @Query('responseOverwriteMode') responseOverwriteMode: string
+      @Query('responseOverwriteMode') responseOverwriteMode: string,
+      @Req() request?: { user: { id: number } }
   ): Promise<Result> {
     const importOptions: ImportOptions = {
       definitions: definitions,
@@ -198,7 +199,8 @@ export class WorkspaceTestCenterController {
           overwriteExistingLogs: boolean,
           overwriteFileIds?: string[],
           importRunId?: string,
-          responseOverwriteMode?: TestResultsOverwriteMode
+          responseOverwriteMode?: TestResultsOverwriteMode,
+          actorUserId?: number
         ) => Promise<Result>;
       }
     ).importWorkspaceFiles(
@@ -212,13 +214,22 @@ export class WorkspaceTestCenterController {
       overwriteLogs,
       overwriteIds.length ? overwriteIds : undefined,
       importRunId,
-      normalizedResponseOverwriteMode
+      normalizedResponseOverwriteMode,
+      request?.user.id
     );
 
-    if (result?.success) {
+    if (result?.success || result?.responses || result?.logs) {
       const workspaceId = Number(workspace_id);
       if (Number.isFinite(workspaceId) && workspaceId > 0) {
-        await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        try {
+          await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        } catch {
+          result.issues = [...(result.issues || []), {
+            level: 'warning',
+            category: 'other',
+            message: 'Der Import ist abgeschlossen, aber die Antwortfilter konnten noch nicht aktualisiert werden. Bitte die Übersicht später neu laden.'
+          }];
+        }
       }
     }
 

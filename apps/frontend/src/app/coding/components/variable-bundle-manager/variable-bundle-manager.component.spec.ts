@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundleManagerComponent } from './variable-bundle-manager.component';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -29,10 +29,15 @@ describe('VariableBundleManagerComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         VariableBundleManagerComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         {
           provide: VariableBundleService,
           useValue: {
@@ -53,7 +58,7 @@ describe('VariableBundleManagerComponent', () => {
             getCodingIncompleteVariables: jest.fn().mockReturnValue(of([]))
           }
         },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: MatDialog, useValue: { open: jest.fn(() => ({ afterClosed: () => of(null) })) } }
       ]

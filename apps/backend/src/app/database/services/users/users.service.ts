@@ -1,12 +1,15 @@
 import {
   Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
-import { In, MoreThan, Repository } from 'typeorm';
+import {
+  EntityManager, In, MoreThan, Repository
+} from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../../entities/workspace_user.entity';
+import { JournalService } from '../shared/journal.service';
 import { WorkspaceUserInListDto } from '../../../../../../../api-dto/user/workspace-user-in-list-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import {
@@ -74,7 +77,7 @@ export class UsersService {
       });
   }
 
-  async updateUsersAccess(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(workspaceId: number, users: UserInListDto[], actorUserId?: number): Promise<boolean> {
     this.logger.log('Patch users access rights');
     const normalizedWorkspaceId = Number(workspaceId);
     if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId < 1) {
@@ -143,12 +146,23 @@ export class UsersService {
       if (usersToUpsert.length > 0) {
         await workspaceUsersRepository.upsert(usersToUpsert, ['workspaceId', 'userId']);
       }
+      await JournalService.recordAccessChangesInTransaction(
+        manager,
+        normalizedWorkspaceId,
+        lockedWorkspaceUsers,
+        [...lockedWorkspaceUsers.filter(entry => !seenUserIds.has(entry.userId)), ...usersToUpsert],
+        actorUserId
+      );
     });
 
     return true;
   }
 
-  async assertUsersCanCodeInWorkspace(userIds: number[], workspaceId: number): Promise<void> {
+  async assertUsersCanCodeInWorkspace(
+    userIds: number[],
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<void> {
     const uniqueUserIds = Array.from(new Set(userIds));
     if (uniqueUserIds.length === 0) {
       return;
@@ -159,7 +173,10 @@ export class UsersService {
       throw new BadRequestException('Selected coders must have positive integer IDs.');
     }
 
-    const coderRows = await this.workspaceUserRepository.find({
+    const repository = manager ?
+      manager.getRepository(WorkspaceUser) :
+      this.workspaceUserRepository;
+    const coderRows = await repository.find({
       where: {
         workspaceId,
         userId: In(uniqueUserIds),
@@ -178,12 +195,13 @@ export class UsersService {
     }
   }
 
-  async canUserCodeInWorkspace(userId: number, workspaceId: number): Promise<boolean> {
+  async canUserCodeInWorkspace(userId: number, workspaceId: number, manager?: EntityManager): Promise<boolean> {
     if (!Number.isInteger(userId) || userId < 1) {
       return false;
     }
 
-    const workspaceUser = await this.workspaceUserRepository.findOne({
+    const repository = manager ? manager.getRepository(WorkspaceUser) : this.workspaceUserRepository;
+    const workspaceUser = await repository.findOne({
       where: {
         workspaceId,
         userId,
@@ -269,7 +287,7 @@ export class UsersService {
     return updatedUser;
   }
 
-  async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
+  async assignUserWorkspaces(userId: number, workspaceIds: number[], actorUserId?: number): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
     try {
       await this.workspaceUserRepository.manager.transaction(async manager => {
@@ -326,11 +344,17 @@ export class UsersService {
           });
         }
 
-        if (entries.length === 0) {
-          return [];
+        const saved = entries.length ? await workspaceUsersRepository.save(entries) : [];
+        for (const workspaceId of affectedWorkspaceIds) {
+          await JournalService.recordAccessChangesInTransaction(
+            manager,
+            workspaceId,
+            lockedWorkspaceUsers.filter(entry => entry.userId === userId && entry.workspaceId === workspaceId),
+            entries.filter(entry => entry.workspaceId === workspaceId),
+            actorUserId
+          );
         }
-
-        return workspaceUsersRepository.save(entries);
+        return saved;
       });
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);

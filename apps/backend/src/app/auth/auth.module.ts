@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './service/auth.service';
 import { OAuth2ClientCredentialsService } from './service/oauth2-client-credentials.service';
 import { OidcAuthService } from './service/oidc-auth.service';
@@ -12,6 +13,8 @@ import { UserModule } from '../user/user.module';
 import { CacheModule } from '../cache/cache.module';
 import { JwtStrategy } from './jwt.strategy';
 import { WorkspaceTokenStrategy } from './workspace-token.strategy';
+import { JournalEntry } from '../database/entities/journal-entry.entity';
+import { JournalService } from '../database/services/shared/journal.service';
 
 @Module({
   imports: [
@@ -20,6 +23,7 @@ import { WorkspaceTokenStrategy } from './workspace-token.strategy';
     HttpModule,
     UserModule,
     CacheModule,
+    TypeOrmModule.forFeature([JournalEntry]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -28,7 +32,7 @@ import { WorkspaceTokenStrategy } from './workspace-token.strategy';
     })
   ],
   controllers: [AuthController],
-  providers: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, JwtStrategy, WorkspaceTokenStrategy],
+  providers: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, JwtStrategy, WorkspaceTokenStrategy, JournalService],
   exports: [AuthService, OAuth2ClientCredentialsService, OidcAuthService, UserModule]
 })
 export class AuthModule { }

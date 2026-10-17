@@ -63,6 +63,7 @@ export interface DoubleCodedReviewCoderResultDto {
 }
 
 export interface DoubleCodedReviewItemDto {
+  canEditDraft?: boolean;
   responseId: number;
   sourceUnitId: number;
   unitName: string;
@@ -83,6 +84,7 @@ export interface DoubleCodedReviewItemDto {
 }
 
 export interface DoubleCodedReviewResponseDto {
+  canApplyResults?: boolean;
   data: DoubleCodedReviewItemDto[];
   total: number;
   page: number;
