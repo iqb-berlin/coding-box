@@ -130,6 +130,14 @@ workflow gates provide real application, database and authentication evidence.
 
 ## Testcenter import recovery on PostgreSQL
 
+`workspace-mutation-pool.postgres.spec.ts` also checks pool admission with two
+and ten connections. Concurrent training requests, session-locked imports and
+transactional writes must leave a connection available for legacy callbacks.
+It verifies rollback and continued processing after a write fails. This fixture
+creates two tables in a unique temporary schema and removes that schema afterward;
+it does not require the application migrations. Like the other PostgreSQL suites,
+it runs only with `POSTGRES_INTEGRATION_TESTS=true` against a disposable database.
+
 Use a disposable PostgreSQL 14 database with the full Liquibase changelog applied.
 The opt-in fixtures create and remove only their own synthetic rows; never point
 these tests at an existing development or production database. Run the complete
