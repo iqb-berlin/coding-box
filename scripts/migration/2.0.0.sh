@@ -64,6 +64,15 @@ ensure_secure_jwt_secret() {
   export JWT_SECRET
 }
 
+ensure_oauth2_redirect_url() {
+  local env_file="$1"
+  local server_name="$2"
+
+  if ! grep -q '^OAUTH2_REDIRECT_URL=' "${env_file}"; then
+    printf '\nOAUTH2_REDIRECT_URL=//%s/api/auth/callback\n' "${server_name}" >>"${env_file}" || return 1
+  fi
+}
+
 update_environment_file() {
   printf "    Upgrading docker environment file '%s' ...\n" .env.${APP_NAME}
 
@@ -140,6 +149,7 @@ update_environment_file() {
   oidc_configuration+="OAUTH2_CLIENT_ID=coding-box\n"
   oidc_configuration+="OAUTH2_CLIENT_SECRET=change_me\n"
   printf "%b" "${oidc_configuration}" >>.env.${APP_NAME}
+  ensure_oauth2_redirect_url ".env.${APP_NAME}" "${SERVER_NAME}" || return 1
 
   printf "    Docker environment file '%s' successfully upgraded.\n" .env.${APP_NAME}
 }

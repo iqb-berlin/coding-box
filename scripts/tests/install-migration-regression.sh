@@ -74,8 +74,22 @@ ensure_secure_jwt_secret "${empty_secret_env}"
 replaced_empty_secret=$(sed -n 's/^JWT_SECRET=//p' "${empty_secret_env}")
 [[ "${replaced_empty_secret}" =~ ^[a-f0-9]{64}$ ]]
 
+legacy_oidc_env="${test_dir}/.env.legacy-oidc"
+printf 'KEYCLOAK_URL=https://keycloak.old.example.test/\n' >"${legacy_oidc_env}"
+ensure_oauth2_redirect_url "${legacy_oidc_env}" app.example.test
+grep -Fxq 'OAUTH2_REDIRECT_URL=//app.example.test/api/auth/callback' "${legacy_oidc_env}"
+ensure_oauth2_redirect_url "${legacy_oidc_env}" other.example.test
+[[ $(grep -c '^OAUTH2_REDIRECT_URL=' "${legacy_oidc_env}") -eq 1 ]]
+grep -Fxq 'OAUTH2_REDIRECT_URL=//app.example.test/api/auth/callback' "${legacy_oidc_env}"
+
+custom_oidc_env="${test_dir}/.env.custom-oidc"
+printf 'OAUTH2_REDIRECT_URL=//custom.example.test/coding/api/auth/callback\n' >"${custom_oidc_env}"
+ensure_oauth2_redirect_url "${custom_oidc_env}" app.example.test
+grep -Fxq 'OAUTH2_REDIRECT_URL=//custom.example.test/coding/api/auth/callback' "${custom_oidc_env}"
+
 migration_script="${repo_root}/scripts/migration/2.0.0.sh"
 grep -Fq 'ensure_secure_jwt_secret ".env.${APP_NAME}"' "${migration_script}"
+grep -Fq 'ensure_oauth2_redirect_url ".env.${APP_NAME}"' "${migration_script}"
 grep -Fq 'OIDC_ISSUER=https://keycloak.${SERVER_NAME}/realms/coding-box' "${migration_script}"
 grep -Fq 'OIDC_TOKEN_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/token' "${migration_script}"
 ! grep -Fq '/auth/realms/iqb' "${migration_script}"
