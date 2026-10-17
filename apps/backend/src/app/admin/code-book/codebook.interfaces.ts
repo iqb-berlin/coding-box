@@ -100,6 +100,8 @@ export interface UnitPropertiesForCodebook {
     /** Items */
     items?: ItemMetadata[];
   };
+  /** Original IDs and aliases for item resolution, preserved across variable scopes. */
+  itemVariableReferences?: ReadonlyArray<{ id?: string; alias?: string }>;
   /** Variables */
   variables?: VariableInfo[];
 }
