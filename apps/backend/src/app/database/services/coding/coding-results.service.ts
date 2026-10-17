@@ -25,6 +25,7 @@ import {
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationPoolSlot,
   withWorkspaceTestResultsMutationLock
 } from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
@@ -116,6 +117,15 @@ export class CodingResultsService {
     workspaceId: number,
     codingJobId: number,
     options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
+    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection,
+      () => this.applyCodingResultsInPool(workspaceId, codingJobId, options));
+  }
+
+  private async applyCodingResultsInPool(
+    workspaceId: number,
+    codingJobId: number,
+    options: ApplyCodingResultsOptions
   ): Promise<ApplyCodingResultsResult> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
     const overwriteExisting = options.overwriteExisting === true;

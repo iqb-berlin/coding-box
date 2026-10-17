@@ -10,7 +10,7 @@ import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/codi
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
 import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 
 type ResetCodingVersion = 'v1' | 'v2' | 'v3';
 type ResetUnitIdsByVersion = Record<ResetCodingVersion, Set<number>>;
@@ -155,7 +155,7 @@ export class CodingVersionService {
 
       for (; ;) {
         const previousJobScope = committedJobScope;
-        const batch = await this.responseRepository.manager.transaction(async manager => {
+        const batch = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async manager => {
           await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
           const batchResponses = await baseQueryBuilder
             .clone()
@@ -290,7 +290,7 @@ export class CodingVersionService {
     const batchSize = 5000;
 
     for (; ;) {
-      const batch = await this.responseRepository.manager.transaction(async manager => {
+      const batch = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
         const queryBuilder = manager.getRepository(ResponseEntity)
           .createQueryBuilder('response')
@@ -524,7 +524,7 @@ export class CodingVersionService {
       return;
     }
 
-    await this.responseRepository.manager.transaction(async manager => {
+    await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       if (version === 'v1') {
         await freshnessService.clearVersionsAfterReset(

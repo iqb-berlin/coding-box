@@ -2317,10 +2317,11 @@ describe('CodingJobService', () => {
     expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
-  it('updates concurrent jobs when transactions occupy every pool connection', async () => {
+  it('updates concurrent jobs while reserving a pool connection for legacy callbacks', async () => {
     const poolCapacity = 10;
     const jobIds = Array.from({ length: poolCapacity }, (_, index) => index + 1);
     let leasedConnections = 0;
+    let peakLeasedConnections = 0;
     let releaseAllTransactions: () => void = () => undefined;
     const allTransactionsStarted = new Promise<void>(resolve => { releaseAllTransactions = resolve; });
     let workspaceLockTail = Promise.resolve();
@@ -2353,7 +2354,8 @@ describe('CodingJobService', () => {
     }]));
     connection.transaction.mockImplementation(async (callback: (manager: EntityManager) => Promise<unknown>) => {
       leasedConnections += 1;
-      if (leasedConnections === poolCapacity) releaseAllTransactions();
+      peakLeasedConnections = Math.max(peakLeasedConnections, leasedConnections);
+      if (leasedConnections === poolCapacity - 1) releaseAllTransactions();
       await allTransactionsStarted;
       let releaseWorkspaceLock: (() => void) | undefined;
       const jobRepo = createRepo();
@@ -2411,6 +2413,7 @@ describe('CodingJobService', () => {
 
     expect(result).toEqual(jobIds.map(id => expect.objectContaining({ id, status: 'completed' })));
     expect(connection.transaction).toHaveBeenCalledTimes(poolCapacity);
+    expect(peakLeasedConnections).toBe(poolCapacity - 1);
     expect(borrowExtraConnection).not.toHaveBeenCalled();
     expect(sharedCache.get).not.toHaveBeenCalled();
     expect(sharedCache.set).not.toHaveBeenCalled();

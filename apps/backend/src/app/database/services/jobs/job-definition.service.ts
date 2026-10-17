@@ -5,7 +5,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository, In } from 'typeorm';
 import * as fastCsv from 'fast-csv';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import {
   JobDefinition,
@@ -125,6 +125,7 @@ interface PreparedJobDefinitionUpdate {
 }
 
 interface PrepareJobDefinitionUpdateOptions {
+  manager?: EntityManager;
   ignoreMissingValidationAvailabilityForExistingVariables?: boolean;
 }
 
@@ -668,7 +669,7 @@ export class JobDefinitionService {
     });
   }
 
-  private async hydrateAssignedVariableBundles(jobDefinition: JobDefinition): Promise<JobDefinition> {
+  private async hydrateAssignedVariableBundles(jobDefinition: JobDefinition, manager?: EntityManager): Promise<JobDefinition> {
     const assignedBundles = jobDefinition.assigned_variable_bundles;
 
     if (!assignedBundles || assignedBundles.length === 0) {
@@ -677,7 +678,7 @@ export class JobDefinitionService {
 
     const bundleIds = assignedBundles.map(bundle => bundle.id);
     const savedBundleModes = new Map(assignedBundles.map(bundle => [bundle.id, bundle.caseOrderingMode]));
-    const fullBundles = await this.variableBundleRepository.find({
+    const fullBundles = await (manager?.getRepository(VariableBundle) || this.variableBundleRepository).find({
       where: { id: In(bundleIds) }
     });
     const fullBundlesById = new Map(fullBundles.map(bundle => [bundle.id, bundle]));
@@ -1018,7 +1019,7 @@ export class JobDefinitionService {
 
   async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number,
                             actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.jobDefinitionRepository.manager, async transactionManager => {
       await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
       const repository = transactionManager.getRepository(JobDefinition);
 
@@ -1027,7 +1028,8 @@ export class JobDefinitionService {
       const distributionSeed = createDto.distributionSeed || this.createDistributionSeed(workspaceId);
       const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
         workspaceId,
-        createDto.missingsProfileId
+        createDto.missingsProfileId,
+        transactionManager
       );
 
       await this.codingJobService.assertDeriveErrorManualCodingEnabled(
@@ -1051,7 +1053,8 @@ export class JobDefinitionService {
       });
       await this.codingJobService.assertCodersCanCodeInWorkspace(
         coderAssignments.assignedCoders,
-        workspaceId
+        workspaceId,
+        transactionManager
       );
 
       const conflicts = await this.checkVariableConflicts(
@@ -1102,8 +1105,8 @@ export class JobDefinitionService {
     });
   }
 
-  async getJobDefinition(id: number, workspaceId: number): Promise<JobDefinition> {
-    const jobDefinition = await this.jobDefinitionRepository.findOne({
+  async getJobDefinition(id: number, workspaceId: number, manager?: EntityManager): Promise<JobDefinition> {
+    const jobDefinition = await (manager?.getRepository(JobDefinition) || this.jobDefinitionRepository).findOne({
       where: {
         id,
         workspace_id: workspaceId
@@ -1114,7 +1117,7 @@ export class JobDefinitionService {
       throw new NotFoundException(`Job definition with ID ${id} not found`);
     }
 
-    await this.hydrateAssignedVariableBundles(jobDefinition);
+    await this.hydrateAssignedVariableBundles(jobDefinition, manager);
 
     return jobDefinition;
   }
@@ -1777,18 +1780,21 @@ export class JobDefinitionService {
     updateDto: UpdateJobDefinitionDto,
     options: PrepareJobDefinitionUpdateOptions = {}
   ): Promise<PreparedJobDefinitionUpdate> {
-    const jobDefinition = await this.getJobDefinition(id, workspaceId);
+    const manager = options.manager;
+    const jobDefinition = await this.getJobDefinition(id, workspaceId, manager);
     const existingCoderAssignments = this.getStoredCoderAssignments(jobDefinition);
     const nextCoderAssignments = this.resolveCoderAssignments(updateDto, existingCoderAssignments);
     const distributionSeed = this.getDefinitionDistributionSeed(jobDefinition);
     const currentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
       jobDefinition.workspace_id,
-      jobDefinition.missings_profile_id
+      jobDefinition.missings_profile_id,
+      manager
     );
     const nextMissingsProfileId = updateDto.missingsProfileId !== undefined ?
       await this.missingsProfilesService.resolveMissingsProfileId(
         jobDefinition.workspace_id,
-        updateDto.missingsProfileId
+        updateDto.missingsProfileId,
+        manager
       ) :
       currentMissingsProfileId;
     const nextAssignedVariables = updateDto.assignedVariables !== undefined ?
@@ -1844,7 +1850,8 @@ export class JobDefinitionService {
     if (coderAssignmentsChanged || approvesDefinition) {
       await this.codingJobService.assertCodersCanCodeInWorkspace(
         nextCoderAssignments.assignedCoders,
-        jobDefinition.workspace_id
+        jobDefinition.workspace_id,
+        manager
       );
     }
 
@@ -1937,7 +1944,7 @@ export class JobDefinitionService {
 
   async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto,
                             actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.jobDefinitionRepository.manager, async transactionManager => {
       await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
       const repository = transactionManager.getRepository(JobDefinition);
 
@@ -1946,7 +1953,8 @@ export class JobDefinitionService {
       const preparedUpdate = await this.prepareJobDefinitionUpdate(
         normalizedId,
         workspaceId,
-        updateDto
+        updateDto,
+        { manager: transactionManager }
       );
       if (
         preparedUpdate.createdJobsCount > 0 &&
@@ -1995,12 +2003,12 @@ export class JobDefinitionService {
 
   async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto,
                              actorUserId?: number): Promise<JobDefinition> {
-    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.jobDefinitionRepository.manager, async transactionManager => {
       await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
       const repository = transactionManager.getRepository(JobDefinition);
 
       await assertCodingResourceMutation(repository.manager, workspaceId, 'definition', id, actorUserId);
-      const jobDefinition = await this.getJobDefinition(id, workspaceId);
+      const jobDefinition = await this.getJobDefinition(id, workspaceId, transactionManager);
       const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
 
       this.validateStatusTransition(jobDefinition.status, approveDto.status);
@@ -2036,7 +2044,8 @@ export class JobDefinitionService {
         );
         await this.codingJobService.assertCodersCanCodeInWorkspace(
           coderAssignments.assignedCoders,
-          jobDefinition.workspace_id
+          jobDefinition.workspace_id,
+          transactionManager
         );
         // Validate variable availability before approving
         await this.validateVariableAvailability(jobDefinition);
@@ -2047,7 +2056,8 @@ export class JobDefinitionService {
 
       jobDefinition.missings_profile_id = await this.missingsProfilesService.resolveMissingsProfileId(
         jobDefinition.workspace_id,
-        jobDefinition.missings_profile_id
+        jobDefinition.missings_profile_id,
+        transactionManager
       );
 
       const savedDefinition = await repository.save(jobDefinition);
@@ -2082,12 +2092,12 @@ export class JobDefinitionService {
 
   async deleteJobDefinition(id: number, workspaceId: number,
                             actorUserId?: number): Promise<void> {
-    return this.jobDefinitionRepository.manager.transaction(async transactionManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.jobDefinitionRepository.manager, async transactionManager => {
       await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
       const repository = transactionManager.getRepository(JobDefinition);
 
       await assertCodingResourceMutation(repository.manager, workspaceId, 'definition', id, actorUserId);
-      const jobDefinition = await this.getJobDefinition(id, workspaceId);
+      const jobDefinition = await this.getJobDefinition(id, workspaceId, transactionManager);
       await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
       await repository.remove(jobDefinition);
       await this.recordDefinitionEvent(transactionManager, workspaceId, id, 'JOB_DEFINITION_DELETED', actorUserId);
