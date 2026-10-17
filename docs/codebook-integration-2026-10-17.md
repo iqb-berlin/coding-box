@@ -111,3 +111,43 @@ lokale Coverage-Lauf wurde aus Platzgründen abgebrochen und zählt nicht als
 bestandene Prüfung. Damit ist die Trennung der Fristen lokal belegt; die genaue
 Ladezeit auf dem entfernten Runner und der Erfolg der neuen Pipeline bleiben
 separat zu bestätigen.
+
+## Review-Korrekturen und erneuter develop-Abgleich
+
+Der Branch ist auf `develop` `a8a48d0216f5bb48feae99b578f9e09153ffa785`
+rebasiert. Der einzige Konflikt betraf die Upload-Testfristen: Die getrennten
+30 Sekunden für den Start und fünf Sekunden für die Anfrage bleiben erhalten.
+Alle übrigen Dateien des Rebase-Ergebnisses entsprechen der direkten Zusammenführung
+des vorherigen PR-Stands mit diesem develop-Stand.
+
+- `7422057ea`: Der gemeinsame Dialog bekommt stabile Initialwerte. Änderungen am
+  Jobfilter und verspätete Missing-Profile überschreiben die vom Benutzer gewählten
+  Ausgabeoptionen nicht mehr. Zwei Angular-Regressionstests prüfen die tatsächlichen
+  Formulareingaben und den gesendeten Exportauftrag. Beide Browser-Abläufe prüfen
+  zusätzlich Jobauswahl, spätes Laden der Profile, JSON und abgewählte Bewertungen.
+- `b8bcfe381`: Explizite Item-Referenzen werden zuerst über die interne Variablen-ID
+  aufgelöst, anschließend über den Alias. Ältere Metadatenspalten bleiben als Fallback
+  erhalten. Fünf DOCX-Regressionstests decken Alias-Kollisionen, die Priorität einer
+  expliziten ID sowie ältere Alias-/Spaltenformate einschließlich `0` und `false` ab.
+  Die neuen Tests reproduzierten vor der Korrektur zwei UI- und zwei DOCX-Fehler.
+
+Nach diesen Korrekturen erneut geprüft:
+
+- Frontend: **2.958 Tests in 277 Suites bestanden**.
+- Backend: **3.050 Tests in 195 Suites bestanden**; **63 Tests in sieben Suites
+  bleiben übersprungen**. Nach einem lokalen ENOSPC-Fehler und einem unterbrochenen
+  Lauf wurde die vollständige Suite abschließend erfolgreich wiederholt.
+- Beide Lints, beide Builds und die Zoneless-Risikoprüfung bestanden. Das Inventar
+  enthält zwei geänderte Fingerprints; keine Prüfvermerke wurden pauschal freigegeben.
+- **3/3 Chrome-Cypress-Tests am Produktionsfrontend bestanden**. Authentifizierung
+  und HTTP-Antworten sind simuliert.
+- **4.694 Exportpaare** über die echten installierten Studio-/Kodierbox-Adapter
+  bestehen erneut in JSON und allen normalisierten DOCX-Bestandteilen. Zusätzlich
+  besteht der gültige Kollisionsfall `idA/alias=idB`, `idB/alias=B`: Ein Item mit
+  `variableId=idB` erscheint in beiden DOCX-Ausgaben genau einmal unter `B`.
+  Die Persistenzgrenzen des Vergleichs liegen weiterhin im Speicher.
+
+Die Korrekturen liegen im Kodierbox-Host und verwenden den vorhandenen gemeinsamen
+Bibliotheksbuild `4.1.0-dev.ff15d6d`. DOCX-Dateien können sich wegen erzeugter
+Zeitstempel technisch unterscheiden. Eine erneute Datenbank-/Redis-/Word-Abnahme
+und die entfernte CI sind von diesen lokalen Ergebnissen getrennt zu beurteilen.
