@@ -90,8 +90,24 @@ Drei Tests des bestehenden E2E-Harness bestehen ebenfalls. Das ist ein lokaler
 Installationsnachweis; der Docker-Daemon antwortet nicht und ein vollständiger
 Image-Bau bzw. Live-Lauf ist damit erst durch die neue entfernte CI zu bestätigen.
 
+## CI-Nachtrag: Startfrist des Upload-Sicherheitstests
+
 Zusätzlich überschreitet `test-backend` (475979) beim gültigen Multipart-Upload
-einmal die Kindprozessgrenze von fünf Sekunden. Alle sechs Tests der Suite
-`upload-dependencies.spec.ts` bestehen beim gezielten lokalen Nachtest. Die
-Ursache der CI-Zeitüberschreitung ist damit nicht abschließend geklärt und wird
-nicht als behoben ausgewiesen.
+die bisher gemeinsame Kindprozessgrenze von fünf Sekunden. Eine injizierte
+Kaltstartverzögerung von sechs Sekunden reproduziert diesen Fehler mit dem alten
+Test. Der Test trennt jetzt den Start des Kindprozesses vom eigentlichen Request:
+Nach dem Laden von Nest und dem Start des HTTP-Servers meldet das Kind per IPC
+seine Bereitschaft. Dafür gelten höchstens 30 Sekunden; ab Bereitschaft bleibt
+die bisherige Fünf-Sekunden-Grenze für den Request erhalten. Zeitüberschreitungen
+beenden das Kind und lassen den Test fehlschlagen. Payloads sowie Erwartungen an
+Status, Daten und Ablehnung schädlicher Uploads bleiben erhalten.
+
+Alle sechs Tests bestehen unverzögert und mit sechs Sekunden künstlicher
+Startverzögerung je Kindprozess. Ein separat injizierter hängender Request wird
+nach 5,254 Sekunden beendet und als Fehler gemeldet. Die vollständige reguläre
+Backend-Suite besteht erneut mit 2.764 Tests in 178 Suites; 17 bestehende Tests in
+drei Suites bleiben übersprungen. Backend-Lint besteht ebenfalls. Der zusätzliche
+lokale Coverage-Lauf wurde aus Platzgründen abgebrochen und zählt nicht als
+bestandene Prüfung. Damit ist die Trennung der Fristen lokal belegt; die genaue
+Ladezeit auf dem entfernten Runner und der Erfolg der neuen Pipeline bleiben
+separat zu bestätigen.
