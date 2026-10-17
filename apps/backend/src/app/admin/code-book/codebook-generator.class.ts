@@ -14,18 +14,21 @@ export class CodebookGenerator {
       if (scheme && !Array.isArray(scheme.variableCodings)) {
         throw new BadRequestException(`Ungültiges Kodierschema für Aufgabe ${unit.key}.`);
       }
-      const codings = Array.isArray(scheme?.variableCodings) ? scheme.variableCodings : [];
+      const codings: { id: string; alias?: string }[] = Array.isArray(scheme?.variableCodings) ? scheme.variableCodings : [];
       if (codings.some((variable: { id?: unknown }) => !variable || typeof variable.id !== 'string')) {
         throw new BadRequestException(`Ungültiges Kodierschema für Aufgabe ${unit.key}.`);
       }
       const items = (unit.metadata?.items || []).flatMap(item => {
         const id = item.id ?? item.key;
         if (id === undefined || id === null) return [];
-        return codings.filter((variable: { id: string; alias?: string }) => {
+        // Studio stores source IDs. Resolve those before considering aliases or legacy columns.
+        const explicitVariable = codings.find(variable => variable.id === item.variableId) ??
+          codings.find(variable => (variable.alias || variable.id) === item.variableId);
+        const itemVariables = explicitVariable ? [explicitVariable] : codings.filter(variable => {
           const variableId = variable.alias || variable.id;
-          return item.variableId === variable.id || item.variableId === variableId ||
-            item[variableId] !== undefined || item[variableId.replace(/\./g, '_')] !== undefined;
-        }).map((variable: { id: string; alias?: string }) => ({ id: String(id), variableId: variable.alias || variable.id }));
+          return item[variableId] !== undefined || item[variableId.replace(/\./g, '_')] !== undefined;
+        });
+        return itemVariables.map(variable => ({ id: String(id), variableId: variable.alias || variable.id }));
       });
       return {
         ...unit,
