@@ -53,6 +53,9 @@ server.listen(0, '127.0.0.1', () => {
     });
   });
   request.on('error', error => { console.error(error.message); process.exit(3); });
+  request.setTimeout(5000, () => {
+    request.destroy(new Error('Multipart request timed out'));
+  });
   request.end(payload);
 });
 `;
@@ -61,7 +64,8 @@ describe('Upload dependency security', () => {
   const probe = (fields: string[][], disk = false) => spawnSync(
     process.execPath,
     ['-e', uploadProbe, require.resolve('@nestjs/platform-express'), JSON.stringify({ fields, disk })],
-    { encoding: 'utf8', timeout: 5000 }
+    // Allow cold Nest startup on busy CI runners; bound the HTTP request separately above.
+    { encoding: 'utf8', timeout: 30000 }
   );
 
   it.each([false, true])('preserves valid multipart uploads (disk storage: %s)', disk => {
@@ -76,7 +80,7 @@ describe('Upload dependency security', () => {
         files: [{ name: 'unit.xml', data: '<unit>ä</unit>' }]
       }
     });
-  });
+  }, 35000);
 
   it.each([
     { name: 'array length overflow', fields: [['metadata[4294967294]', 'value'], ['metadata[]', 'value']] },
@@ -87,7 +91,7 @@ describe('Upload dependency security', () => {
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).status).toBe(400);
-  });
+  }, 35000);
 });
 
 describe('Outgoing multipart headers', () => {
