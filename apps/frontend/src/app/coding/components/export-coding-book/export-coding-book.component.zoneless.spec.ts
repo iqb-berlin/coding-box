@@ -87,6 +87,40 @@ describe('shared codebook with zoneless change detection', () => {
     expect(fixture.nativeElement.querySelector('.mat-column-group')).toBeNull();
   });
 
+  it.each(['job filter', 'delayed missing profiles'])('preserves chosen export settings after %s changes', async change => {
+    const profiles = new Subject<{ id: number; label: string }[]>();
+    jest.spyOn(TestBed.inject(MissingsProfileService), 'getMissingsProfiles').mockReturnValue(profiles);
+    const shared = await loadUnits();
+    const element = fixture.nativeElement as HTMLElement;
+    const scoreCheckbox = Array.from(element.querySelectorAll<HTMLElement>('mat-checkbox'))
+      .find(checkbox => checkbox.textContent?.includes('codebook.coding.show-score'))
+      ?.querySelector<HTMLInputElement>('input');
+    expect(scoreCheckbox).toBeDefined();
+    scoreCheckbox?.click();
+    element.querySelector<HTMLInputElement>('input[type="radio"][value="json"]')?.click();
+    await fixture.whenStable();
+    const chosenOptions = { ...shared.contentOptions };
+    expect(chosenOptions).toMatchObject({ exportFormat: 'json', showScore: false });
+
+    if (change === 'job filter') {
+      fixture.componentInstance.onJobDefinitionFilterChange(10);
+    } else {
+      profiles.next([{ id: 7, label: 'Profil' }]);
+    }
+    await fixture.whenStable();
+    expect(shared.contentOptions).toEqual(chosenOptions);
+
+    shared.toggleAll();
+    await fixture.whenStable();
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    await fixture.whenStable();
+    expect(start).toHaveBeenCalledWith(1, '0', expect.objectContaining({
+      ...chosenOptions,
+      missingsProfile: '0',
+      jobDefinitionId: change === 'job filter' ? 10 : null
+    }), [1]);
+  });
+
   it('renders delayed progress and download errors and keeps exports locked until download ends', async () => {
     const shared = await loadUnits();
     shared.toggleAll();
