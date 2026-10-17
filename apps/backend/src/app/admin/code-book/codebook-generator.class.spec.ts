@@ -73,6 +73,32 @@ describe('Kodierbox adapter to shared CodebookGenerator', () => {
     expect(result.variables[0].codes.map(c => c.id)).toEqual(['0']);
   });
 
+  it.each([
+    { name: 'source ID colliding with another alias', item: { id: 'ITEM-B', variableId: 'idB' } },
+    { name: 'source ID before legacy properties', item: { id: 'ITEM-B', variableId: 'idB', idB: 0 } },
+    { name: 'legacy alias reference', item: { id: 'ITEM-B', variableId: 'PUBLIC.B' } },
+    { name: 'legacy property with a zero value', item: { key: 'ITEM-B', 'PUBLIC.B': 0 } },
+    { name: 'legacy escaped property with a false value', item: { id: 'ITEM-B', PUBLIC_B: false } }
+  ])('retains an unambiguous DOCX item relation for $name', async ({ item }) => {
+    const buffer = await CodebookGenerator.generateCodebook([{
+      ...unit,
+      scheme: JSON.stringify({
+        version: '3.0',
+        variableCodings: [
+          { ...coding('idA'), alias: 'idB', label: 'First' },
+          { ...coding('idB'), alias: 'PUBLIC.B', label: 'Second' }
+        ]
+      }),
+      metadata: { items: [item] }
+    }], { ...options, exportFormat: 'docx' }, []);
+    const $ = load(new AdmZip(buffer).readAsText('word/document.xml'), { xml: true });
+    const paragraphs = $('w\\:body').children('w\\:p').toArray()
+      .map(paragraph => $(paragraph).find('w\\:t').text());
+    const itemParagraphs = paragraphs.filter(text => text.startsWith('Item(s):'));
+    expect(itemParagraphs).toEqual(['Item(s): ITEM-B   ']);
+    expect(paragraphs[paragraphs.indexOf(itemParagraphs[0]) - 1]).toBe('PUBLIC.B  Second');
+  });
+
   it('retains all / not-required training choices', async () => {
     for (const [trainingRequirement, count] of [['all', 2], ['not-required', 1]] as const) {
       const buffer = await CodebookGenerator.generateCodebook([unit], { ...options, trainingRequirement }, []);
