@@ -18,17 +18,21 @@ export class CodebookGenerator {
       if (codings.some((variable: { id?: unknown }) => !variable || typeof variable.id !== 'string')) {
         throw new BadRequestException(`Ungültiges Kodierschema für Aufgabe ${unit.key}.`);
       }
+      const itemCodings = (unit.itemVariableReferences ?? codings)
+        .filter((variable): variable is { id: string; alias?: string } => typeof variable?.id === 'string');
+      const exportedVariableIds = new Set(codings.map(variable => variable.id));
       const items = (unit.metadata?.items || []).flatMap(item => {
         const id = item.id ?? item.key;
         if (id === undefined || id === null) return [];
-        // Studio stores source IDs. Resolve those before considering aliases or legacy columns.
-        const explicitVariable = codings.find(variable => variable.id === item.variableId) ??
-          codings.find(variable => (variable.alias || variable.id) === item.variableId);
-        const itemVariables = explicitVariable ? [explicitVariable] : codings.filter(variable => {
+        // Resolve against the full schema so removed source IDs cannot become surviving aliases.
+        const explicitVariable = itemCodings.find(variable => variable.id === item.variableId) ??
+          itemCodings.find(variable => (variable.alias || variable.id) === item.variableId);
+        const itemVariables = explicitVariable ? [explicitVariable] : itemCodings.filter(variable => {
           const variableId = variable.alias || variable.id;
           return item[variableId] !== undefined || item[variableId.replace(/\./g, '_')] !== undefined;
         });
-        return itemVariables.map(variable => ({ id: String(id), variableId: variable.alias || variable.id }));
+        return itemVariables.filter(variable => exportedVariableIds.has(variable.id))
+          .map(variable => ({ id: String(id), variableId: variable.alias || variable.id }));
       });
       return {
         ...unit,

@@ -396,6 +396,8 @@ export class CodebookGenerationService {
 
       return {
         ...unit,
+        itemVariableReferences: unit.itemVariableReferences ??
+          scheme.variableCodings.map(({ id, alias }) => ({ id, alias })),
         scheme: JSON.stringify({
           ...scheme,
           variableCodings
