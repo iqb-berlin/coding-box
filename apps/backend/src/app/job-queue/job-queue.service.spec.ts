@@ -82,7 +82,9 @@ describe('JobQueueService', () => {
     await expect(service.addVariableAnalysisJob({ workspaceId: 1, unitId: 2 })).resolves.toHaveProperty('data.unitId', 2);
     await expect(service.getVariableAnalysisJob('job-1')).resolves.toHaveProperty('id', 'job-1');
     queues[10].getJobs.mockResolvedValue([]);
-    await expect(service.addExternalCodingImportJob({ workspaceId: 1, tempFilePath: '/tmp/a', fileName: 'a.csv' })).resolves.toHaveProperty('data.fileName', 'a.csv');
+    await expect(service.addExternalCodingImportJob({
+      workspaceId: 1, requestedByUserId: 3, tempFilePath: '/tmp/a', fileName: 'a.csv'
+    })).resolves.toHaveProperty('data.fileName', 'a.csv');
     await expect(service.getExternalCodingImportJob('job-1')).resolves.toHaveProperty('id', 'job-1');
   });
 
@@ -156,7 +158,9 @@ describe('JobQueueService', () => {
     })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addValidationTaskJob({ taskId: 7 })).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.addExternalCodingImportJob({ workspaceId: 1, tempFilePath: '/tmp/a', fileName: 'a.csv' })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.addExternalCodingImportJob({
+      workspaceId: 1, requestedByUserId: 3, tempFilePath: '/tmp/a', fileName: 'a.csv'
+    })).rejects.toBeInstanceOf(ConflictException);
   });
 
   it.each([undefined, 0, 3])(

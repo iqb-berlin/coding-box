@@ -864,11 +864,11 @@ describe('WorkspaceCodingService', () => {
         .fn()
         .mockResolvedValue(expectedResult);
 
-      const result = await service.importExternalCoding(workspaceId, body);
+      const result = await service.importExternalCoding(workspaceId, body, 7);
 
       expect(
         mockExternalCodingImportService.importExternalCoding
-      ).toHaveBeenCalledWith(workspaceId, body);
+      ).toHaveBeenCalledWith(workspaceId, body, undefined, 7);
       expect(result).toEqual(expectedResult);
     });
 
@@ -889,12 +889,13 @@ describe('WorkspaceCodingService', () => {
       const result = await service.importExternalCodingWithProgress(
         workspaceId,
         body,
-        progressCallback
+        progressCallback,
+        7
       );
 
       expect(
         mockExternalCodingImportService.importExternalCodingWithProgress
-      ).toHaveBeenCalledWith(workspaceId, body, progressCallback);
+      ).toHaveBeenCalledWith(workspaceId, body, progressCallback, 7);
       expect(result).toEqual(expectedResult);
     });
   });
