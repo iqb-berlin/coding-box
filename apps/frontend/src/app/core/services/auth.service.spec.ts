@@ -1,21 +1,26 @@
 import { TestBed } from '@angular/core/testing';
 import { computed } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { firstValueFrom, of } from 'rxjs';
 import { AuthService } from './auth.service';
 import { AppService } from './app.service';
 import { authInterceptor } from '../interceptors/auth.interceptor';
+import { AuthRequestCancelledError } from '../interceptors/auth-request-cancelled.error';
 import { SERVER_URL } from '../../injection-tokens';
+import { ValidationBatchRunnerService } from '../../shared/services/validation/validation-batch-runner.service';
+import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
+import { ValidationService } from '../../shared/services/validation/validation.service';
 
 jest.unmock('jwt-decode');
 
 describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
-  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage'>>;
+  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage' | 'setBackendUnavailable'>>;
   let locationMock: Pick<Location, 'href' | 'origin'>;
   let storageMock: {
     getItem: jest.Mock;
@@ -29,9 +34,9 @@ describe('AuthService', () => {
   };
   let originalCryptoDescriptor: PropertyDescriptor | undefined;
 
-  const createToken = (expiresInSeconds: number): string => {
+  const createToken = (expiresInSeconds: number, subject = 'oidc-user-id'): string => {
     const payload = {
-      sub: 'oidc-user-id',
+      sub: subject,
       preferred_username: 'tester',
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds
     };
@@ -50,6 +55,12 @@ describe('AuthService', () => {
     appService.clearAuthState.mockImplementation(() => tokens.clear());
     appService.requireReAuthentication.mockImplementation(() => tokens.clear());
     return tokens;
+  }
+
+  function flushPendingRequests(): Promise<void> {
+    return new Promise(resolve => {
+      setTimeout(resolve, 0);
+    });
   }
 
   beforeEach(() => {
@@ -93,7 +104,8 @@ describe('AuthService', () => {
       markExplicitLogoutInProgress: jest.fn(),
       clearAuthState: jest.fn(),
       requireReAuthentication: jest.fn(),
-      addErrorMessage: jest.fn()
+      addErrorMessage: jest.fn(),
+      setBackendUnavailable: jest.fn()
     };
 
     TestBed.configureTestingModule({
@@ -216,7 +228,7 @@ describe('AuthService', () => {
     expect(storageMock.setItem).toHaveBeenCalledWith('refresh_token', 'rotated-refresh-token');
   });
 
-  it('should clear stored tokens when refresh fails', async () => {
+  it.each([401, 500])('should clear stored tokens and require reauthentication when refresh fails with %s', async status => {
     storageMock.getItem.mockImplementation((key: string) => ({
       auth_token: createToken(-30),
       refresh_token: 'refresh-token'
@@ -225,7 +237,7 @@ describe('AuthService', () => {
     const tokenPromise = service.getValidToken();
 
     const req = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
-    req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    req.flush('Refresh failed', { status, statusText: 'Refresh failed' });
 
     await expect(tokenPromise).resolves.toBeUndefined();
     expect(storageMock.removeItem).toHaveBeenCalledWith('auth_token');
@@ -303,5 +315,173 @@ describe('AuthService', () => {
     await expect(newToken).resolves.toBe(freshToken);
     await expect(sharedNewToken).resolves.toBe(freshToken);
     expect(tokens.get('auth_token')).toBe(freshToken);
+  });
+
+  it.each([
+    ['success', 'same tab'], ['failure', 'same tab'],
+    ['success', 'other tab'], ['failure', 'other tab']
+  ])('cancels a waiting API request after refresh %s and a new login in the %s', async (outcome, loginLocation) => {
+    const tokens = storeSession();
+    const complete = jest.fn();
+    const error = jest.fn();
+    TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces').subscribe({ complete, error });
+    const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    const newToken = createToken(600);
+    if (loginLocation === 'same tab') {
+      service.setToken(newToken);
+      service.setRefreshToken('new-refresh-token');
+    } else {
+      tokens.set('auth_token', newToken);
+      tokens.set('refresh_token', 'new-refresh-token');
+    }
+    if (outcome === 'success') {
+      refresh.flush({ access_token: createToken(300), refresh_token: 'late-refresh-token' });
+    } else {
+      refresh.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    }
+
+    await flushPendingRequests();
+
+    httpMock.expectNone('http://localhost:3333/api/workspaces');
+    expect(error).toHaveBeenCalledWith(expect.any(AuthRequestCancelledError));
+    expect(complete).not.toHaveBeenCalled();
+    expect(tokens.get('auth_token')).toBe(newToken);
+    expect(tokens.get('refresh_token')).toBe('new-refresh-token');
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'])('stops a validation batch when an obsolete refresh finishes with %s', async outcome => {
+    const tokens = storeSession();
+    const runner = TestBed.inject(ValidationBatchRunnerService);
+    const state = TestBed.inject(ValidationTaskStateService);
+    const validation = TestBed.inject(ValidationService);
+    const createTask = jest.spyOn(validation, 'createValidationTask');
+    const newToken = createToken(600, 'another-user');
+
+    runner.startBatch(7, { force: true });
+    const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    tokens.set('auth_token', newToken);
+    tokens.set('refresh_token', 'new-refresh-token');
+    if (outcome === 'success') {
+      refresh.flush({ access_token: createToken(300), refresh_token: 'late-refresh-token' });
+    } else {
+      refresh.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    }
+    await flushPendingRequests();
+
+    expect(createTask).toHaveBeenCalledTimes(1);
+    expect(createTask).toHaveBeenCalledWith(7, 'testTakers');
+    httpMock.expectNone(request => request.url.endsWith('/validation-tasks'));
+    expect(state.getBatchState(7)).toMatchObject({ status: 'failed' });
+    expect(state.getAllValidationResults(7)).toEqual({});
+    expect(tokens.get('auth_token')).toBe(newToken);
+    expect(tokens.get('refresh_token')).toBe('new-refresh-token');
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('completes all validation steps after refreshing the unchanged session', async () => {
+    storeSession();
+    const runner = TestBed.inject(ValidationBatchRunnerService);
+    const state = TestBed.inject(ValidationTaskStateService);
+    const validation = TestBed.inject(ValidationService);
+    jest.spyOn(validation, 'getValidationTask').mockReturnValue(of({
+      id: 1,
+      workspace_id: 7,
+      validation_type: 'testTakers',
+      status: 'completed',
+      created_at: new Date(),
+      updated_at: new Date()
+    }));
+    jest.spyOn(validation, 'getValidationResults').mockReturnValue(of({
+      testTakersFound: true, allGroupsHaveResponses: true, total: 0
+    }));
+
+    runner.startBatch(7, { force: true });
+    const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    const freshToken = createToken(600);
+    refresh.flush({ access_token: freshToken, refresh_token: 'rotated-refresh-token' });
+    await flushPendingRequests();
+
+    for (const type of ['testTakers', 'variables', 'variableTypes', 'responseStatus', 'duplicateResponses', 'groupResponses']) {
+      const request = httpMock.expectOne(req => req.url.endsWith('/validation-tasks') && req.params.get('type') === type);
+      expect(request.request.headers.get('Authorization')).toBe(`Bearer ${freshToken}`);
+      request.flush({ id: 1 });
+      await flushPendingRequests();
+    }
+
+    expect(state.getBatchState(7)).toMatchObject({ status: 'completed' });
+    expect(Object.values(state.getAllValidationResults(7))).toHaveLength(6);
+    expect(Object.values(state.getAllValidationResults(7)).every(result => result.status === 'success')).toBe(true);
+  });
+
+  it('preserves a new login when an already sent API request returns 401', async () => {
+    const tokens = storeSession();
+    service.setToken(createToken(300));
+    TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces').subscribe({ error: () => undefined });
+    await flushPendingRequests();
+    const request = httpMock.expectOne('http://localhost:3333/api/workspaces');
+    const newToken = createToken(600);
+    tokens.set('auth_token', newToken);
+    tokens.set('refresh_token', 'new-refresh-token');
+
+    request.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(tokens.get('auth_token')).toBe(newToken);
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('sends a waiting API request with the refreshed token when the session is unchanged', async () => {
+    storeSession();
+    TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces').subscribe();
+    const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    const freshToken = createToken(600);
+    refresh.flush({ access_token: freshToken, refresh_token: 'rotated-refresh-token' });
+    await flushPendingRequests();
+
+    const request = httpMock.expectOne('http://localhost:3333/api/workspaces');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${freshToken}`);
+    request.flush({});
+  });
+
+  it('still sends public API requests without a stored session', async () => {
+    TestBed.inject(HttpClient).get('http://localhost:3333/api/system-notifications/active').subscribe();
+    await flushPendingRequests();
+
+    const request = httpMock.expectOne('http://localhost:3333/api/system-notifications/active');
+    expect(request.request.headers.has('Authorization')).toBe(false);
+    request.flush([]);
+  });
+
+  it.each([401, 500])('rejects a waiting API request when the current refresh fails with %s', async status => {
+    const tokens = storeSession();
+    const response = firstValueFrom(TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces'));
+    const rejection = expect(response).rejects.toBeInstanceOf(AuthRequestCancelledError);
+    const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    refresh.flush('Refresh failed', { status, statusText: 'Refresh failed' });
+
+    await rejection;
+
+    httpMock.expectNone('http://localhost:3333/api/workspaces');
+    expect(tokens.size).toBe(0);
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('requires reauthentication when the current expired session has no refresh token', async () => {
+    const tokens = storeSession();
+    tokens.delete('refresh_token');
+    const complete = jest.fn();
+    const error = jest.fn();
+    TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces').subscribe({ complete, error });
+    await flushPendingRequests();
+
+    httpMock.expectNone('http://localhost:3333/api/workspaces');
+    expect(error).toHaveBeenCalledWith(expect.any(AuthRequestCancelledError));
+    expect(complete).not.toHaveBeenCalled();
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+    expect(tokens.size).toBe(0);
   });
 });
