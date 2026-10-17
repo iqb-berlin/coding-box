@@ -33,7 +33,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { CodingProgressService } from './coding-progress.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
@@ -162,7 +162,7 @@ export class DoubleCodingReviewDecisionService {
     managerName: string,
     draft: SaveDoubleCodedReviewDraftDto
   ): Promise<DoubleCodedManagerDecisionDto> {
-    return this.responseRepository.manager.transaction(async entityManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async entityManager => {
       await assertCodingReviewMutation(entityManager, workspaceId, responseId, managerUserId);
       const sourceUnitId = this.normalizeExplicitReplayInteger(draft.sourceUnitId);
       if (sourceUnitId === undefined || sourceUnitId <= 0) {
@@ -270,7 +270,7 @@ export class DoubleCodingReviewDecisionService {
     responseId: number,
     managerUserId: number
   ): Promise<{ success: boolean }> {
-    return this.reviewDecisionRepository.manager.transaction(async manager => {
+    return withWorkspaceTestResultsMutationTransaction(this.reviewDecisionRepository.manager, async manager => {
       await assertCodingReviewMutation(manager, workspaceId, responseId, managerUserId);
       const result = await manager.getRepository(DoubleCodingReviewDecision).delete({
         workspace_id: workspaceId,
@@ -308,7 +308,7 @@ export class DoubleCodingReviewDecisionService {
         `Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`
       );
 
-      const application = await this.responseRepository.manager.transaction(
+      const application = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager,
         async transactionalEntityManager => {
           await lockWorkspaceTestResultsMutationInTransaction(
             transactionalEntityManager,
@@ -496,7 +496,7 @@ export class DoubleCodingReviewDecisionService {
         await reconcileDecision(decision);
       }
     } else {
-      await this.responseRepository.manager.transaction(async entityManager => {
+      await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async entityManager => {
         await lockWorkspaceTestResultsMutationInTransaction(
           entityManager,
           workspaceId
