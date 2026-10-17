@@ -9,7 +9,9 @@ import {
   BadRequestException,
   NotFoundException,
   Logger,
-  HttpCode
+  HttpCode,
+  Req,
+  ForbiddenException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -117,7 +119,7 @@ export class WorkspaceCodingImportController {
 
   @Post(':workspace_id/coding/external-coding-import/apply')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(2)
+  @RequireAccessLevel(3)
   @HttpCode(202)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -131,8 +133,13 @@ export class WorkspaceCodingImportController {
   })
   async applyExternalCodingImport(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+      @Body() body: ExternalCodingImportDto,
+      @Req() req: { user?: { id?: number } }
   ): Promise<{ jobId: string }> {
+    const requestedByUserId = req.user?.id;
+    if (typeof requestedByUserId !== 'number' || !Number.isSafeInteger(requestedByUserId) || requestedByUserId <= 0) {
+      throw new ForbiddenException('An authenticated study manager is required');
+    }
     if (!body.file) {
       throw new BadRequestException('File data is required.');
     }
@@ -154,6 +161,7 @@ export class WorkspaceCodingImportController {
 
     const job = await this.jobQueueService.addExternalCodingImportJob({
       workspaceId: workspace_id,
+      requestedByUserId,
       tempFilePath,
       fileName: body.fileName || 'external-coding.csv',
       sourceFormat: body.sourceFormat,

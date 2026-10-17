@@ -4,6 +4,7 @@ import {
 import { AuthService } from '../../auth/service/auth.service';
 import { UsersService } from '../../database/services/users';
 import { WORKSPACE_TOKEN_USE } from '../../auth/workspace-token.constants';
+import { parseWorkspaceId } from './workspace-id.util';
 
 interface RequestUser {
   id?: number | string;
@@ -28,9 +29,9 @@ export class WorkspaceGuard implements CanActivate {
     const req = context.switchToHttp().getRequest();
     const requestUser = req.user as RequestUser | undefined;
     const params = req.params;
-    const workspaceId = Number(params?.workspace_id);
+    const workspaceId = parseWorkspaceId(params?.workspace_id ?? params?.workspaceId);
 
-    if (!Number.isInteger(workspaceId) || workspaceId <= 0 || !requestUser) {
+    if (!workspaceId || !requestUser) {
       throw new UnauthorizedException();
     }
 

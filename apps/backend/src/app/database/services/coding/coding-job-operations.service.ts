@@ -46,7 +46,7 @@ export class CodingJobOperationsService {
     return result;
   }
 
-  async bulkApplyCodingResults(workspaceId: number): Promise<{
+  async bulkApplyCodingResults(workspaceId: number, actorUserId?: number): Promise<{
     success: boolean;
     jobsProcessed: number;
     totalUpdatedResponses: number;
@@ -138,7 +138,7 @@ export class CodingJobOperationsService {
       }
 
       try {
-        const applyResult = await this.applyCodingResults(workspaceId, job.id);
+        const applyResult = await this.applyCodingResults(workspaceId, job.id, { actorUserId });
         results.push({
           jobId: job.id,
           jobName: job.name,
@@ -227,7 +227,8 @@ export class CodingJobOperationsService {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
-    }
+    },
+    actorUserId?: number
   ): Promise<{
       success: boolean;
       jobsCreated: number;
@@ -253,7 +254,9 @@ export class CodingJobOperationsService {
     }> {
     return this.codingJobService.createDistributedCodingJobs(
       workspaceId,
-      request
+      request,
+      undefined,
+      actorUserId
     );
   }
 }

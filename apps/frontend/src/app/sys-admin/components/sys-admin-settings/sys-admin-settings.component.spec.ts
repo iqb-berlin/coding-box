@@ -1,15 +1,14 @@
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting
 } from '@angular/common/http/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
+// Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
@@ -66,6 +65,7 @@ describe('SysAdminSettingsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideHttpClientTesting(),
         {
@@ -93,8 +93,7 @@ describe('SysAdminSettingsComponent', () => {
         {
           provide: SystemSettingsService,
           useValue: systemSettingsService
-        },
-        provideNoopAnimations() // Hier hinzufügen
+        } // Hier hinzufügen
       ],
       imports: [TranslateModule.forRoot()]
     }).compileComponents();
@@ -113,22 +112,41 @@ describe('SysAdminSettingsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('renders content-pool settings after a delayed response without another UI event', async () => {
+    const settings = new Subject<{
+      enabled: boolean;
+      baseUrl: string;
+      hasApplicationToken: boolean;
+    }>();
+    systemSettingsService.getContentPoolSettings.mockReturnValueOnce(settings.asObservable());
+    component.loadContentPoolSettings();
+    fixture.detectChanges();
+
+    settings.next({ enabled: true, baseUrl: 'https://content-pool.test', hasApplicationToken: false });
+    await fixture.whenStable();
+
+    const urlInput = fixture.nativeElement.querySelector(
+      '.content-pool-settings-card input[placeholder*="content-pool.example.org"]'
+    ) as HTMLInputElement;
+    expect(urlInput.value).toBe('https://content-pool.test');
+  });
+
   describe('legal notice settings', () => {
     it('loads the current legal notice on init', () => {
       expect(systemSettingsService.getLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(false);
+      expect(component.legalNoticeHtml()).toBe('<p>Legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(false);
     });
 
     it('saves the edited legal notice', () => {
-      component.legalNoticeHtml = ' <p>Edited legal</p> ';
+      component.legalNoticeHtml.set(' <p>Edited legal</p> ');
 
       component.saveLegalNotice();
 
       expect(systemSettingsService.updateLegalNotice).toHaveBeenCalledWith({
         html: '<p>Edited legal</p>'
       });
-      expect(component.legalNoticeHtml).toBe('<p>Updated legal</p>');
+      expect(component.legalNoticeHtml()).toBe('<p>Updated legal</p>');
       expect(snackBar.open).toHaveBeenCalledWith(
         'Impressum/Datenschutz-Text wurde gespeichert.',
         'Schließen',
@@ -137,7 +155,7 @@ describe('SysAdminSettingsComponent', () => {
     });
 
     it('requires legal notice text before saving', () => {
-      component.legalNoticeHtml = '   ';
+      component.legalNoticeHtml.set('   ');
 
       component.saveLegalNotice();
 
@@ -153,19 +171,19 @@ describe('SysAdminSettingsComponent', () => {
       component.resetLegalNoticeToDefault();
 
       expect(systemSettingsService.resetLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Default legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(true);
+      expect(component.legalNoticeHtml()).toBe('<p>Default legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(true);
     });
   });
 
   describe('testContentPoolConnection', () => {
     it('tests the current URL with an unsaved token and shows the result', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: ' http://content-pool.test ',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = ' cp_unsaved_token ';
+      });
+      component.contentPoolApplicationToken.set(' cp_unsaved_token ');
 
       component.testContentPoolConnection();
 
@@ -180,16 +198,16 @@ describe('SysAdminSettingsComponent', () => {
         'Schließen',
         { duration: 4000 }
       );
-      expect(component.isTestingContentPoolConnection).toBe(false);
+      expect(component.isTestingContentPoolConnection()).toBe(false);
     });
 
     it('requires a token when no stored token is available', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: 'http://content-pool.test',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = '';
+      });
+      component.contentPoolApplicationToken.set('');
 
       component.testContentPoolConnection();
 
@@ -214,54 +232,88 @@ describe('SysAdminSettingsComponent', () => {
       jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
     });
 
-    it('starts an export job, polls status and downloads the SQLite file', fakeAsync(() => {
-      const anchor = document.createElement('a');
-      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
-      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor as HTMLAnchorElement);
-      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
-      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
+    it('starts an export job, polls status and downloads the SQLite file', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const anchor = document.createElement('a');
+        const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
+        const createElement = document.createElement.bind(document);
+        const createElementSpy = jest.spyOn(document, 'createElement').mockImplementation(
+          (tagName, options) => (tagName === 'a' ? anchor : createElement(tagName, options))
+        );
+        const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
+        const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
 
-      component.exportDatabase();
+        component.exportDatabase();
 
-      const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
-      expect(startRequest.request.method).toBe('POST');
-      startRequest.flush({ jobId: 'job-1', message: 'started' });
+        const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
+        expect(startRequest.request.method).toBe('POST');
+        startRequest.flush({ jobId: 'job-1', message: 'started' });
 
-      tick(0);
+        await jest.advanceTimersByTimeAsync(0);
 
-      const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
-      expect(statusRequest.request.method).toBe('GET');
-      statusRequest.flush({ status: 'completed', progress: 100 });
+        const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
+        expect(statusRequest.request.method).toBe('GET');
+        statusRequest.flush({ status: 'completed', progress: 100 });
 
-      const downloadRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1/download');
-      expect(downloadRequest.request.method).toBe('GET');
-      downloadRequest.flush(new Blob(['sqlite']));
+        const downloadRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1/download');
+        expect(downloadRequest.request.method).toBe('GET');
+        downloadRequest.flush(new Blob(['sqlite']));
 
-      expect(clickSpy).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('completed');
+        expect(clickSpy).toHaveBeenCalled();
+        expect(component.isExporting()).toBe(false);
+        expect(component.databaseExportStatus()).toBe('completed');
 
-      appendChildSpy.mockRestore();
-      removeChildSpy.mockRestore();
-      createElementSpy.mockRestore();
-    }));
+        appendChildSpy.mockRestore();
+        removeChildSpy.mockRestore();
+        createElementSpy.mockRestore();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('re-enables export after a failed job status', fakeAsync(() => {
-      component.exportDatabase();
+    it('re-enables export after a failed job status', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        component.exportDatabase();
 
-      const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
-      startRequest.flush({ jobId: 'job-1', message: 'started' });
+        const startRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job');
+        startRequest.flush({ jobId: 'job-1', message: 'started' });
 
-      tick(0);
+        await jest.advanceTimersByTimeAsync(0);
 
-      const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
-      statusRequest.flush({ status: 'failed', progress: 42, error: 'Export failed' });
+        const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
+        statusRequest.flush({ status: 'failed', progress: 42, error: 'Export failed' });
 
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('failed');
-      expect(component.databaseExportError).toBe('Export failed');
-      expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
-    }));
+        expect(component.isExporting()).toBe(false);
+        expect(component.databaseExportStatus()).toBe('failed');
+        expect(component.databaseExportError()).toBe('Export failed');
+        expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('renders background export progress after polling without another UI event', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        component.exportDatabase();
+        fixture.detectChanges();
+
+        httpMock.expectOne('http://test-url/admin/database/export/sqlite/job')
+          .flush({ jobId: 'job-1', message: 'started' });
+        await jest.advanceTimersByTimeAsync(0);
+        httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1')
+          .flush({ status: 'running', progress: 42 });
+        await jest.advanceTimersByTimeAsync(0);
+
+        expect(fixture.nativeElement.querySelector('.export-progress .progress-text').textContent)
+          .toContain('42%');
+        component.ngOnDestroy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('starts export without a local token because auth is handled by the interceptor', () => {
       jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
@@ -278,7 +330,7 @@ describe('SysAdminSettingsComponent', () => {
       );
 
       expect(snackBar.open).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
+      expect(component.isExporting()).toBe(false);
     });
   });
 });

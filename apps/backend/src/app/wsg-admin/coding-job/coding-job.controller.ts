@@ -264,12 +264,14 @@ export class WsgCodingJobController {
   })
   async transferCodingCases(
     @WorkspaceId() workspaceId: number,
-      @Body() transferCodingCasesDto: TransferCodingCasesDto
+      @Body() transferCodingCasesDto: TransferCodingCasesDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<TransferCodingCasesResultDto> {
     return this.codingJobService.transferCodingCases(
       workspaceId,
       transferCodingCasesDto.sourceCoderId,
-      transferCodingCasesDto.targetCoderId
+      transferCodingCasesDto.targetCoderId,
+      ownershipRequest.user?.id
     );
   }
 
@@ -452,6 +454,18 @@ export class WsgCodingJobController {
     };
   }
 
+  @Post('bulk-delete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete owned coding jobs atomically' })
+  async deleteCodingJobs(
+    @WorkspaceId() workspaceId: number,
+      @Body() body: { ids: number[] },
+      @Req() req: Request
+  ): Promise<{ success: boolean }> {
+    return this.codingJobService.deleteCodingJobs(workspaceId, body.ids, this.getRequestUserId(req));
+  }
+
   @Get(':id')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
@@ -520,7 +534,8 @@ export class WsgCodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+      @Body() createCodingJobDto: CreateCodingJobDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -540,7 +555,8 @@ export class WsgCodingJobController {
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
-        createCodingJobDto
+        createCodingJobDto,
+        ownershipRequest.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -591,7 +607,8 @@ export class WsgCodingJobController {
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      updateCodingJobDto
+      updateCodingJobDto,
+      this.getRequestUserId(req)
     );
   }
 
@@ -620,7 +637,9 @@ export class WsgCodingJobController {
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      { status: updateCodingJobStatusDto.status }
+      { status: updateCodingJobStatusDto.status },
+      this.getRequestUserId(req),
+      true
     );
   }
 
@@ -649,7 +668,8 @@ export class WsgCodingJobController {
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      { comment: updateCodingJobCommentDto.comment }
+      { comment: updateCodingJobCommentDto.comment },
+      this.getRequestUserId(req)
     );
   }
 
@@ -699,7 +719,7 @@ export class WsgCodingJobController {
     if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
-      });
+      }, this.getRequestUserId(req), true);
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
@@ -737,7 +757,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.pauseCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -774,7 +795,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.resumeCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -814,7 +836,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.submitCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -854,7 +877,9 @@ export class WsgCodingJobController {
     const codingJob = await this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      { status: 'review' }
+      { status: 'review' },
+      this.getRequestUserId(req),
+      true
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -932,9 +957,10 @@ export class WsgCodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    return this.codingJobService.deleteCodingJob(id, workspaceId);
+    return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
 
   @Post(':id/progress')
@@ -977,7 +1003,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     const userId = saveCodingProgressDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingProgressDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -990,7 +1016,8 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingProgress(
         id,
-        saveCodingProgressDto
+        saveCodingProgressDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -1035,7 +1062,7 @@ export class WsgCodingJobController {
   ): Promise<CodingJobDto> {
     const userId = saveCodingNotesDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingNotesDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -1048,7 +1075,8 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingNotes(
         id,
-        saveCodingNotesDto
+        saveCodingNotesDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -1091,7 +1119,8 @@ export class WsgCodingJobController {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }

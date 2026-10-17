@@ -1,9 +1,9 @@
 <div class="home-body app-container">
   <coding-box-user-workspaces-area
     class="home-panel"
-    [workspaces]="workspaces"
-    [authBootstrapStatus]="authBootstrapStatus"
-    [authDataLoaded]="Number(authData.userId) > 0">
+    [workspaces]="workspaces()"
+    [authBootstrapStatus]="authBootstrapStatus()"
+    [authDataLoaded]="Number(authData().userId) > 0">
   </coding-box-user-workspaces-area>
 
   <coding-box-app-info
@@ -12,8 +12,9 @@
     [introHtml]="'appService.appConfig.introHtml'"
     [appName]="'IQB-Kodierbox'"
     [appVersion]="'1.17.4'"
-    [userName]="authData.userName"
-    [isUserLoggedIn]="Number(authData.userId) > 0"
-    [isAdmin]="authData.isAdmin" [userLongName]="">
+    [userName]="authData().userName"
+    [userLongName]="appService.userProfile.firstName + ' ' + appService.userProfile.lastName"
+    [isUserLoggedIn]="Number(authData().userId) > 0"
+    [isAdmin]="authData().isAdmin">
   </coding-box-app-info>
 </div>

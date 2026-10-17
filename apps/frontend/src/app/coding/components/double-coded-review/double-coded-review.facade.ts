@@ -45,17 +45,26 @@ type ManagerDraftCommand =
   | {
     kind: 'save';
     workspaceId: number;
+    managerUserId: number;
     item: DoubleCodedItem;
     draft: SaveDoubleCodedReviewDraftDto;
   }
   | {
     kind: 'delete';
     workspaceId: number;
+    managerUserId: number;
     item: DoubleCodedItem;
   };
 
 interface ManagerDraftCommandResult {
   command: ManagerDraftCommand;
+  savedDraft: DoubleCodedManagerDecisionDto | null;
+}
+
+export interface ManagerDraftUpdate {
+  workspaceId: number;
+  responseId: number;
+  managerUserId: number;
   savedDraft: DoubleCodedManagerDecisionDto | null;
 }
 
@@ -67,6 +76,8 @@ export class DoubleCodedReviewFacade {
   private readonly sessionRecoveryService = inject(SessionRecoveryService);
 
   readonly selectionForm: FormGroup = this.fb.group({});
+  private readonly managerDraftUpdatesSubject = new Subject<ManagerDraftUpdate>();
+  readonly managerDraftUpdates$ = this.managerDraftUpdatesSubject.asObservable();
 
   private readonly replayDecisionByResponseId = new Map<
   number,
@@ -131,11 +142,11 @@ export class DoubleCodedReviewFacade {
 
       const selectionControl = new FormControl({
         value: selectedValue,
-        disabled: item.isResolved
+        disabled: item.isResolved || item.canEditDraft !== true
       });
       const commentControl = new FormControl({
         value: comment,
-        disabled: item.isResolved
+        disabled: item.isResolved || item.canEditDraft !== true
       });
       this.selectionForm.addControl(
         this.getItemControlName(item),
@@ -174,6 +185,7 @@ export class DoubleCodedReviewFacade {
     this.recoveryItemsProvider = null;
     this.destroy$.next();
     this.destroy$.complete();
+    this.managerDraftUpdatesSubject.complete();
   }
 
   getItemControlName(item: DoubleCodedItem): string {
@@ -249,6 +261,7 @@ export class DoubleCodedReviewFacade {
   }
 
   select(item: DoubleCodedItem, selectedValue: string): void {
+    if (item.canEditDraft !== true) return;
     this.replayDecisionByResponseId.delete(item.responseId);
     const selectedResult = item.coderResults.find(
       result => result.jobId.toString() === selectedValue
@@ -267,6 +280,7 @@ export class DoubleCodedReviewFacade {
     notes: string,
     hasNotes: boolean
   ): void {
+    if (item.canEditDraft !== true) return;
     const matchingResults = item.coderResults.filter(
       result => result.code === code
     );
@@ -398,6 +412,10 @@ export class DoubleCodedReviewFacade {
         candidate => candidate.responseId === entry.responseId
       );
       if (!item) {
+        remainingEntries.push(entry);
+        return;
+      }
+      if (item.isResolved || item.canEditDraft !== true) {
         remainingEntries.push(entry);
         return;
       }
@@ -565,8 +583,9 @@ export class DoubleCodedReviewFacade {
   }
 
   private persistManagerDraft(item: DoubleCodedItem): void {
-    if (item.isResolved) return;
+    if (item.isResolved || item.canEditDraft !== true) return;
     const workspaceId = this.appService.selectedWorkspaceId;
+    const managerUserId = this.appService.userId;
     const selectedValue = this.getItemControl(item).value;
     const selected =
       this.getCatalogDecision(item, selectedValue) ||
@@ -582,13 +601,16 @@ export class DoubleCodedReviewFacade {
       selected.code === -2
     ) {
       if (workspaceId && !selectedValue) {
-        this.enqueueManagerDraftCommand({ kind: 'delete', workspaceId, item });
+        this.enqueueManagerDraftCommand({
+          kind: 'delete', workspaceId, managerUserId, item
+        });
       }
       return;
     }
     this.enqueueManagerDraftCommand({
       kind: 'save',
       workspaceId,
+      managerUserId,
       item,
       draft: {
         sourceUnitId: item.sourceUnitId,
@@ -600,6 +622,7 @@ export class DoubleCodedReviewFacade {
   }
 
   private enqueueManagerDraftCommand(command: ManagerDraftCommand): void {
+    if (command.item.canEditDraft !== true) return;
     const signature = this.getManagerDraftCommandSignature(command);
     if (
       this.lastManagerDraftCommandSignatureByResponseId.get(
@@ -679,13 +702,12 @@ export class DoubleCodedReviewFacade {
   ): void {
     if (!result) return;
     const { command, savedDraft } = result;
-    const managerDrafts = command.item.managerDrafts || [];
-    const retainedDrafts = managerDrafts.filter(
-      decision => decision.managerUserId !== this.appService.userId
-    );
-    if (savedDraft) retainedDrafts.push(savedDraft);
-    managerDrafts.splice(0, managerDrafts.length, ...retainedDrafts);
-    command.item.managerDrafts = managerDrafts;
+    this.managerDraftUpdatesSubject.next({
+      workspaceId: command.workspaceId,
+      responseId: command.item.responseId,
+      managerUserId: command.managerUserId,
+      savedDraft
+    });
   }
 
   private createRecoveryDraft(
@@ -702,7 +724,7 @@ export class DoubleCodedReviewFacade {
   private createRecoveryEntry(
     item: DoubleCodedItem
   ): ReviewRecoveryEntry | null {
-    if (item.isResolved) return null;
+    if (item.isResolved || item.canEditDraft !== true) return null;
     const selectedValue = this.getItemControl(item).value || '';
     const comment = this.getCommentControl(item).value || '';
     const replayDecision = this.replayDecisionByResponseId.get(item.responseId);

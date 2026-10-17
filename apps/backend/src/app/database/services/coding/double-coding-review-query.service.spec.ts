@@ -1,6 +1,20 @@
+import { ForbiddenException } from '@nestjs/common';
 import { DoubleCodingReviewQueryService } from './double-coding-review-query.service';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { applyResolvedExclusionsToQuery } from '../workspace/workspace-exclusion.service';
+import User from '../../entities/user.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
+import { getCodingReviewCapabilities } from '../shared/coding-ownership.policy';
+// Domain fixtures isolate ownership; the capability regression tests below use the real policy.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('./coding-statistics.service', () => ({
   CodingStatisticsService: jest.fn()
@@ -47,6 +61,7 @@ describe('DoubleCodingReviewQueryService', () => {
     query: jest.Mock;
     find: jest.Mock;
     findOne: jest.Mock;
+    manager?: { findOne: jest.Mock; find: jest.Mock };
   };
   let jobDefinitionRepository: {
     find: jest.Mock;
@@ -1353,6 +1368,7 @@ describe('DoubleCodingReviewQueryService', () => {
 
     expect(codingJobUnitRepository.find).not.toHaveBeenCalled();
     expect(result).toEqual({
+      canApplyResults: true,
       data: [],
       total: 0,
       page: 1,
@@ -1839,6 +1855,133 @@ describe('DoubleCodingReviewQueryService', () => {
     expect(queryBuilder.setParameter).toHaveBeenCalledWith('kappaCoderTrainingIds', [21]);
   });
 
+  describe('review capabilities with the real ownership policy', () => {
+    let manager: { findOne: jest.Mock; find: jest.Mock };
+    let units: Array<Record<string, unknown>>;
+    let originalCapabilities: typeof getCodingReviewCapabilities;
+
+    beforeEach(() => {
+      originalCapabilities = jest.mocked(getCodingReviewCapabilities).getMockImplementation()!;
+      jest.mocked(getCodingReviewCapabilities).mockImplementation(
+        jest.requireActual('../shared/coding-ownership.policy').getCodingReviewCapabilities
+      );
+      units = [1, 2].map(coderId => makeCodingJobUnit({
+        id: coderId,
+        coding_job_id: 100 + coderId,
+        code: coderId,
+        coding_job: {
+          workspace_id: workspaceId,
+          creatorUserId: 7,
+          training_id: null,
+          codingJobCoders: [{ user_id: coderId, user: { username: `Coder ${coderId}` } }]
+        }
+      }));
+      codingJobUnitRepository.find.mockResolvedValue(units);
+      manager = {
+        findOne: jest.fn(async entity => {
+          if (entity === User) return { id: 7, isAdmin: false };
+          if (entity === WorkspaceUser) return { accessLevel: 2 };
+          return null;
+        }),
+        find: jest.fn().mockResolvedValue(units)
+      };
+      codingJobUnitRepository.manager = manager;
+      service = new DoubleCodingReviewQueryService(
+        codingJobUnitRepository as never,
+        jobDefinitionRepository as never,
+        variableBundleRepository as never,
+        {
+          calculateCohensKappa: jest.fn(pairs => pairs.map(pair => ({
+            ...pair,
+            kappa: 0.5,
+            agreement: 0.75,
+            validPairs: pair.codes.length,
+            totalItems: pair.codes.length,
+            interpretation: 'Moderate'
+          }))),
+          roundKappaCalculationResult: jest.fn(result => result)
+        } as never,
+        { resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions) } as never,
+        codingJobService as never,
+        defaultMissingsProfilesService as never,
+        reviewDecisionRepository as never
+      );
+    });
+
+    afterEach(() => {
+      jest.mocked(getCodingReviewCapabilities).mockImplementation(originalCapabilities);
+    });
+
+    it.each([7, 8, null])('calculates workspace kappa without a review actor for owner %s', async owner => {
+      (units[1].coding_job as { creatorUserId: number | null }).creatorUserId = owner;
+      const result = await service.getWorkspaceCohensKappaSummary(workspaceId);
+
+      expect(result.workspaceSummary).toMatchObject({
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 1,
+        averageKappa: 0.5,
+        variablesIncluded: 1,
+        codersIncluded: 2
+      });
+      expect(result.coderPairs[0]).toMatchObject({ coder1Id: 1, coder2Id: 2, validPairs: 1 });
+      expect(manager.findOne).not.toHaveBeenCalled();
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty workspace kappa summary without a review actor', async () => {
+      codingJobUnitRepository.query.mockResolvedValue([{ total: '0' }]);
+
+      await expect(service.getWorkspaceCohensKappaSummary(workspaceId)).resolves.toMatchObject({
+        coderPairs: [],
+        workspaceSummary: { totalDoubleCodedResponses: 0, averageKappa: null }
+      });
+      expect(manager.findOne).not.toHaveBeenCalled();
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { owner: 7, canEditDraft: true },
+      { owner: 8, canEditDraft: false },
+      { owner: null, canEditDraft: false }
+    ])(
+      'keeps level 2 review capabilities scoped to owner $owner', async ({ owner, canEditDraft }) => {
+        (units[1].coding_job as { creatorUserId: number | null }).creatorUserId = owner;
+
+        const result = await service.getDoubleCodedVariablesForReview(workspaceId, {}, 7);
+
+        expect(result.canApplyResults).toBe(false);
+        expect(result.data[0].canEditDraft).toBe(canEditDraft);
+      }
+    );
+
+    it.each([false, true])('retains elevated review capabilities (admin=%s)', async isAdmin => {
+      manager.findOne.mockImplementation(async entity => (
+        entity === User ? { id: 7, isAdmin } : { accessLevel: 3 }
+      ));
+      (units[1].coding_job as { creatorUserId: number | null }).creatorUserId = null;
+
+      const result = await service.getDoubleCodedVariablesForReview(workspaceId, {}, 7);
+
+      expect(result.canApplyResults).toBe(true);
+      expect(result.data[0].canEditDraft).toBe(true);
+    });
+
+    it.each([0, 1])('rejects missing actors even when review total is %s', async total => {
+      codingJobUnitRepository.query.mockResolvedValue([{ total: String(total) }]);
+
+      await expect(service.getDoubleCodedVariablesForReview(workspaceId)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('returns capabilities for an authenticated empty review', async () => {
+      codingJobUnitRepository.query.mockResolvedValue([{ total: '0' }]);
+
+      await expect(service.getDoubleCodedVariablesForReview(workspaceId, {}, 7)).resolves.toMatchObject({
+        canApplyResults: false, data: [], total: 0
+      });
+      expect(manager.find).not.toHaveBeenCalled();
+    });
+  });
+
   it('returns an empty workspace kappa summary for a single selected coder', async () => {
     const getDoubleCodedVariablesForReviewSpy = jest.spyOn(
       service,
@@ -1897,8 +2040,11 @@ describe('DoubleCodingReviewQueryService', () => {
       defaultMissingsProfilesService as never,
       reviewDecisionRepository as never
     );
-    const getDoubleCodedVariablesForReviewSpy = jest
-      .spyOn(service, 'getDoubleCodedVariablesForReview')
+    const queryService = service as unknown as {
+      getDoubleCodedReviewData: DoubleCodingReviewQueryService['getDoubleCodedVariablesForReview'];
+    };
+    const getDoubleCodedReviewDataSpy = jest
+      .spyOn(queryService, 'getDoubleCodedReviewData')
       .mockResolvedValueOnce({
         data: [
           {
@@ -1981,7 +2127,7 @@ describe('DoubleCodingReviewQueryService', () => {
       [31, 32]
     );
 
-    expect(getDoubleCodedVariablesForReviewSpy).toHaveBeenCalledWith(
+    expect(getDoubleCodedReviewDataSpy).toHaveBeenCalledWith(
       workspaceId,
       {
         page: 1,

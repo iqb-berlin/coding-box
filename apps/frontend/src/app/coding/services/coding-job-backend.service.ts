@@ -101,6 +101,7 @@ export function getDownloadFileName(
 }
 
 interface JobDefinitionApiResponse {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;
@@ -198,6 +199,7 @@ export interface JobDefinitionDistributionSnapshot {
 }
 
 export interface JobDefinition {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;
@@ -566,6 +568,10 @@ export class CodingJobBackendService {
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/comment`;
     return this.http.put<CodingJob>(url, { comment }, { headers: this.getAuthHeader(authToken) });
+  }
+
+  deleteCodingJobs(workspaceId: number, ids: number[]): Observable<{ success: boolean }> {
+    return this.http.post<{ success: boolean }>(`${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/bulk-delete`, { ids }, { headers: this.authHeader });
   }
 
   deleteCodingJob(
@@ -1043,6 +1049,7 @@ export class CodingJobBackendService {
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
+          creatorUserId: def.creatorUserId ?? null,
           name: def.name,
           description: def.description,
           status: def.status,

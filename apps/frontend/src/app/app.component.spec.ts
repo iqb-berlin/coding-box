@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { signal } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Observable, Subject, of } from 'rxjs';
@@ -39,6 +41,7 @@ describe('AppComponent', () => {
   let authSessionActivity: {
     start: jest.Mock;
     stop: jest.Mock;
+    restart: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -83,13 +86,15 @@ describe('AppComponent', () => {
     };
     authSessionActivity = {
       start: jest.fn(),
-      stop: jest.fn()
+      stop: jest.fn(),
+      restart: jest.fn()
     };
 
     await TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
         { provide: AppService, useValue: appService },
+        { provide: MatSnackBar, useValue: { dismiss: jest.fn(), open: jest.fn() } },
         { provide: AuthService, useValue: authService },
         { provide: AuthSessionActivityService, useValue: authSessionActivity },
         { provide: SystemNotificationService, useValue: { startPolling: jest.fn(), stopPolling: jest.fn() } },
@@ -122,6 +127,7 @@ describe('AppComponent', () => {
     expect(authService.setIdToken).toHaveBeenCalledWith('id-token');
     expect(authService.setRefreshToken).toHaveBeenCalledWith('refresh-token');
     expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
+    await fixture.whenStable();
     expect(authSessionActivity.start).toHaveBeenCalled();
     expect(TestBed.inject(SystemNotificationService).startPolling).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace-admin/1/test-results');
@@ -138,5 +144,45 @@ describe('AppComponent', () => {
 
     expect(authSessionActivity.stop).toHaveBeenCalled();
     expect(TestBed.inject(SystemNotificationService).stopPolling).toHaveBeenCalled();
+  });
+  it('updates workspace state after asynchronous auth data arrives without zones', async () => {
+    const authData = new Subject<AuthDataDto>();
+    appService.authData$ = authData;
+    router.url = '/workspace-admin/7/test-results';
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.whenStable();
+
+    authData.next({ ...AppService.defaultAuthData, workspaces: [{ id: 7, name: 'New workspace' }] } as AuthDataDto);
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.authData().workspaces[0].name).toBe('New workspace');
+    expect(fixture.componentInstance.currentWorkspaceName()).toBe('New workspace');
+  });
+
+  it('restarts session activity after reauthentication is required and restored', async () => {
+    const needsReAuthentication = signal(false);
+    Object.defineProperty(appService, 'needsReAuthentication', { get: () => needsReAuthentication() });
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.whenStable();
+    authSessionActivity.start.mockClear();
+
+    needsReAuthentication.set(true);
+    await fixture.whenStable();
+    expect(authSessionActivity.restart).toHaveBeenCalledTimes(1);
+    expect(authSessionActivity.start).not.toHaveBeenCalled();
+
+    needsReAuthentication.set(false);
+    await fixture.whenStable();
+    expect(authSessionActivity.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports failed backend login and resets global error suppression', async () => {
+    appService.loadAuthenticatedUser.mockReturnValue(of(false));
+    const fixture = TestBed.createComponent(AppComponent);
+
+    await expect(fixture.componentInstance.loadAuthData('oidc-user-id')).resolves.toBe(false);
+
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalled();
+    expect((appService as unknown as AppService).errorMessagesDisabled).toBe(false);
   });
 });

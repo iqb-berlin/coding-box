@@ -36,7 +36,7 @@ describe('UserWorkspacesComponent', () => {
 
     fixture = TestBed.createComponent(UserWorkspacesComponent);
     component = fixture.componentInstance;
-    component.workspaces = [];
+    fixture.componentRef.setInput('workspaces', []);
     fixture.detectChanges();
   });
 
@@ -58,8 +58,8 @@ describe('UserWorkspacesComponent', () => {
   });
 
   it('should show a loading state until auth data is available', () => {
-    component.authBootstrapStatus = 'backend-login-running';
-    component.authDataLoaded = false;
+    fixture.componentRef.setInput('authBootstrapStatus', 'backend-login-running');
+    fixture.componentRef.setInput('authDataLoaded', false);
 
     fixture.detectChanges();
 
@@ -68,8 +68,8 @@ describe('UserWorkspacesComponent', () => {
   });
 
   it('should show an auth data retry action after auth data loading failed', () => {
-    component.authBootstrapStatus = 'auth-data-failed';
-    component.authDataLoaded = false;
+    fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
+    fixture.componentRef.setInput('authDataLoaded', false);
 
     fixture.detectChanges();
 
@@ -83,8 +83,8 @@ describe('UserWorkspacesComponent', () => {
   });
 
   it('should offer reauthentication after auth data loading failed', () => {
-    component.authBootstrapStatus = 'auth-data-failed';
-    component.authDataLoaded = false;
+    fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
+    fixture.componentRef.setInput('authDataLoaded', false);
 
     fixture.detectChanges();
 
@@ -93,9 +93,9 @@ describe('UserWorkspacesComponent', () => {
     expect(mockAuthService.login).toHaveBeenCalledWith('/coding');
   });
 
-  it('should show reauthentication instead of loading when the session expires while authenticated', () => {
-    component.authBootstrapStatus = 'session-expired';
-    component.authDataLoaded = false;
+  it('should show reauthentication instead of loading when the session expires while Keycloak is still authenticated', () => {
+    fixture.componentRef.setInput('authBootstrapStatus', 'session-expired');
+    fixture.componentRef.setInput('authDataLoaded', false);
 
     fixture.detectChanges();
 
@@ -109,8 +109,8 @@ describe('UserWorkspacesComponent', () => {
   });
 
   it('should show a retry action when auth bootstrap is ready but auth data is still missing', () => {
-    component.authBootstrapStatus = 'ready';
-    component.authDataLoaded = false;
+    fixture.componentRef.setInput('authBootstrapStatus', 'ready');
+    fixture.componentRef.setInput('authDataLoaded', false);
 
     fixture.detectChanges();
 
@@ -119,8 +119,8 @@ describe('UserWorkspacesComponent', () => {
   });
 
   it('should only show empty workspaces after auth data has loaded', () => {
-    component.authBootstrapStatus = 'ready';
-    component.authDataLoaded = true;
+    fixture.componentRef.setInput('authBootstrapStatus', 'ready');
+    fixture.componentRef.setInput('authDataLoaded', true);
 
     fixture.detectChanges();
 
@@ -130,6 +130,7 @@ describe('UserWorkspacesComponent', () => {
   it('should show reauthentication inline when logged out after an expired session', () => {
     mockAuthService.isLoggedIn.mockReturnValue(false);
     mockAppService.needsReAuthentication = true;
+    fixture.componentRef.setInput('authBootstrapStatus', 'session-expired');
 
     fixture.detectChanges();
 

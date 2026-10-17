@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { tap, catchError, map } from 'rxjs/operators';
+import { defer, Observable, of } from 'rxjs';
+import { tap, map, finalize } from 'rxjs/operators';
 import { SERVER_URL } from '../../../injection-tokens';
 
 interface CacheEntry<T> {
@@ -34,6 +34,7 @@ export class TestResultCacheService {
   private readonly serverUrl = inject(SERVER_URL);
   private readonly http = inject(HttpClient);
   private cache = new Map<string, CacheEntry<unknown>>();
+  private readonly pendingCacheRequests = new Map<string, symbol>();
 
   // Cache expiration time in milliseconds (5 minutes)
   private readonly CACHE_EXPIRATION = 5 * 60 * 1000;
@@ -52,11 +53,6 @@ export class TestResultCacheService {
    */
   getTestResults(workspaceId: number, page: number, limit: number, searchText?: string): Observable<TestResultsResponse> {
     const cacheKey = this.generateCacheKey(workspaceId, page, limit, searchText);
-    const cachedData = this.getFromCache<TestResultsResponse>(cacheKey);
-
-    if (cachedData) {
-      return of(cachedData);
-    }
 
     const params: { [key: string]: string } = {
       page: page.toString(),
@@ -67,17 +63,13 @@ export class TestResultCacheService {
       params.searchText = searchText.trim();
     }
 
-    return this.http.get<TestResultsResponse>(
+    return this.loadWithCache(cacheKey, this.http.get<TestResultsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/`,
       {
         headers: this.authHeader,
         params: params
       }
-    ).pipe(
-      catchError(() => of({ data: [], total: 0 })),
-      map(result => result || { data: [], total: 0 }),
-      tap(result => this.addToCache(cacheKey, result))
-    );
+    ).pipe(map(result => result || { data: [], total: 0 })));
   }
 
   /**
@@ -88,18 +80,11 @@ export class TestResultCacheService {
    */
   getPersonTestResults(workspaceId: number, personId: number): Observable<PersonTestResult[]> {
     const cacheKey = this.generateCacheKey(workspaceId, personId);
-    const cachedData = this.getFromCache<PersonTestResult[]>(cacheKey);
 
-    if (cachedData) {
-      return of(cachedData);
-    }
-
-    return this.http.get<PersonTestResult[]>(
+    return this.loadWithCache(cacheKey, this.http.get<PersonTestResult[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/${personId}`,
       { headers: this.authHeader }
-    ).pipe(
-      tap(result => this.addToCache(cacheKey, result))
-    );
+    ));
   }
 
   /**
@@ -107,15 +92,13 @@ export class TestResultCacheService {
    * @param workspaceId The workspace ID to invalidate
    */
   invalidateWorkspaceCache(workspaceId: number): void {
-    const keysToRemove: string[] = [];
-
-    this.cache.forEach((_, key) => {
-      if (key.startsWith(`workspace_${workspaceId}`)) {
-        keysToRemove.push(key);
-      }
-    });
-
-    keysToRemove.forEach(key => this.cache.delete(key));
+    const prefix = `workspace_${workspaceId}_`;
+    [...this.cache.keys(), ...this.pendingCacheRequests.keys()]
+      .filter(key => key.startsWith(prefix))
+      .forEach(key => {
+        this.cache.delete(key);
+        this.pendingCacheRequests.delete(key);
+      });
   }
 
   /**
@@ -123,6 +106,30 @@ export class TestResultCacheService {
    */
   clearCache(): void {
     this.cache.clear();
+    this.pendingCacheRequests.clear();
+  }
+
+  private loadWithCache<T>(cacheKey: string, request: Observable<T>): Observable<T> {
+    return defer(() => {
+      const cachedData = this.getFromCache<T>(cacheKey);
+      if (cachedData !== null) return of(cachedData);
+
+      const requestToken = Symbol('result-cache-request');
+      this.pendingCacheRequests.set(cacheKey, requestToken);
+      return request.pipe(
+        tap(result => {
+          // A newer request or invalidation revokes this response's cache write.
+          if (this.pendingCacheRequests.get(cacheKey) === requestToken) {
+            this.addToCache(cacheKey, result);
+          }
+        }),
+        finalize(() => {
+          if (this.pendingCacheRequests.get(cacheKey) === requestToken) {
+            this.pendingCacheRequests.delete(cacheKey);
+          }
+        })
+      );
+    });
   }
 
   /**

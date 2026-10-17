@@ -1,3 +1,5 @@
+import User from '../../entities/user.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 import { ExternalCodingImportService } from './external-coding-import.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
@@ -41,6 +43,11 @@ describe('ExternalCodingImportService', () => {
       release: jest.fn().mockResolvedValue(undefined),
       manager: {
         query: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn(async entity => {
+          if (entity === User) return { id: 7, isAdmin: false };
+          if (entity === WorkspaceUser) return { userId: 7, accessLevel: 3 };
+          return null;
+        }),
         getRepository: jest.fn().mockReturnValue(transactionalResponseRepository)
       }
     };
@@ -80,7 +87,7 @@ describe('ExternalCodingImportService', () => {
       file: Buffer.from('unit_key,variable_id,code\nUNIT,VAR,1\n').toString('base64'),
       fileName: 'coding.csv',
       previewOnly: false
-    });
+    }, undefined, 7);
 
     expect(result.updatedRows).toBe(1);
     expect(queryRunner.startTransaction).toHaveBeenCalledWith('READ COMMITTED');
@@ -136,6 +143,11 @@ describe('ExternalCodingImportService', () => {
       release: jest.fn().mockResolvedValue(undefined),
       manager: {
         query: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn(async entity => {
+          if (entity === User) return { id: 7, isAdmin: false };
+          if (entity === WorkspaceUser) return { userId: 7, accessLevel: 3 };
+          return null;
+        }),
         getRepository: jest.fn().mockReturnValue(transactionalResponseRepository)
       }
     };
@@ -175,7 +187,7 @@ describe('ExternalCodingImportService', () => {
       file: Buffer.from('unit_key,variable_id,status\nUNIT,VAR,DERIVE_ERROR\n').toString('base64'),
       fileName: 'coding.csv',
       previewOnly: false
-    });
+    }, undefined, 7);
 
     expect(result.updatedRows).toBe(1);
     expect(updateQuery.set).toHaveBeenCalledWith({
@@ -221,6 +233,11 @@ describe('ExternalCodingImportService', () => {
       release: jest.fn().mockResolvedValue(undefined),
       manager: {
         query: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn(async entity => {
+          if (entity === User) return { id: 7, isAdmin: false };
+          if (entity === WorkspaceUser) return { userId: 7, accessLevel: 3 };
+          return null;
+        }),
         getRepository: jest.fn().mockReturnValue(transactionalResponseRepository)
       }
     };
@@ -267,7 +284,7 @@ describe('ExternalCodingImportService', () => {
       ).toString('base64'),
       fileName: 'coding.csv',
       previewOnly: false
-    });
+    }, undefined, 7);
 
     expect(result.updatedRows).toBe(1);
     expect(updateQuery.set).toHaveBeenCalledWith({
@@ -392,7 +409,7 @@ describe('ExternalCodingImportService', () => {
 
   it('rejects unchanged coding-list exports with status_v1 as coding lists, not coding-results', async () => {
     const service = new ExternalCodingImportService(
-      {} as never,
+      { manager: { connection: {} } } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -408,7 +425,7 @@ describe('ExternalCodingImportService', () => {
       ).toString('base64'),
       fileName: 'coding.csv',
       previewOnly: false
-    });
+    }, undefined, 7);
 
     expect(result).toMatchObject({
       processedRows: 1,
@@ -443,6 +460,11 @@ describe('ExternalCodingImportService', () => {
       release: jest.fn().mockResolvedValue(undefined),
       manager: {
         query: jest.fn().mockResolvedValue([]),
+        findOne: jest.fn(async entity => {
+          if (entity === User) return { id: 7, isAdmin: false };
+          if (entity === WorkspaceUser) return { userId: 7, accessLevel: 3 };
+          return null;
+        }),
         getRepository: jest.fn().mockReturnValue(transactionalResponseRepository)
       }
     };
@@ -478,7 +500,7 @@ describe('ExternalCodingImportService', () => {
       file: Buffer.from('unit_key,variable_id,code\nUNIT,VAR,1\n').toString('base64'),
       fileName: 'coding.csv',
       previewOnly: false
-    })).rejects.toThrow('freshness failed');
+    }, undefined, 7)).rejects.toThrow('freshness failed');
 
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();

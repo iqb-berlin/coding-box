@@ -1,6 +1,5 @@
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, computed } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -8,6 +7,7 @@ import { FormGroup } from '@angular/forms';
 import {
   finalize, of, Subject, throwError
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -97,10 +97,15 @@ describe('CoderTrainingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         CoderTrainingComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         { provide: CoderService, useValue: coderService },
         { provide: VariableBundleService, useValue: variableBundleService },
         { provide: CodingJobBackendService, useValue: codingJobBackendService },
@@ -114,7 +119,7 @@ describe('CoderTrainingComponent', () => {
 
     fixture = TestBed.createComponent(CoderTrainingComponent);
     component = fixture.componentInstance;
-    component.availableVariables = [
+    component.availableVariables.set([
       {
         unitName: 'UNIT',
         variableId: 'VAR',
@@ -127,8 +132,8 @@ describe('CoderTrainingComponent', () => {
       {
         unitName: 'UNIT3', variableId: 'DERIVED', responseCount: 6, uniqueCasesAfterAggregation: 6, isDerived: true
       }
-    ] as never;
-    component.availableBundles = [
+    ] as never);
+    component.availableBundles.set([
       {
         id: 5,
         name: 'Bundle',
@@ -151,11 +156,11 @@ describe('CoderTrainingComponent', () => {
         createdAt: new Date(),
         updatedAt: new Date()
       }
-    ] as never;
-    component.coders = [
+    ] as never);
+    component.coders.set([
       { id: 1, name: 'Coder 1', username: 'coder1' },
       { id: 2, name: 'Coder 2', username: 'coder2' }
-    ] as never;
+    ] as never);
   });
 
   afterEach(() => {
@@ -181,7 +186,7 @@ describe('CoderTrainingComponent', () => {
     const trainingStarted = jest.fn();
     const closed = jest.fn();
     component.startTraining.subscribe(trainingStarted);
-    component.close.subscribe(closed);
+    component.trainingClosed.subscribe(closed);
     component.ngOnInit();
     component.addVariable('VAR', 'UNIT', 3);
     component.onVariableChange('VAR2', 0);
@@ -191,11 +196,11 @@ describe('CoderTrainingComponent', () => {
     component.updateBundleSampleCount(5, 2);
     component.updateBundleCaseOrderingMode(5, 'continuous');
 
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.selectAllCoders();
     component.trainingForm.get('trainingLabel')?.setValue('Training');
 
-    expect(component.isCoderSelected(component.coders[0])).toBe(true);
+    expect(component.isCoderSelected(component.coders()[0])).toBe(true);
     expect(component.getSelectedCoders()).toHaveLength(2);
     expect(component.hasAtLeastOneVariableSelected()).toBe(true);
     expect(component.getTotalSamples()).toBeGreaterThan(0);
@@ -205,16 +210,33 @@ describe('CoderTrainingComponent', () => {
     expect(component.selectedManualVariableIds).toContain('VAR');
     expect(component.groupedVariables).toBeDefined();
     expect(component.getVariablesGroupedByBundle().bundles).toBeDefined();
-    expect(component.trackByCoderId(0, component.coders[0])).toBe(1);
+    expect(component.trackByCoderId(0, component.coders()[0])).toBe(1);
     expect(component.canStartTraining()).toBe(true);
 
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
     expect(trainingStarted).toHaveBeenCalledWith(expect.objectContaining({
-      selectedCoders: component.coders
+      selectedCoders: component.coders()
     }));
     expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates bundle ordering computations without mutating the previous bundle', () => {
+    component.ngOnInit();
+    const previousBundles = component.availableBundles();
+    const previousBundle = previousBundles[0];
+    const ordering = computed(() => component.availableBundles()[0].caseOrderingMode);
+    expect(ordering()).toBe('alternating');
+
+    component.updateBundleCaseOrderingMode(5, 'continuous');
+    expect(ordering()).toBe('continuous');
+    expect(component.availableBundles()).not.toBe(previousBundles);
+    expect(component.availableBundles()[0]).not.toBe(previousBundle);
+    expect(previousBundle.caseOrderingMode).toBe('alternating');
+
+    component.addBundleVariables(5, 2, 'alternating');
+    expect(ordering()).toBe('alternating');
   });
 
   it('releases pending training requests when the component is destroyed', () => {
@@ -293,6 +315,64 @@ describe('CoderTrainingComponent', () => {
     expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR2');
   });
 
+  it('keeps a foreign training readable and prevents selection changes in its template', () => {
+    fixture.componentRef.setInput('editTraining', {
+      id: 99,
+      workspace_id: 1,
+      creatorUserId: 2,
+      label: 'Foreign training',
+      created_at: new Date(),
+      updated_at: new Date(),
+      jobsCount: 1,
+      assigned_coders: [1],
+      assigned_variables: [{ unitName: 'UNIT', variableId: 'VAR', sampleCount: 3 }]
+    });
+    jest.mocked(component.permissions.canEdit).mockReturnValue(false);
+    fixture.detectChanges();
+
+    expect(component.trainingForm.disabled).toBe(true);
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Foreign training');
+    const codersBefore = [...component.selectedCoders()];
+    const variablesBefore = component.variablesFormArray.getRawValue();
+    const card = fixture.nativeElement.querySelector('.coder-item') as HTMLElement;
+    expect(card.getAttribute('aria-disabled')).toBe('true');
+    expect(card.getAttribute('tabindex')).toBe('-1');
+    card.click();
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    component.selectAllCoders();
+    component.deselectAllCoders();
+    component.onBundleSelectionChange([5]);
+    component.onVariablesSelectionChange(['UNIT2::VAR2']);
+    component.onStartTraining();
+
+    expect([...component.selectedCoders()]).toEqual(codersBefore);
+    expect(component.variablesFormArray.getRawValue()).toEqual(variablesBefore);
+    expect(codingTrainingBackendService.updateCoderTraining).not.toHaveBeenCalled();
+    expect(codingTrainingBackendService.createCoderTrainingJobs).not.toHaveBeenCalled();
+  });
+
+  it('keeps asynchronously loaded foreign training variables disabled', () => {
+    const variables = new Subject<typeof component.availableVariables>();
+    codingJobBackendService.getCodingIncompleteVariables.mockReturnValue(variables);
+    fixture.componentRef.setInput('editTraining', {
+      id: 99,
+      workspace_id: 1,
+      creatorUserId: 2,
+      label: 'Foreign training',
+      assigned_variables: [{ unitName: 'UNIT', variableId: 'VAR', sampleCount: 3 }]
+    });
+    jest.mocked(component.permissions.canEdit).mockReturnValue(false);
+    fixture.detectChanges();
+    expect(component.trainingForm.disabled).toBe(true);
+
+    variables.next([{ unitName: 'UNIT', variableId: 'VAR', responseCount: 10 }]);
+    fixture.detectChanges();
+    expect(component.variablesFormArray).toHaveLength(1);
+    expect(component.variablesFormArray.at(0).disabled).toBe(true);
+    expect(component.trainingForm.disabled).toBe(true);
+    variables.complete();
+  });
+
   it('renders coder selection as toggle cards without checkboxes', () => {
     fixture.detectChanges();
 
@@ -307,7 +387,7 @@ describe('CoderTrainingComponent', () => {
 
     const selectedCoderCard = fixture.nativeElement.querySelector('.coder-grid .coder-item') as HTMLElement;
 
-    expect(component.isCoderSelected(component.coders[0])).toBe(true);
+    expect(component.isCoderSelected(component.coders()[0])).toBe(true);
     expect(selectedCoderCard.classList.contains('selected')).toBe(true);
     expect(selectedCoderCard.querySelector('.selected-icon')).not.toBeNull();
   });
@@ -339,7 +419,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.includeDerivedVariables).toBe(true);
     expect(component.getDerivedVariablesCount()).toBe(1);
     expect(component.isVariableDerived({ unitName: 'UNIT3', variableId: 'DERIVED' })).toBe(true);
-    expect(component.getBundleDerivedVariablesCount(component.availableBundles[0])).toBe(1);
+    expect(component.getBundleDerivedVariablesCount(component.availableBundles()[0])).toBe(1);
 
     component.addVariable('DERIVED', 'UNIT3', 2);
 
@@ -348,7 +428,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('warns about duplicate training labels without blocking the workflow', () => {
-    component.availableTrainings = [
+    component.availableTrainings.set([
       {
         id: 10,
         workspace_id: 1,
@@ -357,7 +437,7 @@ describe('CoderTrainingComponent', () => {
         updated_at: new Date('2026-05-13T10:00:00'),
         jobsCount: 2
       }
-    ];
+    ]);
     component.selectAllCoders();
     component.addVariable('VAR', 'UNIT', 1);
     component.trainingForm.get('trainingLabel')?.setValue('  Training  ');
@@ -441,14 +521,14 @@ describe('CoderTrainingComponent', () => {
     expect(component.getSelectedDerivedVariablesCount()).toBe(0);
     expect(new Set(component.manualVariablesSelectControl.value || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
 
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Bulk Derived');
 
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
       1,
-      [component.coders[0]],
+      [component.coders()[0]],
       [
         { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
         { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
@@ -477,7 +557,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.selectedBundleArray).toContain(6);
 
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Derived disabled');
 
     expect(component.variablesFormArray.length).toBe(0);
@@ -488,7 +568,7 @@ describe('CoderTrainingComponent', () => {
 
   it('requires a reference mode when reference trainings are selected', () => {
     component.addVariable('VAR', 'UNIT', 2);
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Reference validation');
 
     expect(component.canStartTraining()).toBe(true);
@@ -527,7 +607,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.hasBundleOrderingOverrides()).toBe(true);
     expect(component.getBundleOrderingDetails()).toContain('Bundle: Abwechselnd');
 
-    component.isLoading = true;
+    component.isLoading.set(true);
 
     expect(component.getPrimaryActionLabel()).toBe('Schulung wird aktualisiert...');
   });
@@ -560,7 +640,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
     expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
     expect(component.trainingForm.get('suppressGeneralInstructions')?.value).toBe(true);
-    expect(component.isCoderSelected(component.coders[1])).toBe(true);
+    expect(component.isCoderSelected(component.coders()[1])).toBe(true);
   });
 
   it('keeps saved manual variables when bundle loading fails while editing', () => {
@@ -717,7 +797,7 @@ describe('CoderTrainingComponent', () => {
   it('skips derived variables from bundles when disabled and submits only included variables', () => {
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
     component.onBundleSelectionChange([5]);
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('No Derived');
 
     expect(component.variablesFormArray.length).toBe(1);
@@ -728,7 +808,7 @@ describe('CoderTrainingComponent', () => {
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
       1,
-      [component.coders[0]],
+      [component.coders()[0]],
       [{ variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }],
       'No Derived',
       undefined,
@@ -758,7 +838,7 @@ describe('CoderTrainingComponent', () => {
     component.trainingForm.get('includeDerivedVariables')?.setValue(false);
     component.onVariablesSelectionChange(['UNIT::VAR']);
     component.onBundleSelectionChange([5]);
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Mixed Selection');
 
     expect(component.getManualVariablesCount()).toBe(1);
@@ -769,7 +849,7 @@ describe('CoderTrainingComponent', () => {
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
       1,
-      [component.coders[0]],
+      [component.coders()[0]],
       [
         { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
         { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
@@ -805,14 +885,14 @@ describe('CoderTrainingComponent', () => {
     const variableControl = component.variablesFormArray.at(0) as FormGroup;
     component.setDeriveErrorIncludedForControl(variableControl, true);
     expect(component.getAvailableCount({ control: variableControl })).toBe(9);
-    component.toggleCoderSelection(component.coders[0]);
+    component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Derive opt-in');
 
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
       1,
-      [component.coders[0]],
+      [component.coders()[0]],
       [{
         variableId: 'VAR',
         unitId: 'UNIT',
@@ -839,7 +919,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('preserves bundle ordering overrides when importing a job definition', () => {
-    component.availableBundles = [
+    component.availableBundles.set([
       {
         id: 5,
         name: 'Bundle',
@@ -850,7 +930,7 @@ describe('CoderTrainingComponent', () => {
         createdAt: new Date(),
         updatedAt: new Date()
       }
-    ] as never;
+    ] as never);
 
     (component as unknown as {
       importJobDefinitionSelections: (
@@ -901,7 +981,7 @@ describe('CoderTrainingComponent', () => {
       referenceTrainingIds: [99],
       referenceMode: 'same'
     });
-    component.toggleCoderSelection(component.coders[1]);
+    component.toggleCoderSelection(component.coders()[1]);
     component.onVariablesSelectionChange(['UNIT::VAR']);
     component.setDeriveErrorIncludedForControl(component.variablesFormArray.at(0) as FormGroup, true);
     component.onBundleSelectionChange([5]);
@@ -941,7 +1021,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.trainingForm.get('suppressGeneralInstructions')?.value).toBe(true);
     expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
     expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
-    expect(component.selectedCoders.has(2)).toBe(true);
+    expect(component.selectedCoders().has(2)).toBe(true);
     expect(component.selectedBundleArray).toEqual([5]);
     expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
     expect(component.variableFilterCtrl.value).toBe('VAR');

@@ -6,7 +6,8 @@ import {
   UpdateDateColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn
+  JoinColumn,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
@@ -33,12 +34,16 @@ export type CodingJobType = 'regular' | 'coding_issue_review';
  * A coding job is a collection of variables and variable bundles assigned to coders
  */
 @Entity({ name: 'coding_job' })
+@Index(['workspace_id', 'creatorUserId'])
 export class CodingJob {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column()
     workspace_id: number;
+
+  @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
+    creatorUserId: number | null;
 
   @Column()
     name: string;

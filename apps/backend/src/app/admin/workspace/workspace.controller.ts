@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  Req,
   Controller,
   Delete,
   Get,
@@ -189,8 +190,8 @@ export class WorkspaceController {
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')
-  async patch(@Body() workspaces: WorkspaceFullDto) {
-    return this.workspaceCoreService.patch(workspaces);
+  async patch(@Body() workspaces: WorkspaceFullDto, @Req() request?: { user: { id: number } }) {
+    return this.workspaceCoreService.patch(workspaces, request?.user.id);
   }
 
   @Post()

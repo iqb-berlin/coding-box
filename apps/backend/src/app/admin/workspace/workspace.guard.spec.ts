@@ -90,6 +90,23 @@ describe('WorkspaceGuard (Backend)', () => {
     expect(context.switchToHttp().getRequest().user).toEqual(requestUser);
   });
 
+  it('supports the workspaceId route used by access management', async () => {
+    const context = createContext({ id: 42 });
+    context.switchToHttp().getRequest().params = { workspaceId: '123' };
+    authService.canAccessWorkSpace.mockResolvedValue(true);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 123);
+  });
+
+  it.each(['1e2', '1.0', ' 123', '9007199254740992'])(
+    'rejects malformed workspace route %s', async workspaceId => {
+      await expect(guard.canActivate(createContext({ id: 42 }, workspaceId)))
+        .rejects.toThrow(UnauthorizedException);
+      expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+    }
+  );
+
   it('denies an OIDC user without workspace access', async () => {
     usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as never);
     authService.canAccessWorkSpace.mockResolvedValue(false);

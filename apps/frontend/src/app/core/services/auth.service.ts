@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -24,6 +25,7 @@ export class AuthService {
   private readonly loginVerifierKey = 'oidc_login_verifier';
   private refreshInFlight?: Promise<string | undefined>;
   private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasStoredSession());
+  private readonly authenticatedState = toSignal(this.isAuthenticatedSubject, { requireSync: true });
 
   constructor() {
     this.checkTokenValidity();
@@ -67,6 +69,7 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
+    this.authenticatedState();
     const hasStoredSession = this.hasStoredSession();
     if (hasStoredSession !== this.isAuthenticatedSubject.value) {
       this.isAuthenticatedSubject.next(hasStoredSession);

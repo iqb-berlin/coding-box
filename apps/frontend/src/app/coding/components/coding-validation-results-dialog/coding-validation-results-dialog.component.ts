@@ -1,8 +1,11 @@
+import { Subscription, finalize, takeUntil } from 'rxjs';
 import {
+  ChangeDetectorRef,
   Component,
   inject,
-  OnInit
+  OnInit, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialogRef
@@ -19,8 +22,10 @@ import {
 } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-validation-results-dialog',
   templateUrl: './coding-validation-results-dialog.component.html',
   styleUrls: ['./coding-validation-results-dialog.component.scss'],
@@ -34,27 +39,33 @@ import { AppService } from '../../../core/services/app.service';
   ]
 })
 export class CodingValidationResultsDialogComponent implements OnInit {
+  private pageRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
+  private readonly workspaceId = this.appService.selectedWorkspaceId;
   private snackBar = inject(MatSnackBar);
   private dialogRef = inject<MatDialogRef<CodingValidationResultsDialogComponent>>(MatDialogRef);
 
-  validationResults: ValidateCodingCompletenessResponseDto;
+  protected validationResults: ValidateCodingCompletenessResponseDto;
   validationCacheKey: string | null = null;
-  isLoading = false;
-  currentPage = 1;
-  pageSize = 50;
+  protected isLoading = false;
+  protected currentPage = 1;
+  protected pageSize = 50;
   expectedCombinations: ExpectedCombinationDto[] = [];
 
-  get totalPages(): number {
+  protected get totalPages(): number {
     return this.validationResults?.totalPages || 0;
   }
 
-  get hasNextPage(): boolean {
+  protected get hasNextPage(): boolean {
     return this.validationResults?.hasNextPage || false;
   }
 
-  get hasPreviousPage(): boolean {
+  protected get hasPreviousPage(): boolean {
     return this.validationResults?.hasPreviousPage || false;
   }
 
@@ -71,16 +82,18 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // Component initialized with data passed via dialog
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id !== this.workspaceId) this.dialogRef.close();
+    });
   }
 
-  nextPage(): void {
+  protected nextPage(): void {
     if (this.hasNextPage) {
       this.loadValidationPage(this.currentPage + 1);
     }
   }
 
-  previousPage(): void {
+  protected previousPage(): void {
     if (this.hasPreviousPage) {
       this.loadValidationPage(this.currentPage - 1);
     }
@@ -92,20 +105,23 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   }
 
   private loadValidationPage(page: number): void {
+    this.pageRequest?.unsubscribe();
     this.isLoading = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
+    this.changeDetectorRef.markForCheck();
+    const workspaceId = this.workspaceId;
 
     if (!workspaceId) {
       this.isLoading = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
-    this.testPersonCodingService.validateCodingCompleteness(
+    this.pageRequest = this.testPersonCodingService.validateCodingCompleteness(
       workspaceId,
       this.expectedCombinations,
       page,
       this.pageSize
-    ).subscribe({
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) { this.isLoading = false; this.changeDetectorRef.markForCheck(); } })).subscribe({
       next: results => {
         this.validationResults = results;
         this.currentPage = page;
@@ -113,9 +129,11 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           this.validationCacheKey = results.cacheKey;
         }
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       },
       error: () => {
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.snackBar.open('Fehler beim Laden der Validierungsergebnisse', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -125,7 +143,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   }
 
   downloadExcel(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
 
     if (!workspaceId || !this.validationCacheKey) {
       this.snackBar.open('Keine Daten zum Herunterladen verfügbar', 'Schließen', {
@@ -136,11 +154,12 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     }
 
     this.isLoading = true;
+    this.changeDetectorRef.markForCheck();
 
     this.testPersonCodingService.downloadValidationResultsAsExcel(
       workspaceId,
       this.validationCacheKey
-    ).subscribe({
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) { this.isLoading = false; this.changeDetectorRef.markForCheck(); } })).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -157,6 +176,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           panelClass: ['success-snackbar']
         });
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       },
       error: error => {
         let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
@@ -177,11 +197,12 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           panelClass: ['error-snackbar']
         });
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       }
     });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

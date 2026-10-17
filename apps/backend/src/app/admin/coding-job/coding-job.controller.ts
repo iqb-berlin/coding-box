@@ -4,12 +4,12 @@ import {
   Controller,
   Delete,
   Get,
-  NotFoundException,
+  HttpException,
   Param,
   ParseIntPipe,
   Post,
   Put,
-  UseGuards
+  UseGuards, Req
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -71,7 +71,7 @@ export class CodingJobController {
         job.assignedVariableBundles || []
       ));
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve coding jobs: ${error.message}`);
@@ -120,7 +120,7 @@ export class CodingJobController {
       });
       return dto;
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve coding job: ${error.message}`);
@@ -149,7 +149,8 @@ export class CodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+      @Body() createCodingJobDto: CreateCodingJobDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -167,7 +168,8 @@ export class CodingJobController {
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
-        createCodingJobDto
+        createCodingJobDto,
+        ownershipRequest.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
@@ -207,17 +209,19 @@ export class CodingJobController {
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto
+      @Body() updateCodingJobDto: UpdateCodingJobDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     try {
       const codingJob = await this.codingJobService.updateCodingJob(
         id,
         workspaceId,
-        updateCodingJobDto
+        updateCodingJobDto,
+        ownershipRequest.user?.id
       );
       return CodingJobDto.fromEntity(codingJob);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to update coding job: ${error.message}`);
@@ -257,12 +261,13 @@ export class CodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     try {
-      return await this.codingJobService.deleteCodingJob(id, workspaceId);
+      return await this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to delete coding job: ${error.message}`);
@@ -306,18 +311,19 @@ export class CodingJobController {
   async assignCoders(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() assignCodersDto: AssignCodersDto
+      @Body() assignCodersDto: AssignCodersDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     try {
       // Verify the coding job exists in this workspace
       await this.codingJobService.getCodingJob(id, workspaceId);
 
       // Assign the coders
-      await this.codingJobService.assignCoders(id, assignCodersDto.userIds);
+      await this.codingJobService.assignCoders(id, assignCodersDto.userIds, undefined, workspaceId, ownershipRequest.user?.id);
 
       return { success: true };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to assign coders: ${error.message}`);

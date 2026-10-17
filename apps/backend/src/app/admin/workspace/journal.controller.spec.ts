@@ -1,6 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { JournalService } from '../../database/services/shared';
 import { JournalController } from './journal.controller';
+import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 
 describe('JournalController', () => {
   it('treats date-only toDate filters as inclusive through the end of the selected day', async () => {
@@ -247,7 +248,7 @@ describe('JournalController', () => {
     expect(journalService.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('maps legacy action and entity fields to canonical event types when creating entries', async () => {
+  it('marks legacy client entries as manual notes rather than trusted deletion events', async () => {
     const createdEntry = {
       id: 1
     };
@@ -258,7 +259,7 @@ describe('JournalController', () => {
       actorId: null,
       actorUserId: 7,
       actorType: 'user',
-      eventType: 'RESPONSE_DELETED',
+      eventType: 'MANUAL_NOTE_CREATED',
       entityType: 'response',
       entityId: '42',
       result: 'success',
@@ -286,17 +287,63 @@ describe('JournalController', () => {
       } as never
     )).resolves.toEqual(auditDto);
 
-    expect(journalService.mapLegacyEventType).toHaveBeenCalledWith('delete', 'response');
+    expect(journalService.mapLegacyEventType).not.toHaveBeenCalled();
     expect(journalService.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: 3,
         actorUserId: 7,
-        eventType: 'RESPONSE_DELETED',
-        legacyActionType: 'delete',
+        eventType: 'MANUAL_NOTE_CREATED',
+        legacyActionType: 'create',
         entityType: 'response',
         entityId: '42',
-        result: 'success'
+        result: 'success',
+        details: expect.objectContaining({ source: 'manual', reportedActionType: 'delete' })
       })
     );
+  });
+
+  it.each([
+    { eventType: 'RESPONSE_DELETED' },
+    { eventType: 'ACCESS_TOKEN_CREATED' },
+    { actorType: 'system' },
+    { actorType: 'job' },
+    { jobId: '123' },
+    { correlationId: 'trusted-request' },
+    { entity_type: 'response', entityType: 'workspace' },
+    { entity_id: '42', entityId: '43' }
+  ])('rejects forged provenance %j', async fields => {
+    const journalService = { recordEvent: jest.fn() } as unknown as JournalService;
+    const controller = new JournalController(journalService);
+    await expect(controller.createJournalEntry(3, fields as CreateJournalEntryDto, { user: { id: 7 } } as never))
+      .rejects.toThrow(BadRequestException);
+    expect(journalService.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(['actorUserId', 'workspaceId', 'unknownField'])('rejects non-whitelisted %s through the request validation pipe', async field => {
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+    await expect(pipe.transform({ entityType: 'workspace', entityId: '3', [field]: 99 }, {
+      type: 'body', metatype: CreateJournalEntryDto
+    })).rejects.toThrow(BadRequestException);
+  });
+
+  it('accepts camel-only aliases and protects server-owned note metadata', async () => {
+    const journalService = { recordEvent: jest.fn().mockResolvedValue({}), toAuditDto: jest.fn() } as unknown as JournalService;
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+    const dto = await pipe.transform({
+      entityType: 'response',
+      entityId: '42',
+      result: 'failure',
+      details: { source: 'job', reportedActionType: 'delete' }
+    }, { type: 'body', metatype: CreateJournalEntryDto });
+    await new JournalController(journalService).createJournalEntry(3, dto, { user: { id: 7 } } as never);
+    expect(journalService.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: 7,
+      actorType: 'user',
+      eventType: 'MANUAL_NOTE_CREATED',
+      result: 'success',
+      entityType: 'response',
+      entityId: '42',
+      details: { source: 'manual', reportedActionType: 'create', reportedResult: 'failure' }
+    }));
   });
 });
