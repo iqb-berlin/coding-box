@@ -18,25 +18,15 @@ import {
   UserActivityService,
   withAutoRefreshToken
 } from 'keycloak-angular';
-import { Observable } from 'rxjs';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
 import { AUTH_SESSION_AUTO_REFRESH_TIMEOUT_MS } from './core/services/auth-session.config';
+import { CacheBustingTranslateLoader } from './core/services/translation-loader';
 
-const translationCacheBust = Date.now().toString();
-
-export class CacheBustingTranslateLoader implements TranslateLoader {
-  constructor(private http: HttpClient) {}
-
-  getTranslation(lang: string): Observable<Record<string, unknown>> {
-    return this.http.get<Record<string, unknown>>(
-      `./assets/i18n/${lang}.json?v=${translationCacheBust}`
-    );
-  }
-}
+export { CacheBustingTranslateLoader } from './core/services/translation-loader';
 
 export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLoader {
   return new CacheBustingTranslateLoader(http);
