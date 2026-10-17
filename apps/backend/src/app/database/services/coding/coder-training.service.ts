@@ -6,7 +6,7 @@ import {
   Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
 import { createHash } from 'crypto';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -2489,7 +2489,7 @@ export class CoderTrainingService {
     code: number | null | undefined,
     notes?: string | null
   ): Promise<SaveDiscussionResultResponse> {
-    return this.coderTrainingRepository.manager.transaction(async manager => {
+    return withWorkspaceTestResultsMutationTransaction(this.coderTrainingRepository.manager, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, managerUserId);
       const coderTrainingRepository = manager.getRepository(CoderTraining);
@@ -2507,7 +2507,7 @@ export class CoderTrainingService {
         throw new BadRequestException(`Training ${trainingId} not found in workspace ${workspaceId}`);
       }
 
-      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId, manager);
       const representativeUnit = this.findTrainingUnitForResponse(training, responseId, exclusions);
 
       if (!representativeUnit) {
@@ -3078,7 +3078,7 @@ export class CoderTrainingService {
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     await assertCodingResourceCreation(this.coderTrainingRepository.manager, workspaceId, actorUserId);
     try {
-      return await this.coderTrainingRepository.manager.transaction(async manager => {
+      return await withWorkspaceTestResultsMutationTransaction(this.coderTrainingRepository.manager, async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
         const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
         const coderTrainingRepository = manager.getRepository(CoderTraining);
@@ -3094,11 +3094,13 @@ export class CoderTrainingService {
         this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
         await this.codingJobService.assertCodersCanCodeInWorkspace(
           selectedCoders.map(coder => coder.id),
-          workspaceId
+          workspaceId,
+          manager
         );
         const resolvedMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
           workspaceId,
-          missingsProfileId
+          missingsProfileId,
+          manager
         );
         const trainingVariableSelections = await this.buildTrainingVariableSelections(
           workspaceId,
@@ -4478,7 +4480,7 @@ export class CoderTrainingService {
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      return await this.coderTrainingRepository.manager.transaction(async manager => {
+      return await withWorkspaceTestResultsMutationTransaction(this.coderTrainingRepository.manager, async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
         await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
         const coderTrainingRepository = manager.getRepository(CoderTraining);
@@ -4494,7 +4496,8 @@ export class CoderTrainingService {
         this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
         await this.codingJobService.assertCodersCanCodeInWorkspace(
           selectedCoders.map(coder => coder.id),
-          workspaceId
+          workspaceId,
+          manager
         );
 
         const training = await coderTrainingRepository.findOne({
@@ -4513,7 +4516,8 @@ export class CoderTrainingService {
         const resolvedCurrentProfileIds = await Promise.all((training.codingJobs || [])
           .map(job => this.missingsProfilesService.resolveMissingsProfileId(
             workspaceId,
-            job.missings_profile_id
+            job.missings_profile_id,
+            manager
           )));
         const currentProfileKeys = new Set(resolvedCurrentProfileIds);
         const hasConflictingCurrentMissingsProfiles = currentProfileKeys.size > 1;
@@ -4525,10 +4529,11 @@ export class CoderTrainingService {
           null;
         const resolvedCurrentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
           workspaceId,
-          currentMissingsProfileId
+          currentMissingsProfileId,
+          manager
         );
         const resolvedMissingsProfileId = missingsProfileId !== undefined ?
-          await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId) :
+          await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId, manager) :
           resolvedCurrentMissingsProfileId;
 
         // Check if critical configuration changed (coders or variables)
@@ -4885,7 +4890,7 @@ export class CoderTrainingService {
                                  actorUserId?: number): Promise<{ success: boolean; message: string }> {
     await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      return await this.coderTrainingRepository.manager.transaction(async manager => {
+      return await withWorkspaceTestResultsMutationTransaction(this.coderTrainingRepository.manager, async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
         await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
         const coderTrainingRepository = manager.getRepository(CoderTraining);
@@ -4980,7 +4985,7 @@ export class CoderTrainingService {
                             actorUserId?: number): Promise<{ success: boolean; message: string }> {
     await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      return await this.coderTrainingRepository.manager.transaction(async manager => {
+      return await withWorkspaceTestResultsMutationTransaction(this.coderTrainingRepository.manager, async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
         await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
         const coderTrainingRepository = manager.getRepository(CoderTraining);

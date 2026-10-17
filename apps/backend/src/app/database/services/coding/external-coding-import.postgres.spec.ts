@@ -11,7 +11,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { ExternalCodingImportService } from './external-coding-import.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationPoolSlot } from '../shared/workspace-test-results-lock.util';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ? describe : describe.skip;
 
@@ -123,6 +123,41 @@ describePostgres('External coding import permissions with PostgreSQL', () => {
     expect(String(response.score_v2)).toBe('1');
     expect(response.status_v2).not.toBeNull();
   });
+
+  it.each(['role', 'membership'])('keeps previews available and rechecks revoked %s after waiting for a pool slot', async revoked => {
+    let releaseSlots: () => void = () => undefined;
+    const pending = new Promise<void>(resolve => { releaseSlots = resolve; });
+    let allStarted: () => void = () => undefined;
+    const started = new Promise<void>(resolve => { allStarted = resolve; });
+    let entered = 0;
+    // This fixture's four-connection pool admits three blocking mutations.
+    const holders = Array.from({ length: 3 }, () => withWorkspaceTestResultsMutationPoolSlot(db, async () => {
+      entered += 1;
+      if (entered === 3) allStarted();
+      await pending;
+    }));
+    let observed: Promise<unknown> | undefined;
+    try {
+      await started;
+      const attempt = service.importExternalCoding(workspaceId, body, undefined, manager.id);
+      observed = attempt.catch(() => undefined);
+      await expect(service.importExternalCoding(workspaceId, { ...body, previewOnly: true }, undefined, coderManager.id))
+        .resolves.toMatchObject({ updatedRows: 1 });
+      await expectUnchanged();
+      if (revoked === 'role') {
+        await db.getRepository(WorkspaceUser).update({ workspaceId, userId: manager.id }, { accessLevel: 2 });
+      } else {
+        await db.getRepository(WorkspaceUser).delete({ workspaceId, userId: manager.id });
+      }
+      releaseSlots();
+      await expect(attempt).rejects.toBeInstanceOf(ForbiddenException);
+      await expectUnchanged();
+    } finally {
+      releaseSlots();
+      await Promise.all(holders);
+      await observed;
+    }
+  }, 15000);
 
   it.each(['role', 'membership'])('rechecks revoked %s after waiting for the workspace lock', async revoked => {
     const holder = db.createQueryRunner();

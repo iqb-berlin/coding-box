@@ -15,7 +15,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../../utils/response-status-converter';
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationPoolSlot } from '../shared/workspace-test-results-lock.util';
 import { getCodingActor } from '../shared/coding-ownership.policy';
 import {
   getCodingIncompleteVariablesCacheKeys,
@@ -154,6 +154,17 @@ export class ExternalCodingImportService {
   }
 
   async importExternalCoding(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback?: (progress: number, message: string) => void,
+    requestedByUserId?: number
+  ): ReturnType<ExternalCodingImportService['importExternalCodingInPool']> {
+    const importCoding = () => this.importExternalCodingInPool(workspaceId, body, progressCallback, requestedByUserId);
+    return body.previewOnly ? importCoding() :
+      withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection, importCoding);
+  }
+
+  private async importExternalCodingInPool(
     workspaceId: number,
     body: ExternalCodingImportBody,
     progressCallback?: (progress: number, message: string) => void,

@@ -409,7 +409,7 @@ describe('ExternalCodingImportService', () => {
 
   it('rejects unchanged coding-list exports with status_v1 as coding lists, not coding-results', async () => {
     const service = new ExternalCodingImportService(
-      {} as never,
+      { manager: { connection: {} } } as never,
       {} as never,
       {} as never,
       {} as never,
