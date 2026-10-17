@@ -72,3 +72,26 @@ Docker-Start wurden dabei nicht ausgeführt. Ein Deployment und eine erneute
 Microsoft-Word-Abnahme des Originalfalls sind nicht bestätigt. Die entfernte CI
 ist am aktuellen PR-Head separat zu prüfen. Frühere Word-Abnahmen gelten für
 ihre dort dokumentierten Artefakte.
+
+## CI-Nachtrag: Dateien im Live-Testimage
+
+Die GitLab-Pipeline [104222](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/104222)
+für `69200ad2` ist fehlgeschlagen. Die Jobs `test-replay-live` (475982),
+`test-auth-live` (475983) und `test-workflows-live` (475984) brechen jeweils beim
+Image-Bau mit ENOENT für den vendorten Bibliotheks-Tarball ab. Das gemeinsame
+`scripts/e2e/replay/Dockerfile` kopierte vor `npm ci` bislang nur `vendor/braces`.
+Es kopiert jetzt den vollständigen Vendor-Ordner, einschließlich aller lokalen
+Dateiabhängigkeiten aus Paketmanifest und Lock.
+
+Die Prüfung des rekonstruierten COPY-Eingangs bestätigt beide lokalen Abhängigkeiten.
+`npm ci --omit=dev --ignore-scripts` installiert in diesem isolierten Verzeichnis
+669 Pakete; Generator-Auflösung, DOCX-Null-Einzug, Formel und ICNS/PNG bestehen.
+Drei Tests des bestehenden E2E-Harness bestehen ebenfalls. Das ist ein lokaler
+Installationsnachweis; der Docker-Daemon antwortet nicht und ein vollständiger
+Image-Bau bzw. Live-Lauf ist damit erst durch die neue entfernte CI zu bestätigen.
+
+Zusätzlich überschreitet `test-backend` (475979) beim gültigen Multipart-Upload
+einmal die Kindprozessgrenze von fünf Sekunden. Alle sechs Tests der Suite
+`upload-dependencies.spec.ts` bestehen beim gezielten lokalen Nachtest. Die
+Ursache der CI-Zeitüberschreitung ist damit nicht abschließend geklärt und wird
+nicht als behoben ausgewiesen.
