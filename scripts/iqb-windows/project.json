@@ -1,0 +1,51 @@
+{
+  "name": "iqb-windows-checks",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "audit": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/iqb-windows/audit-downloads.mjs"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"],
+      "options": {
+        "command": "node --test scripts/iqb-windows/audit-downloads.test.mjs"
+      }
+    },
+    "test-runner": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"],
+      "options": {
+        "command": "python3 -m unittest discover -s scripts/iqb-windows -p 'test_*.py'"
+      }
+    },
+    "verify-bundle": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "python3 scripts/iqb-windows/windows_probe.py --bundle tmp/iqb-windows --verify-only --output tmp/iqb-windows/bundle-verification"
+      }
+    },
+    "package": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/iqb-windows/package-bundle.mjs"
+      }
+    },
+    "probe-host": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "python3 scripts/iqb-windows/windows_probe.py --bundle tmp/iqb-windows --output tmp/iqb-windows/host-probe"
+      }
+    }
+  }
+}
