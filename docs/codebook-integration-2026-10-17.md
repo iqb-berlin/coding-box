@@ -59,8 +59,8 @@ Das Backend-Dockerfile installiert denselben Tarball. Der bestehende
   Codebook-Beschriftungen, interpolierter Auswahlanzahl, Fortschritt, erfolgreichem
   Download und Fehleranzeige. Authentifizierung und HTTP-Antworten sind simuliert.
 - Separate Produktionsinstallation aus dem generierten Backend-Manifest, demselben
-  Tarball, `image-size`-Override und dem gepinnten PostgreSQL-Treiber erfolgreich
-  mit npm 11.18.0 und `--omit=dev --ignore-scripts` (706 Pakete).
+  Tarball, allen generierten Overrides und dem gepinnten PostgreSQL-Treiber erfolgreich
+  mit npm 11.18.0 und `--omit=dev --ignore-scripts` (657 Pakete).
 - Alle 20 installierten Bibliotheksdateien stimmen auch in der Produktionsinstallation
   mit dem gebauten Paket überein. JSON-/DOCX-Einstieg, Null-Einzug mit 100 Twips,
   native Formel sowie ICNS-/PNG-Regression mit `image-size@2.0.3` bestanden.
