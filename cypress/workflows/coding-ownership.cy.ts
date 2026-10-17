@@ -35,7 +35,7 @@ describe('coding ownership with real role login and PostgreSQL', () => {
     cy.task('workflows:prepare-ownership', null, { log: false }).then(value => { rows = value as OwnershipRows; });
   }
   function login(username: string) {
-    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
+    cy.intercept('POST', '**/api/auth/exchange', request => {
       request.continue(response => { token = response.body.access_token; });
     }).as('roleToken');
     cy.visit('/');

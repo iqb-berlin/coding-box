@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { parseStringPromise } from 'xml2js';
-import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ
@@ -81,7 +81,8 @@ export class WorkspaceCodingReplayController {
   }
 
   @Get(':workspace_id/coding/responses/:responseId/replay-url')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -117,7 +118,7 @@ export class WorkspaceCodingReplayController {
 
   @Get(':workspace_id/replay-payload/:testPerson/:unitId')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -182,7 +183,7 @@ export class WorkspaceCodingReplayController {
 
   @Get(':workspace_id/replay-assets/:unitId')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -229,7 +230,7 @@ export class WorkspaceCodingReplayController {
 
   @Get(':workspace_id/replay-response/:testPerson/:unitId')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({

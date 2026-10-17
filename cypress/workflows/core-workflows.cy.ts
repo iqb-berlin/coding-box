@@ -27,7 +27,7 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
   });
 
   function login(username: string) {
-    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
+    cy.intercept('POST', '**/api/auth/exchange', request => {
       request.continue(response => {
         if (response.body.access_token) accessToken = response.body.access_token;
       });

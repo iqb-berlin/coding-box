@@ -70,6 +70,52 @@ export class CacheService {
     }
   }
 
+  async getAndDelete<T>(key: string): Promise<T | null> {
+    try {
+      const cachedValue = await this.redis.eval(
+        'local value = redis.call("GET", KEYS[1]); if value then redis.call("DEL", KEYS[1]); end; return value',
+        1,
+        key
+      );
+      if (!cachedValue || typeof cachedValue !== 'string') {
+        return null;
+      }
+      return JSON.parse(cachedValue) as T;
+    } catch (error) {
+      this.logger.error(
+        `Error getting and deleting value from cache: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
+  async getAndDeleteIfFieldMatches<T>(
+    key: string,
+    field: string,
+    expectedValue: string
+  ): Promise<T | null> {
+    try {
+      const cachedValue = await this.redis.eval(
+        'local value = redis.call("GET", KEYS[1]); if not value then return nil end; local ok, decoded = pcall(cjson.decode, value); if not ok or type(decoded) ~= "table" or decoded[ARGV[1]] ~= ARGV[2] then return nil end; redis.call("DEL", KEYS[1]); return value',
+        1,
+        key,
+        field,
+        expectedValue
+      );
+      if (!cachedValue || typeof cachedValue !== 'string') {
+        return null;
+      }
+      return JSON.parse(cachedValue) as T;
+    } catch (error) {
+      this.logger.error(
+        `Error getting and conditionally deleting value from cache: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
   /**
    * Set a value in the cache
    * @param key The cache key

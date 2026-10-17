@@ -436,13 +436,8 @@ export class ReplayCodingService implements OnDestroy {
     return this.authToken ? [this.authToken] : [];
   }
 
-  async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed' | 'open') {
+  async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed') {
     if (this.isReviewMode) return Promise.resolve(undefined);
-    if (status === 'active') {
-      return firstValueFrom(
-        this.codingJobBackendService.resumeCodingJob(workspaceId, jobId, ...this.authTokenArg)
-      );
-    }
     if (status === 'paused') {
       return firstValueFrom(
         this.codingJobBackendService.pauseCodingJob(workspaceId, jobId, ...this.authTokenArg)
@@ -453,8 +448,9 @@ export class ReplayCodingService implements OnDestroy {
         this.codingJobBackendService.submitCodingJob(workspaceId, jobId, ...this.authTokenArg)
       );
     }
+
     return firstValueFrom(
-      this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status }, ...this.authTokenArg)
+      this.codingJobBackendService.updateCodingJobStatus(workspaceId, jobId, status, ...this.authTokenArg)
     );
   }
 
@@ -1007,7 +1003,7 @@ export class ReplayCodingService implements OnDestroy {
       this.codingJobComment = comment;
       const commentRevision = this.nextCodingJobCommentRevision();
       await firstValueFrom(
-        this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment }, ...this.authTokenArg)
+        this.codingJobBackendService.updateCodingJobComment(workspaceId, this.codingJobId, comment, ...this.authTokenArg)
       );
       this.markCodingJobCommentRevisionSaved(commentRevision);
     } catch (error) {

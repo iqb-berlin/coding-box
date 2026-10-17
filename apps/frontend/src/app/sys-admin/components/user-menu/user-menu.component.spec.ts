@@ -1,9 +1,9 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { KeycloakProfile } from 'keycloak-js';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { BehaviorSubject, of } from 'rxjs';
+import { UserProfile } from '../../../core/services/auth.models';
 import { AppService } from '../../../core/services/app.service';
 import { UserMenuComponent } from './user-menu.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -25,8 +25,8 @@ describe('UserMenuComponent', () => {
   let component: UserMenuComponent;
   let fixture: ComponentFixture<UserMenuComponent>;
 
-  let profile: Promise<KeycloakProfile>;
-  let resolveProfile: (value: KeycloakProfile) => void;
+  let profile: Promise<UserProfile>;
+  let resolveProfile: (value: UserProfile) => void;
   const authData = new BehaviorSubject({ isAdmin: false });
 
   beforeEach(async () => {

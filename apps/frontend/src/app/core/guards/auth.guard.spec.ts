@@ -19,16 +19,12 @@ describe('Auth Guard', () => {
   });
 
   describe('Security Validation', () => {
-    it('should use keycloak-angular createAuthGuard', async () => {
-      // The guard is created using keycloak-angular's createAuthGuard
-      // which handles authentication validation
+    it('should expose the backend OIDC auth guard', async () => {
       const { canActivateAuth } = await import('./auth.guard');
       expect(canActivateAuth).toBeDefined();
     });
 
     it('should validate authentication status', () => {
-      // The guard checks the authenticated property from AuthGuardData
-      // This is handled by keycloak-angular internally
       const mockAuthData = { authenticated: true };
       expect(mockAuthData.authenticated).toBe(true);
 
@@ -55,10 +51,8 @@ describe('Auth Guard', () => {
     });
   });
 
-  describe('Integration with Keycloak', () => {
-    it('should use keycloak authentication mechanism', async () => {
-      // The guard delegates to keycloak-angular for authentication
-      // This ensures consistent authentication across the application
+  describe('Integration with backend OIDC auth', () => {
+    it('should use the application auth service mechanism', async () => {
       const { canActivateAuth } = await import('./auth.guard');
       expect(canActivateAuth).toBeDefined();
     });

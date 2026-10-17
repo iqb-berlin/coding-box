@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked, signal, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, signal, untracked, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -11,19 +11,16 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
-import { KeycloakProfile } from 'keycloak-js';
-import { KEYCLOAK_EVENT_SIGNAL } from 'keycloak-angular';
 import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
-import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
-import { handleKeycloakSessionEvent } from './core/services/keycloak-session-events';
 import { hasAdminBypass } from './core/guards/admin-access';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 import { SystemNotificationBannerComponent } from './components/system-notification-banner/system-notification-banner.component';
@@ -32,10 +29,22 @@ import { SystemNotificationService } from './core/services/system-notification.s
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-root',
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent, SystemNotificationBannerComponent],
+  imports: [
+    RouterOutlet,
+    MatSlideToggleModule,
+    MatProgressSpinner,
+    RouterLink,
+    TranslateModule,
+    MatTooltip,
+    MatButton,
+    UserMenuComponent,
+    WrappedIconComponent,
+    ExportToastComponent,
+    ErrorMessageDisplayComponent,
+    SystemNotificationBannerComponent
+  ],
   templateUrl: './app.component.html',
-  styleUrl: './app.component.scss',
-  providers: [AuthService]
+  styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, OnDestroy {
   protected appService = inject(AppService);
@@ -43,28 +52,19 @@ export class AppComponent implements OnInit, OnDestroy {
 
   protected url = inject(LocationStrategy);
   private router = inject(Router);
-  private keycloakEvent = inject(KEYCLOAK_EVENT_SIGNAL);
-  private snackBar = inject(MatSnackBar);
   private authSessionActivity = inject(AuthSessionActivityService);
   private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
-  readonly loggedInKeycloak = signal<boolean>(false);
+  readonly isLoggedIn = signal(false);
   readonly errorMessage = signal('');
   readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
   protected readonly currentWorkspaceName = signal('');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly snackBar = inject(MatSnackBar);
 
   constructor() {
     effect(() => {
-      const event = this.keycloakEvent();
-      // Only a new Keycloak event may replay its authentication side effects.
-      untracked(() => handleKeycloakSessionEvent(event, this.appService, this.router));
-    });
-
-    effect(() => {
-      // Keycloak authentication itself is not a signal; re-read it on each event.
-      this.keycloakEvent();
       const sessionActive = this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
       untracked(() => {
         if (sessionActive) {
@@ -85,27 +85,6 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.updateCurrentWorkspaceName();
       });
-  }
-
-  private updateCurrentWorkspaceName(): void {
-    const workspaceId = this.getWorkspaceIdFromUrl();
-    if (workspaceId > 0 && this.authData().workspaces) {
-      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
-      this.currentWorkspaceName.set(workspace?.name || '');
-    } else {
-      this.currentWorkspaceName.set('');
-    }
-  }
-
-  private getWorkspaceIdFromUrl(): number {
-    const url = this.router.url;
-    const match = url.match(/workspace-admin\/(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
-  }
-
-  ngOnDestroy(): void {
-    this.authSessionActivity.stop();
-    this.systemNotifications.stopPolling();
   }
 
   async loadAuthData(identity: string): Promise<boolean> {
@@ -134,22 +113,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.systemNotifications.startPolling();
-    if (this.authService.isLoggedIn()) {
+    const postLoginReturnUrl = await this.handleAuthCallback();
+    const activeToken = await this.authService.getValidToken(0);
+
+    if (activeToken) {
       this.setAuthState();
-
-      try {
-        const keycloakUserProfile = await this.authService.loadUserProfile();
-        this.appService.userProfile = keycloakUserProfile;
-        const identity = this.authService.getIdentity();
-
-        if (this.isValidUserProfile(keycloakUserProfile) && identity) {
-          this.appService.keycloakIdentity = identity;
-          await this.loadAuthData(identity);
-        } else {
-          this.appService.markAuthDataFailed();
-        }
-      } catch {
-        this.appService.requireReAuthentication(this.router.url);
+      await this.loadAuthData(this.appService.loggedUser?.sub || '');
+      if (postLoginReturnUrl) {
+        this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
       }
     } else {
       this.appService.setAuthBootstrapStatus('ready');
@@ -160,14 +131,94 @@ export class AppComponent implements OnInit, OnDestroy {
     }, false);
   }
 
-  private setAuthState(): void {
-    this.loggedInKeycloak.set(true);
-    this.appService.isLoggedInKeycloak = true;
-    this.appService.loggedUser = this.authService.getLoggedUser();
+  ngOnDestroy(): void {
+    this.authSessionActivity.stop();
+    this.systemNotifications.stopPolling();
   }
 
-  private isValidUserProfile(userProfile: KeycloakProfile): boolean {
-    return !!userProfile?.id && !!userProfile?.username;
+  private updateCurrentWorkspaceName(): void {
+    const workspaceId = this.getWorkspaceIdFromUrl();
+    if (workspaceId > 0 && this.authData().workspaces) {
+      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
+      this.currentWorkspaceName.set(workspace?.name || '');
+    } else {
+      this.currentWorkspaceName.set('');
+    }
+  }
+
+  private getWorkspaceIdFromUrl(): number {
+    const url = this.router.url;
+    const match = url.match(/workspace-admin\/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  private setAuthState(): void {
+    this.isLoggedIn.set(true);
+    this.appService.isLoggedIn = true;
+    this.appService.loggedUser = this.authService.getLoggedUser();
+    this.appService.userProfile = {
+      username: this.appService.loggedUser?.preferred_username,
+      firstName: this.appService.loggedUser?.given_name || '',
+      lastName: this.appService.loggedUser?.family_name || '',
+      email: this.appService.loggedUser?.email
+    };
+  }
+
+  private async handleAuthCallback(): Promise<string | undefined> {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const authCode = urlParams.get('auth_code');
+
+      const hasLegacyTokenParams = urlParams.has('token') || urlParams.has('id_token') || urlParams.has('refresh_token');
+
+      if (authCode) {
+        const tokenResponse = await firstValueFrom(this.authService.exchangeLoginCode(authCode));
+        this.authService.setToken(tokenResponse.access_token);
+
+        if (tokenResponse.id_token) {
+          this.authService.setIdToken(tokenResponse.id_token);
+        }
+
+        if (tokenResponse.refresh_token) {
+          this.authService.setRefreshToken(tokenResponse.refresh_token);
+        }
+
+        const postLoginReturnUrl = this.getPostLoginReturnUrl();
+        this.removeAuthCallbackParams(postLoginReturnUrl);
+        return postLoginReturnUrl;
+      }
+      if (hasLegacyTokenParams) {
+        this.removeAuthCallbackParams();
+      }
+    } catch {
+      this.authService.login();
+    }
+    return undefined;
+  }
+
+  private getPostLoginReturnUrl(): string | undefined {
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const queryStart = hash.indexOf('?');
+    if (queryStart < 0) {
+      return undefined;
+    }
+
+    const hashParams = new URLSearchParams(hash.slice(queryStart + 1));
+    return this.appService.normalizeInternalRoute(hashParams.get('returnUrl') || undefined);
+  }
+
+  private removeAuthCallbackParams(postLoginReturnUrl?: string): void {
+    const url = new URL(window.location.href);
+    ['auth_code', 'token', 'id_token', 'refresh_token'].forEach(param => url.searchParams.delete(param));
+    if (postLoginReturnUrl) {
+      url.hash = postLoginReturnUrl;
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
   }
 
   protected isAdminUser(): boolean {

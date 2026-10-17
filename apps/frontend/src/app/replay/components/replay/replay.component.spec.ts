@@ -155,6 +155,8 @@ describe('ReplayComponent', () => {
     getCodingJobUnits: jest.Mock;
     getReplayCodingSession: jest.Mock;
     updateCodingJob: jest.Mock;
+    updateCodingJobStatus: jest.Mock;
+    updateCodingJobComment: jest.Mock;
     pauseCodingJob: jest.Mock;
     resumeCodingJob: jest.Mock;
     submitCodingJob: jest.Mock;
@@ -190,6 +192,8 @@ describe('ReplayComponent', () => {
         new HttpErrorResponse({ status: 404 })
       ))),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
+      updateCodingJobStatus: jest.fn().mockReturnValue(of({})),
+      updateCodingJobComment: jest.fn().mockReturnValue(of({})),
       pauseCodingJob: jest.fn().mockReturnValue(of({})),
       resumeCodingJob: jest.fn().mockReturnValue(of({})),
       submitCodingJob: jest.fn().mockReturnValue(of({})),
