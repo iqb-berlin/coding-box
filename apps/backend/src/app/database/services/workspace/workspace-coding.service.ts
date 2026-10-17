@@ -304,7 +304,8 @@ export class WorkspaceCodingService {
   async importExternalCodingWithProgress(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback: (progress: number, message: string) => void
+    progressCallback: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -330,13 +331,15 @@ export class WorkspaceCodingService {
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
-      progressCallback
+      progressCallback,
+      requestedByUserId
     );
   }
 
   async importExternalCoding(
     workspaceId: number,
-    body: ExternalCodingImportBody
+    body: ExternalCodingImportBody,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -361,7 +364,9 @@ export class WorkspaceCodingService {
     await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
-      body
+      body,
+      undefined,
+      requestedByUserId
     );
   }
 

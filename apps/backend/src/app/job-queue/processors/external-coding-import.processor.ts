@@ -28,7 +28,7 @@ export class ExternalCodingImportProcessor {
     affectedRowCount: number;
   }> {
     const {
-      workspaceId, tempFilePath, fileName, sourceFormat, sourceVersion, scoreMode, existingCodingMode
+      workspaceId, requestedByUserId, tempFilePath, fileName, sourceFormat, sourceVersion, scoreMode, existingCodingMode
     } = job.data;
     this.logger.log(
       `Processing external coding import job ${job.id} for workspace ${workspaceId}, file: ${fileName}`
@@ -54,7 +54,8 @@ export class ExternalCodingImportProcessor {
         async (progress: number, message: string) => {
           this.logger.debug(`Job ${job.id} progress: ${progress}% - ${message}`);
           await job.progress(progress);
-        }
+        },
+        requestedByUserId
       );
 
       // Store full result (including affectedRows) in cache for later retrieval

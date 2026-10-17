@@ -37,7 +37,9 @@
         "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/variable-bundle-manager/variable-bundle-manager.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
+        "cypress/component/import-comparison-permissions.component.cy.ts"
       ]
     },
     {
@@ -188,7 +190,9 @@
         "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts",
         "apps/frontend/src/app/ws-admin/components/export/export-start-lifecycle.zoneless.spec.ts",
-        "cypress/zoneless/export-start-failure.cy.ts"
+        "cypress/zoneless/export-start-failure.cy.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
+        "cypress/component/import-comparison-permissions.component.cy.ts"
       ]
     },
     {

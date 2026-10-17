@@ -11,6 +11,14 @@ Level 2, as required by issue #833. Level 3 and administrators can still edit an
 delete these resources. Assigned-coder actions retain their separate checks.
 Level 2 cannot apply results, including training and double-coding reviews.
 
+External coding imports follow the same rule: Level 2 can upload a file for a
+read-only preview, while applying it requires Level 3 or an administrator. The
+queue records the authenticated requester and the import rechecks persisted
+permissions after acquiring its workspace mutation lock. Revoking that access
+while an import waits prevents the import from writing results. Older queued
+imports without a recorded requester fail closed and must be started again by
+an authorized study manager or administrator.
+
 This deliberately changes legacy Level-2 editing. Before rollout, ensure a
 Level-3 study manager or administrator is available for existing resources.
 There is no public creator-reassignment endpoint. Do not infer or backfill an
