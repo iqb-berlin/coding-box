@@ -24,6 +24,7 @@ describe('OidcAuthService', () => {
       httpService as unknown as HttpService,
       {
         get: jest.fn((key: string) => ({
+          OIDC_ISSUER: 'https://issuer.example.test/realms/coding-box',
           OIDC_TOKEN_ENDPOINT: 'https://issuer.example.test/token',
           OAUTH2_CLIENT_ID: 'coding-box',
           OAUTH2_CLIENT_SECRET: 'client-secret'
@@ -31,6 +32,19 @@ describe('OidcAuthService', () => {
       } as unknown as ConfigService,
       cacheService as unknown as CacheService
     );
+  });
+
+  it('uses the configured issuer for OIDC user identities', () => {
+    expect(service.getIssuer()).toBe('https://issuer.example.test/realms/coding-box');
+  });
+
+  it('rejects missing issuer configuration before creating an OIDC identity', () => {
+    const unconfiguredService = new OidcAuthService(
+      httpService as unknown as HttpService,
+      { get: () => undefined } as unknown as ConfigService,
+      cacheService as unknown as CacheService
+    );
+    expect(() => unconfiguredService.getIssuer()).toThrow('OpenID Connect issuer configuration is missing');
   });
 
   it('stores server PKCE verifiers and browser challenges in the shared cache', async () => {

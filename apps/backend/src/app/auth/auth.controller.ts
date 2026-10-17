@@ -353,7 +353,7 @@ export class AuthController {
         firstName: userInfo.given_name || '',
         lastName: userInfo.family_name || '',
         email: userInfo.email || '',
-        issuer: 'coding-box',
+        issuer: this.oidcAuthService.getIssuer(),
         isAdmin: userInfo.realm_access?.roles?.includes('admin') || false
       };
 
