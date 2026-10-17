@@ -72,7 +72,7 @@ import {
   JobDefinitionRefreshItemDeltaDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   getCodingIncompleteVariablesCacheKeys,
@@ -2007,7 +2007,7 @@ export class CodingJobService {
     jobDefinitionId: number,
     actorUserId?: number
   ): Promise<number> {
-    const deletedJobs = await this.connection.transaction(async manager => {
+    const deletedJobs = await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       await assertCodingResourceMutation(manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
       const jobs = await manager.find(CodingJob, { where: { workspace_id: workspaceId, job_definition_id: jobDefinitionId } });
@@ -2569,7 +2569,7 @@ export class CodingJobService {
       missings_profile_id: missingsProfileId
     };
 
-    const createdCodingJob = await this.connection.transaction(
+    const createdCodingJob = await withWorkspaceTestResultsMutationTransaction(this.connection,
       async manager => {
         await lockWorkspaceTestResultsMutationInTransaction(
           manager,
@@ -2853,7 +2853,7 @@ export class CodingJobService {
     actorUserId?: number
   ): Promise<number> {
     if (!manager) {
-      return this.connection.transaction(transactionManager => this.updateCodingJobDisplayOptionsByDefinitionId(
+      return withWorkspaceTestResultsMutationTransaction(this.connection, transactionManager => this.updateCodingJobDisplayOptionsByDefinitionId(
         workspaceId, jobDefinitionId, options, transactionManager, actorUserId
       ));
     }
@@ -2989,7 +2989,7 @@ export class CodingJobService {
     workspaceId: number,
     actorUserId?: number
   ): Promise<{ success: boolean }> {
-    await this.connection.transaction(async manager => {
+    await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       const codingJob = await assertCodingResourceMutation(manager, workspaceId, 'job', id, actorUserId);
       await manager.getRepository(CodingJob).delete({ id: codingJob.id, workspace_id: workspaceId });
@@ -3042,7 +3042,7 @@ export class CodingJobService {
   ): Promise<CodingJobCoder[]> {
     this.assertAssignedCoderIdsAreUnique(userIds);
     if (!manager) {
-      return this.connection.transaction(transactionManager => this.assignCoders(
+      return withWorkspaceTestResultsMutationTransaction(this.connection, transactionManager => this.assignCoders(
         codingJobId, userIds, transactionManager, workspaceId, actorUserId
       ));
     }
@@ -3093,7 +3093,7 @@ export class CodingJobService {
 
     await this.assertCodersCanCodeInWorkspace([targetCoderId], workspaceId);
 
-    return this.connection.transaction(async manager => {
+    return withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       await assertCodingResourceCreation(manager, workspaceId, actorUserId);
       const codingJobCoderRepo = manager.getRepository(CodingJobCoder);
@@ -5537,7 +5537,7 @@ export class CodingJobService {
     unitSubset: SlimResponse[],
     actorUserId?: number
   ): Promise<CodingJob> {
-    const savedCodingJob = await this.connection.transaction(async manager => {
+    const savedCodingJob = await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
       return this.createCodingJobWithUnitSubsetInManager(workspaceId, { ...createCodingJobDto, creatorUserId }, unitSubset, manager);
@@ -7876,7 +7876,7 @@ export class CodingJobService {
     let preview: JobDefinitionRefreshPreviewDto | null = null;
     const createdJobs: DistributionCreatedJob[] = [];
 
-    await this.connection.transaction(async manager => {
+    await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       const definition = await assertCodingResourceMutation(manager, workspaceId, 'definition', jobDefinitionId, actorUserId);
       const ownedRequest = { ...request, creatorUserId: definition.creatorUserId };
@@ -8082,7 +8082,7 @@ export class CodingJobService {
         plan.jobsToCreate.length > 0 ||
         request.jobDefinitionId !== undefined
       ) {
-        await this.connection.transaction(async manager => {
+        await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
           await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
           const creatorUserId = request.jobDefinitionId ?
             (await assertCodingResourceMutation(manager, workspaceId, 'definition', request.jobDefinitionId, actorUserId)).creatorUserId :
@@ -8372,7 +8372,7 @@ export class CodingJobService {
     manager?: EntityManager
   ): Promise<T> {
     if (!manager) {
-      return this.connection.transaction(transactionManager => this.withLockedCodingJob(
+      return withWorkspaceTestResultsMutationTransaction(this.connection, transactionManager => this.withLockedCodingJob(
         id, workspaceId, callback, transactionManager
       ));
     }
@@ -8391,7 +8391,7 @@ export class CodingJobService {
     if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
       throw new BadRequestException('A non-empty list of coding job IDs is required');
     }
-    await this.connection.transaction(async manager => {
+    await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
       const jobIds = [...new Set(ids)].sort((a, b) => a - b);
       await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
       for (const id of jobIds) await assertCodingResourceMutation(manager, workspaceId, 'job', id, actorUserId);
