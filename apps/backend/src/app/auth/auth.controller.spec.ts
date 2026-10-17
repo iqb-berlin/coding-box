@@ -1,9 +1,12 @@
 import { HttpStatus } from '@nestjs/common';
 import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './service/auth.service';
 import { OAuth2ClientCredentialsService } from './service/oauth2-client-credentials.service';
 import { OidcAuthService } from './service/oidc-auth.service';
+import { UsersService } from '../database/services/users';
+import { JwtStrategy } from './jwt.strategy';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -19,6 +22,7 @@ describe('AuthController', () => {
   let originalFrontendUrl: string | undefined;
   const browserChallenge = 'B'.repeat(43);
   const browserVerifier = 'V'.repeat(43);
+  const issuer = 'https://oidc.example.test/realms/coding-box';
 
   const encodedState = (redirectUri: string): string => `state:${encodeURIComponent(redirectUri)}`;
 
@@ -33,6 +37,7 @@ describe('AuthController', () => {
     delete process.env.FRONTEND_URL;
 
     oidcAuthService = {
+      getIssuer: jest.fn().mockReturnValue(issuer),
       generatePkcePair: jest.fn().mockReturnValue({
         codeVerifier: 'code-verifier',
         codeChallenge: 'code-challenge'
@@ -165,6 +170,42 @@ describe('AuthController', () => {
     expect(redirect).toHaveBeenLastCalledWith(
       'http://localhost:4200/?auth_code=exchange-code#/workspace-admin/1/test-results'
     );
+  });
+
+  it('keeps the existing user id when a renamed OIDC user logs in through the callback and JWT guard', async () => {
+    const existingUser = {
+      id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false
+    };
+    const usersRepository = {
+      findOne: jest.fn().mockImplementation(async ({ where }) => (
+        where.some((condition: Record<string, unknown>) => Object.entries(condition)
+          .every(([key, value]) => existingUser[key] === value)) ? existingUser : null
+      )),
+      update: jest.fn().mockImplementation(async (_criteria, fields) => Object.assign(existingUser, fields)),
+      create: jest.fn().mockImplementation(data => ({ ...data, id: 8 })),
+      save: jest.fn().mockImplementation(async data => data)
+    };
+    const usersService = new UsersService(usersRepository as never, {} as never);
+    authService.storeOidcProviderUser?.mockImplementation(user => usersService.createOidcProviderUser(user));
+    oidcAuthService.getUserInfo?.mockResolvedValue({ sub: 'subject', preferred_username: 'new-name' });
+
+    await controller.callback('auth-code', encodedState('/workspace/1'), response);
+
+    const jwtStrategy = new JwtStrategy({
+      get: (key: string) => ({
+        OIDC_ISSUER: issuer,
+        OIDC_JWKS_URI: `${issuer}/protocol/openid-connect/certs`,
+        OAUTH2_CLIENT_ID: 'coding-box'
+      })[key]
+    } as ConfigService, usersService);
+    const requestUser = await jwtStrategy.validate({
+      sub: 'subject', iss: issuer, preferred_username: 'new-name', azp: 'coding-box'
+    });
+
+    expect(authService.storeOidcProviderUser).toHaveBeenCalledWith(expect.objectContaining({ issuer }));
+    expect(requestUser.id).toBe(7);
+    expect(existingUser).toMatchObject({ id: 7, issuer, username: 'new-name' });
+    expect(usersRepository.save).not.toHaveBeenCalled();
   });
 
   it('does not return tokens for successful callbacks with a disallowed redirect URL', async () => {

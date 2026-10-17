@@ -62,6 +62,13 @@ export class OidcAuthService {
     this.oAuth2ClientSecret = this.configService.get<string>('OAUTH2_CLIENT_SECRET');
   }
 
+  getIssuer(): string {
+    if (!this.oidcConfiguration.issuer) {
+      throw new UnauthorizedException('OpenID Connect issuer configuration is missing');
+    }
+    return this.oidcConfiguration.issuer;
+  }
+
   /**
    * Generate the OpenID Connect authorization URL for the Authorization Code flow
    * @param state - Random state parameter for security
