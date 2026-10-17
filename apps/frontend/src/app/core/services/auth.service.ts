@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {
   BehaviorSubject,
@@ -75,6 +75,10 @@ export class AuthService {
 
   getRefreshToken(): string | null {
     return localStorage.getItem(this.refreshTokenKey);
+  }
+
+  getSessionGeneration(): number {
+    return this.sessionGeneration;
   }
 
   isLoggedIn(): boolean {
@@ -195,7 +199,9 @@ export class AuthService {
   private async refreshAccessToken(): Promise<string | undefined> {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) {
+      const hadAccessToken = !!this.getToken();
       this.clearStoredTokens();
+      if (hadAccessToken) this.appService.requireReAuthentication(this.router.url);
       return undefined;
     }
 
@@ -221,12 +227,10 @@ export class AuthService {
 
         return tokenResponse.access_token;
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (isCurrentSession()) {
           this.clearStoredTokens();
-          if (error instanceof HttpErrorResponse && error.status === 401) {
-            this.appService.requireReAuthentication(this.router.url);
-          }
+          this.appService.requireReAuthentication(this.router.url);
         }
         return undefined;
       })

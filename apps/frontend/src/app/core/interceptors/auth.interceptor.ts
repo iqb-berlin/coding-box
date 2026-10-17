@@ -10,14 +10,15 @@ import {
   catchError,
   finalize,
   from,
-  map,
   Observable,
   of,
   switchMap,
-  tap
+  tap,
+  throwError
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
+import { AuthRequestCancelledError } from './auth-request-cancelled.error';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
   SUPPRESS_GLOBAL_HTTP_ERROR
@@ -55,68 +56,77 @@ export const authInterceptor: HttpInterceptorFn = (
     serverUrl
   )
     .pipe(
-      switchMap(modifiedReq => next(modifiedReq)
-        .pipe(
-          tap({
-            error: error => {
-              httpErrorInfo = new AppHttpError(error);
-              const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
-              suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
-                suppressBackendLoginAuthDataError;
+      switchMap(modifiedReq => {
+        const sessionGeneration = authService.getSessionGeneration();
+        return next(modifiedReq)
+          .pipe(
+            tap({
+              error: error => {
+                httpErrorInfo = new AppHttpError(error);
+                const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
+                const currentToken = authService.getToken();
+                const staleSessionAuthError = isBackendRequest(req.url, serverUrl) &&
+                  (error.status === 401 || error.status === 403) &&
+                  (sessionGeneration !== authService.getSessionGeneration() ||
+                    (error.status === 401 && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+                      modifiedReq.headers.get('Authorization') !== (currentToken ? `Bearer ${currentToken}` : null)));
+                suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
+                  suppressBackendLoginAuthDataError || staleSessionAuthError;
 
-              if (suppressBackendLoginAuthDataError) {
-                return;
-              }
+                if (suppressBackendLoginAuthDataError || staleSessionAuthError) {
+                  return;
+                }
 
-              if (error.status === 500 || error.status === 999) {
-                appService.setBackendUnavailable(true);
-                snackBar.open(
-                  'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
-                  'Schließen',
-                  {
-                    duration: 0,
-                    panelClass: ['error-snackbar']
+                if (error.status === 500 || error.status === 999) {
+                  appService.setBackendUnavailable(true);
+                  snackBar.open(
+                    'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
+                    'Schließen',
+                    {
+                      duration: 0,
+                      panelClass: ['error-snackbar']
+                    }
+                  );
+                } else if (
+                  (error.status === 401 || error.status === 403) &&
+                  !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
+                ) {
+                  suppressGlobalErrorMessage = true;
+                  const errorMessage = error.error?.message || error.message || '';
+
+                  if (errorMessage.includes('Access level')) {
+                    snackBar.open(
+                      'Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion',
+                      'Schließen',
+                      {
+                        duration: 5000,
+                        panelClass: ['error-snackbar']
+                      }
+                    );
+                  } else if (error.status === 401) {
+                    appService.requireReAuthentication(router.url);
+                  } else {
+                    snackBar.open(
+                      'Sie haben keine Berechtigung für diese Aktion',
+                      'Schließen',
+                      {
+                        duration: 5000,
+                        panelClass: ['error-snackbar']
+                      }
+                    );
                   }
-                );
-              } else if (
-                (error.status === 401 || error.status === 403) &&
-                !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
-              ) {
-                suppressGlobalErrorMessage = true;
-                const errorMessage = error.error?.message || error.message || '';
-
-                if (errorMessage.includes('Access level')) {
-                  snackBar.open(
-                    'Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion',
-                    'Schließen',
-                    {
-                      duration: 5000,
-                      panelClass: ['error-snackbar']
-                    }
-                  );
-                } else if (error.status === 401) {
-                  appService.requireReAuthentication(router.url);
-                } else {
-                  snackBar.open(
-                    'Sie haben keine Berechtigung für diese Aktion',
-                    'Schließen',
-                    {
-                      duration: 5000,
-                      panelClass: ['error-snackbar']
-                    }
-                  );
                 }
               }
-            }
-          }),
-          finalize(() => {
-            if (httpErrorInfo && !suppressGlobalErrorMessage) {
-              httpErrorInfo.method = req.method;
-              httpErrorInfo.urlWithParams = req.urlWithParams;
-              appService.addErrorMessage(httpErrorInfo);
-            }
-          })
-        ))
+            }),
+            finalize(() => {
+              if (httpErrorInfo && !suppressGlobalErrorMessage) {
+                httpErrorInfo.method = req.method;
+                httpErrorInfo.urlWithParams = req.urlWithParams;
+                appService.addErrorMessage(httpErrorInfo);
+              }
+            })
+          );
+      })
     );
 };
 
@@ -179,24 +189,38 @@ function getRequestWithAuthHeader(
     return of(req);
   }
 
+  const sessionGeneration = authService.getSessionGeneration();
+  const storedToken = authService.getToken();
+  const storedRefreshToken = authService.getRefreshToken();
+  const hadStoredSession = !!(storedToken || storedRefreshToken);
+
   return from(authService.getValidToken())
     .pipe(
       catchError(() => {
-        appService.requireReAuthentication(router.url);
-        return of(undefined);
+        if (sessionGeneration === authService.getSessionGeneration() &&
+          storedToken === authService.getToken() && storedRefreshToken === authService.getRefreshToken()) {
+          appService.requireReAuthentication(router.url);
+        }
+        return throwError(() => new AuthRequestCancelledError());
       }),
-      map(token => {
-        if (!token) {
-          return authorizationHeader ? req.clone({
-            headers: req.headers.delete('Authorization')
-          }) : req;
+      switchMap(token => {
+        if ((hadStoredSession && sessionGeneration !== authService.getSessionGeneration()) ||
+          (!token && (hadStoredSession || authService.getToken() || authService.getRefreshToken())) ||
+          (token && token !== authService.getToken())) {
+          return throwError(() => new AuthRequestCancelledError());
         }
 
-        return req.clone({
+        if (!token) {
+          return of(authorizationHeader ? req.clone({
+            headers: req.headers.delete('Authorization')
+          }) : req);
+        }
+
+        return of(req.clone({
           setHeaders: {
             Authorization: `Bearer ${token}`
           }
-        });
+        }));
       })
     );
 }
