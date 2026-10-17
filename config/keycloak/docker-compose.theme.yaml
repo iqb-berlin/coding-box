@@ -1,0 +1,7 @@
+services:
+  keycloak:
+    volumes:
+      - type: bind
+        source: ${KODIERBOX_THEME_DIR:?Set the absolute path to config/keycloak/themes/kodierbox}
+        target: /opt/keycloak/themes/kodierbox
+        read_only: true
