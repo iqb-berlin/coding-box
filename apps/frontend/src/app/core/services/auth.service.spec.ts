@@ -1,17 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { computed } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Router } from '@angular/router';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { AuthService } from './auth.service';
 import { AppService } from './app.service';
+import { authInterceptor } from '../interceptors/auth.interceptor';
+import { SERVER_URL } from '../../injection-tokens';
 
 jest.unmock('jwt-decode');
 
 describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
-  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState'>>;
+  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage'>>;
   let locationMock: Pick<Location, 'href' | 'origin'>;
   let storageMock: {
     getItem: jest.Mock;
@@ -33,6 +37,20 @@ describe('AuthService', () => {
     };
     return `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`;
   };
+
+  function storeSession(): Map<string, string> {
+    const tokens = new Map([
+      ['auth_token', createToken(-30)],
+      ['refresh_token', 'old-refresh-token'],
+      ['id_token', 'old-id-token']
+    ]);
+    storageMock.getItem.mockImplementation(key => tokens.get(key) ?? null);
+    storageMock.setItem.mockImplementation((key, value) => tokens.set(key, value));
+    storageMock.removeItem.mockImplementation(key => tokens.delete(key));
+    appService.clearAuthState.mockImplementation(() => tokens.clear());
+    appService.requireReAuthentication.mockImplementation(() => tokens.clear());
+    return tokens;
+  }
 
   beforeEach(() => {
     locationMock = { href: 'http://localhost/', origin: 'http://localhost' };
@@ -73,14 +91,19 @@ describe('AuthService', () => {
       reAuthenticationReturnUrl: '/coding',
       createLoginRedirectUri: jest.fn().mockReturnValue('http://localhost/#/coding'),
       markExplicitLogoutInProgress: jest.fn(),
-      clearAuthState: jest.fn()
+      clearAuthState: jest.fn(),
+      requireReAuthentication: jest.fn(),
+      addErrorMessage: jest.fn()
     };
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         AuthService,
+        { provide: Router, useValue: { url: '/coding' } },
+        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: SERVER_URL, useValue: appService.serverUrl },
         { provide: AppService, useValue: appService },
         { provide: DOCUMENT, useValue: { location: locationMock } }
       ]
@@ -208,5 +231,77 @@ describe('AuthService', () => {
     expect(storageMock.removeItem).toHaveBeenCalledWith('auth_token');
     expect(storageMock.removeItem).toHaveBeenCalledWith('id_token');
     expect(storageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+  });
+
+  it.each(['logout', 'clearAuthState'])(
+    'does not restore tokens when a refresh completes after %s', async action => {
+      const tokens = storeSession();
+      const pendingToken = service.getValidToken();
+      const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+
+      if (action === 'logout') {
+        service.logout();
+      } else {
+        appService.clearAuthState();
+      }
+      expect(tokens.size).toBe(0);
+      refresh.flush({
+        access_token: createToken(300), id_token: 'late-id-token', refresh_token: 'late-refresh-token'
+      });
+
+      await expect(pendingToken).resolves.toBeUndefined();
+      expect(tokens.size).toBe(0);
+      expect(service.isLoggedIn()).toBe(false);
+      if (action === 'logout') httpMock.expectOne('http://localhost:3333/api/auth/logout').flush({});
+    }
+  );
+
+  it.each(['success', 'failure'])(
+    'preserves a new login when an older refresh finishes with %s', async outcome => {
+      const tokens = storeSession();
+      const pendingToken = service.getValidToken();
+      const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+      const newToken = createToken(600);
+      service.setToken(newToken);
+      service.setRefreshToken('new-refresh-token');
+      service.setIdToken('new-id-token');
+
+      if (outcome === 'success') {
+        refresh.flush({ access_token: createToken(300), refresh_token: 'late-refresh-token' });
+      } else {
+        refresh.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+      }
+
+      await expect(pendingToken).resolves.toBeUndefined();
+      expect(tokens.get('auth_token')).toBe(newToken);
+      expect(tokens.get('refresh_token')).toBe('new-refresh-token');
+      expect(tokens.get('id_token')).toBe('new-id-token');
+      expect(service.isLoggedIn()).toBe(true);
+      expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+      expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps a newer in-flight refresh shared when the old request finishes', async () => {
+    const tokens = storeSession();
+    const oldToken = service.getValidToken();
+    const oldRefresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    service.setToken(createToken(-10));
+    service.setRefreshToken('new-refresh-token');
+    const newToken = service.getValidToken();
+    const newRefresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
+    expect(newRefresh.request.body).toEqual({ refresh_token: 'new-refresh-token' });
+
+    oldRefresh.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+    await expect(oldToken).resolves.toBeUndefined();
+    const sharedNewToken = service.getValidToken();
+    httpMock.expectNone('http://localhost:3333/api/auth/refresh');
+    const freshToken = createToken(600);
+    newRefresh.flush({ access_token: freshToken, refresh_token: 'rotated-new-refresh-token' });
+
+    await expect(newToken).resolves.toBe(freshToken);
+    await expect(sharedNewToken).resolves.toBe(freshToken);
+    expect(tokens.get('auth_token')).toBe(freshToken);
   });
 });

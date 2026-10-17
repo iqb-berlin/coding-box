@@ -1,7 +1,8 @@
 import { inject, Injectable } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import {
   BehaviorSubject,
   firstValueFrom,
@@ -11,19 +12,27 @@ import {
 import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
 import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
+import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly appService = inject(AppService);
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
   private readonly loginVerifierKey = 'oidc_login_verifier';
-  private refreshInFlight?: Promise<string | undefined>;
+  private sessionGeneration = 0;
+  private refreshInFlight?: {
+    generation: number;
+    refreshToken: string;
+    promise: Promise<string | undefined>;
+  };
+
   private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasStoredSession());
   private readonly authenticatedState = toSignal(this.isAuthenticatedSubject, { requireSync: true });
 
@@ -119,11 +128,15 @@ export class AuthService {
   }
 
   refreshToken(refreshToken: string): Observable<AuthExchangeResponse> {
-    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/refresh`, { refresh_token: refreshToken });
+    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/refresh`, { refresh_token: refreshToken }, {
+      // Only the owning session may handle refresh failures; the interceptor cannot determine that.
+      context: suppressGlobalAndAuthRedirectHttpErrorContext()
+    });
   }
 
   logout(): void {
     const refreshToken = this.getRefreshToken();
+    this.invalidatePendingRefresh();
     this.appService.markExplicitLogoutInProgress();
     this.appService.clearAuthState({ clearReAuthentication: true });
     this.isAuthenticatedSubject.next(false);
@@ -153,6 +166,11 @@ export class AuthService {
   }
 
   setToken(token: string): void {
+    this.invalidatePendingRefresh();
+    this.storeAccessToken(token);
+  }
+
+  private storeAccessToken(token: string): void {
     localStorage.setItem(this.tokenKey, token);
     this.isAuthenticatedSubject.next(true);
   }
@@ -175,19 +193,23 @@ export class AuthService {
   }
 
   private async refreshAccessToken(): Promise<string | undefined> {
-    if (this.refreshInFlight) {
-      return this.refreshInFlight;
-    }
-
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) {
       this.clearStoredTokens();
       return undefined;
     }
 
-    this.refreshInFlight = firstValueFrom(this.refreshToken(refreshToken))
+    const generation = this.sessionGeneration;
+    if (this.refreshInFlight?.generation === generation && this.refreshInFlight.refreshToken === refreshToken) {
+      return this.refreshInFlight.promise;
+    }
+
+    // AppService can also clear the stored session directly, without calling logout.
+    const isCurrentSession = () => generation === this.sessionGeneration && refreshToken === this.getRefreshToken();
+    const refreshPromise: Promise<string | undefined> = firstValueFrom(this.refreshToken(refreshToken))
       .then(tokenResponse => {
-        this.setToken(tokenResponse.access_token);
+        if (!isCurrentSession()) return undefined;
+        this.storeAccessToken(tokenResponse.access_token);
 
         if (tokenResponse.id_token) {
           this.setIdToken(tokenResponse.id_token);
@@ -199,15 +221,21 @@ export class AuthService {
 
         return tokenResponse.access_token;
       })
-      .catch(() => {
-        this.clearStoredTokens();
+      .catch((error: unknown) => {
+        if (isCurrentSession()) {
+          this.clearStoredTokens();
+          if (error instanceof HttpErrorResponse && error.status === 401) {
+            this.appService.requireReAuthentication(this.router.url);
+          }
+        }
         return undefined;
       })
       .finally(() => {
-        this.refreshInFlight = undefined;
+        if (this.refreshInFlight?.promise === refreshPromise) this.refreshInFlight = undefined;
       });
 
-    return this.refreshInFlight;
+    this.refreshInFlight = { generation, refreshToken, promise: refreshPromise };
+    return refreshPromise;
   }
 
   private hasStoredSession(): boolean {
@@ -215,10 +243,16 @@ export class AuthService {
   }
 
   private clearStoredTokens(): void {
+    this.invalidatePendingRefresh();
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.idTokenKey);
     localStorage.removeItem(this.refreshTokenKey);
     this.isAuthenticatedSubject.next(false);
+  }
+
+  private invalidatePendingRefresh(): void {
+    this.sessionGeneration += 1;
+    this.refreshInFlight = undefined;
   }
 
   private isTokenValid(token: string, minValidity = 0): boolean {
