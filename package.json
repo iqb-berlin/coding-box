@@ -1,7 +1,7 @@
 {
   "name": "coding-box",
   "version": "1.17.5",
-  "author": "IQB - Institut zur Qualit\u00e4tsentwicklung im Bildungswesen",
+  "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
     "ng": "nx",
@@ -28,6 +28,7 @@
     "node": ">=22.12.0 <23"
   },
   "dependencies": {
+    "@angular/animations": "21.2.24",
     "@angular/cdk": "21.2.14",
     "@angular/common": "21.2.24",
     "@angular/compiler": "21.2.24",
@@ -89,6 +90,7 @@
     "keycloak-angular": "21.0.0",
     "keycloak-js": "^26.2.4",
     "libxmljs2": "^0.37.0",
+    "mathjs": "12.4.3",
     "mathml2omml": "^0.5.0",
     "multer": "2.4.0",
     "passport-jwt": "^4.0.1",
@@ -102,8 +104,7 @@
     "tslib": "^2.3.0",
     "typeorm": "^0.3.31",
     "uuid": "11.1.1",
-    "xml2js": "^0.6.2",
-    "mathjs": "12.4.3"
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "21.2.24",
@@ -117,6 +118,7 @@
     "@angular/compiler-cli": "21.2.24",
     "@golevelup/ts-jest": "^0.5.0",
     "@iqb/eslint-config": "^2.1.1",
+    "@iqb/responses-legacy-reference": "npm:@iqb/responses@5.2.0",
     "@nx/angular": "22.7.12",
     "@nx/cypress": "22.7.12",
     "@nx/esbuild": "22.7.12",
@@ -153,8 +155,7 @@
     "prisma": "^5.10.2",
     "ts-jest": "29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "5.9.3",
-    "@iqb/responses-legacy-reference": "npm:@iqb/responses@5.2.0"
+    "typescript": "5.9.3"
   },
   "overrides": {
     "@nx/rspack": {
@@ -206,7 +207,8 @@
     "compression": "1.8.2",
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
-    "handlebars": "4.7.10"
+    "handlebars": "4.7.10",
+    "image-size": "2.0.3"
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",

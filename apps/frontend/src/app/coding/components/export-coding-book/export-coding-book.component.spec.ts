@@ -1,5 +1,5 @@
 import {
-  ComponentFixture, TestBed, fakeAsync, tick
+  ComponentFixture, TestBed
 } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
@@ -114,6 +114,7 @@ describe('ExportCodingBookComponent', () => {
   const mockValidationResults$ = new BehaviorSubject<ValidateCodingCompletenessResponseDto | null>(null);
 
   beforeEach(async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
     const exportServiceMock = {
       getCodingBook: jest.fn(),
       startCodebookJob: jest.fn(),
@@ -219,7 +220,9 @@ describe('ExportCodingBookComponent', () => {
   afterEach(() => {
     mockValidationProgress$.next({ status: 'idle', progress: 0, message: '' });
     mockValidationResults$.next(null);
+    fixture.destroy();
     jest.restoreAllMocks();
+    jest.useRealTimers();
   });
 
   it('should create', () => {
@@ -701,19 +704,19 @@ describe('ExportCodingBookComponent', () => {
   });
 
   it('keeps host scope filters when the shared form requests an export', () => {
-    component.selectedJobDefinitionId = 10;
-    component.selectedVariableBundleIds = [5];
-    component.contentOptions.trainingRequirement = 'required';
+    component.selectedJobDefinitionId.set(10);
+    component.selectedVariableBundleIds.set([5]);
+    component.contentOptions.update(options => ({ ...options, trainingRequirement: 'required' }));
     exportService.startCodebookJob.mockReturnValue(new Subject());
     component.onSharedExport({
       selectedUnits: [2],
       missingsProfileId: 1,
-      contentOptions: { ...component.contentOptions, exportFormat: 'json' }
+      contentOptions: { ...component.contentOptions(), exportFormat: 'json' }
     });
     component.onSharedExport({
       selectedUnits: [1],
       missingsProfileId: 2,
-      contentOptions: { ...component.contentOptions, exportFormat: 'docx' }
+      contentOptions: { ...component.contentOptions(), exportFormat: 'docx' }
     });
     expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
     expect(exportService.startCodebookJob).toHaveBeenCalledWith(1, '1', expect.objectContaining({
@@ -740,31 +743,31 @@ describe('ExportCodingBookComponent', () => {
     );
   });
 
-  it('does not overlap slow status requests and cancels them when the dialog closes', fakeAsync(() => {
+  it('does not overlap slow status requests and cancels them when the dialog closes', () => {
     const status = new Subject<{ status: string; progress: number }>();
     exportService.startCodebookJob.mockReturnValue(of({ jobId: 'job', message: 'ok' }));
     exportService.getCodebookJobStatus.mockReturnValue(status);
-    component.unitList = [1]; component.exportCodingBook();
-    tick(4500);
+    component.unitList.set([1]); component.exportCodingBook();
+    jest.advanceTimersByTime(4500);
     expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
     expect(status.observed).toBe(true);
     component.ngOnDestroy();
     expect(status.observed).toBe(false);
-    tick(4500);
+    jest.advanceTimersByTime(4500);
     expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
-  }));
+  });
 
-  it('keeps export locked until the completed job has been downloaded', fakeAsync(() => {
+  it('keeps export locked until the completed job has been downloaded', () => {
     exportService.startCodebookJob.mockReturnValue(of({ jobId: 'job', message: 'ok' }));
     exportService.getCodebookJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
     const download = new Subject<Blob>();
     exportService.downloadCodebookFile.mockReturnValue(download);
-    component.unitList = [1]; component.exportCodingBook(); tick(1500);
+    component.unitList.set([1]); component.exportCodingBook(); jest.advanceTimersByTime(1500);
     component.exportCodingBook();
     expect(component.isExportBusy).toBe(true);
     expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
     component.ngOnDestroy(); expect(download.observed).toBe(false);
-  }));
+  });
 
   describe('resetCodebookJob', () => {
     it('should reset all codebook job state', () => {

@@ -1,5 +1,11 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, OnDestroy
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  OnInit,
+  OnDestroy,
+  signal,
+  inject
 } from '@angular/core';
 import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
 import type { CodebookExportConfig, UnitSelectionItem } from '@iqb/ngx-coding-components/codebook-models';
@@ -15,9 +21,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTableDataSource } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import {
-  Subject, Subscription, interval
-} from 'rxjs';
+import { Subject, Subscription, interval } from 'rxjs';
 import {
   debounceTime, distinctUntilChanged, exhaustMap, takeUntil
 } from 'rxjs/operators';
@@ -26,10 +30,7 @@ import {
   CodebookTrainingRequirementFilter
 } from '../../../../../../../api-dto/coding/codebook-content-setting';
 import { CodingExportService } from '../../services/coding-export.service';
-import {
-  CodingJobBackendService,
-  JobDefinition
-} from '../../services/coding-job-backend.service';
+import { CodingJobBackendService, JobDefinition } from '../../services/coding-job-backend.service';
 import { VariableBundle } from '../../models/coding-job.model';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -50,9 +51,8 @@ interface CodebookUnitOption {
   unitAlias: string | null;
   unitData: string;
 }
-
 @Component({
-  selector: 'shared-export-coding-book',
+  selector: 'coding-box-export-coding-book',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
@@ -70,36 +70,35 @@ interface CodebookUnitOption {
     MatProgressBarModule,
     TranslateModule
   ],
-  providers: [
-    DatePipe
-  ]
+  providers: [DatePipe]
 })
 export class ExportCodingBookComponent implements OnInit, OnDestroy {
-  unitList: number[] = [];
-  availableUnits: CodebookUnitOption[] = [];
-
+  readonly unitList = signal<number[]>([]);
+  readonly availableUnits = signal<CodebookUnitOption[]>([]);
   dataSource = new MatTableDataSource<CodebookUnitOption>([]);
-
-  filterValue = '';
+  readonly filterValue = signal('');
   filterTextChanged = new Subject<Event>();
-  isLoading = false;
+  readonly isLoading = signal(false);
+  readonly selectedMissingsProfile = signal<number>(0);
+  readonly missingsProfiles = signal<
+  {
+    id: number;
+    label: string;
+  }[]
+  >([{ id: 0, label: '' }]);
 
-  selectedMissingsProfile: number = 0;
-  missingsProfiles: { id: number, label: string }[] = [{ id: 0, label: '' }];
-  selectedJobDefinitionId: number | null = null;
-  availableJobDefinitions: JobDefinition[] = [];
-  jobDefinitionOptions: CodebookJobDefinitionOption[] = [];
-  selectedJobDefinitionLabel = '';
-  selectedJobDefinitionSummary = '';
-  isLoadingJobDefinitions = false;
-  selectedVariableBundleIds: number[] = [];
-  availableVariableBundles: VariableBundle[] = [];
-  isLoadingVariableBundles = false;
-  workspaceChanges = false;
-
+  readonly selectedJobDefinitionId = signal<number | null>(null);
+  readonly availableJobDefinitions = signal<JobDefinition[]>([]);
+  readonly jobDefinitionOptions = signal<CodebookJobDefinitionOption[]>([]);
+  readonly selectedJobDefinitionLabel = signal('');
+  readonly selectedJobDefinitionSummary = signal('');
+  readonly isLoadingJobDefinitions = signal(false);
+  readonly selectedVariableBundleIds = signal<number[]>([]);
+  readonly availableVariableBundles = signal<VariableBundle[]>([]);
+  readonly isLoadingVariableBundles = signal(false);
+  readonly workspaceChanges = signal(false);
   displayedColumns: string[] = ['select', 'unitName'];
-
-  contentOptions: CodeBookContentSetting = {
+  readonly contentOptions = signal<CodeBookContentSetting>({
     exportFormat: 'docx',
     missingsProfile: '',
     hasOnlyManualCoding: true,
@@ -113,43 +112,47 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     trainingRequirement: 'all',
     jobDefinitionId: null,
     variableBundleIds: []
-  };
+  });
 
   private destroy$ = new Subject<void>();
-  validationResults: ValidateCodingCompletenessResponseDto | null = null;
-  validationProgress: ValidationProgress | null = null;
-  isValidating = false;
-  validationCacheKey: string | null = null;
-
-  codebookJobId: string | null = null;
-  codebookJobStatus: 'idle' | 'pending' | 'processing' | 'completed' | 'failed' = 'idle';
-  codebookJobProgress = 0;
-  codebookJobError: string | null = null;
+  readonly validationResults = signal<ValidateCodingCompletenessResponseDto | null>(null);
+  readonly validationProgress = signal<ValidationProgress | null>(null);
+  readonly isValidating = signal(false);
+  readonly validationCacheKey = signal<string | null>(null);
+  readonly codebookJobId = signal<string | null>(null);
+  readonly codebookJobStatus = signal<'idle' | 'pending' | 'processing' | 'completed' | 'failed'>('idle');
+  readonly codebookJobProgress = signal(0);
+  readonly codebookJobError = signal<string | null>(null);
   private codebookPollingSubscription: Subscription | null = null;
-
-  constructor(
-    private exportService: CodingExportService,
-    private codingJobBackendService: CodingJobBackendService,
-    private missingsProfileService: MissingsProfileService,
-    private fileService: FileService,
-    private appService: AppService,
-    private datePipe: DatePipe,
-    private validationStateService: ValidationStateService,
-    private translateService: TranslateService,
-    private dialog: MatDialog,
-    private dialogRef: MatDialogRef<ExportCodingBookComponent>,
-    private changeDetectorRef: ChangeDetectorRef
-  ) { }
-
+  private readonly exportService = inject<CodingExportService>(CodingExportService);
+  private readonly codingJobBackendService = inject<CodingJobBackendService>(CodingJobBackendService);
+  private readonly missingsProfileService = inject<MissingsProfileService>(MissingsProfileService);
+  private readonly fileService = inject<FileService>(FileService);
+  private readonly appService = inject<AppService>(AppService);
+  private readonly datePipe = inject<DatePipe>(DatePipe);
+  private readonly validationStateService = inject<ValidationStateService>(ValidationStateService);
+  private readonly translateService = inject<TranslateService>(TranslateService);
+  private readonly dialog = inject<MatDialog>(MatDialog);
+  private readonly dialogRef = inject<MatDialogRef<ExportCodingBookComponent>>(MatDialogRef);
+  private readonly changeDetectorRef = inject<ChangeDetectorRef>(ChangeDetectorRef);
   private sharedUnitsSource: CodebookUnitOption[] | null = null;
   private sharedUnitsCache: UnitSelectionItem[] = [];
-  private profilesSource: { id: number; label: string }[] | null = null;
-  private profilesCache: { id: number; label: string }[] = [];
+  private profilesSource:
+  | {
+    id: number;
+    label: string;
+  }[]
+  | null = null;
+
+  private profilesCache: {
+    id: number;
+    label: string;
+  }[] = [];
 
   get sharedUnits(): UnitSelectionItem[] {
-    if (this.sharedUnitsSource !== this.availableUnits) {
-      this.sharedUnitsSource = this.availableUnits;
-      this.sharedUnitsCache = this.availableUnits.map(unit => ({
+    if (this.sharedUnitsSource !== this.availableUnits()) {
+      this.sharedUnitsSource = this.availableUnits();
+      this.sharedUnitsCache = this.availableUnits().map(unit => ({
         unitId: unit.unitId,
         key: unit.unitKey.replace(/\.vocs$/i, ''),
         unitName: this.formatUnitName(unit.unitName),
@@ -159,56 +162,52 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     return this.sharedUnitsCache;
   }
 
-  get sharedMissingsProfiles(): { id: number; label: string }[] {
-    if (this.profilesSource !== this.missingsProfiles) {
-      this.profilesSource = this.missingsProfiles;
-      this.profilesCache = this.missingsProfiles.filter(profile => profile.id !== 0);
+  get sharedMissingsProfiles(): {
+    id: number;
+    label: string;
+  }[] {
+    if (this.profilesSource !== this.missingsProfiles()) {
+      this.profilesSource = this.missingsProfiles();
+      this.profilesCache = this.missingsProfiles().filter(profile => profile.id !== 0);
     }
     return this.profilesCache;
   }
 
   get isExportBusy(): boolean {
-    return this.codebookJobStatus === 'pending' || this.codebookJobStatus === 'processing';
+    return this.codebookJobStatus() === 'pending' || this.codebookJobStatus() === 'processing';
   }
 
   onSharedExport(config: CodebookExportConfig): void {
     if (this.isExportBusy) return;
-    this.unitList = [...config.selectedUnits];
-    this.selectedMissingsProfile = config.missingsProfileId;
-    this.contentOptions = { ...this.contentOptions, ...config.contentOptions };
+    this.unitList.set([...config.selectedUnits]);
+    this.selectedMissingsProfile.set(config.missingsProfileId);
+    this.contentOptions.set({ ...this.contentOptions(), ...config.contentOptions });
     this.exportCodingBook();
   }
 
-  closeDialog(): void { this.dialogRef.close(false); }
+  closeDialog(): void {
+    this.dialogRef.close(false);
+  }
 
   ngOnInit(): void {
     this.updateSelectedJobDefinitionDisplay();
-    this.workspaceChanges = this.checkWorkspaceChanges();
+    this.workspaceChanges.set(this.checkWorkspaceChanges());
     this.loadMissingsProfiles();
     this.loadJobDefinitions();
     this.loadVariableBundles();
     this.loadUnitsWithFileIds();
-
     this.filterTextChanged
-      .pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        takeUntil(this.destroy$)
-      )
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
       .subscribe(event => {
         this.applyFilter(event);
       });
-
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => this.handleValidationProgress(progress));
-
     this.handleValidationProgress(this.validationStateService.getValidationProgress());
-
     this.validationStateService.validationResults$
       .pipe(takeUntil(this.destroy$))
       .subscribe(results => this.handleValidationResults(results));
-
     this.handleValidationResults(this.validationStateService.getValidationResults());
   }
 
@@ -226,50 +225,53 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadUnitsWithFileIds(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.isLoading = true;
-
-      this.fileService.getUnitsWithFileIds(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: units => {
-          this.changeDetectorRef.markForCheck();
-          if (units && units.length > 0) {
-            this.availableUnits = units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
-              unitId: unit.id,
-              unitKey: unit.unitId,
-              unitName: unit.fileName,
-              unitAlias: null,
-              unitData: unit.data
-            }));
-            this.dataSource.data = this.availableUnits;
-            this.dataSource.filterPredicate = (data, filter: string) => {
-              const formattedName = this.formatUnitName(data.unitName).toLowerCase();
-              return formattedName.includes(filter);
-            };
-
-            this.unitList = [];
-            this.applyQuickFilterUnitSelection();
+      this.isLoading.set(true);
+      this.fileService
+        .getUnitsWithFileIds(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: units => {
+            this.changeDetectorRef.markForCheck();
+            if (units && units.length > 0) {
+              this.availableUnits.set(
+                units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
+                  unitId: unit.id,
+                  unitKey: unit.unitId,
+                  unitName: unit.fileName,
+                  unitAlias: null,
+                  unitData: unit.data
+                }))
+              );
+              this.dataSource.data = this.availableUnits();
+              this.dataSource.filterPredicate = (data, filter: string) => {
+                const formattedName = this.formatUnitName(data.unitName).toLowerCase();
+                return formattedName.includes(filter);
+              };
+              this.unitList.set([]);
+              this.applyQuickFilterUnitSelection();
+            }
+            this.isLoading.set(false);
+          },
+          error: () => {
+            this.changeDetectorRef.markForCheck();
+            this.isLoading.set(false);
           }
-          this.isLoading = false;
-        },
-        error: () => {
-          this.changeDetectorRef.markForCheck();
-          this.isLoading = false;
-        }
-      });
+        });
     }
   }
 
   toggleUnitSelection(unitId: number, isSelected: boolean): void {
     if (isSelected) {
-      if (!this.unitList.includes(unitId)) {
-        this.unitList.push(unitId);
+      if (!this.unitList().includes(unitId)) {
+        this.unitList.set([...this.unitList(), unitId]);
       }
     } else {
-      this.unitList = this.unitList.filter(id => id !== unitId);
+      this.unitList.set(this.unitList().filter(id => id !== unitId));
     }
   }
 
   isUnitSelected(unitId: number): boolean {
-    return this.unitList.includes(unitId);
+    return this.unitList().includes(unitId);
   }
 
   formatUnitName(unitName: string): string {
@@ -281,9 +283,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   toggleAllUnits(isSelected: boolean): void {
     if (isSelected) {
-      this.unitList = this.availableUnits.map(unit => unit.unitId);
+      this.unitList.set(this.availableUnits().map(unit => unit.unitId));
     } else {
-      this.unitList = [];
+      this.unitList.set([]);
     }
   }
 
@@ -291,49 +293,47 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     return false;
   }
 
-  onTrainingRequirementChange(
-    trainingRequirement: CodebookTrainingRequirementFilter
-  ): void {
-    this.contentOptions.trainingRequirement = trainingRequirement;
+  onTrainingRequirementChange(trainingRequirement: CodebookTrainingRequirementFilter): void {
+    this.contentOptions.update(current => ({ ...current, trainingRequirement: trainingRequirement }));
   }
 
   onJobDefinitionFilterChange(jobDefinitionId: number | null): void {
-    this.selectedJobDefinitionId = jobDefinitionId;
-    this.contentOptions.jobDefinitionId = jobDefinitionId;
+    this.selectedJobDefinitionId.set(jobDefinitionId);
+    this.contentOptions.update(current => ({ ...current, jobDefinitionId: jobDefinitionId }));
     this.updateSelectedJobDefinitionDisplay();
     this.applyQuickFilterUnitSelection();
   }
 
   onVariableBundleFilterChange(variableBundleIds: number[]): void {
-    this.selectedVariableBundleIds = Array.isArray(variableBundleIds) ?
-      variableBundleIds :
-      [];
-    this.contentOptions.variableBundleIds = this.selectedVariableBundleIds;
+    this.selectedVariableBundleIds.set(Array.isArray(variableBundleIds) ? variableBundleIds : []);
+    this.contentOptions.update(current => ({ ...current, variableBundleIds: this.selectedVariableBundleIds() }));
     this.applyQuickFilterUnitSelection();
   }
 
   openJobDefinitionPicker(): void {
-    if (this.isLoadingJobDefinitions) {
+    if (this.isLoadingJobDefinitions()) {
       return;
     }
-
     const dialogData: CodebookJobDefinitionPickerDialogData = {
-      options: this.jobDefinitionOptions,
-      selectedJobDefinitionId: this.selectedJobDefinitionId
+      options: this.jobDefinitionOptions(),
+      selectedJobDefinitionId: this.selectedJobDefinitionId()
     };
-
-    this.dialog.open(CodebookJobDefinitionPickerDialogComponent, {
-      width: '960px',
-      maxWidth: '94vw',
-      maxHeight: '88vh',
-      autoFocus: false,
-      data: dialogData
-    }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(jobDefinitionId => {
-      this.changeDetectorRef.markForCheck();
-      if (jobDefinitionId !== undefined) {
-        this.onJobDefinitionFilterChange(jobDefinitionId);
-      }
-    });
+    this.dialog
+      .open(CodebookJobDefinitionPickerDialogComponent, {
+        width: '960px',
+        maxWidth: '94vw',
+        maxHeight: '88vh',
+        autoFocus: false,
+        data: dialogData
+      })
+      .afterClosed()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(jobDefinitionId => {
+        this.changeDetectorRef.markForCheck();
+        if (jobDefinitionId !== undefined) {
+          this.onJobDefinitionFilterChange(jobDefinitionId);
+        }
+      });
   }
 
   private getJobDefinitionLabel(jobDefinition: JobDefinition): string {
@@ -347,16 +347,24 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     const coderCount = jobDefinition.assignedCoders?.length || 0;
     const caseOrderingMode = this.getJobDefinitionCaseOrderingLabel(jobDefinition);
     const maxCases = jobDefinition.maxCodingCases ?
-      ` · ${this.translateService.instant('coding.job-definition-max-cases', { count: jobDefinition.maxCodingCases })}` :
+      ` · ${this.translateService.instant('coding.job-definition-max-cases', {
+        count: jobDefinition.maxCodingCases
+      })}` :
       '';
-
     const scopeSummary = [
-      this.formatCount(variableCount, 'coding.job-definition-count-variable-one', 'coding.job-definition-count-variable-many'),
+      this.formatCount(
+        variableCount,
+        'coding.job-definition-count-variable-one',
+        'coding.job-definition-count-variable-many'
+      ),
       this.formatCount(unitCount, 'coding.job-definition-count-unit-one', 'coding.job-definition-count-unit-many'),
-      this.formatCount(bundleCount, 'coding.job-definition-count-bundle-one', 'coding.job-definition-count-bundle-many'),
+      this.formatCount(
+        bundleCount,
+        'coding.job-definition-count-bundle-one',
+        'coding.job-definition-count-bundle-many'
+      ),
       this.formatCount(coderCount, 'coding.job-definition-count-coder-one', 'coding.job-definition-count-coder-many')
     ].join(' · ');
-
     return `${scopeSummary} · ${caseOrderingMode}${maxCases}`;
   }
 
@@ -364,11 +372,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     const bundleNames = (jobDefinition.assignedVariableBundles || [])
       .map(bundle => this.getHydratedVariableBundle(bundle.id)?.name || bundle.name)
       .filter((name): name is string => Boolean(name));
-
     if (bundleNames.length === 0) {
       return '';
     }
-
     const visibleNames = bundleNames.slice(0, 2).join(', ');
     const hiddenCount = bundleNames.length - 2;
     return hiddenCount > 0 ?
@@ -381,25 +387,29 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       return;
     }
-
-    this.isLoadingJobDefinitions = true;
-    this.codingJobBackendService.getJobDefinitions(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
-      next: jobDefinitions => {
-        this.changeDetectorRef.markForCheck();
-        this.availableJobDefinitions = jobDefinitions
-          .filter(jobDefinition => jobDefinition.id !== undefined)
-          .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
-        this.refreshJobDefinitionOptions();
-        this.isLoadingJobDefinitions = false;
-        this.applyQuickFilterUnitSelection();
-      },
-      error: () => {
-        this.changeDetectorRef.markForCheck();
-        this.availableJobDefinitions = [];
-        this.refreshJobDefinitionOptions();
-        this.isLoadingJobDefinitions = false;
-      }
-    });
+    this.isLoadingJobDefinitions.set(true);
+    this.codingJobBackendService
+      .getJobDefinitions(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: jobDefinitions => {
+          this.changeDetectorRef.markForCheck();
+          this.availableJobDefinitions.set(
+            jobDefinitions
+              .filter(jobDefinition => jobDefinition.id !== undefined)
+              .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+          );
+          this.refreshJobDefinitionOptions();
+          this.isLoadingJobDefinitions.set(false);
+          this.applyQuickFilterUnitSelection();
+        },
+        error: () => {
+          this.changeDetectorRef.markForCheck();
+          this.availableJobDefinitions.set([]);
+          this.refreshJobDefinitionOptions();
+          this.isLoadingJobDefinitions.set(false);
+        }
+      });
   }
 
   private loadVariableBundles(): void {
@@ -407,75 +417,72 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       return;
     }
-
-    this.isLoadingVariableBundles = true;
-    this.codingJobBackendService.getVariableBundles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
-      next: variableBundles => {
-        this.changeDetectorRef.markForCheck();
-        this.availableVariableBundles = variableBundles
-          .filter(variableBundle => variableBundle.id !== undefined)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        this.refreshJobDefinitionOptions();
-        this.isLoadingVariableBundles = false;
-        this.applyQuickFilterUnitSelection();
-      },
-      error: () => {
-        this.changeDetectorRef.markForCheck();
-        this.availableVariableBundles = [];
-        this.refreshJobDefinitionOptions();
-        this.isLoadingVariableBundles = false;
-      }
-    });
+    this.isLoadingVariableBundles.set(true);
+    this.codingJobBackendService
+      .getVariableBundles(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: variableBundles => {
+          this.changeDetectorRef.markForCheck();
+          this.availableVariableBundles.set(
+            variableBundles
+              .filter(variableBundle => variableBundle.id !== undefined)
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+          this.refreshJobDefinitionOptions();
+          this.isLoadingVariableBundles.set(false);
+          this.applyQuickFilterUnitSelection();
+        },
+        error: () => {
+          this.changeDetectorRef.markForCheck();
+          this.availableVariableBundles.set([]);
+          this.refreshJobDefinitionOptions();
+          this.isLoadingVariableBundles.set(false);
+        }
+      });
   }
 
   private applyQuickFilterUnitSelection(): void {
-    if (this.availableUnits.length === 0) {
+    if (this.availableUnits().length === 0) {
       return;
     }
-
     const filterVariableSelections: Map<string, Set<string>>[] = [];
     const selectedJobDefinition = this.getSelectedJobDefinition();
     if (selectedJobDefinition) {
       filterVariableSelections.push(this.getJobDefinitionVariableSelections(selectedJobDefinition));
     }
-
-    if (this.selectedVariableBundleIds.length > 0) {
+    if (this.selectedVariableBundleIds().length > 0) {
       filterVariableSelections.push(this.getSelectedVariableBundleVariableSelections());
     }
-
     if (filterVariableSelections.length === 0) {
-      this.unitList = [];
+      this.unitList.set([]);
       return;
     }
-
     const variableSelections = this.intersectVariableSelectionMaps(filterVariableSelections);
     if (!this.hasVariableSelections(variableSelections)) {
-      this.unitList = [];
+      this.unitList.set([]);
       return;
     }
-
     const unitKeys = new Set(variableSelections.keys());
-    this.unitList = this.availableUnits
-      .filter(unit => (
-        unitKeys.has(this.normalizeUnitKey(unit.unitKey)) ||
-        unitKeys.has(this.normalizeUnitKey(unit.unitName))
-      ))
-      .map(unit => unit.unitId);
-  }
-
-  private getSelectedJobDefinition(): JobDefinition | undefined {
-    if (this.selectedJobDefinitionId === null) {
-      return undefined;
-    }
-
-    return this.availableJobDefinitions.find(
-      jobDefinition => jobDefinition.id === this.selectedJobDefinitionId
+    this.unitList.set(
+      this.availableUnits()
+        .filter(
+          unit => unitKeys.has(this.normalizeUnitKey(unit.unitKey)) || unitKeys.has(this.normalizeUnitKey(unit.unitName))
+        )
+        .map(unit => unit.unitId)
     );
   }
 
+  private getSelectedJobDefinition(): JobDefinition | undefined {
+    if (this.selectedJobDefinitionId() === null) {
+      return undefined;
+    }
+    return this.availableJobDefinitions().find(jobDefinition => jobDefinition.id === this.selectedJobDefinitionId());
+  }
+
   private refreshJobDefinitionOptions(): void {
-    this.jobDefinitionOptions = this.availableJobDefinitions
-      .map(jobDefinition => {
+    this.jobDefinitionOptions.set(
+      this.availableJobDefinitions().map(jobDefinition => {
         const label = this.getJobDefinitionLabel(jobDefinition);
         const meta = this.getJobDefinitionMeta(jobDefinition);
         const bundleSummary = this.getJobDefinitionBundleSummary(jobDefinition);
@@ -488,52 +495,42 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           bundleSummary,
           summary
         };
-      });
+      })
+    );
     this.updateSelectedJobDefinitionDisplay();
   }
 
   private updateSelectedJobDefinitionDisplay(): void {
-    const selectedOption = this.jobDefinitionOptions.find(
-      option => option.id === this.selectedJobDefinitionId
+    const selectedOption = this.jobDefinitionOptions().find(option => option.id === this.selectedJobDefinitionId());
+    this.selectedJobDefinitionLabel.set(
+      selectedOption?.label || this.translateService.instant('coding.job-definition-all')
     );
-    this.selectedJobDefinitionLabel = selectedOption?.label ||
-      this.translateService.instant('coding.job-definition-all');
-    this.selectedJobDefinitionSummary = selectedOption?.summary || '';
+    this.selectedJobDefinitionSummary.set(selectedOption?.summary || '');
   }
 
   private getSelectedVariableBundles(): VariableBundle[] {
-    if (this.selectedVariableBundleIds.length === 0) {
+    if (this.selectedVariableBundleIds().length === 0) {
       return [];
     }
-
-    return this.availableVariableBundles.filter(variableBundle => (
-      this.selectedVariableBundleIds.includes(variableBundle.id)
-    ));
+    return this.availableVariableBundles().filter(variableBundle => this.selectedVariableBundleIds().includes(variableBundle.id)
+    );
   }
 
   private getSelectedVariableBundleVariableSelections(): Map<string, Set<string>> {
     const variableSelections = new Map<string, Set<string>>();
-    this.getSelectedVariableBundles()
-      .forEach(variableBundle => this.addVariableSelections(
-        variableSelections,
-        variableBundle.variables
-      ));
+    this.getSelectedVariableBundles().forEach(variableBundle => this.addVariableSelections(variableSelections, variableBundle.variables)
+    );
     return variableSelections;
   }
 
-  private intersectVariableSelectionMaps(
-    selectionMaps: Map<string, Set<string>>[]
-  ): Map<string, Set<string>> {
+  private intersectVariableSelectionMaps(selectionMaps: Map<string, Set<string>>[]): Map<string, Set<string>> {
     const [firstSelectionMap, ...otherSelectionMaps] = selectionMaps;
     if (!firstSelectionMap) {
       return new Map<string, Set<string>>();
     }
-
     const intersection = new Map(
-      [...firstSelectionMap.entries()]
-        .map(([unitKey, variableIds]) => [unitKey, new Set(variableIds)])
+      [...firstSelectionMap.entries()].map(([unitKey, variableIds]) => [unitKey, new Set(variableIds)])
     );
-
     otherSelectionMaps.forEach(selectionMap => {
       [...intersection.entries()].forEach(([unitKey, variableIds]) => {
         const nextVariableIds = selectionMap.get(unitKey);
@@ -541,7 +538,6 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           intersection.delete(unitKey);
           return;
         }
-
         const intersectedVariableIds = new Set(
           [...variableIds].filter(variableId => nextVariableIds.has(variableId))
         );
@@ -549,28 +545,19 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           intersection.delete(unitKey);
           return;
         }
-
         intersection.set(unitKey, intersectedVariableIds);
       });
     });
-
     return intersection;
   }
 
-  private getJobDefinitionVariableSelections(
-    jobDefinition: JobDefinition
-  ): Map<string, Set<string>> {
+  private getJobDefinitionVariableSelections(jobDefinition: JobDefinition): Map<string, Set<string>> {
     const variableSelections = new Map<string, Set<string>>();
     this.addVariableSelections(variableSelections, jobDefinition.assignedVariables || []);
-    (jobDefinition.assignedVariableBundles || [])
-      .forEach(bundle => {
-        const hydratedBundle = this.getHydratedVariableBundle(bundle.id);
-        this.addVariableSelections(
-          variableSelections,
-          hydratedBundle?.variables || []
-        );
-      });
-
+    (jobDefinition.assignedVariableBundles || []).forEach(bundle => {
+      const hydratedBundle = this.getHydratedVariableBundle(bundle.id);
+      this.addVariableSelections(variableSelections, hydratedBundle?.variables || []);
+    });
     return variableSelections;
   }
 
@@ -578,17 +565,17 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (bundleId === undefined) {
       return undefined;
     }
-
-    return this.availableVariableBundles.find(
-      availableBundle => availableBundle.id === bundleId
-    );
+    return this.availableVariableBundles().find(availableBundle => availableBundle.id === bundleId);
   }
 
-  private getJobDefinitionVariables(jobDefinition: JobDefinition): Array<{ unitName?: string; variableId?: string }> {
+  private getJobDefinitionVariables(jobDefinition: JobDefinition): Array<{
+    unitName?: string;
+    variableId?: string;
+  }> {
     const directVariables = jobDefinition.assignedVariables || [];
-    const bundleVariables = (jobDefinition.assignedVariableBundles || [])
-      .flatMap(bundle => this.getHydratedVariableBundle(bundle.id)?.variables || bundle.variables || []);
-
+    const bundleVariables = (jobDefinition.assignedVariableBundles || []).flatMap(
+      bundle => this.getHydratedVariableBundle(bundle.id)?.variables || bundle.variables || []
+    );
     return [...directVariables, ...bundleVariables];
   }
 
@@ -598,7 +585,6 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         .map(variable => `${this.normalizeUnitKey(variable.unitName)}:${variable.variableId || ''}`)
         .filter(variableKey => variableKey !== ':')
     );
-
     return variableKeys.size;
   }
 
@@ -608,7 +594,6 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         .map(variable => this.normalizeUnitKey(variable.unitName))
         .filter(Boolean)
     );
-
     return unitKeys.size;
   }
 
@@ -628,27 +613,24 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   private addVariableSelections(
     variableSelections: Map<string, Set<string>>,
-    variables: Array<{ unitName?: string; variableId?: string }>
+    variables: Array<{
+      unitName?: string;
+      variableId?: string;
+    }>
   ): void {
     variables.forEach(variable => {
       const unitKey = this.normalizeUnitKey(variable.unitName);
-      const variableId = this.normalizeVariableIdForUnit(
-        unitKey,
-        variable.variableId
-      );
+      const variableId = this.normalizeVariableIdForUnit(unitKey, variable.variableId);
       if (!unitKey || !variableId) {
         return;
       }
-
       const variableIds = variableSelections.get(unitKey) ?? new Set<string>();
       variableIds.add(variableId);
       variableSelections.set(unitKey, variableIds);
     });
   }
 
-  private hasVariableSelections(
-    variableSelections: Map<string, Set<string>>
-  ): boolean {
+  private hasVariableSelections(variableSelections: Map<string, Set<string>>): boolean {
     return [...variableSelections.values()].some(variableIds => variableIds.size > 0);
   }
 
@@ -659,36 +641,30 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       .toUpperCase();
   }
 
-  private normalizeVariableIdForUnit(
-    unitKey: string,
-    value: string | undefined
-  ): string {
+  private normalizeVariableIdForUnit(unitKey: string, value: string | undefined): string {
     const variableId = (value || '').trim();
     if (!unitKey || !variableId) {
       return '';
     }
-
-    const unit = this.availableUnits.find(availableUnit => (
-      this.normalizeUnitKey(availableUnit.unitKey) === unitKey ||
-      this.normalizeUnitKey(availableUnit.unitName) === unitKey
-    ));
+    const unit = this.availableUnits().find(
+      availableUnit => this.normalizeUnitKey(availableUnit.unitKey) === unitKey ||
+        this.normalizeUnitKey(availableUnit.unitName) === unitKey
+    );
     if (!unit?.unitData) {
       return variableId;
     }
-
     try {
       const scheme = JSON.parse(unit.unitData) as {
-        variableCodings?: Array<{ id?: string; alias?: string }>;
+        variableCodings?: Array<{
+          id?: string;
+          alias?: string;
+        }>;
       };
       const variableCodings = scheme.variableCodings || [];
-      const matchingVariableCoding = variableCodings
-        .find(variableCoding => variableCoding.alias?.trim() === variableId) ||
-        variableCodings
-          .find(variableCoding => variableCoding.id?.trim() === variableId);
-
-      return matchingVariableCoding?.alias?.trim() ||
-        matchingVariableCoding?.id?.trim() ||
-        variableId;
+      const matchingVariableCoding =
+        variableCodings.find(variableCoding => variableCoding.alias?.trim() === variableId) ||
+        variableCodings.find(variableCoding => variableCoding.id?.trim() === variableId);
+      return matchingVariableCoding?.alias?.trim() || matchingVariableCoding?.id?.trim() || variableId;
     } catch {
       return variableId;
     }
@@ -696,33 +672,45 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   private handleValidationResults(results: ValidateCodingCompletenessResponseDto | null): void {
     this.changeDetectorRef.markForCheck();
-    this.validationResults = results;
+    this.validationResults.set(results);
     if (results) {
-      this.validationCacheKey = results.cacheKey || null;
+      this.validationCacheKey.set(results.cacheKey || null);
     }
   }
 
   private handleValidationProgress(progress: ValidationProgress): void {
     this.changeDetectorRef.markForCheck();
-    this.validationProgress = progress;
-    this.isValidating = progress.status === 'loading' || progress.status === 'processing';
+    this.validationProgress.set(progress);
+    this.isValidating.set(progress.status === 'loading' || progress.status === 'processing');
   }
 
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.missingsProfileService.getMissingsProfiles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
-        next: profiles => {
-          this.changeDetectorRef.markForCheck();
-          this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
-          this.selectedMissingsProfile = 0;
-          this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
-        },
-        error: () => {
-          this.changeDetectorRef.markForCheck();
-          // Error occurred while loading missings profiles
-        }
-      });
+      this.missingsProfileService
+        .getMissingsProfiles(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: profiles => {
+            this.changeDetectorRef.markForCheck();
+            this.missingsProfiles.set([
+              { id: 0, label: '' },
+              ...profiles.map((profile: { label: string; id: number }) => ({
+                id: profile.id ?? 0,
+                label: profile.label
+              }))
+            ]);
+            this.selectedMissingsProfile.set(0);
+            this.contentOptions.update(current => ({
+              ...current,
+              missingsProfile: this.selectedMissingsProfile().toString()
+            }));
+          },
+          error: () => {
+            this.changeDetectorRef.markForCheck();
+            // Error occurred while loading missings profiles
+          }
+        });
     }
   }
 
@@ -732,40 +720,38 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (!workspaceId) {
       return;
     }
-    if (this.unitList.length === 0) {
+    if (this.unitList().length === 0) {
       return;
     }
-
-    this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
-    this.contentOptions.jobDefinitionId = this.selectedJobDefinitionId;
-    this.contentOptions.variableBundleIds = this.selectedVariableBundleIds;
-    this.codebookJobStatus = 'pending';
-    this.codebookJobProgress = 0;
-    this.codebookJobError = null;
-    this.codebookJobId = null;
-
-    this.exportService.startCodebookJob(
-      workspaceId,
-      this.contentOptions.missingsProfile,
-      this.contentOptions,
-      this.unitList
-    ).pipe(takeUntil(this.destroy$)).subscribe({
-      next: response => {
-        this.changeDetectorRef.markForCheck();
-        this.codebookJobId = response.jobId;
-        this.startCodebookPolling(workspaceId, response.jobId);
-      },
-      error: () => {
-        this.changeDetectorRef.markForCheck();
-        this.codebookJobStatus = 'failed';
-        this.codebookJobError = 'Failed to start codebook generation job';
-      }
-    });
+    this.contentOptions.update(current => ({
+      ...current,
+      missingsProfile: this.selectedMissingsProfile().toString()
+    }));
+    this.contentOptions.update(current => ({ ...current, jobDefinitionId: this.selectedJobDefinitionId() }));
+    this.contentOptions.update(current => ({ ...current, variableBundleIds: this.selectedVariableBundleIds() }));
+    this.codebookJobStatus.set('pending');
+    this.codebookJobProgress.set(0);
+    this.codebookJobError.set(null);
+    this.codebookJobId.set(null);
+    this.exportService
+      .startCodebookJob(workspaceId, this.contentOptions().missingsProfile, this.contentOptions(), this.unitList())
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: response => {
+          this.changeDetectorRef.markForCheck();
+          this.codebookJobId.set(response.jobId);
+          this.startCodebookPolling(workspaceId, response.jobId);
+        },
+        error: () => {
+          this.changeDetectorRef.markForCheck();
+          this.codebookJobStatus.set('failed');
+          this.codebookJobError.set('Failed to start codebook generation job');
+        }
+      });
   }
 
   private startCodebookPolling(workspaceId: number, jobId: string): void {
     this.stopCodebookPolling();
-
     this.codebookPollingSubscription = interval(1500)
       .pipe(
         exhaustMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId)),
@@ -775,32 +761,30 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         next: status => {
           this.changeDetectorRef.markForCheck();
           if (!status.status && status.error) {
-            this.codebookJobStatus = 'failed';
-            this.codebookJobError = status.error;
+            this.codebookJobStatus.set('failed');
+            this.codebookJobError.set(status.error);
             this.stopCodebookPolling();
             return;
           }
-
-          this.codebookJobProgress = status.progress || 0;
-
+          this.codebookJobProgress.set(status.progress || 0);
           if (status.status === 'completed') {
-            this.codebookJobStatus = 'processing';
+            this.codebookJobStatus.set('processing');
             this.stopCodebookPolling();
             this.downloadCodebookResult(workspaceId, jobId);
           } else if (status.status === 'failed') {
-            this.codebookJobStatus = 'failed';
-            this.codebookJobError = status.error || 'Codebook generation failed';
+            this.codebookJobStatus.set('failed');
+            this.codebookJobError.set(status.error || 'Codebook generation failed');
             this.stopCodebookPolling();
           } else if (status.status === 'processing') {
-            this.codebookJobStatus = 'processing';
+            this.codebookJobStatus.set('processing');
           } else {
-            this.codebookJobStatus = 'pending';
+            this.codebookJobStatus.set('pending');
           }
         },
         error: () => {
           this.changeDetectorRef.markForCheck();
-          this.codebookJobStatus = 'failed';
-          this.codebookJobError = 'Failed to get job status';
+          this.codebookJobStatus.set('failed');
+          this.codebookJobError.set('Failed to get job status');
           this.stopCodebookPolling();
         }
       });
@@ -814,34 +798,37 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private downloadCodebookResult(workspaceId: number, jobId: string): void {
-    this.exportService.downloadCodebookFile(workspaceId, jobId).pipe(takeUntil(this.destroy$)).subscribe({
-      next: blob => {
-        this.changeDetectorRef.markForCheck();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
-        const fileExtension = this.contentOptions.exportFormat.toLowerCase();
-        a.href = url;
-        a.download = `codebook_${timestamp}.${fileExtension}`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        this.codebookJobStatus = 'completed';
-      },
-      error: () => {
-        this.changeDetectorRef.markForCheck();
-        this.codebookJobStatus = 'failed';
-        this.codebookJobError = 'Failed to download codebook file';
-      }
-    });
+    this.exportService
+      .downloadCodebookFile(workspaceId, jobId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: blob => {
+          this.changeDetectorRef.markForCheck();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
+          const fileExtension = this.contentOptions().exportFormat.toLowerCase();
+          a.href = url;
+          a.download = `codebook_${timestamp}.${fileExtension}`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          this.codebookJobStatus.set('completed');
+        },
+        error: () => {
+          this.changeDetectorRef.markForCheck();
+          this.codebookJobStatus.set('failed');
+          this.codebookJobError.set('Failed to download codebook file');
+        }
+      });
   }
 
   resetCodebookJob(): void {
-    this.codebookJobId = null;
-    this.codebookJobStatus = 'idle';
-    this.codebookJobProgress = 0;
-    this.codebookJobError = null;
+    this.codebookJobId.set(null);
+    this.codebookJobStatus.set('idle');
+    this.codebookJobProgress.set(0);
+    this.codebookJobError.set(null);
     this.stopCodebookPolling();
   }
 }
