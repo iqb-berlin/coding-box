@@ -1,8 +1,9 @@
 import {
-  Controller, Get, Post, Body, Param, Delete, Put, UseGuards
+  Controller, Get, Post, Param, Delete, Put, UseGuards
 } from '@nestjs/common';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { MissingsProfilesService } from '../../database/services/coding';
-import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -36,7 +37,7 @@ export class MissingsProfilesController {
   @RequireAccessLevel(3)
   async createMissingsProfile(
   @WorkspaceId() workspaceId: number,
-    @Body() profile: MissingsProfilesDto
+    @ValidatedBody('MissingsProfilesDto') profile: RequestBody<'MissingsProfilesDto'>
   ) {
     return this.missingsProfilesService.createMissingsProfile(workspaceId, profile);
   }
@@ -47,7 +48,7 @@ export class MissingsProfilesController {
   async updateMissingsProfile(
   @WorkspaceId() workspaceId: number,
     @Param('label') label: string,
-    @Body() profile: MissingsProfilesDto
+    @ValidatedBody('MissingsProfilesDto') profile: RequestBody<'MissingsProfilesDto'>
   ) {
     return this.missingsProfilesService.updateMissingsProfile(workspaceId, label, profile);
   }

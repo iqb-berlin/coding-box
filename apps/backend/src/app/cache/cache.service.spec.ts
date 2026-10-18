@@ -17,6 +17,7 @@ describe('CacheService', () => {
       del: jest.fn(),
       exists: jest.fn(),
       incr: jest.fn(),
+      eval: jest.fn(),
       scan: jest.fn()
     };
     service = new CacheService(redis as never);
@@ -77,6 +78,48 @@ describe('CacheService', () => {
     await expect(service.exists('a')).resolves.toBe(true);
     await expect(service.exists('b')).resolves.toBe(false);
     await expect(service.exists('c')).resolves.toBe(false);
+  });
+
+  it('gets and deletes values atomically with a redis script', async () => {
+    redis.eval
+      .mockResolvedValueOnce(JSON.stringify({ ok: true }))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('not-json')
+      .mockRejectedValueOnce(new Error('redis down'));
+
+    await expect(service.getAndDelete('json')).resolves.toEqual({ ok: true });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("GET", KEYS[1])'),
+      1,
+      'json'
+    );
+    await expect(service.getAndDelete('missing')).resolves.toBeNull();
+    await expect(service.getAndDelete('broken')).resolves.toBeNull();
+    await expect(service.getAndDelete('error')).resolves.toBeNull();
+  });
+
+  it('deletes a cached value only when the requested field matches', async () => {
+    redis.eval
+      .mockResolvedValueOnce(JSON.stringify({ browserChallenge: 'expected' }))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      service.getAndDeleteIfFieldMatches('login-code', 'browserChallenge', 'expected')
+    ).resolves.toEqual({ browserChallenge: 'expected' });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('decoded[ARGV[1]] ~= ARGV[2]'),
+      1,
+      'login-code',
+      'browserChallenge',
+      'expected'
+    );
+    await expect(
+      service.getAndDeleteIfFieldMatches('login-code', 'browserChallenge', 'wrong')
+    ).resolves.toBeNull();
+    await expect(
+      service.getAndDeleteIfFieldMatches('missing-code', 'browserChallenge', 'expected')
+    ).resolves.toBeNull();
   });
 
   it('stores and pages validation results', async () => {

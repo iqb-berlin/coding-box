@@ -3,6 +3,8 @@ import { chown, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FILE_ACCESS_USERS } from './file-access-users.mjs';
 
+export const FIXTURE_ADMIN_USERNAME = 'replay-e2e-bootstrap';
+
 export async function prepareAuthEnvironment(
   runDir,
   keycloakPort,
@@ -36,9 +38,27 @@ export async function prepareAuthEnvironment(
           'email'
         ],
         attributes: { 'pkce.code.challenge.method': 'S256' }
+      },
+      {
+        clientId: 'replay-e2e-bootstrap',
+        publicClient: true,
+        standardFlowEnabled: false,
+        directAccessGrantsEnabled: true,
+        attributes: { 'access.token.lifespan': '3600' },
+        defaultClientScopes: ['basic', 'profile', 'roles', 'email'],
+        protocolMappers: [{
+          name: 'backend-audience', protocol: 'openid-connect', protocolMapper: 'oidc-audience-mapper',
+          config: { 'included.client.audience': 'replay-e2e', 'access.token.claim': 'true', 'id.token.claim': 'false' }
+        }]
       }
     ],
     users: [
+      {
+        username: FIXTURE_ADMIN_USERNAME, enabled: true, emailVerified: true,
+        email: 'bootstrap@example.invalid', firstName: 'Fixture', lastName: 'Admin',
+        realmRoles: ['admin'],
+        credentials: [{ type: 'password', value: password, temporary: false }]
+      },
       {
         id: '11111111-1111-4111-8111-111111111111',
         username: 'coding-e2e',
@@ -85,6 +105,7 @@ export async function prepareAuthEnvironment(
   );
   return {
     REPLAY_E2E_AUTH: 'true',
+    REPLAY_E2E_CALLBACK_URL: `//${connectHost}:${frontendPort}/api/auth/callback`,
     REPLAY_E2E_AUTH_DIR: runDir,
     REPLAY_E2E_KEYCLOAK_PORT: String(keycloakPort),
     REPLAY_E2E_KEYCLOAK_URL: url,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createHmac, createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import pg from 'pg';
@@ -14,17 +14,22 @@ import { loadStudioReference, normalizedDocx } from './studio-reference.mjs';
 // Data is synthetic; seeding is direct SQL, all jobs and downloads use HTTP.
 const api = 'http://127.0.0.1:3333/api';
 const output = process.env.CODEBOOK_PROOF_DIR || '/tmp/codebook-1041-evidence/live';
-const secret = process.env.JWT_SECRET;
-assert(secret, 'Use the same disposable JWT_SECRET as the local backend');
 const db = new pg.Client({ host: '127.0.0.1', port: 15441, user: 'codebook_test', password: 'disposable_test_only', database: 'codebook_test' });
 const queues = new Map();
 const report = { createdAt: new Date().toISOString(), sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), seeding: 'synthetic direct SQL in dedicated Compose database', exports: [], autocoder: [] };
-const now = Math.floor(Date.now() / 1000);
-const encode = data => Buffer.from(JSON.stringify(data)).toString('base64url');
-const header = encode({ alg: 'HS256', typ: 'JWT' });
-const payload = encode({ iss: 'http://replay-e2e.invalid/realms/replay-e2e', sub: 'codebook-proof-admin', aud: 'replay-e2e', azp: 'replay-e2e', preferred_username: 'codebook-proof-admin', realm_access: { roles: ['admin'] }, iat: now, exp: now + 3600 });
-const signature = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
-const token = `${header}.${payload}.${signature}`;
+const issuer = 'http://127.0.0.1:18441/realms/codebook-proof';
+const authentication = await fetch(`${issuer}/protocol/openid-connect/token`, {
+  method: 'POST',
+  signal: AbortSignal.timeout(10000),
+  body: new URLSearchParams({
+    grant_type: 'password', client_id: 'codebook-proof',
+    username: 'codebook-proof-admin', password: 'disposable_test_only'
+  })
+});
+assert(authentication.ok, `Disposable Keycloak authentication: HTTP ${authentication.status}`);
+const { access_token: token } = await authentication.json();
+assert(typeof token === 'string' && token.length > 0, 'Keycloak returned an access token');
+report.authentication = { protocol: 'OIDC', issuer, clientId: 'codebook-proof', tokenSource: 'dedicated local Keycloak realm' };
 async function request(path, body) {
   const res = await fetch(`${api}${path}`, { method: body ? 'POST' : 'GET', signal: AbortSignal.timeout(10000), headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   assert(res.ok, `${path}: HTTP ${res.status}: ${res.ok ? '' : await res.text()}`);

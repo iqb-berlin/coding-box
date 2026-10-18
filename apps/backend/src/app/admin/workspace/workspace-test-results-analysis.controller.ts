@@ -1,17 +1,6 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  UseGuards,
-  ParseIntPipe,
-  ParseFloatPipe,
-  DefaultValuePipe
+  Controller, Get, Param, Post, Query, UseGuards, ParseIntPipe, ParseFloatPipe, DefaultValuePipe
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiOkResponse,
   ApiOperation,
@@ -20,12 +9,15 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
-import { FlatResponseFrequenciesRequest, FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
+import { FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { Setting } from '../../database/entities/setting.entity';
 import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
@@ -229,18 +221,12 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponseFrequencies(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: FlatResponseFrequenciesRequest
+      @ValidatedBody('FlatResponseFrequenciesRequest') body: RequestBody<'FlatResponseFrequenciesRequest'>
   ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
-    try {
-      return await this.workspaceTestResultsService.findFlatResponseFrequencies(
-        workspaceId,
-        body?.combos || []
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to retrieve frequencies. ${error.message}`
-      );
-    }
+    return this.workspaceTestResultsService.findFlatResponseFrequencies(
+      workspaceId,
+      body?.combos || []
+    );
   }
 
   @Get(':workspace_id/test-results/flat-responses/filter-options')

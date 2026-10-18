@@ -1,15 +1,5 @@
 import {
-  Controller,
-  Body,
-  Delete,
-  Get,
-  Post,
-  Param,
-  Query,
-  Req,
-  UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe
+  Controller, Delete, Get, Post, Param, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,6 +10,8 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -36,11 +28,7 @@ import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
-import {
-  TestResultsDeletePreviewDto,
-  TestResultsDeleteRequestDto,
-  TestResultsResponseCleanupRequestDto
-} from '../../../../../../api-dto/test-results/test-results-deletion.dto';
+import { TestResultsDeletePreviewDto } from '../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -206,7 +194,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto
+      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResults(
       workspaceId,
@@ -224,7 +212,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto,
+      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
@@ -254,7 +242,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResultResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsResponseCleanupRequestDto
+      @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResultResponses(
       workspaceId,
@@ -272,7 +260,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultResponsesJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsResponseCleanupRequestDto,
+      @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
@@ -302,7 +290,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestLogs(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto
+      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestLogs(
       workspaceId,
@@ -320,7 +308,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto,
+      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(

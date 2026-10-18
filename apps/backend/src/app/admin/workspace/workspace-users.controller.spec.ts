@@ -1,10 +1,7 @@
 import {
-  BadRequestException,
-  ExecutionContext,
-  INestApplication,
-  InternalServerErrorException
+  BadRequestException, ExecutionContext, INestApplication, ForbiddenException
 } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
@@ -239,10 +236,17 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('findUsers', () => {
-    it('throws when workspace users cannot be retrieved', async () => {
-      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+    it('passes the original server failure to the global filter', async () => {
+      const error = new Error('database unavailable');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
 
-      await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
+    });
+
+    it('preserves workspace access errors', async () => {
+      const error = new ForbiddenException('Workspace access denied');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
     });
 
     it('parses the workspace id from the route before retrieving users', async () => {
@@ -324,6 +328,17 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('setWorkspaceUsers', () => {
+    it('requires workspace admin access level metadata and uses workspace_id route param', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        WorkspaceUsersController.prototype.setWorkspaceUsers
+      );
+
+      expect(guards).toEqual([JwtAuthGuard, WorkspaceGuard, AccessLevelGuard]);
+      expect(Reflect.getMetadata('accessLevel', WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(3);
+      expect(Reflect.getMetadata(PATH_METADATA, WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(':workspace_id/users');
+    });
+
     it.each([
       { userId: 1, workspaceId: 3 },
       { userId: 2, workspaceId: 3 },

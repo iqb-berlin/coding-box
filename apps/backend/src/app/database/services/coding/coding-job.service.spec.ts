@@ -4,6 +4,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Brackets, EntityManager } from 'typeorm';
+import { createCodingJobService } from './coding-job-test.factory';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -264,16 +265,12 @@ describe('CodingJobService', () => {
       getVariablePageMap: jest.fn().mockResolvedValue(new Map())
     };
     missingsProfilesService = {
-      resolveMissingsProfileId: jest.fn(
-        async (_workspaceId: number, profileId?: number | null) => profileId || 55
-      ),
-      getMissingByIdForProfileOrDefault: jest
-        .fn()
-        .mockResolvedValue({ code: 99 })
+      resolveMissingsProfileId: jest.fn(async (_workspaceId: number, profileId?: number | null) => profileId || 55),
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({ code: 99 })
     };
     coderTrainingDiscussionResultRepository.count.mockResolvedValue(0);
 
-    service = new CodingJobService(
+    service = createCodingJobService(
       codingJobRepository as never,
       codingJobCoderRepository as never,
       codingJobVariableRepository as never,

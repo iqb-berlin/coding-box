@@ -19,7 +19,7 @@ export class SystemSettingsService {
   private readonly serverUrl = inject(SERVER_URL);
 
   private get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   getContentPoolSettings(): Observable<ContentPoolSettings> {

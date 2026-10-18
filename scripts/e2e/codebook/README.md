@@ -1,7 +1,7 @@
 # Local Codebook and Autocoder acceptance
 
 This fixture uses a dedicated PostgreSQL database (port 15441), Redis (16441),
-and a production backend on `127.0.0.1:3333`. It seeds synthetic records with
+Keycloak (18441), and a production backend on `127.0.0.1:3333`. It seeds synthetic records with
 SQL, submits jobs through the regular authenticated HTTP endpoints, observes
 HTTP status and Bull records, downloads the output, and reads persisted results.
 It never uses production data. Run it from an isolated checkout with Node 22.
@@ -14,17 +14,24 @@ export NX_DAEMON=false NX_ISOLATE_PLUGINS=false
 NG_BUILD_MAX_WORKERS=2 npx nx build frontend --configuration=production
 npx nx build backend --configuration=production
 
-docker compose -p codebook-1041 -f scripts/e2e/codebook/docker-compose.yml up -d db redis
+docker compose -p codebook-1041 -f scripts/e2e/codebook/docker-compose.yml up -d db redis keycloak
 docker compose -p codebook-1041 -f scripts/e2e/codebook/docker-compose.yml run --rm liquibase
 ```
+
+Wait until Keycloak's discovery endpoint responds:
+<http://127.0.0.1:18441/realms/codebook-proof/.well-known/openid-configuration>.
+The imported realm and its fixed credentials belong only to this loopback-only,
+disposable fixture. Its password grant supplies an actual RS256 access token;
+the backend verifies it with the realm's JWKS and configured client. Browser
+authorization-code/PKCE login is covered separately by `frontend:e2e-auth-live`.
 
 Start the backend in a separate terminal. The following credentials are only
 for the disposable fixture. Do not use an existing backend on this address:
 
 ```sh
-JWT_SECRET=codebook-disposable-local-proof-only \
-KEYCLOAK_CLIENT_ID=replay-e2e \
-OIDC_ISSUER=http://replay-e2e.invalid/realms/replay-e2e \
+OAUTH2_CLIENT_ID=codebook-proof \
+OIDC_ISSUER=http://127.0.0.1:18441/realms/codebook-proof \
+OIDC_JWKS_URI=http://127.0.0.1:18441/realms/codebook-proof/protocol/openid-connect/certs \
 POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=15441 \
 POSTGRES_USER=codebook_test POSTGRES_PASSWORD=disposable_test_only \
 POSTGRES_DB=codebook_test REDIS_HOST=127.0.0.1 REDIS_PORT=16441 \
@@ -35,7 +42,6 @@ node dist/apps/backend/main.js
 Once `/api/health` responds, run the acceptance target:
 
 ```sh
-JWT_SECRET=codebook-disposable-local-proof-only \
 CODEBOOK_PROOF_DIR=/tmp/codebook-1041-evidence/live \
 npx nx run backend:verify-codebook-autocoder-live
 ```
