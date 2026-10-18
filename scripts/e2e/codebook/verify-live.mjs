@@ -126,6 +126,7 @@ try {
           const paragraphs = $('w\\:body').children('w\\:p').toArray().map(p => $(p).find('w\\:t').text());
           assert.deepEqual(paragraphs.filter(p => p.startsWith('Item(s):')).map(p => p.slice('Item(s):'.length).trim().split(/\s+/)), scope.items);
           assert.equal(xml.includes('GENERAL-'), show);
+          assert.equal($('w\\:tbl').first().find('w\\:tr').first().children('w\\:tc').length, show ? 4 : 3, 'Score column follows the selected option');
           assert(xml.includes('PROOF-MISSING'));
         }
         if (studio) {
