@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, IsNull, Repository } from 'typeorm';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
@@ -163,7 +164,7 @@ export class MissingsProfilesService {
     }
   }
 
-  private toProfileDto(profile: MissingsProfilesDto): MissingsProfilesDto {
+  private toProfileDto(profile: RequestBody<'MissingsProfilesDto'>): MissingsProfilesDto {
     if (profile instanceof MissingsProfilesDto) {
       return profile;
     }
@@ -299,7 +300,7 @@ export class MissingsProfilesService {
     return normalizedMissings;
   }
 
-  private prepareProfileForStorage(rawProfile: MissingsProfilesDto): MissingsProfilesDto {
+  private prepareProfileForStorage(rawProfile: RequestBody<'MissingsProfilesDto'>): MissingsProfilesDto {
     const profile = this.toProfileDto(rawProfile);
 
     if (!profile.label || typeof profile.label !== 'string' || profile.label.trim() === '') {
@@ -728,7 +729,7 @@ export class MissingsProfilesService {
     }
   }
 
-  async createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
+  async createMissingsProfile(workspaceId: number, profile: RequestBody<'MissingsProfilesDto'>): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Creating missings profile for workspace ${workspaceId}`);
       const normalizedProfile = this.prepareProfileForStorage(profile);
@@ -757,7 +758,7 @@ export class MissingsProfilesService {
     }
   }
 
-  async updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Promise<MissingsProfilesDto | null> {
+  async updateMissingsProfile(workspaceId: number, label: string, profile: RequestBody<'MissingsProfilesDto'>): Promise<MissingsProfilesDto | null> {
     try {
       this.logger.log(`Updating missings profile '${label}' for workspace ${workspaceId}`);
       const normalizedProfile = this.prepareProfileForStorage(profile);

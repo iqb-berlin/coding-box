@@ -3,6 +3,7 @@ import User from '../../entities/user.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { CoderTrainingService } from '../coding/coder-training.service';
 import { CodingJobService } from '../coding/coding-job.service';
+import { CodingJobAccessService } from '../coding/coding-job-access.service';
 import { UsersService } from '../users/users.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
@@ -69,7 +70,10 @@ describePostgres('Workspace mutation pool admission with PostgreSQL', () => {
     const { db, user } = f;
     try {
       const users = new UsersService(db.getRepository(User), db.getRepository(WorkspaceUser));
-      const jobs = Object.assign(Object.create(CodingJobService.prototype), { usersService: users });
+      const access = new CodingJobAccessService({} as never, {} as never, {} as never, users);
+      const jobs = new CodingJobService(
+        access, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
+      );
       // Model a legacy downstream read that still uses the shared repository.
       const resolveProfile = jest.fn(async () => {
         await db.query('SELECT 1');

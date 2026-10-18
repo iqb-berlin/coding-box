@@ -59,6 +59,36 @@ describe('UsersService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
   });
 
+  it('does not persist a supplied primary key or relations when creating a user', async () => {
+    usersRepository.findOne.mockResolvedValue(null);
+    await service.createUser({ username: 'New', id: 99, workspaces: [{ workspaceId: 88 }] } as never);
+    expect(usersRepository.create.mock.calls[0][0]).not.toHaveProperty('id');
+    expect(usersRepository.create.mock.calls[0][0]).not.toHaveProperty('workspaces');
+    expect(usersRepository.save).toHaveBeenCalledWith(expect.objectContaining({ id: 77, username: 'New' }));
+  });
+
+  it('uses the URL user ID and ignores protected properties in update JSON', async () => {
+    usersRepository.findOne.mockResolvedValue({ id: 7, username: 'Original' });
+    await service.updateUser(7, {
+      id: 99,
+      username: 'Updated',
+      isAdmin: false,
+      description: '',
+      identity: 'foreign-identity',
+      issuer: 'foreign-issuer',
+      workspaces: [{ workspaceId: 88 }]
+    } as never);
+    expect(usersRepository.save).toHaveBeenCalledWith({
+      id: 7, username: 'Updated', isAdmin: false, description: ''
+    });
+  });
+
+  it('returns 404 and performs no write when updating a missing user', async () => {
+    usersRepository.findOne.mockResolvedValue(null);
+    await expect(service.updateUser(7, { username: 'Updated' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(usersRepository.save).not.toHaveBeenCalled();
+  });
+
   it('lists users with and without workspace filters', async () => {
     workspaceUserRepository.find.mockResolvedValue([{ userId: 2, accessLevel: 3, canCode: true }]);
     usersRepository.find.mockResolvedValue([
@@ -609,7 +639,7 @@ describe('UsersService', () => {
     await expect(service.createUser({ username: 'new' } as never)).resolves.toBe(77);
   });
 
-  it('handles admin checks and keycloak users', async () => {
+  it('handles admin checks and OIDC provider users', async () => {
     usersRepository.findOne
       .mockResolvedValueOnce({ isAdmin: true })
       .mockResolvedValueOnce(null)
@@ -620,21 +650,21 @@ describe('UsersService', () => {
 
     await expect(service.getUserIsAdmin(1)).resolves.toBe(true);
     await expect(service.getUserIsAdmin(2)).resolves.toBe(false);
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: true
     } as never)).resolves.toBe(10);
     expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new', isAdmin: true });
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'fresh', identity: 'id', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(77);
   });
 
-  it('does not demote existing database admins during keycloak login', async () => {
+  it('does not demote existing database admins during OIDC login', async () => {
     usersRepository.findOne.mockResolvedValueOnce({
       id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
     });
 
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(10);
 

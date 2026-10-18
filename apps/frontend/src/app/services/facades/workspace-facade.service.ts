@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { UserBackendService } from '../../shared/services/user/user-backend.service';
 import { ServerResponse } from '../../core/services/authentication.service';
 import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
@@ -16,13 +17,9 @@ import { UnitNoteService } from '../../shared/services/unit/unit-note.service';
 import { ResourcePackageService } from '../../shared/services/response/resource-package.service';
 import { UnitService } from '../../shared/services/unit/unit.service';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
-import { UserWorkspaceAccessDto } from '../../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
-import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/paginated-workspaces-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
-import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
-import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateUnitTagDto } from '../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UnitTagDto } from '../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
@@ -70,7 +67,7 @@ export class WorkspaceFacadeService {
     return this.userBackendService.getUsers(workspaceId);
   }
 
-  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<boolean> {
+  saveUsers(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Observable<boolean> {
     return this.userBackendService.saveUsers(workspaceId, users);
   }
 
@@ -78,11 +75,11 @@ export class WorkspaceFacadeService {
     return this.userBackendService.getUsersFull();
   }
 
-  addUser(newUser: CreateUserDto): Observable<boolean> {
+  addUser(newUser: RequestBody<'CreateUserDto'>): Observable<boolean> {
     return this.userBackendService.addUser(newUser);
   }
 
-  changeUserData(userId: number, newData: UserFullDto): Observable<boolean> {
+  changeUserData(userId: number, newData: RequestBody<'UserFullDto'>): Observable<boolean> {
     return this.userBackendService.changeUserData(userId, newData);
   }
 
@@ -102,7 +99,7 @@ export class WorkspaceFacadeService {
     return this.workspaceBackendService.getWorkspaceUsers(workspaceId);
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
+  addWorkspace(workspaceData: RequestBody<'CreateWorkspaceDto'>): Observable<number | null> {
     return this.workspaceBackendService.addWorkspace(workspaceData);
   }
 
@@ -110,7 +107,7 @@ export class WorkspaceFacadeService {
     return this.workspaceBackendService.deleteWorkspace(ids);
   }
 
-  changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
+  changeWorkspace(workspaceData: RequestBody<'WorkspaceFullDto'>): Observable<boolean> {
     return this.workspaceBackendService.changeWorkspace(workspaceData);
   }
 

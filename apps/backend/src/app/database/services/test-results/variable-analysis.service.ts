@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -221,11 +222,11 @@ export class VariableAnalysisService {
         );
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.withSchemaCodeVisibility(
@@ -257,11 +258,11 @@ export class VariableAnalysisService {
         return cachedPage;
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.getResultPage(
@@ -447,7 +448,7 @@ export class VariableAnalysisService {
 
     const state = await job.getState();
     if (state !== 'completed') {
-      throw new Error(
+      throw new BadRequestException(
         `Job with ID ${jobId} is not completed (status: ${state})`
       );
     }
@@ -524,7 +525,7 @@ export class VariableAnalysisService {
     }
 
     if (this.isChunkedResultManifest(cachedValue)) {
-      throw new Error(
+      throw new BadRequestException(
         'Variable analysis result is stored in chunks; use the paginated results endpoint'
       );
     }
@@ -574,11 +575,11 @@ export class VariableAnalysisService {
         return cachedResult;
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.getFilteredResultForExport(

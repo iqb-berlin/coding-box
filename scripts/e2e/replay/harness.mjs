@@ -1,11 +1,14 @@
-import { createHash, createHmac } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { findComposeContainer } from './compose-container.mjs';
+import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
 
 const REQUIRED_ENV = [
+  'REPLAY_E2E_OIDC_ISSUER',
+  'REPLAY_E2E_AUTH_PASSWORD',
   'REPLAY_E2E_API_URL',
   'REPLAY_E2E_BASE_URL',
   'REPLAY_E2E_CACHE_DIR',
@@ -16,8 +19,6 @@ const REQUIRED_ENV = [
   'REPLAY_E2E_STATE_FILE'
 ];
 
-const ISSUER = 'http://replay-e2e.invalid/realms/replay-e2e';
-const CLIENT_ID = 'replay-e2e';
 
 export function createReplayHarness(environment = process.env) {
   if (environment.REPLAY_E2E_EXISTING_SETUP_FILE) {
@@ -187,7 +188,7 @@ async function setupReplayWorkspace(config) {
     playerSource,
     playerChecksum
   );
-  const adminToken = createAdminToken(config);
+  const adminToken = await createAdminToken(config);
   const workspaceName = `replay-e2e-${config.runId}`;
   let workspaceId;
 
@@ -734,7 +735,7 @@ async function deleteWorkspace(config, workspaceId) {
     `${config.apiUrl}/api/admin/workspace?ids=${encodeURIComponent(workspaceId)}`,
     {
       method: 'DELETE',
-      headers: { authorization: `Bearer ${createAdminToken(config)}` }
+      headers: { authorization: `Bearer ${await createAdminToken(config)}` }
     }
   );
 
@@ -775,34 +776,18 @@ async function appendFile(form, filePath, fileName, mimeType) {
   );
 }
 
-function createAdminToken(config) {
-  const now = Math.floor(Date.now() / 1000);
-  return signHs256(
-    {
-      iss: config.issuer || ISSUER,
-      sub: `replay-e2e-admin-${config.runId}`,
-      aud: CLIENT_ID,
-      azp: CLIENT_ID,
-      preferred_username: `replay-e2e-admin-${config.runId}`,
-      realm_access: { roles: ['admin'] },
-      iat: now,
-      exp: now + 3600
-    },
-    config.jwtSecret
-  );
-}
-
-function signHs256(payload, secret) {
-  const header = encodeJwtPart({ alg: 'HS256', typ: 'JWT' });
-  const body = encodeJwtPart(payload);
-  const signature = createHmac('sha256', secret)
-    .update(`${header}.${body}`)
-    .digest('base64url');
-  return `${header}.${body}.${signature}`;
-}
-
-function encodeJwtPart(value) {
-  return Buffer.from(JSON.stringify(value)).toString('base64url');
+export async function createAdminToken(config) {
+  const response = await fetch(`${config.issuer}/protocol/openid-connect/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'password', client_id: 'replay-e2e-bootstrap',
+      username: FIXTURE_ADMIN_USERNAME, password: config.authPassword
+    })
+  });
+  if (!response.ok) throw new Error(`OIDC fixture login failed with HTTP ${response.status}.`);
+  const tokens = await response.json();
+  if (!tokens.access_token) throw new Error('OIDC fixture login returned no access token.');
+  return tokens.access_token;
 }
 
 function safeJobMessage(status) {
@@ -827,6 +812,7 @@ function readConfig(environment) {
 
   return {
     issuer: environment.REPLAY_E2E_OIDC_ISSUER,
+    authPassword: environment.REPLAY_E2E_AUTH_PASSWORD,
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),
