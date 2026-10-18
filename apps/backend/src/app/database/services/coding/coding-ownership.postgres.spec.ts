@@ -10,6 +10,10 @@ import {
 } from '../shared/coding-ownership.policy';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import { CodingJobService } from './coding-job.service';
+import { CodingJobMutationService } from './coding-job-mutation.service';
+import { CodingJobAccessService } from './coding-job-access.service';
+import { CodingJobStatusService } from './coding-job-status.service';
+import { CodingJobProgressService } from './coding-job-progress.service';
 import { VariableBundleService } from './variable-bundle.service';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { UsersService } from '../users/users.service';
@@ -67,14 +71,21 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       resources.set(kind, ids);
     }
     await db.manager.save(CodingJobCoder, { coding_job_id: resources.get('job')![0], user_id: owner.id });
-    jobs = Object.assign(Object.create(CodingJobService.prototype), {
+    const dependencies = {
       connection: db,
       usersService: Object.assign(Object.create(UsersService.prototype), { workspaceUserRepository: db.getRepository(WorkspaceUser) }),
       codingJobRepository: db.getRepository(CodingJob),
       codingJobCoderRepository: db.getRepository(CodingJobCoder),
       cacheService: { incr: async () => 1, delete: async () => undefined },
       logger: { log: () => undefined, error: () => undefined }
-    }) as CodingJobService;
+    };
+    const access = Object.assign(Object.create(CodingJobAccessService.prototype), dependencies) as CodingJobAccessService;
+    const mutation = Object.assign(Object.create(CodingJobMutationService.prototype), dependencies, { access }) as CodingJobMutationService;
+    const status = new CodingJobStatusService(access, mutation, {} as never);
+    const progress = Object.assign(Object.create(CodingJobProgressService.prototype), dependencies, { access, mutation }) as CodingJobProgressService;
+    jobs = new CodingJobService(
+      access, {} as never, {} as never, mutation, progress, {} as never, {} as never, {} as never, {} as never, status
+    );
   }, 30000);
 
   afterAll(async () => {
