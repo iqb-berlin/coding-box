@@ -1,19 +1,5 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Param,
-  Post,
-  Put,
-  Query,
-  Req,
-  UseGuards,
-  UseInterceptors,
-  UploadedFiles,
-  ParseIntPipe,
-  Logger,
-  Get,
-  NotFoundException
+  BadRequestException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -31,18 +17,15 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/test-results';
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
-import {
-  ChunkedUploadInitRequestDto,
-  ChunkedUploadInitResponseDto,
-  ChunkedUploadChunkResponseDto,
-  ChunkedUploadCompleteRequestDto
-} from '../../../../../../api-dto/files/chunked-upload.dto';
+import { ChunkedUploadInitResponseDto, ChunkedUploadChunkResponseDto } from '../../../../../../api-dto/files/chunked-upload.dto';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
@@ -284,9 +267,7 @@ export class WorkspaceTestResultsImportController {
         `Error queuing test results upload after ${totalTime}ms!`,
         error
       );
-      throw new BadRequestException(
-        'Uploading test results failed to queue. Please try again.'
-      );
+      throw error;
     }
   }
 
@@ -375,12 +356,12 @@ export class WorkspaceTestResultsImportController {
   })
   @ApiParam({ name: 'workspace_id', type: Number, required: true })
   @ApiParam({ name: 'resultType', enum: ['logs', 'responses'], required: true })
-  @ApiBody({ type: ChunkedUploadInitRequestDto })
+
   @ApiOkResponse({ type: ChunkedUploadInitResponseDto })
   async initChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('resultType') resultType: 'logs' | 'responses',
-      @Body() body: ChunkedUploadInitRequestDto
+      @ValidatedBody('ChunkedUploadInitRequestDto') body: RequestBody<'ChunkedUploadInitRequestDto'>
   ): Promise<ChunkedUploadInitResponseDto> {
     if (!body.fileName || !body.fileSize || !body.mimeType) {
       throw new BadRequestException(
@@ -500,13 +481,13 @@ export class WorkspaceTestResultsImportController {
   })
   @ApiParam({ name: 'workspace_id', type: Number, required: true })
   @ApiParam({ name: 'uploadId', type: String, required: true })
-  @ApiBody({ type: ChunkedUploadCompleteRequestDto })
+
   @ApiOkResponse({ type: TestResultsUploadJobDto, isArray: true })
   async completeChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('uploadId') uploadId: string,
-      @Body() body: ChunkedUploadCompleteRequestDto,
-      @Req() request?: { user: { id: number } }
+                                         @ValidatedBody('ChunkedUploadCompleteRequestDto', true) body: RequestBody<'ChunkedUploadCompleteRequestDto'> = {},
+                                         @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)

@@ -1,10 +1,8 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Delete,
   Get,
-  InternalServerErrorException,
   Post,
   Put,
   UploadedFile,
@@ -23,6 +21,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
@@ -80,11 +80,7 @@ export class LogoController {
       throw new BadRequestException('No file uploaded');
     }
 
-    try {
-      return { path: `assets/images/logo${path.extname(file.originalname)}` };
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to upload logo');
-    }
+    return { path: `assets/images/logo${path.extname(file.originalname)}` };
   }
 
   @Delete()
@@ -93,48 +89,39 @@ export class LogoController {
   @ApiOperation({ summary: 'Delete logo', description: 'Deletes the custom logo and reverts to the default one' })
   @ApiOkResponse({ description: 'Logo deleted successfully', type: Boolean })
   async deleteLogo(): Promise<{ success: boolean }> {
-    try {
-      const assetsDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
-      const files = fs.readdirSync(assetsDir);
+    const assetsDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'images');
+    const files = fs.readdirSync(assetsDir);
 
-      let deleted = false;
-      for (const file of files) {
-        if (file.startsWith('logo')) {
-          fs.unlinkSync(path.join(assetsDir, file));
-          deleted = true;
-        }
+    let deleted = false;
+    for (const file of files) {
+      if (file.startsWith('logo')) {
+        fs.unlinkSync(path.join(assetsDir, file));
+        deleted = true;
       }
-
-      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
-      if (fs.existsSync(settingsPath)) {
-        fs.unlinkSync(settingsPath);
-      }
-
-      return { success: deleted };
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to delete logo');
     }
+
+    const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
+
+    return { success: deleted };
   }
 
   @Put('settings')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Save logo settings', description: 'Saves logo settings like background color' })
-  @ApiBody({ type: AppLogoDto })
   @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
-  async saveLogoSettings(@Body() logoSettings: AppLogoDto): Promise<{ success: boolean }> {
-    try {
-      const dataDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data');
-      const settingsPath = path.join(dataDir, 'logo-settings.json');
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      fs.writeFileSync(settingsPath, JSON.stringify(logoSettings, null, 2));
-
-      return { success: true };
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to save logo settings');
+  async saveLogoSettings(@ValidatedBody('AppLogoDto') logoSettings: RequestBody<'AppLogoDto'>): Promise<{ success: boolean }> {
+    const dataDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data');
+    const settingsPath = path.join(dataDir, 'logo-settings.json');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
     }
+    fs.writeFileSync(settingsPath, JSON.stringify(logoSettings, null, 2));
+
+    return { success: true };
   }
 
   @Get('settings')
@@ -143,21 +130,17 @@ export class LogoController {
   @ApiOperation({ summary: 'Get logo settings', description: 'Gets logo settings like background color' })
   @ApiOkResponse({ description: 'Logo settings retrieved successfully', type: AppLogoDto })
   async getLogoSettings(): Promise<AppLogoDto> {
-    try {
-      const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
-      if (fs.existsSync(settingsPath)) {
-        const settingsJson = fs.readFileSync(settingsPath, 'utf8');
-        return JSON.parse(settingsJson);
-      }
-
-      return {
-        data: 'assets/images/IQB-LogoA.png',
-        alt: 'Zur Startseite',
-        bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
-        boxBackground: 'lightgray'
-      };
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to get logo settings');
+    const settingsPath = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data', 'logo-settings.json');
+    if (fs.existsSync(settingsPath)) {
+      const settingsJson = fs.readFileSync(settingsPath, 'utf8');
+      return JSON.parse(settingsJson);
     }
+
+    return {
+      data: 'assets/images/IQB-LogoA.png',
+      alt: 'Zur Startseite',
+      bodyBackground: 'linear-gradient(180deg, rgba(7,70,94,1) 0%, rgba(6,112,123,1) 24%, rgba(1,192,229,1) 85%)',
+      boxBackground: 'lightgray'
+    };
   }
 }

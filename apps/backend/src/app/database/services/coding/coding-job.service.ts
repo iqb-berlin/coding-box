@@ -20,6 +20,7 @@ import {
   Brackets
 } from 'typeorm';
 import * as cheerio from 'cheerio';
+import { ResponseMatchingFlag } from '../../../../../../../api-dto/coding/response-matching-flag';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { JournalService } from '../shared/journal.service';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
@@ -119,11 +120,7 @@ function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
 }
 
-export enum ResponseMatchingFlag {
-  NO_AGGREGATION = 'NO_AGGREGATION',
-  IGNORE_CASE = 'IGNORE_CASE',
-  IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
-}
+export { ResponseMatchingFlag } from '../../../../../../../api-dto/coding/response-matching-flag';
 
 interface CodingSchemeCode {
   id: number | string;

@@ -9,11 +9,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
 import { JournalService } from '../shared/journal.service';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import FileUpload from '../../entities/file_upload.entity';
@@ -92,14 +92,14 @@ export class WorkspaceCoreService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
-  async create(workspace: CreateWorkspaceDto, creatorUserId: number): Promise<number> {
+  async create(workspace: RequestBody<'CreateWorkspaceDto'>, creatorUserId: number): Promise<number> {
     this.logger.log(`Creating workspace with name: ${workspace.name}`);
     const normalizedCreatorUserId = Number(creatorUserId);
     if (!Number.isInteger(normalizedCreatorUserId) || normalizedCreatorUserId < 1) {
       throw new BadRequestException('Creator user ID must be a positive integer.');
     }
 
-    const newWorkspace = this.workspaceRepository.create({ ...workspace });
+    const newWorkspace = this.workspaceRepository.create({ name: workspace.name, settings: workspace.settings });
     try {
       const savedWorkspace = await this.connection.transaction(async manager => {
         const createdWorkspace = await manager.save(Workspace, newWorkspace);
