@@ -169,12 +169,18 @@ describe('CodebookGenerationService with the real shared generator', () => {
     unit.data = JSON.stringify(scheme);
     unit.structured_data.metadata.items.push({ id: 'ITEM-C', variableId: 'third' });
     files.find.mockResolvedValue([unit]);
-    jobs.findOne.mockResolvedValue({ assigned_variables: [
-      { unitName: 'UNIT', variableId: 'idB' }, { unitName: 'UNIT', variableId: 'C' }
-    ], assigned_variable_bundles: [] });
-    bundles.find.mockResolvedValue([{ id: 20, variables: [
-      { unitName: 'UNIT', variableId: 'idA' }, { unitName: 'UNIT', variableId: 'C' }
-    ] }]);
+    jobs.findOne.mockResolvedValue({
+      assigned_variables: [
+        { unitName: 'UNIT', variableId: 'idB' }, { unitName: 'UNIT', variableId: 'C' }
+      ],
+      assigned_variable_bundles: []
+    });
+    bundles.find.mockResolvedValue([{
+      id: 20,
+      variables: [
+        { unitName: 'UNIT', variableId: 'idA' }, { unitName: 'UNIT', variableId: 'C' }
+      ]
+    }]);
     const result = await service.generateCodebook(42, 0, {
       ...contentOptions, exportFormat, jobDefinitionId: 10, variableBundleIds: [20]
     }, [1]);
