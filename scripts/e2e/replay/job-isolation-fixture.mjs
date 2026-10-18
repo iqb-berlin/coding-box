@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { findComposeContainer } from './compose-container.mjs';
+import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
 
 const exec = promisify(execFile);
 
@@ -28,7 +29,7 @@ export async function verifyJobIsolation(state) {
   };
   const identity = await request('/auth-data');
   assert.equal(identity.status, 200);
-  assert.equal(identity.body.userName, `replay-e2e-admin-${config.runId}`);
+  assert.equal(identity.body.userName, FIXTURE_ADMIN_USERNAME);
   assert.equal(identity.body.isAdmin, true);
   const pollCompleted = async route => {
     const deadline = Date.now() + 60_000;

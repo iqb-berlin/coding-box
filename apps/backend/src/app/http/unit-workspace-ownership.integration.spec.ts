@@ -6,6 +6,7 @@ import { UnitNotesController } from '../admin/unit-notes/unit-notes.controller';
 import { UnitTagService } from '../database/services/workspace/unit-tag.service';
 import { UnitNoteService } from '../database/services/workspace/unit-note.service';
 import { AuthService } from '../auth/service/auth.service';
+import { UsersService } from '../database/services/users';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { createRequestValidationPipe } from './request-validation';
 import { GlobalHttpExceptionFilter } from './global-http-exception.filter';
@@ -48,7 +49,8 @@ describe.each(['tag', 'note'] as const)('Unit %s workspace ownership', kind => {
       providers: [
         { provide: UnitTagService, useValue: new UnitTagService(repository as never, unitRepository as never) },
         { provide: UnitNoteService, useValue: new UnitNoteService(repository as never, unitRepository as never) },
-        { provide: AuthService, useValue: auth }
+        { provide: AuthService, useValue: auth },
+        { provide: UsersService, useValue: { findUserByIdentity: jest.fn() } }
       ]
     }).overrideGuard(JwtAuthGuard).useValue({
       canActivate: (context: ExecutionContext) => {

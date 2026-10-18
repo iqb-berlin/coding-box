@@ -16,7 +16,7 @@ describe('real Keycloak coding session', () => {
   let accessToken: string;
 
   before(() => {
-    cy.task('coding:setup', null, { log: false }).then((value) => {
+    cy.task('coding:setup', null, { log: false, timeout: 180_000 }).then((value) => {
       setup = value as CodingSetup;
     });
   });
@@ -28,9 +28,8 @@ describe('real Keycloak coding session', () => {
   it('persists coding, recovers an expired session, and completes the job', () => {
     cy.intercept(
       'POST',
-      '**/realms/coding-e2e/protocol/openid-connect/token'
+      '**/api/auth/exchange'
     ).as('loginToken');
-    cy.intercept('GET', '**/realms/coding-e2e/account').as('profile');
     cy.intercept('GET', '**/api/auth-data*').as('authData');
     cy.visit('/');
     cy.window().then(win => {
@@ -51,9 +50,6 @@ describe('real Keycloak coding session', () => {
       expect(response?.statusCode).to.equal(200);
       accessToken = response?.body.access_token;
     });
-    cy.wait('@profile', { log: false })
-      .its('response.statusCode')
-      .should('eq', 200);
     cy.wait('@authData', { log: false })
       .its('response.statusCode')
       .should('eq', 200);
@@ -91,9 +87,8 @@ describe('real Keycloak coding session', () => {
     cy.tick(AUTH_SESSION_WARNING_DELAY_MS);
     cy.get('.session-expiry-warning').should('be.visible');
     cy.clock().then(clock => clock.restore());
-    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
-      if (String(request.body).includes('grant_type=refresh_token')) request.alias = 'extendSession';
-    });
+    cy.window().then(win => win.localStorage.removeItem('auth_token'));
+    cy.intercept('POST', '**/api/auth/refresh').as('extendSession');
     cy.get('.session-expiry-warning button').click();
     cy.wait('@extendSession').its('response.statusCode').should('eq', 200);
     cy.get('.session-expiry-warning').should('not.exist');
@@ -161,8 +156,8 @@ describe('real Keycloak coding session', () => {
       .type('Recovered live draft')
       .blur();
     let rejectExpiredRefresh = false;
-    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
-      if (rejectExpiredRefresh && String(request.body).includes('grant_type=refresh_token')) {
+    cy.intercept('POST', '**/api/auth/refresh', request => {
+      if (rejectExpiredRefresh) {
         request.alias = 'expiredRefresh';
         request.reply({
           statusCode: 400,
@@ -173,6 +168,7 @@ describe('real Keycloak coding session', () => {
     // A refresh can race with the server-side session revocation. Arm its observer first.
     cy.then(() => { rejectExpiredRefresh = true; });
     cy.task('coding:expire-session', null, { log: false });
+    cy.window().then(win => win.localStorage.removeItem('auth_token'));
     cy.get('coding-box-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
       if (!field.disabled) {
@@ -230,7 +226,7 @@ describe('real Keycloak coding session', () => {
       'Recovered live draft'
     );
 
-    cy.intercept('PUT', '**/coding-job/*', (request) => {
+    cy.intercept('PUT', '**/coding-job/*/comment', (request) => {
       if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
     });
     cy.get('coding-box-code-selector .comment-button').click();
@@ -244,11 +240,13 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
 
     cy.intercept('POST', '**/coding-job/*/pause').as('pause');
-    cy.intercept('POST', '**/coding-job/*/resume').as('resume');
+    cy.intercept('PUT', '**/coding-job/*/status', request => {
+      if (request.body.status === 'active') request.alias = 'resume';
+    });
     cy.get('coding-box-code-selector .pause-button').click();
     cy.wait('@pause').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay .resume-button').should('be.visible').click();
-    cy.wait('@resume').its('response.statusCode').should('eq', 201);
+    cy.wait('@resume').its('response.statusCode').should('eq', 200);
     cy.get('.pause-overlay').should('not.exist');
     cy.get('coding-box-code-selector .next-button').click();
     cy.get('coding-box-code-selector .current-position').should('have.text', '2');
@@ -617,8 +615,8 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-coding-management-manual .manual-coding-tabs')
       .contains('Abschluss').click();
     cy.contains('.completed-job-apply-row', createdJobName)
-      .scrollIntoView()
-      .should('be.visible');
+      .scrollIntoView();
+    cy.contains('.completed-job-apply-row', createdJobName).should('be.visible');
     cy.intercept('POST', '**/coding/jobs/*/apply-results').as('applyResults');
     cy.contains('.completed-job-apply-row', createdJobName)
       .contains('button', 'Ergebnisse anwenden').click();
@@ -744,7 +742,7 @@ describe('real Keycloak coding session', () => {
         }))
       );
       cy.task('coding:prepare-file-settings', null, { log: false });
-      cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token').as('fileRoleToken');
+      cy.intercept('POST', '**/api/auth/exchange').as('fileRoleToken');
       cy.intercept('GET', '**/api/auth-data*', request => {
         delete request.headers['if-none-match'];
         request.continue();

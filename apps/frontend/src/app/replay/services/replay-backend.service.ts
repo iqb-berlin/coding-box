@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   Observable, catchError, forkJoin, map, shareReplay, throwError, timeout
 } from 'rxjs';
-import Keycloak from 'keycloak-js';
+import { AuthService } from '../../core/services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../../core/interceptors/http-error-context';
@@ -94,11 +94,11 @@ type ReplayAssetsCacheValue = {
 export class ReplayBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private readonly keycloak = inject(Keycloak, { optional: true });
+  private readonly authService = inject(AuthService);
   private readonly replayAssetsCache = new Map<string, ReplayAssetsCacheEntry>();
 
   private get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   storeReplayStatistics(
@@ -207,8 +207,7 @@ export class ReplayBackendService {
     const now = Date.now();
     this.removeExpiredReplayAssets(now);
     const authContext = authToken ??
-      this.keycloak?.tokenParsed?.sub ??
-      this.keycloak?.idTokenParsed?.sub ??
+      this.authService.getLoggedUser()?.sub ??
       null;
     const cacheKey = JSON.stringify([workspaceId, unitId, authContext]);
     const cached = this.replayAssetsCache.get(cacheKey);
