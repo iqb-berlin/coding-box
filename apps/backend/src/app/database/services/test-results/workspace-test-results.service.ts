@@ -2205,7 +2205,7 @@ export class WorkspaceTestResultsService {
       >();
 
       if (unitIds.length > 0) {
-        const allTags = await this.unitTagService.findAllByUnitIds(unitIds);
+        const allTags = await this.unitTagService.findAllByUnitIds(workspaceId, unitIds);
 
         allTags.forEach(tag => {
           if (!unitTagsMap.has(tag.unitId)) {
@@ -7217,7 +7217,7 @@ export class WorkspaceTestResultsService {
 
       const unitIds = units.map(unit => unit.id);
       const allUnitTags = await Promise.all(
-        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(workspaceId, unitId))
       );
 
       const unitTagsMap = new Map<

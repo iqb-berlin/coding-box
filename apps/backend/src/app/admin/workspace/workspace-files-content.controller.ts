@@ -2,10 +2,10 @@ import {
   BadRequestException,
   Controller,
   Get,
-  InternalServerErrorException,
   NotFoundException,
   Param,
-  UseGuards
+  UseGuards,
+  HttpException
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -79,14 +79,15 @@ export class WorkspaceFilesContentController {
       );
       return { content };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error.message.includes('not found')) {
         throw new NotFoundException(
           `Unit with ID ${unit_id} not found in workspace ${workspace_id}`
         );
       }
-      throw new InternalServerErrorException(
-        `Error retrieving unit content: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -140,15 +141,16 @@ export class WorkspaceFilesContentController {
       );
       return { content };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error.message.includes('not found')) {
         throw new NotFoundException(
           `TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`
         );
       }
 
-      throw new InternalServerErrorException(
-        `Error retrieving TestTakers content: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -206,9 +208,7 @@ export class WorkspaceFilesContentController {
       if (error.status === 404) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Error retrieving coding scheme file: ${error.message}`
-      );
+      throw error;
     }
   }
 }

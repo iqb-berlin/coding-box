@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Delete,
   Get,
@@ -17,7 +16,6 @@ import {
   Put,
   ParseIntPipe, Req
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -29,8 +27,11 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -38,7 +39,6 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
 import { Setting } from '../../database/entities/setting.entity';
@@ -145,9 +145,7 @@ export class WorkspaceFilesController {
         throw regexError;
       }
 
-      throw new BadRequestException(
-        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message} `
-      );
+      throw error;
     }
   }
 
@@ -186,7 +184,7 @@ export class WorkspaceFilesController {
   })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+      @ValidatedBody('WorkspaceFilesController_excludePersons') body: RequestBody<'WorkspaceFilesController_excludePersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -234,7 +232,7 @@ export class WorkspaceFilesController {
   @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
   async considerPersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+      @ValidatedBody('WorkspaceFilesController_considerPersons') body: RequestBody<'WorkspaceFilesController_considerPersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -302,32 +300,17 @@ export class WorkspaceFilesController {
       throw new BadRequestException('At least one file must be uploaded.');
     }
 
-    try {
-      const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
-      const overwriteIds = (overwriteFileIds || '')
-        .split(/[,;]/)
-        .map(s => s.trim())
-        .filter(Boolean);
-      return await this.workspaceFilesService.uploadTestFiles(
-        workspaceId,
-        files,
-        overwrite,
-        overwriteIds.length > 0 ? overwriteIds : undefined
-      );
-    } catch (error) {
-      this.logger.error('Error uploading test files:');
-      return {
-        total: Array.isArray(files) ? files.length : 0,
-        uploaded: 0,
-        failed: Array.isArray(files) ? files.length : 0,
-        failedFiles: Array.isArray(files) ?
-          files.map(f => ({
-            filename: f.originalname,
-            reason: 'Upload failed'
-          })) :
-          []
-      };
-    }
+    const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+    const overwriteIds = (overwriteFileIds || '')
+      .split(/[,;]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    return this.workspaceFilesService.uploadTestFiles(
+      workspaceId,
+      files,
+      overwrite,
+      overwriteIds.length > 0 ? overwriteIds : undefined
+    );
   }
 
   @Get(':workspace_id/files/:fileId/metadata')
@@ -384,9 +367,7 @@ export class WorkspaceFilesController {
       );
     } catch (error) {
       this.logger.error(`'Error downloading test file:' ${error} `);
-      throw new InternalServerErrorException(
-        'Unable to download the file. Please try again later.'
-      );
+      throw error;
     }
   }
 
@@ -417,7 +398,7 @@ export class WorkspaceFilesController {
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id') workspaceId: string,
-      @Body() body?: { fileTypes?: string[] }
+      @ValidatedBody('WorkspaceFilesController_downloadWorkspaceFilesAsZip', true) body?: RequestBody<'WorkspaceFilesController_downloadWorkspaceFilesAsZip'>
   ): Promise<StreamableFile> {
     const startTime = Date.now();
     const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
@@ -489,35 +470,7 @@ export class WorkspaceFilesController {
       );
 
       // Re-throw generic exceptions if needed, though they aren't caught locally anymore.
-      if (
-        error instanceof BadRequestException ||
-        error instanceof InternalServerErrorException
-      ) {
-        throw error;
-      }
-
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message.includes('ENOENT')) {
-          throw new InternalServerErrorException(
-            'One or more files could not be found.'
-          );
-        }
-        if (error.message.includes('EACCES')) {
-          throw new InternalServerErrorException(
-            'Permission denied accessing files.'
-          );
-        }
-        if (error.message.includes('ENOMEM')) {
-          throw new InternalServerErrorException(
-            'Insufficient memory to create ZIP file.'
-          );
-        }
-      }
-
-      throw new InternalServerErrorException(
-        'Unable to create ZIP file. Please try again later.'
-      );
+      throw error;
     }
 
     // Validate ZIP buffer outside try/catch
@@ -569,7 +522,7 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { ignoredUnits: string[] },
+      @ValidatedBody('WorkspaceFilesController_updateIgnoredUnits') body: RequestBody<'WorkspaceFilesController_updateIgnoredUnits'>,
       @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
@@ -597,7 +550,7 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: WorkspaceSettingsDto,
+      @ValidatedBody('WorkspaceSettingsDto') body: RequestBody<'WorkspaceSettingsDto'>,
       @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body) {

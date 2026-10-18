@@ -4,7 +4,6 @@ import {
   Controller,
   Delete,
   Get,
-  HttpException,
   Param,
   ParseIntPipe,
   Post,
@@ -62,20 +61,13 @@ export class CodingJobController {
   async getCodingJobs(
     @WorkspaceId() workspaceId: number
   ): Promise<CodingJobDto[]> {
-    try {
-      const result = await this.codingJobService.getCodingJobs(workspaceId);
-      return result.data.map(job => CodingJobDto.fromEntity(
-        job,
-        job.assignedCoders || [],
-        job.assignedVariables || [],
-        job.assignedVariableBundles || []
-      ));
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding jobs: ${error.message}`);
-    }
+    const result = await this.codingJobService.getCodingJobs(workspaceId);
+    return result.data.map(job => CodingJobDto.fromEntity(
+      job,
+      job.assignedCoders || [],
+      job.assignedVariables || [],
+      job.assignedVariableBundles || []
+    ));
   }
 
   @Get(':id')
@@ -108,23 +100,16 @@ export class CodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
-    try {
-      const result = await this.codingJobService.getCodingJob(id, workspaceId);
-      const dto = CodingJobDto.fromEntity(result.codingJob);
-      dto.assigned_coders = result.assignedCoders;
-      dto.variables = result.variables.map(v => {
-        const variableDto = new VariableDto();
-        variableDto.unitName = v.unitName;
-        variableDto.variableId = v.variableId;
-        return variableDto;
-      });
-      return dto;
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding job: ${error.message}`);
-    }
+    const result = await this.codingJobService.getCodingJob(id, workspaceId);
+    const dto = CodingJobDto.fromEntity(result.codingJob);
+    dto.assigned_coders = result.assignedCoders;
+    dto.variables = result.variables.map(v => {
+      const variableDto = new VariableDto();
+      variableDto.unitName = v.unitName;
+      variableDto.variableId = v.variableId;
+      return variableDto;
+    });
+    return dto;
   }
 
   @Post()
@@ -165,16 +150,12 @@ export class CodingJobController {
       );
     }
 
-    try {
-      const codingJob = await this.codingJobService.createCodingJob(
-        workspaceId,
-        createCodingJobDto,
-        ownershipRequest.user?.id
-      );
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      throw new BadRequestException(`Failed to create coding job: ${error.message}`);
-    }
+    const codingJob = await this.codingJobService.createCodingJob(
+      workspaceId,
+      createCodingJobDto,
+      ownershipRequest.user?.id
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Put(':id')
@@ -212,20 +193,13 @@ export class CodingJobController {
       @Body() updateCodingJobDto: UpdateCodingJobDto,
       @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
-    try {
-      const codingJob = await this.codingJobService.updateCodingJob(
-        id,
-        workspaceId,
-        updateCodingJobDto,
-        ownershipRequest.user?.id
-      );
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update coding job: ${error.message}`);
-    }
+    const codingJob = await this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      updateCodingJobDto,
+      ownershipRequest.user?.id
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Delete(':id')
@@ -264,14 +238,7 @@ export class CodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    try {
-      return await this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete coding job: ${error.message}`);
-    }
+    return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
 
   @Post(':id/assign-coders')
@@ -314,20 +281,13 @@ export class CodingJobController {
       @Body() assignCodersDto: AssignCodersDto,
       @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    try {
-      // Verify the coding job exists in this workspace
-      await this.codingJobService.getCodingJob(id, workspaceId);
+    // Verify the coding job exists in this workspace
+    await this.codingJobService.getCodingJob(id, workspaceId);
 
-      // Assign the coders
-      await this.codingJobService.assignCoders(id, assignCodersDto.userIds, undefined, workspaceId, ownershipRequest.user?.id);
+    // Assign the coders
+    await this.codingJobService.assignCoders(id, assignCodersDto.userIds, undefined, workspaceId, ownershipRequest.user?.id);
 
-      return { success: true };
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to assign coders: ${error.message}`);
-    }
+    return { success: true };
   }
 
   @Get('/coder/:coderId')
@@ -358,14 +318,10 @@ export class CodingJobController {
   async getCodingJobsByCoder(
     @Param('coderId', ParseIntPipe) coderId: number
   ): Promise<{ data: CodingJobDto[] }> {
-    try {
-      const codingJobs = await this.codingJobService.getCodingJobsByCoder(coderId);
-      return {
-        data: codingJobs.map(job => CodingJobDto.fromEntity(job))
-      };
-    } catch (error) {
-      throw new BadRequestException(`Failed to get coding jobs for coder: ${error.message}`);
-    }
+    const codingJobs = await this.codingJobService.getCodingJobsByCoder(coderId);
+    return {
+      data: codingJobs.map(job => CodingJobDto.fromEntity(job))
+    };
   }
 
   @Get(':jobId/coders')
@@ -402,15 +358,11 @@ export class CodingJobController {
   async getCodersByJobId(
     @Param('jobId', ParseIntPipe) jobId: number
   ): Promise<{ data: { userId: number }[], total: number }> {
-    try {
-      const coderIds = await this.codingJobService.getCodersByJobId(jobId);
-      const data = coderIds.map(userId => ({ userId }));
-      return {
-        data,
-        total: data.length
-      };
-    } catch (error) {
-      throw new BadRequestException(`Failed to get coders for job: ${error.message}`);
-    }
+    const coderIds = await this.codingJobService.getCodersByJobId(jobId);
+    const data = coderIds.map(userId => ({ userId }));
+    return {
+      data,
+      total: data.length
+    };
   }
 }

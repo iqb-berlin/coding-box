@@ -1,13 +1,13 @@
 import { EntityManager, Repository } from 'typeorm';
+import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import { ExclusionContext, WorkspaceExclusionService } from './workspace-exclusion.service';
-import { WorkspaceCoreService } from './workspace-core.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 
 const createService = (settings: WorkspaceSettingsDto = {}) => {
-  const workspaceCoreService = {
+  const workspaceRepository = {
     findOne: jest.fn().mockResolvedValue({ settings })
   };
   const fileUploadRepository = {
@@ -19,13 +19,13 @@ const createService = (settings: WorkspaceSettingsDto = {}) => {
     delete: jest.fn().mockResolvedValue(undefined)
   };
   const service = new WorkspaceExclusionService(
-    workspaceCoreService as unknown as WorkspaceCoreService,
+    workspaceRepository as unknown as Repository<Workspace>,
     fileUploadRepository as unknown as Repository<FileUpload>,
     cacheService as unknown as CacheService
   );
 
   return {
-    service, workspaceCoreService, fileUploadRepository, cacheService
+    service, workspaceRepository, fileUploadRepository, cacheService
   };
 };
 
@@ -36,7 +36,7 @@ describe('WorkspaceExclusionService', () => {
 
   it('returns cached exclusions without reading workspace settings or files', async () => {
     const {
-      service, workspaceCoreService, fileUploadRepository, cacheService
+      service, workspaceRepository, fileUploadRepository, cacheService
     } = createService();
     const cached = {
       globalIgnoredUnits: ['U1'], ignoredBooklets: ['B1'], testletIgnoredUnits: []
@@ -45,14 +45,14 @@ describe('WorkspaceExclusionService', () => {
 
     await expect(service.resolveExclusionsForQueries(7)).resolves.toBe(cached);
     expect(cacheService.get).toHaveBeenCalledWith('workspace-exclusions-7');
-    expect(workspaceCoreService.findOne).not.toHaveBeenCalled();
+    expect(workspaceRepository.findOne).not.toHaveBeenCalled();
     expect(fileUploadRepository.find).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
   });
 
   it('normalizes exclusions and resolves nested ignored testlets only in the selected booklet', async () => {
     const {
-      service, workspaceCoreService, fileUploadRepository, cacheService
+      service, workspaceRepository, fileUploadRepository, cacheService
     } = createService({
       ignoredUnits: [' unit-global.xml '],
       ignoredBooklets: [' booklet-ignore '],
@@ -80,7 +80,9 @@ describe('WorkspaceExclusionService', () => {
     };
 
     await expect(service.resolveExclusionsForQueries(7)).resolves.toEqual(expected);
-    expect(workspaceCoreService.findOne).toHaveBeenCalledWith(7);
+    expect(workspaceRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 7 }, select: { id: true, name: true, settings: true }
+    });
     expect(fileUploadRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 7, file_type: 'Booklet' }
     });
@@ -89,7 +91,7 @@ describe('WorkspaceExclusionService', () => {
 
   it('reads transactional settings and files through the supplied manager without using shared caches', async () => {
     const {
-      service, workspaceCoreService, fileUploadRepository, cacheService
+      service, workspaceRepository, fileUploadRepository, cacheService
     } = createService();
     cacheService.get.mockResolvedValue({
       globalIgnoredUnits: ['STALE'], ignoredBooklets: [], testletIgnoredUnits: []
@@ -124,23 +126,31 @@ describe('WorkspaceExclusionService', () => {
     expect(transactionalFileRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 7, file_type: 'Booklet' }
     });
-    expect(workspaceCoreService.findOne).not.toHaveBeenCalled();
+    expect(workspaceRepository.findOne).not.toHaveBeenCalled();
     expect(fileUploadRepository.find).not.toHaveBeenCalled();
     expect(cacheService.get).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
   });
 
-  it('returns no exclusions for a missing workspace', async () => {
-    const { service, workspaceCoreService } = createService();
-    workspaceCoreService.findOne.mockResolvedValue(null);
+  it('preserves the workspace not-found error outside a transaction', async () => {
+    const { service, workspaceRepository } = createService();
+    workspaceRepository.findOne.mockResolvedValue(null);
 
-    await expect(service.getExclusions(7)).resolves.toEqual({});
+    await expect(service.getExclusions(7)).rejects.toBeInstanceOf(AdminWorkspaceNotFoundException);
+  });
+
+  it('returns no exclusions for a missing workspace in a supplied transaction', async () => {
+    const { service, workspaceRepository } = createService();
+    const transactionalRepository = { findOne: jest.fn().mockResolvedValue(null) };
+    const manager = { getRepository: jest.fn().mockReturnValue(transactionalRepository) };
+    await expect(service.getExclusions(7, manager as unknown as EntityManager)).resolves.toEqual({});
+    expect(workspaceRepository.findOne).not.toHaveBeenCalled();
   });
 
   it('propagates workspace lookup failures without caching a false empty result', async () => {
-    const { service, workspaceCoreService, cacheService } = createService();
+    const { service, workspaceRepository, cacheService } = createService();
     const error = new Error('database unavailable');
-    workspaceCoreService.findOne.mockRejectedValue(error);
+    workspaceRepository.findOne.mockRejectedValue(error);
 
     await expect(service.resolveExclusionsForQueries(7)).rejects.toBe(error);
     expect(cacheService.set).not.toHaveBeenCalled();

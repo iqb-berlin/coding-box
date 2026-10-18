@@ -92,6 +92,14 @@ describe('WorkspaceCoreService', () => {
     await expect(service.findOne(99)).rejects.toBeInstanceOf(AdminWorkspaceNotFoundException);
   });
 
+  it('does not persist a supplied workspace ID or entity relations during creation', async () => {
+    await service.create({ name: 'New', id: 99, users: [{ userId: 88 }] } as never, 5);
+    expect(repo.create).toHaveBeenCalledWith({ name: 'New', settings: undefined });
+    expect(managerSave).toHaveBeenCalledWith(WorkspaceUser, {
+      workspaceId: 9, userId: 5, accessLevel: 3, canCode: false
+    });
+  });
+
   it('creates, patches and removes workspaces', async () => {
     queryRunner.manager.findOne.mockResolvedValueOnce({
       id: 1,

@@ -5,13 +5,13 @@ import {
   EntityManager, In, MoreThan, Repository
 } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { JournalService } from '../shared/journal.service';
 import { WorkspaceUserInListDto } from '../../../../../../../api-dto/user/workspace-user-in-list-dto';
-import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import {
   assertStudyManagersRemain,
   DEFAULT_WORKSPACE_USER_ACCESS,
@@ -77,7 +77,7 @@ export class UsersService {
       });
   }
 
-  async updateUsersAccess(workspaceId: number, users: UserInListDto[], actorUserId?: number): Promise<boolean> {
+  async updateUsersAccess(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>, actorUserId?: number): Promise<boolean> {
     this.logger.log('Patch users access rights');
     const normalizedWorkspaceId = Number(workspaceId);
     if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId < 1) {
@@ -276,14 +276,20 @@ export class UsersService {
     } as UserFullDto;
   }
 
-  async updateUser(userId: number, userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(userId: number, userData: RequestBody<'UserFullDto'>): Promise<UserFullDto> {
     this.logger.log(`Updating user with id: ${userId}`);
     const existingUser = await this.usersRepository.findOne({ where: { id: userId } });
     if (!existingUser) {
       this.logger.warn(`User with id: ${userId} not found.`);
-      throw new Error(`User with id: ${userId} not found.`);
+      throw new NotFoundException(`User with id: ${userId} not found.`);
     }
-    const updatedUser = await this.usersRepository.save({ id: userId, ...userData });
+    // Only documented write fields may reach persistence; the URL owns the ID.
+    const updatedUser = await this.usersRepository.save({
+      id: userId,
+      ...(userData.username !== undefined ? { username: userData.username } : {}),
+      ...(userData.isAdmin !== undefined ? { isAdmin: userData.isAdmin } : {}),
+      ...(userData.description !== undefined ? { description: userData.description } : {})
+    });
     return updatedUser;
   }
 
@@ -371,11 +377,16 @@ export class UsersService {
     }
   }
 
-  async create(user: CreateUserDto): Promise<number> {
+  async create(user: RequestBody<'CreateUserDto'>): Promise<number> {
     try {
       this.logger.log('Creating a new user');
 
-      const newUser = this.usersRepository.create(user);
+      const newUser = this.usersRepository.create({
+        username: user.username,
+        isAdmin: user.isAdmin,
+        issuer: user.issuer,
+        identity: user.identity
+      });
       const savedUser = await this.usersRepository.save(newUser);
 
       this.logger.log(`User created successfully with ID: ${savedUser.id}`);
@@ -386,7 +397,7 @@ export class UsersService {
     }
   }
 
-  async createUser(user: CreateUserDto): Promise<number> {
+  async createUser(user: RequestBody<'CreateUserDto'>): Promise<number> {
     const existingUser: User | null = await this.usersRepository.findOne({
       where: { username: user.username },
       select: ['id', 'username'] // Fetch only the needed fields for validation
@@ -399,7 +410,12 @@ export class UsersService {
       return existingUser.id;
     }
 
-    const newUser = this.usersRepository.create(user);
+    const newUser = this.usersRepository.create({
+      username: user.username,
+      isAdmin: user.isAdmin,
+      issuer: user.issuer,
+      identity: user.identity
+    });
 
     await this.usersRepository.save(newUser);
 
