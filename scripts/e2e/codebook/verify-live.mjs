@@ -175,6 +175,14 @@ try {
     assert.equal(derived.code ?? null, code, name);
     expectedRows.push({ unit, name, reference });
   }
+  const badName = 'SOLVER-INVALID-NAMESPACE';
+  const badCodings = [baseCoding('source', 'A'), { ...baseCoding('duplicate', 'A'), sourceType: 'COPY_VALUE', deriveSources: ['source'] }];
+  await file(badName + '.VOCS', 'Resource', JSON.stringify({ version: '3.4', variableCodings: badCodings }));
+  await file(badName, 'Unit', `<Unit><Metadata><Id>${badName}</Id></Metadata><CodingSchemeRef>${badName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="float" multiple="false" nullable="false" /></BaseVariables></Unit>`);
+  const badPerson = await insert('persons', { login: 'synthetic-invalid', code: 'proof', group: 'invalid', workspace_id: workspace, uploaded_at: new Date(), booklets: '[]', source: 'synthetic', consider: true });
+  const badBooklet = await insert('booklet', { infoid: info, personid: badPerson });
+  const badUnit = await insert('unit', { bookletid: badBooklet, name: badName, alias: badName });
+  await insert('response', { unitid: badUnit, variableid: 'A', status: 3, value: '1', subform: 'part-a' });
   const started = await json(`/admin/workspace/${workspace}/coding?testPersons=${person}&autoCoderRun=1`);
   const proof = await finishJob('test-person-coding', started.jobId, `/admin/workspace/${workspace}/coding/job/${started.jobId}`);
   for (const { unit, name, reference } of expectedRows) {
@@ -192,18 +200,12 @@ try {
     report.autocoder.push({ name, unit, reference, persisted: rows });
   }
   report.autocoderJob = proof;
-  const badName = 'SOLVER-INVALID-NAMESPACE';
-  const badCodings = [baseCoding('source', 'A'), { ...baseCoding('duplicate', 'A'), sourceType: 'COPY_VALUE', deriveSources: ['source'] }];
-  await file(badName + '.VOCS', 'Resource', JSON.stringify({ version: '3.4', variableCodings: badCodings }));
-  await file(badName, 'Unit', `<Unit><Metadata><Id>${badName}</Id></Metadata><CodingSchemeRef>${badName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="float" multiple="false" nullable="false" /></BaseVariables></Unit>`);
-  const badUnit = await insert('unit', { bookletid: booklet, name: badName, alias: badName });
-  await insert('response', { unitid: badUnit, variableid: 'A', status: 3, value: '1', subform: 'part-a' });
-  const snapshotSql = 'SELECT response.* FROM response JOIN unit ON unit.id=response.unitid JOIN booklet ON booklet.id=unit.bookletid WHERE booklet.personid=$1 ORDER BY response.id';
-  const beforeFailure = (await db.query(snapshotSql, [person])).rows;
-  const failedStart = await json(`/admin/workspace/${workspace}/coding?testPersons=${person}&autoCoderRun=1`);
+  const snapshotSql = 'SELECT response.* FROM response JOIN unit ON unit.id=response.unitid JOIN booklet ON booklet.id=unit.bookletid WHERE booklet.personid=ANY($1::int[]) ORDER BY response.id';
+  const beforeFailure = (await db.query(snapshotSql, [[person, badPerson]])).rows;
+  const failedStart = await json(`/admin/workspace/${workspace}/coding?testPersons=${badPerson}&autoCoderRun=1`);
   report.failedAutocoder = await finishJob('test-person-coding', failedStart.jobId, `/admin/workspace/${workspace}/coding/job/${failedStart.jobId}`, 'failed');
   assert.match(report.failedAutocoder.queue.failedReason, /duplicate output alias/);
-  assert.deepEqual((await db.query(snapshotSql, [person])).rows, beforeFailure, 'Failed whole-job preflight must not alter persisted responses');
+  assert.deepEqual((await db.query(snapshotSql, [[person, badPerson]])).rows, beforeFailure, 'Failed whole-job preflight must not alter persisted responses');
   report.failedAutocoder.persistenceUnchanged = true;
   report.passed = true;
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2) + '\n');
