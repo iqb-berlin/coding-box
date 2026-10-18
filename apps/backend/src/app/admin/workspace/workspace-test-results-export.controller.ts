@@ -1,19 +1,5 @@
 import {
-  BadRequestException,
-  Body,
-  ConflictException,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  Logger,
-  NotFoundException,
-  Param,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-  ParseIntPipe
+  BadRequestException, ConflictException, Controller, Delete, ForbiddenException, Get, Logger, NotFoundException, Param, Post, Req, Res, UseGuards, ParseIntPipe
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Job, Queue } from 'bull';
@@ -27,6 +13,8 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -365,14 +353,8 @@ export class WorkspaceTestResultsExportController {
   async startExportTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
-      @Body()
-                                         filters?: {
-                                           groupNames?: string[];
-                                           bookletNames?: string[];
-                                           unitNames?: string[];
-                                           personIds?: number[];
-                                           includeLogAnomalies?: boolean;
-                                         }
+      @ValidatedBody('WorkspaceTestResultsExportController_startExportTestResultsJob', true)
+                                         filters?: RequestBody<'WorkspaceTestResultsExportController_startExportTestResultsJob'>
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -424,13 +406,8 @@ export class WorkspaceTestResultsExportController {
   async startExportTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
-      @Body()
-                                         filters?: {
-                                           groupNames?: string[];
-                                           bookletNames?: string[];
-                                           unitNames?: string[];
-                                           personIds?: number[];
-                                         }
+      @ValidatedBody('WorkspaceTestResultsExportController_startExportTestLogsJob', true)
+                                         filters?: RequestBody<'WorkspaceTestResultsExportController_startExportTestLogsJob'>
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),

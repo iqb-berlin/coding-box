@@ -26,6 +26,7 @@ import { WorkspaceId } from './workspace.decorator';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { JobQueueService, CodebookJobResult } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { rethrowDownloadError } from '../../http/download-error';
 import {
   CodeBookContentSetting,
   CodebookExportFormat,
@@ -338,7 +339,7 @@ export class WorkspaceCodingCodebookController {
         `Error getting codebook job status: ${error.message}`,
         error.stack
       );
-      return { error: error.message };
+      throw error;
     }
   }
 
@@ -399,16 +400,7 @@ export class WorkspaceCodingCodebookController {
         `Error downloading codebook: ${error.message}`,
         error.stack
       );
-      if (res.headersSent || res.destroyed || res.writableEnded) {
-        if (!res.destroyed) {
-          res.destroy(error);
-        }
-        return;
-      }
-      res.removeHeader('Content-Disposition');
-      res.removeHeader('Content-Length');
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 

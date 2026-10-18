@@ -1,5 +1,8 @@
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import {
+  IsArray, IsOptional, IsString, ValidateNested
+} from 'class-validator';
 import { VariableDto } from './variable.dto';
 
 export class UpdateVariableBundleDto {
@@ -28,5 +31,7 @@ export class UpdateVariableBundleDto {
   })
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VariableDto)
     variables?: VariableDto[];
 }

@@ -7,13 +7,14 @@ import {
   Put,
   Delete,
   Param,
-  Body,
   ParseIntPipe,
   UseGuards,
   Req
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import type { RequestBody } from '../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../http/validated-body.decorator';
 import { JournalService } from '../database/services/shared/journal.service';
 import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -27,15 +28,8 @@ import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
 } from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
-interface WorkspaceSettingWriteDto {
-  key: string;
-  value: string;
-  description?: string;
-}
-
-interface WorkspaceSettingsBatchDto {
-  settings: WorkspaceSettingWriteDto[];
-}
+type WorkspaceSettingWriteDto = RequestBody<'WorkspaceSettingWriteDto'>;
+type WorkspaceSettingsBatchDto = RequestBody<'WorkspaceSettingsBatchDto'>;
 
 interface WorkspaceSettingResponse {
   id: string | number;
@@ -157,7 +151,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   async createWorkspaceSettings(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body() createSettingsDto: WorkspaceSettingsBatchDto,
+    @ValidatedBody('WorkspaceSettingsBatchDto') createSettingsDto: WorkspaceSettingsBatchDto,
     @Req() request?: { user: { id: number } }
   ) {
     const settings = this.validateWorkspaceSettingsBatch(createSettingsDto);
@@ -208,7 +202,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   async createWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body() createSettingDto: WorkspaceSettingWriteDto,
+    @ValidatedBody('WorkspaceSettingWriteDto') createSettingDto: WorkspaceSettingWriteDto,
     @Req() request?: { user: { id: number } }
   ) {
     const settings = await this.createWorkspaceSettings(workspaceId, { settings: [createSettingDto] }, request);
@@ -221,7 +215,7 @@ export class WorkspaceSettingsController {
   async updateWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
-    @Body() updateSettingDto: { value: string },
+    @ValidatedBody('WorkspaceSettingsController_updateWorkspaceSetting') updateSettingDto: RequestBody<'WorkspaceSettingsController_updateWorkspaceSetting'>,
     @Req() request?: { user: { id: number } }
   ) {
     this.assertSettingIdBelongsToWorkspace(workspaceId, settingId);
@@ -231,7 +225,7 @@ export class WorkspaceSettingsController {
       const setting = await repository.findOne({ where: { key: settingId } });
 
       if (!setting) {
-        throw new Error(`Setting ${settingId} not found`);
+        throw new NotFoundException(`Setting ${settingId} not found`);
       }
 
       setting.content = updateSettingDto.value;
@@ -260,7 +254,7 @@ export class WorkspaceSettingsController {
     return this.settingRepository.manager.transaction(async manager => {
       const result = await manager.getRepository(Setting).delete({ key: settingId });
       if (result.affected === 0) {
-        throw new Error(`Setting ${settingId} not found`);
+        throw new NotFoundException(`Setting ${settingId} not found`);
       }
       await this.recordSettingsChange(manager, workspaceId, [settingId], 'delete', request?.user.id);
       return { message: 'Setting deleted successfully' };

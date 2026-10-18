@@ -1,21 +1,12 @@
 import {
-  Controller,
-  Post,
-  Get,
-  Logger,
-  Param,
-  Req,
-  UseGuards,
-  Body
+  Controller, Post, Get, Logger, Param, Req, UseGuards
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiTags,
-  ApiBody,
-  ApiConflictResponse
+  ApiOkResponse, ApiParam, ApiTags, ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -53,32 +44,7 @@ export class WorkspaceCodingVersionController {
     type: Number,
     description: 'ID of the workspace'
   })
-  @ApiBody({
-    description: 'Reset coding version request',
-    schema: {
-      type: 'object',
-      properties: {
-        version: {
-          type: 'string',
-          enum: ['v1', 'v2', 'v3'],
-          description: 'Coding version to reset'
-        },
-        unitFilters: {
-          type: 'array',
-          items: { type: 'string' },
-          nullable: true,
-          description: 'Optional unit names to filter by'
-        },
-        variableFilters: {
-          type: 'array',
-          items: { type: 'string' },
-          nullable: true,
-          description: 'Optional variable IDs to filter by'
-        }
-      },
-      required: ['version']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Reset coding version job enqueued successfully',
     schema: {
@@ -100,12 +66,8 @@ export class WorkspaceCodingVersionController {
   })
   async resetCodingVersion(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     version: 'v1' | 'v2' | 'v3';
-                     unitFilters?: string[];
-                     variableFilters?: string[];
-                   },
+      @ValidatedBody('WorkspaceCodingVersionController_resetCodingVersion')
+                   body: RequestBody<'WorkspaceCodingVersionController_resetCodingVersion'>,
                    @Req() request: RequestWithUser
   ): Promise<{ jobId: string; message: string }> {
     await this.jobQueueService.assertNoDependencyConflicts('reset-coding-version', workspace_id);
