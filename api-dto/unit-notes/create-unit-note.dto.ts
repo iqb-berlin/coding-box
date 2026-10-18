@@ -1,9 +1,3 @@
-import { ApiProperty } from '@nestjs/swagger';
+import type { RequestBody } from '../request-contracts';
 
-export class CreateUnitNoteDto {
-  @ApiProperty({ description: 'The ID of the unit this note belongs to' })
-    unitId!: number;
-
-  @ApiProperty({ description: 'The note text' })
-    note!: string;
-}
+export type CreateUnitNoteDto = RequestBody<'CreateUnitNoteDto'>;
