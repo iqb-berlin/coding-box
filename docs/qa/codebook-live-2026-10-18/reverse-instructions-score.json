@@ -1,0 +1,1 @@
+[{"key":"UNIT","name":"UNIT","variables":[{"id":"idA","label":"idA","sourceType":"BASE","generalInstruction":"<p>GENERAL-idB</p>","codes":[{"id":"0","label":"RICHTIG","description":"<p>Bewerten idB</p>","score":"0"}]}],"missings":[{"code":-99,"label":"PROOF-MISSING","description":"Synthetic missing description"}]}]
