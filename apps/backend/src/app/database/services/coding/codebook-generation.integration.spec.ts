@@ -155,6 +155,37 @@ describe('CodebookGenerationService with the real shared generator', () => {
     expect(itemRelations(docx!)).toEqual([[item, ...(legacyItems ? [`LEGACY-${sourceId === 'idA' ? 'A' : 'B'}`] : [])]]);
   });
 
+  it.each(['json', 'docx'] as const)('rejects disjoint filters with colliding aliases in %s', async exportFormat => {
+    bundles.find.mockResolvedValue([{ id: 20, variables: [{ unitName: 'UNIT', variableId: 'idA' }] }]);
+    await expect(service.generateCodebook(42, 0, {
+      ...contentOptions, exportFormat, jobDefinitionId: 10, variableBundleIds: [20]
+    }, [1])).rejects.toThrow('keine passenden Variablen');
+  });
+
+  it.each(['json', 'docx'] as const)('exports only the true intersection with colliding aliases in %s', async exportFormat => {
+    const unit = sourceUnit();
+    const scheme = JSON.parse(unit.data);
+    scheme.variableCodings.push(coding('third', 'C'));
+    unit.data = JSON.stringify(scheme);
+    unit.structured_data.metadata.items.push({ id: 'ITEM-C', variableId: 'third' });
+    files.find.mockResolvedValue([unit]);
+    jobs.findOne.mockResolvedValue({ assigned_variables: [
+      { unitName: 'UNIT', variableId: 'idB' }, { unitName: 'UNIT', variableId: 'C' }
+    ], assigned_variable_bundles: [] });
+    bundles.find.mockResolvedValue([{ id: 20, variables: [
+      { unitName: 'UNIT', variableId: 'idA' }, { unitName: 'UNIT', variableId: 'C' }
+    ] }]);
+    const result = await service.generateCodebook(42, 0, {
+      ...contentOptions, exportFormat, jobDefinitionId: 10, variableBundleIds: [20]
+    }, [1]);
+    expect(result).not.toBeNull();
+    if (exportFormat === 'json') {
+      expect(JSON.parse(result!.toString())[0].variables.map(variable => variable.id)).toEqual(['C']);
+    } else {
+      expect(itemRelations(result!)).toEqual([['ITEM-C']]);
+    }
+  });
+
   it('retains both original item relations without a variable scope', async () => {
     const docx = await service.generateCodebook(42, 0, { ...contentOptions, exportFormat: 'docx' }, [1]);
     expect(docx).not.toBeNull();

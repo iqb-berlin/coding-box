@@ -89,17 +89,22 @@ try {
   const jobId = await insert('job_definitions', { workspace_id: workspace, name: 'Proof filter', distribution_seed: 'proof', assigned_variables: JSON.stringify([{ unitName: 'UNIT', variableId: 'idB' }]) });
   const bundleId = await insert('variable_bundle', { workspace_id: workspace, name: 'Proof bundle', variables: JSON.stringify([{ unitName: 'UNIT', variableId: 'idB' }]) });
   const reverseBundleId = await insert('variable_bundle', { workspace_id: workspace, name: 'Other bundle', variables: JSON.stringify([{ unitName: 'UNIT', variableId: 'idA' }]) });
+  const partialVariables = [...variables, baseCoding('third', 'C')];
+  const partialUnitId = await file('INTERSECTION.VOCS', 'Resource', JSON.stringify({ version: '3.4', variableCodings: partialVariables }), { metadata: { items: [{ id: 'ITEM-A', variableId: 'idA' }, { id: 'ITEM-B', variableId: 'idB' }, { id: 'ITEM-C', variableId: 'third' }] } });
+  const partialJobId = await insert('job_definitions', { workspace_id: workspace, name: 'Partial filter', distribution_seed: 'proof', assigned_variables: JSON.stringify([{ unitName: 'INTERSECTION', variableId: 'idB' }, { unitName: 'INTERSECTION', variableId: 'C' }]) });
+  const partialBundleId = await insert('variable_bundle', { workspace_id: workspace, name: 'Partial bundle', variables: JSON.stringify([{ unitName: 'INTERSECTION', variableId: 'idA' }, { unitName: 'INTERSECTION', variableId: 'C' }]) });
   for (const scope of [
     { name: 'all', filter: {}, aliases: ['idA','idB'], items: [['ITEM-B','LEGACY-B'],['ITEM-A','LEGACY-A']] },
     { name: 'job', filter: { jobDefinitionId: jobId }, aliases: ['idB'], items: [['ITEM-A','LEGACY-A']] },
     { name: 'bundle', filter: { variableBundleIds: [bundleId] }, aliases: ['idB'], items: [['ITEM-A','LEGACY-A']] },
     { name: 'intersection', filter: { jobDefinitionId: jobId, variableBundleIds: [bundleId] }, aliases: ['idB'], items: [['ITEM-A','LEGACY-A']] },
+    { name: 'partial-intersection', unitId: partialUnitId, unitKey: 'INTERSECTION', variables: partialVariables, filter: { jobDefinitionId: partialJobId, variableBundleIds: [partialBundleId] }, aliases: ['C'], items: [['ITEM-C']] },
     { name: 'reverse', filter: { variableBundleIds: [reverseBundleId] }, aliases: ['idA'], items: [['ITEM-B','LEGACY-B']] }
   ]) {
     for (const show of [true, false]) {
       for (const format of ['json','docx']) {
         const contentOptions = { ...options, ...scope.filter, showScore: show, hasGeneralInstructions: show, exportFormat: format, missingsProfile: String(profileId) };
-        const started = await json(`/admin/workspace/${workspace}/coding/codebook/job`, { missingsProfile: profileId, contentOptions, unitList: [unitId] });
+        const started = await json(`/admin/workspace/${workspace}/coding/codebook/job`, { missingsProfile: profileId, contentOptions, unitList: [scope.unitId ?? unitId] });
         const proof = await finishJob('codebook-generation', started.jobId, `/admin/workspace/${workspace}/coding/codebook/job/${started.jobId}`);
         const response = await request(`/admin/workspace/${workspace}/coding/codebook/job/${started.jobId}/download`);
         assert.match(response.headers.get('content-disposition'), new RegExp(`codebook\\.${format}`));
@@ -124,9 +129,9 @@ try {
           assert(xml.includes('PROOF-MISSING'));
         }
         if (studio) {
-          const selected = variables.filter(v => scope.aliases.includes(v.alias));
+          const selected = (scope.variables ?? variables).filter(v => scope.aliases.includes(v.alias));
           const items = selected.flatMap(v => scope.items[scope.aliases.indexOf(v.alias)].map(id => ({ id, variableId: v.id })));
-          const reference = await studio.generate({ id: 1, key: 'UNIT', name: 'UNIT', scheme: JSON.stringify({ version: '3.4', variableCodings: selected }), metadata: { items } }, contentOptions, missing);
+          const reference = await studio.generate({ id: 1, key: scope.unitKey ?? 'UNIT', name: scope.unitKey ?? 'UNIT', scheme: JSON.stringify({ version: '3.4', variableCodings: selected }), metadata: { items } }, contentOptions, missing);
           if (format === 'json') assert.deepEqual(JSON.parse(bytes.toString()), JSON.parse(reference.toString()));
           else assert.deepEqual(normalizedDocx(bytes), normalizedDocx(reference));
         }
@@ -139,7 +144,7 @@ try {
   assert.match(report.failedExport.queue.failedReason, /keine passenden Variablen/);
   const rejectedDownload = await fetch(`${api}/admin/workspace/${workspace}/coding/codebook/job/${invalidScope.jobId}/download`, { headers: { authorization: `Bearer ${token}` } });
   assert.equal(rejectedDownload.status, 404);
-  const person = await insert('persons' , { login: 'synthetic', code: 'proof', group: 'solver', workspace_id: workspace, uploaded_at: new Date(), booklets: '[]', source: 'synthetic', consider: true });
+  const person = await insert('persons', { login: 'synthetic', code: 'proof', group: 'solver', workspace_id: workspace, uploaded_at: new Date(), booklets: '[]', source: 'synthetic', consider: true });
   const info = await insert('bookletinfo', { name: `Proof ${workspace}`, size: 0 });
   const booklet = await insert('booklet', { infoid: info, personid: person });
   const cases = [
