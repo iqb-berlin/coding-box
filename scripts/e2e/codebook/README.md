@@ -1,7 +1,7 @@
 # Local Codebook and Autocoder acceptance
 
 This fixture uses a dedicated PostgreSQL database (port 15441), Redis (16441),
-and a production backend on `127.0.0.104:3333`. It seeds synthetic records with
+and a production backend on `127.0.0.1:3333`. It seeds synthetic records with
 SQL, submits jobs through the regular authenticated HTTP endpoints, observes
 HTTP status and Bull records, downloads the output, and reads persisted results.
 It never uses production data. Run it from an isolated checkout with Node 22.
@@ -28,7 +28,7 @@ OIDC_ISSUER=http://replay-e2e.invalid/realms/replay-e2e \
 POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=15441 \
 POSTGRES_USER=codebook_test POSTGRES_PASSWORD=disposable_test_only \
 POSTGRES_DB=codebook_test REDIS_HOST=127.0.0.1 REDIS_PORT=16441 \
-REDIS_PREFIX=codebook-proof API_HOST=127.0.0.104 \
+REDIS_PREFIX=codebook-proof API_HOST=127.0.0.1 \
 node dist/apps/backend/main.js
 ```
 

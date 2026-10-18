@@ -12,7 +12,7 @@ import { loadStudioReference, normalizedDocx } from './studio-reference.mjs';
 
 // This fixture only supports the dedicated local Compose database and queue.
 // Data is synthetic; seeding is direct SQL, all jobs and downloads use HTTP.
-const api = 'http://127.0.0.104:3333/api';
+const api = 'http://127.0.0.1:3333/api';
 const output = process.env.CODEBOOK_PROOF_DIR || '/tmp/codebook-1041-evidence/live';
 const secret = process.env.JWT_SECRET;
 assert(secret, 'Use the same disposable JWT_SECRET as the local backend');
@@ -26,7 +26,7 @@ const payload = encode({ iss: 'http://replay-e2e.invalid/realms/replay-e2e', sub
 const signature = createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
 const token = `${header}.${payload}.${signature}`;
 async function request(path, body) {
-  const res = await fetch(`${api}${path}`, { method: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${api}${path}`, { method: body ? 'POST' : 'GET', signal: AbortSignal.timeout(10000), headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   assert(res.ok, `${path}: HTTP ${res.status}: ${res.ok ? '' : await res.text()}`);
   return res;
 }
