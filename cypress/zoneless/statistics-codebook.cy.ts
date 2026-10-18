@@ -183,7 +183,9 @@ describe('Zoneless replay statistics and codebook export', () => {
   });
 
   for (const outcome of ['completed', 'failed']) {
-    it(`renders delayed codebook progress and the ${outcome} status`, () => {
+    // Both gates deliberately span several user interactions. Cypress applies this
+    // timeout to the entire intercept callback, not just to each DOM command.
+    it(`renders delayed codebook progress and the ${outcome} status`, { defaultCommandTimeout: 30000 }, () => {
       let releaseUnits!: () => void;
       const unitsGate = new Promise<void>(resolve => { releaseUnits = resolve; });
       let releaseProfiles!: () => void;
@@ -206,6 +208,7 @@ describe('Zoneless replay statistics and codebook export', () => {
         expect(request.body.contentOptions.showScore).to.equal(false);
         expect(request.body.contentOptions.exportFormat).to.equal('json');
         expect(request.body.contentOptions.jobDefinitionId).to.equal(10);
+        expect(request.body.missingsProfile).to.equal('7');
         request.reply({ delay: 300, body: { jobId: 'job-1', message: 'Started' } });
       }).as('startCodebook');
       let finish = false;
@@ -243,6 +246,8 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.wait('@profiles');
       cy.get('@dialog').find('input[type="radio"][value="json"]').should('be.checked');
       cy.get('@dialog').contains('mat-checkbox', 'Bewertung anzeigen').find('input').should('not.be.checked');
+      cy.get('@dialog').find('.select-missings-profile').click();
+      cy.contains('mat-option', 'Profil').click();
       cy.get('@dialog').find('button[type="submit"]').click();
       cy.wait('@startCodebook');
       cy.get('@dialog').find('button[type="submit"]').should('be.disabled');
