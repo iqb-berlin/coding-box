@@ -1,19 +1,6 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe,
-  Logger
+  BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, Logger
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiOkResponse,
   ApiOperation,
@@ -22,7 +9,10 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
@@ -37,7 +27,7 @@ import {
   ResponseSearchSortDirection
 } from '../../database/services/test-results/workspace-test-results.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
-import { RequestWithUser, ResolveDuplicateResponsesRequest, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
+import { RequestWithUser, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { Setting } from '../../database/entities/setting.entity';
@@ -141,20 +131,14 @@ export class WorkspaceTestResultsResponseController {
   })
   async resolveDuplicateResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() body: ResolveDuplicateResponsesRequest,
+      @ValidatedBody('ResolveDuplicateResponsesRequest') body: RequestBody<'ResolveDuplicateResponsesRequest'>,
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
-    try {
-      return await this.responseManagementService.resolveDuplicateResponses(
-        workspaceId,
-        body?.resolutionMap || {},
-        req.user.id
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to resolve duplicate responses. ${error.message}`
-      );
-    }
+    return this.responseManagementService.resolveDuplicateResponses(
+      workspaceId,
+      body?.resolutionMap || {},
+      req.user.id
+    );
   }
 
   @Get(':workspace_id/responses')
@@ -331,9 +315,7 @@ export class WorkspaceTestResultsResponseController {
       }
 
       this.logger.error(`Error searching for responses: ${error}`);
-      throw new BadRequestException(
-        `Failed to search for responses. ${error.message}`
-      );
+      throw error;
     }
   }
 

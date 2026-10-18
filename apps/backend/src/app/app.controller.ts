@@ -1,18 +1,10 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  ForbiddenException,
-  Get,
-  NotFoundException,
-  Post,
-  Query,
-  Req,
-  UseGuards
+  BadRequestException, Controller, ForbiddenException, Get, NotFoundException, Post, Query, Req, UseGuards
 } from '@nestjs/common';
-
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
+import type { RequestBody } from '../../../../api-dto/request-contracts';
+import { ValidatedBody } from './http/validated-body.decorator';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -76,7 +68,7 @@ export class AppController {
 
   @Post('tc_authentication')
   async authenticateTestCenter(
-    @Body() credentials: { username: string, password: string, server: string, url: string }
+    @ValidatedBody('AppController_authenticateTestCenter') credentials: RequestBody<'AppController_authenticateTestCenter'>
   ): Promise<Record<string, unknown>> {
     return this.testCenterService.authenticate(credentials);
   }

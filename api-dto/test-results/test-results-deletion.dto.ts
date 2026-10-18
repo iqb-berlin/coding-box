@@ -1,3 +1,4 @@
+import type { RequestBody } from '../request-contracts';
 import { CodingFreshnessImpactDto } from '../coding/coding-freshness.dto';
 
 export type TestResultsDeleteScope =
@@ -10,22 +11,9 @@ export type TestResultsDeleteScope =
 export type TestResultsDeleteTargetType = 'test-results' | 'logs' | 'responses';
 export type TestResultsTimestampSource = 'chunk' | 'unknown';
 
-export interface TestResultsDeleteRequestDto {
-  scope: TestResultsDeleteScope;
-  personIds?: number[];
-  searchText?: string;
-  groups?: string[];
-  bookletNames?: string[];
-  unitNames?: string[];
-}
+export type TestResultsDeleteRequestDto = RequestBody<'TestResultsDeleteRequestDto'>;
 
-export interface TestResultsResponseCleanupRequestDto {
-  unitNames: string[];
-  answeredBefore: string | number;
-  answeredFrom?: string | number;
-  variableIds?: string[];
-  subforms?: string[];
-}
+export type TestResultsResponseCleanupRequestDto = RequestBody<'TestResultsResponseCleanupRequestDto'>;
 
 export interface TestResultsResponseCleanupSampleDto {
   responseId: number;

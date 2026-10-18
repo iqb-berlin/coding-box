@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import * as ExcelJS from 'exceljs';
 import { EventEmitter } from 'events';
@@ -126,6 +126,18 @@ describe('WorkspaceCodingStatisticsController', () => {
       return undefined;
     });
   });
+
+  it.each([new Error('Original database failure'), new ForbiddenException('Access denied')])(
+    'preserves the original kappa service error and stack', async error => {
+      const log = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      codingReviewService.getCodedVariablesForKappa.mockRejectedValueOnce(error);
+      try {
+        await expect(controller.getCohensKappaStatistics(47)).rejects.toBe(error);
+      } finally {
+        log.mockRestore();
+      }
+    }
+  );
 
   it('requires coding-manager access for applied results overview', () => {
     const handler = WorkspaceCodingStatisticsController.prototype.getAppliedResultsOverview;

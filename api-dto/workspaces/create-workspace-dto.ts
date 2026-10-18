@@ -1,9 +1,3 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { RequestBody } from '../request-contracts';
 
-export class CreateWorkspaceDto {
-  @ApiProperty({ example: 'VERA2002' })
-    name!: string;
-
-  @ApiPropertyOptional()
-    settings = {};
-}
+export type CreateWorkspaceDto = RequestBody<'CreateWorkspaceDto'>;
