@@ -3,6 +3,8 @@ import { chown, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { FILE_ACCESS_USERS } from './file-access-users.mjs';
 
+export const FIXTURE_ADMIN_USERNAME = 'replay-e2e-bootstrap';
+
 export async function prepareAuthEnvironment(
   runDir,
   keycloakPort,
@@ -52,7 +54,7 @@ export async function prepareAuthEnvironment(
     ],
     users: [
       {
-        username: 'replay-e2e-bootstrap', enabled: true, emailVerified: true,
+        username: FIXTURE_ADMIN_USERNAME, enabled: true, emailVerified: true,
         email: 'bootstrap@example.invalid', firstName: 'Fixture', lastName: 'Admin',
         realmRoles: ['admin'],
         credentials: [{ type: 'password', value: password, temporary: false }]

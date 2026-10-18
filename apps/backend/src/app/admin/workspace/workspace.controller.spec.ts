@@ -56,7 +56,10 @@ describe('WorkspaceController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('passes the authenticated user id when creating a workspace', async () => {
+  it.each([
+    { id: 'identity-5' },
+    { id: 5, identity: 'identity-5' }
+  ])('resolves the OIDC identity to the creating database user: %j', async user => {
     workspaceCoreService.create.mockResolvedValueOnce(12);
     usersService.findUserByIdentity.mockResolvedValueOnce({
       id: 5,
@@ -66,7 +69,7 @@ describe('WorkspaceController', () => {
 
     await expect(controller.create(
       { name: 'New workspace' } as never,
-      { user: { id: 'identity-5' } } as never
+      { user } as never
     )).resolves.toBe(12);
 
     expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-5');

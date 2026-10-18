@@ -4,6 +4,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { findComposeContainer } from './compose-container.mjs';
+import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_OIDC_ISSUER',
@@ -780,7 +781,7 @@ export async function createAdminToken(config) {
     method: 'POST',
     body: new URLSearchParams({
       grant_type: 'password', client_id: 'replay-e2e-bootstrap',
-      username: 'replay-e2e-bootstrap', password: config.authPassword
+      username: FIXTURE_ADMIN_USERNAME, password: config.authPassword
     })
   });
   if (!response.ok) throw new Error(`OIDC fixture login failed with HTTP ${response.status}.`);

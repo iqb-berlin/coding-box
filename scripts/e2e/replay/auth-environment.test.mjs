@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { prepareAuthEnvironment } from './auth-environment.mjs';
+import { FIXTURE_ADMIN_USERNAME, prepareAuthEnvironment } from './auth-environment.mjs';
 import { createAdminToken } from './harness.mjs';
 
 test('generates a separate fixture login with the backend audience and a short-lived browser session', async t => {
@@ -13,6 +13,9 @@ test('generates a separate fixture login with the backend audience and a short-l
   const realm = JSON.parse(await readFile(path.join(directory, 'coding-e2e-realm.json'), 'utf8'));
   const browser = realm.clients.find(client => client.clientId === 'replay-e2e');
   const bootstrap = realm.clients.find(client => client.clientId === 'replay-e2e-bootstrap');
+  const administrator = realm.users.find(user => user.username === FIXTURE_ADMIN_USERNAME);
+  assert.deepEqual(administrator.realmRoles, ['admin']);
+  assert.equal(administrator.credentials[0].value, environment.REPLAY_E2E_AUTH_PASSWORD);
   assert.equal(environment.REPLAY_E2E_OIDC_ISSUER, 'http://127.0.0.1:8123/realms/coding-e2e');
   assert.equal(environment.REPLAY_E2E_CALLBACK_URL, '//127.0.0.1:8420/api/auth/callback');
   assert.equal(realm.accessTokenLifespan, 30);

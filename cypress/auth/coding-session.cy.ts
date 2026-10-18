@@ -226,7 +226,7 @@ describe('real Keycloak coding session', () => {
       'Recovered live draft'
     );
 
-    cy.intercept('PUT', '**/coding-job/*', (request) => {
+    cy.intercept('PUT', '**/coding-job/*/comment', (request) => {
       if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
     });
     cy.get('coding-box-code-selector .comment-button').click();
