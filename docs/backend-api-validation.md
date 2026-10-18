@@ -73,6 +73,10 @@ connecting to a database. These checks do not prove a live full-stack deployment
 
 ## Separate follow-up: service decomposition
 
+The separate port after merging #1066 is documented in
+[backend-coding-job-services.md](backend-coding-job-services.md). The following
+notes record the dependency and compatibility constraints identified for it.
+
 Do not cherry-pick the old service extraction wholesale: current `develop` adds
 ownership checks, actor IDs, audit events, locking and status-transition rules
 that its extracted providers do not contain. Port against the current service,
