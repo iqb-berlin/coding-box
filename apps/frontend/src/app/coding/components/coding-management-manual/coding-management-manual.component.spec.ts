@@ -27,16 +27,16 @@ import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-
 import type { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
 
 type VariableCoverageOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['variableCoverageOverview']>
+  ReturnType<CodingManagementManualComponent['variableCoverageOverview']>
 >;
 type CaseCoverageOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['caseCoverageOverview']>
+  ReturnType<CodingManagementManualComponent['caseCoverageOverview']>
 >;
 type CodingProgressOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['codingProgressOverview']>
+  ReturnType<CodingManagementManualComponent['codingProgressOverview']>
 >;
 type ManualAppliedResultsOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['appliedResultsOverview']>
+  ReturnType<CodingManagementManualComponent['appliedResultsOverview']>
 >;
 
 const createManualCodeAvailabilityWarning = (

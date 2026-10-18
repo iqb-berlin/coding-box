@@ -35,7 +35,7 @@ export class CreateJobDefinitionDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'Optional user-facing description of the job definition',
@@ -52,7 +52,7 @@ export class CreateJobDefinitionDto {
   })
   @IsString()
   @IsOptional()
-    description?: string | null;
+  description?: string | null;
 
   @ApiProperty({
     description: 'Status of the job definition',
@@ -61,7 +61,7 @@ export class CreateJobDefinitionDto {
   })
   @IsEnum(['draft', 'pending_review', 'approved'])
   @IsOptional()
-    status?: JobDefinitionStatus;
+  status?: JobDefinitionStatus;
 
   @ApiProperty({
     description: 'Assigned variables',
@@ -72,7 +72,7 @@ export class CreateJobDefinitionDto {
   @ValidateNested({ each: true })
   @Type(() => JobDefinitionVariableDto)
   @IsOptional()
-    assignedVariables?: JobDefinitionVariableDto[];
+  assignedVariables?: JobDefinitionVariableDto[];
 
   @ApiProperty({
     description: 'Assigned variable bundles',
@@ -83,7 +83,7 @@ export class CreateJobDefinitionDto {
   @ValidateNested({ each: true })
   @Type(() => JobDefinitionVariableBundleDto)
   @IsOptional()
-    assignedVariableBundles?: JobDefinitionVariableBundleDto[];
+  assignedVariableBundles?: JobDefinitionVariableBundleDto[];
 
   @ApiProperty({
     description: 'Assigned coder IDs',
@@ -96,7 +96,7 @@ export class CreateJobDefinitionDto {
   @Min(1, { each: true })
   @Type(() => Number)
   @IsOptional()
-    assignedCoders?: number[];
+  assignedCoders?: number[];
 
   @ApiProperty({
     description: 'Assigned coders with optional capacity percentages. If present, this is the source for assigned coder IDs.',
@@ -107,7 +107,7 @@ export class CreateJobDefinitionDto {
   @ValidateNested({ each: true })
   @Type(() => JobDefinitionCoderConfigDto)
   @IsOptional()
-    assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
+  assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
 
   @ApiProperty({
     description: 'ID of the missings profile to assign to the job definition. If omitted, IQB-Standard is used.',
@@ -118,7 +118,7 @@ export class CreateJobDefinitionDto {
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-    missingsProfileId?: number;
+  missingsProfileId?: number;
 
   @ApiProperty({
     description: 'Duration in seconds for one coding task',
@@ -129,7 +129,7 @@ export class CreateJobDefinitionDto {
   @Min(1)
   @Type(() => Number)
   @IsOptional()
-    durationSeconds?: number;
+  durationSeconds?: number;
 
   @ApiProperty({
     description: 'Maximum number of coding cases',
@@ -141,7 +141,7 @@ export class CreateJobDefinitionDto {
   @Min(1)
   @Type(() => Number)
   @IsOptional()
-    maxCodingCases?: number | null;
+  maxCodingCases?: number | null;
 
   @ApiProperty({
     description: 'Absolute number of cases per variable that should be double coded',
@@ -152,7 +152,7 @@ export class CreateJobDefinitionDto {
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-    doubleCodingAbsolute?: number;
+  doubleCodingAbsolute?: number;
 
   @ApiProperty({
     description: 'Percentage (0-100) of cases per variable that should be double coded',
@@ -164,7 +164,7 @@ export class CreateJobDefinitionDto {
   @Max(100)
   @Type(() => Number)
   @IsOptional()
-    doubleCodingPercentage?: number;
+  doubleCodingPercentage?: number;
 
   @ApiProperty({
     description: 'Case ordering mode for distribution: continuous (sort by variable first) or alternating (sort by case first)',
@@ -174,7 +174,7 @@ export class CreateJobDefinitionDto {
   })
   @IsEnum(['continuous', 'alternating'])
   @IsOptional()
-    caseOrderingMode?: CaseOrderingMode;
+  caseOrderingMode?: CaseOrderingMode;
 
   @ApiProperty({
     description: 'Seed used for deterministic distribution planning',
@@ -185,7 +185,7 @@ export class CreateJobDefinitionDto {
   @IsString()
   @MaxLength(128)
   @IsOptional()
-    distributionSeed?: string;
+  distributionSeed?: string;
 
   @ApiProperty({
     description: 'Whether to show scores in generated coding jobs',
@@ -195,7 +195,7 @@ export class CreateJobDefinitionDto {
   })
   @IsBoolean()
   @IsOptional()
-    showScore?: boolean;
+  showScore?: boolean;
 
   @ApiProperty({
     description: 'Whether to allow comments in generated coding jobs',
@@ -205,7 +205,7 @@ export class CreateJobDefinitionDto {
   })
   @IsBoolean()
   @IsOptional()
-    allowComments?: boolean;
+  allowComments?: boolean;
 
   @ApiProperty({
     description: 'Whether to suppress general instructions in generated coding jobs',
@@ -215,5 +215,5 @@ export class CreateJobDefinitionDto {
   })
   @IsBoolean()
   @IsOptional()
-    suppressGeneralInstructions?: boolean;
+  suppressGeneralInstructions?: boolean;
 }

@@ -132,7 +132,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(mockResponse) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -213,7 +213,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(mockResponse) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -310,7 +310,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(mockResponse) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -351,7 +351,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(null) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -381,7 +381,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(null) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -437,7 +437,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(null) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -490,7 +490,7 @@ describe('ExportValidationResultsService', () => {
 
       responseRepository.createQueryBuilder.mockReturnValue(
         makeQueryBuilder(mockResponse) as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 
@@ -550,7 +550,7 @@ describe('ExportValidationResultsService', () => {
       const mockQueryBuilder = makeQueryBuilder(mockResponse);
       responseRepository.createQueryBuilder.mockReturnValue(
         mockQueryBuilder as unknown as ReturnType<
-        Repository<ResponseEntity>['createQueryBuilder']
+          Repository<ResponseEntity>['createQueryBuilder']
         >
       );
 

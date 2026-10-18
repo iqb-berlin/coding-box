@@ -79,7 +79,7 @@ export class ResourcePackageController {
   @ApiTags('admin resource-packages')
   async removeResourcePackage(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<void> {
     return this.resourcePackageService.removeResourcePackage(workspaceId, id);
   }
@@ -104,7 +104,7 @@ export class ResourcePackageController {
   @ApiOkResponse({ description: 'Admin resource-packages deleted successfully.' })
   async removeIds(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Query('id', new ParseArrayPipe({ items: Number, separator: ',' })) id: number[]
+    @Query('id', new ParseArrayPipe({ items: Number, separator: ',' })) id: number[]
   ): Promise<void> {
     return this.resourcePackageService.removeResourcePackages(workspaceId, id);
   }
@@ -131,7 +131,7 @@ export class ResourcePackageController {
   })
   async getZippedResourcePackage(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('name') name: string
+    @Param('name') name: string
   ): Promise<StreamableFile> {
     const file = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
     return new StreamableFile(file);
@@ -157,7 +157,7 @@ export class ResourcePackageController {
   @ApiTags('admin resource-packages')
   async create(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
+    @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
   ): Promise<number> {
     return this.resourcePackageService.create(workspaceId, zippedResourcePackage);
   }

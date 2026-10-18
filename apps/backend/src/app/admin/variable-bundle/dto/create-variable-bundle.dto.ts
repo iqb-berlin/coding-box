@@ -12,7 +12,7 @@ export class CreateVariableBundleDto {
   })
   @IsNotEmpty()
   @IsString()
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'The description of the variable bundle',
@@ -21,7 +21,7 @@ export class CreateVariableBundleDto {
   })
   @IsOptional()
   @IsString()
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'The variables in the bundle',
@@ -31,5 +31,5 @@ export class CreateVariableBundleDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => VariableDto)
-    variables: VariableDto[];
+  variables: VariableDto[];
 }

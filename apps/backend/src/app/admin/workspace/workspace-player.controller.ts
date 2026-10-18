@@ -31,7 +31,7 @@ export class WorkspacePlayerController {
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   async findPlayer(
     @WorkspaceId() workspaceId: number,
-      @Param('playerName') playerName: string
+    @Param('playerName') playerName: string
   ): Promise<FilesDto[]> {
     return this.workspacePlayerService.findPlayer(workspaceId, playerName);
   }
@@ -41,7 +41,7 @@ export class WorkspacePlayerController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findTestPersonUnits(
     @WorkspaceId() id: number,
-      @Param('testPerson') testPerson: string
+    @Param('testPerson') testPerson: string
   ): Promise<ResponseEntity[]> {
     return this.workspacePlayerService.findTestPersonUnits(id, testPerson);
   }
@@ -59,7 +59,7 @@ export class WorkspacePlayerController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(
     @Param('workspace_id') workspace_id: number,
-      @Param('unit') unit: string
+    @Param('unit') unit: string
   ): Promise<FilesDto[]> {
     const unitIdToUpperCase = unit.toUpperCase();
     return this.workspacePlayerService.findUnitDef(
@@ -74,7 +74,7 @@ export class WorkspacePlayerController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(
     @WorkspaceId() id: number,
-      @Param('unitId') unitId: string
+    @Param('unitId') unitId: string
   ): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
     return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
@@ -95,9 +95,9 @@ export class WorkspacePlayerController {
   })
   async getBookletUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('bookletId') bookletId: string,
-      @Query('testPerson') testPerson?: string,
-      @Query('includeReplayStatus') includeReplayStatus?: string
+    @Param('bookletId') bookletId: string,
+    @Query('testPerson') testPerson?: string,
+    @Query('includeReplayStatus') includeReplayStatus?: string
   ): Promise<BookletUnit[]> {
     return this.workspacePlayerService.getBookletUnits(
       workspaceId,

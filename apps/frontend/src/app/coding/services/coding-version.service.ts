@@ -40,13 +40,13 @@ export class CodingVersionService {
   ): Observable<{ jobId: string; message: string }> {
     return this.http
       .post<{ jobId: string; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version`,
-      {
-        version,
-        unitFilters: unitFilters || [],
-        variableFilters: variableFilters || []
-      }
-    );
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version`,
+        {
+          version,
+          unitFilters: unitFilters || [],
+          variableFilters: variableFilters || []
+        }
+      );
   }
 
   getResetVersionJobStatus(
@@ -55,9 +55,9 @@ export class CodingVersionService {
   ): Observable<ResetVersionJobStatus> {
     return this.http
       .get<ResetVersionJobStatus>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/job/${jobId}`,
-      { context: suppressGlobalHttpErrorContext() }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/job/${jobId}`,
+        { context: suppressGlobalHttpErrorContext() }
+      )
       .pipe(
         catchError(() => of({
           status: 'failed' as const,
@@ -72,9 +72,9 @@ export class CodingVersionService {
   ): Observable<ActiveResetJob> {
     return this.http
       .get<ActiveResetJob>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/active`,
-      { context: suppressGlobalHttpErrorContext() }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/active`,
+        { context: suppressGlobalHttpErrorContext() }
+      )
       .pipe(
         catchError(() => of({ hasActiveJob: false }))
       );

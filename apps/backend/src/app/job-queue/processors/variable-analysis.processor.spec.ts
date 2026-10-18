@@ -444,7 +444,7 @@ describe('VariableAnalysisProcessor', () => {
     });
 
     const frequencyChunks = findCacheSetPayload<
-    Array<[string, Array<Record<string, unknown>>]>
+      Array<[string, Array<Record<string, unknown>>]>
     >(
       cacheService,
       'variable-analysis:1:job-1:frequencies:0'

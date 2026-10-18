@@ -349,17 +349,17 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     jobId: string,
     workspaceId: number
   ): Promise<{
-      status:
+    status:
       | 'pending'
       | 'processing'
       | 'completed'
       | 'failed'
       | 'cancelled'
       | 'paused';
-      progress: number;
-      result?: CodingStatistics;
-      error?: string;
-    } | null> {
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+  } | null> {
     try {
       let bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
 
@@ -397,17 +397,17 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     jobId: string,
     workspaceId: number
   ): Promise<{
-      status:
+    status:
       | 'pending'
       | 'processing'
       | 'completed'
       | 'failed'
       | 'cancelled'
       | 'paused';
-      progress: number;
-      result?: CodingStatistics;
-      error?: string;
-    } | null> {
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+  } | null> {
     try {
       const bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'coding-statistics', jobId);
       if (!bullJob) {

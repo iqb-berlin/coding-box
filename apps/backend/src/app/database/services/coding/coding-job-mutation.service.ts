@@ -1055,8 +1055,8 @@ export class CodingJobMutationService {
     manager: EntityManager
   ): Promise<Map<string, number>> {
     const bundleVariablesById = new Map<
-    number,
-    Array<{ unitName: string; variableId: string }>
+      number,
+      Array<{ unitName: string; variableId: string }>
     >();
     const bundleIds = new Set<number>();
 

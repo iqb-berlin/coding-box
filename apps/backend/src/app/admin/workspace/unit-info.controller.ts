@@ -37,7 +37,7 @@ export class UnitInfoController {
   })
   async getUnitInfo(
     @Param('workspaceId') workspaceId: number,
-      @Param('unitId') unitId: string
+    @Param('unitId') unitId: string
   ): Promise<UnitInfoDto> {
     return this.unitInfoService.getUnitInfo(workspaceId, unitId);
   }

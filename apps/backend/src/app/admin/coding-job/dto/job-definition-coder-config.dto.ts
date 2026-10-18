@@ -15,7 +15,7 @@ export class JobDefinitionCoderConfigDto {
   @IsInt()
   @Min(1)
   @Type(() => Number)
-    coderId: number;
+  coderId: number;
 
   @ApiProperty({
     description: 'Capacity percentage for distribution. 100 means normal load.',
@@ -27,5 +27,5 @@ export class JobDefinitionCoderConfigDto {
   @Min(10)
   @Max(300)
   @Type(() => Number)
-    capacityPercent: number;
+  capacityPercent: number;
 }

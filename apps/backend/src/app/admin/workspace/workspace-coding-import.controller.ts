@@ -60,8 +60,8 @@ export class WorkspaceCodingImportController {
   })
   async importExternalCodingWithProgress(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
-      @Res() res: Response
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
+    @Res() res: Response
   ): Promise<void> {
     // Guard: SSE endpoint is only for preview mode
     if (body.previewOnly === false) {
@@ -122,8 +122,8 @@ export class WorkspaceCodingImportController {
 
   async applyExternalCodingImport(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
-      @Req() req: { user?: { id?: number } }
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
+    @Req() req: { user?: { id?: number } }
   ): Promise<{ jobId: string }> {
     const requestedByUserId = req.user?.id;
     if (typeof requestedByUserId !== 'number' || !Number.isSafeInteger(requestedByUserId) || requestedByUserId <= 0) {
@@ -177,19 +177,19 @@ export class WorkspaceCodingImportController {
   })
   async getExternalCodingImportJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{
-        status: string;
-        progress: number;
-        result?: {
-          message: string;
-          processedRows: number;
-          updatedRows: number;
-          errorCount: number;
-          affectedRowCount: number;
-        };
-        error?: string;
-      }> {
+      status: string;
+      progress: number;
+      result?: {
+        message: string;
+        processedRows: number;
+        updatedRows: number;
+        errorCount: number;
+        affectedRowCount: number;
+      };
+      error?: string;
+    }> {
     const job = await this.jobQueueService.getExternalCodingImportJob(jobId);
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
@@ -246,7 +246,7 @@ export class WorkspaceCodingImportController {
   })
   async getExternalCodingImportResult(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<unknown> {
     // Verify job belongs to this workspace
     const job = await this.jobQueueService.getExternalCodingImportJob(jobId);
@@ -273,31 +273,31 @@ export class WorkspaceCodingImportController {
 
   async importExternalCoding(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
   ): Promise<{
-        message: string;
-        processedRows: number;
-        updatedRows: number;
-        errors: string[];
-        affectedRows: Array<{
-          unitAlias: string;
-          variableId: string;
-          personCode?: string;
-          personLogin?: string;
-          personGroup?: string;
-          bookletName?: string;
-          originalCodedStatus: string;
-          originalCode: number | null;
-          originalScore: number | null;
-          updatedCodedStatus: string | null;
-          updatedCode: number | null;
-          updatedScore: number | null;
-          importAction?: 'update' | 'skip' | 'unchanged';
-          actionReason?: string;
-          hasExistingCoding?: boolean;
-          hasConflict?: boolean;
-        }>;
-      }> {
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+        importAction?: 'update' | 'skip' | 'unchanged';
+        actionReason?: string;
+        hasExistingCoding?: boolean;
+        hasConflict?: boolean;
+      }>;
+    }> {
     if (body.previewOnly !== true) {
       throw new BadRequestException(
         'Use the /apply endpoint for applying changes. This endpoint is only for preview mode.'

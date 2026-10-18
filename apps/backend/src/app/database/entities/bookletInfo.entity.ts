@@ -8,11 +8,11 @@ import {
 
 export class BookletInfo {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'text' })
-    name: string;
+  name: string;
 
   @Column({ type: 'bigint', default: 0 })
-    size: number;
+  size: number;
 }

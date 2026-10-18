@@ -49,7 +49,7 @@ export class UnitTagsController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @ValidatedBody('CreateUnitTagDto') createUnitTagDto: RequestBody<'CreateUnitTagDto'>
+    @ValidatedBody('CreateUnitTagDto') createUnitTagDto: RequestBody<'CreateUnitTagDto'>
   ): Promise<UnitTagDto> {
     return this.unitTagService.create(workspaceId, createUnitTagDto);
   }
@@ -82,7 +82,7 @@ export class UnitTagsController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId', ParseIntPipe) unitId: number
+    @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<UnitTagDto[]> {
     return this.unitTagService.findAllByUnitId(workspaceId, unitId);
   }
@@ -115,7 +115,7 @@ export class UnitTagsController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<UnitTagDto> {
     return this.unitTagService.findOne(workspaceId, id);
   }
@@ -151,8 +151,8 @@ export class UnitTagsController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @ValidatedBody('UpdateUnitTagDto') updateUnitTagDto: RequestBody<'UpdateUnitTagDto'>
+    @Param('id', ParseIntPipe) id: number,
+    @ValidatedBody('UpdateUnitTagDto') updateUnitTagDto: RequestBody<'UpdateUnitTagDto'>
   ): Promise<UnitTagDto> {
     return this.unitTagService.update(workspaceId, id, updateUnitTagDto);
   }
@@ -185,7 +185,7 @@ export class UnitTagsController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<boolean> {
     return this.unitTagService.remove(workspaceId, id);
   }

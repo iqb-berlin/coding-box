@@ -11,26 +11,26 @@ import {
 @Entity('journal_entries')
 export class JournalEntry {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   /**
    * Timestamp when the action was performed
    */
   @CreateDateColumn({ type: 'timestamp' })
-    timestamp: Date;
+  timestamp: Date;
 
   /**
    * ID of the user who performed the action
    * @deprecated Use actorUserId for new audit entries.
    */
   @Column({ name: 'user_id', nullable: false })
-    userId: string;
+  userId: string;
 
   /**
    * Numeric ID of the user who triggered the event, when available.
    */
   @Column({ name: 'actor_user_id', type: 'integer', nullable: true })
-    actorUserId: number | null;
+  actorUserId: number | null;
 
   /**
    * Actor category for the event.
@@ -42,20 +42,20 @@ export class JournalEntry {
     nullable: false,
     default: 'user'
   })
-    actorType: string;
+  actorType: string;
 
   /**
    * Workspace ID where the action was performed
    */
   @Column({ name: 'workspace_id', nullable: false })
-    workspaceId: number;
+  workspaceId: number;
 
   /**
    * Type of action performed (e.g., CREATE, UPDATE, DELETE)
    * @deprecated Use eventType for new audit entries.
    */
   @Column({ name: 'action_type', nullable: false })
-    actionType: string;
+  actionType: string;
 
   /**
    * Canonical audit event type.
@@ -66,13 +66,13 @@ export class JournalEntry {
     length: 100,
     nullable: true
   })
-    eventType: string | null;
+  eventType: string | null;
 
   /**
    * Type of entity that was affected (e.g., UNIT, RESPONSE, PERSON, TAG)
    */
   @Column({ name: 'entity_type', nullable: false })
-    entityType: string;
+  entityType: string;
 
   /**
    * ID of the entity that was affected
@@ -83,7 +83,7 @@ export class JournalEntry {
     length: 255,
     nullable: true
   })
-    entityId: string | null;
+  entityId: string | null;
 
   /**
    * Result state of the audited action.
@@ -95,13 +95,13 @@ export class JournalEntry {
     nullable: false,
     default: 'success'
   })
-    result: string;
+  result: string;
 
   /**
    * Human-readable, privacy-conscious summary.
    */
   @Column({ name: 'summary', type: 'text', nullable: true })
-    summary: string | null;
+  summary: string | null;
 
   /**
    * Optional request/job correlation ID.
@@ -112,7 +112,7 @@ export class JournalEntry {
     length: 255,
     nullable: true
   })
-    correlationId: string | null;
+  correlationId: string | null;
 
   /**
    * Optional background job ID.
@@ -123,11 +123,11 @@ export class JournalEntry {
     length: 255,
     nullable: true
   })
-    jobId: string | null;
+  jobId: string | null;
 
   /**
    * Additional details about the action in JSON format
    */
   @Column({ type: 'jsonb', nullable: true })
-    details: Record<string, unknown> | null;
+  details: Record<string, unknown> | null;
 }

@@ -189,8 +189,8 @@ export type DistributionPlan = {
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: ResponseMatchingFlag[];
   warnings: JobCreationWarning[];
@@ -245,8 +245,8 @@ export type DistributedCodingJobsResult = {
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: ResponseMatchingFlag[];
   warnings: JobCreationWarning[];

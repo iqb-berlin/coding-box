@@ -11,5 +11,5 @@ export class UpdateCodingJobStatusDto {
     enum: codingJobReplayStatuses
   })
   @IsEnum(codingJobReplayStatuses)
-    status: CodingJobReplayStatus;
+  status: CodingJobReplayStatus;
 }
