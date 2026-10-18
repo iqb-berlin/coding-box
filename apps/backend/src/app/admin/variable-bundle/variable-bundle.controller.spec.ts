@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { VariableBundleService } from '../../database/services/coding';
 import { VariableBundleController } from './variable-bundle.controller';
 
@@ -18,9 +18,10 @@ describe('VariableBundleController creation errors', () => {
     expect(denial.getStatus()).toBe(403);
   });
 
-  it('continues to report an unexpected creation failure as a bad request', async () => {
-    createVariableBundle.mockRejectedValue(new Error('Invalid bundle'));
+  it('passes an unexpected creation failure unchanged to the global filter', async () => {
+    const error = new Error('Database failure');
+    createVariableBundle.mockRejectedValue(error);
     await expect(controller.createVariableBundle(5, { name: 'Bundle', variables: [] }, { user: { id: 7 } }))
-      .rejects.toBeInstanceOf(BadRequestException);
+      .rejects.toBe(error);
   });
 });
