@@ -7,6 +7,8 @@ import {
   SELF_DECLARED_DEPS_METADATA
 } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import Workspace from '../../entities/workspace.entity';
 import { BullJobManagementService } from './bull-job-management.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingReadinessService } from '../coding/coding-readiness.service';
@@ -77,10 +79,11 @@ describe('Bull job management production dependency graph', () => {
         [CodingStatisticsService, 'bullJobManagementService', BullJobManagementService],
         [BullJobManagementService, 'codingFreshnessService', CodingFreshnessService],
         [CodingFreshnessService, 'workspaceExclusionService', WorkspaceExclusionService],
-        [WorkspaceExclusionService, 'workspaceCoreService', WorkspaceCoreService],
         [WorkspaceCoreService, 'workspaceTestResultsService', WorkspaceTestResultsService],
         [WorkspaceTestResultsService, 'codingStatisticsService', CodingStatisticsService]
       ];
+      expect(Reflect.get(module.get(WorkspaceExclusionService), 'workspaceRepository'))
+        .toBe(module.get(getRepositoryToken(Workspace)));
       productionEdges.forEach(([source, property, dependency]) => {
         expect(Reflect.get(module.get(source) as object, property)).toBe(module.get(dependency));
       });
