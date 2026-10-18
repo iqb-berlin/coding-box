@@ -29,6 +29,7 @@ Start the backend in a separate terminal. The following credentials are only
 for the disposable fixture. Do not use an existing backend on this address:
 
 ```sh
+JWT_SECRET=codebook-disposable-local-proof-only \
 OAUTH2_CLIENT_ID=codebook-proof \
 OIDC_ISSUER=http://127.0.0.1:18441/realms/codebook-proof \
 OIDC_JWKS_URI=http://127.0.0.1:18441/realms/codebook-proof/protocol/openid-connect/certs \
