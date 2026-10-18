@@ -166,7 +166,7 @@ try {
       { ...baseCoding('sum', 'T'), sourceType: 'SUM_SCORE', deriveSources: ['derived'], sourceParameters: { processing: [] }, codes }
     ];
     await file(unitName + '.VOCS', 'Resource', JSON.stringify({ version: '3.4', variableCodings }));
-    await file(unitName, 'Unit', `<Unit><Metadata><Id>${unitName}</Id></Metadata><CodingSchemeRef>${unitName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="float" multiple="false" nullable="false" /></BaseVariables></Unit>`);
+    await file(unitName, 'Unit', `<Unit><Metadata><Id>${unitName}</Id></Metadata><CodingSchemeRef>${unitName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="number" multiple="false" nullable="false" /></BaseVariables></Unit>`);
     const unit = await insert('unit', { bookletid: booklet, name: unitName, alias: unitName });
     await insert('response', { unitid: unit, variableid: 'A', status: 3, value: String(value), subform: 'part-a' });
     const reference = Reference.code([{ id: 'A', value, status: 'VALUE_CHANGED', subform: 'part-a' }], structuredClone(variableCodings));
@@ -178,7 +178,7 @@ try {
   const badName = 'SOLVER-INVALID-NAMESPACE';
   const badCodings = [baseCoding('source', 'A'), { ...baseCoding('duplicate', 'A'), sourceType: 'COPY_VALUE', deriveSources: ['source'] }];
   await file(badName + '.VOCS', 'Resource', JSON.stringify({ version: '3.4', variableCodings: badCodings }));
-  await file(badName, 'Unit', `<Unit><Metadata><Id>${badName}</Id></Metadata><CodingSchemeRef>${badName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="float" multiple="false" nullable="false" /></BaseVariables></Unit>`);
+  await file(badName, 'Unit', `<Unit><Metadata><Id>${badName}</Id></Metadata><CodingSchemeRef>${badName}.VOCS</CodingSchemeRef><BaseVariables><Variable id="source" alias="A" type="number" multiple="false" nullable="false" /></BaseVariables></Unit>`);
   const badPerson = await insert('persons', { login: 'synthetic-invalid', code: 'proof', group: 'invalid', workspace_id: workspace, uploaded_at: new Date(), booklets: '[]', source: 'synthetic', consider: true });
   const badBooklet = await insert('booklet', { infoid: info, personid: badPerson });
   const badUnit = await insert('unit', { bookletid: badBooklet, name: badName, alias: badName });
