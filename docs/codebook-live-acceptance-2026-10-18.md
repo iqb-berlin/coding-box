@@ -72,12 +72,15 @@ altering any response rows. A failed Codebook scope must expose no download.
 
 [Machine-readable report](qa/codebook-live-2026-10-18/report.json) and all 24
 actual downloads are retained in the same directory. The successful run used
-source commit `81eb8cbe` (runtime scope fix `524e0c84`). All 24 JSON/DOCX
+source commit `28ef6c47` (runtime scope fix `524e0c84`). All 24 JSON/DOCX
 comparisons match Studio, including the partial intersection that previously
 exported an excluded variable. Six SOLVER cases and all 18 persisted result rows
 match the independent reference. Empty intersection and invalid namespace fail
 in Bull; failed Autocoder preflight leaves the complete before/after response
-snapshot unchanged. Both production builds and both lints pass locally.
+snapshot unchanged. Both production builds and both lints pass locally. The complete backend suite
+passes with **3,062 tests in 196 suites**; **63 tests in seven suites are skipped**.
+It ran sequentially with `npx nx test backend --maxWorkers=1 --workerIdleMemoryLimit=768MB`
+and `NODE_OPTIONS=--max-old-space-size=2048` (171.774 seconds).
 
 [Browser reproduction before](qa/codebook-live-2026-10-18/browser-reproduction-before.log),
 [the same stress after](qa/codebook-live-2026-10-18/browser-reproduction-after.log)
