@@ -29,6 +29,8 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
@@ -460,7 +462,7 @@ export class WsgCodingJobController {
   @ApiOperation({ summary: 'Delete owned coding jobs atomically' })
   async deleteCodingJobs(
     @WorkspaceId() workspaceId: number,
-      @Body() body: { ids: number[] },
+      @ValidatedBody('CodingJobsBulkDelete') body: RequestBody<'CodingJobsBulkDelete'>,
       @Req() req: Request
   ): Promise<{ success: boolean }> {
     return this.codingJobService.deleteCodingJobs(workspaceId, body.ids, this.getRequestUserId(req));
@@ -552,18 +554,12 @@ export class WsgCodingJobController {
       );
     }
 
-    try {
-      const codingJob = await this.codingJobService.createCodingJob(
-        workspaceId,
-        createCodingJobDto,
-        ownershipRequest.user?.id
-      );
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to create coding job: ${error.message}`
-      );
-    }
+    const codingJob = await this.codingJobService.createCodingJob(
+      workspaceId,
+      createCodingJobDto,
+      ownershipRequest.user?.id
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Put(':id')

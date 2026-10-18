@@ -5,6 +5,8 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CoderTraining } from '../../entities/coder-training.entity';
 import { CodingJobService } from './coding-job.service';
+import { CodingJobMutationService } from './coding-job-mutation.service';
+import { CodingJobProgressService } from './coding-job-progress.service';
 import { VariableBundleService } from './variable-bundle.service';
 import { CoderTrainingService } from './coder-training.service';
 
@@ -50,12 +52,18 @@ describe('Ownership at mutation boundaries', () => {
     manager.transaction.mockImplementation(async callback => callback(manager));
     const repo = { ...repository, manager };
     manager.getRepository.mockReturnValue(repo);
-    const service = Object.assign(Object.create(CodingJobService.prototype), {
+    const mutation = Object.assign(Object.create(CodingJobMutationService.prototype), {
       connection: manager,
       codingJobRepository: repo,
       logger: { log: jest.fn(), error: jest.fn() },
       cacheService: { incr: jest.fn(), delete: jest.fn() }
-    }) as CodingJobService;
+    }) as CodingJobMutationService;
+    const progress = Object.assign(Object.create(CodingJobProgressService.prototype), {
+      codingJobRepository: repo, mutation
+    }) as CodingJobProgressService;
+    const service = new CodingJobService(
+      {} as never, {} as never, {} as never, mutation, progress, {} as never, {} as never, {} as never, {} as never, {} as never
+    );
     return {
       manager, repo, jobs, bundle, service, training
     };

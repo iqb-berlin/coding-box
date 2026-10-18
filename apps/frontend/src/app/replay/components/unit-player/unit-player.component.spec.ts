@@ -17,6 +17,10 @@ describe('UnitPlayerComponent', () => {
     await TestBed.configureTestingModule({
       providers: [
         {
+          provide: AppService,
+          useValue: { postMessage$: new Subject<MessageEvent>() }
+        },
+        {
           provide: SERVER_URL,
           useValue: environment.backendUrl
         },
@@ -182,6 +186,499 @@ describe('UnitPlayerComponent', () => {
     const [mathTextResponse, otherResponse] = JSON.parse(component.dataParts.chunk1);
     expect(mathTextResponse.value).toBe('[]');
     expect(otherResponse.value).toEqual(['kept']);
+  });
+
+  it('should reuse prepared assets for response changes and release them on destroy', () => {
+    const createObjectURL = jest.fn().mockReturnValue('blob:unit-image');
+    const revokeObjectURL = jest.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+
+    const firstResponses = {
+      responses: [{ id: 'answer', content: 'first answer' }]
+    };
+    const secondResponses = {
+      responses: [{ id: 'answer', content: 'second answer' }]
+    };
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true),
+      unitResponses: new SimpleChange(undefined, firstResponses, true)
+    });
+    component.ngOnChanges({
+      unitResponses: new SimpleChange(firstResponses, secondResponses, false)
+    });
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(
+      postMessage.mock.calls[0][0].unitDefinition
+    );
+    expect(postMessage.mock.calls[0][0].unitState.dataParts.answer).toBe('"first answer"');
+    expect(postMessage.mock.calls[1][0].unitState.dataParts.answer).toBe('"second answer"');
+
+    fixture.destroy();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:unit-image');
+  });
+
+  it('should retry once with the original definition after a player asset error', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe().nativeElement.contentWindow;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopRuntimeErrorNotification',
+        sessionId: postMessage.mock.lastCall[0].sessionId,
+        code: 'image-not-loading'
+      },
+      source
+    }));
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopRuntimeErrorNotification',
+        sessionId: postMessage.mock.lastCall[0].sessionId,
+        code: 'image-not-loading'
+      },
+      source
+    }));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  it('should retry with the original definition after an iframe blob asset fails', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    const iframe = component.hostingIframe().nativeElement as HTMLIFrameElement;
+    iframe.dispatchEvent(new Event('load'));
+    const failedImage = iframe.contentDocument?.createElement('img');
+
+    expect(failedImage).toBeTruthy();
+    failedImage!.src = 'blob:unit-image';
+    iframe.contentDocument?.body.appendChild(failedImage!);
+    failedImage!.dispatchEvent(new Event('error'));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  describe('native media source lifecycle', () => {
+    let postMessage: jest.Mock;
+    let document: Document;
+    const blobUrl = 'blob:unit-audio';
+    const definition = JSON.stringify({ audio: 'data:audio/wav;base64,aGVsbG8=' });
+
+    beforeEach(() => {
+      Object.defineProperty(URL, 'createObjectURL', { value: jest.fn().mockReturnValue(blobUrl), configurable: true });
+      Object.defineProperty(URL, 'revokeObjectURL', { value: jest.fn(), configurable: true });
+      postMessage = jest.fn();
+      component.postMessageTarget = { postMessage } as unknown as Window;
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      const iframe = component.hostingIframe().nativeElement;
+      iframe.dispatchEvent(new Event('load'));
+      document = iframe.contentDocument!;
+    });
+
+    it.each(['cleared', 'removed', 'aborted', 'changed'])(
+      'ignores a %s audio source even when currentSrc still contains the previous Blob', state => {
+        const audio = document.createElement('audio');
+        audio.src = blobUrl;
+        Object.defineProperty(audio, 'currentSrc', { value: blobUrl });
+        document.body.appendChild(audio);
+        switch (state) {
+          case 'cleared': audio.src = ''; break;
+          case 'removed': audio.removeAttribute('src'); break;
+          case 'aborted': Object.defineProperty(audio, 'error', { value: { code: 1 } }); break;
+          case 'changed': audio.src = 'data:audio/wav;base64,d29ybGQ='; break;
+          default: break;
+        }
+        audio.dispatchEvent(new Event('error'));
+
+        expect(postMessage).toHaveBeenCalledTimes(1);
+        expect(postMessage.mock.lastCall[0].unitDefinition).toContain(blobUrl);
+      }
+    );
+
+    it.each(['audio', 'video'])('still falls back when the requested %s Blob fails', tag => {
+      const media = document.createElement(tag) as HTMLMediaElement;
+      media.src = blobUrl;
+      Object.defineProperty(media, 'currentSrc', { value: blobUrl });
+      document.body.appendChild(media);
+      media.dispatchEvent(new Event('error'));
+
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+    });
+
+    it('falls back when an audio element selects a failing Blob from a source child', () => {
+      const audio = document.createElement('audio');
+      const source = document.createElement('source');
+      source.src = blobUrl;
+      audio.appendChild(source);
+      Object.defineProperty(audio, 'currentSrc', { value: blobUrl });
+      document.body.appendChild(audio);
+      audio.dispatchEvent(new Event('error'));
+
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+    });
+  });
+
+  it('should ignore a delayed iframe error from a previously released blob asset', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn()
+        .mockReturnValueOnce('blob:first-unit-image')
+        .mockReturnValueOnce('blob:second-unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), true)
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), JSON.stringify({
+        image: 'data:image/png;base64,d29ybGQ='
+      }), false)
+    });
+    const iframe = component.hostingIframe().nativeElement as HTMLIFrameElement;
+    iframe.dispatchEvent(new Event('load'));
+    const staleImage = iframe.contentDocument?.createElement('img');
+
+    expect(staleImage).toBeTruthy();
+    staleImage!.src = 'blob:first-unit-image';
+    iframe.contentDocument?.body.appendChild(staleImage!);
+    staleImage!.dispatchEvent(new Event('error'));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toContain('blob:second-unit-image');
+  });
+
+  it('should retry with the original definition when the prepared unit does not start', () => {
+    jest.useFakeTimers();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    jest.advanceTimersByTime(10_000);
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  it('should keep the prepared definition after the player confirms startup', () => {
+    jest.useFakeTimers();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), true)
+    });
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe().nativeElement.contentWindow;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopStateChangedNotification',
+        sessionId: postMessage.mock.lastCall[0].sessionId,
+        playerState: { validPages: ['0'], currentPage: '0' }
+      },
+      source
+    }));
+    jest.advanceTimersByTime(10_000);
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+  });
+
+  describe('startup acknowledgements', () => {
+    const definition = JSON.stringify({ image: 'data:image/png;base64,aGVsbG8=' });
+    let postMessage: jest.Mock;
+
+    function receive(data: object): void {
+      TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
+        data,
+        source: component.hostingIframe().nativeElement.contentWindow
+      }));
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      Object.defineProperty(URL, 'createObjectURL', { value: jest.fn().mockReturnValue('blob:startup'), configurable: true });
+      Object.defineProperty(URL, 'revokeObjectURL', { value: jest.fn(), configurable: true });
+      postMessage = jest.fn();
+      component.postMessageTarget = { postMessage } as unknown as Window;
+    });
+
+    it.each([
+      { playerState: { validPages: [], currentPage: '0' } },
+      { log: [{ key: 'initializing', content: 'loading' }] },
+      { playerState: { validPages: ['0'] } },
+      { unitState: { dataParts: { answer: '[]' }, presentationProgress: 'none' } }
+    ])('keeps the watchdog active for partial initial state %j', state => {
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      receive({ type: 'vopStateChangedNotification', sessionId: postMessage.mock.lastCall[0].sessionId, ...state });
+      jest.advanceTimersByTime(10_000);
+
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+    });
+
+    it.each([
+      { playerState: { validPages: [{ id: '0' }], currentPage: 0 } },
+      { playerState: { validPages: [], currentPage: '0' }, unitState: { presentationProgress: 'complete' } }
+    ])('accepts current-session presentation evidence %j', state => {
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      receive({ type: 'vopStateChangedNotification', sessionId: postMessage.mock.lastCall[0].sessionId, ...state });
+      jest.advanceTimersByTime(10_000);
+
+      expect(postMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('rearms the watchdog for the next response and ignores earlier-session confirmations', () => {
+      const responseVisible = jest.spyOn(component.responseVisible, 'emit');
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      const firstSession = postMessage.mock.lastCall[0].sessionId;
+      receive({
+        type: 'vopStateChangedNotification',
+        sessionId: firstSession,
+        playerState: { validPages: ['0'], currentPage: '0' }
+      });
+      jest.advanceTimersByTime(10_000);
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      component.ngOnChanges({
+        unitResponses: new SimpleChange(undefined, { responses: [{ id: 'answer', content: 'second answer' }] }, false)
+      });
+      const secondSession = postMessage.mock.lastCall[0].sessionId;
+      expect(secondSession).not.toBe(firstSession);
+      receive({
+        type: 'vopStateChangedNotification',
+        sessionId: firstSession,
+        playerState: { validPages: ['stale-page'], currentPage: 'stale-page' }
+      });
+      // Missing session IDs must not acknowledge the new start either.
+      receive({ type: 'vopStateChangedNotification', playerState: { validPages: ['0'], currentPage: '0' } });
+      expect(responseVisible).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(10_000);
+
+      expect(postMessage).toHaveBeenCalledTimes(3);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+      expect(postMessage.mock.lastCall[0].unitState.dataParts.answer).toBe('"second answer"');
+      const fallbackSession = postMessage.mock.lastCall[0].sessionId;
+      component.navigateToPage('0');
+      expect(postMessage.mock.lastCall[0].sessionId).toBe(fallbackSession);
+    });
+
+    it('ignores delayed runtime errors from an earlier start but retries for the current session', async () => {
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      const previousSession = postMessage.mock.lastCall[0].sessionId;
+      await component.sendUnitData();
+      const currentSession = postMessage.mock.lastCall[0].sessionId;
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: previousSession, code: 'image-not-loading' });
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code: 'image-not-loading' });
+      expect(postMessage).toHaveBeenCalledTimes(3);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code: 'image-not-loading' });
+      jest.advanceTimersByTime(20_000);
+      expect(postMessage).toHaveBeenCalledTimes(3);
+    });
+
+    it('replaces the pending watchdog when another response starts before confirmation', () => {
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      jest.advanceTimersByTime(9000);
+      component.ngOnChanges({ unitResponses: new SimpleChange(undefined, { responses: [] }, false) });
+      jest.advanceTimersByTime(1000);
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(9000);
+      expect(postMessage).toHaveBeenCalledTimes(3);
+      expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
+    });
+
+    it('can acknowledge a start synchronously while posting the command', () => {
+      postMessage.mockImplementationOnce(message => receive({
+        type: 'vopStateChangedNotification',
+        sessionId: message.sessionId,
+        playerState: { validPages: ['0'], currentPage: '0' }
+      }));
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      jest.advanceTimersByTime(10_000);
+      expect(postMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts an explicit legacy StartedNotification with the current session', () => {
+      component.playerApiVersion = 1;
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      receive({ type: 'vo.FromPlayer.StartedNotification', sessionId: postMessage.mock.lastCall[0].sessionId });
+      jest.advanceTimersByTime(10_000);
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      expect(postMessage.mock.lastCall[0].type).toBe('vo.ToPlayer.DataTransfer');
+    });
+
+    it('continues to accept sessionless player focus notifications', () => {
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      receive({ type: 'vopWindowFocusChangedNotification', hasFocus: true });
+      expect(component.hasFocus).toBe(true);
+    });
+
+    it('does not treat an empty legacy data transfer as a startup acknowledgement', () => {
+      component.playerApiVersion = 1;
+      component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
+      receive({
+        type: 'vo.FromPlayer.ChangedDataTransfer',
+        sessionId: postMessage.mock.lastCall[0].sessionId,
+        validPages: [],
+        currentPage: '0',
+        presentationComplete: 'no'
+      });
+      jest.advanceTimersByTime(10_000);
+      expect(postMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('reuses one prepared definition across twenty zoneless input updates and releases it on reset', async () => {
+    const createObjectURL = jest.fn().mockReturnValue('blob:twenty-answers');
+    const revokeObjectURL = jest.fn();
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    fixture.componentRef.setInput('unitDef', JSON.stringify({ image: 'data:image/png;base64,aGVsbG8=' }));
+    await fixture.whenStable();
+
+    for (let index = 0; index < 20; index += 1) {
+      fixture.componentRef.setInput('unitResponses', { responses: [{ id: 'answer', content: `answer ${index}` }] });
+      await fixture.whenStable();
+    }
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(new Set(postMessage.mock.calls.map(([message]) => message.unitDefinition)).size).toBe(1);
+    expect(postMessage).toHaveBeenCalledTimes(21);
+    expect(postMessage.mock.lastCall[0].unitState.dataParts.answer).toBe('"answer 19"');
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+
+    fixture.componentRef.setInput('unitDef', undefined);
+    await fixture.whenStable();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:twenty-answers');
+    await component.sendUnitData();
+    expect(postMessage).toHaveBeenCalledTimes(21);
+  });
+
+  it('keeps subsequent responses on the original definition after a fallback', async () => {
+    const createObjectURL = jest.fn().mockReturnValue('blob:failed-image');
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: jest.fn(), configurable: true });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({ image: 'data:image/png;base64,aGVsbG8=' });
+    fixture.componentRef.setInput('unitDef', definition);
+    await fixture.whenStable();
+    TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
+      data: { type: 'vopRuntimeErrorNotification', sessionId: postMessage.mock.lastCall[0].sessionId, code: 'image-not-loading' },
+      source: component.hostingIframe().nativeElement.contentWindow
+    }));
+    fixture.componentRef.setInput('unitResponses', { responses: [{ id: 'answer', content: 'after fallback' }] });
+    await fixture.whenStable();
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(3);
+    expect(postMessage.mock.calls.slice(1).map(([message]) => message.unitDefinition)).toEqual([definition, definition]);
+    expect(postMessage.mock.lastCall[0].unitState.dataParts.answer).toBe('"after fallback"');
+  });
+
+  it('cancels the old startup timeout on unit changes and destruction', () => {
+    jest.useFakeTimers();
+    const createObjectURL = jest.fn().mockReturnValueOnce('blob:first').mockReturnValueOnce('blob:second');
+    const revokeObjectURL = jest.fn();
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const first = JSON.stringify({ image: 'data:image/png;base64,aGVsbG8=' });
+    const second = JSON.stringify({ image: 'data:image/png;base64,d29ybGQ=' });
+    component.ngOnChanges({ unitDef: new SimpleChange(undefined, first, true) });
+    jest.advanceTimersByTime(9000);
+    component.ngOnChanges({ unitDef: new SimpleChange(first, second, false) });
+    jest.advanceTimersByTime(1000);
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:first');
+
+    fixture.destroy();
+    jest.advanceTimersByTime(10_000);
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:second');
   });
 
   it('should not emit a page error when requested page 0 is valid and current', () => {

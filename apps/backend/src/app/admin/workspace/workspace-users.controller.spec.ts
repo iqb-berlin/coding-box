@@ -1,4 +1,6 @@
-import { BadRequestException, ExecutionContext, INestApplication } from '@nestjs/common';
+import {
+  BadRequestException, ExecutionContext, INestApplication, ForbiddenException
+} from '@nestjs/common';
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
@@ -231,6 +233,98 @@ describe('WorkspaceUsersController', () => {
         expect(authService.createToken).not.toHaveBeenCalled();
       }
     );
+  });
+
+  describe('findUsers', () => {
+    it('passes the original server failure to the global filter', async () => {
+      const error = new Error('database unavailable');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
+
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
+    });
+
+    it('preserves workspace access errors', async () => {
+      const error = new ForbiddenException('Workspace access denied');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
+    });
+
+    it('parses the workspace id from the route before retrieving users', async () => {
+      workspaceUsersService.findUsers.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+          data: [],
+          total: 0,
+          page: 1,
+          limit: 500
+        });
+        expect(workspaceUsersService.findUsers).toHaveBeenCalledWith(3, { page: 1, limit: 500 });
+      } finally {
+        await app?.close();
+      }
+    });
+
+    it('returns an HTTP error when workspace users cannot be retrieved', async () => {
+      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
+
+        expect(response.status).toBe(500);
+      } finally {
+        await app?.close();
+      }
+    });
+  });
+
+  describe('findCoders', () => {
+    it('parses the workspace id from the route before retrieving coders', async () => {
+      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coders`);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toEqual({
+          data: [],
+          total: 0
+        });
+        expect(workspaceUsersService.findCoders).toHaveBeenCalledWith(3);
+      } finally {
+        await app?.close();
+      }
+    });
+  });
+
+  describe('findCodersByCodingJob', () => {
+    it('rejects a non-numeric coding job id', async () => {
+      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
+      let app: INestApplication | undefined;
+
+      try {
+        app = await createTestApp();
+
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coding-jobs/not-a-number/coders`);
+
+        expect(response.status).toBe(400);
+        expect(workspaceUsersService.findCoders).not.toHaveBeenCalled();
+      } finally {
+        await app?.close();
+      }
+    });
   });
 
   describe('setWorkspaceUsers', () => {
