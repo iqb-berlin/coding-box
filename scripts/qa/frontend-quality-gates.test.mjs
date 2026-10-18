@@ -15,7 +15,15 @@ import { hashFrontendArtifact } from './hash-frontend-artifact.mjs';
 const workspace = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const { ESLint } = require('eslint');
-const eslint = new ESLint({ cwd: workspace });
+const eslint = new ESLint({
+  cwd: workspace,
+  overrideConfig: {
+    parserOptions: {
+      // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
+      disallowAutomaticSingleRunInference: true
+    }
+  }
+});
 const templatePath = 'apps/frontend/src/app/components/home/home.component.html';
 const componentPath = 'apps/frontend/src/app/components/home/home.component.ts';
 
@@ -66,6 +74,26 @@ test('replacement semantic rules still reject unsafe types, throws and imprecise
       '@typescript-eslint/no-empty-object-type', '@typescript-eslint/no-unused-vars'
     ].includes(message.ruleId)), JSON.stringify(compatible.messages));
   }
+});
+
+test('synthetic lint fixtures check their supplied source under CI=true', () => {
+  const env = { ...process.env, CI: 'true' };
+  // Start an independent test runner instead of inheriting Node's child-test protocol.
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, [
+    '--test', '--test-reporter=tap',
+    '--test-name-pattern=TypeScript-ESLint and migrated|replacement semantic rules',
+    fileURLToPath(import.meta.url)
+  ], {
+    cwd: workspace,
+    env,
+    encoding: 'utf8',
+    timeout: 60000
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /# pass 2\b/);
+  assert.match(result.stdout, /# fail 0\b/);
 });
 
 test('the vendored lint adapter is locked and available before Docker dependency installation', () => {
