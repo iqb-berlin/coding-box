@@ -16,7 +16,7 @@ describe('real Keycloak coding session', () => {
   let accessToken: string;
 
   before(() => {
-    cy.task('coding:setup', null, { log: false }).then((value) => {
+    cy.task('coding:setup', null, { log: false, timeout: 180_000 }).then((value) => {
       setup = value as CodingSetup;
     });
   });
