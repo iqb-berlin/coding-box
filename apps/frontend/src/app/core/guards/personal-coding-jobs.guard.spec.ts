@@ -58,7 +58,7 @@ describe('Personal Coding Jobs Guard', () => {
     expect(router.createUrlTree).toHaveBeenCalledWith(['/home']);
   });
 
-  it('redirects Keycloak admins away from the personal coding jobs route', () => {
+  it('redirects OIDC admins away from the personal coding jobs route', () => {
     const result = createPersonalCodingJobsGuardResult(router, '/coding', 'ready', authData, ['admin']);
 
     expect(result).toEqual({ redirect: true });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { findComposeContainer } from './compose-container.mjs';
+import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
 
 const exec = promisify(execFile);
 
@@ -29,7 +30,7 @@ export async function verifyAuditRollback(state) {
   assert.equal(identity.status, 200);
   const actorUserId = identity.body.userId;
   assert.ok(Number.isSafeInteger(actorUserId) && actorUserId > 0);
-  assert.equal(identity.body.userName, `replay-e2e-admin-${config.runId}`);
+  assert.equal(identity.body.userName, FIXTURE_ADMIN_USERNAME);
   assert.equal(identity.body.isAdmin, true);
   const personId = Number(await sql(`SELECT id FROM persons
     WHERE workspace_id=${workspaceId} AND login='replay-login-c'`));

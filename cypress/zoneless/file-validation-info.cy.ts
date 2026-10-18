@@ -132,6 +132,8 @@ describe('Zoneless information from file validation', () => {
     cy.get('coding-box-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Erstellen');
+    cy.get('coding-box-error-message-display .close-button').each(button => cy.wrap(button).click());
+    cy.get('coding-box-error-message-display .close-button').should('not.exist');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@dummyValidation');
@@ -211,7 +213,8 @@ describe('Zoneless information from file validation', () => {
       delay: 150, body: { id: profileId, label: [{ lang: 'de', value: 'Metadaten ZL' }], target: ['UNIT'], groups: [{ label: [{ lang: 'de', value: 'Gruppe ZL' }], entries: [{ id: 'comment', label: [{ lang: 'de', value: 'Kommentar ZL' }], type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }] }] }
     }).as('profile');
     cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]')
+      .scrollIntoView().should('be.visible').click({ scrollBehavior: 'center' });
     cy.wait('@profile');
     cy.get('coding-box-metadata-dialog h2').should('be.visible').and('contain.text', 'metadata.vomd');
     cy.get('coding-box-metadata-dialog mat-progress-spinner').should('not.exist');

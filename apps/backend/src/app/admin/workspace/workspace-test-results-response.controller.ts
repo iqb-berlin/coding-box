@@ -14,6 +14,7 @@ import { Repository } from 'typeorm';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ
@@ -172,7 +173,7 @@ export class WorkspaceTestResultsResponseController {
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(
     @WorkspaceId() id: number,
