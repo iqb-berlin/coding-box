@@ -464,7 +464,7 @@ export class CodingJobReplayService {
 
   private getCodingJobBundleUnitCaseKey(
     unit: Pick<
-    CodingJobUnit,
+      CodingJobUnit,
     | 'person_login'
     | 'person_code'
     | 'person_group'
@@ -804,7 +804,7 @@ export class CodingJobReplayService {
     codingJobIds: number[],
     workspaceId: number
   ): Promise<
-    Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
+      Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
     > {
     if (codingJobIds.length === 0) {
       return {};
@@ -822,8 +822,8 @@ export class CodingJobReplayService {
     }
 
     const progressMap: Record<
-    number,
-    Record<string, SaveCodingProgressDto['selectedCode']>
+      number,
+      Record<string, SaveCodingProgressDto['selectedCode']>
     > = {};
 
     await Promise.all(

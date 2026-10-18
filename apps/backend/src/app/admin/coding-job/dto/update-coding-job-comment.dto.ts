@@ -7,5 +7,5 @@ export class UpdateCodingJobCommentDto {
     example: 'This coding job requires special attention'
   })
   @IsString()
-    comment: string;
+  comment: string;
 }

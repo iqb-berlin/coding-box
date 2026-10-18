@@ -17,63 +17,63 @@ export class StoreReplayStatisticsDto {
   @IsOptional()
   @IsString()
   @MaxLength(128)
-    replayAttemptId?: string;
+  replayAttemptId?: string;
 
   @ApiProperty()
   @IsString()
   @MaxLength(255)
-    unitId: string;
+  unitId: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(255)
-    bookletId?: string;
+  bookletId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(255)
-    testPersonLogin?: string;
+  testPersonLogin?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   @MaxLength(255)
-    testPersonCode?: string;
+  testPersonCode?: string;
 
   @ApiProperty()
   @IsInt()
   @Min(0)
   @Max(2147483647)
-    durationMilliseconds: number;
+  durationMilliseconds: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-    replayUrl?: string;
+  replayUrl?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
-    success?: boolean;
+  success?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-    errorMessage?: string;
+  errorMessage?: string;
 
   @ApiPropertyOptional({
     description: 'Small, whitelisted replay timing map recorded in the browser.'
   })
   @IsOptional()
   @IsObject()
-    clientTimings?: Record<string, unknown>;
+  clientTimings?: Record<string, unknown>;
 
   @ApiPropertyOptional({
     description: 'Small, whitelisted replay timing map reported by replay API endpoints.'
   })
   @IsOptional()
   @IsObject()
-    serverTimings?: Record<string, unknown>;
+  serverTimings?: Record<string, unknown>;
 }

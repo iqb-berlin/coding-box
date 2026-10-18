@@ -11,14 +11,14 @@ export class JobDefinitionVariableDto {
     example: 'unit1'
   })
   @IsString()
-    unitName: string;
+  unitName: string;
 
   @ApiProperty({
     description: 'Variable ID',
     example: 'variable1'
   })
   @IsString()
-    variableId: string;
+  variableId: string;
 
   @ApiProperty({
     description: 'Whether DERIVE_ERROR responses for this variable should be included in generated manual coding jobs',
@@ -27,7 +27,7 @@ export class JobDefinitionVariableDto {
   })
   @IsBoolean()
   @IsOptional()
-    includeDeriveError?: boolean;
+  includeDeriveError?: boolean;
 }
 
 export class JobDefinitionVariableBundleDto {
@@ -38,14 +38,14 @@ export class JobDefinitionVariableBundleDto {
   @IsNumber()
   @Min(1)
   @Type(() => Number)
-    id: number;
+  id: number;
 
   @ApiProperty({
     description: 'Bundle name',
     example: 'My Bundle'
   })
   @IsString()
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'Bundle-specific case ordering mode (overrides global mode)',
@@ -55,7 +55,7 @@ export class JobDefinitionVariableBundleDto {
   })
   @IsEnum(['continuous', 'alternating'])
   @IsOptional()
-    caseOrderingMode?: 'continuous' | 'alternating';
+  caseOrderingMode?: 'continuous' | 'alternating';
 
   @ApiProperty({
     description: 'Optional variable-level options for variables contained in this bundle',
@@ -66,5 +66,5 @@ export class JobDefinitionVariableBundleDto {
   @ValidateNested({ each: true })
   @Type(() => JobDefinitionVariableDto)
   @IsOptional()
-    variables?: JobDefinitionVariableDto[];
+  variables?: JobDefinitionVariableDto[];
 }

@@ -15,66 +15,66 @@ import { Unit } from './unit.entity';
 @Index(['is_autocoder_generated'])
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Index()
   @Column({ type: 'int' })
-    unitid: number;
+  unitid: number;
 
   @Index()
   @Column({ type: 'varchar', length: 255 })
-    variableid: string;
+  variableid: string;
 
   @Column({ type: 'smallint' })
-    status: number;
+  status: number;
 
   @Column({ type: 'text', nullable: true })
-    value: string;
+  value: string;
 
   @Column({ type: 'text', nullable: true })
-    subform: string;
+  subform: string;
 
   @Column({ type: 'boolean', default: false })
-    is_autocoder_generated?: boolean;
+  is_autocoder_generated?: boolean;
 
   @Column({ type: 'varchar', length: 2, nullable: true })
-    autocoder_invalidated_version?: 'v1' | 'v2' | null;
+  autocoder_invalidated_version?: 'v1' | 'v2' | null;
 
   // Transient query result used to apply the effective V2 -> V1 inheritance
   // rules without persisting another response attribute.
   inherits_v1_for_v2?: boolean;
 
   @Column({ type: 'smallint', nullable: true })
-    status_v1: number | null;
+  status_v1: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    code_v1: number | null;
+  code_v1: number | null;
 
   @Column({ type: 'smallint', nullable: true })
-    score_v1: number | null;
+  score_v1: number | null;
 
   @Column({ type: 'smallint', nullable: true })
-    status_v2: number | null;
+  status_v2: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    code_v2: number | null;
+  code_v2: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    score_v2: number | null;
+  score_v2: number | null;
 
   @Column({ type: 'smallint', nullable: true })
-    status_v3: number | null;
+  status_v3: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    code_v3: number | null;
+  code_v3: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    score_v3: number | null;
+  score_v3: number | null;
 
   @ManyToOne(() => Unit, unit => unit.responses, {
     onDelete: 'CASCADE'
     // Not using eager loading here to avoid performance issues with large result sets
   })
   @JoinColumn({ name: 'unitid' })
-    unit: Unit;
+  unit: Unit;
 }

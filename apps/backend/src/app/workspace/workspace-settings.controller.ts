@@ -102,7 +102,7 @@ export class WorkspaceSettingsController {
 
   @Get(':key')
   async getWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('key') key: string
   ) {
     const settingKey = this.getWorkspaceSettingStorageKey(workspaceId, key);
@@ -150,7 +150,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async createWorkspaceSettings(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @ValidatedBody('WorkspaceSettingsBatchDto') createSettingsDto: WorkspaceSettingsBatchDto,
     @Req() request?: { user: { id: number } }
   ) {
@@ -201,7 +201,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async createWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @ValidatedBody('WorkspaceSettingWriteDto') createSettingDto: WorkspaceSettingWriteDto,
     @Req() request?: { user: { id: number } }
   ) {
@@ -213,7 +213,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async updateWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
     @ValidatedBody('WorkspaceSettingsController_updateWorkspaceSetting') updateSettingDto: RequestBody<'WorkspaceSettingsController_updateWorkspaceSetting'>,
     @Req() request?: { user: { id: number } }
@@ -245,7 +245,7 @@ export class WorkspaceSettingsController {
   @UseGuards(AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteWorkspaceSetting(
-  @Param('workspaceId', ParseIntPipe) workspaceId: number,
+    @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
     @Req() request?: { user: { id: number } }
   ) {

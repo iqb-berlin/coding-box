@@ -265,65 +265,65 @@ export class TestPersonCodingService {
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<
-  number,
-  CodingStatisticsVersion
+    number,
+    CodingStatisticsVersion
   >();
 
   private codingFreshnessCache = new Map<number, CodingFreshnessSummaryDto>();
   private codingFreshnessRequests = new Map<
-  number,
-  Observable<CodingFreshnessSummaryDto>
+    number,
+    Observable<CodingFreshnessSummaryDto>
   >();
 
   private autocodingReadinessCache = new Map<string, AutocodingReadinessDto>();
   private autocodingReadinessRequests = new Map<
-  string,
-  Observable<AutocodingReadinessDto>
+    string,
+    Observable<AutocodingReadinessDto>
   >();
 
   private autocodingReadinessCacheOnlyRequests = new Map<
-  string,
-  Observable<AutocodingReadinessDto | null>
+    string,
+    Observable<AutocodingReadinessDto | null>
   >();
 
   private codingFreshnessScopeCache = new Map<
-  string,
-  CodingFreshnessScopeDto
+    string,
+    CodingFreshnessScopeDto
   >();
 
   private codingFreshnessScopeRequests = new Map<
-  string,
-  Observable<CodingFreshnessScopeDto>
+    string,
+    Observable<CodingFreshnessScopeDto>
   >();
 
   private appliedResultsOverviewCache = new Map<
-  number,
+    number,
   AppliedResultsOverview | null
   >();
 
   private appliedResultsOverviewRequests = new Map<
-  number,
-  Observable<AppliedResultsOverview | null>
+    number,
+    Observable<AppliedResultsOverview | null>
   >();
 
   private manualCodingPlanningSnapshots = new Map<
-  number,
-  ManualCodingPlanningSnapshot
+    number,
+    ManualCodingPlanningSnapshot
   >();
 
   private responseAnalysisGuardPollTimers = new Map<
-  number,
-  ReturnType<typeof setTimeout>
+    number,
+    ReturnType<typeof setTimeout>
   >();
 
   private responseAnalysisGuardThresholds = new Map<
-  number,
+    number,
   number | undefined
   >();
 
   private freshnessCodingGuardPollTimers = new Map<
-  string,
-  ReturnType<typeof setTimeout>
+    string,
+    ReturnType<typeof setTimeout>
   >();
 
   private readonly responseAnalysisGuardPollIntervalMs = 5000;
@@ -539,9 +539,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<CodingStatisticsWithJob>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding`,
-      { headers: this.authHeader, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding`,
+        { headers: this.authHeader, params }
+      )
       .pipe(
         catchError(error => of({
           totalResponses: 0,
@@ -567,9 +567,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<unknown>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/manual`,
-      { headers: this.authHeader, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/manual`,
+        { headers: this.authHeader, params }
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -591,9 +591,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<PaginatedCodingList>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/coding-list`,
-      { headers: this.authHeader, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/coding-list`,
+        { headers: this.authHeader, params }
+      )
       .pipe(
         catchError(() => of({
           data: [],
@@ -608,9 +608,9 @@ export class TestPersonCodingService {
   getCodingStatistics(workspaceId: number): Observable<CodingStatistics> {
     return this.http
       .get<CodingStatistics>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/statistics`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/statistics`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of({ totalResponses: 0, statusCounts: {} })));
   }
 
@@ -648,9 +648,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<JobStatus | { error: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({ error: `Failed to get status for job ${jobId}` }))
       );
@@ -666,9 +666,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<{ success: boolean; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/cancel`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/cancel`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({ success: false, message: `Failed to cancel job ${jobId}` })
         )
@@ -685,9 +685,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<{ success: boolean; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/delete`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/delete`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({ success: false, message: `Failed to delete job ${jobId}` })
         )
@@ -731,9 +731,9 @@ export class TestPersonCodingService {
   getAllJobs(workspaceId: number): Observable<JobInfo[]> {
     return this.http
       .get<JobInfo[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -742,9 +742,9 @@ export class TestPersonCodingService {
   ): Observable<WorkspaceGroupCodingStats[]> {
     return this.http
       .get<WorkspaceGroupCodingStats[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups/stats`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/groups/stats`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -770,12 +770,12 @@ export class TestPersonCodingService {
     const requestGeneration = this.codingStatusCacheGeneration;
     const request$ = this.http
       .get<CodingFreshnessSummaryDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
-      {
-        headers: this.authHeader,
-        context: suppressGlobalHttpErrorContext()
-      }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
+        {
+          headers: this.authHeader,
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
       .pipe(
         tap(summary => {
           if (this.codingStatusCacheGeneration === requestGeneration) {
@@ -830,13 +830,13 @@ export class TestPersonCodingService {
     const requestGeneration = this.codingStatusCacheGeneration;
     const request$ = this.http
       .get<AutocodingReadinessDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
-      {
-        headers: this.authHeader,
-        params,
-        context: suppressGlobalHttpErrorContext()
-      }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
+        {
+          headers: this.authHeader,
+          params,
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
       .pipe(
         tap(readiness => {
           if (
@@ -887,13 +887,13 @@ export class TestPersonCodingService {
     const requestGeneration = this.codingStatusCacheGeneration;
     const request$ = this.http
       .get<AutocodingReadinessDto | null>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
-      {
-        headers: this.authHeader,
-        params,
-        context: suppressGlobalHttpErrorContext()
-      }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
+        {
+          headers: this.authHeader,
+          params,
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
       .pipe(
         map(readiness => (this.codingStatusCacheGeneration === requestGeneration ?
           readiness :
@@ -962,13 +962,13 @@ export class TestPersonCodingService {
     const requestGeneration = this.codingStatusCacheGeneration;
     const request$ = this.http
       .get<CodingFreshnessScopeDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
-      {
-        headers: this.authHeader,
-        params,
-        context: suppressGlobalHttpErrorContext()
-      }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
+        {
+          headers: this.authHeader,
+          params,
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
       .pipe(
         tap(scope => {
           if (this.codingStatusCacheGeneration === requestGeneration) {
@@ -1001,10 +1001,10 @@ export class TestPersonCodingService {
   ): Observable<CodingFreshnessJobResultDto> {
     return this.http
       .post<CodingFreshnessJobResultDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/code`,
-      request,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/code`,
+        request,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({
           totalResponses: 0,
@@ -1028,9 +1028,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<{ success: boolean; message: string; jobId?: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/restart`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/restart`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({ success: false, message: `Failed to restart job ${jobId}` })
         )
@@ -1051,10 +1051,10 @@ export class TestPersonCodingService {
 
     return this.http
       .post<ValidateCodingCompletenessResponseDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness`,
-      request,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/validate-completeness`,
+        request,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(error => throwError(() => error)));
   }
 
@@ -1233,9 +1233,9 @@ export class TestPersonCodingService {
   ): Observable<CodingProgressOverview | null> {
     return this.http
       .get<CodingProgressOverview>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of(null)));
   }
 
@@ -1262,9 +1262,9 @@ export class TestPersonCodingService {
     const requestGeneration = this.codingStatusCacheGeneration;
     const request$ = this.http
       .get<AppliedResultsOverview>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(overview => {
           if (this.codingStatusCacheGeneration === requestGeneration) {
@@ -1295,22 +1295,22 @@ export class TestPersonCodingService {
       sampleCount: number;
     }[]
   ): Observable<
-    {
-      coderId: number;
-      coderName: string;
-      responses: {
-        responseId: number;
-        unitAlias: string;
-        variableId: string;
-        unitName: string;
-        value: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        variable: string;
-      }[];
-    }[]
+      {
+        coderId: number;
+        coderName: string;
+        responses: {
+          responseId: number;
+          unitAlias: string;
+          variableId: string;
+          unitName: string;
+          value: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          bookletName: string;
+          variable: string;
+        }[];
+      }[]
     > {
     const request = {
       selectedCoders,
@@ -1319,27 +1319,27 @@ export class TestPersonCodingService {
 
     return this.http
       .post<
-    {
-      coderId: number;
-      coderName: string;
-      responses: {
-        responseId: number;
-        unitAlias: string;
-        variableId: string;
-        unitName: string;
-        value: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        variable: string;
-      }[];
-    }[]
+      {
+        coderId: number;
+        coderName: string;
+        responses: {
+          responseId: number;
+          unitAlias: string;
+          variableId: string;
+          unitName: string;
+          value: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          bookletName: string;
+          variable: string;
+        }[];
+      }[]
     >(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-packages`,
-      request,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-packages`,
+        request,
+        { headers: this.authHeader }
+      )
       .pipe(catchError(() => of([])));
   }
 
@@ -1410,9 +1410,9 @@ export class TestPersonCodingService {
       coveredSourceVariableCount?: number;
       coveredSourceResponseCount?: number;
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/variable-coverage-overview`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({
           totalVariables: 0,
@@ -1445,9 +1445,9 @@ export class TestPersonCodingService {
   ): Observable<CaseCoverageOverview> {
     return this.http
       .get<CaseCoverageOverview>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/case-coverage-overview`,
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/case-coverage-overview`,
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({
           totalCasesToCode: 0,
@@ -1697,10 +1697,10 @@ export class TestPersonCodingService {
       updatedCount: number;
       message: string;
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-empty-responses`,
-      {},
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-empty-responses`,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({
           success: false,
@@ -1730,10 +1730,10 @@ export class TestPersonCodingService {
       uniqueCodingCases: number;
       message: string;
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-duplicate-aggregation`,
-      { threshold, aggregateMode },
-      { headers: this.authHeader }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-duplicate-aggregation`,
+        { threshold, aggregateMode },
+        { headers: this.authHeader }
+      )
       .pipe(
         catchError(() => of({
           success: false,
@@ -1771,9 +1771,9 @@ export class TestPersonCodingService {
 
     return this.http
       .get<CohensKappaStatisticsResponse>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
-      { headers: this.authHeader, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
+        { headers: this.authHeader, params }
+      )
       .pipe(
         catchError(() => of({
           variables: [],
@@ -2026,9 +2026,9 @@ export class TestPersonCodingService {
         weightingMethod: 'weighted' | 'unweighted';
       };
     }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
-      { headers: this.authHeader, params }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
+        { headers: this.authHeader, params }
+      )
       .pipe(
         catchError(() => of({
           coderPairs: [],

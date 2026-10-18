@@ -44,7 +44,7 @@ export class WorkspaceCodingResultsController {
   })
   async getCodingJobFreshnessImpact(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: number
+    @Param('jobId') jobId: number
   ): Promise<CodingJobFreshnessImpactDto> {
     return this.codingJobService.getCodingJobFreshnessImpact(
       workspace_id,
@@ -100,9 +100,9 @@ export class WorkspaceCodingResultsController {
   })
   async applyCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: number,
-      @Body('overwriteExisting', new JsonSchemaValidationPipe(requestBodySchemas.boolean, true)) overwriteExisting?: boolean,
-      @Req() request?: { user: { id: number } }
+    @Param('jobId') jobId: number,
+    @Body('overwriteExisting', new JsonSchemaValidationPipe(requestBodySchemas.boolean, true)) overwriteExisting?: boolean,
+    @Req() request?: { user: { id: number } }
   ): Promise<ApplyCodingResultsResult> {
     return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId, {
       overwriteExisting: overwriteExisting === true,

@@ -98,7 +98,7 @@ export class CodingJobController {
   })
   async getCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number
   ): Promise<CodingJobDto> {
     const result = await this.codingJobService.getCodingJob(id, workspaceId);
     const dto = CodingJobDto.fromEntity(result.codingJob);
@@ -134,8 +134,8 @@ export class CodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Body() createCodingJobDto: CreateCodingJobDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -189,9 +189,9 @@ export class CodingJobController {
   })
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCodingJobDto: UpdateCodingJobDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     const codingJob = await this.codingJobService.updateCodingJob(
       id,
@@ -235,8 +235,8 @@ export class CodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id', ParseIntPipe) id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
@@ -277,9 +277,9 @@ export class CodingJobController {
   })
   async assignCoders(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() assignCodersDto: AssignCodersDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id', ParseIntPipe) id: number,
+    @Body() assignCodersDto: AssignCodersDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     // Verify the coding job exists in this workspace
     await this.codingJobService.getCodingJob(id, workspaceId);
