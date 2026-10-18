@@ -16,8 +16,13 @@ not each interaction independently. Profile loading does not block these UI
 actions; the test itself delays their response until those actions finish.
 The unchanged test initially passed locally. Injecting 4.5 seconds immediately
 before `releaseProfiles()` reproduced the exact CI callback timeout in both
-Codebook cases (1/3 passed). With a 30-second budget scoped to those two tests,
-the same injected delay passed (3/3). The injected delay was then removed.
+Codebook cases (1/3 passed). With a 30-second budget captured when the two intercept callbacks begin,
+the same injected delay passes (3/3). The test waits for both callbacks to
+reach their gates, then immediately restores the original command timeout.
+The dialog-opening click and the request-start assertions also keep the original
+timeout; subsequent UI commands therefore retain their original four-second
+deadlines. The afterEach hook restores the timeout on failure as well. The
+injected delay is removed from the regular test.
 Both gates and all existing assertions remain; the test additionally selects
 the loaded profile and verifies its ID in the actual request.
 
@@ -80,7 +85,12 @@ in Bull; failed Autocoder preflight leaves the complete before/after response
 snapshot unchanged. Both production builds and both lints pass locally. The complete backend suite
 passes with **3,062 tests in 196 suites**; **63 tests in seven suites are skipped**.
 It ran sequentially with `npx nx test backend --maxWorkers=1 --workerIdleMemoryLimit=768MB`
-and `NODE_OPTIONS=--max-old-space-size=2048` (171.774 seconds).
+and `NODE_OPTIONS=--max-old-space-size=2048` (171.774 seconds). The complete
+frontend suite passes with **2,998 tests in 278 suites** using the same worker
+limits (187.333 seconds). Zoneless risk coverage passes. The complete local
+browser suite passes with **140/140 tests in 27 specs**; the subsequently
+refined callback deadline is additionally checked with and without the injected
+4.5-second delay in the affected three-test spec.
 
 [Browser reproduction before](qa/codebook-live-2026-10-18/browser-reproduction-before.log),
 [the same stress after](qa/codebook-live-2026-10-18/browser-reproduction-after.log)

@@ -1,15 +1,15 @@
 
 > nx run frontend:e2e:ci --browser=electron --spec=cypress/zoneless/statistics-codebook.cy.ts
 
-(node:72519) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:92966) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:72570) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(node:93016) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 (Use `node --trace-warnings ...` to show where the warning was created)
 Starting up http-server, serving dist/apps/frontend
 
 http-server version: 14.1.1
 
-http-server settings: 
+http-server settings:
 CORS: true
 Cache: -1 seconds
 Connection Timeout: 120 seconds
@@ -37,14 +37,14 @@ Learn more: https://on.cypress.io/cypress-env-migration
   │ Searched:       cypress/zoneless/statistics-codebook.cy.ts                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-                                                                                                    
+
   Running:  statistics-codebook.cy.ts                                                       (1 of 1)
   Zoneless replay statistics and codebook export
-(node:72570) [DEP0066] DeprecationWarning: OutgoingMessage.prototype._headers is deprecated
-    ✓ renders replay statistics after the delayed final response without another click (7550ms)
-    ✓ renders delayed codebook progress and the completed status (10122ms)
-    ✓ renders delayed codebook progress and the failed status (10664ms)
-  3 passing (29s)
+(node:93016) [DEP0066] DeprecationWarning: OutgoingMessage.prototype._headers is deprecated
+    ✓ renders replay statistics after the delayed final response without another click (5594ms)
+    ✓ renders delayed codebook progress and the completed status (9937ms)
+    ✓ renders delayed codebook progress and the failed status (9956ms)
+  3 passing (26s)
   (Results)
   ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ Tests:        3                                                                                │
@@ -54,21 +54,21 @@ Learn more: https://on.cypress.io/cypress-env-migration
   │ Skipped:      0                                                                                │
   │ Screenshots:  2                                                                                │
   │ Video:        false                                                                            │
-  │ Duration:     28 seconds                                                                       │
+  │ Duration:     25 seconds                                                                       │
   │ Spec Ran:     statistics-codebook.cy.ts                                                        │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
   (Screenshots)
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
-     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png                                
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (1600x1200)
-     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png                                  
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png
 ================================================================================
   (Run Finished)
-       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+       Spec                                              Tests  Passing  Failing  Pending  Skipped
   ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │ ✔  statistics-codebook.cy.ts                00:28        3        3        -        -        - │
+  │ ✔  statistics-codebook.cy.ts                00:25        3        3        -        -        - │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
-    ✔  All specs passed!                        00:28        3        3        -        -        -  
+    ✔  All specs passed!                        00:25        3        3        -        -        -
 
 
 

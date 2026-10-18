@@ -9,7 +9,7 @@ Starting up http-server, serving dist/apps/frontend
 
 http-server version: 14.1.1
 
-http-server settings: 
+http-server settings:
 CORS: true
 Cache: -1 seconds
 Connection Timeout: 120 seconds
@@ -37,7 +37,7 @@ Learn more: https://on.cypress.io/cypress-env-migration
   │ Searched:       cypress/zoneless/statistics-codebook.cy.ts                                     │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-                                                                                                    
+
   Running:  statistics-codebook.cy.ts                                                       (1 of 1)
   Zoneless replay statistics and codebook export
 (node:67203) [DEP0066] DeprecationWarning: OutgoingMessage.prototype._headers is deprecated
@@ -154,22 +154,22 @@ https://on.cypress.io/intercept
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
   (Screenshots)
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
-     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png                                
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (1600x1200)
-     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png                                  
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
-     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor               
-     t -- renders delayed codebook progress and the completed status (failed).png                   
+     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor
+     t -- renders delayed codebook progress and the completed status (failed).png
   -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
-     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor               
-     t -- renders delayed codebook progress and the failed status (failed).png                      
+     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor
+     t -- renders delayed codebook progress and the failed status (failed).png
 ================================================================================
   (Run Finished)
-       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+       Spec                                              Tests  Passing  Failing  Pending  Skipped
   ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
   │ ✖  statistics-codebook.cy.ts                00:16        3        1        2        -        - │
   └────────────────────────────────────────────────────────────────────────────────────────────────┘
-    ✖  1 of 1 failed (100%)                     00:16        3        1        2        -        -  
+    ✖  1 of 1 failed (100%)                     00:16        3        1        2        -        -
 
 
 
