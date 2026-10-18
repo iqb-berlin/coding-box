@@ -1,5 +1,6 @@
 describe('Zoneless replay statistics and codebook export', () => {
   let unexpectedRequests: string[];
+  let defaultCommandTimeout: number;
   let dateLabels: Map<HTMLCanvasElement, Map<string, { left: number; right: number }>>;
   let renderedText: Map<HTMLCanvasElement, Set<string>>;
   let animatedHeights: Map<HTMLCanvasElement, Set<number>>;
@@ -51,6 +52,7 @@ describe('Zoneless replay statistics and codebook export', () => {
   }
 
   beforeEach(() => {
+    defaultCommandTimeout = Cypress.config('defaultCommandTimeout');
     unexpectedRequests = [];
     dateLabels = new Map();
     renderedText = new Map();
@@ -67,6 +69,7 @@ describe('Zoneless replay statistics and codebook export', () => {
   });
 
   afterEach(() => {
+    Cypress.config('defaultCommandTimeout', defaultCommandTimeout);
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
@@ -183,9 +186,9 @@ describe('Zoneless replay statistics and codebook export', () => {
   });
 
   for (const outcome of ['completed', 'failed']) {
-    // Both gates deliberately span several user interactions. Cypress applies this
-    // timeout to the entire intercept callback, not just to each DOM command.
-    it(`renders delayed codebook progress and the ${outcome} status`, { defaultCommandTimeout: 30000 }, () => {
+    it(`renders delayed codebook progress and the ${outcome} status`, () => {
+      let unitsRequested = false;
+      let profilesRequested = false;
       let releaseUnits!: () => void;
       const unitsGate = new Promise<void>(resolve => { releaseUnits = resolve; });
       let releaseProfiles!: () => void;
@@ -195,10 +198,12 @@ describe('Zoneless replay statistics and codebook export', () => {
       });
       cy.intercept('GET', '**/api/admin/workspace/5/variable-bundle?*', { body: { data: [], total: 0 } });
       cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', async request => {
+        profilesRequested = true;
         await profilesGate;
         request.reply({ body: [{ id: 7, label: 'Profil' }] });
       }).as('profiles');
       cy.intercept('GET', '**/api/admin/workspace/5/files/units-with-file-ids', async request => {
+        unitsRequested = true;
         await unitsGate;
         request.reply({ body: [{ id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: JSON.stringify({ variableCodings: [{ id: 'V' }] }) }] });
       }).as('units');
@@ -224,7 +229,18 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
-      cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Codebook').click();
+      cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Codebook').then(button => {
+        // Cypress captures this deadline when each intercept callback begins.
+        // The gates span several interactions; keep normal UI/action deadlines.
+        Cypress.config('defaultCommandTimeout', 30000);
+        cy.wrap(button).click({ timeout: defaultCommandTimeout });
+      });
+      cy.wrap(null, { timeout: defaultCommandTimeout }).should(() => {
+        expect(unitsRequested, 'Units request reached its gate').to.equal(true);
+        expect(profilesRequested, 'Profiles request reached its gate').to.equal(true);
+      }).then(() => {
+        Cypress.config('defaultCommandTimeout', defaultCommandTimeout);
+      });
       cy.get('coding-box-export-coding-book').as('dialog');
       cy.get('@dialog').should('not.contain.text', 'codebook.');
       cy.get('@dialog').find('button[type="submit"]').should('contain.text', 'Exportieren');
