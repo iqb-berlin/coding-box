@@ -1,0 +1,1 @@
+[{"key":"INTERSECTION","name":"INTERSECTION","variables":[{"id":"C","label":"C","sourceType":"BASE","generalInstruction":"<p>GENERAL-third</p>","codes":[{"id":"0","label":"RICHTIG","description":"<p>Bewerten third</p>","score":"0"}]}],"missings":[{"code":-99,"label":"PROOF-MISSING","description":"Synthetic missing description"}]}]

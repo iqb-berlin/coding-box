@@ -1,0 +1,77 @@
+
+> nx run frontend:e2e:ci --browser=electron --spec=cypress/zoneless/statistics-codebook.cy.ts
+
+(node:72519) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:72570) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Starting up http-server, serving dist/apps/frontend
+
+http-server version: 14.1.1
+
+http-server settings: 
+CORS: true
+Cache: -1 seconds
+Connection Timeout: 120 seconds
+Directory Listings: visible
+AutoIndex: visible
+Serve GZIP Files: false
+Serve Brotli Files: false
+Default File Extension: none
+
+Available on:
+  http://127.0.0.1:4200
+Unhandled requests will be served from: http://localhost:4200?
+Hit CTRL-C to stop the server
+Warning: The allowCypressEnv configuration option is enabled. This allows any browser code to read values from Cypress.env(). This is insecure and will be removed in a future major version.
+1. Replace Cypress.env() calls with cy.env() (for sensitive values) or Cypress.expose() (for public configuration)
+2. Set allowCypressEnv: false in your Cypress configuration to disable Cypress.env()
+Learn more: https://on.cypress.io/cypress-env-migration
+================================================================================
+  (Run Starting)
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Cypress:        15.21.1                                                                        │
+  │ Browser:        Electron 138 (headless)                                                        │
+  │ Node Version:   v22.23.1 (/Users/user/.hermes/node/bin/node)                                 │
+  │ Specs:          1 found (statistics-codebook.cy.ts)                                            │
+  │ Searched:       cypress/zoneless/statistics-codebook.cy.ts                                     │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  statistics-codebook.cy.ts                                                       (1 of 1)
+  Zoneless replay statistics and codebook export
+(node:72570) [DEP0066] DeprecationWarning: OutgoingMessage.prototype._headers is deprecated
+    ✓ renders replay statistics after the delayed final response without another click (7550ms)
+    ✓ renders delayed codebook progress and the completed status (10122ms)
+    ✓ renders delayed codebook progress and the failed status (10664ms)
+  3 passing (29s)
+  (Results)
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        3                                                                                │
+  │ Passing:      3                                                                                │
+  │ Failing:      0                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  2                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     28 seconds                                                                       │
+  │ Spec Ran:     statistics-codebook.cy.ts                                                        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+  (Screenshots)
+  -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png                                
+  -  /Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (1600x1200)
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png                                  
+================================================================================
+  (Run Finished)
+       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ✔  statistics-codebook.cy.ts                00:28        3        3        -        -        - │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ✔  All specs passed!                        00:28        3        3        -        -        -  
+
+
+
+ NX   Successfully ran target e2e for project frontend
+
+
