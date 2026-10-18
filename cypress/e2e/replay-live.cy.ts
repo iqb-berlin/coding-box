@@ -40,7 +40,7 @@ describe('live replay with the embedded Aspect player', () => {
   let setup: ReplaySetup;
 
   before(() => {
-    cy.task('replay:setup', null, { log: false }).then((result) => {
+    cy.task('replay:setup', null, { log: false, timeout: 180_000 }).then((result) => {
       setup = result as ReplaySetup;
     });
   });

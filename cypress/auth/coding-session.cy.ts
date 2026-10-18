@@ -240,11 +240,13 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
 
     cy.intercept('POST', '**/coding-job/*/pause').as('pause');
-    cy.intercept('POST', '**/coding-job/*/resume').as('resume');
+    cy.intercept('PUT', '**/coding-job/*/status', request => {
+      if (request.body.status === 'active') request.alias = 'resume';
+    });
     cy.get('coding-box-code-selector .pause-button').click();
     cy.wait('@pause').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay .resume-button').should('be.visible').click();
-    cy.wait('@resume').its('response.statusCode').should('eq', 201);
+    cy.wait('@resume').its('response.statusCode').should('eq', 200);
     cy.get('.pause-overlay').should('not.exist');
     cy.get('coding-box-code-selector .next-button').click();
     cy.get('coding-box-code-selector .current-position').should('have.text', '2');
@@ -613,8 +615,8 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-coding-management-manual .manual-coding-tabs')
       .contains('Abschluss').click();
     cy.contains('.completed-job-apply-row', createdJobName)
-      .scrollIntoView()
-      .should('be.visible');
+      .scrollIntoView();
+    cy.contains('.completed-job-apply-row', createdJobName).should('be.visible');
     cy.intercept('POST', '**/coding/jobs/*/apply-results').as('applyResults');
     cy.contains('.completed-job-apply-row', createdJobName)
       .contains('button', 'Ergebnisse anwenden').click();
