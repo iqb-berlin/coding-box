@@ -10,6 +10,8 @@ import { CodingModule } from '../../coding/coding.module';
 import { JobQueueModule } from '../../job-queue/job-queue.module';
 import { VariableBundleModule } from '../variable-bundle/variable-bundle.module';
 import { UsersController } from '../users/users.controller';
+import { LogoService } from '../logo/logo.service';
+import { LogoUploadInterceptor } from '../logo/logo-upload.interceptor';
 import { LogoController } from '../logo/logo.controller';
 import { UnitTagsController } from '../unit-tags/unit-tags.controller';
 import { UnitNotesController } from '../unit-notes/unit-notes.controller';
@@ -83,6 +85,8 @@ export function getEnabledCoreAdminProcessors(
     AdminSystemNotificationController
   ],
   providers: [
+    LogoService,
+    LogoUploadInterceptor,
     DatabaseExportService,
     ...getEnabledCoreAdminProcessors(),
     ContentPoolIntegrationService,

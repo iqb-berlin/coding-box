@@ -586,6 +586,7 @@ test-main-pr-backend:
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
     - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
+    - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:typecheck
     - docker run --name backend-unit-${CI_JOB_ID} ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
   coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
   artifacts:

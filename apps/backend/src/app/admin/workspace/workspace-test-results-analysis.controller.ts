@@ -9,8 +9,6 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -19,8 +17,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
-import { Setting } from '../../database/entities/setting.entity';
-import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -28,8 +25,7 @@ export class WorkspaceTestResultsAnalysisController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettings: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/test-results/flat-responses')
@@ -96,7 +92,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+      await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
         page,

@@ -5,8 +5,6 @@ import {
   ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -19,8 +17,7 @@ import { ExportValidationResultsService } from '../../database/services/validati
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
-import { Setting } from '../../database/entities/setting.entity';
-import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -31,8 +28,7 @@ export class WorkspaceCodingAnalysisController {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettings: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
@@ -107,7 +103,7 @@ export class WorkspaceCodingAnalysisController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
     const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+      await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,

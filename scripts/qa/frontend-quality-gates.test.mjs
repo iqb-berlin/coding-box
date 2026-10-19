@@ -371,14 +371,22 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync(project + '.tested', 'checked');
       if (project === 'frontend' || fs.existsSync('fail-backend')) process.exitCode = 1;
     `);
+    writeFileSync(join(directory, 'typecheck.cjs'), `
+      const fs = require('node:fs');
+      fs.writeFileSync('typecheck.tested', 'checked');
+      if (fs.existsSync('fail-typecheck')) process.exitCode = 1;
+    `);
     for (const project of ['frontend', 'backend']) {
       const root = join(directory, 'apps', project);
       mkdirSync(root, { recursive: true });
       writeFileSync(join(root, 'project.json'), JSON.stringify({
         name: project,
-        targets: { test: { executor: 'nx:run-commands', options: {
-          command: `node test.cjs ${project}`
-        } } }
+        targets: {
+          test: { executor: 'nx:run-commands', options: { command: `node test.cjs ${project}` } },
+          ...(project === 'backend' ? { typecheck: {
+            executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
+          } } : {})
+        }
       }));
       writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
     }
@@ -400,12 +408,22 @@ test('the actual backend job checks its complete suite and rejects test failures
     const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
+    assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
     writeFileSync(join(directory, 'fail-backend'), 'fail');
     const failed = run('sh', ['-eu', '-c', script]);
     assert.ifError(failed.error);
     assert.equal(failed.status, 1, failed.stdout + failed.stderr);
     assert.match(failed.stdout + failed.stderr, /backend:test/);
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+    rmSync(join(directory, 'fail-backend'));
+    rmSync(join(directory, 'backend.tested'));
+    writeFileSync(join(directory, 'fail-typecheck'), 'fail');
+    const failedTypes = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failedTypes.error);
+    assert.equal(failedTypes.status, 1, failedTypes.stdout + failedTypes.stderr);
+    assert.match(failedTypes.stdout + failedTypes.stderr, /backend:typecheck/);
+    assert.equal(existsSync(join(directory, 'backend.tested')), false);
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });

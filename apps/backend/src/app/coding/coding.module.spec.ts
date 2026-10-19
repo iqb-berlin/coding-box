@@ -9,7 +9,15 @@ import {
   Connection, DataSource, EntityManager, getMetadataArgsStorage
 } from 'typeorm';
 // Load the application first so this test uses the production module evaluation order.
+import '../config/startup-environment.test.factory';
 import { AppModule } from '../app.module';
+import { WorkspaceSettingsModule } from '../workspace/workspace-settings.module';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
+import { WorkspaceSettingsController } from '../workspace/workspace-settings.controller';
+import { WorkspaceCodingAnalysisController } from '../admin/workspace/workspace-coding-analysis.controller';
+import { WorkspaceTestResultsResponseController } from '../admin/workspace/workspace-test-results-response.controller';
+import { WorkspaceFilesController } from '../admin/workspace/workspace-files.controller';
+import { WorkspaceTestResultsAnalysisController } from '../admin/workspace/workspace-test-results-analysis.controller';
 import { CodingAggregationPeerService } from '../database/services/coding/coding-aggregation-peer.service';
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
 import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
@@ -65,7 +73,7 @@ async function createApplication(): Promise<TestingModule> {
     .overrideProvider(Connection)
     .useValue({})
     .overrideProvider(getRedisConnectionToken())
-    .useValue({});
+    .useValue({ disconnect: jest.fn() });
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',
@@ -98,6 +106,13 @@ describe('CodingModule', () => {
 
     const module = await createApplication();
     try {
+      const settings = module.select(WorkspaceSettingsModule).get(WorkspaceSettingsService, { strict: true });
+      expect((module.get(WorkspaceSettingsController) as unknown as { settings: WorkspaceSettingsService }).settings).toBe(settings);
+      expect((module.get(WorkspaceFilesController) as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
+      expect((module.get(WorkspaceTestResultsAnalysisController) as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
+      for (const controller of [module.get(WorkspaceCodingAnalysisController), module.get(WorkspaceTestResultsResponseController)]) {
+        expect((controller as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
+      }
       const facade = module.get(CodingJobService);
       const featureProviders = [
         CodingJobMutationService, CodingJobResponsesService, CodingJobAccessService,
