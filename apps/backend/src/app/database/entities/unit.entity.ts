@@ -26,60 +26,60 @@ import { UnitNote } from './unitNote.entity';
 @Index(['bookletid', 'alias']) // Composite index for common query patterns
 export class Unit {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Index()
   @Column({ type: 'int' })
-    bookletid: number;
+  bookletid: number;
 
   @Index()
   @Column({ type: 'varchar', length: 100 })
-    name: string;
+  name: string;
 
   @Index()
   @Column({ type: 'varchar', length: 100, nullable: true })
-    alias: string;
+  alias: string;
 
   @ManyToOne(() => Booklet, booklet => booklet.units, {
     onDelete: 'CASCADE'
     // Not using eager loading here to avoid circular eager loading with Booklet
   })
   @JoinColumn({ name: 'bookletid' })
-    booklet: Booklet;
+  booklet: Booklet;
 
   @OneToMany(() => UnitLog, unitLog => unitLog.unit, {
     // Cascade operations to unit logs when unit is modified
     cascade: true
   })
-    unitLogs: UnitLog[];
+  unitLogs: UnitLog[];
 
   @OneToMany(() => UnitLastState, unitLastState => unitLastState.unit, {
     // Cascade operations to unit last states when unit is modified
     cascade: true
   })
-    unitLastStates: UnitLastState[];
+  unitLastStates: UnitLastState[];
 
   @OneToMany(() => ChunkEntity, chunk => chunk.unit, {
     // Cascade operations to chunks when unit is modified
     cascade: true
   })
-    chunks: ChunkEntity[];
+  chunks: ChunkEntity[];
 
   @OneToMany(() => ResponseEntity, response => response.unit, {
     // Cascade operations to responses when unit is modified
     cascade: true
   })
-    responses: ResponseEntity[];
+  responses: ResponseEntity[];
 
   @OneToMany(() => UnitTag, unitTag => unitTag.unit, {
     // Cascade operations to unit tags when unit is modified
     cascade: true
   })
-    tags: UnitTag[];
+  tags: UnitTag[];
 
   @OneToMany(() => UnitNote, unitNote => unitNote.unit, {
     // Cascade operations to unit notes when unit is modified
     cascade: true
   })
-    notes: UnitNote[];
+  notes: UnitNote[];
 }

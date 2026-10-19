@@ -52,13 +52,13 @@ export class WorkspaceSettingsService {
 
   private readonly settingsCacheTtlMs = 10_000;
   private readonly settingsCache = new Map<
-  string,
-  { expiresAt: number; value: WorkspaceSettings }
+    string,
+    { expiresAt: number; value: WorkspaceSettings }
   >();
 
   private readonly settingsInFlight = new Map<
-  string,
-  Observable<WorkspaceSettings>
+    string,
+    Observable<WorkspaceSettings>
   >();
 
   private get serverUrl(): string {

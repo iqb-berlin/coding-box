@@ -254,8 +254,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private readonly unitIdsWithNotes = signal(new Set<number>());
 
   private personTestResultsCache = new Map<
-  number,
-  Observable<BookletFromPersonTestResults[]>
+    number,
+    Observable<BookletFromPersonTestResults[]>
   >();
 
   private personTestResultsCacheOrder: number[] = [];
@@ -283,8 +283,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   readonly isLoadingFrequencies = signal<boolean>(false);
   private readonly frequenciesByComboKey = signal(new Map<
-  string,
-  { total: number; values: FlatResponseFrequencyItem[] }
+    string,
+    { total: number; values: FlatResponseFrequencyItem[] }
   >());
 
   readonly flatData = signal<FlatResponseRow[]>([]);
@@ -699,8 +699,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     const combosToFetchMap = new Map<
-    string,
-    FlatResponseFrequencyRequestCombo
+      string,
+      FlatResponseFrequencyRequestCombo
     >();
     (this.flatData() || []).forEach(r => {
       const variableId = String(r.response || '').trim();
@@ -1319,23 +1319,23 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           .filter(Boolean);
 
         const ref = this.dialog.open<
-        TestResultsFlatTableSettingsDialogComponent,
-        {
-          audioLowThreshold: number;
-          shortProcessingThresholdMs: number;
-          longLoadingThresholdMs: number;
-          focusLostThresholdMs: number;
-          sessionSpanThresholdMs: number;
-          repeatedStartThreshold: number;
-          processingDurationMin: string;
-          processingDurationMax: string;
-          sessionBrowsersAllowlist: string[];
-          sessionOsAllowlist: string[];
-          sessionScreensAllowlist: string[];
-          availableSessionBrowsers: string[];
-          availableSessionOs: string[];
-          availableSessionScreens: string[];
-        },
+          TestResultsFlatTableSettingsDialogComponent,
+          {
+            audioLowThreshold: number;
+            shortProcessingThresholdMs: number;
+            longLoadingThresholdMs: number;
+            focusLostThresholdMs: number;
+            sessionSpanThresholdMs: number;
+            repeatedStartThreshold: number;
+            processingDurationMin: string;
+            processingDurationMax: string;
+            sessionBrowsersAllowlist: string[];
+            sessionOsAllowlist: string[];
+            sessionScreensAllowlist: string[];
+            availableSessionBrowsers: string[];
+            availableSessionOs: string[];
+            availableSessionScreens: string[];
+          },
         TestResultsFlatTableSettingsDialogResult | undefined
         >(TestResultsFlatTableSettingsDialogComponent, {
           width: '720px',

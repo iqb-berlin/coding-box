@@ -744,7 +744,7 @@ export class CodingJobDistributionService {
   private getDistributionSeed(
     workspaceId: number,
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'distributionSeed' | 'jobDefinitionId'
     >
   ): string {
@@ -1042,7 +1042,7 @@ export class CodingJobDistributionService {
 
   private buildDistributionItems(
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'selectedVariables' | 'selectedVariableBundles'
     >
   ): DistributionItem[] {
@@ -1252,7 +1252,7 @@ export class CodingJobDistributionService {
 
   private getDoubleCodingSettings(
     request: Pick<
-    DistributionPlanRequest,
+      DistributionPlanRequest,
     'doubleCodingAbsolute' | 'doubleCodingPercentage'
     >
   ): { doubleCodingAbsolute: number; doubleCodingPercentage: number } {
@@ -1401,8 +1401,8 @@ export class CodingJobDistributionService {
     const distributionByCoderId: Record<string, Record<string, number>> = {};
     const doubleCodingInfo: Record<string, DistributionDoubleCodingInfo> = {};
     const aggregationInfo: Record<
-    string,
-    { uniqueCases: number; totalResponses: number }
+      string,
+      { uniqueCases: number; totalResponses: number }
     > = {};
 
     for (const itemObj of items) {
@@ -1505,8 +1505,8 @@ export class CodingJobDistributionService {
       coders.map(coder => [coder.id, { tasks: 0, doubleTasks: 0 }])
     );
     const coderLoadsByItemKey = new Map<
-    string,
-    Map<number, DistributionCoderLoad>
+      string,
+      Map<number, DistributionCoderLoad>
     >(
       planItems.map(item => [
         item.itemKey,
@@ -1531,8 +1531,8 @@ export class CodingJobDistributionService {
       coder => coder.weight === coders[0]?.weight
     );
     const doubleCodingPairQuotasByItemKey = new Map<
-    string,
-    Map<string, number>
+      string,
+      Map<string, number>
     >();
     let plannedDoubleCoderAssignments = new Map(
       coders.map(coder => [coder.id, 0])
@@ -1577,11 +1577,11 @@ export class CodingJobDistributionService {
       return { selectedCase, isDoubleCoded };
     });
     const assignmentsByCaseGroup = new Map<
-    DistributionPlanCaseGroup,
-    {
-      isDoubleCoded: boolean;
-      assignedCoders: NormalizedDistributionCoder[];
-    }
+      DistributionPlanCaseGroup,
+      {
+        isDoubleCoded: boolean;
+        assignedCoders: NormalizedDistributionCoder[];
+      }
     >();
 
     [true, false].forEach(assignDoubleCodedCases => {
@@ -2093,8 +2093,8 @@ export class CodingJobDistributionService {
       distributionByCoderId: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
       aggregationInfo: Record<
-      string,
-      { uniqueCases: number; totalResponses: number }
+        string,
+        { uniqueCases: number; totalResponses: number }
       >;
       matchingFlags: ResponseMatchingFlag[];
       warnings: JobCreationWarning[];

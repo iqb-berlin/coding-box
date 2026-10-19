@@ -191,8 +191,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async createJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) createDto: CreateJobDefinitionDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Body(new ValidationPipe({ transform: true, whitelist: true })) createDto: CreateJobDefinitionDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.createJobDefinition(
       createDto,
@@ -258,7 +258,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async getJobDefinitions(
     @WorkspaceId() workspace_id: number,
-      @Query('includePlannedUsage') includePlannedUsage?: string
+    @Query('includePlannedUsage') includePlannedUsage?: string
   ): Promise<JobDefinitionWithCreatedJobsCount[]> {
     return this.jobDefinitionService.getJobDefinitions(workspace_id, {
       includePlannedUsage: includePlannedUsage === 'true'
@@ -315,7 +315,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async getJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.getJobDefinition(id, workspace_id);
   }
@@ -339,8 +339,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async exportJobDefinitionDistributionAsCsv(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Res() res: Response
+    @Param('id') id: number,
+    @Res() res: Response
   ): Promise<void> {
     const csvContent = await this.jobDefinitionService.exportDistributionSnapshotAsCsv(id, workspace_id);
     const exportDate = new Date().toISOString().slice(0, 10);
@@ -368,9 +368,9 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async updateJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto, ownershipRequest.user?.id);
   }
@@ -390,9 +390,9 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async approveJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) approveDto: ApproveJobDefinitionDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true })) approveDto: ApproveJobDefinitionDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.approveJobDefinition(id, workspace_id, approveDto, ownershipRequest.user?.id);
   }
@@ -415,8 +415,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async deleteJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
     await this.jobDefinitionService.deleteJobDefinition(id, workspace_id, ownershipRequest.user?.id);
     return { success: true, message: 'Job definition deleted successfully' };
@@ -433,8 +433,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async createCodingJobFromDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<Awaited<ReturnType<JobDefinitionService['createCodingJobFromDefinition']>>> {
     return this.jobDefinitionService.createCodingJobFromDefinition(
       id,
@@ -588,7 +588,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async previewCodingJobFromDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<Awaited<ReturnType<JobDefinitionService['previewCodingJobFromDefinition']>>> {
     return this.jobDefinitionService.previewCodingJobFromDefinition(
       id,
@@ -606,7 +606,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async previewJobDefinitionRefresh(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<JobDefinitionRefreshPreviewDto> {
     return this.jobDefinitionService.previewJobDefinitionRefresh(
       id,
@@ -629,8 +629,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async previewJobDefinitionUpdateRefresh(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
+    @Param('id') id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
   ): Promise<JobDefinitionRefreshPreviewDto> {
     return this.jobDefinitionService.previewJobDefinitionUpdateRefresh(
       id,
@@ -650,8 +650,8 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async applyJobDefinitionRefresh(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     return this.jobDefinitionService.refreshCodingJobFromDefinition(
       id,
@@ -675,9 +675,9 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async applyJobDefinitionUpdateRefresh(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     return this.jobDefinitionService.refreshCodingJobFromUpdatedDefinition(
       id,

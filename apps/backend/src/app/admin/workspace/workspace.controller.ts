@@ -176,7 +176,7 @@ export class WorkspaceController {
   @ApiTags('admin workspaces')
   async create(
     @ValidatedBody('CreateWorkspaceDto') createWorkspaceDto: RequestBody<'CreateWorkspaceDto'>,
-      @Req() req: RequestWithUser
+    @Req() req: RequestWithUser
   ): Promise<number> {
     const userIdentity = req.user?.identity ?? req.user?.id;
 

@@ -22,7 +22,7 @@ export class AuthenticationService {
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {
     return this.http
       .post<ServerResponse>(`${this.serverUrl}tc_authentication`, {
-      username, password, server, url
-    });
+        username, password, server, url
+      });
   }
 }

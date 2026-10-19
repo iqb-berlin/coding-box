@@ -266,8 +266,8 @@ export class WsgCodingJobController {
   })
   async transferCodingCases(
     @WorkspaceId() workspaceId: number,
-      @Body() transferCodingCasesDto: TransferCodingCasesDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Body() transferCodingCasesDto: TransferCodingCasesDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<TransferCodingCasesResultDto> {
     return this.codingJobService.transferCodingCases(
       workspaceId,
@@ -389,8 +389,8 @@ export class WsgCodingJobController {
   })
   async getCodingJobs(
     @WorkspaceId() workspaceId: number,
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new ParseIntPipe({ optional: true }))
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new ParseIntPipe({ optional: true }))
                    limit: number | undefined,
                    @Query('assignedTo') assignedTo: string | undefined,
                    @Query('scope') scope: string | undefined,
@@ -404,12 +404,12 @@ export class WsgCodingJobController {
                    @Query('includeIssueSummary') includeIssueSummary: string | undefined,
                    @Req() req: Request
   ): Promise<{
-        data: CodingJobDto[];
-        total: number;
-        totalOpenUnits: number;
-        page: number;
-        limit?: number;
-      }> {
+      data: CodingJobDto[];
+      total: number;
+      totalOpenUnits: number;
+      page: number;
+      limit?: number;
+    }> {
     let assignedToUserId: number | undefined;
     if (assignedTo) {
       if (assignedTo !== 'me') {
@@ -462,8 +462,8 @@ export class WsgCodingJobController {
   @ApiOperation({ summary: 'Delete owned coding jobs atomically' })
   async deleteCodingJobs(
     @WorkspaceId() workspaceId: number,
-      @ValidatedBody('CodingJobsBulkDelete') body: RequestBody<'CodingJobsBulkDelete'>,
-      @Req() req: Request
+    @ValidatedBody('CodingJobsBulkDelete') body: RequestBody<'CodingJobsBulkDelete'>,
+    @Req() req: Request
   ): Promise<{ success: boolean }> {
     return this.codingJobService.deleteCodingJobs(workspaceId, body.ids, this.getRequestUserId(req));
   }
@@ -497,8 +497,8 @@ export class WsgCodingJobController {
   })
   async getCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const result = await this.codingJobService.getCodingJob(id, workspaceId);
@@ -536,8 +536,8 @@ export class WsgCodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Body() createCodingJobDto: CreateCodingJobDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -595,9 +595,9 @@ export class WsgCodingJobController {
   })
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCodingJobDto: UpdateCodingJobDto,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.updateCodingJob(
@@ -625,9 +625,9 @@ export class WsgCodingJobController {
   })
   async updateCodingJobStatus(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobStatusDto: UpdateCodingJobStatusDto,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobStatusDto: UpdateCodingJobStatusDto,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     return this.codingJobService.updateCodingJob(
@@ -656,9 +656,9 @@ export class WsgCodingJobController {
   })
   async updateCodingJobComment(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobCommentDto: UpdateCodingJobCommentDto,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobCommentDto: UpdateCodingJobCommentDto,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.updateCodingJob(
@@ -701,8 +701,8 @@ export class WsgCodingJobController {
   })
   async startCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
@@ -747,8 +747,8 @@ export class WsgCodingJobController {
   })
   async pauseCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.pauseCodingJob(
@@ -785,8 +785,8 @@ export class WsgCodingJobController {
   })
   async resumeCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.resumeCodingJob(
@@ -826,8 +826,8 @@ export class WsgCodingJobController {
   })
   async submitCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.submitCodingJob(
@@ -866,8 +866,8 @@ export class WsgCodingJobController {
   })
   async submitCodingJobForReview(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.updateCodingJob(
@@ -912,8 +912,8 @@ export class WsgCodingJobController {
   })
   async prepareCodingJobReview(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.prepareCodingJobReplay(workspaceId, id, req, false);
@@ -953,8 +953,8 @@ export class WsgCodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id', ParseIntPipe) id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
@@ -992,8 +992,8 @@ export class WsgCodingJobController {
   })
   async saveCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
                    saveCodingProgressDto: SaveCodingProgressDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
@@ -1051,8 +1051,8 @@ export class WsgCodingJobController {
   })
   async saveCodingNotes(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
                    saveCodingNotesDto: SaveCodingNotesDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
@@ -1109,8 +1109,8 @@ export class WsgCodingJobController {
   })
   async restartCodingJobWithOpenUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(
@@ -1153,8 +1153,8 @@ export class WsgCodingJobController {
   })
   async getCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<Record<string, unknown>> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
@@ -1196,8 +1196,8 @@ export class WsgCodingJobController {
   })
   async getBulkCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Query('jobIds') jobIdsParam: string,
-      @Req() req: Request
+    @Query('jobIds') jobIdsParam: string,
+    @Req() req: Request
   ): Promise<Record<number, Record<string, unknown>>> {
     if (!jobIdsParam?.trim()) {
       throw new BadRequestException('Invalid job IDs provided');
@@ -1393,9 +1393,9 @@ export class WsgCodingJobController {
   })
   async getCodingJobReplaySession(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request,
-      @Query('onlyOpen') onlyOpen?: string
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Query('onlyOpen') onlyOpen?: string
   ): Promise<ReplayCodingSessionDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.getCodingJobReplaySession(
@@ -1486,9 +1486,9 @@ export class WsgCodingJobController {
   })
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request,
-      @Query('onlyOpen') onlyOpen?: string
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Query('onlyOpen') onlyOpen?: string
   ): Promise<
       Array<{
         responseId: number;
@@ -1506,7 +1506,7 @@ export class WsgCodingJobController {
         isDoubleCoded: boolean;
         otherCoders: string[];
       }>
-      > {
+    > {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');
