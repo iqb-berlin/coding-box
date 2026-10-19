@@ -2,7 +2,9 @@ import {
   Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
-import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+import {
+  ReactiveFormsModule, NonNullableFormBuilder, FormGroup, FormControl
+} from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -140,11 +142,16 @@ export class CodingJobBulkCreationDialogComponent {
   dialogRef = inject<MatDialogRef<CodingJobBulkCreationDialogComponent>>(MatDialogRef);
   protected data = inject<BulkCreationData>(MAT_DIALOG_DATA);
 
-  private fb = inject(FormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
-  protected displayOptionsForm!: FormGroup;
+  protected displayOptionsForm!: FormGroup<{
+    showScore: FormControl<boolean>;
+    allowComments: FormControl<boolean>;
+    suppressGeneralInstructions: FormControl<boolean>;
+  }>;
+
   readonly jobPreviews = signal<JobPreview[]>([]);
   protected readonly distributionMatrix = signal<DistributionMatrixRow[]>([]);
   protected readonly doubleCodingPreview = signal<DoubleCodingPreview | undefined>(undefined);
@@ -586,9 +593,9 @@ export class CodingJobBulkCreationDialogComponent {
 
     const result: BulkCreationResult = {
       confirmed: true,
-      showScore: this.displayOptionsForm.value.showScore,
-      allowComments: this.displayOptionsForm.value.allowComments,
-      suppressGeneralInstructions: this.displayOptionsForm.value.suppressGeneralInstructions
+      showScore: this.displayOptionsForm.controls.showScore.value,
+      allowComments: this.displayOptionsForm.controls.allowComments.value,
+      suppressGeneralInstructions: this.displayOptionsForm.controls.suppressGeneralInstructions.value
     };
     this.dialogRef.close(result);
   }

@@ -19,8 +19,8 @@ interface BlockingMutationPoolState {
 // for legacy callbacks that still obtain their own connection while allowing
 // independent workspace mutations to use the remaining pool capacity.
 const blockingMutationPoolStates = new WeakMap<
-MutationPool,
-BlockingMutationPoolState
+  MutationPool,
+  BlockingMutationPoolState
 >();
 
 export type WorkspaceTestResultsMutationLockAttempt<T> =

@@ -1,0 +1,28 @@
+{
+  "realm": "codebook-proof",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 3600,
+  "roles": { "realm": [{ "name": "admin" }] },
+  "clients": [{
+    "clientId": "codebook-proof",
+    "publicClient": true,
+    "standardFlowEnabled": false,
+    "directAccessGrantsEnabled": true,
+    "defaultClientScopes": ["basic", "profile", "roles", "email"]
+  }],
+  "users": [{
+    "username": "codebook-proof-admin",
+    "enabled": true,
+    "emailVerified": true,
+    "email": "codebook-proof@example.invalid",
+    "firstName": "Codebook",
+    "lastName": "Proof",
+    "realmRoles": ["admin"],
+    "credentials": [{
+      "type": "password",
+      "value": "disposable_test_only",
+      "temporary": false
+    }]
+  }]
+}

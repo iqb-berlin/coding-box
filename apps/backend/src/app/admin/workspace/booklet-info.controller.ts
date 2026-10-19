@@ -37,7 +37,7 @@ export class BookletInfoController {
   })
   async getBookletInfo(
     @Param('workspaceId') workspaceId: number,
-      @Param('bookletId') bookletId: string
+    @Param('bookletId') bookletId: string
   ): Promise<BookletInfoDto> {
     return this.bookletInfoService.getBookletInfo(workspaceId, bookletId);
   }

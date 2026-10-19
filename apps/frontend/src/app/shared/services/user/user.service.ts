@@ -26,16 +26,16 @@ export class UserService {
   saveUsers(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/users/access/${workspaceId}`,
-      users,
-      {})
+        users,
+        {})
       .pipe(catchError(() => of(false)));
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
     return this.http
       .get<UserFullDto[]>(
-      `${this.serverUrl}admin/users/full`,
-      {})
+        `${this.serverUrl}admin/users/full`,
+        {})
       .pipe(
         catchError(() => of([]))
       );
@@ -79,7 +79,7 @@ export class UserService {
   getWorkspacesByUserList(userId: number): Observable<number[]> {
     return this.http
       .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,
-      {})
+        {})
       .pipe(
         catchError(() => of([]))
       );

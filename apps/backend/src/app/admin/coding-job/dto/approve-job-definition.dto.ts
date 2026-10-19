@@ -11,5 +11,5 @@ export class ApproveJobDefinitionDto {
     example: 'approved'
   })
   @IsEnum(['pending_review', 'approved'])
-    status: 'pending_review' | 'approved';
+  status: 'pending_review' | 'approved';
 }

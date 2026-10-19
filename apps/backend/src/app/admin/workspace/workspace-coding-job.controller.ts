@@ -75,7 +75,7 @@ export class WorkspaceCodingJobController {
   })
   async getJobStatus(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<
       | {
         status: string;
@@ -84,7 +84,7 @@ export class WorkspaceCodingJobController {
         error?: string;
       }
       | { error: string }
-      > {
+    > {
     const status = await this.codingStatisticsService.getJobStatus(jobId, workspaceId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
@@ -120,7 +120,7 @@ export class WorkspaceCodingJobController {
   })
   async cancelJob(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     return this.codingStatisticsService.cancelJob(jobId, workspaceId);
   }
@@ -152,7 +152,7 @@ export class WorkspaceCodingJobController {
   })
   async deleteJob(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     return this.codingStatisticsService.deleteJob(jobId, workspaceId);
   }
@@ -218,25 +218,25 @@ export class WorkspaceCodingJobController {
     }
   })
   async getAllJobs(@WorkspaceId() workspace_id: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-    autoCoderRun?: number;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+      autoCoderRun?: number;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspace_id);
   }
@@ -315,24 +315,24 @@ export class WorkspaceCodingJobController {
     }
   })
   async getBullJobs(@WorkspaceId() workspace_id: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspace_id);
   }
@@ -364,7 +364,7 @@ export class WorkspaceCodingJobController {
   })
   async pauseJob(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     return this.bullJobManagementService.pauseJob(jobId, workspaceId);
   }
@@ -396,7 +396,7 @@ export class WorkspaceCodingJobController {
   })
   async resumeJob(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     return this.bullJobManagementService.resumeJob(jobId, workspaceId);
   }
@@ -432,7 +432,7 @@ export class WorkspaceCodingJobController {
   })
   async restartJob(
     @WorkspaceId() workspaceId: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string; jobId?: string }> {
     return this.bullJobManagementService.restartJob(jobId, workspaceId);
   }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
+import { validateEnvironment } from './config/environment.validation';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
@@ -19,7 +20,8 @@ import { RuntimeConfigModule } from './config/runtime-config.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env.dev',
-      cache: true
+      cache: true,
+      validate: validateEnvironment
     }),
     RuntimeConfigModule,
     AuthModule,

@@ -4,7 +4,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import {
-  FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, ValidatorFn
+  FormsModule, ReactiveFormsModule, NonNullableFormBuilder, FormGroup, FormControl, Validators
 } from '@angular/forms';
 import {
   MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog
@@ -56,7 +56,7 @@ import { CodingJobService } from '../../services/coding-job.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
@@ -98,6 +98,25 @@ export interface JobDefinition {
   updated_at?: Date;
 }
 
+interface CodingJobFormValue {
+  durationSeconds: number;
+  maxCodingCases: number | null;
+  doubleCodingAbsolute: number;
+  doubleCodingPercentage: number;
+  caseOrderingMode: 'continuous' | 'alternating';
+  showScore: boolean;
+  allowComments: boolean;
+  suppressGeneralInstructions: boolean;
+  name?: string;
+  description?: string;
+  missingsProfileId?: number;
+  status?: string;
+}
+
+type CodingJobForm = FormGroup<{
+  [Key in keyof CodingJobFormValue]: FormControl<Exclude<CodingJobFormValue[Key], undefined>>;
+}>;
+
 export const CODING_JOB_DEFINITION_RECOVERY_KEY = 'coding-job-definition-active-state';
 
 interface CodingJobDefinitionRecoveryVariable {
@@ -121,7 +140,7 @@ export interface CodingJobDefinitionRecoveryDraft {
   codingJob?: CodingJob;
   readOnly?: boolean;
   createdJobsCount?: number;
-  formValue: Record<string, unknown>;
+  formValue: Partial<CodingJobFormValue>;
   doubleCodingMode: 'absolute' | 'percentage';
   selectedVariables: CodingJobDefinitionRecoveryVariable[];
   selectedVariableBundles: CodingJobDefinitionRecoveryBundle[];
@@ -213,7 +232,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
   private changeDetectorRef = inject(ChangeDetectorRef);
-  private fb = inject(FormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
@@ -236,7 +255,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private existingJobDefinitionsLoadedForRecovery = false;
   private missingsProfilesLoadedForRecovery = false;
 
-  codingJobForm!: FormGroup;
+  codingJobForm!: CodingJobForm;
   readonly isLoading = signal(false);
   protected readonly isSaving = signal(false);
 
@@ -459,8 +478,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const formValue = this.codingJobForm.getRawValue();
     const hasFormChanges = this.codingJobForm.dirty && (
-      ((formValue.name as string | undefined)?.trim().length ?? 0) > 0 ||
-      ((formValue.description as string | undefined)?.trim().length ?? 0) > 0 ||
+      (formValue.name?.trim().length ?? 0) > 0 ||
+      (formValue.description?.trim().length ?? 0) > 0 ||
       formValue.durationSeconds !== 1 ||
       formValue.maxCodingCases !== null ||
       (formValue.doubleCodingAbsolute ?? 0) !== 0 ||
@@ -666,11 +685,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       workspaceId,
       this.getSelectedDefinitionVariables(),
       this.mapCodersForDistribution(this.getSelectedCodersForDistribution()),
-      this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
-      this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
+      this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingAbsolute),
+      this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingPercentage),
       this.getSelectedDefinitionVariableBundles(),
-      this.codingJobForm.value.caseOrderingMode,
-      this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
+      this.codingJobForm.getRawValue().caseOrderingMode,
+      this.sanitizeNumber(this.codingJobForm.getRawValue().maxCodingCases),
       this.getDistributionSeed()
     )
       .pipe(catchError(() => of(null)));
@@ -900,39 +919,37 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   initForm(): void {
-    const formFields: Record<string, [string | number | boolean | null | undefined, ValidatorFn[]]> = {
+    this.codingJobForm = this.fb.group({
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
-      maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
+      maxCodingCases: this.fb.control<number | null>(this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]),
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
-      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]],
-      showScore: [this.data.codingJob?.showScore ?? this.data.mode !== 'definition', []],
-      allowComments: [this.data.codingJob?.allowComments ?? true, []],
-      suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false, []]
-    };
+      caseOrderingMode: this.fb.control<'continuous' | 'alternating'>(
+        this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]
+      ),
+      showScore: [this.data.codingJob?.showScore ?? this.data.mode !== 'definition'],
+      allowComments: [this.data.codingJob?.allowComments ?? true],
+      suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false]
+    });
 
     if (this.data.mode === 'definition') {
-      formFields.name = [
+      this.codingJobForm.addControl('name', this.fb.control(
         this.data.codingJob?.name || '',
         [Validators.required, Validators.pattern(/\S/), Validators.maxLength(255)]
-      ];
-      formFields.description = [this.data.codingJob?.description || '', []];
-      formFields.missingsProfileId = [
+      ));
+      this.codingJobForm.addControl('description', this.fb.control(this.data.codingJob?.description || ''));
+      this.codingJobForm.addControl('missingsProfileId', this.fb.control(
         this.data.codingJob?.missingsProfileId ?? this.data.codingJob?.missings_profile_id ?? 0,
         [Validators.min(0)]
-      ];
-    }
-
-    if (this.data.mode === 'job') {
-      formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
+      ));
     }
 
     if (this.data.isEdit) {
       const defaultStatus = this.data.mode === 'definition' ? 'draft' : 'pending';
-      formFields.status = [this.data.codingJob?.status || defaultStatus, [Validators.required]];
+      this.codingJobForm.addControl('status', this.fb.control(
+        this.data.codingJob?.status || defaultStatus, [Validators.required]
+      ));
     }
-
-    this.codingJobForm = this.fb.group(formFields);
 
     if (this.hasExistingDefinitionJobs) {
       this.codingJobForm.get('status')?.disable({ emitEvent: false });
@@ -2151,7 +2168,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const codingJob: CodingJob = {
       id: this.data.codingJob?.id || 0,
-      ...this.codingJobForm.value,
+      ...this.codingJobForm.getRawValue(),
+      workspace_id: workspaceId,
+      name: this.data.codingJob?.name ?? '',
+      status: this.codingJobForm.controls.status?.value ?? 'pending',
       created_at: this.data.codingJob?.created_at || new Date(),
       updated_at: new Date(),
       assignedCoders: selectedCoderIds,
@@ -2205,7 +2225,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const codingJob: CodingJob = {
       id: 0,
-      ...this.codingJobForm.value,
+      ...this.codingJobForm.getRawValue(),
+      workspace_id: workspaceId,
+      name: this.data.codingJob?.name ?? '',
+      status: this.codingJobForm.controls.status?.value ?? 'pending',
       created_at: new Date(),
       updated_at: new Date(),
       assignedCoders: selectedCoderIds,
@@ -2250,15 +2273,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       selectedVariables: this.selectedVariableValues(),
       selectedVariableBundles: this.selectedVariableBundles.selected,
       selectedCoders: this.getSelectedCodersForDistribution(),
-      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
-      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      doubleCodingAbsolute: this.codingJobForm.getRawValue().doubleCodingAbsolute,
+      doubleCodingPercentage: this.codingJobForm.getRawValue().doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode,
+      maxCodingCases: this.codingJobForm.getRawValue().maxCodingCases,
       distributionSeed: this.data.codingJob?.distributionSeed,
       displayOptions: {
-        showScore: this.codingJobForm.value.showScore ?? true,
-        allowComments: this.codingJobForm.value.allowComments ?? true,
-        suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions ?? false
+        showScore: this.codingJobForm.getRawValue().showScore ?? true,
+        allowComments: this.codingJobForm.getRawValue().allowComments ?? true,
+        suppressGeneralInstructions: this.codingJobForm.getRawValue().suppressGeneralInstructions ?? false
       }
     };
 
@@ -2313,11 +2336,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         workspaceId,
         data.selectedVariables,
         mappedCoders,
-        this.codingJobForm.value.doubleCodingAbsolute,
-        this.codingJobForm.value.doubleCodingPercentage,
+        this.codingJobForm.getRawValue().doubleCodingAbsolute,
+        this.codingJobForm.getRawValue().doubleCodingPercentage,
         data.selectedVariableBundles,
-        this.codingJobForm.value.caseOrderingMode,
-        this.codingJobForm.value.maxCodingCases,
+        this.codingJobForm.getRawValue().caseOrderingMode,
+        this.codingJobForm.getRawValue().maxCodingCases ?? undefined,
         {
           showScore: displayOptions.showScore,
           allowComments: displayOptions.allowComments,
@@ -2359,7 +2382,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (!wasSelected && isNowSelected) {
       if (!bundle.caseOrderingMode) {
-        this.replaceBundleRow({ ...bundle, caseOrderingMode: this.codingJobForm.value.caseOrderingMode || 'continuous' });
+        this.replaceBundleRow({ ...bundle, caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode || 'continuous' });
       }
       this.removeConflictingIndividualSelections(bundle);
     }
@@ -2411,9 +2434,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.setDoubleCodingMode(this.doubleCodingMode() === 'absolute' ? 'percentage' : 'absolute');
   }
 
-  protected get currentDoubleCodingControl(): FormControl {
+  protected get currentDoubleCodingControl(): FormControl<number> {
     const controlName = this.doubleCodingMode() === 'absolute' ? 'doubleCodingAbsolute' : 'doubleCodingPercentage';
-    return this.codingJobForm.get(controlName) as FormControl;
+    return this.codingJobForm.controls[controlName];
   }
 
   protected getDoubleCodingLabel(): string {
@@ -2444,23 +2467,23 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
-      name: this.codingJobForm.value.name.trim(),
-      description: this.sanitizeDescription(this.codingJobForm.value.description),
+      name: (this.codingJobForm.getRawValue().name ?? '').trim(),
+      description: this.sanitizeDescription(this.codingJobForm.getRawValue().description),
       status: 'draft',
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,
-      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
-      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
-      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
-      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.getRawValue().durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.getRawValue().maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingPercentage),
+      caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode,
       distributionSeed: this.getDistributionSeed(),
-      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
-      showScore: this.codingJobForm.value.showScore,
-      allowComments: this.codingJobForm.value.allowComments,
-      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.getRawValue().missingsProfileId),
+      showScore: this.codingJobForm.getRawValue().showScore,
+      allowComments: this.codingJobForm.getRawValue().allowComments,
+      suppressGeneralInstructions: this.codingJobForm.getRawValue().suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -2483,26 +2506,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: Partial<JobDefinition> = {
-      name: this.codingJobForm.value.name.trim(),
-      description: this.sanitizeDescription(this.codingJobForm.value.description),
+      name: (this.codingJobForm.getRawValue().name ?? '').trim(),
+      description: this.sanitizeDescription(this.codingJobForm.getRawValue().description),
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,
-      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
-      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
-      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
-      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
-      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
-      showScore: this.codingJobForm.value.showScore,
-      allowComments: this.codingJobForm.value.allowComments,
-      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.getRawValue().durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.getRawValue().maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingPercentage),
+      caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode,
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.getRawValue().missingsProfileId),
+      showScore: this.codingJobForm.getRawValue().showScore,
+      allowComments: this.codingJobForm.getRawValue().allowComments,
+      suppressGeneralInstructions: this.codingJobForm.getRawValue().suppressGeneralInstructions
     };
 
     const statusControl = this.codingJobForm.get('status');
     if (statusControl?.enabled) {
-      jobDefinition.status = statusControl.value;
+      const status = statusControl.value;
+      if (status === 'draft' || status === 'pending_review' || status === 'approved') {
+        jobDefinition.status = status;
+      }
     }
 
     return jobDefinition;
@@ -2810,23 +2836,23 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
-      name: this.codingJobForm.value.name.trim(),
-      description: this.sanitizeDescription(this.codingJobForm.value.description),
+      name: (this.codingJobForm.getRawValue().name ?? '').trim(),
+      description: this.sanitizeDescription(this.codingJobForm.getRawValue().description),
       status: 'pending_review', // Submit for review
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
       assignedCoders: selectedCoderIds,
       assignedCoderConfigs: selectedCoderConfigs,
-      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
-      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
-      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
-      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.getRawValue().durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.getRawValue().maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingPercentage),
+      caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode,
       distributionSeed: this.getDistributionSeed(),
-      missingsProfileId: this.sanitizeNumber(this.codingJobForm.value.missingsProfileId),
-      showScore: this.codingJobForm.value.showScore,
-      allowComments: this.codingJobForm.value.allowComments,
-      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
+      missingsProfileId: this.sanitizeNumber(this.codingJobForm.getRawValue().missingsProfileId),
+      showScore: this.codingJobForm.getRawValue().showScore,
+      allowComments: this.codingJobForm.getRawValue().allowComments,
+      suppressGeneralInstructions: this.codingJobForm.getRawValue().suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({

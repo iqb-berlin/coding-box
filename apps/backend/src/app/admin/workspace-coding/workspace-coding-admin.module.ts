@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { WorkspaceSettingsModule } from '../../workspace/workspace-settings.module';
 import { DatabaseModule } from '../../database/database.module';
 import { CodingModule } from '../../coding/coding.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
@@ -27,6 +28,7 @@ import { DistributionPreviewLimiterService } from './distribution-preview-limite
 
 @Module({
   imports: [
+    WorkspaceSettingsModule,
     DatabaseModule,
     CodingModule,
     WorkspaceModule,

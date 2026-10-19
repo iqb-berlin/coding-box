@@ -20,7 +20,7 @@ import { VariableAnalysisService } from '../../apps/frontend/src/app/shared/serv
 import { CodingStatisticsService } from '../../apps/frontend/src/app/coding/services/coding-statistics.service';
 import { TestPersonCodingService } from '../../apps/frontend/src/app/coding/services/test-person-coding.service';
 import { UnitsReplayService } from '../../apps/frontend/src/app/replay/services/units-replay.service';
-import { WorkspaceSettingsService } from '../../apps/frontend/src/app/ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../apps/frontend/src/app/shared/services/workspace/workspace-settings.service';
 import translations from '../../apps/frontend/src/assets/i18n/de.json';
 
 describe('TestResultsComponent view switching', () => {

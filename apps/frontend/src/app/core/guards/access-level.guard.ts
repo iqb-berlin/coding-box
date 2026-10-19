@@ -10,7 +10,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import { AppService } from '../services/app.service';
-import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
+import { WorkspaceAccessService } from '../services/workspace-access.service';
 import {
   createAccessDeniedUrlTree,
   createAuthDataFailedUrlTree,
@@ -30,7 +30,7 @@ interface WorkspaceAccessGuardContext {
   state: RouterStateSnapshot;
   userAccessLevel: number;
   workspaceId: string;
-  codingJobBackendService: CodingJobBackendService;
+  workspaceAccessService: WorkspaceAccessService;
 }
 
 function getWorkspaceId(route: ActivatedRouteSnapshot): string | null {
@@ -64,7 +64,7 @@ function createWorkspaceAccessGuard(
     }
 
     const userService = inject(UserService);
-    const codingJobBackendService = inject(CodingJobBackendService);
+    const workspaceAccessService = inject(WorkspaceAccessService);
     const userRoles = authService.getRoles() || [];
 
     if (hasAdminBypass(userRoles)) {
@@ -101,7 +101,7 @@ function createWorkspaceAccessGuard(
         state,
         userAccessLevel: currentUser.accessLevel || 0,
         workspaceId,
-        codingJobBackendService
+        workspaceAccessService
       };
 
       if (await isAllowed(context)) {
@@ -122,13 +122,7 @@ async function hasAssignedCodingJobs(context: WorkspaceAccessGuardContext): Prom
   }
 
   try {
-    const response = await firstValueFrom(context.codingJobBackendService.getCodingJobs(
-      workspaceId,
-      undefined,
-      1,
-      { assignedTo: 'me' }
-    ));
-    return (response.total ?? response.data.length) > 0;
+    return await firstValueFrom(context.workspaceAccessService.hasAssignedCodingJobs(workspaceId));
   } catch {
     return false;
   }

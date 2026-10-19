@@ -467,6 +467,7 @@ test-backend:
     - !reference [ .quality_gate_rules, rules ]
   script:
     - node --test scripts/qa/junit-reporter.test.cjs
+    - npx nx run backend:typecheck
     - npx nx test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
   variables:
     FORCE_COLOR: "0"

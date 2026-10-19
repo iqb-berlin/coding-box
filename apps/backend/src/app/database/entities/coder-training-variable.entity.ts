@@ -12,25 +12,25 @@ import { CoderTraining } from './coder-training.entity';
 @Entity({ name: 'coder_training_variable' })
 export class CoderTrainingVariable {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
   @Index()
-    coder_training_id: number;
+  coder_training_id: number;
 
   @Column()
-    variable_id: string;
+  variable_id: string;
 
   @Column()
-    unit_name: string;
+  unit_name: string;
 
   @Column({ default: 10 })
-    sample_count: number;
+  sample_count: number;
 
   @Column({ type: 'boolean', default: false })
-    include_derive_error: boolean;
+  include_derive_error: boolean;
 
   @ManyToOne(() => CoderTraining, training => training.variables, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-    training: CoderTraining;
+  training: CoderTraining;
 }

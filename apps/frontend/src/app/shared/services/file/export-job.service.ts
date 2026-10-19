@@ -29,7 +29,7 @@ import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
@@ -115,8 +115,8 @@ export class ExportJobService implements OnDestroy {
   private downloadSubscriptions = new Map<string, Subscription>();
   private incompleteDownloadCancellations = new Map<string, Subject<void>>();
   private itemMatrixExpirationTimers = new Map<
-  string,
-  ReturnType<typeof setTimeout>
+    string,
+    ReturnType<typeof setTimeout>
   >();
 
   private stopPolling$ = new Subject<void>();

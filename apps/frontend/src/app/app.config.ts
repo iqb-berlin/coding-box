@@ -9,7 +9,6 @@ import {
   provideHttpClient,
   withInterceptors
 } from '@angular/common/http';
-import { Observable } from 'rxjs';
 import { HashLocationStrategy, LocationStrategy, registerLocaleData } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
 import { routes } from './app.routes';
@@ -17,20 +16,11 @@ import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
+import { CacheBustingTranslateLoader } from './core/services/translation-loader';
 
 registerLocaleData(localeDeAt);
 
-const translationCacheBust = Date.now().toString();
-
-export class CacheBustingTranslateLoader implements TranslateLoader {
-  constructor(private http: HttpClient) {}
-
-  getTranslation(lang: string): Observable<Record<string, unknown>> {
-    return this.http.get<Record<string, unknown>>(
-      `./assets/i18n/${lang}.json?v=${translationCacheBust}`
-    );
-  }
-}
+export { CacheBustingTranslateLoader } from './core/services/translation-loader';
 
 export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLoader {
   return new CacheBustingTranslateLoader(http);

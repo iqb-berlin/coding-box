@@ -22,7 +22,7 @@ export class MissingsProfilesController {
   @Get(':id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getMissingsProfileDetails(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @Param('id') id: string
   ) {
     const parsedId = parseInt(id, 10);
@@ -36,7 +36,7 @@ export class MissingsProfilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async createMissingsProfile(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @ValidatedBody('MissingsProfilesDto') profile: RequestBody<'MissingsProfilesDto'>
   ) {
     return this.missingsProfilesService.createMissingsProfile(workspaceId, profile);
@@ -46,7 +46,7 @@ export class MissingsProfilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async updateMissingsProfile(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @Param('label') label: string,
     @ValidatedBody('MissingsProfilesDto') profile: RequestBody<'MissingsProfilesDto'>
   ) {
@@ -57,7 +57,7 @@ export class MissingsProfilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteMissingsProfile(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @Param('label') label: string
   ) {
     return this.missingsProfilesService.deleteMissingsProfile(workspaceId, label);

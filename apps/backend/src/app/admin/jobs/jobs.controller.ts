@@ -82,7 +82,7 @@ export class JobsController {
   })
   async getJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: number
+    @Param('job_id') jobId: number
   ): Promise<JobDto> {
     const job = await this.jobService.getJob(jobId, workspaceId);
     return JobDto.fromEntity(job);
@@ -122,7 +122,7 @@ export class JobsController {
   })
   async cancelJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: number
+    @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
     await this.jobService.getJob(jobId, workspaceId);
     return this.jobService.cancelJob(jobId);
@@ -162,7 +162,7 @@ export class JobsController {
   })
   async deleteJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: number
+    @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
     await this.jobService.getJob(jobId, workspaceId);
     return this.jobService.deleteJob(jobId);

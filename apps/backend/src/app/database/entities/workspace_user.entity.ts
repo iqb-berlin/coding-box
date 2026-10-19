@@ -5,24 +5,24 @@ class WorkspaceUser {
   @PrimaryColumn({
     name: 'workspace_id'
   })
-    workspaceId!: number;
+  workspaceId!: number;
 
   @PrimaryColumn({
     name: 'user_id'
   })
-    userId!: number;
+  userId!: number;
 
   @Column({
     name: 'access_level'
   })
-    accessLevel!: number;
+  accessLevel!: number;
 
   @Column({
     name: 'can_code',
     type: 'boolean',
     default: false
   })
-    canCode!: boolean;
+  canCode!: boolean;
 }
 
 export default WorkspaceUser;

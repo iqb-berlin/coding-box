@@ -6,7 +6,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { VariableAnalysisDialogComponent } from './variable-analysis-dialog.component';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 
