@@ -35,6 +35,12 @@
   </div>
 
   <div class="diagnostic-toolbar">
+    @if (data.downloadFullCsv) {
+      <button mat-stroked-button data-cy="item-matrix-full-diagnostics-download" (click)="data.downloadFullCsv()">
+        <mat-icon>download</mat-icon>
+        {{ 'export-toast.item-matrix-diagnostics.download-full' | translate }}
+      </button>
+    }
     <span data-cy="item-matrix-diagnostics-result-count">
       {{ 'export-toast.item-matrix-diagnostics.results' | translate: { filtered: filteredGroups.length, total: data.groups.length } }}
     </span>
@@ -62,6 +68,12 @@
           <dd>{{ group.bookletName }}</dd>
           <dt>{{ 'export-toast.item-matrix-diagnostics.column' | translate }}</dt>
           <dd>{{ group.columnName }}</dd>
+          @if (group.unitId) {
+            <dt>{{ 'export-toast.item-matrix-diagnostics.unit' | translate }}</dt>
+            <dd>{{ group.unitId }}</dd>
+            <dt>{{ 'export-toast.item-matrix-diagnostics.variable' | translate }}</dt>
+            <dd>{{ group.variableId }}</dd>
+          }
           <dt>{{ 'export-toast.item-matrix-diagnostics.count' | translate }}</dt>
           <dd>{{ group.count }}</dd>
           @if (group.sampleRowNumbers.length > 0) {
