@@ -29,7 +29,10 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE
@@ -52,6 +55,8 @@ import {
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
+import { UpdateCodingJobCommentDto } from '../../admin/coding-job/dto/update-coding-job-comment.dto';
+import { UpdateCodingJobStatusDto } from '../../admin/coding-job/dto/update-coding-job-status.dto';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes.dto';
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
@@ -261,12 +266,14 @@ export class WsgCodingJobController {
   })
   async transferCodingCases(
     @WorkspaceId() workspaceId: number,
-      @Body() transferCodingCasesDto: TransferCodingCasesDto
+    @Body() transferCodingCasesDto: TransferCodingCasesDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<TransferCodingCasesResultDto> {
     return this.codingJobService.transferCodingCases(
       workspaceId,
       transferCodingCasesDto.sourceCoderId,
-      transferCodingCasesDto.targetCoderId
+      transferCodingCasesDto.targetCoderId,
+      ownershipRequest.user?.id
     );
   }
 
@@ -382,8 +389,8 @@ export class WsgCodingJobController {
   })
   async getCodingJobs(
     @WorkspaceId() workspaceId: number,
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new ParseIntPipe({ optional: true }))
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new ParseIntPipe({ optional: true }))
                    limit: number | undefined,
                    @Query('assignedTo') assignedTo: string | undefined,
                    @Query('scope') scope: string | undefined,
@@ -397,12 +404,12 @@ export class WsgCodingJobController {
                    @Query('includeIssueSummary') includeIssueSummary: string | undefined,
                    @Req() req: Request
   ): Promise<{
-        data: CodingJobDto[];
-        total: number;
-        totalOpenUnits: number;
-        page: number;
-        limit?: number;
-      }> {
+      data: CodingJobDto[];
+      total: number;
+      totalOpenUnits: number;
+      page: number;
+      limit?: number;
+    }> {
     let assignedToUserId: number | undefined;
     if (assignedTo) {
       if (assignedTo !== 'me') {
@@ -449,9 +456,21 @@ export class WsgCodingJobController {
     };
   }
 
+  @Post('bulk-delete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete owned coding jobs atomically' })
+  async deleteCodingJobs(
+    @WorkspaceId() workspaceId: number,
+    @ValidatedBody('CodingJobsBulkDelete') body: RequestBody<'CodingJobsBulkDelete'>,
+    @Req() req: Request
+  ): Promise<{ success: boolean }> {
+    return this.codingJobService.deleteCodingJobs(workspaceId, body.ids, this.getRequestUserId(req));
+  }
+
   @Get(':id')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get a coding job by ID',
@@ -478,8 +497,8 @@ export class WsgCodingJobController {
   })
   async getCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const result = await this.codingJobService.getCodingJob(id, workspaceId);
@@ -517,7 +536,8 @@ export class WsgCodingJobController {
   })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Body() createCodingJobDto: CreateCodingJobDto
+    @Body() createCodingJobDto: CreateCodingJobDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<CodingJobDto> {
     if (!createCodingJobDto) {
       throw new BadRequestException('Request body is required');
@@ -534,22 +554,17 @@ export class WsgCodingJobController {
       );
     }
 
-    try {
-      const codingJob = await this.codingJobService.createCodingJob(
-        workspaceId,
-        createCodingJobDto
-      );
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to create coding job: ${error.message}`
-      );
-    }
+    const codingJob = await this.codingJobService.createCodingJob(
+      workspaceId,
+      createCodingJobDto,
+      ownershipRequest.user?.id
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Put(':id')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
   @ApiOperation({
@@ -580,57 +595,78 @@ export class WsgCodingJobController {
   })
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCodingJobDto: UpdateCodingJobDto,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      updateCodingJobDto
+      updateCodingJobDto,
+      this.getRequestUserId(req)
     );
   }
 
-  @Post(':id/submit-review')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @Put(':id/status')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Submit a completed coding job for review',
-    description:
-      'Allows an assigned coder to submit a completed coding job for review'
-  })
-  @ApiParam({
-    name: 'workspace_id',
-    type: Number,
-    required: true,
-    description: 'The ID of the workspace'
-  })
-  @ApiParam({
-    name: 'id',
-    type: Number,
-    required: true,
-    description: 'The ID of the coding job'
+    summary: 'Update a coding job status from replay',
+    description: 'Updates only the replay-safe status field of a coding job'
   })
   @ApiOkResponse({
-    description: 'The coding job has been submitted for review.',
+    description: 'The coding job status has been successfully updated.',
     type: CodingJobDto
   })
   @ApiBadRequestResponse({
-    description: 'Coding job is not completed or cannot be submitted.'
+    description: 'Invalid input data.'
   })
-  async submitCodingJobForReview(
+  async updateCodingJobStatus(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobStatusDto: UpdateCodingJobStatusDto,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
-    const codingJob = await this.codingJobService.updateCodingJob(
+    return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
-      { status: 'review' }
+      { status: updateCodingJobStatusDto.status },
+      this.getRequestUserId(req),
+      true
     );
-    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Put(':id/comment')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update a coding job comment from replay',
+    description: 'Updates only the replay-safe comment field of a coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job comment has been successfully updated.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async updateCodingJobComment(
+    @WorkspaceId() workspaceId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) updateCodingJobCommentDto: UpdateCodingJobCommentDto,
+    @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
+    return this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { comment: updateCodingJobCommentDto.comment },
+      this.getRequestUserId(req)
+    );
   }
 
   @Post(':id/start')
@@ -665,8 +701,8 @@ export class WsgCodingJobController {
   })
   async startCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
@@ -679,7 +715,7 @@ export class WsgCodingJobController {
     if (!isFinalizedJob) {
       await this.codingJobService.updateCodingJob(id, workspaceId, {
         status: 'active'
-      });
+      }, this.getRequestUserId(req), true);
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);
@@ -687,7 +723,7 @@ export class WsgCodingJobController {
 
   @Post(':id/pause')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Pause an assigned coding job',
@@ -711,20 +747,21 @@ export class WsgCodingJobController {
   })
   async pauseCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.pauseCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
 
   @Post(':id/resume')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Resume an assigned coding job',
@@ -748,20 +785,21 @@ export class WsgCodingJobController {
   })
   async resumeCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.resumeCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
 
   @Post(':id/submit')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Submit an assigned coding job',
@@ -788,13 +826,56 @@ export class WsgCodingJobController {
   })
   async submitCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.submitCodingJob(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
+  @Post(':id/submit-review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit a coding job for review',
+    description: 'Moves an assigned coding job to review after the coder finishes their work'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted for review.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'The coding job cannot be submitted for review.'
+  })
+  async submitCodingJobForReview(
+    @WorkspaceId() workspaceId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { status: 'review' },
+      this.getRequestUserId(req),
+      true
     );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -831,8 +912,8 @@ export class WsgCodingJobController {
   })
   async prepareCodingJobReview(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.prepareCodingJobReplay(workspaceId, id, req, false);
@@ -872,14 +953,15 @@ export class WsgCodingJobController {
   })
   async deleteCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    return this.codingJobService.deleteCodingJob(id, workspaceId);
+    return this.codingJobService.deleteCodingJob(id, workspaceId, ownershipRequest.user?.id);
   }
 
   @Post(':id/progress')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding progress',
@@ -910,14 +992,14 @@ export class WsgCodingJobController {
   })
   async saveCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
                    saveCodingProgressDto: SaveCodingProgressDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
     const userId = saveCodingProgressDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingProgressDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -930,14 +1012,15 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingProgress(
         id,
-        saveCodingProgressDto
+        saveCodingProgressDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }
 
   @Post(':id/notes')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Save coding notes',
@@ -968,14 +1051,14 @@ export class WsgCodingJobController {
   })
   async saveCodingNotes(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Body(new ValidationPipe({ transform: true, whitelist: true }))
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true }))
                    saveCodingNotesDto: SaveCodingNotesDto,
                    @Req() req: Request
   ): Promise<CodingJobDto> {
     const userId = saveCodingNotesDto.issueReview ?
       await this.assertCodingIssueReviewAccess(workspaceId, id, req) :
-      undefined;
+      this.getRequestUserId(req);
     if (!saveCodingNotesDto.issueReview) {
       await this.assertCodingJobCodingAccess(workspaceId, id, req);
       await this.codingJobService.getCodingJob(id, workspaceId);
@@ -988,7 +1071,8 @@ export class WsgCodingJobController {
       ) :
       await this.codingJobService.saveCodingNotes(
         id,
-        saveCodingNotesDto
+        saveCodingNotesDto,
+        userId
       );
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -1025,20 +1109,21 @@ export class WsgCodingJobController {
   })
   async restartCodingJobWithOpenUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(
       id,
-      workspaceId
+      workspaceId,
+      this.getRequestUserId(req)
     );
     return CodingJobDto.fromEntity(codingJob);
   }
 
   @Get(':id/progress')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get coding progress',
@@ -1068,8 +1153,8 @@ export class WsgCodingJobController {
   })
   async getCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request
   ): Promise<Record<string, unknown>> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
@@ -1111,8 +1196,8 @@ export class WsgCodingJobController {
   })
   async getBulkCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Query('jobIds') jobIdsParam: string,
-      @Req() req: Request
+    @Query('jobIds') jobIdsParam: string,
+    @Req() req: Request
   ): Promise<Record<number, Record<string, unknown>>> {
     if (!jobIdsParam?.trim()) {
       throw new BadRequestException('Invalid job IDs provided');
@@ -1136,7 +1221,7 @@ export class WsgCodingJobController {
 
   @Get(':id/replay-session')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Start a coding-job replay session',
@@ -1308,9 +1393,9 @@ export class WsgCodingJobController {
   })
   async getCodingJobReplaySession(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request,
-      @Query('onlyOpen') onlyOpen?: string
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Query('onlyOpen') onlyOpen?: string
   ): Promise<ReplayCodingSessionDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.getCodingJobReplaySession(
@@ -1322,7 +1407,7 @@ export class WsgCodingJobController {
 
   @Get(':id/units')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get coding job units',
@@ -1401,9 +1486,9 @@ export class WsgCodingJobController {
   })
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number,
-      @Req() req: Request,
-      @Query('onlyOpen') onlyOpen?: string
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Query('onlyOpen') onlyOpen?: string
   ): Promise<
       Array<{
         responseId: number;
@@ -1421,7 +1506,7 @@ export class WsgCodingJobController {
         isDoubleCoded: boolean;
         otherCoders: string[];
       }>
-      > {
+    > {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');

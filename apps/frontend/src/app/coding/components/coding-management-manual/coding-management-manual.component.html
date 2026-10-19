@@ -765,6 +765,7 @@
                                   >
                                 </mat-paginator>
                                 <div class="analysis-actions">
+                                  @if (canApplyCompletedJobResults()) {
                                   <button
                                     mat-stroked-button
                                     color="primary"
@@ -790,6 +791,7 @@
                                     | translate
                                     }}
                                   </button>
+                                  }
                                 </div>
                               </div>
                             }

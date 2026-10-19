@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { VariableBundleService } from './variable-bundle.service';
+import User from '../../entities/user.entity';
+import WorkspaceUser from '../../entities/workspace_user.entity';
 
 const createRepo = () => ({
   count: jest.fn(),
@@ -16,6 +18,17 @@ describe('VariableBundleService', () => {
 
   beforeEach(() => {
     repo = createRepo();
+    const manager = {
+      getRepository: jest.fn(() => repo),
+      transaction: jest.fn(),
+      findOne: jest.fn(async (entity, options) => {
+        if (entity === User) return { id: 7, isAdmin: false };
+        if (entity === WorkspaceUser) return { accessLevel: 3 };
+        return repo.findOne(options);
+      })
+    };
+    manager.transaction.mockImplementation(async callback => callback(manager));
+    Object.assign(repo, { manager, findOneOrFail: repo.findOne });
     service = new VariableBundleService(repo as never);
   });
 
@@ -38,9 +51,70 @@ describe('VariableBundleService', () => {
     await expect(service.createVariableBundle(3, {
       name: 'Bundle',
       variables: [{ unitName: 'U', variableId: 'V' }]
-    })).resolves.toMatchObject({ name: 'Bundle', workspace_id: 3 });
-    await expect(service.updateVariableBundle(1, 3, { name: 'Renamed' } as never)).resolves.toMatchObject({ name: 'Renamed' });
-    await expect(service.deleteVariableBundle(1, 3)).resolves.toEqual({ success: true });
+    }, 7)).resolves.toMatchObject({ name: 'Bundle', workspace_id: 3, creatorUserId: 7 });
+    await expect(service.updateVariableBundle(1, 3, { name: 'Renamed' } as never, 7)).resolves.toMatchObject({ name: 'Renamed' });
+    await expect(service.deleteVariableBundle(1, 3, 7)).resolves.toEqual({ success: true });
+  });
+
+  it('creates only allowed fields even when JSON includes protected entity properties', async () => {
+    await service.createVariableBundle(3, {
+      name: 'Bundle',
+      description: 'Description',
+      variables: [],
+      id: 99,
+      workspace_id: 8,
+      created_at: 'attacker-date',
+      codingJobVariableBundles: [{ id: 42 }]
+    } as never, 7);
+    expect(repo.create).toHaveBeenCalledWith({
+      name: 'Bundle',
+      description: 'Description',
+      variables: [],
+      workspace_id: 3,
+      creatorUserId: 7,
+      codingJobVariableBundles: []
+    });
+    expect(repo.save.mock.calls[0][0]).not.toHaveProperty('id');
+  });
+
+  it('retains ownership, identity, timestamps and relationships when updating', async () => {
+    const entity = {
+      id: 1,
+      workspace_id: 3,
+      name: 'Original',
+      description: 'Description',
+      variables: [],
+      created_at: new Date(0),
+      updated_at: new Date(1),
+      codingJobVariableBundles: [{ id: 42 }]
+    };
+    repo.findOne.mockResolvedValue(entity);
+    await service.updateVariableBundle(1, 3, {
+      name: 'Renamed',
+      id: 99,
+      workspace_id: 8,
+      created_at: 'attacker-date',
+      updated_at: 'attacker-date',
+      codingJobVariableBundles: [{ id: 88 }]
+    } as never, 7);
+    expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 1, workspace_id: 3 } });
+    expect(repo.save).toHaveBeenCalledWith({
+      ...entity,
+      name: 'Renamed',
+      id: 1,
+      workspace_id: 3,
+      created_at: new Date(0),
+      updated_at: new Date(1),
+      codingJobVariableBundles: [{ id: 42 }]
+    });
+  });
+
+  it('allows clearing a description without changing omitted fields', async () => {
+    repo.findOne.mockResolvedValue({
+      id: 1, workspace_id: 3, name: 'Original', variables: []
+    });
+    await expect(service.updateVariableBundle(1, 3, { description: null } as never, 7))
+      .resolves.toMatchObject({ name: 'Original', variables: [], description: null });
   });
 
   it('throws for missing bundles', async () => {
@@ -53,11 +127,11 @@ describe('VariableBundleService', () => {
     const bundle = { id: 1, variables: [{ unitName: 'U', variableId: 'V' }] };
     repo.findOne.mockResolvedValue(bundle);
 
-    await expect(service.addVariableToBundle(1, 3, { unitName: 'U', variableId: 'V' })).resolves.toBe(bundle);
-    await expect(service.addVariableToBundle(1, 3, { unitName: 'U2', variableId: 'V2' })).resolves.toMatchObject({
+    await expect(service.addVariableToBundle(1, 3, { unitName: 'U', variableId: 'V' }, 7)).resolves.toBe(bundle);
+    await expect(service.addVariableToBundle(1, 3, { unitName: 'U2', variableId: 'V2' }, 7)).resolves.toMatchObject({
       variables: [{ unitName: 'U', variableId: 'V' }, { unitName: 'U2', variableId: 'V2' }]
     });
-    await expect(service.removeVariableFromBundle(1, 3, 'U', 'V')).resolves.toMatchObject({
+    await expect(service.removeVariableFromBundle(1, 3, 'U', 'V', 7)).resolves.toMatchObject({
       variables: [{ unitName: 'U2', variableId: 'V2' }]
     });
   });

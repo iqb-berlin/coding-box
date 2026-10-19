@@ -8,7 +8,7 @@ type ItemMatrixAcceptance = {
 
 describe('live incomplete item matrix export', () => {
   before(() => {
-    cy.task('replay:setup', null, { log: false });
+    cy.task('replay:setup', null, { log: false, timeout: 180_000 });
   });
 
   after(() => {

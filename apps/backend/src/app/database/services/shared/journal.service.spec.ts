@@ -1,8 +1,77 @@
+import { parseString } from 'fast-csv';
 import { JournalEntry } from '../../entities/journal-entry.entity';
 import { JournalService } from './journal.service';
 
 describe('JournalService', () => {
   const createService = (): JournalService => new JournalService({} as never);
+
+  it('uses only the transaction repository when recording a transactional event', async () => {
+    const repository = { create: jest.fn(entry => entry), save: jest.fn(async entry => entry) };
+    const manager = { getRepository: jest.fn().mockReturnValue(repository) };
+    await JournalService.recordEventInTransaction(manager as never, {
+      workspaceId: 3,
+      actorUserId: 7,
+      eventType: 'TEST_PERSON_DELETED',
+      entityId: 42,
+      details: { token: 'secret', count: 1 }
+    });
+    expect(manager.getRepository).toHaveBeenCalledWith(JournalEntry);
+    expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: 3, actorUserId: 7, details: { count: 1 }
+    }));
+  });
+
+  it('records grants, role changes and revocations, but skips unchanged access', async () => {
+    const repository = { create: jest.fn(entry => entry), save: jest.fn(async entry => entry) };
+    const manager = { getRepository: jest.fn().mockReturnValue(repository) };
+    await JournalService.recordAccessChangesInTransaction(manager as never, 3, [{ userId: 1, accessLevel: 1 }, { userId: 2, accessLevel: 2 }, { userId: 3, accessLevel: 3 }], [{ userId: 1, accessLevel: 1 }, { userId: 2, accessLevel: 3 }, { userId: 4, accessLevel: 1 }], 7);
+    expect(repository.save).toHaveBeenCalledTimes(3);
+    expect(repository.save.mock.calls.map(([entry]) => entry.entityId)).toEqual(['2', '3', '4']);
+    expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: 7,
+      eventType: 'ACCESS_LEVEL_CHANGED',
+      entityId: '3',
+      details: {
+        previousAccessLevel: 3, accessLevel: 0, previousCanCode: false, canCode: false
+      }
+    }));
+  });
+
+  it.each(['=1+1', '+SUM(1,1)', '-1+1', '@SUM(1,1)', ' \t=1+1', '\r\n+1', '\u0000=1', '\u001f@A1'])(
+    'escapes formula prefixes in every CSV text column: %j', async payload => {
+      const entry = {
+        id: 1,
+        timestamp: new Date('2026-10-05T00:00:00Z'),
+        userId: payload,
+        actorUserId: null,
+        actorType: 'user',
+        workspaceId: 3,
+        actionType: 'create',
+        eventType: payload,
+        entityType: payload,
+        entityId: payload,
+        result: 'success',
+        summary: payload,
+        correlationId: payload,
+        jobId: payload,
+        details: { note: 'comma, quote" and newline\n' }
+      } as JournalEntry;
+      const repository = { find: jest.fn().mockResolvedValue([entry]) };
+      const csvText = await new JournalService(repository as never).generateCsv(3);
+      const rows = await new Promise<Record<string, string>[]>((resolve, reject) => {
+        const parsed: Record<string, string>[] = [];
+        parseString(csvText, { headers: true }).on('data', row => parsed.push(row))
+          .on('error', reject).on('end', () => resolve(parsed));
+      });
+      expect(rows).toHaveLength(1);
+      for (const key of ['actorId', 'eventType', 'entityType', 'entityId', 'summary', 'correlationId', 'jobId']) {
+        const source = key === 'actorId' ? payload.trim() : payload;
+        expect(rows[0][key]).toBe(`'${source.replace(/[\r\n\t]+/g, ' ')}`);
+      }
+      expect(JSON.parse(rows[0].details)).toEqual(entry.details);
+      expect(repository.find).toHaveBeenCalledWith({ where: { workspaceId: 3 }, order: { timestamp: 'DESC' } });
+    }
+  );
 
   it('sanitizes legacy details when mapping entries to audit DTOs', () => {
     const service = createService();

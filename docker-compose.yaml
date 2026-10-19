@@ -10,13 +10,18 @@ x-env-redis: &env-redis
   REDIS_PORT: 6379
   REDIS_PREFIX: coding-box
 
-x-env-keycloak: &env-keycloak
-  KEYCLOAK_URL: ${KEYCLOAK_URL}
-  KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
-  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+x-env-oidc: &env-oidc
+  OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL}
   OIDC_ISSUER: ${OIDC_ISSUER}
+  OIDC_ACCOUNT_ENDPOINT: ${OIDC_ACCOUNT_ENDPOINT}
+  OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT}
+  OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT}
+  OIDC_USERINFO_ENDPOINT: ${OIDC_USERINFO_ENDPOINT}
+  OIDC_END_SESSION_ENDPOINT: ${OIDC_END_SESSION_ENDPOINT}
   OIDC_JWKS_URI: ${OIDC_JWKS_URI}
+  OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+  OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+  OAUTH2_REDIRECT_URL: ${OAUTH2_REDIRECT_URL}
 
 x-env-auth-policy: &env-auth-policy
   WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS: ${WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS:-90}
@@ -72,6 +77,7 @@ services:
     environment:
       APP_ROLE: api
       API_HOST: backend
+      HTTP_PORT: ${HTTP_PORT:-4200}
       JWT_SECRET: ${JWT_SECRET}
       NODE_OPTIONS: ${BACKEND_NODE_OPTIONS:-}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
@@ -86,7 +92,7 @@ services:
       CODING_FILE_LOAD_CONCURRENCY: ${CODING_FILE_LOAD_CONCURRENCY:-4}
       AUTOCODER_SCHEMA_VALIDATION_MODE: ${AUTOCODER_SCHEMA_VALIDATION_MODE:-compatible}
       DISABLED_JOB_QUEUE_PROCESSORS: data-export
-      <<: [ *env-redis, *env-postgres, *env-keycloak, *env-auth-policy ]
+      <<: [ *env-redis, *env-postgres, *env-oidc, *env-auth-policy ]
     healthcheck:
       test:
         [
@@ -119,7 +125,7 @@ services:
       POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${EXPORT_WORKER_POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS:-0}
       JOB_QUEUE_PROCESSORS: data-export
       PGOPTIONS: ${EXPORT_WORKER_PGOPTIONS:--c jit=off}
-      <<: [ *env-redis, *env-postgres, *env-keycloak, *env-auth-policy ]
+      <<: [ *env-redis, *env-postgres, *env-oidc, *env-auth-policy ]
     networks:
       - application-network
 

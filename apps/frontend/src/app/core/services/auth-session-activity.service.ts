@@ -2,8 +2,8 @@ import {
   Injectable, NgZone, OnDestroy, inject
 } from '@angular/core';
 import { Router } from '@angular/router';
-import Keycloak from 'keycloak-js';
 import { AppService } from './app.service';
+import { AuthService } from './auth.service';
 import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   AUTH_SESSION_IDLE_TIMEOUT_MS,
@@ -15,7 +15,7 @@ import { WorkspaceSettingsService } from '../../shared/services/workspace/worksp
   providedIn: 'root'
 })
 export class AuthSessionActivityService implements OnDestroy {
-  private readonly keycloak = inject(Keycloak);
+  private readonly authService = inject(AuthService);
   private readonly appService = inject(AppService);
   private readonly workspaceSettingsService = inject(WorkspaceSettingsService);
   private readonly router = inject(Router);
@@ -109,7 +109,7 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.keycloak.updateToken(-1).catch(() => this.expireSession());
+      this.refreshSessionAfterActivity();
     }
   }
 
@@ -209,8 +209,23 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.keycloak.updateToken(-1).catch(() => this.expireSession());
+      this.refreshSessionAfterActivity();
     }
+  }
+
+  private refreshSessionAfterActivity(): void {
+    const generation = this.authService.getSessionGeneration();
+    const refreshToken = this.authService.getRefreshToken();
+    const expireCurrentSession = () => {
+      if (generation === this.authService.getSessionGeneration() && refreshToken === this.authService.getRefreshToken()) {
+        this.expireSession();
+      }
+    };
+    this.authService.getValidToken(0)
+      .then(token => {
+        if (!token) expireCurrentSession();
+      })
+      .catch(expireCurrentSession);
   }
 
   private parseActivityMessage(rawMessage: string): { source?: string; timestamp?: number } | null {
@@ -243,7 +258,7 @@ export class AuthSessionActivityService implements OnDestroy {
   }
 
   private isAuthenticatedSession(): boolean {
-    return !!this.keycloak.authenticated && !this.appService.needsReAuthentication;
+    return this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
   }
 
   private refreshTimeoutSettingsForCurrentWorkspace(): void {

@@ -11,7 +11,7 @@ import {
 } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationPoolSlot } from '../shared/workspace-test-results-lock.util';
 import {
   normalizeExclusionBookletId,
   normalizeExclusionUnitId,
@@ -84,6 +84,15 @@ export class CoderTrainingResultsApplyService {
   }
 
   async applyTrainingDiscussionResults(
+    workspaceId: number,
+    trainingId: number,
+    request: ApplyTrainingDiscussionResultsRequestDto
+  ): Promise<ApplyTrainingDiscussionResultsResultDto> {
+    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection,
+      () => this.applyTrainingDiscussionResultsInPool(workspaceId, trainingId, request));
+  }
+
+  private async applyTrainingDiscussionResultsInPool(
     workspaceId: number,
     trainingId: number,
     request: ApplyTrainingDiscussionResultsRequestDto

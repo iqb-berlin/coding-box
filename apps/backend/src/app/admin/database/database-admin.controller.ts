@@ -144,8 +144,8 @@ export class DatabaseAdminController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   async downloadDatabaseExport(
     @Param('jobId') jobId: string,
-      @Req() req: RequestWithUser,
-      @Res() res: Response
+    @Req() req: RequestWithUser,
+    @Res() res: Response
   ): Promise<void> {
     const job = await this.databaseExportQueue.getJob(jobId);
     if (!job) {

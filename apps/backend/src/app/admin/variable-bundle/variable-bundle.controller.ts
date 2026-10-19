@@ -1,17 +1,16 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   DefaultValuePipe,
   Delete,
   Get,
-  NotFoundException,
   Param,
   ParseIntPipe,
   Post,
   Put,
   Query,
-  UseGuards
+  UseGuards,
+  Req
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -73,23 +72,16 @@ export class VariableBundleController {
   })
   async getVariableBundles(
     @WorkspaceId() workspaceId: number,
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
   ): Promise<{ data: VariableBundleDto[]; total: number; page: number; limit: number }> {
-    try {
-      const result = await this.variableBundleService.getVariableBundles(workspaceId, page, limit);
-      return {
-        data: result.data.map(bundle => VariableBundleDto.fromEntity(bundle)),
-        total: result.total,
-        page: result.page,
-        limit: result.limit
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve variable bundles: ${error.message}`);
-    }
+    const result = await this.variableBundleService.getVariableBundles(workspaceId, page, limit);
+    return {
+      data: result.data.map(bundle => VariableBundleDto.fromEntity(bundle)),
+      total: result.total,
+      page: result.page,
+      limit: result.limit
+    };
   }
 
   @Get(':id')
@@ -120,17 +112,10 @@ export class VariableBundleController {
   })
   async getVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<VariableBundleDto> {
-    try {
-      const variableBundle = await this.variableBundleService.getVariableBundle(id, workspaceId);
-      return VariableBundleDto.fromEntity(variableBundle);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve variable bundle: ${error.message}`);
-    }
+    const variableBundle = await this.variableBundleService.getVariableBundle(id, workspaceId);
+    return VariableBundleDto.fromEntity(variableBundle);
   }
 
   @Post()
@@ -155,17 +140,15 @@ export class VariableBundleController {
   })
   async createVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Body() createVariableBundleDto: CreateVariableBundleDto
+    @Body() createVariableBundleDto: CreateVariableBundleDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
-    try {
-      const variableBundle = await this.variableBundleService.createVariableBundle(
-        workspaceId,
-        createVariableBundleDto
-      );
-      return VariableBundleDto.fromEntity(variableBundle);
-    } catch (error) {
-      throw new BadRequestException(`Failed to create variable bundle: ${error.message}`);
-    }
+    const variableBundle = await this.variableBundleService.createVariableBundle(
+      workspaceId,
+      createVariableBundleDto,
+      ownershipRequest.user?.id
+    );
+    return VariableBundleDto.fromEntity(variableBundle);
   }
 
   @Put(':id')
@@ -199,22 +182,17 @@ export class VariableBundleController {
   })
   async updateVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateVariableBundleDto: UpdateVariableBundleDto
+    @Param('id') id: number,
+    @Body() updateVariableBundleDto: UpdateVariableBundleDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
-    try {
-      const variableBundle = await this.variableBundleService.updateVariableBundle(
-        id,
-        workspaceId,
-        updateVariableBundleDto
-      );
-      return VariableBundleDto.fromEntity(variableBundle);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update variable bundle: ${error.message}`);
-    }
+    const variableBundle = await this.variableBundleService.updateVariableBundle(
+      id,
+      workspaceId,
+      updateVariableBundleDto,
+      ownershipRequest.user?.id
+    );
+    return VariableBundleDto.fromEntity(variableBundle);
   }
 
   @Delete(':id')
@@ -250,16 +228,10 @@ export class VariableBundleController {
   })
   async deleteVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
-    try {
-      return await this.variableBundleService.deleteVariableBundle(id, workspaceId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete variable bundle: ${error.message}`);
-    }
+    return this.variableBundleService.deleteVariableBundle(id, workspaceId, ownershipRequest.user?.id);
   }
 
   @Post(':id/variables')
@@ -293,22 +265,17 @@ export class VariableBundleController {
   })
   async addVariableToBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() variable: VariableDto
+    @Param('id') id: number,
+    @Body() variable: VariableDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
-    try {
-      const variableBundle = await this.variableBundleService.addVariableToBundle(
-        id,
-        workspaceId,
-        variable
-      );
-      return VariableBundleDto.fromEntity(variableBundle);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to add variable to variable bundle: ${error.message}`);
-    }
+    const variableBundle = await this.variableBundleService.addVariableToBundle(
+      id,
+      workspaceId,
+      variable,
+      ownershipRequest.user?.id
+    );
+    return VariableBundleDto.fromEntity(variableBundle);
   }
 
   @Delete(':id/variables/:unitName/:variableId')
@@ -351,23 +318,18 @@ export class VariableBundleController {
   })
   async removeVariableFromBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Param('unitName') unitName: string,
-      @Param('variableId') variableId: string
+    @Param('id') id: number,
+    @Param('unitName') unitName: string,
+    @Param('variableId') variableId: string,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
-    try {
-      const variableBundle = await this.variableBundleService.removeVariableFromBundle(
-        id,
-        workspaceId,
-        unitName,
-        variableId
-      );
-      return VariableBundleDto.fromEntity(variableBundle);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to remove variable from variable bundle: ${error.message}`);
-    }
+    const variableBundle = await this.variableBundleService.removeVariableFromBundle(
+      id,
+      workspaceId,
+      unitName,
+      variableId,
+      ownershipRequest.user?.id
+    );
+    return VariableBundleDto.fromEntity(variableBundle);
   }
 }

@@ -83,12 +83,14 @@ export interface MetadataDialogData {
     <div class="dialog-header">
       <h2 mat-dialog-title>{{ data.title }}</h2>
       <div class="header-controls">
+        @if (canEdit) {
         <mat-slide-toggle
           [(ngModel)]="isEditing"
           (change)="onEditModeChange()"
           color="primary">
           {{ isEditing() ? 'Bearbeiten aktiv' : 'Bearbeiten' }}
         </mat-slide-toggle>
+        }
       </div>
     </div>
 
@@ -120,7 +122,7 @@ export interface MetadataDialogData {
               <mat-label>Item-ID</mat-label>
               <input matInput
                      [value]="getSelectedItem()!.id"
-                     [readonly]="!isEditing()"
+                     [readonly]="!canEdit || !isEditing()"
                      (input)="updateItemProperty('id', $any($event.target).value)">
             </mat-form-field>
 
@@ -128,7 +130,7 @@ export interface MetadataDialogData {
               <mat-label>Variablen-ID</mat-label>
               <input matInput
                      [value]="getSelectedItem()!.variableId"
-                     [readonly]="!isEditing()"
+                     [readonly]="!canEdit || !isEditing()"
                      (input)="updateItemProperty('variableId', $any($event.target).value)">
             </mat-form-field>
 
@@ -136,7 +138,7 @@ export interface MetadataDialogData {
               <mat-label>Beschreibung</mat-label>
               <textarea matInput
                         [value]="getSelectedItem()!.description"
-                        [readonly]="!isEditing()"
+                        [readonly]="!canEdit || !isEditing()"
                         rows="3"
                         (input)="updateItemProperty('description', $any($event.target).value)"></textarea>
             </mat-form-field>
@@ -149,7 +151,7 @@ export interface MetadataDialogData {
           <metadata-profile-form
             #metadataForm
             [attr.language]="data.language || 'de'"
-            [attr.readonly]="isEditing() ? null : ''">
+            [attr.readonly]="canEdit && isEditing() ? null : ''">
           </metadata-profile-form>
         </div>
       </div>
@@ -162,7 +164,7 @@ export interface MetadataDialogData {
         {{ isEditing() && hasChanges() ? 'Abbrechen' : 'Schließen' }}
       </button>
 
-      @if (isEditing() && hasChanges()) {
+      @if (canEdit && isEditing() && hasChanges()) {
         <button mat-raised-button color="primary" (click)="close(true)">
           Speichern
         </button>
@@ -218,6 +220,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   private initializationTimer?: ReturnType<typeof setTimeout>;
   private metadataForm?: MetadataProfileFormElement;
   private readonly metadataChangeListener = (event: Event) => {
+    if (!this.canEdit || !this.isEditing()) return;
     this.currentWebComponentMetadata = (event as CustomEvent).detail;
     this.saveCurrentViewDataToLocal();
     this.markAsChanged();
@@ -233,6 +236,8 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
 
   protected readonly isEditing = signal(false);
   readonly hasChanges = signal(false);
+
+  get canEdit(): boolean { return this.data.mode === 'edit'; }
 
   async ngOnInit() {
     // Deep copy metadata values to avoid mutating reference passed in
@@ -349,6 +354,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   }
 
   protected onEditModeChange(): void {
+    if (!this.canEdit) this.isEditing.set(false);
     const form = this.metadataFormElement()?.nativeElement;
     if (form) {
       form.readonly = !this.isEditing();
@@ -356,10 +362,12 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   }
 
   markAsChanged(): void {
+    if (!this.canEdit || !this.isEditing()) return;
     this.hasChanges.set(true);
   }
 
   protected updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {
+    if (!this.canEdit || !this.isEditing()) return;
     const item = this.getSelectedItem();
     if (item) {
       this.updateItems(this.items().map(current => (current.uuid === item.uuid ? { ...current, [prop]: value } : current)));
@@ -386,7 +394,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   }
 
   protected close(save: boolean = false): void {
-    if (save) {
+    if (save && this.canEdit && this.isEditing()) {
       // Ensure latest web component state is captured (should be covered by listener, but good to be sure)
       this.dialogRef.close(this.localMetadataValues());
     } else {

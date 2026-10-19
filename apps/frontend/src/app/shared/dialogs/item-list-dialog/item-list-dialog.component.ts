@@ -124,7 +124,7 @@ export class ItemListDialogComponent implements OnInit {
 
     try {
       const fileDownload = await firstValueFrom(
-        this.fileService.downloadFile(workspaceId, group.id).pipe(
+        this.fileService.readMetadataFile(workspaceId, group.id).pipe(
           takeUntil(this.metadataCancelled),
           takeUntilWorkspaceChanged(this.appService, workspaceId),
           takeUntil(this.dialogRef.beforeClosed()),

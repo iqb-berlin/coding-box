@@ -18,6 +18,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   Subject, finalize, firstValueFrom, takeUntil
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import {
   CodingJobBackendService,
   JobDefinitionDistributionSnapshot
@@ -47,6 +48,7 @@ import { SessionRecoveryService } from '../../../core/services/session-recovery.
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 
 interface JobDefinition {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;
@@ -100,6 +102,7 @@ interface Coder {
   ]
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
+  readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
 
   private codingJobBackendService = inject(CodingJobBackendService);
@@ -141,6 +144,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   readonly definitionSelected = output<JobDefinition>();
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.loadCoders();
     this.loadJobDefinitions();
     this.sessionRecoveryService.restore$
@@ -424,14 +428,17 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   canCreateCodingJobs(definition: JobDefinition): boolean {
+    if (!this.permissions.canEdit(definition)) return false;
     return definition.status === 'approved' && this.getCreatedJobsCount(definition) === 0;
   }
 
   canModifyDefinition(definition: JobDefinition): boolean {
+    if (!this.permissions.canEdit(definition)) return false;
     return this.getCreatedJobsCount(definition) !== undefined;
   }
 
   canDeleteDefinition(definition: JobDefinition): boolean {
+    if (!this.permissions.canEdit(definition)) return false;
     return this.getBlockingCreatedJobsCount(definition) === 0;
   }
 
@@ -546,6 +553,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   protected createDefinition(): void {
+    if (!this.permissions.canCreate) return;
     const dialogData: CodingJobDefinitionDialogData = {
       isEdit: false,
       mode: 'definition'
@@ -643,6 +651,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   protected submitForReview(definition: JobDefinition): void {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -683,6 +692,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   protected approveDefinition(definition: JobDefinition): void {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -721,6 +731,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   protected rejectDefinition(definition: JobDefinition): void {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -759,6 +770,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   deleteDefinition(definition: JobDefinition): void {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id) return;
 
     if (!this.canDeleteDefinition(definition)) {
@@ -802,6 +814,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   async refreshDefinition(definition: JobDefinition): Promise<void> {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id || !this.canRefreshDefinition(definition)) {
       return;
     }
@@ -985,6 +998,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   async createCodingJobFromDefinition(
     definition: JobDefinition
   ): Promise<void> {
+    if (!this.permissions.canEdit(definition)) return;
     if (!definition.id || !definition.assignedCoders) {
       return;
     }

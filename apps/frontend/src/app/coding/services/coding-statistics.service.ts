@@ -38,11 +38,11 @@ export class CodingStatisticsService {
     const params = new HttpParams().set('version', version);
     return this.http
       .get<CodingStatistics>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
-      {
-        params,
-        context: suppressGlobalHttpErrorContext()
-      })
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
+        {
+          params,
+          context: suppressGlobalHttpErrorContext()
+        })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
@@ -51,9 +51,9 @@ export class CodingStatisticsService {
   getCodingFreshness(workspace_id: number): Observable<CodingFreshnessSummaryDto> {
     return this.http
       .get<CodingFreshnessSummaryDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`,
-      { context: suppressGlobalHttpErrorContext() }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`,
+        { context: suppressGlobalHttpErrorContext() }
+      )
       .pipe(
         catchError(() => of({
           workspaceId: workspace_id,
@@ -87,9 +87,9 @@ export class CodingStatisticsService {
 
     return this.http
       .get<PaginatedResponse<ResponseEntity>>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/responses/${status}`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/coding/responses/${status}`,
+        { params }
+      )
       .pipe(
         catchError(() => of({
           data: [],
@@ -103,11 +103,11 @@ export class CodingStatisticsService {
   getReplayUrl(workspaceId: number, responseId: number): Observable<{ replayUrl: string }> {
     return this.http
       .get<{ replayUrl: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
-      {
-        context: suppressGlobalHttpErrorContext()
-      }
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
+        {
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
       .pipe(
         catchError(() => of({ replayUrl: '' }))
       );
@@ -153,9 +153,9 @@ export class CodingStatisticsService {
 
         return this.http
           .get<PaginatedResponse<VariableAnalysisItemDto>>(
-          `${this.serverUrl}admin/workspace/${workspace_id}/coding/variable-analysis`,
-          { params }
-        )
+            `${this.serverUrl}admin/workspace/${workspace_id}/coding/variable-analysis`,
+            { params }
+          )
           .pipe(
             catchError(() => of({
               data: [],

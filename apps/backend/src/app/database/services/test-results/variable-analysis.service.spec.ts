@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { VariableAnalysisService } from './variable-analysis.service';
 
@@ -66,6 +66,38 @@ describe('VariableAnalysisService', () => {
         'log'
       )
       .mockImplementation(jest.fn());
+  });
+
+  it.each(['active', 'waiting', 'failed'])('rejects results of a %s job with a client error', async state => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ state }));
+    await expect(service.getAnalysisResults('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.getAnalysisResultsPage('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'getAnalysisResults',
+    'getAnalysisResultsPage',
+    'exportAnalysisResultsAsCsv',
+    'exportAnalysisResultsAsXlsx'
+  ] as const)('%s rejects expired cached results with a client error', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockResolvedValue(null);
+    await expect(service[method]('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each([
+    'getAnalysisResults',
+    'getAnalysisResultsPage',
+    'exportAnalysisResultsAsCsv',
+    'exportAnalysisResultsAsXlsx'
+  ] as const)('%s rejects completed jobs without results with a client error', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
+      data: { workspaceId: 1 },
+      returnvalue: undefined
+    }));
+    await expect(service[method]('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(cacheService.get).not.toHaveBeenCalled();
   });
 
   it('creates jobs unless one is already active', async () => {
@@ -1101,6 +1133,23 @@ describe('VariableAnalysisService', () => {
     });
   });
 
+  it('does not delete a foreign variable analysis job or its cached results', async () => {
+    const job = createJob();
+    job.data.workspaceId = 2;
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(job);
+
+    await expect(service.deleteJob(1, 'job-1')).resolves.toBe(false);
+    expect(jobQueueService.deleteVariableAnalysisJob).not.toHaveBeenCalled();
+    expect(cacheService.delete).not.toHaveBeenCalled();
+  });
+
+  it('passes workspace ownership to variable analysis cancellation', async () => {
+    jobQueueService.cancelVariableAnalysisJob.mockResolvedValue(false);
+
+    await expect(service.cancelJob(1, 'job-1')).resolves.toBe(false);
+    expect(jobQueueService.cancelVariableAnalysisJob).toHaveBeenCalledWith('job-1', 1);
+  });
+
   it('lists, deletes and cancels jobs', async () => {
     jobQueueService.getVariableAnalysisJobs.mockResolvedValue([
       createJob({ id: 'newer', state: 'active' }),
@@ -1115,6 +1164,7 @@ describe('VariableAnalysisService', () => {
     expect(jobs).toHaveLength(2);
     expect(jobs[0].status).toBe('processing');
     await expect(service.deleteJob(1, 'job-1')).resolves.toBe(true);
+    expect(jobQueueService.deleteVariableAnalysisJob).toHaveBeenCalledWith('job-1', 1);
     expect(cacheService.delete).toHaveBeenCalledWith(
       'variable-analysis:1:job-1'
     );

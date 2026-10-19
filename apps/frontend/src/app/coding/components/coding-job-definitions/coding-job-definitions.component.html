@@ -116,7 +116,7 @@
                     type="button"
                     color="primary"
                     class="primary-row-action"
-                    (click)="submitForReview(definition)"
+                    (click)="submitForReview(definition)" [disabled]="!permissions.canEdit(definition)"
                     [matTooltip]="'coding-job-definitions.actions.submit-for-review' | translate"
                     [attr.aria-label]="getActionAriaLabel('submit-for-review', definition)">
                     <mat-icon>send</mat-icon>
@@ -129,7 +129,7 @@
                     type="button"
                     color="primary"
                     class="primary-row-action"
-                    (click)="approveDefinition(definition)"
+                    (click)="approveDefinition(definition)" [disabled]="!permissions.canEdit(definition)"
                     [matTooltip]="'coding-job-definitions.actions.approve' | translate"
                     [attr.aria-label]="getActionAriaLabel('approve', definition)">
                     <mat-icon>check_circle</mat-icon>
@@ -159,7 +159,7 @@
                     <button
                       mat-menu-item
                       type="button"
-                      (click)="rejectDefinition(definition)"
+                      (click)="rejectDefinition(definition)" [disabled]="!permissions.canEdit(definition)"
                       [attr.aria-label]="getActionAriaLabel('reject', definition)">
                       <mat-icon>cancel</mat-icon>
                       <span>{{ 'coding-job-definitions.actions.reject' | translate }}</span>

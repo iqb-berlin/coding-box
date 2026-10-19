@@ -1,19 +1,5 @@
 import {
-  BadRequestException,
-  Body,
-  ConflictException,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  Logger,
-  NotFoundException,
-  Param,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-  ParseIntPipe
+  BadRequestException, ConflictException, Controller, Delete, ForbiddenException, Get, Logger, NotFoundException, Param, Post, Req, Res, UseGuards, ParseIntPipe
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Job, Queue } from 'bull';
@@ -27,6 +13,8 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -136,7 +124,7 @@ export class WorkspaceTestResultsExportController {
   @RequireAccessLevel(3)
   async startWorkspaceDatabaseExportJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Req() req: RequestWithUser
+    @Req() req: RequestWithUser
   ): Promise<{ jobId: string; message: string }> {
     const runningJobs = await this.databaseExportQueue.getJobs([
       'active',
@@ -209,7 +197,7 @@ export class WorkspaceTestResultsExportController {
   @RequireAccessLevel(3)
   async getWorkspaceDatabaseExportJobStatus(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<DatabaseExportJobStatusResponse> {
     const job = await this.getWorkspaceDatabaseExportJob(jobId, workspace_id);
     const state = await job.getState();
@@ -249,9 +237,9 @@ export class WorkspaceTestResultsExportController {
   @RequireAccessLevel(3)
   async downloadWorkspaceDatabaseExport(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('jobId') jobId: string,
-      @Req() req: RequestWithUser,
-      @Res() res: Response
+    @Param('jobId') jobId: string,
+    @Req() req: RequestWithUser,
+    @Res() res: Response
   ): Promise<void> {
     const job = await this.getWorkspaceDatabaseExportJob(jobId, workspace_id);
 
@@ -323,7 +311,7 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async exportTestResults(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Res() response: Response
+    @Res() response: Response
   ): Promise<void> {
     try {
       response.setHeader('Content-Type', 'text/csv');
@@ -364,15 +352,9 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Req() req: RequestWithUser,
-      @Body()
-                                         filters?: {
-                                           groupNames?: string[];
-                                           bookletNames?: string[];
-                                           unitNames?: string[];
-                                           personIds?: number[];
-                                           includeLogAnomalies?: boolean;
-                                         }
+    @Req() req: RequestWithUser,
+    @ValidatedBody('WorkspaceTestResultsExportController_startExportTestResultsJob', true)
+                                         filters?: RequestBody<'WorkspaceTestResultsExportController_startExportTestResultsJob'>
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -423,14 +405,9 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Req() req: RequestWithUser,
-      @Body()
-                                         filters?: {
-                                           groupNames?: string[];
-                                           bookletNames?: string[];
-                                           unitNames?: string[];
-                                           personIds?: number[];
-                                         }
+    @Req() req: RequestWithUser,
+    @ValidatedBody('WorkspaceTestResultsExportController_startExportTestLogsJob', true)
+                                         filters?: RequestBody<'WorkspaceTestResultsExportController_startExportTestLogsJob'>
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -531,8 +508,8 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async downloadExportJobResult(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('jobId') jobId: string,
-      @Res() res: Response
+    @Param('jobId') jobId: string,
+    @Res() res: Response
   ): Promise<void> {
     const result = await this.cacheService.get<ExportResult>(
       `export-result:${jobId}`
@@ -567,9 +544,10 @@ export class WorkspaceTestResultsExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteExportJob(
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    const success = await this.jobQueueService.deleteExportJob(jobId);
+    const success = await this.jobQueueService.deleteExportJob(jobId, workspace_id);
     if (!success) {
       throw new BadRequestException('Failed to delete job');
     }
@@ -595,7 +573,7 @@ export class WorkspaceTestResultsExportController {
   @RequireAccessLevel(3)
   async cancelExportJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -617,8 +595,8 @@ export class WorkspaceTestResultsExportController {
       return { success: false, message: 'Job already failed' };
     }
 
-    const marked = await this.jobQueueService.markExportJobCancelled(jobId);
-    const cancelled = await this.jobQueueService.cancelExportJob(jobId);
+    const marked = await this.jobQueueService.markExportJobCancelled(jobId, workspace_id);
+    const cancelled = await this.jobQueueService.cancelExportJob(jobId, workspace_id);
 
     const stateAfterCancellationRequest = await job.getState();
     if (stateAfterCancellationRequest === 'completed') {

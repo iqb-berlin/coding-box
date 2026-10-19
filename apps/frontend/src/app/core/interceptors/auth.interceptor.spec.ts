@@ -9,7 +9,9 @@ import {
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { finalize } from 'rxjs';
 import { authInterceptor } from './auth.interceptor';
+import { AuthRequestCancelledError } from './auth-request-cancelled.error';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
   SUPPRESS_GLOBAL_HTTP_ERROR
@@ -34,6 +36,9 @@ describe('authInterceptor', () => {
       reAuthenticationReturnUrl: undefined
     } as unknown as jest.Mocked<AppService>;
     authService = {
+      getToken: jest.fn().mockReturnValue('keycloak-token'),
+      getRefreshToken: jest.fn().mockReturnValue(null),
+      getSessionGeneration: jest.fn().mockReturnValue(0),
       getValidToken: jest.fn().mockResolvedValue('keycloak-token')
     } as unknown as jest.Mocked<AuthService>;
 
@@ -96,6 +101,15 @@ describe('authInterceptor', () => {
     req.flush({});
   });
 
+  it('should not attach authorization or refresh recursively for auth refresh requests', () => {
+    http.post('/api/auth/refresh', { refresh_token: 'refresh-token' }).subscribe();
+
+    const req = httpMock.expectOne('/api/auth/refresh');
+    expect(authService.getValidToken).not.toHaveBeenCalled();
+    expect(req.request.headers.has('Authorization')).toBe(false);
+    req.flush({ access_token: 'fresh-token' });
+  });
+
   it('should preserve explicit authorization headers for scoped API tokens', () => {
     http.get('/api/scoped', {
       headers: new HttpHeaders({ Authorization: 'Bearer scoped-token' })
@@ -119,6 +133,59 @@ describe('authInterceptor', () => {
 
     const req = httpMock.expectOne('/api/workspaces');
     expect(req.request.headers.get('X-Request-Id')).toBe('operation-123');
+    req.flush({});
+  });
+
+  it.each([false, true])('propagates token preparation failures with a newer session: %s', async newerSession => {
+    const error = jest.fn();
+    const complete = jest.fn();
+    const finalized = jest.fn();
+    authService.getValidToken.mockRejectedValue(new Error('Token preparation failed'));
+
+    http.get('/api/workspaces').pipe(finalize(finalized)).subscribe({ error, complete });
+    if (newerSession) {
+      authService.getSessionGeneration.mockReturnValue(1);
+      authService.getToken.mockReturnValue('new-session-token');
+    }
+    await Promise.resolve();
+
+    httpMock.expectNone('/api/workspaces');
+    expect(error).toHaveBeenCalledWith(expect.any(AuthRequestCancelledError));
+    expect(complete).not.toHaveBeenCalled();
+    expect(finalized).toHaveBeenCalled();
+    expect(appService.requireReAuthentication).toHaveBeenCalledTimes(newerSession ? 0 : 1);
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('propagates cancellation when a prepared token no longer belongs to the current session', async () => {
+    const error = jest.fn();
+    http.get('/api/workspaces').subscribe({ error });
+    authService.getToken.mockReturnValue('new-session-token');
+    await Promise.resolve();
+
+    httpMock.expectNone('/api/workspaces');
+    expect(error).toHaveBeenCalledWith(expect.any(AuthRequestCancelledError));
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('should replace stale stored-token authorization headers with a refreshed access token', async () => {
+    authService.getToken.mockReturnValue('stale-token');
+    authService.getValidToken.mockImplementation(async () => {
+      authService.getToken.mockReturnValue('fresh-token');
+      return 'fresh-token';
+    });
+
+    http.get('/api/workspaces', {
+      headers: new HttpHeaders({ Authorization: 'Bearer stale-token' })
+    }).subscribe();
+
+    await Promise.resolve();
+
+    const req = httpMock.expectOne('/api/workspaces');
+    expect(authService.getValidToken).toHaveBeenCalled();
+    expect(req.request.headers.get('Authorization')).toBe('Bearer fresh-token');
     req.flush({});
   });
 

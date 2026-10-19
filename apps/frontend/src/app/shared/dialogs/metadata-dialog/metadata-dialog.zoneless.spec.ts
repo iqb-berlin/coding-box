@@ -15,7 +15,7 @@ describe('Metadata dialog without Zone.js', () => {
         provideZonelessChangeDetection(),
         { provide: MetadataWebComponentService, useValue: { ensureRegistered: jest.fn() } },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
-        { provide: MAT_DIALOG_DATA, useValue: { title: 'Metadata', metadataValues: { profiles: [], items: [] } } }
+        { provide: MAT_DIALOG_DATA, useValue: { title: 'Metadata', mode: 'edit', metadataValues: { profiles: [], items: [] } } }
       ]
     }).compileComponents();
   });
@@ -76,6 +76,7 @@ describe('Metadata dialog without Zone.js', () => {
       const fixture = TestBed.createComponent(MetadataDialogComponent);
       fixture.componentInstance.data = {
         title,
+        mode: 'edit',
         profileData: {
           id: `${title}-unit`, label: [], target: ['UNIT'], groups: []
         },
@@ -114,6 +115,8 @@ describe('Metadata dialog without Zone.js', () => {
 
   it('routes metadata changes to their originating dialog only', async () => {
     const [first, second] = await openPair();
+    second.nativeElement.querySelector('mat-slide-toggle button').click();
+    await second.whenStable();
     second.nativeElement.querySelector('metadata-profile-form').dispatchEvent(new CustomEvent('metadataChange', {
       detail: { profiles: [{ profileId: 'second-unit', entries: [] }] }
     }));

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
-import Keycloak from 'keycloak-js';
+import { AuthService } from '../../core/services/auth.service';
 import { ReplayBackendService } from './replay-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
 import {
@@ -19,16 +19,12 @@ describe('ReplayBackendService', () => {
     player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
     vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }]
   };
-  const keycloakMock: {
-    tokenParsed?: { sub?: string };
-    idTokenParsed?: { sub?: string };
-  } = {
-    tokenParsed: { sub: 'internal-user' }
+  const authServiceMock = {
+    getLoggedUser: jest.fn()
   };
 
   beforeEach(() => {
-    keycloakMock.tokenParsed = { sub: 'internal-user' };
-    keycloakMock.idTokenParsed = undefined;
+    authServiceMock.getLoggedUser.mockReturnValue({ sub: 'internal-user' });
     Object.defineProperty(window, 'localStorage', {
       value: {
         getItem: jest.fn().mockReturnValue('mock-token')
@@ -41,7 +37,7 @@ describe('ReplayBackendService', () => {
         ReplayBackendService,
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
-        { provide: Keycloak, useValue: keycloakMock },
+        { provide: AuthService, useValue: authServiceMock },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -86,7 +82,7 @@ describe('ReplayBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(data);
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       expect(req.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(true);
       req.flush({});
@@ -241,7 +237,7 @@ describe('ReplayBackendService', () => {
   });
 
   describe('getReplayAssets', () => {
-    it('should fetch assets without a service-owned auth token when no URL token is supplied', () => {
+    it('should fetch assets with the stored auth token when no URL token is supplied', () => {
       service.getReplayAssets(1, 'unit-1').subscribe();
 
       const req = httpMock.expectOne(request => {
@@ -252,7 +248,7 @@ describe('ReplayBackendService', () => {
       expect(req.request.urlWithParams).toBe(
         `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`
       );
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush({ unitDef: [], player: [], vocs: [] });
     });
 
@@ -305,7 +301,7 @@ describe('ReplayBackendService', () => {
         headers: { 'Cache-Control': 'private, max-age=300' }
       });
 
-      keycloakMock.tokenParsed = { sub: 'different-internal-user' };
+      authServiceMock.getLoggedUser.mockReturnValue({ sub: 'different-internal-user' });
       service.getReplayAssets(1, 'unit-1').subscribe();
       const secondRequest = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`

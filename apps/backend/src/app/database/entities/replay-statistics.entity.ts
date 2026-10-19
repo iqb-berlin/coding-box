@@ -17,37 +17,37 @@ export const REPLAY_STATISTICS_SOURCE_EXTERNAL: ReplayStatisticsSource = 'extern
 @Entity()
 export class ReplayStatistics {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @CreateDateColumn()
-    timestamp: Date;
+  timestamp: Date;
 
   @Column({ type: 'int', nullable: false })
-    workspace_id: number;
+  workspace_id: number;
 
   @Column({ type: 'varchar', length: 255, nullable: false })
-    unit_id: string;
+  unit_id: string;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
-    replay_attempt_id: string;
+  replay_attempt_id: string;
 
   @Column({ type: 'varchar', length: 128, nullable: true })
-    request_id: string;
+  request_id: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-    booklet_id: string;
+  booklet_id: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-    test_person_login: string;
+  test_person_login: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-    test_person_code: string;
+  test_person_code: string;
 
   @Column({ type: 'int', nullable: false })
-    duration_milliseconds: number;
+  duration_milliseconds: number;
 
   @Column({ type: 'varchar', length: 2000, nullable: true })
-    replay_url: string;
+  replay_url: string;
 
   @Column({
     type: 'varchar',
@@ -55,17 +55,17 @@ export class ReplayStatistics {
     nullable: false,
     default: REPLAY_STATISTICS_SOURCE_INTERNAL
   })
-    replay_source: ReplayStatisticsSource;
+  replay_source: ReplayStatisticsSource;
 
   @Column({ type: 'boolean', default: true })
-    success: boolean;
+  success: boolean;
 
   @Column({ type: 'varchar', length: 2000, nullable: true })
-    error_message: string;
+  error_message: string;
 
   @Column({ type: 'jsonb', nullable: true })
-    client_timings: Record<string, number | null>;
+  client_timings: Record<string, number | null>;
 
   @Column({ type: 'jsonb', nullable: true })
-    server_timings: Record<string, number | null>;
+  server_timings: Record<string, number | null>;
 }

@@ -49,7 +49,8 @@ describe('CodingJobResultDialogComponent review flow', () => {
           useValue: {
             codingJob,
             workspaceId: 5,
-            canApplyResults: false
+            canApplyResults: false,
+            canEdit: true
           }
         },
         {

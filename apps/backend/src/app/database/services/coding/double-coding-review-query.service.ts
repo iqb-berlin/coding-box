@@ -9,6 +9,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { DoubleCodingReviewDecision } from '../../entities/double-coding-review-decision.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { getCodingReviewCapabilities } from '../shared/coding-ownership.policy';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -240,6 +241,29 @@ export class DoubleCodingReviewQueryService {
   }
 
   async getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    filters: DoubleCodedReviewFilters = {},
+    actorUserId?: number
+  ): Promise<DoubleCodedReviewResponseDto> {
+    const result = await this.getDoubleCodedReviewData(workspaceId, filters);
+    const capabilities = await getCodingReviewCapabilities(
+      this.codingJobUnitRepository.manager,
+      workspaceId,
+      result.data.map(group => group.responseId),
+      actorUserId
+    );
+    return {
+      ...result,
+      canApplyResults: capabilities.canApplyResults,
+      data: result.data.map(group => ({
+        ...group,
+        canEditDraft: capabilities.canEditDraft.get(group.responseId) === true
+      }))
+    };
+  }
+
+  // Statistics reuse the read query without requiring UI-specific mutation capabilities.
+  private async getDoubleCodedReviewData(
     workspaceId: number,
     filters: DoubleCodedReviewFilters = {}
   ): Promise<DoubleCodedReviewResponseDto> {
@@ -545,40 +569,40 @@ export class DoubleCodingReviewQueryService {
       ));
 
       const responseGroups = new Map<
-      number,
-      {
-        responseId: number;
-        sourceUnitId: number;
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        givenAnswer: string;
-        isResolved: boolean;
-        appliedCode: number | null;
-        appliedScore: number | null;
-        appliedComment: string | null;
-        availableCodes: DoubleCodedReviewCodeDto[];
-        managerDrafts: DoubleCodedManagerDecisionDto[];
-        managerHistory: DoubleCodedManagerDecisionDto[];
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-          jobDefinitionId: number | null;
-          trainingId: number | null;
-          trainingLabel: string | null;
-          code: number | null;
-          codingIssueOption: number | null;
-          score: number | null;
-          notes: string | null;
-          supervisorComment: string | null;
-          codedAt: Date;
-        }>;
-      }
+        number,
+        {
+          responseId: number;
+          sourceUnitId: number;
+          unitName: string;
+          variableId: string;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          bookletName: string;
+          givenAnswer: string;
+          isResolved: boolean;
+          appliedCode: number | null;
+          appliedScore: number | null;
+          appliedComment: string | null;
+          availableCodes: DoubleCodedReviewCodeDto[];
+          managerDrafts: DoubleCodedManagerDecisionDto[];
+          managerHistory: DoubleCodedManagerDecisionDto[];
+          coderResults: Array<{
+            coderId: number;
+            coderName: string;
+            jobId: number;
+            jobName: string;
+            jobDefinitionId: number | null;
+            trainingId: number | null;
+            trainingLabel: string | null;
+            code: number | null;
+            codingIssueOption: number | null;
+            score: number | null;
+            notes: string | null;
+            supervisorComment: string | null;
+            codedAt: Date;
+          }>;
+        }
       >();
       const coderResultIndexByResponseId = new Map<number, Map<number, number>>();
       const manualMissingCache = new Map<string, Promise<ResolvedMissingValue>>();
@@ -1469,21 +1493,21 @@ export class DoubleCodingReviewQueryService {
       let hasMore = true;
 
       const coderPairData = new Map<
-      string,
-      {
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        codes: Array<{ code1: number | null; code2: number | null }>;
-      }
+        string,
+        {
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          codes: Array<{ code1: number | null; code2: number | null }>;
+        }
       >();
 
       const uniqueVariables = new Set<string>();
       const uniqueCoders = new Set<number>();
 
       while (hasMore) {
-        const doubleCodedData = await this.getDoubleCodedVariablesForReview(
+        const doubleCodedData = await this.getDoubleCodedReviewData(
           workspaceId,
           {
             page: currentPage,

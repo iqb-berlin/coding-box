@@ -266,6 +266,7 @@ describe('WorkspaceCodingExportController', () => {
     await expect(
       controller.startExportJob(5, { user: { id: 2 } } as never, {
         exportType: 'item-matrix',
+        missingsProfileId: 1,
         version: 'v4' as never
       })
     ).rejects.toThrow(BadRequestException);
@@ -861,10 +862,7 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
-        success: false,
-        message: 'file is busy'
-      });
+      await expect(controller.deleteExportJob(5, 'job-1')).rejects.toThrow('file is busy');
       expect(cacheService.delete).not.toHaveBeenCalled();
       expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
     } finally {
@@ -895,10 +893,7 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
-      success: false,
-      message: 'Export artifacts could not be deleted completely'
-    });
+    await expect(controller.deleteExportJob(5, 'job-1')).rejects.toThrow('Export artifacts could not be deleted completely');
     expect(cacheService.delete).toHaveBeenCalledTimes(3);
     expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
   });
@@ -1133,9 +1128,8 @@ describe('WorkspaceCodingExportController', () => {
         'Export job cancellation requested (job will stop at next checkpoint)'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
     expect(cacheService.get).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
@@ -1164,9 +1158,8 @@ describe('WorkspaceCodingExportController', () => {
       message: 'Export job cancelled successfully'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('does not report coding export cancellation as successful when queue cancellation was not accepted', async () => {
@@ -1193,9 +1186,8 @@ describe('WorkspaceCodingExportController', () => {
       message: 'Export job cancellation could not be requested'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('reports coding export cancellation as successful when cancellation completes during the request', async () => {
@@ -1226,9 +1218,8 @@ describe('WorkspaceCodingExportController', () => {
         'Export job cancellation requested (job will stop at next checkpoint)'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('rejects export job status access for jobs from another workspace', async () => {
