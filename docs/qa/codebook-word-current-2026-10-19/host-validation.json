@@ -1,0 +1,67 @@
+{
+  "codeSource": "0e4c62c2668ee6be8db87d2f833e8a45b87b5fbd",
+  "develop": "3ba72a90c095d6903cc87a609aedf08573615fc1",
+  "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+  "backend": {
+    "suitesPassed": 217,
+    "testsPassed": 3392,
+    "suitesSkipped": 8,
+    "testsSkipped": 67,
+    "note": "Full suite matched because the absolute checkout path contains codebook; no skipped suite is claimed as run"
+  },
+  "frontend": {
+    "suitesPassed": 279,
+    "testsPassed": 3039
+  },
+  "inventoryRegressionTestsPassed": 2,
+  "backendLint": "passed",
+  "frontendLint": "passed",
+  "backendProductionBuild": "passed without Nx cache",
+  "frontendProductionBuild": "passed without Nx cache",
+  "installationExportPairs": 4694,
+  "liveDownloads": 24,
+  "liveReport": "live-services-report.json",
+  "logChecksums": [
+    {
+      "file": "1075-backend-tests.log",
+      "sha256": "573c8edca6a41cd6ea12cdebe0e2141516fb78c2ba4b9c8785c1fc92729ec44f"
+    },
+    {
+      "file": "1075-frontend-tests.log",
+      "sha256": "44d1b32f7fe1b2e5c6aa5aec708e9319740b0a8300b703559313f18bdd6e8817"
+    },
+    {
+      "file": "1075-backend-lint.log",
+      "sha256": "c6eb9276b11afe39677170709c26c26685639da5947f3a957b3227d6026f0c7f"
+    },
+    {
+      "file": "1075-frontend-lint.log",
+      "sha256": "e066ff7f70fb601670a613b357213a9699186f7df0c2c4a1ceed55d9865efbc9"
+    },
+    {
+      "file": "1075-backend-build-final.log",
+      "sha256": "4c45345ca2b608504c4a8210b73f000582695c057222d2c344ab2e6dafbad09b"
+    },
+    {
+      "file": "1075-frontend-build-final.log",
+      "sha256": "40a9ed00411bef55aa7c13620e7acab5b535555b58cf2b6fb359680c3c76f70d"
+    },
+    {
+      "file": "1075-inventory-tests.log",
+      "sha256": "2c880bc3b1e64207695f61036e06d2ed20a03396d4e5a1bc84bb9dc9202281be"
+    },
+    {
+      "file": "1075-live.log",
+      "sha256": "ec82600535bf457732f7a03e36d3da6b8ab0d48f6c23cd732bad082ccf570cfc"
+    },
+    {
+      "file": "1075-installation-comparison.log",
+      "sha256": "f0ee556b82038a124f09dc3e284e2c6298b78e84820c8572863e4fb329c2a647"
+    }
+  ],
+  "limits": [
+    "Original host browser flow proof keeps its original source commit; no fresh Codebook frontend interaction rerun in this acceptance",
+    "No native install scripts or Docker application image build in this acceptance",
+    "No fresh library source build, Desktop Word or original real Schemer case acceptance"
+  ]
+}

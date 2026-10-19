@@ -7,7 +7,7 @@
   "generator": "real installed Studio and Kodierbox adapters; persistence boundaries in memory",
   "pinnedScriptSource": "d79ca05365e6073bfd650e2dfa180c05d3ffc5b8",
   "packageVerification": "All 20 installed package files match the pinned tarball; no new independent library source build in this run",
-  "wordAcceptance": "pending fresh rendering; files are inputs, not proof of rendering",
+  "wordAcceptance": "passed for current synthetic fixtures in Microsoft Word Web Viewer on 2026-10-19; no fresh Desktop Word acceptance",
   "files": [
     {
       "file": "kodierbox-inline-mixed-code-no-scores.docx",
