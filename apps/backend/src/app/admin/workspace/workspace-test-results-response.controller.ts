@@ -9,8 +9,6 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -31,11 +29,8 @@ import { ResponseEntity } from '../../database/entities/response.entity';
 import { RequestWithUser, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
-import { Setting } from '../../database/entities/setting.entity';
-import {
-  getWorkspaceRegexSearchEnabled,
-  toRegexSearchException
-} from '../../utils/regex-search.util';
+import { toRegexSearchException } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -47,8 +42,7 @@ export class WorkspaceTestResultsResponseController {
     private responseManagementService: ResponseManagementService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettings: WorkspaceSettingsService
   ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -281,7 +275,7 @@ export class WorkspaceTestResultsResponseController {
 
     try {
       const effectiveRegexSearch = regexSearch === 'true' &&
-        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+        await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
         {

@@ -28,8 +28,6 @@ import {
   ApiBadRequestResponse
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
@@ -41,11 +39,8 @@ import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/serv
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
-import { Setting } from '../../database/entities/setting.entity';
-import {
-  getWorkspaceRegexSearchEnabled,
-  toRegexSearchException
-} from '../../utils/regex-search.util';
+import { toRegexSearchException } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -58,8 +53,7 @@ export class WorkspaceFilesController {
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
     private readonly codingValidationService: CodingValidationService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettings: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/files')
@@ -122,7 +116,7 @@ export class WorkspaceFilesController {
     }
     try {
       const effectiveRegexSearch = regexSearch === 'true' &&
-        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+        await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
       const [files, total, fileTypes] =
         await this.workspaceFilesService.findFiles(workspace_id, {
           page,

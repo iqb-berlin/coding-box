@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { WorkspaceSettingsModule } from '../../workspace/workspace-settings.module';
 import { DatabaseModule } from '../../database/database.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -18,6 +19,7 @@ import { Setting } from '../../database/entities/setting.entity';
 
 @Module({
   imports: [
+    WorkspaceSettingsModule,
     DatabaseModule,
     WorkspaceModule,
     AuthModule,

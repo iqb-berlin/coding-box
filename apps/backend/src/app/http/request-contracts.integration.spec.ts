@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { WorkspaceController } from '../admin/workspace/workspace.controller';
 import { WorkspaceCodingExportController } from '../admin/workspace/workspace-coding-export.controller';
 import { JobQueueService } from '../job-queue/job-queue.service';
@@ -47,6 +48,7 @@ describe('Workspace request contracts over HTTP', () => {
     const builder = Test.createTestingModule({
       controllers: [WorkspaceController, WorkspaceSettingsController, WorkspaceCodingCodebookController, WorkspaceCodingExportController],
       providers: [
+        WorkspaceSettingsService,
         {
           provide: JobQueueService,
           useValue: {
