@@ -42,3 +42,23 @@ rekonstruieren. Für sie muss einmal ein neuer Export gestartet werden.
 Regressionstests decken beide abgeleiteten Fehlergründe, CSV/Excel-Koordinaten,
 5.480 Zellen, deterministische Wiederholung, Archivzugriff ohne Queue/Redis,
 Neustart, Workspace-Trennung, Abbruch und fehlgeschlagene Veröffentlichung ab.
+
+## Durchgängige lokale Abnahme vom 19.10.2026
+
+Der wiederholbare Nx-Aufruf `backend:verify-item-matrix-live` verwendet eine
+isolierte PostgreSQL-Datenbank nach 163 Migrationen, Redis/Bull, echte OIDC-Tokens
+und getrennte API-/Export-Worker-Prozesse aus dem Produktionsbuild.
+2.740 synthetische Personen erzeugen 5.480 Fehlerzellen, je 2.740 mit
+`derived-result-missing` und `derived-source-unresolved`. CSV/Score und Excel/Code
+liefern identische vollständige Diagnose-CSVs mit geprüften Koordinaten.
+ZIP-Inhalt, Workspace-Trennung und unveränderte Antwortdaten sind geprüft.
+Nach Entfernen der Queue-Aufträge und ihrer Cache-Einträge sowie nach Neustart
+beider Prozesse stimmen die archivierten Downloads weiterhin per SHA-256 überein.
+
+Im Produktionsfrontend wurden die Archive nach echter Anmeldung über OIDC
+Authorization Code mit S256-PKCE geöffnet und die zwei Diagnosegruppen angezeigt.
+Der Browserdownload stimmt mit den 5.480 archivierten Zellen überein. Die API
+wurde dabei nicht simuliert; die Browserkonsole enthält keine JavaScript-Fehler.
+
+Anleitung: `scripts/e2e/item-matrix/README.md`. Die synthetische Abnahme bestätigt
+keinen erneuten Lauf mit dem ursprünglichen Problemdatensatz und kein Deployment.
