@@ -122,6 +122,13 @@
         "parallel": false
       }
     },
+    "verify-item-matrix-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/item-matrix/verify-live.mjs"
+      }
+    },
     "verify-hardening-live": {
       "executor": "nx:run-commands",
       "cache": false,

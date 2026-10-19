@@ -267,7 +267,10 @@ export class ExportToastComponent {
       .pipe(take(1), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: diagnostics => this.dialog.open(ItemMatrixDiagnosticsDialogComponent, {
-          data: diagnostics,
+          data: diagnostics.archiveId ? {
+            ...diagnostics,
+            downloadFullCsv: () => this.downloadFullItemMatrixDiagnostics(job, diagnostics.archiveId!)
+          } : diagnostics,
           maxWidth: '95vw',
           maxHeight: '85vh',
           width: '1000px'
@@ -276,6 +279,27 @@ export class ExportToastComponent {
           this.translateService.instant(
             'export-toast.errors.item-matrix-diagnostics-load-failed'
           ),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        )
+      });
+  }
+
+  private downloadFullItemMatrixDiagnostics(job: ExportJob, archiveId: string): void {
+    this.exportJobService.downloadArchivedItemMatrixDiagnostics(job.workspaceId, archiveId)
+      .pipe(take(1), takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: blob => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Itemdatensatz-Diagnose-${archiveId}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+        },
+        error: () => this.snackBar.open(
+          this.translateService.instant('ws-admin.diagnostics-history.failed'),
           this.translateService.instant('close'),
           { duration: 5000 }
         )
