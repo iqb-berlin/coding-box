@@ -56,7 +56,7 @@ import { CodingJobService } from '../../services/coding-job.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';

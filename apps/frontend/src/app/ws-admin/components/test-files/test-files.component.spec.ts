@@ -17,7 +17,7 @@ import { TestFilesUploadResultDialogComponent } from './test-files-upload-result
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;

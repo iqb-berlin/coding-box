@@ -11,7 +11,7 @@ import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../core/services/auth-session.config';
-import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../shared/services/workspace/workspace-settings.service';
 
 describe('CodingExportService', () => {
   let service: CodingExportService;

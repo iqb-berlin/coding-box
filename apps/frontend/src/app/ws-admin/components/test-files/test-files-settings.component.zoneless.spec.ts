@@ -11,7 +11,7 @@ import { TestFilesComponent } from './test-files.component';
 import { AppService } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
 import { FileService } from '../../../shared/services/file/file.service';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../../core/interceptors/http-error-context';

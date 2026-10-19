@@ -12,7 +12,7 @@ import {
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
-import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
+import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { CoderService } from '../../services/coder.service';
 import {
   createReplayAuthTokenError,

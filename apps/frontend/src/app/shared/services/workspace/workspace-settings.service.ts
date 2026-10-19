@@ -2,9 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, Subject } from 'rxjs';
 import { finalize, shareReplay, tap } from 'rxjs/operators';
-import { SERVER_URL } from '../../injection-tokens';
-import { WorkspaceSettings } from '../models/workspace-settings.model';
-import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { SERVER_URL } from '../../../injection-tokens';
+import { WorkspaceSettings } from '../../models/workspace-settings.model';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
@@ -12,7 +12,7 @@ import {
   MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   type ReplayUrlExportMode
-} from '../../core/services/auth-session.config';
+} from '../../../core/services/auth-session.config';
 
 export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
