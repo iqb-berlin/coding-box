@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import { ItemMatrixDiagnosticsArchive } from '../coding/item-matrix-diagnostics-archive';
 import { JournalService } from '../shared/journal.service';
 import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import Workspace from '../../entities/workspace.entity';
@@ -200,6 +201,8 @@ export class WorkspaceCoreService {
         'Workspaces cannot be deleted while an Autocoder or workspace mutation is running.'
       );
     }
+    const diagnosticsArchive = new ItemMatrixDiagnosticsArchive();
+    for (const id of ids) await diagnosticsArchive.removeWorkspace(id);
   }
 
   async getIgnoredUnits(workspaceId: number): Promise<string[]> {

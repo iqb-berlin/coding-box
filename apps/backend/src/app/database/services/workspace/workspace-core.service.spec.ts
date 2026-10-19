@@ -4,6 +4,7 @@ import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceCoreService } from './workspace-core.service';
 import { JournalService } from '../shared/journal.service';
+import { ItemMatrixDiagnosticsArchive } from '../coding/item-matrix-diagnostics-archive';
 
 const createRepo = () => ({
   find: jest.fn(),
@@ -28,8 +29,10 @@ describe('WorkspaceCoreService', () => {
   };
   let managerSave: jest.Mock;
   let service: WorkspaceCoreService;
+  let archiveCleanup: jest.SpyInstance;
 
   beforeEach(() => {
+    archiveCleanup = jest.spyOn(ItemMatrixDiagnosticsArchive.prototype, 'removeWorkspace').mockResolvedValue(undefined);
     jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     repo = createRepo();
     cacheService = {
@@ -75,6 +78,8 @@ describe('WorkspaceCoreService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
   });
+
+  afterEach(() => archiveCleanup.mockRestore());
 
   it('lists and loads workspaces', async () => {
     repo.findAndCount.mockResolvedValueOnce([[{ id: 1, name: 'A' }], 1]);
@@ -122,7 +127,10 @@ describe('WorkspaceCoreService', () => {
     expect(cacheService.delete).toHaveBeenCalled();
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     await expect(service.remove([])).resolves.toBeUndefined();
+    expect(archiveCleanup).not.toHaveBeenCalled();
     await expect(service.remove([1])).resolves.toBeUndefined();
+    expect(archiveCleanup).toHaveBeenCalledWith(1);
+    expect(archiveCleanup.mock.invocationCallOrder[0]).toBeGreaterThan(queryRunner.commitTransaction.mock.invocationCallOrder.slice(-1)[0]);
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
   });
@@ -136,6 +144,7 @@ describe('WorkspaceCoreService', () => {
     queryRunner.manager.delete.mockRejectedValueOnce(new Error('db down'));
 
     await expect(service.remove([1])).rejects.toThrow('db down');
+    expect(archiveCleanup).not.toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
   });

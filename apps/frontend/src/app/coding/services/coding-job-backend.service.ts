@@ -24,6 +24,7 @@ import type {
   BackgroundExportRequest,
   ExportJobStatusResponseDto,
   ItemDatasetOptionsDto,
+  ItemMatrixDiagnosticsArchiveEntryDto,
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../api-dto/coding/export-request.dto';
 import {
@@ -1256,6 +1257,27 @@ export class CodingJobBackendService {
       responseType: 'blob',
       headers: this.authHeader
     });
+  }
+
+  listArchivedItemMatrixDiagnostics(workspaceId: number): Observable<ItemMatrixDiagnosticsArchiveEntryDto[]> {
+    return this.http.get<ItemMatrixDiagnosticsArchiveEntryDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/item-matrix-diagnostics`,
+      { headers: this.authHeader }
+    );
+  }
+
+  getArchivedItemMatrixDiagnostics(workspaceId: number, archiveId: string): Observable<ItemMatrixExportDiagnosticsDto> {
+    return this.http.get<ItemMatrixExportDiagnosticsDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/item-matrix-diagnostics/${encodeURIComponent(archiveId)}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  downloadArchivedItemMatrixDiagnostics(workspaceId: number, archiveId: string): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/item-matrix-diagnostics/${encodeURIComponent(archiveId)}/download`,
+      { headers: this.authHeader, responseType: 'blob' }
+    );
   }
 
   getItemMatrixExportDiagnostics(

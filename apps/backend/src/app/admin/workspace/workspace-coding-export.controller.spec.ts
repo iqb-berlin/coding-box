@@ -18,6 +18,7 @@ import {
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { ItemMatrixDiagnosticsArchive } from '../../database/services/coding/item-matrix-diagnostics-archive';
 
 jest.mock('../../database/services/workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
@@ -36,7 +37,7 @@ const createController = (
   codingExportOrchestratorService,
   jobQueueService,
   codingPsychometricExportService,
-  new ExportArtifactService(cacheService)
+  new ExportArtifactService(cacheService, {} as never)
 );
 
 const createWritableResponse = () => {
@@ -86,6 +87,39 @@ const createWritableResponse = () => {
 };
 
 describe('WorkspaceCodingExportController', () => {
+  it('serves the saved diagnosis after both queue and Redis entries are removed, with workspace isolation', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-controller-'));
+    const root = jest.spyOn(ItemMatrixDiagnosticsArchive.prototype, 'getRootDirectory').mockReturnValue(directory);
+    const csvPath = path.join(directory, 'source.csv');
+    fs.writeFileSync(csvPath, 'full cell diagnosis');
+    const queue = { getExportJob: jest.fn().mockResolvedValue(null) };
+    const cache = { get: jest.fn().mockResolvedValue(null) };
+    const controller = createController({} as never, {} as never, {} as never, queue as never, cache as never, {} as never);
+    try {
+      const archive = new ItemMatrixDiagnosticsArchive();
+      const id = await archive.publish(5, {
+        jobId: '214', createdAt: 1000, total: 1, version: 'v2', matrixValue: 'score', missingsProfileId: 4
+      }, { total: 1, sampleLimit: 20, groups: [] }, csvPath);
+      expect(await controller.listArchivedItemMatrixDiagnostics(5)).toHaveLength(1);
+      expect(await controller.listArchivedItemMatrixDiagnostics(6)).toEqual([]);
+      expect(await controller.getArchivedItemMatrixDiagnostics(5, id)).toMatchObject({ total: 1 });
+      await expect(controller.getArchivedItemMatrixDiagnostics(6, id)).rejects.toThrow('not found');
+      const response = createWritableResponse();
+      let body = '';
+      response.on('data', chunk => { body += chunk.toString(); });
+      await controller.downloadArchivedItemMatrixDiagnostics(5, id, response as never);
+      expect(body).toBe('full cell diagnosis');
+      expect(queue.getExportJob).not.toHaveBeenCalled();
+      expect(cache.get).not.toHaveBeenCalled();
+      for (const method of [controller.listArchivedItemMatrixDiagnostics,
+        controller.getArchivedItemMatrixDiagnostics, controller.downloadArchivedItemMatrixDiagnostics]) {
+        expect(Reflect.getMetadata(GUARDS_METADATA, method)).toEqual([JwtAuthGuard, WorkspaceGuard, AccessLevelGuard]);
+      }
+    } finally {
+      root.mockRestore();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
   const codingPsychometricExportServiceMock =
     {} as CodingPsychometricExportService;
 
