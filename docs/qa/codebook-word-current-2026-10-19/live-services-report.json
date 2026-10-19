@@ -1,0 +1,2628 @@
+{
+  "createdAt": "2026-10-19T11:39:20.639Z",
+  "sourceCommit": "2cd87d22a055adf21d5f33bd77f1102d7c0efe48",
+  "seeding": "synthetic direct SQL in dedicated Compose database",
+  "exports": [
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.json",
+      "sha256": "9ba79896fbfb6b80bbf8cf65a05c6a0e7cd2a5f5937cb8df5b2946f0fa180e9a",
+      "bytes": 492,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "1",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "1",
+            "fileName": "codebook_1_1792409962424.json",
+            "fileSize": 492,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409962425
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409962371,
+        "finishedOn": 1792409962427,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "1",
+          "fileName": "codebook_1_1792409962424.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_1_1792409962424.json",
+          "fileSize": 492,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409962425
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.docx",
+      "sha256": "cfe3cafecbb336fe22f7cedd124998488d0a0e888d72ad450f38eba76dce98db",
+      "bytes": 8793,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "2",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "2",
+            "fileName": "codebook_2_1792409962567.docx",
+            "fileSize": 8793,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409962569
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409962528,
+        "finishedOn": 1792409962570,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "2",
+          "fileName": "codebook_2_1792409962567.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_2_1792409962567.docx",
+          "fileSize": 8793,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409962569
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.json",
+      "sha256": "e0e114362d4e628a1972a04825de33618b4187dab6b5cdf85cb48cb6446734c8",
+      "bytes": 432,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "3",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "3",
+            "fileName": "codebook_3_1792409962731.json",
+            "fileSize": 432,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409962732
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409962725,
+        "finishedOn": 1792409962734,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "3",
+          "fileName": "codebook_3_1792409962731.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_3_1792409962731.json",
+          "fileSize": 432,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409962732
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.docx",
+      "sha256": "574938ebde2ab639dcda7cf54bc3ca368135c6005f67d863461cd982241b56db",
+      "bytes": 8758,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "4",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "4",
+            "fileName": "codebook_4_1792409962897.docx",
+            "fileSize": 8758,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409962898
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409962879,
+        "finishedOn": 1792409962899,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "4",
+          "fileName": "codebook_4_1792409962897.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_4_1792409962897.docx",
+          "fileSize": 8758,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409962898
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3
+      },
+      "id": "5",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "5",
+            "fileName": "codebook_5_1792409963062.json",
+            "fileSize": 316,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409963062
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963050,
+        "finishedOn": 1792409963064,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "5",
+          "fileName": "codebook_5_1792409963062.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_5_1792409963062.json",
+          "fileSize": 316,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409963062
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.docx",
+      "sha256": "63a0c8ca12277bc8360688e0ca29a245286c1911bb7c64963f990a4b17215121",
+      "bytes": 8733,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3
+      },
+      "id": "6",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "6",
+            "fileName": "codebook_6_1792409963246.docx",
+            "fileSize": 8733,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409963247
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963221,
+        "finishedOn": 1792409963249,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "6",
+          "fileName": "codebook_6_1792409963246.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_6_1792409963246.docx",
+          "fileSize": 8733,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409963247
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3
+      },
+      "id": "7",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "7",
+            "fileName": "codebook_7_1792409963400.json",
+            "fileSize": 286,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409963401
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963390,
+        "finishedOn": 1792409963402,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "7",
+          "fileName": "codebook_7_1792409963400.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_7_1792409963400.json",
+          "fileSize": 286,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409963401
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.docx",
+      "sha256": "29ba767e8bf3386e6aee0a22a5e6a64f57374aa96da8440c313643976b54f202",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3
+      },
+      "id": "8",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "8",
+            "fileName": "codebook_8_1792409963554.docx",
+            "fileSize": 8709,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409963555
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963535,
+        "finishedOn": 1792409963559,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "8",
+          "fileName": "codebook_8_1792409963554.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_8_1792409963554.docx",
+          "fileSize": 8709,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409963555
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "9",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "9",
+            "fileName": "codebook_9_1792409963703.json",
+            "fileSize": 316,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409963703
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963694,
+        "finishedOn": 1792409963704,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "9",
+          "fileName": "codebook_9_1792409963703.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_9_1792409963703.json",
+          "fileSize": 316,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409963703
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.docx",
+      "sha256": "0afeccfd5651253eb3c19690b09e26cbf1e9ed15d214423ccf97258fa04706db",
+      "bytes": 8736,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "10",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "10",
+            "fileName": "codebook_10_1792409963861.docx",
+            "fileSize": 8736,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409963862
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963842,
+        "finishedOn": 1792409963864,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "10",
+          "fileName": "codebook_10_1792409963861.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_10_1792409963861.docx",
+          "fileSize": 8736,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409963862
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "11",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "11",
+            "fileName": "codebook_11_1792409963995.json",
+            "fileSize": 286,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409963996
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409963989,
+        "finishedOn": 1792409963997,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "11",
+          "fileName": "codebook_11_1792409963995.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_11_1792409963995.json",
+          "fileSize": 286,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409963996
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.docx",
+      "sha256": "1a6debbbd2975f9cc55dea0fe3af661096d2734cd02803b41abcee7eac424195",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "12",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "12",
+            "fileName": "codebook_12_1792409964146.docx",
+            "fileSize": 8709,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409964147
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964130,
+        "finishedOn": 1792409964149,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "12",
+          "fileName": "codebook_12_1792409964146.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_12_1792409964146.docx",
+          "fileSize": 8709,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409964147
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3,
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "13",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "13",
+            "fileName": "codebook_13_1792409964288.json",
+            "fileSize": 316,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409964289
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964280,
+        "finishedOn": 1792409964290,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "13",
+          "fileName": "codebook_13_1792409964288.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_13_1792409964288.json",
+          "fileSize": 316,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409964289
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.docx",
+      "sha256": "7e5eff0b1127271ca9759c4b18fb21e75c0cc1aee1ee31bbf5775a13233fff0c",
+      "bytes": 8733,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3,
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "14",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "14",
+            "fileName": "codebook_14_1792409964448.docx",
+            "fileSize": 8733,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409964449
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964422,
+        "finishedOn": 1792409964450,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "14",
+          "fileName": "codebook_14_1792409964448.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_14_1792409964448.docx",
+          "fileSize": 8733,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409964449
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3,
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "15",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "15",
+            "fileName": "codebook_15_1792409964577.json",
+            "fileSize": 286,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409964577
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964568,
+        "finishedOn": 1792409964578,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "15",
+          "fileName": "codebook_15_1792409964577.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_15_1792409964577.json",
+          "fileSize": 286,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409964577
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.docx",
+      "sha256": "a72f456fd4d002b8ddd130ec0d2b16b9f2b8683168e5635b38d8c7c32b3ad0f5",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 3,
+        "variableBundleIds": [
+          4
+        ]
+      },
+      "id": "16",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "16",
+            "fileName": "codebook_16_1792409964710.docx",
+            "fileSize": 8709,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409964711
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964696,
+        "finishedOn": 1792409964712,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 3,
+            "variableBundleIds": [
+              4
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "16",
+          "fileName": "codebook_16_1792409964710.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_16_1792409964710.docx",
+          "fileSize": 8709,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409964711
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.json",
+      "sha256": "abc04778fd9ada34b668319936decf667d53eb21a3c6c414d2c1900f93c8ccb1",
+      "bytes": 332,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 4,
+        "variableBundleIds": [
+          6
+        ]
+      },
+      "id": "17",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "17",
+            "fileName": "codebook_17_1792409964846.json",
+            "fileSize": 332,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409964847
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964837,
+        "finishedOn": 1792409964848,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 4,
+            "variableBundleIds": [
+              6
+            ]
+          },
+          "unitIds": [
+            104118
+          ]
+        },
+        "result": {
+          "fileId": "17",
+          "fileName": "codebook_17_1792409964846.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_17_1792409964846.json",
+          "fileSize": 332,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409964847
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.docx",
+      "sha256": "5c9fe1a4bd358858c8c887db7d9d095b4e4d55bdff822585c0123f02eb8dd159",
+      "bytes": 8730,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 4,
+        "variableBundleIds": [
+          6
+        ]
+      },
+      "id": "18",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "18",
+            "fileName": "codebook_18_1792409964989.docx",
+            "fileSize": 8730,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409964990
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409964969,
+        "finishedOn": 1792409964991,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 4,
+            "variableBundleIds": [
+              6
+            ]
+          },
+          "unitIds": [
+            104118
+          ]
+        },
+        "result": {
+          "fileId": "18",
+          "fileName": "codebook_18_1792409964989.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_18_1792409964989.docx",
+          "fileSize": 8730,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409964990
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.json",
+      "sha256": "0de5784e51a06232ee0c7949a6d1042ec9e408f82876d6cc3611d60025a1b1ee",
+      "bytes": 300,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 4,
+        "variableBundleIds": [
+          6
+        ]
+      },
+      "id": "19",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "19",
+            "fileName": "codebook_19_1792409965140.json",
+            "fileSize": 300,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409965141
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965132,
+        "finishedOn": 1792409965142,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 4,
+            "variableBundleIds": [
+              6
+            ]
+          },
+          "unitIds": [
+            104118
+          ]
+        },
+        "result": {
+          "fileId": "19",
+          "fileName": "codebook_19_1792409965140.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_19_1792409965140.json",
+          "fileSize": 300,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409965141
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.docx",
+      "sha256": "4da6c00c7fd560d8886546d187a13c027e3d3ee9a5f375480a32282c7b855c78",
+      "bytes": 8704,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 4,
+        "variableBundleIds": [
+          6
+        ]
+      },
+      "id": "20",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "20",
+            "fileName": "codebook_20_1792409965293.docx",
+            "fileSize": 8704,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409965294
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965273,
+        "finishedOn": 1792409965296,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 4,
+            "variableBundleIds": [
+              6
+            ]
+          },
+          "unitIds": [
+            104118
+          ]
+        },
+        "result": {
+          "fileId": "20",
+          "fileName": "codebook_20_1792409965293.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_20_1792409965293.docx",
+          "fileSize": 8704,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409965294
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.json",
+      "sha256": "03033fe0c4485c590699c96d00d5eeb912376e600f5cace0a6ae52ff1326f764",
+      "bytes": 316,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          5
+        ]
+      },
+      "id": "21",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "21",
+            "fileName": "codebook_21_1792409965440.json",
+            "fileSize": 316,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409965441
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965428,
+        "finishedOn": 1792409965442,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              5
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "21",
+          "fileName": "codebook_21_1792409965440.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_21_1792409965440.json",
+          "fileSize": 316,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409965441
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.docx",
+      "sha256": "4bc8307fefce0f9852a2a4f6f033ad8e892eb36da9c3b5907647c08d6dceca81",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          5
+        ]
+      },
+      "id": "22",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "22",
+            "fileName": "codebook_22_1792409965603.docx",
+            "fileSize": 8734,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409965605
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965585,
+        "finishedOn": 1792409965607,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              5
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "22",
+          "fileName": "codebook_22_1792409965603.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_22_1792409965603.docx",
+          "fileSize": 8734,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409965605
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.json",
+      "sha256": "643a689cb56fcd1b39d85b74ec2b56f204c69c475751b646668eece7b644a6de",
+      "bytes": 286,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          5
+        ]
+      },
+      "id": "23",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "23",
+            "fileName": "codebook_23_1792409965757.json",
+            "fileSize": 286,
+            "workspaceId": 2,
+            "exportFormat": "json",
+            "createdAt": 1792409965758
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965749,
+        "finishedOn": 1792409965759,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              5
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "23",
+          "fileName": "codebook_23_1792409965757.json",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_23_1792409965757.json",
+          "fileSize": 286,
+          "workspaceId": 2,
+          "exportFormat": "json",
+          "createdAt": 1792409965758
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.docx",
+      "sha256": "68f1a97c3c48ee3c4118bea0ce00b6734d7ea73e721033e86ac6e3866ea6bac5",
+      "bytes": 8708,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "3",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          5
+        ]
+      },
+      "id": "24",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "24",
+            "fileName": "codebook_24_1792409965916.docx",
+            "fileSize": 8708,
+            "workspaceId": 2,
+            "exportFormat": "docx",
+            "createdAt": 1792409965918
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792409965899,
+        "finishedOn": 1792409965920,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 2,
+          "missingsProfile": 3,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "3",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              5
+            ]
+          },
+          "unitIds": [
+            104117
+          ]
+        },
+        "result": {
+          "fileId": "24",
+          "fileName": "codebook_24_1792409965916.docx",
+          "filePath": "/Users/julian/Documents/Codex/2026-10-19/https-github-com-iqb-berlin-coding-2/work/codebook-export-fixes/temp/codebook_24_1792409965916.docx",
+          "fileSize": 8708,
+          "workspaceId": 2,
+          "exportFormat": "docx",
+          "createdAt": 1792409965918
+        }
+      }
+    }
+  ],
+  "autocoder": [
+    {
+      "name": "ceil",
+      "unit": 8,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        },
+        {
+          "id": "T",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "equality",
+      "unit": 9,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        },
+        {
+          "id": "T",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "null",
+      "unit": 10,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "infinity",
+      "unit": 11,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "unit": 12,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "exponent-string",
+      "unit": 13,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1e-15",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1e-15",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    }
+  ],
+  "authentication": {
+    "protocol": "OIDC",
+    "issuer": "http://127.0.0.1:18441/realms/codebook-proof",
+    "clientId": "codebook-proof",
+    "tokenSource": "dedicated local Keycloak realm"
+  },
+  "migrations": 163,
+  "backendArtifactSha256": "0dd0dfa106e6f6c8e3e2ee0381e7874da3374521234c85769a0a438066c89d2a",
+  "frontendArtifactSha256": "6a726be685697f0a12bcd355f9475d146b843df96de83fb22bd676f9b206e9d2",
+  "runnerSha256": "3a7374b2928ef0bcbb563ff1cac440d6d43763064e56696dd5aae042ee61278f",
+  "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+  "studio": {
+    "commit": "4a9c42180fe7c09af0ec3b8b833e102ffac59882",
+    "sourceSha256": "52db9d720b0af26f66b1a5deb4ab46fc5e4b7e18b1c07265d6516b0120dbbe75",
+    "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+    "persistence": "Studio repository/profile boundaries in memory; Kodierbox HTTP/DB/Redis live",
+    "scope": "Studio receives the explicitly expected variable subset and item identities; it has no Kodierbox job/bundle filter"
+  },
+  "workspaceId": 2,
+  "failedExport": {
+    "id": "25",
+    "history": [
+      {
+        "status": "stuck",
+        "progress": 10
+      },
+      {
+        "status": "failed",
+        "progress": 10,
+        "error": "Die ausgew\u00e4hlten Schnellfilter enthalten keine passenden Variablen f\u00fcr die ausgew\u00e4hlten Einheiten."
+      }
+    ],
+    "queue": {
+      "name": "codebook-generation",
+      "state": "failed",
+      "processedOn": 1792409966054,
+      "finishedOn": 1792409966070,
+      "attemptsMade": 1,
+      "failedReason": "Die ausgew\u00e4hlten Schnellfilter enthalten keine passenden Variablen f\u00fcr die ausgew\u00e4hlten Einheiten.",
+      "data": {
+        "workspaceId": 2,
+        "missingsProfile": 3,
+        "contentOptions": {
+          "exportFormat": "json",
+          "missingsProfile": "3",
+          "hasOnlyManualCoding": true,
+          "hasGeneralInstructions": true,
+          "hasDerivedVars": true,
+          "hasOnlyVarsWithCodes": true,
+          "hasClosedVars": false,
+          "codeLabelToUpper": false,
+          "showScore": true,
+          "hideItemVarRelation": false,
+          "trainingRequirement": "all",
+          "jobDefinitionId": 3,
+          "variableBundleIds": [
+            5
+          ]
+        },
+        "unitIds": [
+          104117
+        ]
+      },
+      "result": null
+    }
+  },
+  "autocoderJob": {
+    "id": "1",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "processing",
+        "progress": 85
+      },
+      {
+        "status": "completed",
+        "progress": 100,
+        "result": {
+          "totalResponses": 6,
+          "statusCounts": {
+            "NO_CODING": 6,
+            "CODING_COMPLETE": 4,
+            "DERIVE_ERROR": 8
+          }
+        }
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "completed",
+      "processedOn": 1792409966327,
+      "finishedOn": 1792409966509,
+      "attemptsMade": 0,
+      "data": {
+        "workspaceId": 2,
+        "personIds": [
+          "3"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": {
+        "totalResponses": 6,
+        "statusCounts": {
+          "NO_CODING": 6,
+          "CODING_COMPLETE": 4,
+          "DERIVE_ERROR": 8
+        }
+      }
+    }
+  },
+  "failedAutocoder": {
+    "id": "2",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "failed",
+        "progress": 81,
+        "error": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (14): duplicate output alias \"A\"."
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "failed",
+      "processedOn": 1792409966581,
+      "finishedOn": 1792409966633,
+      "attemptsMade": 1,
+      "failedReason": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (14): duplicate output alias \"A\".",
+      "data": {
+        "workspaceId": 2,
+        "personIds": [
+          "4"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": null
+    },
+    "persistenceUnchanged": true
+  },
+  "passed": true
+}

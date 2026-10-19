@@ -1,0 +1,67 @@
+{
+  "cases": [
+    {
+      "suffix": "",
+      "columns": 4,
+      "tables": 22,
+      "hasMissingZero": true,
+      "images": 2,
+      "formulas": 2,
+      "variableHeadings": 22
+    },
+    {
+      "suffix": "-rich-no-scores",
+      "columns": 3,
+      "tables": 17,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 2,
+      "variableHeadings": 17
+    },
+    {
+      "suffix": "-rich-scores",
+      "columns": 4,
+      "tables": 17,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 2,
+      "variableHeadings": 17
+    },
+    {
+      "suffix": "-inline-mixed-general-no-scores",
+      "columns": 3,
+      "tables": 1,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 1,
+      "variableHeadings": 1
+    },
+    {
+      "suffix": "-inline-mixed-general-scores",
+      "columns": 4,
+      "tables": 1,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 1,
+      "variableHeadings": 1
+    },
+    {
+      "suffix": "-inline-mixed-code-no-scores",
+      "columns": 3,
+      "tables": 1,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 1,
+      "variableHeadings": 1
+    },
+    {
+      "suffix": "-inline-mixed-code-scores",
+      "columns": 4,
+      "tables": 1,
+      "hasMissingZero": false,
+      "images": 1,
+      "formulas": 1,
+      "variableHeadings": 1
+    }
+  ]
+}
