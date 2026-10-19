@@ -8,6 +8,7 @@ import { appConfig } from './app.config';
 import { SERVER_URL } from './injection-tokens';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { WorkspaceAccessService } from './core/services/workspace-access.service';
 
 jest.mock('./app.routes', () => ({ routes: [] }));
 
@@ -66,6 +67,19 @@ describe('application providers with shared Codebook translations and OIDC', () 
     expect(request.request.headers.get('X-Request-Id')).toMatch(/^[a-f0-9-]{32,36}$/i);
     request.flush({ id: 42 });
     await expect(loaded).resolves.toEqual({ id: 42 });
+  });
+
+  it.each([0, 1])('checks coding assignments using the OIDC providers for %s assignments', async total => {
+    const service = TestBed.inject(WorkspaceAccessService);
+    const loaded = firstValueFrom(service.hasAssignedCodingJobs(42));
+    await Promise.resolve();
+    const request = requests.expectOne(req => req.url === 'api/wsg-admin/workspace/42/coding-job');
+    expect(request.request.headers.get('Authorization')).toBe('Bearer oidc-access-token');
+    expect(authService.getValidToken).toHaveBeenCalledTimes(1);
+    expect(request.request.params.get('assignedTo')).toBe('me');
+    expect(request.request.params.get('limit')).toBe('1');
+    request.flush({ total, data: [] });
+    await expect(loaded).resolves.toBe(total > 0);
   });
 
   it('exchanges a login code without attaching or refreshing an access token', async () => {

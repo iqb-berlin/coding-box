@@ -88,7 +88,7 @@ import {
 import {
   ResponseMatchingFlag,
   WorkspaceSettingsService
-} from '../../../ws-admin/services/workspace-settings.service';
+} from '../../../shared/services/workspace/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import {

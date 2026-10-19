@@ -91,10 +91,10 @@ import {
 } from '../github-releases-dialog/github-releases-dialog.component';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
-import { ContentPoolSettings } from '../../models/content-pool.model';
+import { ContentPoolSettings } from '../../../shared/models/content-pool.model';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
-import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
 import {
   ContentPoolImportDialogComponent,

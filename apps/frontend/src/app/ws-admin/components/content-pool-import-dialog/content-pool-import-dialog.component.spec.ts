@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Subject } from 'rxjs';
 import { ContentPoolImportDialogComponent } from './content-pool-import-dialog.component';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
-import { ContentPoolAcpListResponse, ContentPoolImportAcpProgress } from '../../models/content-pool.model';
+import { ContentPoolAcpListResponse, ContentPoolImportAcpProgress } from '../../../shared/models/content-pool.model';
 
 const settings = { enabled: true, baseUrl: 'https://example.org', hasApplicationToken: true };
 

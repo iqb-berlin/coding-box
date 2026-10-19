@@ -19,7 +19,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
-import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
