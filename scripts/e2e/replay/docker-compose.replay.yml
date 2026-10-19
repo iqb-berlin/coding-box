@@ -60,6 +60,7 @@ services:
       JWT_SECRET: ${REPLAY_E2E_JWT_SECRET}
       OAUTH2_CLIENT_ID: replay-e2e
       OIDC_ISSUER: http://replay-e2e.invalid/realms/replay-e2e
+      OIDC_JWKS_URI: http://replay-e2e.invalid/realms/replay-e2e/protocol/openid-connect/certs
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_USER: replay_e2e

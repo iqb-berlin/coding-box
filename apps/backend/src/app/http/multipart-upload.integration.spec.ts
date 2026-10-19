@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { Setting } from '../database/entities/setting.entity';
 import { WorkspaceFilesController } from '../admin/workspace/workspace-files.controller';
 import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
@@ -26,6 +27,7 @@ describe('Workspace multipart uploads', () => {
     const module = await Test.createTestingModule({
       controllers: [WorkspaceFilesController],
       providers: [
+        WorkspaceSettingsService,
         { provide: WorkspaceFilesService, useValue: filesService },
         { provide: WorkspaceCoreService, useValue: {} },
         { provide: getRepositoryToken(Setting), useValue: {} },

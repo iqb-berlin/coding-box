@@ -110,6 +110,24 @@
       "options": {
         "command": "node scripts/e2e/codebook/verify-live.mjs"
       }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "commands": [
+          "node --test scripts/quality/check-backend-strict.test.mjs",
+          "node scripts/quality/check-backend-strict.mjs"
+        ],
+        "parallel": false
+      }
+    },
+    "verify-hardening-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/backend-hardening/verify-runtime.mjs"
+      }
     }
   }
 }
