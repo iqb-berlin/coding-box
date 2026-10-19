@@ -41,6 +41,13 @@ pull request is opened without a new commit, its check uses the existing branch
 pipeline for that SHA. After rollout, verify both a new push and opening a pull
 request against GitHub's reported commit status.
 
+For that rollout check, filter GitLab's pipeline list to the feature branch and
+record the commit SHA and pipeline ID before opening the PR. Opening the PR must
+retain that single pipeline, and GitHub's GitLab status must link to it. Push a
+subsequent commit with the PR open, then verify one new push pipeline for the new
+SHA, including the database, dependency-scan and functional jobs. Check the final
+GitHub status against that pipeline's result before merging.
+
 ## Coverage and assertions
 
 Jest requires at least 60% statements, branches, functions and lines in each
