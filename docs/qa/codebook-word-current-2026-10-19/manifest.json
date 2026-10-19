@@ -1,0 +1,69 @@
+{
+  "librarySource": "d79ca05365e6073bfd650e2dfa180c05d3ffc5b8",
+  "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+  "boxSource": "0e4c62c2668ee6be8db87d2f833e8a45b87b5fbd",
+  "studioSource": "4a9c42180fe7c09af0ec3b8b833e102ffac59882",
+  "synthetic": true,
+  "generator": "real installed Studio and Kodierbox adapters; persistence boundaries in memory",
+  "pinnedScriptSource": "d79ca05365e6073bfd650e2dfa180c05d3ffc5b8",
+  "packageVerification": "All 20 installed package files match the pinned tarball; no new independent library source build in this run",
+  "wordAcceptance": "pending fresh rendering; files are inputs, not proof of rendering",
+  "files": [
+    {
+      "file": "kodierbox-inline-mixed-code-no-scores.docx",
+      "sha256": "572709958d4aab2fb40d4289d24db5fc6613719cb0d37fe5f692154fe51b2418"
+    },
+    {
+      "file": "kodierbox-inline-mixed-code-scores.docx",
+      "sha256": "1b313b4cc872aec1782b65ff59dc86fea2a04f51ebb3c188dc471bb982ffc879"
+    },
+    {
+      "file": "kodierbox-inline-mixed-general-no-scores.docx",
+      "sha256": "c9c9bf7e79a6c51fbb89c059a080827508bc314423c485c9b91341b8a9b30d4f"
+    },
+    {
+      "file": "kodierbox-inline-mixed-general-scores.docx",
+      "sha256": "f28e5d5bfcb994b5833da2df71f8c49b11db726140e22487a9019df70f58efdb"
+    },
+    {
+      "file": "kodierbox-rich-no-scores.docx",
+      "sha256": "9420a1939785c19a586ac136509bc1e91cf09086e03a4c08218bf8ec7210fc6a"
+    },
+    {
+      "file": "kodierbox-rich-scores.docx",
+      "sha256": "773c7aa5b0c36e1b50c4da969e2485cd016c92166f09304dbd8019329d8e990e"
+    },
+    {
+      "file": "kodierbox.docx",
+      "sha256": "dafd0aa1b6dd230b7aae90df3c4fd0f8ef4e84828a0aad16e3f4558844380169"
+    },
+    {
+      "file": "studio-inline-mixed-code-no-scores.docx",
+      "sha256": "5d1abce8172d4fcb4f899d5566d6f4ee4bc8dd79ed8fd6d766349ea910889376"
+    },
+    {
+      "file": "studio-inline-mixed-code-scores.docx",
+      "sha256": "93a32743b00783cf87466cb708672a34e8a291dc9324028d2c7b008a48e5ba28"
+    },
+    {
+      "file": "studio-inline-mixed-general-no-scores.docx",
+      "sha256": "584191607bd4285030af2b35c35b03d7b2528417b994f7b128021ee6248bb970"
+    },
+    {
+      "file": "studio-inline-mixed-general-scores.docx",
+      "sha256": "679d3855332ccf7dfecbc999a2f3dfdd0ba0d68995ce7a705024faa5e578ca02"
+    },
+    {
+      "file": "studio-rich-no-scores.docx",
+      "sha256": "0b8629da6431cae8d16e638c81a05491d2ced132b37e780d9e77d7b8dc607d2f"
+    },
+    {
+      "file": "studio-rich-scores.docx",
+      "sha256": "28a1725f8c5857acef757cb82172d7a76ecdd84457fbe4ff855f76d39f3b0878"
+    },
+    {
+      "file": "studio.docx",
+      "sha256": "214280fed79f8360d6eb1d778aa6e299378e571bdd5a5a741e4da606920372f0"
+    }
+  ]
+}
