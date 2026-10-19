@@ -39,6 +39,7 @@ import {
   ExportJobStatusDto,
   ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
   ItemDatasetOptionsDto,
+  ItemMatrixDiagnosticsArchiveEntryDto,
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
 
@@ -470,6 +471,18 @@ export class ExportJobService implements OnDestroy {
     if (subscription.closed) {
       this.downloadSubscriptions.delete(jobId);
     }
+  }
+
+  listArchivedItemMatrixDiagnostics(workspaceId: number): Observable<ItemMatrixDiagnosticsArchiveEntryDto[]> {
+    return this.codingJobBackendService.listArchivedItemMatrixDiagnostics(workspaceId);
+  }
+
+  getArchivedItemMatrixDiagnostics(workspaceId: number, archiveId: string): Observable<ItemMatrixExportDiagnosticsDto> {
+    return this.codingJobBackendService.getArchivedItemMatrixDiagnostics(workspaceId, archiveId);
+  }
+
+  downloadArchivedItemMatrixDiagnostics(workspaceId: number, archiveId: string): Observable<Blob> {
+    return this.codingJobBackendService.downloadArchivedItemMatrixDiagnostics(workspaceId, archiveId);
   }
 
   getItemMatrixDiagnostics(

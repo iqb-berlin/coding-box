@@ -59,6 +59,7 @@ export interface DetailedCodingResultsExportOptions {
 }
 
 export interface ItemMatrixExportOptions {
+  onDiagnostic?: ItemMatrixExportConfiguration['onDiagnostic'];
   workspaceId: number;
   missingsProfileId: number;
   matrixValue?: ItemMatrixValue;
@@ -261,6 +262,7 @@ export class CodingExportOrchestratorService {
     options: ItemMatrixExportOptions
   ): ItemMatrixExportConfiguration {
     return {
+      onDiagnostic: options.onDiagnostic,
       missingsProfileId: options.missingsProfileId,
       notReachedScope: options.notReachedScope || 'unit',
       recodeTrailingOmissions: options.recodeTrailingOmissions || false,

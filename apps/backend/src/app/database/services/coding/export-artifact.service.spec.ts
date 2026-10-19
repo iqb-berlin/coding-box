@@ -21,9 +21,11 @@ describe('ExportArtifactService', () => {
         return Promise.resolve(true);
       })
     };
+    const workspaceRepository = { existsBy: jest.fn().mockResolvedValue(true) };
     return {
+      workspaceRepository,
       service: new ExportArtifactService(
-        cacheService as unknown as CacheService
+        cacheService as unknown as CacheService, workspaceRepository as never
       ),
       cacheService,
       values
@@ -42,6 +44,49 @@ describe('ExportArtifactService', () => {
     tempDirs.splice(0).forEach(tempDir => {
       fs.rmSync(tempDir, { recursive: true, force: true });
     });
+  });
+
+  it('removes a diagnosis published concurrently with workspace deletion', async () => {
+    const { service, workspaceRepository } = createService();
+    const root = createTempDir();
+    jest.spyOn(service.diagnosticsArchive, 'getRootDirectory').mockReturnValue(root);
+    const csv = path.join(root, 'source.csv');
+    fs.writeFileSync(csv, 'full cells');
+    const publish = service.diagnosticsArchive.publish.bind(service.diagnosticsArchive);
+    jest.spyOn(service.diagnosticsArchive, 'publish').mockImplementation(async (...args) => {
+      await service.diagnosticsArchive.removeWorkspace(7);
+      workspaceRepository.existsBy.mockResolvedValue(false);
+      // The worker recreates the directory after the deletion request finished.
+      return publish(...args);
+    });
+    await expect(service.publishItemMatrixDiagnostics(7, {
+      jobId: '214', createdAt: 1000, total: 1, version: 'v2', matrixValue: 'score', missingsProfileId: 4
+    }, { total: 1, sampleLimit: 20, groups: [] }, csv)).rejects.toThrow('deleted workspace');
+    expect(await service.diagnosticsArchive.list(7)).toEqual([]);
+    expect(workspaceRepository.existsBy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not publish after workspace deletion or retain an archive when the final read fails', async () => {
+    const { service, workspaceRepository } = createService();
+    const root = createTempDir();
+    jest.spyOn(service.diagnosticsArchive, 'getRootDirectory').mockReturnValue(root);
+    const csv = path.join(root, 'source.csv');
+    fs.writeFileSync(csv, 'full cells');
+    const entry = {
+      jobId: '214',
+      createdAt: 1000,
+      total: 1,
+      version: 'v2' as const,
+      matrixValue: 'score' as const,
+      missingsProfileId: 4
+    };
+    const diagnostics = { total: 1, sampleLimit: 20, groups: [] };
+    workspaceRepository.existsBy.mockResolvedValueOnce(false);
+    await expect(service.publishItemMatrixDiagnostics(7, entry, diagnostics, csv)).rejects.toThrow('deleted workspace');
+    expect(fs.existsSync(path.join(root, '7'))).toBe(false);
+    workspaceRepository.existsBy.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(service.publishItemMatrixDiagnostics(7, entry, diagnostics, csv)).rejects.toThrow('database unavailable');
+    expect(await service.diagnosticsArchive.list(7)).toEqual([]);
   });
 
   it('publishes, caches and resolves a completed export artifact', async () => {

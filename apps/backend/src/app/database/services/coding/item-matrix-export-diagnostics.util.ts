@@ -78,7 +78,9 @@ export const buildItemMatrixDiagnosticsCsv = (
     'spalte',
     'anzahl',
     'beispielzeilen',
-    'empfohlene_massnahme'
+    'empfohlene_massnahme',
+    'unit',
+    'variable'
   ]];
   diagnostics.groups.forEach(group => {
     const text = getItemMatrixDiagnosticText(group.reasonCode);
@@ -89,7 +91,9 @@ export const buildItemMatrixDiagnosticsCsv = (
       group.columnName,
       group.count,
       group.sampleRowNumbers.join(', '),
-      text.action
+      text.action,
+      group.unitId || '',
+      group.variableId || ''
     ]);
   });
   return `\uFEFF${rows
@@ -127,7 +131,8 @@ export const writeIncompleteItemMatrixPackage = async (
   zipPath: string,
   matrixPath: string,
   matrixFileName: string,
-  options: ItemMatrixIncompleteReadmeOptions
+  options: ItemMatrixIncompleteReadmeOptions,
+  diagnosticsPath?: string
 ): Promise<void> => {
   if (!fs.existsSync(matrixPath)) {
     throw new Error('Incomplete item matrix source file is missing');
@@ -142,9 +147,16 @@ export const writeIncompleteItemMatrixPackage = async (
   archive.once('warning', handleWarning);
   try {
     archive.file(matrixPath, { name: matrixFileName });
-    archive.append(buildItemMatrixDiagnosticsCsv(options.diagnostics), {
-      name: 'diagnose.csv'
-    });
+    if (diagnosticsPath) {
+      archive.file(diagnosticsPath, { name: 'diagnose.csv' });
+      archive.append(buildItemMatrixDiagnosticsCsv(options.diagnostics), {
+        name: 'diagnose-gruppiert.csv'
+      });
+    } else {
+      archive.append(buildItemMatrixDiagnosticsCsv(options.diagnostics), {
+        name: 'diagnose.csv'
+      });
+    }
     archive.append(buildItemMatrixIncompleteReadme(options), {
       name: 'README.txt'
     });

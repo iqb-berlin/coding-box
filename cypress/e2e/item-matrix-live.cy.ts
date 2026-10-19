@@ -24,9 +24,10 @@ describe('live incomplete item matrix export', () => {
       expect(acceptance.matrixValues).to.deep.equal(['score', 'code']);
       expect(acceptance.total).to.be.greaterThan(0);
       expect(acceptance.groupCount).to.be.greaterThan(0);
-      expect(acceptance.zipEntries).to.have.length(3);
+      expect(acceptance.zipEntries).to.have.length(4);
       expect(acceptance.zipEntries).to.include('README.txt');
       expect(acceptance.zipEntries).to.include('diagnose.csv');
+      expect(acceptance.zipEntries).to.include('diagnose-gruppiert.csv');
       expect(acceptance.fileName).to.match(
         /^Itemdatensatz-UNVOLLSTAENDIG-\d{4}-\d{2}-\d{2}\.zip$/
       );

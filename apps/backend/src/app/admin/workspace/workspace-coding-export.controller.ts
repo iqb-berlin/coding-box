@@ -36,6 +36,7 @@ import {
   ExportJobStatusResponseDto,
   ExportRequestValidationError,
   ItemDatasetOptionsDto,
+  ItemMatrixDiagnosticsArchiveEntryDto,
   ItemMatrixExportDiagnosticsDto,
   ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
   parseExportRequest
@@ -1496,6 +1497,55 @@ export class WorkspaceCodingExportController {
       );
       rethrowDownloadError(error, res);
     }
+  }
+
+  @Get(':workspace_id/coding/export/item-matrix-diagnostics')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({ description: 'Persisted item matrix diagnoses, independent of export jobs' })
+  async listArchivedItemMatrixDiagnostics(
+    @WorkspaceId() workspaceId: number
+  ): Promise<ItemMatrixDiagnosticsArchiveEntryDto[]> {
+    return this.exportArtifactService.diagnosticsArchive.list(workspaceId);
+  }
+
+  @Get(':workspace_id/coding/export/item-matrix-diagnostics/:archiveId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'archiveId', type: String })
+  @ApiOkResponse({ description: 'Persisted grouped item matrix diagnosis' })
+  async getArchivedItemMatrixDiagnostics(
+    @WorkspaceId() workspaceId: number,
+    @Param('archiveId') archiveId: string
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    const archived = await this.exportArtifactService.diagnosticsArchive.get(workspaceId, archiveId);
+    if (!archived) throw new NotFoundException('Item matrix diagnosis not found');
+    return archived.diagnostics;
+  }
+
+  @Get(':workspace_id/coding/export/item-matrix-diagnostics/:archiveId/download')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'archiveId', type: String })
+  @ApiOkResponse({
+    description: 'Complete cell diagnosis as CSV',
+    content: {
+      'text/csv': { schema: { type: 'string', format: 'binary' } }
+    }
+  })
+  async downloadArchivedItemMatrixDiagnostics(
+    @WorkspaceId() workspaceId: number,
+    @Param('archiveId') archiveId: string,
+    @Res() res: Response
+  ): Promise<void> {
+    const filePath = await this.exportArtifactService.diagnosticsArchive.getCsvPath(workspaceId, archiveId);
+    if (!filePath) throw new NotFoundException('Item matrix diagnosis not found');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Itemdatensatz-Diagnose-${archiveId}.csv"`);
+    await this.pipeExportStream(fs.createReadStream(filePath), res, 'Error streaming item matrix diagnosis');
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/item-matrix-diagnostics')

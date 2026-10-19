@@ -24,6 +24,7 @@ docker.env
 # compiled output
 /dist
 /tmp
+/temp/
 /cache/replay-player/
 /cypress/replay-artifacts/
 /cypress/downloads/
