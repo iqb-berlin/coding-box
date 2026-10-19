@@ -1,0 +1,1751 @@
+{
+  "date": "2026-10-19",
+  "baseCommit": "abb620e7703dd1909c6914929877de1b41f6186e",
+  "sourceCommit": "daa412fed555636d50998232e611b00e713ea769",
+  "librarySource": "d79ca05365e6073bfd650e2dfa180c05d3ffc5b8",
+  "packageVersion": "4.1.0-dev.d79ca05",
+  "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+  "unrelatedLockEntryChanges": 0,
+  "validation": {
+    "backendTests": {
+      "passed": 78,
+      "suites": 7,
+      "scope": "focused Codebook suites"
+    },
+    "frontendTests": {
+      "passed": 71,
+      "suites": 4,
+      "scope": "focused export/translation suites"
+    },
+    "backendProductionBuild": "passed",
+    "frontendProductionBuild": "passed",
+    "backendLint": "passed",
+    "frontendLint": "passed",
+    "installedHostComparison": {
+      "hostExportPairs": 4694,
+      "optionCombinations": 768,
+      "missingCases": 3,
+      "formats": 2,
+      "originalStudioWhitespaceCases": 20,
+      "inlineImageCases": 5,
+      "inlineImageExportPairs": 40,
+      "identicalJson": true,
+      "identicalAllDocxParts": true,
+      "artifactIntegrity": "sha512-s9YB4OonhswfdiuQCq0PtVkbrFaoQq4JB3VvYPE2K5t+C+rhNCybH3Ihu2meaKGEeGww1DTG5b+y41BlXCQyww==",
+      "identicalInstalledPackageFiles": true,
+      "installedPackageFiles": 20,
+      "responsesVersion": "5.3.1",
+      "responsesPeerRange": "^5.3.1",
+      "responsesSharedWithHost": true,
+      "currentVariableInfoValidated": true,
+      "storedChemistryFormatsRecognized": true,
+      "realHostAdapters": true,
+      "inMemoryRepositories": true,
+      "httpBrowserRedis": false,
+      "windowsWord": false
+    },
+    "live": {
+      "passed": true,
+      "authentication": {
+        "protocol": "OIDC",
+        "issuer": "http://127.0.0.1:18441/realms/codebook-proof",
+        "clientId": "codebook-proof",
+        "tokenSource": "dedicated local Keycloak realm"
+      },
+      "seeding": "synthetic direct SQL in dedicated Compose database",
+      "migrations": 163,
+      "backendArtifactSha256": "3b63dd377467d35d562649459398f30d685db998bb6a250b3cc6bab1555d4666",
+      "frontendArtifactSha256": "f72db2d79902b7a356bf8aa05cd5b43b3c45a629c99c86890706f36dae41c686",
+      "runnerSha256": "3a7374b2928ef0bcbb563ff1cac440d6d43763064e56696dd5aae042ee61278f",
+      "studio": {
+        "commit": "8e88d3476d1f36cebb7cac74297b20c3e5c4ed63",
+        "sourceSha256": "52db9d720b0af26f66b1a5deb4ab46fc5e4b7e18b1c07265d6516b0120dbbe75",
+        "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+        "persistence": "Studio repository/profile boundaries in memory; Kodierbox HTTP/DB/Redis live",
+        "scope": "Studio receives the explicitly expected variable subset and item identities; it has no Kodierbox job/bundle filter"
+      },
+      "exports": [
+        {
+          "filename": "all-instructions-score.json",
+          "sha256": "9ba79896fbfb6b80bbf8cf65a05c6a0e7cd2a5f5937cb8df5b2946f0fa180e9a",
+          "bytes": 492,
+          "expectedAliases": [
+            "idA",
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ],
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399901956,
+            "finishedOn": 1792399901987,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "1",
+              "fileName": "codebook_1_1792399901982.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_1_1792399901982.json",
+              "fileSize": 492,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399901983
+            }
+          }
+        },
+        {
+          "filename": "all-instructions-score.docx",
+          "sha256": "9b4ff1d2b3dbc84a0bfc7fbc34996b411820eddf220b6e0d7fb07b0d5b7de603",
+          "bytes": 8793,
+          "expectedAliases": [
+            "idA",
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ],
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399902108,
+            "finishedOn": 1792399902154,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "2",
+              "fileName": "codebook_2_1792399902152.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_2_1792399902152.docx",
+              "fileSize": 8793,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399902153
+            }
+          }
+        },
+        {
+          "filename": "all-plain.json",
+          "sha256": "e0e114362d4e628a1972a04825de33618b4187dab6b5cdf85cb48cb6446734c8",
+          "bytes": 432,
+          "expectedAliases": [
+            "idA",
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ],
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399902341,
+            "finishedOn": 1792399902376,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "3",
+              "fileName": "codebook_3_1792399902373.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_3_1792399902373.json",
+              "fileSize": 432,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399902374
+            }
+          }
+        },
+        {
+          "filename": "all-plain.docx",
+          "sha256": "5a848b00333ef04a201b3f88dbf561d4b777fa1920fe10dc687c4b2ff5518b7c",
+          "bytes": 8759,
+          "expectedAliases": [
+            "idA",
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ],
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399902523,
+            "finishedOn": 1792399902559,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "4",
+              "fileName": "codebook_4_1792399902551.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_4_1792399902551.docx",
+              "fileSize": 8759,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399902557
+            }
+          }
+        },
+        {
+          "filename": "job-instructions-score.json",
+          "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+          "bytes": 316,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399902708,
+            "finishedOn": 1792399902724,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "5",
+              "fileName": "codebook_5_1792399902723.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_5_1792399902723.json",
+              "fileSize": 316,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399902723
+            }
+          }
+        },
+        {
+          "filename": "job-instructions-score.docx",
+          "sha256": "3c7f63ab92c1e95b96f24c2de9f07b500c9381c9c28694523ec6c385084a7e69",
+          "bytes": 8734,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399902851,
+            "finishedOn": 1792399902886,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "6",
+              "fileName": "codebook_6_1792399902882.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_6_1792399902882.docx",
+              "fileSize": 8734,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399902883
+            }
+          }
+        },
+        {
+          "filename": "job-plain.json",
+          "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+          "bytes": 286,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903039,
+            "finishedOn": 1792399903061,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "7",
+              "fileName": "codebook_7_1792399903058.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_7_1792399903058.json",
+              "fileSize": 286,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399903059
+            }
+          }
+        },
+        {
+          "filename": "job-plain.docx",
+          "sha256": "bdcc8b9b2f7da5a32a3430ccc61660a1b36e95d21406274a57a0cd75ead719a6",
+          "bytes": 8709,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903189,
+            "finishedOn": 1792399903212,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": []
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "8",
+              "fileName": "codebook_8_1792399903207.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_8_1792399903207.docx",
+              "fileSize": 8709,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399903209
+            }
+          }
+        },
+        {
+          "filename": "bundle-instructions-score.json",
+          "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+          "bytes": 316,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903354,
+            "finishedOn": 1792399903366,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "9",
+              "fileName": "codebook_9_1792399903364.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_9_1792399903364.json",
+              "fileSize": 316,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399903365
+            }
+          }
+        },
+        {
+          "filename": "bundle-instructions-score.docx",
+          "sha256": "9a0d08771c2e71371f1b488c490984b9098928d7ffcb313c7b691a150551860f",
+          "bytes": 8734,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903488,
+            "finishedOn": 1792399903507,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "10",
+              "fileName": "codebook_10_1792399903505.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_10_1792399903505.docx",
+              "fileSize": 8734,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399903506
+            }
+          }
+        },
+        {
+          "filename": "bundle-plain.json",
+          "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+          "bytes": 286,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903637,
+            "finishedOn": 1792399903647,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "11",
+              "fileName": "codebook_11_1792399903645.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_11_1792399903645.json",
+              "fileSize": 286,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399903646
+            }
+          }
+        },
+        {
+          "filename": "bundle-plain.docx",
+          "sha256": "c17c927e7f2cc38beb188edf1a67e1298b5f568711c3e91d4c42a07f9c80439e",
+          "bytes": 8710,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903778,
+            "finishedOn": 1792399903794,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "12",
+              "fileName": "codebook_12_1792399903792.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_12_1792399903792.docx",
+              "fileSize": 8710,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399903793
+            }
+          }
+        },
+        {
+          "filename": "intersection-instructions-score.json",
+          "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+          "bytes": 316,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399903945,
+            "finishedOn": 1792399903955,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "13",
+              "fileName": "codebook_13_1792399903954.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_13_1792399903954.json",
+              "fileSize": 316,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399903954
+            }
+          }
+        },
+        {
+          "filename": "intersection-instructions-score.docx",
+          "sha256": "9df2b1df99487848d10d5183f8d3be4e8608014349ada65a6a4624fc613edbd0",
+          "bytes": 8734,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904084,
+            "finishedOn": 1792399904103,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "14",
+              "fileName": "codebook_14_1792399904101.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_14_1792399904101.docx",
+              "fileSize": 8734,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399904102
+            }
+          }
+        },
+        {
+          "filename": "intersection-plain.json",
+          "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+          "bytes": 286,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904229,
+            "finishedOn": 1792399904240,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "15",
+              "fileName": "codebook_15_1792399904238.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_15_1792399904238.json",
+              "fileSize": 286,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399904239
+            }
+          }
+        },
+        {
+          "filename": "intersection-plain.docx",
+          "sha256": "01f756a569182d45fca9d8e2d3c75f9402dc80ab88aa2eb784390894c95a09da",
+          "bytes": 8709,
+          "expectedAliases": [
+            "idB"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-A",
+              "LEGACY-A"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904384,
+            "finishedOn": 1792399904448,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 1,
+                "variableBundleIds": [
+                  1
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "16",
+              "fileName": "codebook_16_1792399904441.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_16_1792399904441.docx",
+              "fileSize": 8709,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399904444
+            }
+          }
+        },
+        {
+          "filename": "partial-intersection-instructions-score.json",
+          "sha256": "abc04778fd9ada34b668319936decf667d53eb21a3c6c414d2c1900f93c8ccb1",
+          "bytes": 332,
+          "expectedAliases": [
+            "C"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-C"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904540,
+            "finishedOn": 1792399904552,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 2,
+                "variableBundleIds": [
+                  3
+                ]
+              },
+              "unitIds": [
+                104102
+              ]
+            },
+            "result": {
+              "fileId": "17",
+              "fileName": "codebook_17_1792399904550.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_17_1792399904550.json",
+              "fileSize": 332,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399904551
+            }
+          }
+        },
+        {
+          "filename": "partial-intersection-instructions-score.docx",
+          "sha256": "ad7508123fc5aa253d6487caa3614a7a3ce85ae278a2d9ac77ca92dc19689de7",
+          "bytes": 8730,
+          "expectedAliases": [
+            "C"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-C"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904676,
+            "finishedOn": 1792399904698,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 2,
+                "variableBundleIds": [
+                  3
+                ]
+              },
+              "unitIds": [
+                104102
+              ]
+            },
+            "result": {
+              "fileId": "18",
+              "fileName": "codebook_18_1792399904697.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_18_1792399904697.docx",
+              "fileSize": 8730,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399904698
+            }
+          }
+        },
+        {
+          "filename": "partial-intersection-plain.json",
+          "sha256": "0de5784e51a06232ee0c7949a6d1042ec9e408f82876d6cc3611d60025a1b1ee",
+          "bytes": 300,
+          "expectedAliases": [
+            "C"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-C"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904822,
+            "finishedOn": 1792399904834,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 2,
+                "variableBundleIds": [
+                  3
+                ]
+              },
+              "unitIds": [
+                104102
+              ]
+            },
+            "result": {
+              "fileId": "19",
+              "fileName": "codebook_19_1792399904833.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_19_1792399904833.json",
+              "fileSize": 300,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399904833
+            }
+          }
+        },
+        {
+          "filename": "partial-intersection-plain.docx",
+          "sha256": "eaae9f771cb1a5e9b274f4778358b652ffd32400ca3955ed0245503b7f1e1bd1",
+          "bytes": 8705,
+          "expectedAliases": [
+            "C"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-C"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399904963,
+            "finishedOn": 1792399904988,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": 2,
+                "variableBundleIds": [
+                  3
+                ]
+              },
+              "unitIds": [
+                104102
+              ]
+            },
+            "result": {
+              "fileId": "20",
+              "fileName": "codebook_20_1792399904986.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_20_1792399904986.docx",
+              "fileSize": 8705,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399904987
+            }
+          }
+        },
+        {
+          "filename": "reverse-instructions-score.json",
+          "sha256": "03033fe0c4485c590699c96d00d5eeb912376e600f5cace0a6ae52ff1326f764",
+          "bytes": 316,
+          "expectedAliases": [
+            "idA"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399905118,
+            "finishedOn": 1792399905166,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  2
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "21",
+              "fileName": "codebook_21_1792399905155.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_21_1792399905155.json",
+              "fileSize": 316,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399905159
+            }
+          }
+        },
+        {
+          "filename": "reverse-instructions-score.docx",
+          "sha256": "cb5e3b2b6196630d48b4ecd9e255ca5f19f6c3f0390e484a3fe4014f5515a39a",
+          "bytes": 8734,
+          "expectedAliases": [
+            "idA"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399905284,
+            "finishedOn": 1792399905307,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": true,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": true,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  2
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "22",
+              "fileName": "codebook_22_1792399905306.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_22_1792399905306.docx",
+              "fileSize": 8734,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399905306
+            }
+          }
+        },
+        {
+          "filename": "reverse-plain.json",
+          "sha256": "643a689cb56fcd1b39d85b74ec2b56f204c69c475751b646668eece7b644a6de",
+          "bytes": 286,
+          "expectedAliases": [
+            "idA"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399905443,
+            "finishedOn": 1792399905455,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "json",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  2
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "23",
+              "fileName": "codebook_23_1792399905453.json",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_23_1792399905453.json",
+              "fileSize": 286,
+              "workspaceId": 1,
+              "exportFormat": "json",
+              "createdAt": 1792399905454
+            }
+          }
+        },
+        {
+          "filename": "reverse-plain.docx",
+          "sha256": "5d32f049600cddc81f2a39aa4dd537838886f2771880f783cdd8d7b5135a5c19",
+          "bytes": 8709,
+          "expectedAliases": [
+            "idA"
+          ],
+          "expectedItems": [
+            [
+              "ITEM-B",
+              "LEGACY-B"
+            ]
+          ],
+          "studioEqual": true,
+          "queue": {
+            "name": "codebook-generation",
+            "state": "completed",
+            "processedOn": 1792399905579,
+            "finishedOn": 1792399905598,
+            "attemptsMade": 0,
+            "data": {
+              "workspaceId": 1,
+              "missingsProfile": 2,
+              "contentOptions": {
+                "exportFormat": "docx",
+                "missingsProfile": "2",
+                "hasOnlyManualCoding": true,
+                "hasGeneralInstructions": false,
+                "hasDerivedVars": true,
+                "hasOnlyVarsWithCodes": true,
+                "hasClosedVars": false,
+                "codeLabelToUpper": false,
+                "showScore": false,
+                "hideItemVarRelation": false,
+                "trainingRequirement": "all",
+                "jobDefinitionId": null,
+                "variableBundleIds": [
+                  2
+                ]
+              },
+              "unitIds": [
+                104101
+              ]
+            },
+            "result": {
+              "fileId": "24",
+              "fileName": "codebook_24_1792399905593.docx",
+              "filePath": "/Users/user/dev/iqb/Kodierbox-codebook-review-fixes/temp/codebook_24_1792399905593.docx",
+              "fileSize": 8709,
+              "workspaceId": 1,
+              "exportFormat": "docx",
+              "createdAt": 1792399905594
+            }
+          }
+        }
+      ],
+      "autocoder": [
+        {
+          "name": "ceil",
+          "unit": 1,
+          "reference": [
+            {
+              "id": "A",
+              "value": "0.000000000000001",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": 1,
+              "status": "CODING_COMPLETE",
+              "subform": "part-a",
+              "code": 1,
+              "score": 1
+            },
+            {
+              "id": "T",
+              "value": 1,
+              "status": "CODING_COMPLETE",
+              "subform": "part-a",
+              "code": 1,
+              "score": 1
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "0.000000000000001",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "1",
+              "subform": "part-a",
+              "status_v1": 5,
+              "code_v1": "1",
+              "score_v1": "1",
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "1",
+              "subform": "part-a",
+              "status_v1": 5,
+              "code_v1": "1",
+              "score_v1": "1",
+              "is_autocoder_generated": true
+            }
+          ]
+        },
+        {
+          "name": "equality",
+          "unit": 2,
+          "reference": [
+            {
+              "id": "A",
+              "value": "0.000000000000001",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": 0,
+              "status": "CODING_COMPLETE",
+              "subform": "part-a",
+              "code": 0,
+              "score": 0
+            },
+            {
+              "id": "T",
+              "value": 0,
+              "status": "CODING_COMPLETE",
+              "subform": "part-a",
+              "code": 0,
+              "score": 0
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "0.000000000000001",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "0",
+              "subform": "part-a",
+              "status_v1": 5,
+              "code_v1": "0",
+              "score_v1": "0",
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "0",
+              "subform": "part-a",
+              "status_v1": 5,
+              "code_v1": "0",
+              "score_v1": "0",
+              "is_autocoder_generated": true
+            }
+          ]
+        },
+        {
+          "name": "null",
+          "unit": 3,
+          "reference": [
+            {
+              "id": "A",
+              "value": "1",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            },
+            {
+              "id": "T",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "1",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            }
+          ]
+        },
+        {
+          "name": "infinity",
+          "unit": 4,
+          "reference": [
+            {
+              "id": "A",
+              "value": "1",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            },
+            {
+              "id": "T",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "1",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            }
+          ]
+        },
+        {
+          "name": "config",
+          "unit": 5,
+          "reference": [
+            {
+              "id": "A",
+              "value": "1",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            },
+            {
+              "id": "T",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "1",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            }
+          ]
+        },
+        {
+          "name": "exponent-string",
+          "unit": 6,
+          "reference": [
+            {
+              "id": "A",
+              "value": "1e-15",
+              "status": "NO_CODING",
+              "subform": "part-a"
+            },
+            {
+              "id": "D",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            },
+            {
+              "id": "T",
+              "value": null,
+              "status": "DERIVE_ERROR",
+              "subform": "part-a"
+            }
+          ],
+          "persisted": [
+            {
+              "variableid": "A",
+              "value": "1e-15",
+              "subform": "part-a",
+              "status_v1": 6,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": false
+            },
+            {
+              "variableid": "D",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            },
+            {
+              "variableid": "T",
+              "value": "",
+              "subform": "part-a",
+              "status_v1": 4,
+              "code_v1": null,
+              "score_v1": null,
+              "is_autocoder_generated": true
+            }
+          ]
+        }
+      ],
+      "failedExport": {
+        "state": "failed",
+        "reason": "Die ausgew\u00e4hlten Schnellfilter enthalten keine passenden Variablen f\u00fcr die ausgew\u00e4hlten Einheiten."
+      },
+      "failedAutocoder": {
+        "state": "failed",
+        "reason": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (7): duplicate output alias \"A\"."
+      }
+    },
+    "browser": {
+      "host": "Kodierbox",
+      "productionBundle": true,
+      "authentication": "real OIDC password-grant access token from disposable Keycloak, supplied to browser storage; no browser PKCE-login assertion",
+      "actualHttpDatabaseRedisDownload": true,
+      "selectionRetainedAcrossSearch": true,
+      "allSharedControlsDisabledDuringExport": true,
+      "settingsReenabledAfterDownload": true,
+      "selectedScoreOptionApplied": true,
+      "javascriptErrors": [],
+      "requestDelay": "Job POST briefly paused then continued to real API and queue; no response stub",
+      "wordAcceptance": false
+    }
+  },
+  "boundaries": {
+    "fullHostUnitSuitesRerun": false,
+    "nativeInstallScriptsAndDockerImagesRerun": false,
+    "originalWordFileAndSchemerHtmlVersion": "unknown",
+    "newMicrosoftWordAcceptance": false,
+    "newBrowserPkceLoginAcceptance": false,
+    "remoteCi": "check new PR head separately",
+    "merged": false,
+    "registryRelease": false,
+    "deployed": false
+  }
+}
