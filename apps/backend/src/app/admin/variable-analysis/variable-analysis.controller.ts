@@ -78,8 +78,8 @@ export class VariableAnalysisController {
   })
   async createAnalysisJob(
     @WorkspaceId() workspaceId: number,
-      @Query('unitId') unitId?: number,
-      @Query('variableId') variableId?: string
+    @Query('unitId') unitId?: number,
+    @Query('variableId') variableId?: string
   ): Promise<VariableAnalysisJobDto> {
     return this.variableAnalysisService.createAnalysisJob(
       workspaceId,
@@ -148,7 +148,7 @@ export class VariableAnalysisController {
   })
   async getAnalysisJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<VariableAnalysisJobDto> {
     try {
       return await this.variableAnalysisService.getAnalysisJob(
@@ -204,8 +204,8 @@ export class VariableAnalysisController {
   })
   async getAnalysisResults(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('includeSchemaCodes') includeSchemaCodes?: string
+    @Param('job_id') jobId: string,
+    @Query('includeSchemaCodes') includeSchemaCodes?: string
   ): Promise<VariableAnalysisResultDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResults(
@@ -300,14 +300,14 @@ export class VariableAnalysisController {
   })
   async getAnalysisResultsPage(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('page') page?: string,
-      @Query('pageSize') pageSize?: string,
-      @Query('search') search?: string,
-      @Query('onlyEmpty') onlyEmpty?: string,
-      @Query('includeSchemaCodes') includeSchemaCodes?: string,
-      @Query('sortBy') sortBy?: string,
-      @Query('sortDirection') sortDirection?: string
+    @Param('job_id') jobId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('onlyEmpty') onlyEmpty?: string,
+    @Query('includeSchemaCodes') includeSchemaCodes?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDirection') sortDirection?: string
   ): Promise<VariableAnalysisResultPageDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResultsPage(
@@ -391,11 +391,11 @@ export class VariableAnalysisController {
   })
   async exportAnalysisResultsAsCsv(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('search') search: string | undefined,
-      @Query('onlyEmpty') onlyEmpty: string | undefined,
-      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
-      @Res() res: Response
+    @Param('job_id') jobId: string,
+    @Query('search') search: string | undefined,
+    @Query('onlyEmpty') onlyEmpty: string | undefined,
+    @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const csv = await this.variableAnalysisService.exportAnalysisResultsAsCsv(
@@ -484,11 +484,11 @@ export class VariableAnalysisController {
   })
   async exportAnalysisResultsAsXlsx(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('search') search: string | undefined,
-      @Query('onlyEmpty') onlyEmpty: string | undefined,
-      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
-      @Res() res: Response
+    @Param('job_id') jobId: string,
+    @Query('search') search: string | undefined,
+    @Query('onlyEmpty') onlyEmpty: string | undefined,
+    @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const xlsx =
@@ -548,7 +548,7 @@ export class VariableAnalysisController {
   })
   async deleteJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     const success = await this.variableAnalysisService.deleteJob(
       workspaceId,
@@ -608,7 +608,7 @@ export class VariableAnalysisController {
   })
   async cancelJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
     const success = await this.variableAnalysisService.cancelJob(
       workspaceId,

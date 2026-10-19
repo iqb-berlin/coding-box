@@ -500,11 +500,11 @@ describe('CodingItemMatrixExportService', () => {
           derived: unknown,
           config: ItemMatrixExportConfiguration
         ) => Promise<
-        Array<{
-          code: number | null;
-          score: number | null;
-          unresolved: boolean;
-        }>
+          Array<{
+            code: number | null;
+            score: number | null;
+            unresolved: boolean;
+          }>
         >;
       }
     ).resolveRowCells(
@@ -1512,12 +1512,12 @@ describe('CodingItemMatrixExportService', () => {
           derivedValue: unknown,
           configValue: ItemMatrixExportConfiguration
         ) => Promise<
-        Array<{
-          state: string;
-          code: number | null;
-          score: number | null;
-          unresolved: boolean;
-        }>
+          Array<{
+            state: string;
+            code: number | null;
+            score: number | null;
+            unresolved: boolean;
+          }>
         >;
       }
     ).resolveRowCells(
@@ -1584,12 +1584,12 @@ describe('CodingItemMatrixExportService', () => {
           derivedValue: unknown,
           configValue: ItemMatrixExportConfiguration
         ) => Promise<
-        Array<{
-          state: string;
-          code: number | null;
-          score: number | null;
-          unresolved: boolean;
-        }>
+          Array<{
+            state: string;
+            code: number | null;
+            score: number | null;
+            unresolved: boolean;
+          }>
         >;
       }
     ).resolveRowCells(
@@ -2585,12 +2585,12 @@ describe('CodingItemMatrixExportService', () => {
     const designs = await (
       service as never as {
         getBookletDesigns: (workspaceId: number) => Promise<
-        Map<
-        string,
-        {
-          units: Map<string, { order: number; testletKey: string }>;
-        }
-        >
+          Map<
+            string,
+            {
+              units: Map<string, { order: number; testletKey: string }>;
+            }
+          >
         >;
       }
     ).getBookletDesigns(7);
@@ -2636,7 +2636,7 @@ describe('CodingItemMatrixExportService', () => {
     const designs = await (
       service as never as {
         getBookletDesigns: (workspaceId: number) => Promise<
-        Map<string, { units: Map<string, unknown> }>
+          Map<string, { units: Map<string, unknown> }>
         >;
       }
     ).getBookletDesigns(7);

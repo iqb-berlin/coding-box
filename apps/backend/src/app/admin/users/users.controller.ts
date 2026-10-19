@@ -37,7 +37,7 @@ export class UsersController {
   @ApiTags('users access')
   async getUsersWithWorkspaceAccess(
     @Param('workspaceId', ParseIntPipe) workspaceId: number,
-      @Req() request: { user: { id: number } }
+    @Req() request: { user: { id: number } }
   ): Promise<WorkspaceUserInListDto[]> {
     // The frontend uses this read to resolve route permissions. An authenticated
     // nonmember gets no directory data and can still reach its access-denied UI.

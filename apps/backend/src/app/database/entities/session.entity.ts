@@ -8,27 +8,27 @@ import { Booklet } from './booklet.entity';
 @Entity('session')
 export class Session {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'text', nullable: true })
-    browser: string;
+  browser: string;
 
   @Column({ type: 'text', nullable: true })
-    os: string;
+  os: string;
 
   @Column({ type: 'text', nullable: true })
-    screen: string;
+  screen: string;
 
   @Column({ type: 'bigint', nullable: true })
-    ts: number;
+  ts: number;
 
   @Column({ type: 'bigint', nullable: true })
-    loadcompletems: number;
+  loadcompletems: number;
 
   @Index()
   @ManyToOne(() => Booklet, booklet => booklet.sessions, {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'bookletid' })
-    booklet: Booklet;
+  booklet: Booklet;
 }

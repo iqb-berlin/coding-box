@@ -143,8 +143,8 @@ export class WorkspaceTestFilesValidationService {
     )).sort();
 
     const ignoredTestletsByKey = new Map<
-    string,
-    { bookletId: string; testletId: string }
+      string,
+      { bookletId: string; testletId: string }
     >();
     (exclusions?.ignoredTestlets || []).forEach(testlet => {
       const bookletId = normalizeExclusionBookletId(testlet.bookletId);
@@ -413,8 +413,8 @@ export class WorkspaceTestFilesValidationService {
 
       let filteredTestTakers: FilteredTestTaker[] = [];
       const loginOccurrences = new Map<
-      string,
-      { testTaker: string; mode: string }[]
+        string,
+        { testTaker: string; mode: string }[]
       >();
       const modesNotToFilter = [
         'run-hot-return',
@@ -651,7 +651,7 @@ export class WorkspaceTestFilesValidationService {
     usedTestTakerFileIds: Set<string>,
     allResourceIds: string[]
   ): Promise<
-    Array<{ id: number; fileId: string; filename: string; fileType: string }>
+      Array<{ id: number; fileId: string; filename: string; fileType: string }>
     > {
     const usedTokens = new Set<string>();
 
@@ -830,8 +830,8 @@ export class WorkspaceTestFilesValidationService {
     exclusions: WorkspaceSettingsDto
   ): Promise<Map<string, { unitIds: string[]; testlets: TestletDto[] }>> {
     const bookletMap = new Map<
-    string,
-    { unitIds: string[]; testlets: TestletDto[] }
+      string,
+      { unitIds: string[]; testlets: TestletDto[] }
     >();
     const BATCH_SIZE = 100;
     let offset = 0;
@@ -1483,8 +1483,8 @@ export class WorkspaceTestFilesValidationService {
     resourceIdsArray: string[],
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
     codingSchemeResults: Map<
-    string,
-    SchemaValidationResult
+      string,
+      SchemaValidationResult
     >,
     exclusions: WorkspaceSettingsDto
   ): ValidationData | null {

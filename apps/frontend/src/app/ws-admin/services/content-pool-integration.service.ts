@@ -13,7 +13,7 @@ import {
   ContentPoolUploadFilesProgress,
   ContentPoolUploadFilesRequest,
   ContentPoolUploadFilesStartResponse
-} from '../models/content-pool.model';
+} from '../../shared/models/content-pool.model';
 
 @Injectable({
   providedIn: 'root'

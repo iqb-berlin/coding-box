@@ -12,7 +12,7 @@ import {
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
-import { ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
+import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { CoderService } from '../../services/coder.service';
 import {
   createReplayAuthTokenError,
@@ -27,16 +27,16 @@ import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-
 import type { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
 
 type VariableCoverageOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['variableCoverageOverview']>
+  ReturnType<CodingManagementManualComponent['variableCoverageOverview']>
 >;
 type CaseCoverageOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['caseCoverageOverview']>
+  ReturnType<CodingManagementManualComponent['caseCoverageOverview']>
 >;
 type CodingProgressOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['codingProgressOverview']>
+  ReturnType<CodingManagementManualComponent['codingProgressOverview']>
 >;
 type ManualAppliedResultsOverview = NonNullable<
-ReturnType<CodingManagementManualComponent['appliedResultsOverview']>
+  ReturnType<CodingManagementManualComponent['appliedResultsOverview']>
 >;
 
 const createManualCodeAvailabilityWarning = (

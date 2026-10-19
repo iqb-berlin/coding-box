@@ -45,7 +45,7 @@ export class WorkspaceContentPoolController {
     summary: 'Import all files from selected Content-Pool ACP into workspace test files'
   })
   async importAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
@@ -62,7 +62,7 @@ export class WorkspaceContentPoolController {
     summary: 'Start importing all files from selected Content-Pool ACP'
   })
   async startImportAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startAcpImportToWorkspace({
@@ -88,7 +88,7 @@ export class WorkspaceContentPoolController {
     summary: 'Start replacing selected ACP files with workspace files'
   })
   async startUploadFilesToAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @ValidatedBody('UploadFilesToAcpDto') body: RequestBody<'UploadFilesToAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({

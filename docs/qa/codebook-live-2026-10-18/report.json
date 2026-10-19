@@ -1,0 +1,2618 @@
+{
+  "createdAt": "2026-10-18T09:34:36.775Z",
+  "sourceCommit": "28ef6c470b42eb1391df0b9a65073866522c64a5",
+  "seeding": "synthetic direct SQL in dedicated Compose database",
+  "exports": [
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.json",
+      "sha256": "9ba79896fbfb6b80bbf8cf65a05c6a0e7cd2a5f5937cb8df5b2946f0fa180e9a",
+      "bytes": 492,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "112",
+      "history": [
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "112",
+            "fileName": "codebook_112_1792316077820.json",
+            "fileSize": 492,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316077821
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316077814,
+        "finishedOn": 1792316077822,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "112",
+          "fileName": "codebook_112_1792316077820.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_112_1792316077820.json",
+          "fileSize": 492,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316077821
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.docx",
+      "sha256": "a2d6da5df0ea07c8e67f17af8c9a3b8924704366a3903ad0b941f15674019b04",
+      "bytes": 8795,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "113",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "113",
+            "fileName": "codebook_113_1792316077869.docx",
+            "fileSize": 8795,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316077871
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316077850,
+        "finishedOn": 1792316077874,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "113",
+          "fileName": "codebook_113_1792316077869.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_113_1792316077869.docx",
+          "fileSize": 8795,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316077871
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.json",
+      "sha256": "e0e114362d4e628a1972a04825de33618b4187dab6b5cdf85cb48cb6446734c8",
+      "bytes": 432,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "114",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 80
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "114",
+            "fileName": "codebook_114_1792316078042.json",
+            "fileSize": 432,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316078043
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078037,
+        "finishedOn": 1792316078044,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "114",
+          "fileName": "codebook_114_1792316078042.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_114_1792316078042.json",
+          "fileSize": 432,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316078043
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.docx",
+      "sha256": "f3768d267d3654f034b53d244eecffb93a549b1d1093082f5ece365922d62ca9",
+      "bytes": 8759,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "115",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "115",
+            "fileName": "codebook_115_1792316078184.docx",
+            "fileSize": 8759,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316078185
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078170,
+        "finishedOn": 1792316078186,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "115",
+          "fileName": "codebook_115_1792316078184.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_115_1792316078184.docx",
+          "fileSize": 8759,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316078185
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8
+      },
+      "id": "116",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "116",
+            "fileName": "codebook_116_1792316078334.json",
+            "fileSize": 316,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316078335
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078327,
+        "finishedOn": 1792316078336,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "116",
+          "fileName": "codebook_116_1792316078334.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_116_1792316078334.json",
+          "fileSize": 316,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316078335
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.docx",
+      "sha256": "3c152a410e31b631bf04ca7822775a986f5e6cff59b931a847feeda416ce0a5f",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8
+      },
+      "id": "117",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "117",
+            "fileName": "codebook_117_1792316078481.docx",
+            "fileSize": 8734,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316078483
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078464,
+        "finishedOn": 1792316078485,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "117",
+          "fileName": "codebook_117_1792316078481.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_117_1792316078481.docx",
+          "fileSize": 8734,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316078483
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8
+      },
+      "id": "118",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "118",
+            "fileName": "codebook_118_1792316078627.json",
+            "fileSize": 286,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316078629
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078617,
+        "finishedOn": 1792316078630,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "118",
+          "fileName": "codebook_118_1792316078627.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_118_1792316078627.json",
+          "fileSize": 286,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316078629
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.docx",
+      "sha256": "6a5374a27226fcbd1588362a2ee2a797b863410995a87097e2be127bc4a93703",
+      "bytes": 8710,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8
+      },
+      "id": "119",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "119",
+            "fileName": "codebook_119_1792316078757.docx",
+            "fileSize": 8710,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316078763
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078745,
+        "finishedOn": 1792316078765,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "119",
+          "fileName": "codebook_119_1792316078757.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_119_1792316078757.docx",
+          "fileSize": 8710,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316078763
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "120",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "120",
+            "fileName": "codebook_120_1792316078907.json",
+            "fileSize": 316,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316078908
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316078897,
+        "finishedOn": 1792316078908,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "120",
+          "fileName": "codebook_120_1792316078907.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_120_1792316078907.json",
+          "fileSize": 316,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316078908
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.docx",
+      "sha256": "8e8826c92e21aa1367b12c1000d6c61803611c3a59d751b6f3eebc7c1fcf73d9",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "121",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "121",
+            "fileName": "codebook_121_1792316079049.docx",
+            "fileSize": 8734,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316079051
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079032,
+        "finishedOn": 1792316079052,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "121",
+          "fileName": "codebook_121_1792316079049.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_121_1792316079049.docx",
+          "fileSize": 8734,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316079051
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "122",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "122",
+            "fileName": "codebook_122_1792316079216.json",
+            "fileSize": 286,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316079222
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079191,
+        "finishedOn": 1792316079238,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "122",
+          "fileName": "codebook_122_1792316079216.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_122_1792316079216.json",
+          "fileSize": 286,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316079222
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.docx",
+      "sha256": "9ea3d159a2ad3cd2db1c813b431fa329a167b4a3f83fc73f08976bc838ae3dfe",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "123",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "123",
+            "fileName": "codebook_123_1792316079357.docx",
+            "fileSize": 8709,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316079357
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079343,
+        "finishedOn": 1792316079359,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "123",
+          "fileName": "codebook_123_1792316079357.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_123_1792316079357.docx",
+          "fileSize": 8709,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316079357
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8,
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "124",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "124",
+            "fileName": "codebook_124_1792316079494.json",
+            "fileSize": 316,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316079495
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079486,
+        "finishedOn": 1792316079496,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "124",
+          "fileName": "codebook_124_1792316079494.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_124_1792316079494.json",
+          "fileSize": 316,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316079495
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.docx",
+      "sha256": "e3d9681d3bf7f44723c9e6bd07b4e9a82384e74e2bcdd2e93ffcb0b71c5498ca",
+      "bytes": 8735,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8,
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "125",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "125",
+            "fileName": "codebook_125_1792316079663.docx",
+            "fileSize": 8735,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316079664
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079638,
+        "finishedOn": 1792316079665,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "125",
+          "fileName": "codebook_125_1792316079663.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_125_1792316079663.docx",
+          "fileSize": 8735,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316079664
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8,
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "126",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "126",
+            "fileName": "codebook_126_1792316079815.json",
+            "fileSize": 286,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316079816
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079804,
+        "finishedOn": 1792316079817,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "126",
+          "fileName": "codebook_126_1792316079815.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_126_1792316079815.json",
+          "fileSize": 286,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316079816
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.docx",
+      "sha256": "f9d6de569472de938be0d4dfcde2539d2ac91f53c1c9a35c5b55fddcee865ccd",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 8,
+        "variableBundleIds": [
+          13
+        ]
+      },
+      "id": "127",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "127",
+            "fileName": "codebook_127_1792316079963.docx",
+            "fileSize": 8709,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316079964
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316079944,
+        "finishedOn": 1792316079965,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 8,
+            "variableBundleIds": [
+              13
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "127",
+          "fileName": "codebook_127_1792316079963.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_127_1792316079963.docx",
+          "fileSize": 8709,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316079964
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.json",
+      "sha256": "abc04778fd9ada34b668319936decf667d53eb21a3c6c414d2c1900f93c8ccb1",
+      "bytes": 332,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 9,
+        "variableBundleIds": [
+          15
+        ]
+      },
+      "id": "128",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "128",
+            "fileName": "codebook_128_1792316080125.json",
+            "fileSize": 332,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316080126
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080113,
+        "finishedOn": 1792316080127,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 9,
+            "variableBundleIds": [
+              15
+            ]
+          },
+          "unitIds": [
+            104159
+          ]
+        },
+        "result": {
+          "fileId": "128",
+          "fileName": "codebook_128_1792316080125.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_128_1792316080125.json",
+          "fileSize": 332,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316080126
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.docx",
+      "sha256": "b50fb3182ddc836dacfc6f6d2da6b0f3b41f2c2f0d11fdec4c2101631e83af0e",
+      "bytes": 8730,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 9,
+        "variableBundleIds": [
+          15
+        ]
+      },
+      "id": "129",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "129",
+            "fileName": "codebook_129_1792316080311.docx",
+            "fileSize": 8730,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316080312
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080292,
+        "finishedOn": 1792316080314,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 9,
+            "variableBundleIds": [
+              15
+            ]
+          },
+          "unitIds": [
+            104159
+          ]
+        },
+        "result": {
+          "fileId": "129",
+          "fileName": "codebook_129_1792316080311.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_129_1792316080311.docx",
+          "fileSize": 8730,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316080312
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.json",
+      "sha256": "0de5784e51a06232ee0c7949a6d1042ec9e408f82876d6cc3611d60025a1b1ee",
+      "bytes": 300,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 9,
+        "variableBundleIds": [
+          15
+        ]
+      },
+      "id": "130",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "130",
+            "fileName": "codebook_130_1792316080459.json",
+            "fileSize": 300,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316080461
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080449,
+        "finishedOn": 1792316080462,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 9,
+            "variableBundleIds": [
+              15
+            ]
+          },
+          "unitIds": [
+            104159
+          ]
+        },
+        "result": {
+          "fileId": "130",
+          "fileName": "codebook_130_1792316080459.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_130_1792316080459.json",
+          "fileSize": 300,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316080461
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.docx",
+      "sha256": "45f06c678c1386c9f824b7d2b6db38adda78920dfb5216df2f3b1c3dfde549e2",
+      "bytes": 8704,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 9,
+        "variableBundleIds": [
+          15
+        ]
+      },
+      "id": "131",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "131",
+            "fileName": "codebook_131_1792316080603.docx",
+            "fileSize": 8704,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316080604
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080586,
+        "finishedOn": 1792316080606,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 9,
+            "variableBundleIds": [
+              15
+            ]
+          },
+          "unitIds": [
+            104159
+          ]
+        },
+        "result": {
+          "fileId": "131",
+          "fileName": "codebook_131_1792316080603.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_131_1792316080603.docx",
+          "fileSize": 8704,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316080604
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.json",
+      "sha256": "03033fe0c4485c590699c96d00d5eeb912376e600f5cace0a6ae52ff1326f764",
+      "bytes": 316,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          14
+        ]
+      },
+      "id": "132",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "132",
+            "fileName": "codebook_132_1792316080744.json",
+            "fileSize": 316,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316080745
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080736,
+        "finishedOn": 1792316080746,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              14
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "132",
+          "fileName": "codebook_132_1792316080744.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_132_1792316080744.json",
+          "fileSize": 316,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316080745
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.docx",
+      "sha256": "84c08770a9902823e54f02c042d59d7a962846ef3eab62185e39ba9e1195ffb2",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          14
+        ]
+      },
+      "id": "133",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "133",
+            "fileName": "codebook_133_1792316080901.docx",
+            "fileSize": 8734,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316080903
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316080882,
+        "finishedOn": 1792316080904,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              14
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "133",
+          "fileName": "codebook_133_1792316080901.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_133_1792316080901.docx",
+          "fileSize": 8734,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316080903
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.json",
+      "sha256": "643a689cb56fcd1b39d85b74ec2b56f204c69c475751b646668eece7b644a6de",
+      "bytes": 286,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          14
+        ]
+      },
+      "id": "134",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "134",
+            "fileName": "codebook_134_1792316081056.json",
+            "fileSize": 286,
+            "workspaceId": 6,
+            "exportFormat": "json",
+            "createdAt": 1792316081057
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316081049,
+        "finishedOn": 1792316081059,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              14
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "134",
+          "fileName": "codebook_134_1792316081056.json",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_134_1792316081056.json",
+          "fileSize": 286,
+          "workspaceId": 6,
+          "exportFormat": "json",
+          "createdAt": 1792316081057
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.docx",
+      "sha256": "522802f193aaa104e560ff3221b25e0d1573eaecb2203df81e98cd1fd8d263c4",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "7",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          14
+        ]
+      },
+      "id": "135",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "135",
+            "fileName": "codebook_135_1792316081218.docx",
+            "fileSize": 8709,
+            "workspaceId": 6,
+            "exportFormat": "docx",
+            "createdAt": 1792316081219
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792316081197,
+        "finishedOn": 1792316081221,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 6,
+          "missingsProfile": 7,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "7",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              14
+            ]
+          },
+          "unitIds": [
+            104158
+          ]
+        },
+        "result": {
+          "fileId": "135",
+          "fileName": "codebook_135_1792316081218.docx",
+          "filePath": "/Users/user/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/temp/codebook_135_1792316081218.docx",
+          "fileSize": 8709,
+          "workspaceId": 6,
+          "exportFormat": "docx",
+          "createdAt": 1792316081219
+        }
+      }
+    }
+  ],
+  "autocoder": [
+    {
+      "name": "ceil",
+      "unit": 26,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        },
+        {
+          "id": "T",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "equality",
+      "unit": 27,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        },
+        {
+          "id": "T",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "null",
+      "unit": 28,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "infinity",
+      "unit": 29,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "unit": 30,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "exponent-string",
+      "unit": 31,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1e-15",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1e-15",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    }
+  ],
+  "migrations": 163,
+  "backendArtifactSha256": "4d7aed7e7ec0e5dc83d0b65717892f9c720249ede2509dd0dbc929bebc724fdb",
+  "frontendArtifactSha256": "162f6845d925996e63ab6ed1c3ab6163082662c1e0d7e47a0847820be7f5e771",
+  "runnerSha256": "6e445bc3310fc14fea5ff59c019b4b06dc4fd0b14a90deec1517d4e81df5533f",
+  "packageSha256": "e67c04e07762350cb4ee3b1a70a36bcde0f2ba1c24df1f5a40000346d34fd112",
+  "studio": {
+    "commit": "86ff5d9d8f2d61d63258e15024f04beb3ef69b50",
+    "sourceSha256": "52db9d720b0af26f66b1a5deb4ab46fc5e4b7e18b1c07265d6516b0120dbbe75",
+    "packageSha256": "e67c04e07762350cb4ee3b1a70a36bcde0f2ba1c24df1f5a40000346d34fd112",
+    "persistence": "Studio repository/profile boundaries in memory; Kodierbox HTTP/DB/Redis live",
+    "scope": "Studio receives the explicitly expected variable subset and item identities; it has no Kodierbox job/bundle filter"
+  },
+  "workspaceId": 6,
+  "failedExport": {
+    "id": "136",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 10
+      },
+      {
+        "status": "failed",
+        "progress": 10,
+        "error": "Die ausgewählten Schnellfilter enthalten keine passenden Variablen für die ausgewählten Einheiten."
+      }
+    ],
+    "queue": {
+      "name": "codebook-generation",
+      "state": "failed",
+      "processedOn": 1792316081364,
+      "finishedOn": 1792316081378,
+      "attemptsMade": 1,
+      "failedReason": "Die ausgewählten Schnellfilter enthalten keine passenden Variablen für die ausgewählten Einheiten.",
+      "data": {
+        "workspaceId": 6,
+        "missingsProfile": 7,
+        "contentOptions": {
+          "exportFormat": "json",
+          "missingsProfile": "7",
+          "hasOnlyManualCoding": true,
+          "hasGeneralInstructions": true,
+          "hasDerivedVars": true,
+          "hasOnlyVarsWithCodes": true,
+          "hasClosedVars": false,
+          "codeLabelToUpper": false,
+          "showScore": true,
+          "hideItemVarRelation": false,
+          "trainingRequirement": "all",
+          "jobDefinitionId": 8,
+          "variableBundleIds": [
+            14
+          ]
+        },
+        "unitIds": [
+          104158
+        ]
+      },
+      "result": null
+    }
+  },
+  "autocoderJob": {
+    "id": "7",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "processing",
+        "progress": 100
+      },
+      {
+        "status": "completed",
+        "progress": 100,
+        "result": {
+          "totalResponses": 6,
+          "statusCounts": {
+            "NO_CODING": 6,
+            "CODING_COMPLETE": 4,
+            "DERIVE_ERROR": 8
+          }
+        }
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "completed",
+      "processedOn": 1792316081610,
+      "finishedOn": 1792316081722,
+      "attemptsMade": 0,
+      "data": {
+        "workspaceId": 6,
+        "personIds": [
+          "6"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": {
+        "totalResponses": 6,
+        "statusCounts": {
+          "NO_CODING": 6,
+          "CODING_COMPLETE": 4,
+          "DERIVE_ERROR": 8
+        }
+      }
+    }
+  },
+  "failedAutocoder": {
+    "id": "8",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "failed",
+        "progress": 81,
+        "error": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (32): duplicate output alias \"A\"."
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "failed",
+      "processedOn": 1792316081880,
+      "finishedOn": 1792316081941,
+      "attemptsMade": 1,
+      "failedReason": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (32): duplicate output alias \"A\".",
+      "data": {
+        "workspaceId": 6,
+        "personIds": [
+          "7"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": null
+    },
+    "persistenceUnchanged": true
+  },
+  "passed": true
+}

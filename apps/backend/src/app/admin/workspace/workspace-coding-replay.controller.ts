@@ -101,8 +101,8 @@ export class WorkspaceCodingReplayController {
   })
   async getReplayUrl(
     @WorkspaceId() workspace_id: number,
-      @Param('responseId') responseId: number,
-      @Req() req: Request
+    @Param('responseId') responseId: number,
+    @Req() req: Request
   ): Promise<{ replayUrl: string }> {
     // Use x-forwarded-proto header if present (set by reverse proxy) to ensure
     // HTTPS URLs are generated when the app is behind a proxy, preventing mixed content errors
@@ -140,9 +140,9 @@ export class WorkspaceCodingReplayController {
   })
   async getReplayPayload(
     @WorkspaceId() workspaceId: number,
-      @Param('testPerson') testPerson: string,
-      @Param('unitId') unitId: string,
-      @Res({ passthrough: true }) res: Response
+    @Param('testPerson') testPerson: string,
+    @Param('unitId') unitId: string,
+    @Res({ passthrough: true }) res: Response
   ): Promise<ReplayPayload> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};
@@ -200,8 +200,8 @@ export class WorkspaceCodingReplayController {
   })
   async getReplayAssets(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: string,
-      @Res({ passthrough: true }) res: Response
+    @Param('unitId') unitId: string,
+    @Res({ passthrough: true }) res: Response
   ): Promise<ReplayAssetsPayload> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};
@@ -252,9 +252,9 @@ export class WorkspaceCodingReplayController {
   })
   async getReplayResponse(
     @WorkspaceId() workspaceId: number,
-      @Param('testPerson') testPerson: string,
-      @Param('unitId') unitId: string,
-      @Res({ passthrough: true }) res: Response
+    @Param('testPerson') testPerson: string,
+    @Param('unitId') unitId: string,
+    @Res({ passthrough: true }) res: Response
   ): Promise<ReplayResponsePayload> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};

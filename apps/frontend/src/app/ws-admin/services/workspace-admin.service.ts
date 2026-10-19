@@ -1,19 +1,7 @@
 import { Injectable } from '@angular/core';
+import { WorkspaceAdmin, Testcenter } from '../../shared/models/test-center-authentication.model';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 
-export type WorkspaceAdmin = {
-  label: string,
-  id: string,
-  type: string,
-  flags: {
-    mode: string
-  }
-};
-
-export type Testcenter = {
-  id:number,
-  label:string
-};
 @Injectable({
   providedIn: 'root'
 })

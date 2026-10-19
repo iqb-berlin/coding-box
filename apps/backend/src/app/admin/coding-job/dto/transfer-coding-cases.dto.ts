@@ -8,7 +8,7 @@ export class TransferCodingCasesDto {
   })
   @IsInt()
   @Min(1)
-    sourceCoderId: number;
+  sourceCoderId: number;
 
   @ApiProperty({
     description: 'Target coder user ID',
@@ -16,5 +16,5 @@ export class TransferCodingCasesDto {
   })
   @IsInt()
   @Min(1)
-    targetCoderId: number;
+  targetCoderId: number;
 }

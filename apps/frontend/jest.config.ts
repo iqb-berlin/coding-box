@@ -20,7 +20,7 @@ export default {
       }
     ]
   },
-  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver)'],
+  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@angular/common/locales/|@iqb/metadata-resolver)'],
   snapshotSerializers: [
     'jest-preset-angular/build/serializers/no-ng-attributes',
     'jest-preset-angular/build/serializers/ng-snapshot',

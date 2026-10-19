@@ -1,0 +1,125 @@
+
+> nx run backend:test --runInBand --testPathPatterns=codebook-generation.integration.spec.ts
+
+(node:84433) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+[Nest] 84433  - 10/18/2026, 11:28:29 AM     LOG [CodebookGenerationService] Generating codebook for workspace 42 with 1 units
+ FAIL   backend  apps/backend/src/app/database/services/coding/codebook-generation.integration.spec.ts (5.462 s)
+  CodebookGenerationService with the real shared generator
+    ✓ keeps original item identities through the job scope (59 ms)
+    ✓ keeps original item identities through the bundle scope (18 ms)
+    ✓ keeps original item identities through the job/bundle intersection scope (15 ms)
+    ✓ keeps original item identities through the reverse alias collision scope (16 ms)
+    ✓ keeps original item identities through the legacy zero column scope (16 ms)
+    ✓ keeps original item identities through the legacy false column scope (13 ms)
+    ✕ rejects disjoint filters with colliding aliases in json (2 ms)
+    ✕ rejects disjoint filters with colliding aliases in docx (16 ms)
+    ✕ exports only the true intersection with colliding aliases in json (4 ms)
+    ✕ exports only the true intersection with colliding aliases in docx (17 ms)
+    ✓ retains both original item relations without a variable scope (18 ms)
+    ✓ does not carry a previous export scope into later exports of the same source record (36 ms)
+  ● CodebookGenerationService with the real shared generator › rejects disjoint filters with colliding aliases in json
+    expect(received).rejects.toThrow()
+    Received promise resolved instead of rejected
+    Resolved to value: {"data": [91, 123, 34, 107, 101, 121, 34, 58, 34, 85, …], "type": "Buffer"}
+      158 |   it.each(['json', 'docx'] as const)('rejects disjoint filters with colliding aliases in %s', async exportFormat => {
+      159 |     bundles.find.mockResolvedValue([{ id: 20, variables: [{ unitName: 'UNIT', variableId: 'idA' }] }]);
+    > 160 |     await expect(service.generateCodebook(42, 0, {
+          |           ^
+      161 |       ...contentOptions, exportFormat, jobDefinitionId: 10, variableBundleIds: [20]
+      162 |     }, [1])).rejects.toThrow('keine passenden Variablen');
+      163 |   });
+      at expect (../../node_modules/expect/build/index.js:2116:15)
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:160:11
+      at ../../node_modules/tslib/tslib.js:170:75
+      at Object.__awaiter (../../node_modules/tslib/tslib.js:166:16)
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:158:116
+  ● CodebookGenerationService with the real shared generator › rejects disjoint filters with colliding aliases in docx
+    expect(received).rejects.toThrow()
+    Received promise resolved instead of rejected
+    Resolved to value: {"data": [80, 75, 3, 4, 10, 0, 0, 0, 0, 0, …], "type": "Buffer"}
+      158 |   it.each(['json', 'docx'] as const)('rejects disjoint filters with colliding aliases in %s', async exportFormat => {
+      159 |     bundles.find.mockResolvedValue([{ id: 20, variables: [{ unitName: 'UNIT', variableId: 'idA' }] }]);
+    > 160 |     await expect(service.generateCodebook(42, 0, {
+          |           ^
+      161 |       ...contentOptions, exportFormat, jobDefinitionId: 10, variableBundleIds: [20]
+      162 |     }, [1])).rejects.toThrow('keine passenden Variablen');
+      163 |   });
+      at expect (../../node_modules/expect/build/index.js:2116:15)
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:160:11
+      at ../../node_modules/tslib/tslib.js:170:75
+      at Object.__awaiter (../../node_modules/tslib/tslib.js:166:16)
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:158:116
+  ● CodebookGenerationService with the real shared generator › exports only the true intersection with colliding aliases in json
+    expect(received).toEqual(expected) // deep equality
+    - Expected  - 0
+    + Received  + 1
+      Array [
+        "C",
+    +   "idB",
+      ]
+      181 |     expect(result).not.toBeNull();
+      182 |     if (exportFormat === 'json') {
+    > 183 |       expect(JSON.parse(result!.toString())[0].variables.map(variable => variable.id)).toEqual(['C']);
+          |                                                                                        ^
+      184 |     } else {
+      185 |       expect(itemRelations(result!)).toEqual([['ITEM-C']]);
+      186 |     }
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:183:88
+      at fulfilled (../../node_modules/tslib/tslib.js:167:62)
+  ● CodebookGenerationService with the real shared generator › exports only the true intersection with colliding aliases in docx
+    expect(received).toEqual(expected) // deep equality
+    - Expected  - 0
+    + Received  + 3
+      Array [
+        Array [
+          "ITEM-C",
+        ],
+    +   Array [
+    +     "ITEM-A",
+    +   ],
+      ]
+      183 |       expect(JSON.parse(result!.toString())[0].variables.map(variable => variable.id)).toEqual(['C']);
+      184 |     } else {
+    > 185 |       expect(itemRelations(result!)).toEqual([['ITEM-C']]);
+          |                                      ^
+      186 |     }
+      187 |   });
+      188 |
+      at src/app/database/services/coding/codebook-generation.integration.spec.ts:185:38
+      at fulfilled (../../node_modules/tslib/tslib.js:167:62)
+Test Suites: 1 failed, 1 total
+Tests:       4 failed, 8 passed, 12 total
+Snapshots:   0 total
+Time:        5.715 s
+Ran all test suites matching codebook-generation.integration.spec.ts.
+
+
+
+ NX   Running target test for project backend failed
+
+Failed tasks:
+
+- backend:test
+
+Hint: run the command with --verbose for more details.
+

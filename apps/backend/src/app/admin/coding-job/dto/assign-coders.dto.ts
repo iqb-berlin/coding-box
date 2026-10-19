@@ -12,5 +12,5 @@ export class AssignCodersDto {
   })
   @IsArray()
   @IsNumber({}, { each: true })
-    userIds: number[];
+  userIds: number[];
 }

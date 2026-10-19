@@ -13,20 +13,20 @@ import User from './user.entity';
 @Entity({ name: 'coder_training_coder' })
 export class CoderTrainingCoder {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
   @Index()
-    coder_training_id: number;
+  coder_training_id: number;
 
   @Column()
-    user_id: number;
+  user_id: number;
 
   @ManyToOne(() => CoderTraining, training => training.coders, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-    training: CoderTraining;
+  training: CoderTraining;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
-    user: User;
+  user: User;
 }

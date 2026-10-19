@@ -138,8 +138,8 @@ export class WorkspaceCodingCodebookController {
   })
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
-      @Body() body: CodebookRequestBody,
-      @Res() res: Response
+    @Body() body: CodebookRequestBody,
+    @Res() res: Response
   ): Promise<void> {
     const { missingsProfile, contentOptions, unitList } =
       this.normalizeCodebookRequest(body);
@@ -226,7 +226,7 @@ export class WorkspaceCodingCodebookController {
   })
   async startCodebookJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: CodebookRequestBody
+    @Body() body: CodebookRequestBody
   ): Promise<{ jobId: string; message: string }> {
     const { missingsProfile, contentOptions, unitList } =
       this.normalizeCodebookRequest(body);
@@ -275,7 +275,7 @@ export class WorkspaceCodingCodebookController {
   })
   async getCodebookJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<CodebookJobStatusResponse> {
     try {
       const job = await this.jobQueueService.getCodebookGenerationJob(jobId);
@@ -353,8 +353,8 @@ export class WorkspaceCodingCodebookController {
   })
   async downloadCodebook(
     @Param('jobId') jobId: string,
-      @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+    @WorkspaceId() workspace_id: number,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const metadata = await this.cacheService.get<CodebookJobResult>(

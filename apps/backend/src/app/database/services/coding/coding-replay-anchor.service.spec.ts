@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
@@ -127,5 +128,29 @@ describe('CodingReplayAnchorService', () => {
     await expect(
       codingListInstance.resolveVariableAnchor(7, 'UNIT', 'VAR')
     ).resolves.toBe('TEXT/Anchor 1');
+  });
+  it.each(['unitName', 'variableId', 'replayAnchor'])('rejects a blank %s before persistence', async key => {
+    for (const value of ['', '   ', '\t\n']) {
+      const repository = createRepository();
+      const service = new CodingReplayAnchorService(repository);
+      await expect(service.upsertOverride(7, {
+        unitName: 'UNIT', variableId: 'VAR', replayAnchor: 'ANCHOR', [key]: value
+      })).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.findOne).not.toHaveBeenCalled();
+      expect(repository.save).not.toHaveBeenCalled();
+    }
+  });
+
+  it('ignores invalid historical entries and preserves normalized valid ones', async () => {
+    const repository = createRepository({
+      key: 'workspace-7-replay-anchor-overrides',
+      content: JSON.stringify([
+        { unitName: '  ', variableId: 'VAR', replayAnchor: 'ANCHOR' },
+        { unitName: ' UNIT ', variableId: ' VAR ', replayAnchor: ' ANCHOR ' }
+      ])
+    });
+    await expect(new CodingReplayAnchorService(repository).getOverrides(7)).resolves.toEqual([
+      { unitName: 'UNIT', variableId: 'VAR', replayAnchor: 'ANCHOR' }
+    ]);
   });
 });

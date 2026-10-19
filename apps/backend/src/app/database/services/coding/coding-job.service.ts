@@ -519,8 +519,8 @@ export class CodingJobService {
       distributionByCoderId: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
       aggregationInfo: Record<
-      string,
-      { uniqueCases: number; totalResponses: number }
+        string,
+        { uniqueCases: number; totalResponses: number }
       >;
       matchingFlags: ResponseMatchingFlag[];
       warnings: JobCreationWarning[];
@@ -557,7 +557,7 @@ export class CodingJobService {
     codingJobIds: number[],
     workspaceId: number
   ): Promise<
-    Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
+      Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
     > {
     return this.replay.getBulkCodingProgress(codingJobIds, workspaceId);
   }

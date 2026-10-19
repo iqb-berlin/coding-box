@@ -5,8 +5,6 @@ import {
   ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -19,8 +17,7 @@ import { ExportValidationResultsService } from '../../database/services/validati
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
-import { Setting } from '../../database/entities/setting.entity';
-import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -31,8 +28,7 @@ export class WorkspaceCodingAnalysisController {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettings: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
@@ -90,24 +86,24 @@ export class WorkspaceCodingAnalysisController {
   })
   async getVariableAnalysis(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl?: string,
-                   @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 100,
-                   @Query('unitId') unitId?: string,
-                   @Query('variableId') variableId?: string,
-                   @Query('derivation') derivation?: string,
-                   @Query('regexSearch') regexSearch?: string
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 100,
+    @Query('unitId') unitId?: string,
+    @Query('variableId') variableId?: string,
+    @Query('derivation') derivation?: string,
+    @Query('regexSearch') regexSearch?: string
   ): Promise<{
-        data: VariableAnalysisItemDto[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
+      data: VariableAnalysisItemDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
     const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+      await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,
@@ -134,7 +130,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('ValidateCodingCompletenessRequestDto') request: RequestBody<'ValidateCodingCompletenessRequestDto'>
+    @ValidatedBody('ValidateCodingCompletenessRequestDto') request: RequestBody<'ValidateCodingCompletenessRequestDto'>
   ): Promise<ValidateCodingCompletenessResponseDto> {
     // Extract and validate pagination parameters
     const page = Math.max(1, request.page || 1);
@@ -167,8 +163,8 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateAndExportCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('ExportValidationResultsRequestDto') request: RequestBody<'ExportValidationResultsRequestDto'>,
-      @Res() res: Response
+    @ValidatedBody('ExportValidationResultsRequestDto') request: RequestBody<'ExportValidationResultsRequestDto'>,
+    @Res() res: Response
   ): Promise<void> {
     const excelData =
       await this.exportValidationResultsService.exportValidationResultsAsExcel(
@@ -264,10 +260,10 @@ export class WorkspaceCodingAnalysisController {
   })
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
-      @Query('unitName') unitName?: string,
-      @Query('trainingRequired') trainingRequired?: string,
-      @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string,
-      @Query('excludeJobDefinitionId') excludeJobDefinitionId?: string
+    @Query('unitName') unitName?: string,
+    @Query('trainingRequired') trainingRequired?: string,
+    @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string,
+    @Query('excludeJobDefinitionId') excludeJobDefinitionId?: string
   ): Promise<
       {
         unitName: string;
@@ -281,7 +277,7 @@ export class WorkspaceCodingAnalysisController {
         uniqueCasesAfterAggregationWithDeriveError?: number;
         isDerived: boolean;
       }[]
-      > {
+    > {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
       trainingRequiredParam = true;
@@ -349,8 +345,8 @@ export class WorkspaceCodingAnalysisController {
   })
   async getManualCodingScopeSummary(
     @WorkspaceId() workspace_id: number,
-      @Query('unitName') unitName?: string,
-      @Query('trainingRequired') trainingRequired?: string
+    @Query('unitName') unitName?: string,
+    @Query('trainingRequired') trainingRequired?: string
   ): Promise<Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -413,8 +409,8 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateManualCodeAvailability(
     @WorkspaceId() workspace_id: number,
-      @Query('unitName') unitName?: string,
-      @Query('trainingRequired') trainingRequired?: string
+    @Query('unitName') unitName?: string,
+    @Query('trainingRequired') trainingRequired?: string
   ): Promise<ManualCodeAvailabilityValidationDto> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -446,7 +442,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async getAppliedResultsCount(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('WorkspaceCodingAnalysisController_getAppliedResultsCount')
+    @ValidatedBody('WorkspaceCodingAnalysisController_getAppliedResultsCount')
                    body: RequestBody<'WorkspaceCodingAnalysisController_getAppliedResultsCount'>
   ): Promise<number> {
     return this.codingValidationService.getAppliedResultsCount(
@@ -632,7 +628,7 @@ export class WorkspaceCodingAnalysisController {
     }
   })
   async getResponseAnalysis(
-  @WorkspaceId() workspace_id: number,
+    @WorkspaceId() workspace_id: number,
     @Query('threshold') threshold?: number,
     @Query('emptyPage') emptyPage?: number,
     @Query('emptyLimit') emptyLimit?: number,
@@ -664,7 +660,7 @@ export class WorkspaceCodingAnalysisController {
     description: 'Current response aggregation settings.'
   })
   async getAggregationSettings(
-  @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number
   ) {
     return this.codingAnalysisService.getAggregationSettings(workspace_id);
   }
@@ -679,8 +675,8 @@ export class WorkspaceCodingAnalysisController {
     description: 'Response aggregation settings saved.'
   })
   async saveAggregationSettings(
-  @WorkspaceId() workspace_id: number,
-                 @ValidatedBody('WorkspaceCodingAnalysisController_saveAggregationSettings', true) body: RequestBody<'WorkspaceCodingAnalysisController_saveAggregationSettings'> | undefined = {}
+    @WorkspaceId() workspace_id: number,
+    @ValidatedBody('WorkspaceCodingAnalysisController_saveAggregationSettings', true) body: RequestBody<'WorkspaceCodingAnalysisController_saveAggregationSettings'> | undefined = {}
   ) {
     const threshold = this.normalizeIntegerParam(body.threshold, 2, 2, 100);
     return this.codingAnalysisService.saveAggregationSettings(
@@ -720,14 +716,14 @@ export class WorkspaceCodingAnalysisController {
   })
   async applyDuplicateAggregation(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('WorkspaceCodingAnalysisController_applyDuplicateAggregation') body: RequestBody<'WorkspaceCodingAnalysisController_applyDuplicateAggregation'>
+    @ValidatedBody('WorkspaceCodingAnalysisController_applyDuplicateAggregation') body: RequestBody<'WorkspaceCodingAnalysisController_applyDuplicateAggregation'>
   ): Promise<{
-        success: boolean;
-        aggregatedGroups: number;
-        aggregatedResponses: number;
-        uniqueCodingCases: number;
-        message: string;
-      }> {
+      success: boolean;
+      aggregatedGroups: number;
+      aggregatedResponses: number;
+      uniqueCodingCases: number;
+      message: string;
+    }> {
     return this.codingAnalysisService.applyDuplicateAggregation(
       workspace_id,
       body.threshold,
@@ -745,7 +741,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async postTriggerResponseAnalysis(
     @WorkspaceId() workspace_id: number,
-                   @ValidatedBody('WorkspaceCodingAnalysisController_postTriggerResponseAnalysis', true) body: RequestBody<'WorkspaceCodingAnalysisController_postTriggerResponseAnalysis'> | undefined = {}
+    @ValidatedBody('WorkspaceCodingAnalysisController_postTriggerResponseAnalysis', true) body: RequestBody<'WorkspaceCodingAnalysisController_postTriggerResponseAnalysis'> | undefined = {}
   ): Promise<void> {
     const threshold = body.threshold === undefined ?
       undefined :

@@ -109,7 +109,7 @@ export class WorkspaceBackendService {
 
     return this.http
       .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      { params });
+        { params });
   }
 
   getAllWorkspaceUsers(workspaceId: number): Observable<WorkspaceUserDto[]> {
@@ -130,7 +130,7 @@ export class WorkspaceBackendService {
   getWorkspaceCoders(workspaceId: number): Observable<{ data: CoderDto[], total: number }> {
     return this.http
       .get<{ data: CoderDto[], total: number }>(`${this.serverUrl}admin/workspace/${workspaceId}/coders`,
-      {})
+        {})
       .pipe(
         catchError(() => of({
           data: [],

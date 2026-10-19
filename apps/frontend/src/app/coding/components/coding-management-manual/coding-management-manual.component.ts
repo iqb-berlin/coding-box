@@ -88,7 +88,7 @@ import {
 import {
   ResponseMatchingFlag,
   WorkspaceSettingsService
-} from '../../../ws-admin/services/workspace-settings.service';
+} from '../../../shared/services/workspace/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import {
@@ -848,8 +848,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       const detection = await this.detectCodingImportFormat(file);
       const dialogResult = await firstValueFrom(
         this.dialog.open<
-        CodingImportFormatDialogComponent,
-        CodingImportFormatDialogData,
+          CodingImportFormatDialogComponent,
+          CodingImportFormatDialogData,
         CodingImportFormatDialogResult | undefined
         >(CodingImportFormatDialogComponent, {
           width: '720px',

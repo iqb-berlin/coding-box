@@ -339,7 +339,7 @@ export class WorkspaceCoderTrainingController {
   })
   async generateCoderTrainingPackages(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('WorkspaceCoderTrainingController_generateCoderTrainingPackages')
+    @ValidatedBody('WorkspaceCoderTrainingController_generateCoderTrainingPackages')
                    body: RequestBody<'WorkspaceCoderTrainingController_generateCoderTrainingPackages'>
   ): Promise<
       {
@@ -358,7 +358,7 @@ export class WorkspaceCoderTrainingController {
           variable: string;
         }[];
       }[]
-      > {
+    > {
     return this.coderTrainingService.generateCoderTrainingPackages(
       workspace_id,
       body.selectedCoders,
@@ -416,21 +416,21 @@ export class WorkspaceCoderTrainingController {
     }
   })
   async getCoderTrainings(@WorkspaceId() workspace_id: number): Promise<
-  {
-    id: number;
-    workspace_id: number;
-    label: string;
-    created_at: Date;
-    updated_at: Date;
-    jobsCount: number;
-    case_ordering_mode?: 'continuous' | 'alternating';
-    case_selection_mode?: string;
-    reference_training_ids?: number[];
-    reference_mode?: string | null;
-    show_score?: boolean;
-    allow_comments?: boolean;
-    suppress_general_instructions?: boolean;
-  }[]
+    {
+      id: number;
+      workspace_id: number;
+      label: string;
+      created_at: Date;
+      updated_at: Date;
+      jobsCount: number;
+      case_ordering_mode?: 'continuous' | 'alternating';
+      case_selection_mode?: string;
+      reference_training_ids?: number[];
+      reference_mode?: string | null;
+      show_score?: boolean;
+      allow_comments?: boolean;
+      suppress_general_instructions?: boolean;
+    }[]
   > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
   }
@@ -458,7 +458,7 @@ export class WorkspaceCoderTrainingController {
   })
   async getTrainingResponseIds(
     @WorkspaceId() workspace_id: number,
-      @Query('trainingIds') trainingIdsParam: string
+    @Query('trainingIds') trainingIdsParam: string
   ): Promise<Record<string, number[]>> {
     const trainingIds = trainingIdsParam ?
       trainingIdsParam.split(',').map(id => parseInt(id.trim(), 10)).filter(n => !Number.isNaN(n)) :
@@ -501,21 +501,21 @@ export class WorkspaceCoderTrainingController {
   })
   async createCoderTrainingJobs(
     @WorkspaceId() workspace_id: number,
-      @ValidatedBody('WorkspaceCoderTrainingController_createCoderTrainingJobs')
+    @ValidatedBody('WorkspaceCoderTrainingController_createCoderTrainingJobs')
                    body: RequestBody<'WorkspaceCoderTrainingController_createCoderTrainingJobs'>,
                    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{
-        success: boolean;
-        jobsCreated: number;
-        message: string;
-        jobs: {
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-        }[];
-        trainingId?: number;
-      }> {
+      success: boolean;
+      jobsCreated: number;
+      message: string;
+      jobs: {
+        coderId: number;
+        coderName: string;
+        jobId: number;
+        jobName: string;
+      }[];
+      trainingId?: number;
+    }> {
     return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
@@ -554,20 +554,20 @@ export class WorkspaceCoderTrainingController {
   })
   async compareTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Query('trainingIds') trainingIdsQuery: string | undefined,
-      @Query('page') page: string | undefined,
-      @Query('limit') limit: string | undefined,
-      @Query('sortBy') sortBy: string | undefined,
-      @Query('sortDirection') sortDirection: string | undefined,
-      @Query('coderKeys') coderKeys: string | undefined,
-      @Query('unitName') unitName: string | undefined,
-      @Query('variableId') variableId: string | undefined,
-      @Query('personLogin') personLogin: string | undefined,
-      @Query('personGroup') personGroup: string | undefined,
-      @Query('bookletName') bookletName: string | undefined,
-      @Query('match') match: string | undefined,
-      @Query('notesMode') notesMode: string | undefined,
-      @Query('regexSearch') regexSearch: string | undefined
+    @Query('trainingIds') trainingIdsQuery: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Query('sortBy') sortBy: string | undefined,
+    @Query('sortDirection') sortDirection: string | undefined,
+    @Query('coderKeys') coderKeys: string | undefined,
+    @Query('unitName') unitName: string | undefined,
+    @Query('variableId') variableId: string | undefined,
+    @Query('personLogin') personLogin: string | undefined,
+    @Query('personGroup') personGroup: string | undefined,
+    @Query('bookletName') bookletName: string | undefined,
+    @Query('match') match: string | undefined,
+    @Query('notesMode') notesMode: string | undefined,
+    @Query('regexSearch') regexSearch: string | undefined
   ): Promise<TrainingCodingComparisonPageDto> {
     const trainingIds = this.parsePositiveIntCsv(trainingIdsQuery, 'trainingIds') ?? [];
 
@@ -618,20 +618,20 @@ export class WorkspaceCoderTrainingController {
   })
   async compareWithinTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Query('trainingId') trainingIdParam: string,
-      @Query('page') page: string | undefined,
-      @Query('limit') limit: string | undefined,
-      @Query('sortBy') sortBy: string | undefined,
-      @Query('sortDirection') sortDirection: string | undefined,
-      @Query('jobIds') jobIds: string | undefined,
-      @Query('unitName') unitName: string | undefined,
-      @Query('variableId') variableId: string | undefined,
-      @Query('personLogin') personLogin: string | undefined,
-      @Query('personGroup') personGroup: string | undefined,
-      @Query('bookletName') bookletName: string | undefined,
-      @Query('match') match: string | undefined,
-      @Query('notesMode') notesMode: string | undefined,
-      @Query('regexSearch') regexSearch: string | undefined
+    @Query('trainingId') trainingIdParam: string,
+    @Query('page') page: string | undefined,
+    @Query('limit') limit: string | undefined,
+    @Query('sortBy') sortBy: string | undefined,
+    @Query('sortDirection') sortDirection: string | undefined,
+    @Query('jobIds') jobIds: string | undefined,
+    @Query('unitName') unitName: string | undefined,
+    @Query('variableId') variableId: string | undefined,
+    @Query('personLogin') personLogin: string | undefined,
+    @Query('personGroup') personGroup: string | undefined,
+    @Query('bookletName') bookletName: string | undefined,
+    @Query('match') match: string | undefined,
+    @Query('notesMode') notesMode: string | undefined,
+    @Query('regexSearch') regexSearch: string | undefined
   ): Promise<WithinTrainingCodingComparisonPageDto> {
     const trainingId = this.parsePositiveIntQuery(trainingIdParam, 'trainingId');
     if (!trainingId || trainingId <= 0) {
@@ -674,18 +674,18 @@ export class WorkspaceCoderTrainingController {
 
   async saveDiscussionResult(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @ValidatedBody('WorkspaceCoderTrainingController_saveDiscussionResult') body: RequestBody<'WorkspaceCoderTrainingController_saveDiscussionResult'>,
-      @Req() req: Request
+    @Param('trainingId') trainingId: number,
+    @ValidatedBody('WorkspaceCoderTrainingController_saveDiscussionResult') body: RequestBody<'WorkspaceCoderTrainingController_saveDiscussionResult'>,
+    @Req() req: Request
   ): Promise<{
-        success: boolean;
-        code: number | null;
-        score: number | null;
-        notes: string | null;
-        source: 'manual' | 'auto_agreement' | null;
-        managerUserId: number | null;
-        managerName: string | null;
-      }> {
+      success: boolean;
+      code: number | null;
+      score: number | null;
+      notes: string | null;
+      source: 'manual' | 'auto_agreement' | null;
+      managerUserId: number | null;
+      managerName: string | null;
+    }> {
     const reqUser = (req as Request & {
       user?: { id?: string | number; username?: string; preferred_username?: string; name?: string };
     }).user;
@@ -715,8 +715,8 @@ export class WorkspaceCoderTrainingController {
   })
   async previewApplyDiscussionResults(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @ValidatedBody('TrainingDiscussionApplyPreviewRequest') body: RequestBody<'TrainingDiscussionApplyPreviewRequest'>
+    @Param('trainingId') trainingId: number,
+    @ValidatedBody('TrainingDiscussionApplyPreviewRequest') body: RequestBody<'TrainingDiscussionApplyPreviewRequest'>
   ): Promise<TrainingDiscussionApplyPreviewDto> {
     return this.coderTrainingResultsApplyService.previewTrainingDiscussionResults(
       workspace_id,
@@ -738,8 +738,8 @@ export class WorkspaceCoderTrainingController {
 
   async applyDiscussionResults(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @ValidatedBody('ApplyTrainingDiscussionResultsRequestDto') body: RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>
+    @Param('trainingId') trainingId: number,
+    @ValidatedBody('ApplyTrainingDiscussionResultsRequestDto') body: RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>
   ): Promise<ApplyTrainingDiscussionResultsResultDto> {
     return this.coderTrainingResultsApplyService.applyTrainingDiscussionResults(
       workspace_id,
@@ -772,9 +772,9 @@ export class WorkspaceCoderTrainingController {
   })
   async updateCoderTraining(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTraining') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTraining'>,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('trainingId') trainingId: number,
+    @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTraining') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTraining'>,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -842,7 +842,7 @@ export class WorkspaceCoderTrainingController {
   })
   async getCodingJobsForTraining(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number
+    @Param('trainingId') trainingId: number
   ): Promise<
       Array<{
         id: number;
@@ -856,7 +856,7 @@ export class WorkspaceCoderTrainingController {
         };
         unitsCount: number;
       }>
-      > {
+    > {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }
@@ -892,8 +892,8 @@ export class WorkspaceCoderTrainingController {
   })
   async deleteCoderTraining(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('trainingId') trainingId: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -932,9 +932,9 @@ export class WorkspaceCoderTrainingController {
   })
   async updateCoderTrainingLabel(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTrainingLabel') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTrainingLabel'>,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('trainingId') trainingId: number,
+    @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTrainingLabel') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTrainingLabel'>,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -982,7 +982,7 @@ export class WorkspaceCoderTrainingController {
   })
   async getTrainingComparisonFreshness(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number
+    @Param('trainingId') trainingId: number
   ): Promise<TrainingComparisonFreshnessDto> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1087,10 +1087,10 @@ export class WorkspaceCoderTrainingController {
   })
   async getTrainingCohensKappa(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @Query('weightedMean') weightedMean?: string,
-      @Query('level') level?: 'code' | 'score',
-      @Query('jobIds') jobIds?: string
+    @Param('trainingId') trainingId: number,
+    @Query('weightedMean') weightedMean?: string,
+    @Query('level') level?: 'code' | 'score',
+    @Query('jobIds') jobIds?: string
   ): Promise<TrainingCohensKappaStatistics> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1193,11 +1193,11 @@ export class WorkspaceCoderTrainingController {
   })
   async exportTrainingReliabilityAsCsv(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number,
-      @Query('weightedMean') weightedMean: string | undefined,
-      @Query('level') level: 'code' | 'score' | undefined,
-      @Query('jobIds') jobIds: string | undefined,
-      @Res() res: Response
+    @Param('trainingId') trainingId: number,
+    @Query('weightedMean') weightedMean: string | undefined,
+    @Query('level') level: 'code' | 'score' | undefined,
+    @Query('jobIds') jobIds: string | undefined,
+    @Res() res: Response
   ): Promise<void> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');

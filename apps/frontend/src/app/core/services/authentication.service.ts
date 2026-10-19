@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { WorkspaceAdmin } from '../../shared/models/test-center-authentication.model';
 import { SERVER_URL } from '../../injection-tokens';
 
 export interface ServerResponse {
@@ -8,7 +9,7 @@ export interface ServerResponse {
   token?: string;
   message?: string;
   claims?: {
-    workspaceAdmin: import('../../ws-admin/components/test-center-import/test-center-import.component').WorkspaceAdmin[];
+    workspaceAdmin: WorkspaceAdmin[];
   };
 }
 
@@ -22,7 +23,7 @@ export class AuthenticationService {
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {
     return this.http
       .post<ServerResponse>(`${this.serverUrl}tc_authentication`, {
-      username, password, server, url
-    });
+        username, password, server, url
+      });
   }
 }

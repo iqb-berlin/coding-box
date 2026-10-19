@@ -18,7 +18,7 @@ export class GithubReleasesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getReleases(
     @WorkspaceId() workspaceId: number,
-      @Param('type') type: 'aspect-player' | 'schemer'
+    @Param('type') type: 'aspect-player' | 'schemer'
   ): Promise<GithubReleaseShort[]> {
     return this.githubReleasesService.getReleases(type);
   }
@@ -27,7 +27,7 @@ export class GithubReleasesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async installRelease(
     @WorkspaceId() workspaceId: number,
-      @ValidatedBody('GithubReleasesController_installRelease') body: RequestBody<'GithubReleasesController_installRelease'>
+    @ValidatedBody('GithubReleasesController_installRelease') body: RequestBody<'GithubReleasesController_installRelease'>
   ): Promise<boolean> {
     return this.githubReleasesService.downloadAndInstall(workspaceId, body.url);
   }

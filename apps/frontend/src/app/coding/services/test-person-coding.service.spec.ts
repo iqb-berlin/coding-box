@@ -21,7 +21,7 @@ import { AppService } from '../../core/services/app.service';
 import {
   ResponseMatchingFlag,
   WorkspaceSettingsService
-} from '../../ws-admin/services/workspace-settings.service';
+} from '../../shared/services/workspace/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 import { AuthService } from '../../core/services/auth.service';
 import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
