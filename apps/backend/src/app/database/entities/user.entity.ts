@@ -8,20 +8,20 @@ import {
 @Entity()
 class User {
   @PrimaryGeneratedColumn({ type: 'int' })
-    id: number;
+  id: number;
 
   @Index()
   @Column({ type: 'varchar' })
-    identity: string;
+  identity: string;
 
   @Column({ type: 'varchar' })
-    issuer: string;
+  issuer: string;
 
   @Column({ type: 'boolean' })
-    isAdmin: boolean;
+  isAdmin: boolean;
 
   @Column({ type: 'varchar' })
-    username: string;
+  username: string;
 }
 
 export default User;

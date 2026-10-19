@@ -60,10 +60,10 @@ export class WorkspaceTestResultsLogsController {
   @RequireAccessLevel(3)
   async findUnitLogs(
     @Param('workspace_id') workspace_id: number,
-      @Param('unitId', ParseIntPipe) unitId: number
+    @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<
       { id: number; unitid: number; ts: string; key: string; parameter: string }[]
-      > {
+    > {
     return this.workspaceTestResultsService.findUnitLogs(workspace_id, unitId);
   }
 
@@ -90,7 +90,7 @@ export class WorkspaceTestResultsLogsController {
   @RequireAccessLevel(3)
   async findBookletLogsForUnit(
     @Param('workspace_id') workspace_id: number,
-      @Param('unitId', ParseIntPipe) unitId: number
+    @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<BookletLogsResponse> {
     return this.workspaceTestResultsService.findBookletLogsByUnitId(
       workspace_id,

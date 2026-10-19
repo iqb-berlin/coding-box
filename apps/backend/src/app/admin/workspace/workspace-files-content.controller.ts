@@ -2,10 +2,10 @@ import {
   BadRequestException,
   Controller,
   Get,
-  InternalServerErrorException,
   NotFoundException,
   Param,
-  UseGuards
+  UseGuards,
+  HttpException
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -59,7 +59,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getUnitContent(
     @Param('workspace_id') workspace_id: number,
-      @Param('unit_id') unit_id: number
+    @Param('unit_id') unit_id: number
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -79,14 +79,15 @@ export class WorkspaceFilesContentController {
       );
       return { content };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error.message.includes('not found')) {
         throw new NotFoundException(
           `Unit with ID ${unit_id} not found in workspace ${workspace_id}`
         );
       }
-      throw new InternalServerErrorException(
-        `Error retrieving unit content: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -119,7 +120,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getTestTakerContent(
     @Param('workspace_id') workspace_id: number,
-      @Param('testtaker_id') testtaker_id: string
+    @Param('testtaker_id') testtaker_id: string
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -140,15 +141,16 @@ export class WorkspaceFilesContentController {
       );
       return { content };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error.message.includes('not found')) {
         throw new NotFoundException(
           `TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`
         );
       }
 
-      throw new InternalServerErrorException(
-        `Error retrieving TestTakers content: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -184,7 +186,7 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getCodingSchemeFile(
     @Param('workspace_id') workspace_id: number,
-      @Param('coding_scheme_ref') coding_scheme_ref: string
+    @Param('coding_scheme_ref') coding_scheme_ref: string
   ): Promise<FileDownloadDto> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
@@ -206,9 +208,7 @@ export class WorkspaceFilesContentController {
       if (error.status === 404) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        `Error retrieving coding scheme file: ${error.message}`
-      );
+      throw error;
     }
   }
 }

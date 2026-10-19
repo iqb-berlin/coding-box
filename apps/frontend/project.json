@@ -167,7 +167,7 @@
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
-        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs"
+        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs scripts/qa/functional-quality-gates.test.mjs scripts/qa/junit-reporter.test.cjs"
       }
     },
     "test-dependency-patches": {
@@ -181,7 +181,7 @@
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
-        "command": "node --test scripts/e2e/replay/loopback-forwarders.test.mjs"
+        "command": "node --test scripts/e2e/replay/*.test.mjs"
       }
     },
     "e2e-replay-live": {
@@ -253,6 +253,18 @@
         "spa": true,
         "host": "127.0.0.1",
         "port": 4200
+      }
+    },
+    "e2e-workflows": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --workflows"
+      },
+      "configurations": {
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --workflows --production"
+        }
       }
     }
   }

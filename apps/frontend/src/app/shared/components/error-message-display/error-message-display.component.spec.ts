@@ -25,7 +25,9 @@ describe('ErrorMessageDisplayComponent', () => {
     setSessionExpiryWarning: jest.Mock;
     requireReAuthentication: jest.Mock;
   };
-  let authService: { login: jest.Mock; getValidToken: jest.Mock };
+  let authService: {
+    login: jest.Mock; getValidToken: jest.Mock; getSessionGeneration: jest.Mock; getRefreshToken: jest.Mock;
+  };
   let router: { url: string; events: Subject<RouterEvent> };
 
   const navigate = (url: string) => {
@@ -47,6 +49,8 @@ describe('ErrorMessageDisplayComponent', () => {
     };
     authService = {
       login: jest.fn(),
+      getSessionGeneration: jest.fn().mockReturnValue(0),
+      getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
       getValidToken: jest.fn().mockResolvedValue('token')
     };
     router = { url: '/home?auth=session-expired', events: new Subject<RouterEvent>() };
@@ -123,6 +127,26 @@ describe('ErrorMessageDisplayComponent', () => {
     await fixture.componentInstance.handleExtendSession();
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+  });
+
+  it.each(['discarded', 'failed'])('preserves a newer session when the old extension is %s', async outcome => {
+    let finishRefresh!: (token: string | undefined) => void;
+    let rejectRefresh!: (error: Error) => void;
+    authService.getValidToken.mockReturnValue(new Promise((resolve, reject) => {
+      finishRefresh = resolve;
+      rejectRefresh = reject;
+    }));
+    const extending = fixture.componentInstance.handleExtendSession();
+    authService.getRefreshToken.mockReturnValue('new-refresh-token');
+    if (outcome === 'discarded') {
+      finishRefresh(undefined);
+    } else {
+      rejectRefresh(new Error('obsolete refresh failed'));
+    }
+    await extending;
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.setSessionExpiryWarning).not.toHaveBeenCalled();
   });
 
   it('should hide request details until the user expands them', () => {
@@ -221,7 +245,14 @@ describe('ErrorMessageDisplayComponent zoneless session warning', () => {
         provideHttpClientTesting(),
         { provide: SERVER_URL, useValue: '/api/' },
         { provide: LogoService, useValue: { getLogoSettings: () => of(null) } },
-        { provide: AuthService, useValue: { getValidToken: jest.fn().mockResolvedValue('token') } },
+        {
+          provide: AuthService,
+          useValue: {
+            getValidToken: jest.fn().mockResolvedValue('token'),
+            getSessionGeneration: jest.fn().mockReturnValue(0),
+            getRefreshToken: jest.fn().mockReturnValue('refresh-token')
+          }
+        },
         { provide: Router, useValue: { url: '/coding', events: new Subject<RouterEvent>() } }
       ]
     }).compileComponents();

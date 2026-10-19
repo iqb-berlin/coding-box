@@ -13,8 +13,8 @@ describe('EmptyResponseSelectionService', () => {
   let service: EmptyResponseSelectionService;
   let responseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let workspaceFilesService: jest.Mocked<Pick<
-  WorkspaceFilesService,
-  'getDerivedVariableMetadata'
+    WorkspaceFilesService,
+    'getDerivedVariableMetadata'
   >>;
   let sourceRows: ResponseEntity[];
 

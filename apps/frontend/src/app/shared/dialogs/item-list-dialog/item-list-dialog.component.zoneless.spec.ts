@@ -44,7 +44,7 @@ describe('Metadata dialog async ownership without ZoneJS', () => {
           provide: FileService,
           useValue: {
             getItemIdsFromMetadata: () => of([]),
-            downloadFile: () => { const reply = new Subject<typeof file>(); downloads.push(reply); return reply; }
+            readMetadataFile: () => { const reply = new Subject<typeof file>(); downloads.push(reply); return reply; }
           }
         }
       ]

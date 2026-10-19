@@ -3,31 +3,29 @@ import {
   Post,
   Get,
   UseGuards,
-  Body,
   Res,
   Param,
   BadRequestException,
   NotFoundException,
   Logger,
-  HttpCode
+  HttpCode,
+  Req,
+  ForbiddenException
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiTags,
-  ApiBody,
-  ApiOperation
+  ApiOkResponse, ApiParam, ApiTags, ApiOperation
 } from '@nestjs/swagger';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { ExternalCodingImportService } from '../../database/services/coding';
-import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 
@@ -49,11 +47,7 @@ export class WorkspaceCodingImportController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description:
-      'External coding file upload (CSV/Excel) with streaming progress. Only for preview mode (previewOnly=true).',
-    type: ExternalCodingImportDto
-  })
+
   @ApiOkResponse({
     description: 'External coding import preview with progress streaming',
     content: {
@@ -66,8 +60,8 @@ export class WorkspaceCodingImportController {
   })
   async importExternalCodingWithProgress(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto,
-      @Res() res: Response
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
+    @Res() res: Response
   ): Promise<void> {
     // Guard: SSE endpoint is only for preview mode
     if (body.previewOnly === false) {
@@ -117,7 +111,7 @@ export class WorkspaceCodingImportController {
 
   @Post(':workspace_id/coding/external-coding-import/apply')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-  @RequireAccessLevel(2)
+  @RequireAccessLevel(3)
   @HttpCode(202)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -125,14 +119,16 @@ export class WorkspaceCodingImportController {
     summary: 'Apply external coding import via background job',
     description: 'Queues an external coding import job. Returns a job ID for polling progress.'
   })
-  @ApiBody({
-    description: 'External coding file upload (CSV/Excel)',
-    type: ExternalCodingImportDto
-  })
+
   async applyExternalCodingImport(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
+    @Req() req: { user?: { id?: number } }
   ): Promise<{ jobId: string }> {
+    const requestedByUserId = req.user?.id;
+    if (typeof requestedByUserId !== 'number' || !Number.isSafeInteger(requestedByUserId) || requestedByUserId <= 0) {
+      throw new ForbiddenException('An authenticated study manager is required');
+    }
     if (!body.file) {
       throw new BadRequestException('File data is required.');
     }
@@ -154,6 +150,7 @@ export class WorkspaceCodingImportController {
 
     const job = await this.jobQueueService.addExternalCodingImportJob({
       workspaceId: workspace_id,
+      requestedByUserId,
       tempFilePath,
       fileName: body.fileName || 'external-coding.csv',
       sourceFormat: body.sourceFormat,
@@ -180,19 +177,19 @@ export class WorkspaceCodingImportController {
   })
   async getExternalCodingImportJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{
-        status: string;
-        progress: number;
-        result?: {
-          message: string;
-          processedRows: number;
-          updatedRows: number;
-          errorCount: number;
-          affectedRowCount: number;
-        };
-        error?: string;
-      }> {
+      status: string;
+      progress: number;
+      result?: {
+        message: string;
+        processedRows: number;
+        updatedRows: number;
+        errorCount: number;
+        affectedRowCount: number;
+      };
+      error?: string;
+    }> {
     const job = await this.jobQueueService.getExternalCodingImportJob(jobId);
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
@@ -249,7 +246,7 @@ export class WorkspaceCodingImportController {
   })
   async getExternalCodingImportResult(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<unknown> {
     // Verify job belongs to this workspace
     const job = await this.jobQueueService.getExternalCodingImportJob(jobId);
@@ -273,37 +270,34 @@ export class WorkspaceCodingImportController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'External coding file upload (CSV/Excel)',
-    type: ExternalCodingImportDto
-  })
+
   async importExternalCoding(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+    @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
   ): Promise<{
-        message: string;
-        processedRows: number;
-        updatedRows: number;
-        errors: string[];
-        affectedRows: Array<{
-          unitAlias: string;
-          variableId: string;
-          personCode?: string;
-          personLogin?: string;
-          personGroup?: string;
-          bookletName?: string;
-          originalCodedStatus: string;
-          originalCode: number | null;
-          originalScore: number | null;
-          updatedCodedStatus: string | null;
-          updatedCode: number | null;
-          updatedScore: number | null;
-          importAction?: 'update' | 'skip' | 'unchanged';
-          actionReason?: string;
-          hasExistingCoding?: boolean;
-          hasConflict?: boolean;
-        }>;
-      }> {
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errors: string[];
+      affectedRows: Array<{
+        unitAlias: string;
+        variableId: string;
+        personCode?: string;
+        personLogin?: string;
+        personGroup?: string;
+        bookletName?: string;
+        originalCodedStatus: string;
+        originalCode: number | null;
+        originalScore: number | null;
+        updatedCodedStatus: string | null;
+        updatedCode: number | null;
+        updatedScore: number | null;
+        importAction?: 'update' | 'skip' | 'unchanged';
+        actionReason?: string;
+        hasExistingCoding?: boolean;
+        hasConflict?: boolean;
+      }>;
+    }> {
     if (body.previewOnly !== true) {
       throw new BadRequestException(
         'Use the /apply endpoint for applying changes. This endpoint is only for preview mode.'

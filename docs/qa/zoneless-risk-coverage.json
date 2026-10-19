@@ -37,7 +37,9 @@
         "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/variable-bundle-manager/variable-bundle-manager.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
+        "cypress/component/import-comparison-permissions.component.cy.ts"
       ]
     },
     {
@@ -65,7 +67,10 @@
         "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/review-notifications.cy.ts",
         "cypress/zoneless/manual-preparation.cy.ts",
-        "cypress/zoneless/training-comparison.cy.ts"
+        "cypress/zoneless/training-comparison.cy.ts",
+        "apps/frontend/src/app/coding/services/coding-permissions.service.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.ownership.spec.ts",
+        "cypress/workflows/coding-ownership.cy.ts"
       ]
     },
     {
@@ -85,6 +90,8 @@
         "cypress/e2e/item-matrix-live.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
+        "cypress/component/unit-player-assets.cy.ts",
+        "cypress/component/unit-player-aspect-assets.cy.ts",
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
@@ -110,6 +117,8 @@
         "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/services/validation/validation-context.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.spec.ts",
+        "apps/frontend/src/app/shared/services/test-result/test-result-cache.service.spec.ts",
+        "cypress/component/test-results.component.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component.spec.ts",
         "cypress/zoneless/validation-dialog.cy.ts",
         "cypress/zoneless/validation-access.cy.ts",
@@ -172,6 +181,8 @@
         "cypress/e2e/export-item-dataset.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.spec.ts",
+        "cypress/component/test-center-import.component.cy.ts",
         "cypress/zoneless/testcenter-import.cy.ts",
         "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/async-coding-dialogs.cy.ts",
@@ -181,7 +192,9 @@
         "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts",
         "apps/frontend/src/app/ws-admin/components/export/export-start-lifecycle.zoneless.spec.ts",
-        "cypress/zoneless/export-start-failure.cy.ts"
+        "cypress/zoneless/export-start-failure.cy.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
+        "cypress/component/import-comparison-permissions.component.cy.ts"
       ]
     },
     {

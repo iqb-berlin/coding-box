@@ -34,6 +34,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { AppService } from '../../../core/services/app.service';
 
 export interface VariableBundleGroupDialogData {
+  readOnly?: boolean;
   bundleGroup?: VariableBundle;
   isEdit: boolean;
   preloadedIncompleteVariables?: Variable[];
@@ -102,6 +103,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
 
   ngOnInit(): void {
     this.initForm();
+    if (this.data.readOnly) this.bundleGroupForm.disable();
     this.loadCodingIncompleteVariables();
     this.setupSelectionWatcher();
 
@@ -240,6 +242,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
   }
 
   private updateName(): void {
+    if (this.data.readOnly) return;
     const selectedVars = this.selectedVariables.selected;
 
     if (selectedVars.length > 0 && !this.isNameManuallyEdited) {
@@ -271,16 +274,24 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
   }
 
   protected selectAll(): void {
+    if (this.data.readOnly) return;
     this.dataSource.filteredData.forEach(variable => {
       this.selectedVariables.select(variable);
     });
   }
 
   protected deselectAll(): void {
+    if (this.data.readOnly) return;
     this.selectedVariables.clear();
   }
 
+  toggleVariable(variable: Variable): void {
+    if (this.data.readOnly) return;
+    this.selectedVariables.toggle(variable);
+  }
+
   protected clearFilters(): void {
+    if (this.data.readOnly) return;
     this.unitNameFilter = '';
     this.variableIdFilter = '';
 
@@ -297,6 +308,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
   }
 
   onSubmit(): void {
+    if (this.data.readOnly) return;
     if (this.bundleGroupForm.invalid) {
       return;
     }

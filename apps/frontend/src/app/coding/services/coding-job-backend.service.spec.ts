@@ -7,7 +7,6 @@ import {
   provideHttpClient,
   withInterceptorsFromDi
 } from '@angular/common/http';
-import Keycloak from 'keycloak-js';
 import { CodingJobBackendService } from './coding-job-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodingJob } from '../models/coding-job.model';
@@ -17,11 +16,6 @@ describe('CodingJobBackendService', () => {
   let service: CodingJobBackendService;
   let httpMock: HttpTestingController;
   let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
-  let keycloak: {
-    authenticated: boolean;
-    token?: string;
-    updateToken: jest.Mock;
-  };
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
 
@@ -32,12 +26,6 @@ describe('CodingJobBackendService', () => {
       invalidateWorkspace: jest.fn()
     };
     originalFetch = globalThis.fetch;
-    keycloak = {
-      authenticated: true,
-      token: 'keycloak-token',
-      updateToken: jest.fn().mockResolvedValue(true)
-    };
-
     Object.defineProperty(window, 'localStorage', {
       value: {
         getItem: jest.fn().mockReturnValue('mock-token')
@@ -54,7 +42,6 @@ describe('CodingJobBackendService', () => {
           provide: ValidationTaskStateService,
           useValue: validationTaskStateServiceMock
         },
-        { provide: Keycloak, useValue: keycloak },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -76,6 +63,14 @@ describe('CodingJobBackendService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('submits bulk deletion as one workspace-scoped request', () => {
+    service.deleteCodingJobs(5, [1, 2]).subscribe(result => expect(result.success).toBe(true));
+    const request = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/5/coding-job/bulk-delete`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ ids: [1, 2] });
+    request.flush({ success: true });
+  });
+
   describe('keepalive fetch authentication', () => {
     beforeEach(() => {
       fetchMock = jest.fn().mockResolvedValue({
@@ -85,17 +80,16 @@ describe('CodingJobBackendService', () => {
       globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
     });
 
-    it('attaches the current Keycloak token to keepalive job updates synchronously', () => {
-      service.updateCodingJobKeepalive(1, 2, { status: 'active' });
+    it('attaches the stored auth token to keepalive job updates synchronously', () => {
+      service.updateCodingJobKeepalive(1, 2, 'active');
 
-      expect(keycloak.updateToken).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalledWith(
-        `${mockServerUrl}wsg-admin/workspace/1/coding-job/2`,
+        `${mockServerUrl}wsg-admin/workspace/1/coding-job/2/status`,
         expect.objectContaining({
           method: 'PUT',
           keepalive: true,
           headers: {
-            Authorization: 'Bearer keycloak-token',
+            Authorization: 'Bearer mock-token',
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ status: 'active' })
@@ -106,7 +100,6 @@ describe('CodingJobBackendService', () => {
     it('preserves explicit scoped tokens for keepalive pause requests', () => {
       service.pauseCodingJobKeepalive(1, 2, 'scoped-token');
 
-      expect(keycloak.updateToken).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalledWith(
         `${mockServerUrl}wsg-admin/workspace/1/coding-job/2/pause`,
         expect.objectContaining({
@@ -362,7 +355,7 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({});
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush({
         success: true,
         jobsCreated: 3,
@@ -397,7 +390,7 @@ describe('CodingJobBackendService', () => {
         `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/create-job-preview`
       );
       expect(req.request.method).toBe('GET');
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush({
         distribution: { 'Unit::Var': { Ada: 1 } },
         distributionByCoderId: { 'Unit::Var': { 1: 1 } },
@@ -439,7 +432,7 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
-      expect(req.request.headers.get('Authorization')).toBeNull();
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush(mockBlob);
     });
 
@@ -719,7 +712,7 @@ describe('CodingJobBackendService', () => {
   describe('createCodingJob', () => {
     it('should create coding job', () => {
       const job = { name: 'J', workspace_id: 1 } as unknown as Omit<
-      CodingJob,
+        CodingJob,
       'id' | 'createdAt' | 'updatedAt'
       >;
       service.createCodingJob(1, job).subscribe();

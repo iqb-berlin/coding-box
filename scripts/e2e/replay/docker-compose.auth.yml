@@ -1,5 +1,6 @@
 services:
   keycloak:
+    mem_limit: 1g
     image: quay.io/keycloak/keycloak:26.4.0
     command: ['start-dev', '--import-realm']
     environment:
@@ -12,6 +13,14 @@ services:
       - '${REPLAY_E2E_PUBLISH_HOST:-127.0.0.1}:${REPLAY_E2E_KEYCLOAK_PORT}:8080'
   backend:
     environment:
+      NODE_ENV: development
+      FRONTEND_URL: ${REPLAY_E2E_BASE_URL}
+      OAUTH2_REDIRECT_URL: ${REPLAY_E2E_CALLBACK_URL}
+      OIDC_AUTHORIZATION_ENDPOINT: ${REPLAY_E2E_OIDC_ISSUER}/protocol/openid-connect/auth
+      OIDC_TOKEN_ENDPOINT: http://keycloak:8080/realms/coding-e2e/protocol/openid-connect/token
+      OIDC_USERINFO_ENDPOINT: http://keycloak:8080/realms/coding-e2e/protocol/openid-connect/userinfo
+      OIDC_END_SESSION_ENDPOINT: http://keycloak:8080/realms/coding-e2e/protocol/openid-connect/logout
+      OIDC_ACCOUNT_ENDPOINT: ${REPLAY_E2E_KEYCLOAK_URL}/realms/coding-e2e/account
       OIDC_ISSUER: ${REPLAY_E2E_OIDC_ISSUER}
       OIDC_JWKS_URI: http://keycloak:8080/realms/coding-e2e/protocol/openid-connect/certs
   frontend:

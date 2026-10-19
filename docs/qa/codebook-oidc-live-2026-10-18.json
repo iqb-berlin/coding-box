@@ -1,0 +1,2632 @@
+{
+  "createdAt": "2026-10-18T18:40:35.167Z",
+  "sourceCommit": "739a13d1866db61d9926e328c241c645f7e9d4e5",
+  "seeding": "synthetic direct SQL in dedicated Compose database",
+  "exports": [
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.json",
+      "sha256": "9ba79896fbfb6b80bbf8cf65a05c6a0e7cd2a5f5937cb8df5b2946f0fa180e9a",
+      "bytes": 492,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "1",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "1",
+            "fileName": "codebook_1_1792348838788.json",
+            "fileSize": 492,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348838794
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348838749,
+        "finishedOn": 1792348838798,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "1",
+          "fileName": "codebook_1_1792348838788.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_1_1792348838788.json",
+          "fileSize": 492,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348838794
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-instructions-score.docx",
+      "sha256": "aeb1f40ca3f4988f6356590cc1bc3f9395d2c4172e14308660797097ad23ff0e",
+      "bytes": 8794,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "2",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "2",
+            "fileName": "codebook_2_1792348838980.docx",
+            "fileSize": 8794,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348838981
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348838923,
+        "finishedOn": 1792348838983,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "2",
+          "fileName": "codebook_2_1792348838980.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_2_1792348838980.docx",
+          "fileSize": 8794,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348838981
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.json",
+      "sha256": "e0e114362d4e628a1972a04825de33618b4187dab6b5cdf85cb48cb6446734c8",
+      "bytes": 432,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "3",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "3",
+            "fileName": "codebook_3_1792348839168.json",
+            "fileSize": 432,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348839170
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839157,
+        "finishedOn": 1792348839173,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "3",
+          "fileName": "codebook_3_1792348839168.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_3_1792348839168.json",
+          "fileSize": 432,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348839170
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "all-plain.docx",
+      "sha256": "83d18ec3f37daea1e02568b9f37b50c2440006633ad9617d31a3bb03816c72c4",
+      "bytes": 8759,
+      "expectedAliases": [
+        "idA",
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ],
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all"
+      },
+      "id": "4",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "4",
+            "fileName": "codebook_4_1792348839330.docx",
+            "fileSize": 8759,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348839331
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839307,
+        "finishedOn": 1792348839334,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "4",
+          "fileName": "codebook_4_1792348839330.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_4_1792348839330.docx",
+          "fileSize": 8759,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348839331
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1
+      },
+      "id": "5",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "5",
+            "fileName": "codebook_5_1792348839496.json",
+            "fileSize": 316,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348839497
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839481,
+        "finishedOn": 1792348839498,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "5",
+          "fileName": "codebook_5_1792348839496.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_5_1792348839496.json",
+          "fileSize": 316,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348839497
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-instructions-score.docx",
+      "sha256": "c8a551848e6812d8920f414197eff74ff5874944dc12b2f6c16a6b1bfffda1e3",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1
+      },
+      "id": "6",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "6",
+            "fileName": "codebook_6_1792348839663.docx",
+            "fileSize": 8734,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348839665
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839641,
+        "finishedOn": 1792348839666,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "6",
+          "fileName": "codebook_6_1792348839663.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_6_1792348839663.docx",
+          "fileSize": 8734,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348839665
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1
+      },
+      "id": "7",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "7",
+            "fileName": "codebook_7_1792348839823.json",
+            "fileSize": 286,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348839824
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839807,
+        "finishedOn": 1792348839826,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "7",
+          "fileName": "codebook_7_1792348839823.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_7_1792348839823.json",
+          "fileSize": 286,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348839824
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "job-plain.docx",
+      "sha256": "6413b08b9b42ab1656b36da6237f4f228805527d8e0b188132bbc7d38fbe862c",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1
+      },
+      "id": "8",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "8",
+            "fileName": "codebook_8_1792348839974.docx",
+            "fileSize": 8709,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348839976
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348839951,
+        "finishedOn": 1792348839978,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": []
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "8",
+          "fileName": "codebook_8_1792348839974.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_8_1792348839974.docx",
+          "fileSize": 8709,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348839976
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "9",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "9",
+            "fileName": "codebook_9_1792348840153.json",
+            "fileSize": 316,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348840154
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840121,
+        "finishedOn": 1792348840155,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "9",
+          "fileName": "codebook_9_1792348840153.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_9_1792348840153.json",
+          "fileSize": 316,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348840154
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-instructions-score.docx",
+      "sha256": "76c098e60f5bce38cf5f10a9da54fa74a18e44fc791f4b02ded29a02ab3b6880",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "10",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "10",
+            "fileName": "codebook_10_1792348840309.docx",
+            "fileSize": 8734,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348840312
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840287,
+        "finishedOn": 1792348840314,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "10",
+          "fileName": "codebook_10_1792348840309.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_10_1792348840309.docx",
+          "fileSize": 8734,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348840312
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "11",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "11",
+            "fileName": "codebook_11_1792348840457.json",
+            "fileSize": 286,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348840458
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840448,
+        "finishedOn": 1792348840460,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "11",
+          "fileName": "codebook_11_1792348840457.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_11_1792348840457.json",
+          "fileSize": 286,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348840458
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "bundle-plain.docx",
+      "sha256": "ec681ddb401459d5de88d94d6310103c30cc8fa692d11b60feebca2fd25139e8",
+      "bytes": 8708,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "12",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "12",
+            "fileName": "codebook_12_1792348840612.docx",
+            "fileSize": 8708,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348840615
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840592,
+        "finishedOn": 1792348840617,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "12",
+          "fileName": "codebook_12_1792348840612.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_12_1792348840612.docx",
+          "fileSize": 8708,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348840615
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.json",
+      "sha256": "e91071d6e343e05429a8bc9699668c2ece120b2198df174b5c4e09e1b7d59de0",
+      "bytes": 316,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1,
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "13",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "13",
+            "fileName": "codebook_13_1792348840754.json",
+            "fileSize": 316,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348840755
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840745,
+        "finishedOn": 1792348840756,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "13",
+          "fileName": "codebook_13_1792348840754.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_13_1792348840754.json",
+          "fileSize": 316,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348840755
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-instructions-score.docx",
+      "sha256": "0ea9982b35966dd41d7713bbd70d3865c2334c21a174d0d74e373594aa53ef4c",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1,
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "14",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "14",
+            "fileName": "codebook_14_1792348840911.docx",
+            "fileSize": 8734,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348840912
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348840892,
+        "finishedOn": 1792348840913,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "14",
+          "fileName": "codebook_14_1792348840911.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_14_1792348840911.docx",
+          "fileSize": 8734,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348840912
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.json",
+      "sha256": "87d3102e051c4cb913c0a1bdfcc4153f30da42168339a9860c69a7bd8530839d",
+      "bytes": 286,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1,
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "15",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "15",
+            "fileName": "codebook_15_1792348841065.json",
+            "fileSize": 286,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348841066
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841058,
+        "finishedOn": 1792348841067,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "15",
+          "fileName": "codebook_15_1792348841065.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_15_1792348841065.json",
+          "fileSize": 286,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348841066
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "intersection-plain.docx",
+      "sha256": "a6013fefd7e646f1322ea825eabc4c8d5ae23d201437a78319263505f6ecb737",
+      "bytes": 8708,
+      "expectedAliases": [
+        "idB"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-A",
+          "LEGACY-A"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 1,
+        "variableBundleIds": [
+          1
+        ]
+      },
+      "id": "16",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "16",
+            "fileName": "codebook_16_1792348841208.docx",
+            "fileSize": 8708,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348841209
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841190,
+        "finishedOn": 1792348841210,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 1,
+            "variableBundleIds": [
+              1
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "16",
+          "fileName": "codebook_16_1792348841208.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_16_1792348841208.docx",
+          "fileSize": 8708,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348841209
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.json",
+      "sha256": "abc04778fd9ada34b668319936decf667d53eb21a3c6c414d2c1900f93c8ccb1",
+      "bytes": 332,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 2,
+        "variableBundleIds": [
+          3
+        ]
+      },
+      "id": "17",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "17",
+            "fileName": "codebook_17_1792348841339.json",
+            "fileSize": 332,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348841340
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841329,
+        "finishedOn": 1792348841341,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 2,
+            "variableBundleIds": [
+              3
+            ]
+          },
+          "unitIds": [
+            104102
+          ]
+        },
+        "result": {
+          "fileId": "17",
+          "fileName": "codebook_17_1792348841339.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_17_1792348841339.json",
+          "fileSize": 332,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348841340
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-instructions-score.docx",
+      "sha256": "fda659021481d3c313db133541da85620f81c85aebf820497b863655c8054776",
+      "bytes": 8729,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 2,
+        "variableBundleIds": [
+          3
+        ]
+      },
+      "id": "18",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "18",
+            "fileName": "codebook_18_1792348841495.docx",
+            "fileSize": 8729,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348841497
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841469,
+        "finishedOn": 1792348841500,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 2,
+            "variableBundleIds": [
+              3
+            ]
+          },
+          "unitIds": [
+            104102
+          ]
+        },
+        "result": {
+          "fileId": "18",
+          "fileName": "codebook_18_1792348841495.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_18_1792348841495.docx",
+          "fileSize": 8729,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348841497
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.json",
+      "sha256": "0de5784e51a06232ee0c7949a6d1042ec9e408f82876d6cc3611d60025a1b1ee",
+      "bytes": 300,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 2,
+        "variableBundleIds": [
+          3
+        ]
+      },
+      "id": "19",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "19",
+            "fileName": "codebook_19_1792348841641.json",
+            "fileSize": 300,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348841642
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841630,
+        "finishedOn": 1792348841644,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 2,
+            "variableBundleIds": [
+              3
+            ]
+          },
+          "unitIds": [
+            104102
+          ]
+        },
+        "result": {
+          "fileId": "19",
+          "fileName": "codebook_19_1792348841641.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_19_1792348841641.json",
+          "fileSize": 300,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348841642
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "partial-intersection-plain.docx",
+      "sha256": "10465344286a8c448b77b20367058880c21cb7f8cc095f24220d8f225eff5587",
+      "bytes": 8703,
+      "expectedAliases": [
+        "C"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-C"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "jobDefinitionId": 2,
+        "variableBundleIds": [
+          3
+        ]
+      },
+      "id": "20",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "20",
+            "fileName": "codebook_20_1792348841792.docx",
+            "fileSize": 8703,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348841793
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841770,
+        "finishedOn": 1792348841796,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": 2,
+            "variableBundleIds": [
+              3
+            ]
+          },
+          "unitIds": [
+            104102
+          ]
+        },
+        "result": {
+          "fileId": "20",
+          "fileName": "codebook_20_1792348841792.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_20_1792348841792.docx",
+          "fileSize": 8703,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348841793
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.json",
+      "sha256": "03033fe0c4485c590699c96d00d5eeb912376e600f5cace0a6ae52ff1326f764",
+      "bytes": 316,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          2
+        ]
+      },
+      "id": "21",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "21",
+            "fileName": "codebook_21_1792348841930.json",
+            "fileSize": 316,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348841931
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348841917,
+        "finishedOn": 1792348841932,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              2
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "21",
+          "fileName": "codebook_21_1792348841930.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_21_1792348841930.json",
+          "fileSize": 316,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348841931
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-instructions-score.docx",
+      "sha256": "0620456d87b8ca76f7b879f44d7f49a2924d703e76bcc8067e1b995406b9c7c2",
+      "bytes": 8734,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": true,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": true,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          2
+        ]
+      },
+      "id": "22",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "22",
+            "fileName": "codebook_22_1792348842074.docx",
+            "fileSize": 8734,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348842075
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348842058,
+        "finishedOn": 1792348842077,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": true,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": true,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              2
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "22",
+          "fileName": "codebook_22_1792348842074.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_22_1792348842074.docx",
+          "fileSize": 8734,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348842075
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.json",
+      "sha256": "643a689cb56fcd1b39d85b74ec2b56f204c69c475751b646668eece7b644a6de",
+      "bytes": 286,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "json",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          2
+        ]
+      },
+      "id": "23",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "23",
+            "fileName": "codebook_23_1792348842228.json",
+            "fileSize": 286,
+            "workspaceId": 1,
+            "exportFormat": "json",
+            "createdAt": 1792348842229
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348842214,
+        "finishedOn": 1792348842230,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "json",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              2
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "23",
+          "fileName": "codebook_23_1792348842228.json",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_23_1792348842228.json",
+          "fileSize": 286,
+          "workspaceId": 1,
+          "exportFormat": "json",
+          "createdAt": 1792348842229
+        }
+      }
+    },
+    {
+      "studioEqual": true,
+      "filename": "reverse-plain.docx",
+      "sha256": "c67d31c3fb9be9865e9c80dd1d87180a7dd496e99f6efca20628fa06df2cc448",
+      "bytes": 8709,
+      "expectedAliases": [
+        "idA"
+      ],
+      "expectedItems": [
+        [
+          "ITEM-B",
+          "LEGACY-B"
+        ]
+      ],
+      "options": {
+        "exportFormat": "docx",
+        "missingsProfile": "2",
+        "hasOnlyManualCoding": true,
+        "hasGeneralInstructions": false,
+        "hasDerivedVars": true,
+        "hasOnlyVarsWithCodes": true,
+        "hasClosedVars": false,
+        "codeLabelToUpper": false,
+        "showScore": false,
+        "hideItemVarRelation": false,
+        "trainingRequirement": "all",
+        "variableBundleIds": [
+          2
+        ]
+      },
+      "id": "24",
+      "history": [
+        {
+          "status": "processing",
+          "progress": 10
+        },
+        {
+          "status": "completed",
+          "progress": 100,
+          "result": {
+            "fileId": "24",
+            "fileName": "codebook_24_1792348842387.docx",
+            "fileSize": 8709,
+            "workspaceId": 1,
+            "exportFormat": "docx",
+            "createdAt": 1792348842389
+          }
+        }
+      ],
+      "queue": {
+        "name": "codebook-generation",
+        "state": "completed",
+        "processedOn": 1792348842367,
+        "finishedOn": 1792348842391,
+        "attemptsMade": 0,
+        "data": {
+          "workspaceId": 1,
+          "missingsProfile": 2,
+          "contentOptions": {
+            "exportFormat": "docx",
+            "missingsProfile": "2",
+            "hasOnlyManualCoding": true,
+            "hasGeneralInstructions": false,
+            "hasDerivedVars": true,
+            "hasOnlyVarsWithCodes": true,
+            "hasClosedVars": false,
+            "codeLabelToUpper": false,
+            "showScore": false,
+            "hideItemVarRelation": false,
+            "trainingRequirement": "all",
+            "jobDefinitionId": null,
+            "variableBundleIds": [
+              2
+            ]
+          },
+          "unitIds": [
+            104101
+          ]
+        },
+        "result": {
+          "fileId": "24",
+          "fileName": "codebook_24_1792348842387.docx",
+          "filePath": "/Users/user/Documents/Codex/2026-10-18/pr-fe-wie-gut-angular-x20/work/pr-review/repository/temp/codebook_24_1792348842387.docx",
+          "fileSize": 8709,
+          "workspaceId": 1,
+          "exportFormat": "docx",
+          "createdAt": 1792348842389
+        }
+      }
+    }
+  ],
+  "autocoder": [
+    {
+      "name": "ceil",
+      "unit": 1,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        },
+        {
+          "id": "T",
+          "value": 1,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 1,
+          "score": 1
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "1",
+          "score_v1": "1",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "equality",
+      "unit": 2,
+      "reference": [
+        {
+          "id": "A",
+          "value": "0.000000000000001",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        },
+        {
+          "id": "T",
+          "value": 0,
+          "status": "CODING_COMPLETE",
+          "subform": "part-a",
+          "code": 0,
+          "score": 0
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "0.000000000000001",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "0",
+          "subform": "part-a",
+          "status_v1": 5,
+          "code_v1": "0",
+          "score_v1": "0",
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "null",
+      "unit": 3,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "infinity",
+      "unit": 4,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "config",
+      "unit": 5,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    },
+    {
+      "name": "exponent-string",
+      "unit": 6,
+      "reference": [
+        {
+          "id": "A",
+          "value": "1e-15",
+          "status": "NO_CODING",
+          "subform": "part-a"
+        },
+        {
+          "id": "D",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        },
+        {
+          "id": "T",
+          "value": null,
+          "status": "DERIVE_ERROR",
+          "subform": "part-a"
+        }
+      ],
+      "persisted": [
+        {
+          "variableid": "A",
+          "value": "1e-15",
+          "subform": "part-a",
+          "status_v1": 6,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": false
+        },
+        {
+          "variableid": "D",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        },
+        {
+          "variableid": "T",
+          "value": "",
+          "subform": "part-a",
+          "status_v1": 4,
+          "code_v1": null,
+          "score_v1": null,
+          "is_autocoder_generated": true
+        }
+      ]
+    }
+  ],
+  "authentication": {
+    "protocol": "OIDC",
+    "issuer": "http://127.0.0.1:18441/realms/codebook-proof",
+    "clientId": "codebook-proof",
+    "tokenSource": "dedicated local Keycloak realm"
+  },
+  "migrations": 163,
+  "backendArtifactSha256": "b47fdb41a57ffa376609a15c47c39165cdb205f8c22c7071b887d47cc16da0cf",
+  "frontendArtifactSha256": "c971ef30a014d0d01f28ae3cb8269ad8f63a182909e351558cfa6e71d2c5c539",
+  "runnerSha256": "684ba2cd372c99885a069fa4753330fd38e49e837cee3dca115eab87762c9d99",
+  "packageSha256": "e67c04e07762350cb4ee3b1a70a36bcde0f2ba1c24df1f5a40000346d34fd112",
+  "studio": {
+    "commit": "86ff5d9d8f2d61d63258e15024f04beb3ef69b50",
+    "sourceSha256": "52db9d720b0af26f66b1a5deb4ab46fc5e4b7e18b1c07265d6516b0120dbbe75",
+    "packageSha256": "e67c04e07762350cb4ee3b1a70a36bcde0f2ba1c24df1f5a40000346d34fd112",
+    "persistence": "Studio repository/profile boundaries in memory; Kodierbox HTTP/DB/Redis live",
+    "scope": "Studio receives the explicitly expected variable subset and item identities; it has no Kodierbox job/bundle filter"
+  },
+  "workspaceId": 1,
+  "failedExport": {
+    "id": "25",
+    "history": [
+      {
+        "status": "stuck",
+        "progress": 10
+      },
+      {
+        "status": "failed",
+        "progress": 10,
+        "error": "Die ausgewählten Schnellfilter enthalten keine passenden Variablen für die ausgewählten Einheiten."
+      }
+    ],
+    "queue": {
+      "name": "codebook-generation",
+      "state": "failed",
+      "processedOn": 1792348842526,
+      "finishedOn": 1792348842546,
+      "attemptsMade": 1,
+      "failedReason": "Die ausgewählten Schnellfilter enthalten keine passenden Variablen für die ausgewählten Einheiten.",
+      "data": {
+        "workspaceId": 1,
+        "missingsProfile": 2,
+        "contentOptions": {
+          "exportFormat": "json",
+          "missingsProfile": "2",
+          "hasOnlyManualCoding": true,
+          "hasGeneralInstructions": true,
+          "hasDerivedVars": true,
+          "hasOnlyVarsWithCodes": true,
+          "hasClosedVars": false,
+          "codeLabelToUpper": false,
+          "showScore": true,
+          "hideItemVarRelation": false,
+          "trainingRequirement": "all",
+          "jobDefinitionId": 1,
+          "variableBundleIds": [
+            2
+          ]
+        },
+        "unitIds": [
+          104101
+        ]
+      },
+      "result": null
+    }
+  },
+  "autocoderJob": {
+    "id": "1",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "processing",
+        "progress": 81
+      },
+      {
+        "status": "processing",
+        "progress": 90
+      },
+      {
+        "status": "completed",
+        "progress": 100,
+        "result": {
+          "totalResponses": 6,
+          "statusCounts": {
+            "NO_CODING": 6,
+            "CODING_COMPLETE": 4,
+            "DERIVE_ERROR": 8
+          }
+        }
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "completed",
+      "processedOn": 1792348842812,
+      "finishedOn": 1792348843107,
+      "attemptsMade": 0,
+      "data": {
+        "workspaceId": 1,
+        "personIds": [
+          "1"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": {
+        "totalResponses": 6,
+        "statusCounts": {
+          "NO_CODING": 6,
+          "CODING_COMPLETE": 4,
+          "DERIVE_ERROR": 8
+        }
+      }
+    }
+  },
+  "failedAutocoder": {
+    "id": "2",
+    "history": [
+      {
+        "status": "processing",
+        "progress": 0
+      },
+      {
+        "status": "failed",
+        "progress": 81,
+        "error": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (7): duplicate output alias \"A\"."
+      }
+    ],
+    "queue": {
+      "name": "test-person-coding",
+      "state": "failed",
+      "processedOn": 1792348843239,
+      "finishedOn": 1792348843322,
+      "attemptsMade": 1,
+      "failedReason": "Autocoder rejected coding scheme \"SOLVER-INVALID-NAMESPACE.VOCS\" for unit \"SOLVER-INVALID-NAMESPACE\" (7): duplicate output alias \"A\".",
+      "data": {
+        "workspaceId": 1,
+        "personIds": [
+          "2"
+        ],
+        "autoCoderRun": 1
+      },
+      "result": null
+    },
+    "persistenceUnchanged": true
+  },
+  "passed": true
+}

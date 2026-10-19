@@ -32,6 +32,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   debounceTime, distinctUntilChanged, finalize, Subject, takeUntil
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
@@ -266,6 +267,13 @@ interface ModalValueDisplay {
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit, OnDestroy, AfterViewInit {
+  readonly permissions = inject(CodingPermissionsService);
+
+  get canEditDiscussion(): boolean {
+    const training = this.getSelectedWithinTraining();
+    return this.permissions.canApply || (!!training && this.permissions.canEdit(training));
+  }
+
   protected dialogRef = inject<MatDialogRef<CodingResultsComparisonComponent>>(MatDialogRef);
   data = inject<CodingResultsComparisonDialogData>(MAT_DIALOG_DATA);
   private paginatorIntl = inject(MatPaginatorIntl);
@@ -432,6 +440,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnInit(): void {
+    this.permissions.load(this.data.workspaceId);
     this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
       key: this.trainingDiscussionRecoveryKey,
       capture: () => this.createTrainingDiscussionRecoveryDraft()
@@ -1066,6 +1075,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onDiscussionCodeInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
+    if (!this.canEditDiscussion) return;
     if (this.comparisonMode !== 'within-training') {
       return;
     }
@@ -1118,6 +1128,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onDiscussionNotesInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
+    if (!this.canEditDiscussion) return;
     if (this.comparisonMode !== 'within-training') {
       return;
     }
@@ -1134,6 +1145,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     comparison: TrainingComparison | WithinTrainingComparison,
     scoreOverride?: number | null
   ): void {
+    if (!this.canEditDiscussion) return;
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
       return;
     }
@@ -1287,6 +1299,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
+    if (!this.permissions.canApply) return;
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
       this.snackBar.open('Bitte zuerst eine Schulung auswählen.', this.translate.instant('common.close'), { duration: 3000 });
       return;
@@ -1344,6 +1357,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     strategies: ApplyTrainingDiscussionResultsDialogResult,
     trainingId = this.selectedTrainingForWithin
   ): void {
+    if (!this.permissions.canApply) return;
     if (!trainingId) {
       return;
     }
@@ -1589,6 +1603,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       const [path, query = ''] = value.split('?', 2);
       const params = new URLSearchParams(query);
       params.set('mode', 'coding-decision');
+      params.set('decisionReadOnly', String(this.comparisonMode !== 'within-training' || !this.canEditDiscussion));
       params.set('originResponseId', responseId.toString());
       if (displayOptions.showScore !== undefined) {
         params.set('showScore', String(displayOptions.showScore));

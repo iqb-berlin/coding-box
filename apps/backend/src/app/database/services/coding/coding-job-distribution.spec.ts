@@ -1,10 +1,22 @@
 import { BadRequestException } from '@nestjs/common';
+import { createCodingJobService } from './coding-job-test.factory';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { JournalService } from '../shared/journal.service';
+// Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -104,6 +116,7 @@ describe('CodingJobService distribution from job definitions', () => {
   let cacheService: { delete: jest.Mock; incr: jest.Mock };
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();
@@ -117,6 +130,8 @@ describe('CodingJobService distribution from job definitions', () => {
     jobDefinitionRepository.createQueryBuilder.mockReturnValue(createJobDefinitionLockQueryBuilder());
     const connection = {
       transaction: jest.fn(callback => callback({
+        find: jest.fn().mockResolvedValue([]),
+        query: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === JobDefinition) return jobDefinitionRepository;
@@ -144,7 +159,7 @@ describe('CodingJobService distribution from job definitions', () => {
       assertUsersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
     };
 
-    service = new CodingJobService(
+    service = createCodingJobService(
       codingJobRepository as never,
       codingJobCoderRepository as never,
       codingJobVariableRepository as never,

@@ -20,14 +20,13 @@ export default {
       }
     ]
   },
-  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver|keycloak-js)'],
+  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@angular/common/locales/|@iqb/metadata-resolver)'],
   snapshotSerializers: [
     'jest-preset-angular/build/serializers/no-ng-attributes',
     'jest-preset-angular/build/serializers/ng-snapshot',
     'jest-preset-angular/build/serializers/html-comment'
   ],
   moduleNameMapper: {
-    '^keycloak-js$': '<rootDir>/src/mocks/keycloak-js.mock.ts',
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'
   },
@@ -35,6 +34,10 @@ export default {
   coverageReporters: ['text-summary', 'html', 'lcov', 'json', 'cobertura'],
   reporters: [
     'default',
-    ['jest-junit', { outputDirectory: '<rootDir>/../../coverage/apps/frontend', outputName: 'junit.xml' }]
+    ['jest-junit', {
+      outputDirectory: '<rootDir>/../../coverage/apps/frontend',
+      outputName: 'junit.xml',
+      reportTestSuiteErrors: 'true'
+    }]
   ]
 };

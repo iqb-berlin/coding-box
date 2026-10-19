@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Delete,
   Get,
@@ -14,9 +13,9 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
-  Put
+  Put,
+  ParseIntPipe, Req
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -28,8 +27,11 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -37,7 +39,6 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
 import { Setting } from '../../database/entities/setting.entity';
@@ -101,19 +102,19 @@ export class WorkspaceFilesController {
   @RequireAccessLevel(3)
   async findFiles(
     @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20,
-                           @Query('fileType') fileType?: string,
-                           @Query('fileSize') fileSize?: string,
-                           @Query('searchText') searchText?: string,
-                           @Query('regexSearch') regexSearch?: string
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('fileType') fileType?: string,
+    @Query('fileSize') fileSize?: string,
+    @Query('searchText') searchText?: string,
+    @Query('regexSearch') regexSearch?: string
   ): Promise<{
-        data: FilesDto[];
-        total: number;
-        page: number;
-        limit: number;
-        fileTypes: string[];
-      }> {
+      data: FilesDto[];
+      total: number;
+      page: number;
+      limit: number;
+      fileTypes: string[];
+    }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
@@ -144,9 +145,7 @@ export class WorkspaceFilesController {
         throw regexError;
       }
 
-      throw new BadRequestException(
-        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message} `
-      );
+      throw error;
     }
   }
 
@@ -155,7 +154,7 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteTestFiles(
-  @Query() query: { fileIds: string },
+    @Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number
   ) {
     const fileIds = query.fileIds.split(/[,;]/).map(id => id.trim()).filter(id => id.length > 0);
@@ -185,7 +184,7 @@ export class WorkspaceFilesController {
   })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+    @ValidatedBody('WorkspaceFilesController_excludePersons') body: RequestBody<'WorkspaceFilesController_excludePersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -233,7 +232,7 @@ export class WorkspaceFilesController {
   @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
   async considerPersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+    @ValidatedBody('WorkspaceFilesController_considerPersons') body: RequestBody<'WorkspaceFilesController_considerPersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -289,9 +288,9 @@ export class WorkspaceFilesController {
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
-      @Query('overwriteExisting') overwriteExisting: string | undefined,
-      @Query('overwriteFileIds') overwriteFileIds: string | undefined,
-      @UploadedFiles() files: Express.Multer.File[]
+    @Query('overwriteExisting') overwriteExisting: string | undefined,
+    @Query('overwriteFileIds') overwriteFileIds: string | undefined,
+    @UploadedFiles() files: Express.Multer.File[]
   ): Promise<TestFilesUploadResultDto> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -301,32 +300,31 @@ export class WorkspaceFilesController {
       throw new BadRequestException('At least one file must be uploaded.');
     }
 
-    try {
-      const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
-      const overwriteIds = (overwriteFileIds || '')
-        .split(/[,;]/)
-        .map(s => s.trim())
-        .filter(Boolean);
-      return await this.workspaceFilesService.uploadTestFiles(
-        workspaceId,
-        files,
-        overwrite,
-        overwriteIds.length > 0 ? overwriteIds : undefined
-      );
-    } catch (error) {
-      this.logger.error('Error uploading test files:');
-      return {
-        total: Array.isArray(files) ? files.length : 0,
-        uploaded: 0,
-        failed: Array.isArray(files) ? files.length : 0,
-        failedFiles: Array.isArray(files) ?
-          files.map(f => ({
-            filename: f.originalname,
-            reason: 'Upload failed'
-          })) :
-          []
-      };
-    }
+    const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+    const overwriteIds = (overwriteFileIds || '')
+      .split(/[,;]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    return this.workspaceFilesService.uploadTestFiles(
+      workspaceId,
+      files,
+      overwrite,
+      overwriteIds.length > 0 ? overwriteIds : undefined
+    );
+  }
+
+  @Get(':workspace_id/files/:fileId/metadata')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Read a workspace metadata resource' })
+  @ApiOkResponse({ type: FileDownloadDto })
+  @ApiNotFoundResponse({ description: 'Metadata resource not found in this workspace' })
+  async readMetadataFile(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('fileId', ParseIntPipe) fileId: number
+  ): Promise<FileDownloadDto> {
+    return this.workspaceFilesService.readMetadataFile(workspaceId, fileId);
   }
 
   @Get(':workspace_id/files/:fileId/download')
@@ -356,7 +354,7 @@ export class WorkspaceFilesController {
   @ApiTags('workspace')
   async downloadFile(
     @Param('workspace_id') workspaceId: number,
-      @Param('fileId') fileId: number
+    @Param('fileId') fileId: number
   ): Promise<FileDownloadDto> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required.');
@@ -369,9 +367,7 @@ export class WorkspaceFilesController {
       );
     } catch (error) {
       this.logger.error(`'Error downloading test file:' ${error} `);
-      throw new InternalServerErrorException(
-        'Unable to download the file. Please try again later.'
-      );
+      throw error;
     }
   }
 
@@ -402,7 +398,7 @@ export class WorkspaceFilesController {
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id') workspaceId: string,
-      @Body() body?: { fileTypes?: string[] }
+    @ValidatedBody('WorkspaceFilesController_downloadWorkspaceFilesAsZip', true) body?: RequestBody<'WorkspaceFilesController_downloadWorkspaceFilesAsZip'>
   ): Promise<StreamableFile> {
     const startTime = Date.now();
     const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
@@ -474,35 +470,7 @@ export class WorkspaceFilesController {
       );
 
       // Re-throw generic exceptions if needed, though they aren't caught locally anymore.
-      if (
-        error instanceof BadRequestException ||
-        error instanceof InternalServerErrorException
-      ) {
-        throw error;
-      }
-
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message.includes('ENOENT')) {
-          throw new InternalServerErrorException(
-            'One or more files could not be found.'
-          );
-        }
-        if (error.message.includes('EACCES')) {
-          throw new InternalServerErrorException(
-            'Permission denied accessing files.'
-          );
-        }
-        if (error.message.includes('ENOMEM')) {
-          throw new InternalServerErrorException(
-            'Insufficient memory to create ZIP file.'
-          );
-        }
-      }
-
-      throw new InternalServerErrorException(
-        'Unable to create ZIP file. Please try again later.'
-      );
+      throw error;
     }
 
     // Validate ZIP buffer outside try/catch
@@ -554,12 +522,13 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { ignoredUnits: string[] }
+    @ValidatedBody('WorkspaceFilesController_updateIgnoredUnits') body: RequestBody<'WorkspaceFilesController_updateIgnoredUnits'>,
+    @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
       throw new BadRequestException('ignoredUnits must be an array of strings');
     }
-    return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits);
+    return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits, request?.user.id);
   }
 
   @Get(':workspace_id/settings')
@@ -581,11 +550,12 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: WorkspaceSettingsDto
+    @ValidatedBody('WorkspaceSettingsDto') body: RequestBody<'WorkspaceSettingsDto'>,
+    @Req() request?: { user: { id: number } }
   ): Promise<void> {
     if (!body) {
       throw new BadRequestException('Request body is required');
     }
-    return this.workspaceCoreService.setWorkspaceSettings(workspaceId, body);
+    return this.workspaceCoreService.setWorkspaceSettings(workspaceId, body, request?.user.id);
   }
 }

@@ -4,7 +4,8 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
-  Optional
+  Optional,
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -61,7 +62,7 @@ import {
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
-import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+import { ResponseDeletionAuditContext, WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
@@ -199,6 +200,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private unitRepository: Repository<Unit>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
+    @Inject(forwardRef(() => CodingStatisticsService))
     private codingStatisticsService: CodingStatisticsService,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceFileStorageService: WorkspaceFileStorageService,
@@ -208,8 +210,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
+    @Inject(forwardRef(() => CodingFreshnessService))
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
     private readonly codingFileCacheService?: CodingFileCacheService,
@@ -3084,18 +3088,21 @@ ${bookletRefs}
 
   async deleteInvalidResponses(
     workspaceId: number,
-    responseIds: number[]
+    responseIds: number[],
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
-      workspaceId,
-      responseIds
-    );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
+    try {
+      const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
+        workspaceId,
+        responseIds,
+        audit
       );
+      if (deletedCount > 0) await this.invalidateResponseDeletionCaches(workspaceId);
+      return deletedCount;
+    } catch (error) {
+      await this.invalidateResponseDeletionCaches(workspaceId);
+      throw error;
     }
-    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -3104,18 +3111,33 @@ ${bookletRefs}
     | 'variables'
     | 'variableTypes'
     | 'responseStatus'
-    | 'duplicateResponses'
+    | 'duplicateResponses',
+    audit: ResponseDeletionAuditContext = {}
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
-      workspaceId,
-      validationType
-    );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
+    try {
+      const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
+        workspaceId,
+        validationType,
+        audit
       );
+      if (deletedCount > 0) await this.invalidateResponseDeletionCaches(workspaceId);
+      return deletedCount;
+    } catch (error) {
+      await this.invalidateResponseDeletionCaches(workspaceId);
+      throw error;
     }
-    return deletedCount;
+  }
+
+  private async invalidateResponseDeletionCaches(workspaceId: number): Promise<void> {
+    try {
+      await Promise.all([
+        this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
+      ]);
+    } catch (error) {
+      this.logger.error(`Could not invalidate response deletion caches for workspace ${workspaceId}: ${error.message}`);
+    }
   }
 
   async onModuleInit(): Promise<void> {
@@ -3226,8 +3248,8 @@ ${bookletRefs}
       const manualInstructionByUnit = new Map<string, Set<string>>();
       const trainingRequiredByUnit = new Map<string, Set<string>>();
       const derivedSourcesByUnit = new Map<
-      string,
-      Array<{ derivedId: string; derivedAlias?: string; sourceIds: string[] }>
+        string,
+        Array<{ derivedId: string; derivedAlias?: string; sourceIds: string[] }>
       >();
       for (const scheme of codingSchemes) {
         try {
@@ -3882,37 +3904,37 @@ ${bookletRefs}
       const codingSchemeAliasToIdMap = new Map<string, Map<string, string>>();
       const codingSchemeIdToAliasMap = new Map<string, Map<string, string>>();
       const codingSchemeVariableTypesMap = new Map<
-      string,
-      Map<string, UnitVariableType>
+        string,
+        Map<string, UnitVariableType>
       >();
       const codingSchemeCodesMap = new Map<
-      string,
-      Map<
-      string,
-      Array<{
-        id: string | number;
-        label: string;
-        score?: number;
-        manualInstruction?: string;
-        type?: string;
-      }>
-      >
+        string,
+        Map<
+          string,
+          Array<{
+            id: string | number;
+            label: string;
+            score?: number;
+            manualInstruction?: string;
+            type?: string;
+          }>
+        >
       >();
       const codingSchemeManualInstructionsMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeClosedCodingMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeTrainingRequiredMap = new Map<
-      string,
-      Map<string, boolean>
+        string,
+        Map<string, boolean>
       >();
       const codingSchemeProcessingMap = new Map<
-      string,
-      Map<string, string[]>
+        string,
+        Map<string, string[]>
       >();
 
       for (const scheme of codingSchemes) {
@@ -3945,14 +3967,14 @@ ${bookletRefs}
             const variableIdToAlias = new Map<string, string>();
             const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
-            string,
-            Array<{
-              id: string | number;
-              label: string;
-              score?: number;
-              manualInstruction?: string;
-              type?: string;
-            }>
+              string,
+              Array<{
+                id: string | number;
+                label: string;
+                score?: number;
+                manualInstruction?: string;
+                type?: string;
+              }>
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
@@ -4297,7 +4319,7 @@ ${bookletRefs}
   private extractVariableMetadata(
     variable: ParsedVariableElement
   ): Pick<
-    VariableDetailDto,
+      VariableDetailDto,
     | 'multiple'
     | 'nullable'
     | 'values'
@@ -4443,5 +4465,19 @@ ${bookletRefs}
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );
+  }
+
+  async readMetadataFile(workspaceId: number, fileId: number): Promise<FileDownloadDto> {
+    const file = await this.fileUploadRepository.findOne({
+      where: { id: fileId, workspace_id: workspaceId, file_type: 'Resource' }
+    });
+    if (!file || !file.filename.toLowerCase().endsWith('.vomd')) {
+      throw new NotFoundException('Metadata resource not found');
+    }
+    return {
+      filename: file.filename,
+      base64Data: Buffer.from(file.data, 'utf8').toString('base64'),
+      mimeType: 'application/json'
+    };
   }
 }

@@ -1,6 +1,3 @@
-import { ApiProperty } from '@nestjs/swagger';
+import type { RequestBody } from '../request-contracts';
 
-export class UpdateUnitNoteDto {
-  @ApiProperty({ description: 'The note text' })
-    note!: string;
-}
+export type UpdateUnitNoteDto = RequestBody<'UpdateUnitNoteDto'>;

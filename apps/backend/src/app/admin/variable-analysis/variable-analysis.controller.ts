@@ -1,7 +1,5 @@
 import {
-  BadRequestException,
   Controller,
-  ConflictException,
   Delete,
   Get,
   NotFoundException,
@@ -80,26 +78,14 @@ export class VariableAnalysisController {
   })
   async createAnalysisJob(
     @WorkspaceId() workspaceId: number,
-      @Query('unitId') unitId?: number,
-      @Query('variableId') variableId?: string
+    @Query('unitId') unitId?: number,
+    @Query('variableId') variableId?: string
   ): Promise<VariableAnalysisJobDto> {
-    try {
-      return await this.variableAnalysisService.createAnalysisJob(
-        workspaceId,
-        unitId,
-        variableId
-      );
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      throw new BadRequestException(
-        `Failed to create variable analysis job: ${error.message}`
-      );
-    }
+    return this.variableAnalysisService.createAnalysisJob(
+      workspaceId,
+      unitId,
+      variableId
+    );
   }
 
   @Get('jobs')
@@ -128,16 +114,7 @@ export class VariableAnalysisController {
   async getAnalysisJobs(
     @WorkspaceId() workspaceId: number
   ): Promise<VariableAnalysisJobDto[]> {
-    try {
-      return await this.variableAnalysisService.getAnalysisJobs(workspaceId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(
-        `Failed to retrieve variable analysis jobs: ${error.message}`
-      );
-    }
+    return this.variableAnalysisService.getAnalysisJobs(workspaceId);
   }
 
   @Get('jobs/:job_id')
@@ -171,7 +148,7 @@ export class VariableAnalysisController {
   })
   async getAnalysisJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<VariableAnalysisJobDto> {
     try {
       return await this.variableAnalysisService.getAnalysisJob(
@@ -185,9 +162,7 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(
-        `Failed to retrieve variable analysis job: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -229,8 +204,8 @@ export class VariableAnalysisController {
   })
   async getAnalysisResults(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('includeSchemaCodes') includeSchemaCodes?: string
+    @Param('job_id') jobId: string,
+    @Query('includeSchemaCodes') includeSchemaCodes?: string
   ): Promise<VariableAnalysisResultDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResults(
@@ -245,9 +220,7 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(
-        `Failed to retrieve variable analysis results: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -327,14 +300,14 @@ export class VariableAnalysisController {
   })
   async getAnalysisResultsPage(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('page') page?: string,
-      @Query('pageSize') pageSize?: string,
-      @Query('search') search?: string,
-      @Query('onlyEmpty') onlyEmpty?: string,
-      @Query('includeSchemaCodes') includeSchemaCodes?: string,
-      @Query('sortBy') sortBy?: string,
-      @Query('sortDirection') sortDirection?: string
+    @Param('job_id') jobId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('onlyEmpty') onlyEmpty?: string,
+    @Query('includeSchemaCodes') includeSchemaCodes?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDirection') sortDirection?: string
   ): Promise<VariableAnalysisResultPageDto> {
     try {
       return await this.variableAnalysisService.getAnalysisResultsPage(
@@ -357,9 +330,7 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(
-        `Failed to retrieve variable analysis result page: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -420,11 +391,11 @@ export class VariableAnalysisController {
   })
   async exportAnalysisResultsAsCsv(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('search') search: string | undefined,
-      @Query('onlyEmpty') onlyEmpty: string | undefined,
-      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
-      @Res() res: Response
+    @Param('job_id') jobId: string,
+    @Query('search') search: string | undefined,
+    @Query('onlyEmpty') onlyEmpty: string | undefined,
+    @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const csv = await this.variableAnalysisService.exportAnalysisResultsAsCsv(
@@ -452,9 +423,7 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(
-        `Failed to export variable analysis results as CSV: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -515,11 +484,11 @@ export class VariableAnalysisController {
   })
   async exportAnalysisResultsAsXlsx(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string,
-      @Query('search') search: string | undefined,
-      @Query('onlyEmpty') onlyEmpty: string | undefined,
-      @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
-      @Res() res: Response
+    @Param('job_id') jobId: string,
+    @Query('search') search: string | undefined,
+    @Query('onlyEmpty') onlyEmpty: string | undefined,
+    @Query('includeSchemaCodes') includeSchemaCodes: string | undefined,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const xlsx =
@@ -551,9 +520,7 @@ export class VariableAnalysisController {
       if (error.message && error.message.includes('not found in workspace')) {
         throw new NotFoundException(error.message);
       }
-      throw new BadRequestException(
-        `Failed to export variable analysis results as XLSX: ${error.message}`
-      );
+      throw error;
     }
   }
 
@@ -581,19 +548,13 @@ export class VariableAnalysisController {
   })
   async deleteJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const success = await this.variableAnalysisService.deleteJob(
-        workspaceId,
-        jobId
-      );
-      return { success };
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to delete variable analysis job: ${error.message}`
-      );
-    }
+    const success = await this.variableAnalysisService.deleteJob(
+      workspaceId,
+      jobId
+    );
+    return { success };
   }
 
   @Delete('jobs')
@@ -619,14 +580,8 @@ export class VariableAnalysisController {
   async deleteAllJobs(
     @WorkspaceId() workspaceId: number
   ): Promise<{ success: boolean }> {
-    try {
-      await this.variableAnalysisService.deleteAllJobs(workspaceId);
-      return { success: true };
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to delete all variable analysis jobs: ${error.message}`
-      );
-    }
+    await this.variableAnalysisService.deleteAllJobs(workspaceId);
+    return { success: true };
   }
 
   @Post('jobs/:job_id/cancel')
@@ -653,19 +608,13 @@ export class VariableAnalysisController {
   })
   async cancelJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id') jobId: string
+    @Param('job_id') jobId: string
   ): Promise<{ success: boolean; message?: string }> {
-    try {
-      const success = await this.variableAnalysisService.cancelJob(
-        workspaceId,
-        jobId
-      );
-      return { success };
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to cancel variable analysis job: ${error.message}`
-      );
-    }
+    const success = await this.variableAnalysisService.cancelJob(
+      workspaceId,
+      jobId
+    );
+    return { success };
   }
 
   private toSafeFilenamePart(value: string): string {

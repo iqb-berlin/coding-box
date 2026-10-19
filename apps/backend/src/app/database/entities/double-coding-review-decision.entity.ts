@@ -14,44 +14,44 @@ import { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding
 @Index(['workspace_id', 'response_id'])
 export class DoubleCodingReviewDecision {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column({ type: 'integer' })
-    workspace_id: number;
+  workspace_id: number;
 
   @Column({ type: 'integer' })
-    response_id: number;
+  response_id: number;
 
   @Column({ type: 'integer', nullable: true })
-    manager_user_id: number | null;
+  manager_user_id: number | null;
 
   @Column({ type: 'varchar', length: 255 })
-    manager_key: string;
+  manager_key: string;
 
   @Column({ type: 'varchar', length: 255 })
-    manager_name: string;
+  manager_name: string;
 
   @Column({ type: 'varchar', length: 16 })
-    state: DoubleCodedReviewDecisionState;
+  state: DoubleCodedReviewDecisionState;
 
   @Column({ type: 'bigint', nullable: true })
-    effective_code: number | null;
+  effective_code: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    selected_code: number | null;
+  selected_code: number | null;
 
   @Column({ type: 'bigint', nullable: true })
-    score: number | null;
+  score: number | null;
 
   @Column({ type: 'text', nullable: true })
-    comment: string | null;
+  comment: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn({ type: 'timestamptz' })
-    updated_at: Date;
+  updated_at: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-    finalized_at: Date | null;
+  finalized_at: Date | null;
 }

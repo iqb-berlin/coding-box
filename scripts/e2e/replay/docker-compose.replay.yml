@@ -53,9 +53,12 @@ services:
         condition: service_completed_successfully
     environment:
       APP_ROLE: api
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      NODE_OPTIONS: '--max-old-space-size=2048'
       API_HOST: backend
       JWT_SECRET: ${REPLAY_E2E_JWT_SECRET}
-      KEYCLOAK_CLIENT_ID: replay-e2e
+      OAUTH2_CLIENT_ID: replay-e2e
       OIDC_ISSUER: http://replay-e2e.invalid/realms/replay-e2e
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
@@ -86,6 +89,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      NODE_OPTIONS: '--max-old-space-size=2048'
+      NG_BUILD_MAX_WORKERS: '2'
     command:
       - sh
       - -c

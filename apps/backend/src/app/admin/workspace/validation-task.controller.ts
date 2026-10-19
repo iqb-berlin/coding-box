@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Body,
   Controller,
   Post,
   Get,
@@ -8,7 +7,8 @@ import {
   Query,
   ParseIntPipe,
   Logger,
-  UseGuards
+  UseGuards,
+  Req
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,6 +17,8 @@ import {
   ApiParam,
   ApiQuery
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { CreateValidationTaskRequestDto } from './dto/create-validation-task-request.dto';
@@ -117,11 +119,12 @@ export class ValidationTaskController {
   @ApiQuery({ name: 'limit', description: 'Page size', required: false })
   async createValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Query('type') type: ValidationType,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string,
-      @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
-      @Body() body?: CreateValidationTaskRequestDto
+    @Query('type') type: ValidationType,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
+    @ValidatedBody('CreateValidationTaskRequestDto', true) body?: RequestBody<'CreateValidationTaskRequestDto'>,
+    @Req() request?: { user: { id: number | string } }
   ): Promise<ValidationTaskDto> {
     this.logger.log(`Creating validation task of type ${type} for workspace ${workspaceId}`);
 
@@ -137,7 +140,10 @@ export class ValidationTaskController {
       type,
       ValidationTaskController.parseOptionalPositiveInt(page, 'page'),
       ValidationTaskController.parseOptionalPositiveInt(limit, 'limit'),
-      ValidationTaskController.getAdditionalData(body, allQueryParams)
+      {
+        ...ValidationTaskController.getAdditionalData(body, allQueryParams),
+        userId: request?.user.id === undefined ? '' : String(request.user.id)
+      }
     );
     return ValidationTaskDto.fromEntity(task);
   }
@@ -158,7 +164,7 @@ export class ValidationTaskController {
   @ApiParam({ name: 'id', description: 'Task ID' })
   async getValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) taskId: number
+    @Param('id', ParseIntPipe) taskId: number
   ): Promise<ValidationTaskDto> {
     const task = await this.validationTaskService.getValidationTask(taskId, workspaceId);
     return ValidationTaskDto.fromEntity(task);
@@ -170,7 +176,7 @@ export class ValidationTaskController {
   @ApiParam({ name: 'id', description: 'Task ID' })
   async getValidationResults(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) taskId: number
+    @Param('id', ParseIntPipe) taskId: number
   ): Promise<unknown> {
     return this.validationTaskService.getValidationResults(taskId, workspaceId);
   }
