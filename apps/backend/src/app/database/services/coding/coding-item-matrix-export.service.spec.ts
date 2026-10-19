@@ -189,6 +189,63 @@ const otherDerivedSourceTypes = [
 ] as const;
 
 describe('CodingItemMatrixExportService', () => {
+  it.each(['derived-result-missing', 'derived-source-unresolved'] as const)(
+    'streams every %s cell with exact matrix coordinates and keys', async reason => {
+      const service = createService();
+      const matrixColumn = column('1');
+      const rows = Array.from({ length: 25 }, (_, index) => ({
+        bookletId: index + 10,
+        bookletName: 'BOOKLET-1',
+        personLogin: `login-${index}`,
+        personCode: `code-${index}`,
+        personGroup: 'group'
+      }));
+      const internals = service as never as {
+        buildMatrixContext: jest.Mock;
+        getResponseValuesForRows: jest.Mock;
+        resolveRowCells: jest.Mock;
+      };
+      internals.buildMatrixContext = jest.fn().mockResolvedValue({
+        rows,
+        columns: [matrixColumn],
+        bookletDesigns: new Map([['BOOKLET-1', { units: new Map() }]]),
+        profile,
+        derivedSources: new Map()
+      });
+      internals.getResponseValuesForRows = jest.fn().mockResolvedValue(new Map());
+      internals.resolveRowCells = jest.fn().mockResolvedValue([{
+        code: null, score: null, unresolved: true, state: 'error', failureReason: reason
+      }]);
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'matrix-cells-'));
+      try {
+        for (const format of ['csv', 'excel'] as const) {
+          const onDiagnostic = jest.fn().mockResolvedValue(undefined);
+          const options = { ...configuration, onDiagnostic };
+          const result = format === 'csv' ?
+            await service.writeItemMatrixCsvToFile(path.join(directory, 'matrix.csv'), 7, 'score', 'v2', options) :
+            await service.writeItemMatrixExcelToFile(path.join(directory, 'matrix.xlsx'), 7, 'score', 'v2', options);
+          expect(result.total).toBe(25);
+          expect(onDiagnostic).toHaveBeenCalledTimes(25);
+          expect(onDiagnostic.mock.calls[24][0]).toEqual({
+            rowNumber: 26,
+            columnNumber: 5,
+            personLogin: 'login-24',
+            personCode: 'code-24',
+            personGroup: 'group',
+            bookletId: 34,
+            bookletName: 'BOOKLET-1',
+            columnName: 'UNIT1_1',
+            unitId: 'UNIT1',
+            variableId: 'VAR1',
+            reasonCode: reason
+          });
+          expect(result.groups[0].sampleRowNumbers).toHaveLength(20);
+        }
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }
+  );
   it('handles output stream errors when Excel preparation fails', async () => {
     const outputStream = new PassThrough();
     const createWriteStream = jest
