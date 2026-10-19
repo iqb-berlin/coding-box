@@ -1,14 +1,17 @@
 import {
   Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
-import { In, MoreThan, Repository } from 'typeorm';
+import {
+  EntityManager, In, MoreThan, Repository
+} from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../../entities/workspace_user.entity';
+import { JournalService } from '../shared/journal.service';
 import { WorkspaceUserInListDto } from '../../../../../../../api-dto/user/workspace-user-in-list-dto';
-import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import {
   assertStudyManagersRemain,
   DEFAULT_WORKSPACE_USER_ACCESS,
@@ -74,7 +77,7 @@ export class UsersService {
       });
   }
 
-  async updateUsersAccess(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>, actorUserId?: number): Promise<boolean> {
     this.logger.log('Patch users access rights');
     const normalizedWorkspaceId = Number(workspaceId);
     if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId < 1) {
@@ -143,12 +146,23 @@ export class UsersService {
       if (usersToUpsert.length > 0) {
         await workspaceUsersRepository.upsert(usersToUpsert, ['workspaceId', 'userId']);
       }
+      await JournalService.recordAccessChangesInTransaction(
+        manager,
+        normalizedWorkspaceId,
+        lockedWorkspaceUsers,
+        [...lockedWorkspaceUsers.filter(entry => !seenUserIds.has(entry.userId)), ...usersToUpsert],
+        actorUserId
+      );
     });
 
     return true;
   }
 
-  async assertUsersCanCodeInWorkspace(userIds: number[], workspaceId: number): Promise<void> {
+  async assertUsersCanCodeInWorkspace(
+    userIds: number[],
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<void> {
     const uniqueUserIds = Array.from(new Set(userIds));
     if (uniqueUserIds.length === 0) {
       return;
@@ -159,7 +173,10 @@ export class UsersService {
       throw new BadRequestException('Selected coders must have positive integer IDs.');
     }
 
-    const coderRows = await this.workspaceUserRepository.find({
+    const repository = manager ?
+      manager.getRepository(WorkspaceUser) :
+      this.workspaceUserRepository;
+    const coderRows = await repository.find({
       where: {
         workspaceId,
         userId: In(uniqueUserIds),
@@ -178,12 +195,13 @@ export class UsersService {
     }
   }
 
-  async canUserCodeInWorkspace(userId: number, workspaceId: number): Promise<boolean> {
+  async canUserCodeInWorkspace(userId: number, workspaceId: number, manager?: EntityManager): Promise<boolean> {
     if (!Number.isInteger(userId) || userId < 1) {
       return false;
     }
 
-    const workspaceUser = await this.workspaceUserRepository.findOne({
+    const repository = manager ? manager.getRepository(WorkspaceUser) : this.workspaceUserRepository;
+    const workspaceUser = await repository.findOne({
       where: {
         workspaceId,
         userId,
@@ -258,18 +276,24 @@ export class UsersService {
     } as UserFullDto;
   }
 
-  async updateUser(userId: number, userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(userId: number, userData: RequestBody<'UserFullDto'>): Promise<UserFullDto> {
     this.logger.log(`Updating user with id: ${userId}`);
     const existingUser = await this.usersRepository.findOne({ where: { id: userId } });
     if (!existingUser) {
       this.logger.warn(`User with id: ${userId} not found.`);
-      throw new Error(`User with id: ${userId} not found.`);
+      throw new NotFoundException(`User with id: ${userId} not found.`);
     }
-    const updatedUser = await this.usersRepository.save({ id: userId, ...userData });
+    // Only documented write fields may reach persistence; the URL owns the ID.
+    const updatedUser = await this.usersRepository.save({
+      id: userId,
+      ...(userData.username !== undefined ? { username: userData.username } : {}),
+      ...(userData.isAdmin !== undefined ? { isAdmin: userData.isAdmin } : {}),
+      ...(userData.description !== undefined ? { description: userData.description } : {})
+    });
     return updatedUser;
   }
 
-  async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
+  async assignUserWorkspaces(userId: number, workspaceIds: number[], actorUserId?: number): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
     try {
       await this.workspaceUserRepository.manager.transaction(async manager => {
@@ -326,11 +350,17 @@ export class UsersService {
           });
         }
 
-        if (entries.length === 0) {
-          return [];
+        const saved = entries.length ? await workspaceUsersRepository.save(entries) : [];
+        for (const workspaceId of affectedWorkspaceIds) {
+          await JournalService.recordAccessChangesInTransaction(
+            manager,
+            workspaceId,
+            lockedWorkspaceUsers.filter(entry => entry.userId === userId && entry.workspaceId === workspaceId),
+            entries.filter(entry => entry.workspaceId === workspaceId),
+            actorUserId
+          );
         }
-
-        return workspaceUsersRepository.save(entries);
+        return saved;
       });
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
@@ -347,11 +377,16 @@ export class UsersService {
     }
   }
 
-  async create(user: CreateUserDto): Promise<number> {
+  async create(user: RequestBody<'CreateUserDto'>): Promise<number> {
     try {
       this.logger.log('Creating a new user');
 
-      const newUser = this.usersRepository.create(user);
+      const newUser = this.usersRepository.create({
+        username: user.username,
+        isAdmin: user.isAdmin,
+        issuer: user.issuer,
+        identity: user.identity
+      });
       const savedUser = await this.usersRepository.save(newUser);
 
       this.logger.log(`User created successfully with ID: ${savedUser.id}`);
@@ -362,7 +397,7 @@ export class UsersService {
     }
   }
 
-  async createUser(user: CreateUserDto): Promise<number> {
+  async createUser(user: RequestBody<'CreateUserDto'>): Promise<number> {
     const existingUser: User | null = await this.usersRepository.findOne({
       where: { username: user.username },
       select: ['id', 'username'] // Fetch only the needed fields for validation
@@ -375,7 +410,12 @@ export class UsersService {
       return existingUser.id;
     }
 
-    const newUser = this.usersRepository.create(user);
+    const newUser = this.usersRepository.create({
+      username: user.username,
+      isAdmin: user.isAdmin,
+      issuer: user.issuer,
+      identity: user.identity
+    });
 
     await this.usersRepository.save(newUser);
 
@@ -449,6 +489,42 @@ export class UsersService {
 
       await usersRepository.delete(uniqueUserIds);
     });
+  }
+
+  async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
+    const {
+      username, identity, issuer, isAdmin
+    } = oidcPdUser;
+    const existingUser = await this.usersRepository.findOne({
+      where: [
+        { identity, issuer },
+        { username }
+      ],
+      select: {
+        id: true, username: true, identity: true, issuer: true, isAdmin: true
+      }
+    });
+
+    if (existingUser) {
+      const updatedFields: Partial<User> = {};
+      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
+      if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
+      if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
+      if (username && existingUser.username !== username) updatedFields.username = username;
+      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
+
+      if (Object.keys(updatedFields).length > 0) {
+        await this.usersRepository.update({ id: existingUser.id }, updatedFields);
+        this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
+      }
+
+      return existingUser.id;
+    }
+    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
+    const newUser = this.usersRepository.create(oidcPdUser);
+    await this.usersRepository.save(newUser);
+
+    return newUser.id;
   }
 
   async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {

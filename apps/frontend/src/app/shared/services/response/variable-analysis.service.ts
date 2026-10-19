@@ -153,7 +153,7 @@ export class VariableAnalysisService implements OnDestroy {
   ]);
 
   get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   createAnalysisJob(

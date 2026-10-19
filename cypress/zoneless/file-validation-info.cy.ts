@@ -1,5 +1,19 @@
 const completeFiles = { complete: true, missing: [], files: [] };
 
+// Editing belongs to the regular file editor; the validation viewer is read-only.
+function openMetadataEditor(doubleClick = false) {
+  cy.get('body').then(body => {
+    if (body.find('coding-box-files-validation-dialog').length) {
+      cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+      cy.get('coding-box-files-validation-dialog').should('not.exist');
+    }
+  });
+  cy.get('coding-box-test-files coding-box-search-filter input').focus().clear().type('metadata.vomd');
+  const button = cy.contains('coding-box-test-files mat-row', 'metadata.vomd').contains('button', 'visibility');
+  if (doubleClick) button.dblclick();
+  else button.click();
+}
+
 describe('Zoneless information from file validation', () => {
   let unexpectedRequests: string[];
   beforeEach(() => {
@@ -118,6 +132,8 @@ describe('Zoneless information from file validation', () => {
     cy.get('coding-box-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Erstellen');
+    cy.get('coding-box-error-message-display .close-button').each(button => cy.wrap(button).click());
+    cy.get('coding-box-error-message-display .close-button').should('not.exist');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
     cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@dummyValidation');
@@ -188,7 +204,7 @@ describe('Zoneless information from file validation', () => {
   it('finishes metadata initialization without another interaction', () => {
     const profileId = '/api/zoneless-metadata-profile';
     cy.intercept('GET', '**/api/admin/workspace/5/files?*searchText=metadata.vomd*', {
-      delay: 150, body: { data: [{ id: 17, filename: 'metadata.vomd' }], total: 1, fileTypes: ['Resource'] }
+      delay: 150, body: { data: [{ id: 17, filename: 'metadata.vomd', file_type: 'Resource' }], total: 1, fileTypes: ['Resource'] }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/files/17/download', {
       delay: 150, body: { filename: 'metadata.vomd', base64Data: btoa(JSON.stringify({ profiles: [{ profileId, entries: [] }], items: [] })) }
@@ -197,15 +213,15 @@ describe('Zoneless information from file validation', () => {
       delay: 150, body: { id: profileId, label: [{ lang: 'de', value: 'Metadaten ZL' }], target: ['UNIT'], groups: [{ label: [{ lang: 'de', value: 'Gruppe ZL' }], entries: [{ id: 'comment', label: [{ lang: 'de', value: 'Kommentar ZL' }], type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }] }] }
     }).as('profile');
     cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]')
+      .scrollIntoView().should('be.visible').click({ scrollBehavior: 'center' });
     cy.wait('@profile');
     cy.get('coding-box-metadata-dialog h2').should('be.visible').and('contain.text', 'metadata.vomd');
     cy.get('coding-box-metadata-dialog mat-progress-spinner').should('not.exist');
     cy.get('coding-box-metadata-dialog mat-select').should('be.visible').and('contain.text', 'Unit (Aufgabe)');
     cy.get('coding-box-metadata-dialog metadata-profile-form input').should('be.visible').and('be.disabled');
-    cy.get('coding-box-metadata-dialog mat-slide-toggle button').click();
-    cy.get('coding-box-metadata-dialog metadata-profile-form input').should('be.enabled').type('synthetic metadata');
-    cy.get('coding-box-metadata-dialog').contains('button', 'Speichern').should('be.visible');
+    cy.get('coding-box-metadata-dialog mat-slide-toggle').should('not.exist');
+    cy.get('coding-box-metadata-dialog').contains('button', 'Speichern').should('not.exist');
   });
 
   for (const delays of [[150, 150], [300, 150], [150, 300]]) {
@@ -213,7 +229,7 @@ describe('Zoneless information from file validation', () => {
       const profileId = '/api/zoneless-metadata-profile';
       let downloads = 0;
       cy.intercept('GET', '**/api/admin/workspace/5/files?*searchText=metadata.vomd*', {
-        delay: 150, body: { data: [{ id: 17, filename: 'metadata.vomd' }], total: 1, fileTypes: ['Resource'] }
+        delay: 150, body: { data: [{ id: 17, filename: 'metadata.vomd', file_type: 'Resource' }], total: 1, fileTypes: ['Resource'] }
       });
       cy.intercept('GET', '**/api/admin/workspace/5/files/17/download', request => {
         downloads += 1;
@@ -224,8 +240,7 @@ describe('Zoneless information from file validation', () => {
       cy.intercept('GET', '**/api/zoneless-metadata-profile', {
         delay: 150, body: { id: profileId, label: [{ lang: 'de', value: 'Metadaten ZL' }], target: ['UNIT'], groups: [{ label: [{ lang: 'de', value: 'Gruppe ZL' }], entries: [{ id: 'comment', label: [{ lang: 'de', value: 'Kommentar ZL' }], type: 'TEXT', parameters: { format: 'PLAIN', textLanguages: ['de'], pattern: '' } }] }] }
       }).as('profile');
-      cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-      cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
+      openMetadataEditor(true);
       cy.wait(['@profile', '@profile']);
       cy.get('coding-box-metadata-dialog').should('have.length', 2);
       cy.get('coding-box-metadata-dialog metadata-profile-form input').should(inputs => {
@@ -257,7 +272,7 @@ describe('Zoneless information from file validation', () => {
         profiles: [{ profileId: itemProfile, entries: [{ id: 'comment', value: label('initial comment') }] }] }]
     };
     cy.intercept('GET', '**/api/admin/workspace/5/files?*searchText=metadata.vomd*', {
-      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd' }], total: 1, fileTypes: ['Resource'] }
+      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd', file_type: 'Resource' }], total: 1, fileTypes: ['Resource'] }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/files/17/download', {
       delay: 100, body: { filename: 'metadata.vomd', base64Data: btoa(JSON.stringify(values)) }
@@ -279,8 +294,7 @@ describe('Zoneless information from file validation', () => {
       cy.get('coding-box-metadata-dialog .selection-container mat-select').click();
       cy.contains('mat-option', name).click();
     };
-    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    openMetadataEditor();
     cy.wait('@itemProfile');
     cy.get(`${form} input[type="number"]`).should('have.value', '12').and('be.disabled');
     cy.get(`${form} textarea`).should('have.value', 'initial notes').and('be.disabled');
@@ -304,7 +318,7 @@ describe('Zoneless information from file validation', () => {
     cy.get('coding-box-metadata-dialog .item-info textarea').should('have.value', 'changed item');
     cy.get('coding-box-metadata-dialog').contains('button', 'Abbrechen').click();
     cy.get('coding-box-metadata-dialog').should('not.exist');
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    openMetadataEditor();
     cy.wait('@itemProfile');
     cy.get(`${form} input[type="number"]`).should('have.value', '12').and('be.disabled');
     selectItem('Item ITEM-ZL');
@@ -321,7 +335,7 @@ describe('Zoneless information from file validation', () => {
       hideNumbering: false, hideDescription: false, hideTitle: false, addTextLanguages: []
     });
     cy.intercept('GET', '**/api/admin/workspace/5/files?*searchText=metadata.vomd*', {
-      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd' }], total: 1, fileTypes: ['Resource'] }
+      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd', file_type: 'Resource' }], total: 1, fileTypes: ['Resource'] }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/files/17/download', {
       delay: 100, body: { filename: 'metadata.vomd', base64Data: btoa(JSON.stringify({ profiles: [{ profileId, entries: [
@@ -342,8 +356,7 @@ describe('Zoneless information from file validation', () => {
         { id: 'B', notation: ['B'], prefLabel: { de: 'Begriff B' } }
       ] }
     });
-    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').click();
+    openMetadataEditor();
     const form = 'coding-box-metadata-dialog metadata-profile-form';
     cy.get(`${form} iqb-formly-duration input`).first().should('have.value', '01').and('be.disabled');
     cy.get(`${form} iqb-formly-duration input`).last().should('have.value', '30').and('be.disabled');
@@ -384,7 +397,7 @@ describe('Zoneless information from file validation', () => {
     let downloads = 0;
     const label = (value: string) => [{ lang: 'de', value }];
     cy.intercept('GET', '**/api/admin/workspace/5/files?*searchText=metadata.vomd*', {
-      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd' }], total: 1, fileTypes: ['Resource'] }
+      delay: 100, body: { data: [{ id: 17, filename: 'metadata.vomd', file_type: 'Resource' }], total: 1, fileTypes: ['Resource'] }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/files/17/download', request => {
       const instance = ++downloads;
@@ -410,8 +423,7 @@ describe('Zoneless information from file validation', () => {
         hasTopConcept: [{ id: `term-${instance}`, notation: [`${instance}`], prefLabel: { de: `Term ${instance}` } }]
       } }).as(`vocabulary${instance}`);
     }
-    cy.get('coding-box-files-validation-dialog .mat-mdc-tab-body-active .files-header').last().click();
-    cy.get('coding-box-files-validation-dialog button[aria-label="Metadaten anzeigen"]').dblclick();
+    openMetadataEditor(true);
     cy.wait(['@vocabulary1', '@vocabulary2']);
     cy.get('coding-box-metadata-dialog').should('have.length', 2);
     cy.get('coding-box-metadata-dialog').first().find('iqb-formly-inline').should('contain.text', 'Term 1').and('not.contain.text', 'Term 2');

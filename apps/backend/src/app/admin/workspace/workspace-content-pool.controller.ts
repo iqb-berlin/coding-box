@@ -1,13 +1,9 @@
 import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Post,
-  UseGuards
+  Controller, Get, Param, ParseIntPipe, Post, UseGuards
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
   AccessLevelGuard,
@@ -15,22 +11,6 @@ import {
 } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
-
-interface ImportAcpDto {
-  acpId: string;
-
-  overwriteExisting?: boolean;
-
-  overwriteFileIds?: string[];
-}
-
-interface UploadFilesToAcpDto {
-  acpId: string;
-
-  fileIds: number[];
-
-  changelog?: string;
-}
 
 @ApiTags('Admin Workspace Content Pool')
 @Controller('admin/workspace/:workspace_id/content-pool')
@@ -65,8 +45,8 @@ export class WorkspaceContentPoolController {
     summary: 'Import all files from selected Content-Pool ACP into workspace test files'
   })
   async importAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: ImportAcpDto
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
       workspaceId,
@@ -82,8 +62,8 @@ export class WorkspaceContentPoolController {
     summary: 'Start importing all files from selected Content-Pool ACP'
   })
   async startImportAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: ImportAcpDto
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startAcpImportToWorkspace({
       workspaceId,
@@ -108,8 +88,8 @@ export class WorkspaceContentPoolController {
     summary: 'Start replacing selected ACP files with workspace files'
   })
   async startUploadFilesToAcp(
-  @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: UploadFilesToAcpDto
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @ValidatedBody('UploadFilesToAcpDto') body: RequestBody<'UploadFilesToAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({
       workspaceId,

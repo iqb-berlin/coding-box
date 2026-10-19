@@ -1,0 +1,183 @@
+
+> nx run frontend:e2e:ci --browser=electron --spec=cypress/zoneless/statistics-codebook.cy.ts
+
+(node:67143) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:67203) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Starting up http-server, serving dist/apps/frontend
+
+http-server version: 14.1.1
+
+http-server settings:
+CORS: true
+Cache: -1 seconds
+Connection Timeout: 120 seconds
+Directory Listings: visible
+AutoIndex: visible
+Serve GZIP Files: false
+Serve Brotli Files: false
+Default File Extension: none
+
+Available on:
+  http://127.0.0.1:4200
+Unhandled requests will be served from: http://localhost:4200?
+Hit CTRL-C to stop the server
+Warning: The allowCypressEnv configuration option is enabled. This allows any browser code to read values from Cypress.env(). This is insecure and will be removed in a future major version.
+1. Replace Cypress.env() calls with cy.env() (for sensitive values) or Cypress.expose() (for public configuration)
+2. Set allowCypressEnv: false in your Cypress configuration to disable Cypress.env()
+Learn more: https://on.cypress.io/cypress-env-migration
+================================================================================
+  (Run Starting)
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Cypress:        15.21.1                                                                        │
+  │ Browser:        Electron 138 (headless)                                                        │
+  │ Node Version:   v22.23.1 (/Users/julian/.hermes/node/bin/node)                                 │
+  │ Specs:          1 found (statistics-codebook.cy.ts)                                            │
+  │ Searched:       cypress/zoneless/statistics-codebook.cy.ts                                     │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Running:  statistics-codebook.cy.ts                                                       (1 of 1)
+  Zoneless replay statistics and codebook export
+(node:67203) [DEP0066] DeprecationWarning: OutgoingMessage.prototype._headers is deprecated
+    ✓ renders replay statistics after the delayed final response without another click (6821ms)
+    1) renders delayed codebook progress and the completed status
+    2) renders delayed codebook progress and the failed status
+  1 passing (17s)
+  2 failing
+  1) Zoneless replay statistics and codebook export
+       renders delayed codebook progress and the completed status:
+     CypressError: A request callback passed to `cy.intercept()` timed out after returning a Promise that took more than the `defaultCommandTimeout` of `4000ms` to resolve.
+If the request callback is expected to take longer than `4000ms`, increase the configured `defaultCommandTimeout` value.
+Route: {
+  "method": "GET",
+  "url": "**/api/admin/workspace/5/coding/missings-profiles"
+}
+Intercepted request: {
+  "headers": {
+    "host": "127.0.0.1:4200",
+    "proxy-connection": "keep-alive",
+    "x-request-id": "25b21d7c-f69d-4e29-8844-cded2a951b8c",
+    "authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJlMmUtdXNlciIsIm5vbmNlIjoiZGUzZjVkNTUtZGJlMS00M2JkLTgzMDItYjAwOGIxYTNmNjliIiwiaWF0IjoxNzkyMzE1MTQ1LCJleHAiOjE3OTIzMTg3NDUsInNlc3Npb25fc3RhdGUiOiJlMmUtc2Vzc2lvbiIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJhZG1pbiJdfX0.e2e",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Cypress/15.21.1 Chrome/138.0.7204.251 Electron/37.6.0 Safari/537.36",
+    "accept": "application/json, text/plain, */*",
+    "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-dest": "empty",
+    "referer": "http://127.0.0.1:4200/",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "accept-language": "de"
+  },
+  "url": "http://127.0.0.1:4200/api/admin/workspace/5/coding/missings-profiles",
+  "method": "GET",
+  "httpVersion": "1.1",
+  "resourceType": "xhr",
+  "query": {},
+  "body": "",
+  "responseTimeout": 30000
+}
+https://on.cypress.io/intercept
+      at <unknown> (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:145507:66)
+      at tryCatcher (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1780:23)
+      at <unknown> (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:4159:41)
+      at tryCatcher (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1780:23)
+      at Promise._settlePromiseFromHandler (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1492:31)
+      at Promise._settlePromise (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1549:18)
+      at Promise._settlePromise0 (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1594:10)
+      at Promise._settlePromises (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1670:18)
+      at _drainQueueStep (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2380:12)
+      at _drainQueue (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2373:9)
+      at Async._drainQueues (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2389:5)
+      at Async.drainQueues (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2259:14)
+  2) Zoneless replay statistics and codebook export
+       renders delayed codebook progress and the failed status:
+     CypressError: A request callback passed to `cy.intercept()` timed out after returning a Promise that took more than the `defaultCommandTimeout` of `4000ms` to resolve.
+If the request callback is expected to take longer than `4000ms`, increase the configured `defaultCommandTimeout` value.
+Route: {
+  "method": "GET",
+  "url": "**/api/admin/workspace/5/coding/missings-profiles"
+}
+Intercepted request: {
+  "headers": {
+    "host": "127.0.0.1:4200",
+    "proxy-connection": "keep-alive",
+    "x-request-id": "2e1f1f0a-0f75-424d-9846-6edad77277bf",
+    "authorization": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJlMmUtdXNlciIsIm5vbmNlIjoiNTIwMDgxNTAtZWY1Ny00MmEyLWFlMWItZTllMzdmMGQ2ZGUxIiwiaWF0IjoxNzkyMzE1MTUwLCJleHAiOjE3OTIzMTg3NTAsInNlc3Npb25fc3RhdGUiOiJlMmUtc2Vzc2lvbiIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJhZG1pbiJdfX0.e2e",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Cypress/15.21.1 Chrome/138.0.7204.251 Electron/37.6.0 Safari/537.36",
+    "accept": "application/json, text/plain, */*",
+    "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-dest": "empty",
+    "referer": "http://127.0.0.1:4200/",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "accept-language": "de"
+  },
+  "url": "http://127.0.0.1:4200/api/admin/workspace/5/coding/missings-profiles",
+  "method": "GET",
+  "httpVersion": "1.1",
+  "resourceType": "xhr",
+  "query": {},
+  "body": "",
+  "responseTimeout": 30000
+}
+https://on.cypress.io/intercept
+      at <unknown> (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:145507:66)
+      at tryCatcher (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1780:23)
+      at <unknown> (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:4159:41)
+      at tryCatcher (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1780:23)
+      at Promise._settlePromiseFromHandler (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1492:31)
+      at Promise._settlePromise (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1549:18)
+      at Promise._settlePromise0 (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1594:10)
+      at Promise._settlePromises (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:1670:18)
+      at _drainQueueStep (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2380:12)
+      at _drainQueue (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2373:9)
+      at Async._drainQueues (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2389:5)
+      at Async.drainQueues (http://127.0.0.1:4200/__cypress/runner/cypress_runner.js:2259:14)
+  (Results)
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        3                                                                                │
+  │ Passing:      1                                                                                │
+  │ Failing:      2                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      0                                                                                │
+  │ Screenshots:  4                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     16 seconds                                                                       │
+  │ Spec Ran:     statistics-codebook.cy.ts                                                        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+  (Screenshots)
+  -  /Users/julian/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-frequency.png
+  -  /Users/julian/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (1600x1200)
+     eenshots/statistics-codebook.cy.ts/chartjs-replay-30-days.png
+  -  /Users/julian/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
+     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor
+     t -- renders delayed codebook progress and the completed status (failed).png
+  -  /Users/julian/.codex/worktrees/codebook-pr-1041-completion/Kodierbox/cypress/scr    (2560x1440)
+     eenshots/statistics-codebook.cy.ts/Zoneless replay statistics and codebook expor
+     t -- renders delayed codebook progress and the failed status (failed).png
+================================================================================
+  (Run Finished)
+       Spec                                              Tests  Passing  Failing  Pending  Skipped
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ✖  statistics-codebook.cy.ts                00:16        3        1        2        -        - │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ✖  1 of 1 failed (100%)                     00:16        3        1        2        -        -
+
+
+
+ NX   Running target e2e for project frontend failed
+
+Failed tasks:
+
+- frontend:e2e:ci
+
+Hint: run the command with --verbose for more details.
+

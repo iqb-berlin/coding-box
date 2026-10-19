@@ -3,11 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
-import { KeycloakTokenParsed } from 'keycloak-js';
+import { DecodedToken } from './auth.models';
 import { AppService, AuthDataRefreshOutcome } from './app.service';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
   BACKEND_CONNECTIVITY_ERROR_MESSAGE
@@ -234,7 +235,7 @@ describe('AppService', () => {
 
   describe('refreshAuthData', () => {
     it('should suppress global HTTP errors while manually retrying auth data', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
 
       service.retryAuthDataLoad().subscribe(result => {
@@ -250,7 +251,7 @@ describe('AppService', () => {
     });
 
     it('should refresh data if user is logged in', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
       let refreshResult: AuthDataRefreshOutcome | undefined;
@@ -269,7 +270,7 @@ describe('AppService', () => {
     });
 
     it('should preserve ready auth state when a background refresh fails', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
 
       let refreshResult: AuthDataRefreshOutcome | undefined;
@@ -286,7 +287,7 @@ describe('AppService', () => {
     });
 
     it('should not refresh data while backend login is still running', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('backend-login-running');
 
       let refreshResult: AuthDataRefreshOutcome | undefined;
@@ -298,20 +299,18 @@ describe('AppService', () => {
       expect(refreshResult).toBe('invalidated');
     });
 
-    it('should refresh with the stored Keycloak identity when parsed token data is unavailable', () => {
-      service.keycloakIdentity = 'user1';
+    it('invalidates refreshes when no OIDC identity is available', () => {
       service.setAuthBootstrapStatus('ready');
 
       service.refreshAuthData().subscribe(result => {
-        expect(result).toBe('updated');
+        expect(result).toBe('invalidated');
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
-      req.flush({ userId: 1 } as AuthDataDto);
+      httpMock.expectNone(`${mockServerUrl}auth-data?identity=user1`);
     });
 
     it('should not overwrite newer auth data and should report effective refresh success', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let firstResult: AuthDataRefreshOutcome | undefined;
       let secondResult: AuthDataRefreshOutcome | undefined;
@@ -334,7 +333,7 @@ describe('AppService', () => {
     });
 
     it('should apply an older successful refresh if a newer refresh fails', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let firstResult: AuthDataRefreshOutcome | undefined;
       let secondResult: AuthDataRefreshOutcome | undefined;
@@ -357,7 +356,7 @@ describe('AppService', () => {
     });
 
     it('should finish the newest refresh after its subscriber unsubscribes', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let firstResult: AuthDataRefreshOutcome | undefined;
 
@@ -378,8 +377,7 @@ describe('AppService', () => {
     });
 
     it('should not restore auth data from a refresh after auth state was cleared', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
-      service.keycloakIdentity = 'user1';
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let refreshResult: AuthDataRefreshOutcome | undefined;
 
@@ -396,8 +394,7 @@ describe('AppService', () => {
     });
 
     it('should not overwrite a newly authenticated user with an earlier refresh response', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
-      service.keycloakIdentity = 'user1';
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       service.setAuthBootstrapStatus('ready');
       let refreshResult: AuthDataRefreshOutcome | undefined;
       let loginResult: boolean | undefined;
@@ -407,7 +404,7 @@ describe('AppService', () => {
       });
       const oldRefreshRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
 
-      service.loggedUser = { sub: 'user2' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user2' } as DecodedToken;
       service.loadAuthenticatedUser('user2').subscribe(result => {
         loginResult = result;
       });
@@ -423,9 +420,9 @@ describe('AppService', () => {
 
   describe('auth state cleanup', () => {
     it('should clear stored auth state', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
-      service.isLoggedInKeycloak = true;
-      service.keycloakIdentity = 'user1';
+      service.user = { username: 'user', isAdmin: false } as CreateUserDto;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.isLoggedIn = true;
       service.needsReAuthentication = true;
       service.sessionExpiryWarning = true;
       service.reAuthenticationReturnUrl = '/coding';
@@ -433,10 +430,12 @@ describe('AppService', () => {
 
       service.clearAuthState();
 
+      expect(localStorage.removeItem).toHaveBeenCalledWith('auth_token');
       expect(localStorage.removeItem).toHaveBeenCalledWith('id_token');
+      expect(localStorage.removeItem).toHaveBeenCalledWith('refresh_token');
       expect(service.loggedUser).toBeUndefined();
-      expect(service.keycloakIdentity).toBeUndefined();
-      expect(service.isLoggedInKeycloak).toBe(false);
+      expect(service.user).toBeUndefined();
+      expect(service.isLoggedIn).toBe(false);
       expect(service.authData).toEqual(AppService.defaultAuthData);
       expect(service.needsReAuthentication).toBe(false);
       expect(service.sessionExpiryWarning).toBe(false);
@@ -455,7 +454,9 @@ describe('AppService', () => {
     it('should clear auth state and mark reauthentication as required', () => {
       service.requireReAuthentication('/coding');
 
+      expect(localStorage.removeItem).toHaveBeenCalledWith('auth_token');
       expect(localStorage.removeItem).toHaveBeenCalledWith('id_token');
+      expect(localStorage.removeItem).toHaveBeenCalledWith('refresh_token');
       expect(service.needsReAuthentication).toBe(true);
       expect(service.sessionExpiryWarning).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBe('/coding');
@@ -470,7 +471,7 @@ describe('AppService', () => {
     });
 
     it('should capture registered recovery drafts before requiring reauthentication', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       const unregister = sessionRecoveryService.registerProvider({
         key: 'active-form',
         capture: () => ({ field: 'value' })
@@ -484,7 +485,7 @@ describe('AppService', () => {
     });
 
     it('should keep recovery drafts saved during reauthentication scoped to the current user', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
 
       service.requireReAuthentication('/coding');
       sessionRecoveryService.saveDraft('late-active-form', { field: 'late-value' });
@@ -497,7 +498,7 @@ describe('AppService', () => {
     });
 
     it('should keep recovery drafts scoped when reauthentication is requested repeatedly', () => {
-      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
       let fieldValue = 'first-value';
       const unregister = sessionRecoveryService.registerProvider({
         key: 'active-form',

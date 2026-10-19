@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Controller, Get, Param, Query, UseGuards
+  BadRequestException, Controller, Get, Param, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -34,6 +34,17 @@ export class WorkspaceTestCenterController {
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) {}
+
+  private decodeTestcenterUrl(url: string): string {
+    try {
+      return decodeURIComponent(url);
+    } catch (error) {
+      if (error instanceof URIError) {
+        throw new BadRequestException('Invalid URL encoding');
+      }
+      throw error;
+    }
+  }
 
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
@@ -146,24 +157,25 @@ export class WorkspaceTestCenterController {
   @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
     @Param('workspace_id') workspace_id: string,
-      @Query('server') server: string,
-      @Query('url') url: string,
-      @Query('tc_workspace') tc_workspace: string,
-      @Query('token') token: string,
-      @Query('definitions') definitions: string,
-      @Query('responses') responses: string,
-      @Query('logs') logs: string,
-      @Query('player') player: string,
-      @Query('units') units: string,
-      @Query('codings') codings: string,
-      @Query('testTakers') testTakers: string,
-      @Query('testGroups') testGroups: string,
-      @Query('booklets') booklets: string,
-      @Query('metadata') metadata: string,
-      @Query('overwriteFileIds') overwriteFileIds: string,
-      @Query('overwriteExistingLogs') overwriteExistingLogs: string,
-      @Query('importRunId') importRunId: string,
-      @Query('responseOverwriteMode') responseOverwriteMode: string
+    @Query('server') server: string,
+    @Query('url') url: string,
+    @Query('tc_workspace') tc_workspace: string,
+    @Query('token') token: string,
+    @Query('definitions') definitions: string,
+    @Query('responses') responses: string,
+    @Query('logs') logs: string,
+    @Query('player') player: string,
+    @Query('units') units: string,
+    @Query('codings') codings: string,
+    @Query('testTakers') testTakers: string,
+    @Query('testGroups') testGroups: string,
+    @Query('booklets') booklets: string,
+    @Query('metadata') metadata: string,
+    @Query('overwriteFileIds') overwriteFileIds: string,
+    @Query('overwriteExistingLogs') overwriteExistingLogs: string,
+    @Query('importRunId') importRunId: string,
+    @Query('responseOverwriteMode') responseOverwriteMode: string,
+    @Req() request?: { user: { id: number } }
   ): Promise<Result> {
     const importOptions: ImportOptions = {
       definitions: definitions,
@@ -198,27 +210,37 @@ export class WorkspaceTestCenterController {
           overwriteExistingLogs: boolean,
           overwriteFileIds?: string[],
           importRunId?: string,
-          responseOverwriteMode?: TestResultsOverwriteMode
+          responseOverwriteMode?: TestResultsOverwriteMode,
+          actorUserId?: number
         ) => Promise<Result>;
       }
     ).importWorkspaceFiles(
       workspace_id,
       tc_workspace,
       server,
-      decodeURIComponent(url),
+      this.decodeTestcenterUrl(url),
       token,
       importOptions,
       testGroups,
       overwriteLogs,
       overwriteIds.length ? overwriteIds : undefined,
       importRunId,
-      normalizedResponseOverwriteMode
+      normalizedResponseOverwriteMode,
+      request?.user.id
     );
 
-    if (result?.success) {
+    if (result?.success || result?.responses || result?.logs) {
       const workspaceId = Number(workspace_id);
       if (Number.isFinite(workspaceId) && workspaceId > 0) {
-        await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        try {
+          await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        } catch {
+          result.issues = [...(result.issues || []), {
+            level: 'warning',
+            category: 'other',
+            message: 'Der Import ist abgeschlossen, aber die Antwortfilter konnten noch nicht aktualisiert werden. Bitte die Übersicht später neu laden.'
+          }];
+        }
       }
     }
 
@@ -259,7 +281,7 @@ export class WorkspaceTestCenterController {
   @ApiOkResponse({ type: Object })
   async getImportWorkspaceFilesProgress(
     @Param('workspace_id') workspace_id: string,
-      @Query('importRunId') importRunId: string
+    @Query('importRunId') importRunId: string
   ): Promise<ImportWorkspaceFilesProgressDto> {
     return this.testCenterService.getImportWorkspaceFilesProgress(
       workspace_id,
@@ -287,7 +309,7 @@ export class WorkspaceTestCenterController {
   @ApiOkResponse({ type: Object })
   async getImportTestcenterGroupsProgress(
     @Param('workspace_id') workspace_id: string,
-      @Query('importRunId') importRunId: string
+    @Query('importRunId') importRunId: string
   ): Promise<TestGroupsLoadProgressDto> {
     return this.testCenterService.getTestGroupsLoadProgress(
       workspace_id,
@@ -334,27 +356,19 @@ export class WorkspaceTestCenterController {
   @ApiBadRequestResponse({ description: 'Failed to retrieve test groups' })
   async getImportTestcenterGroups(
     @Param('workspace_id') workspace_id: string,
-      @Query('server') server: string,
-      @Query('url') url: string,
-      @Query('tc_workspace') tc_workspace: string,
-      @Query('token') token: string,
-      @Query('importRunId') importRunId: string
+    @Query('server') server: string,
+    @Query('url') url: string,
+    @Query('tc_workspace') tc_workspace: string,
+    @Query('token') token: string,
+    @Query('importRunId') importRunId: string
   ): Promise<TestGroupsInfoDto[]> {
-    try {
-      return await this.testCenterService.getTestgroups(
-        workspace_id,
-        tc_workspace,
-        server,
-        decodeURIComponent(url),
-        token,
-        importRunId
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ?
-          error.message :
-          'Failed to retrieve test groups from Testcenter.'
-      );
-    }
+    return this.testCenterService.getTestgroups(
+      workspace_id,
+      tc_workspace,
+      server,
+      this.decodeTestcenterUrl(url),
+      token,
+      importRunId
+    );
   }
 }

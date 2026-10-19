@@ -158,27 +158,27 @@ export interface ContentPoolUploadFilesJobProgress {
 }
 
 type ContentPoolImportProgressUpdate = Partial<
-Pick<
-ContentPoolImportJobProgress,
+  Pick<
+    ContentPoolImportJobProgress,
 'phase' |
 'message' |
 'processedFiles' |
 'totalFiles' |
 'progress' |
 'currentFileName'
->
+  >
 >;
 
 type ContentPoolUploadProgressUpdate = Partial<
-Pick<
-ContentPoolUploadFilesJobProgress,
+  Pick<
+    ContentPoolUploadFilesJobProgress,
 'phase' |
 'message' |
 'processedFiles' |
 'totalFiles' |
 'progress' |
 'currentFileName'
->
+  >
 >;
 
 @Injectable()

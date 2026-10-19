@@ -172,42 +172,45 @@ export class WorkspaceCodingService {
   }
 
   async pauseJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.pauseJob(jobId);
+    return this.bullJobManagementService.pauseJob(jobId, workspaceId);
   }
 
   async resumeJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.resumeJob(jobId);
+    return this.bullJobManagementService.resumeJob(jobId, workspaceId);
   }
 
   async restartJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string; jobId?: string }> {
-    return this.bullJobManagementService.restartJob(jobId);
+    return this.bullJobManagementService.restartJob(jobId, workspaceId);
   }
 
   async getBullJobs(workspaceId: number): Promise<
-  {
-    jobId: string;
-    status:
+    {
+      jobId: string;
+      status:
     | 'pending'
     | 'processing'
     | 'completed'
     | 'failed'
     | 'cancelled'
     | 'paused';
-    progress: number;
-    result?: CodingStatistics;
-    error?: string;
-    workspaceId?: number;
-    createdAt?: Date;
-    groupNames?: string;
-    durationMs?: number;
-    completedAt?: Date;
-  }[]
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+      workspaceId?: number;
+      createdAt?: Date;
+      groupNames?: string;
+      durationMs?: number;
+      completedAt?: Date;
+    }[]
   > {
     return this.bullJobManagementService.getBullJobs(workspaceId);
   }
@@ -267,14 +270,14 @@ export class WorkspaceCodingService {
     workspaceId: number,
     unitName?: string
   ): Promise<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+      }[]
     > {
     return this.codingValidationService.getCodingIncompleteVariables(
       workspaceId,
@@ -301,7 +304,8 @@ export class WorkspaceCodingService {
   async importExternalCodingWithProgress(
     workspaceId: number,
     body: ExternalCodingImportBody,
-    progressCallback: (progress: number, message: string) => void
+    progressCallback: (progress: number, message: string) => void,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -327,13 +331,15 @@ export class WorkspaceCodingService {
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
-      progressCallback
+      progressCallback,
+      requestedByUserId
     );
   }
 
   async importExternalCoding(
     workspaceId: number,
-    body: ExternalCodingImportBody
+    body: ExternalCodingImportBody,
+    requestedByUserId?: number
   ): Promise<{
       message: string;
       processedRows: number;
@@ -358,7 +364,9 @@ export class WorkspaceCodingService {
     await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
-      body
+      body,
+      undefined,
+      requestedByUserId
     );
   }
 
@@ -412,18 +420,18 @@ export class WorkspaceCodingService {
     }>,
     serverUrl: string
   ): Promise<
-    Array<{
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      replayUrl: string;
-    }>
+      Array<{
+        responseId: number;
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        variableAnchor: string;
+        bookletName: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        replayUrl: string;
+      }>
     > {
     return this.codingReplayService.generateReplayUrlsForItems(
       workspaceId,
@@ -477,20 +485,21 @@ export class WorkspaceCodingService {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
-    }
+    },
+    actorUserId?: number
   ): Promise<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<
-      string,
-      {
-        totalCases: number;
-        doubleCodedCases: number;
-        singleCodedCasesAssigned: number;
-        doubleCodedCasesPerCoder: Record<string, number>;
-      }
+        string,
+        {
+          totalCases: number;
+          doubleCodedCases: number;
+          singleCodedCasesAssigned: number;
+          doubleCodedCasesPerCoder: Record<string, number>;
+        }
       >;
       jobs: {
         coderId: number;
@@ -503,7 +512,8 @@ export class WorkspaceCodingService {
     }> {
     return this.codingJobOperationsService.createDistributedCodingJobs(
       workspaceId,
-      request
+      request,
+      actorUserId
     );
   }
 

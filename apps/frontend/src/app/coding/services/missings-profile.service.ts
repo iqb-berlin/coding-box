@@ -39,9 +39,9 @@ export class MissingsProfileService {
   getMissingsProfileDetails(workspaceId: number, id: string | number): Observable<MissingsProfilesDto | null> {
     return this.http
       .get<MissingsProfilesDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${id}`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${id}`,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -50,10 +50,10 @@ export class MissingsProfileService {
   createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
     return this.http
       .post<MissingsProfilesDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles`,
-      profile,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles`,
+        profile,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -62,10 +62,10 @@ export class MissingsProfileService {
   updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
     return this.http
       .put<MissingsProfilesDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
-      profile,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+        profile,
+        {}
+      )
       .pipe(
         catchError(() => of(null))
       );
@@ -74,9 +74,9 @@ export class MissingsProfileService {
   deleteMissingsProfile(workspaceId: number, label: string): Observable<boolean> {
     return this.http
       .delete<boolean>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
-      {}
-    )
+        `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
+        {}
+      )
       .pipe(
         catchError(() => of(false))
       );

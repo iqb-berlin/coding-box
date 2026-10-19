@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { catchError, Observable, of } from 'rxjs';
+import {
+  catchError, Observable, of, timeout
+} from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import {
@@ -68,11 +70,13 @@ export class ImportService {
       .set('importRunId', String(importRunId || ''))
       .set('responseOverwriteMode', responseOverwriteMode);
 
-    return this.http
+    const request = this.http
       .get<Result>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
+        { params }
+      );
+    return String(responses) === 'true' || String(logs) === 'true' ?
+      request.pipe(timeout(180000)) : request;
   }
 
   getImportWorkspaceFilesProgress(
@@ -82,10 +86,10 @@ export class ImportService {
     const params = new HttpParams().set('importRunId', importRunId);
     return this.http
       .get<ImportWorkspaceFilesProgressDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
-      { params }
-    )
-      .pipe(catchError(() => of(null)));
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
+        { params }
+      )
+      .pipe(timeout(10000), catchError(() => of(null)));
   }
 
   importTestcenterGroups(
@@ -108,9 +112,9 @@ export class ImportService {
 
     return this.http
       .get<TestGroupsInfoDto[]>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
-      { params }
-    );
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
+        { params }
+      );
   }
 
   getTestGroupsLoadProgress(
@@ -120,9 +124,9 @@ export class ImportService {
     const params = new HttpParams().set('importRunId', importRunId);
     return this.http
       .get<TestGroupsLoadProgressDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups/progress`,
-      { params }
-    )
+        `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups/progress`,
+        { params }
+      )
       .pipe(catchError(() => of(null)));
   }
 }

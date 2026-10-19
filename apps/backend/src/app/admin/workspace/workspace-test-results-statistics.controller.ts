@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   Get,
   Param,
@@ -71,24 +70,18 @@ export class WorkspaceTestResultsStatisticsController {
   async getOverview(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{
-        testPersons: number;
-        testGroups: number;
-        uniqueBooklets: number;
-        uniqueUnits: number;
-        uniqueResponses: number;
-        responseStatusCounts: Record<string, number>;
-        sessionBrowserCounts: Record<string, number>;
-        sessionOsCounts: Record<string, number>;
-        sessionScreenCounts: Record<string, number>;
-      }> {
-    try {
-      return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
-        workspaceId
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to retrieve overview. ${error.message}`
-      );
-    }
+      testPersons: number;
+      testGroups: number;
+      uniqueBooklets: number;
+      uniqueUnits: number;
+      uniqueResponses: number;
+      responseStatusCounts: Record<string, number>;
+      sessionBrowserCounts: Record<string, number>;
+      sessionOsCounts: Record<string, number>;
+      sessionScreenCounts: Record<string, number>;
+    }> {
+    return this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
+      workspaceId
+    );
   }
 }

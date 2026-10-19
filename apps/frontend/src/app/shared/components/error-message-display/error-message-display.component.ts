@@ -62,15 +62,22 @@ export class ErrorMessageDisplayComponent {
   }
 
   async handleExtendSession(): Promise<void> {
+    const generation = this.authService.getSessionGeneration();
+    const refreshToken = this.authService.getRefreshToken();
+    const requireCurrentSessionReauthentication = () => {
+      if (generation === this.authService.getSessionGeneration() && refreshToken === this.authService.getRefreshToken()) {
+        this.appService.requireReAuthentication(this.router.url);
+      }
+    };
     try {
       const token = await this.authService.getValidToken(-1);
       if (!token) {
-        this.appService.requireReAuthentication(this.router.url);
+        requireCurrentSessionReauthentication();
         return;
       }
-      this.appService.setSessionExpiryWarning(false);
+      if (generation === this.authService.getSessionGeneration()) this.appService.setSessionExpiryWarning(false);
     } catch {
-      this.appService.requireReAuthentication(this.router.url);
+      requireCurrentSessionReauthentication();
     }
   }
 

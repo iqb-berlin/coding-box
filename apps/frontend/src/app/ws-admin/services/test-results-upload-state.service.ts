@@ -608,12 +608,12 @@ export class TestResultsUploadStateService {
         }
 
         const dialogRef = this.dialog.open<
-        TestResultsLogAnomalyDetailsDialogComponent,
-        {
-          affectedBooklets: number;
-          rows: typeof details.data;
-          truncated: boolean;
-        },
+          TestResultsLogAnomalyDetailsDialogComponent,
+          {
+            affectedBooklets: number;
+            rows: typeof details.data;
+            truncated: boolean;
+          },
         TestResultsLogAnomalyDetailsDialogResult | undefined
         >(TestResultsLogAnomalyDetailsDialogComponent, {
           width: '900px',

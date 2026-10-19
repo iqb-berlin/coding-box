@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { UsersService } from './users.service';
+import { JournalService } from '../shared/journal.service';
 
 const createLockedRowsQuery = (rows: unknown[] = []) => ({
   setLock: jest.fn().mockReturnThis(),
@@ -43,6 +45,7 @@ describe('UsersService', () => {
   let service: UsersService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     usersRepository = createRepo();
     workspaceUserRepository = createRepo();
     const transactionManager = {
@@ -54,6 +57,36 @@ describe('UsersService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
+  });
+
+  it('does not persist a supplied primary key or relations when creating a user', async () => {
+    usersRepository.findOne.mockResolvedValue(null);
+    await service.createUser({ username: 'New', id: 99, workspaces: [{ workspaceId: 88 }] } as never);
+    expect(usersRepository.create.mock.calls[0][0]).not.toHaveProperty('id');
+    expect(usersRepository.create.mock.calls[0][0]).not.toHaveProperty('workspaces');
+    expect(usersRepository.save).toHaveBeenCalledWith(expect.objectContaining({ id: 77, username: 'New' }));
+  });
+
+  it('uses the URL user ID and ignores protected properties in update JSON', async () => {
+    usersRepository.findOne.mockResolvedValue({ id: 7, username: 'Original' });
+    await service.updateUser(7, {
+      id: 99,
+      username: 'Updated',
+      isAdmin: false,
+      description: '',
+      identity: 'foreign-identity',
+      issuer: 'foreign-issuer',
+      workspaces: [{ workspaceId: 88 }]
+    } as never);
+    expect(usersRepository.save).toHaveBeenCalledWith({
+      id: 7, username: 'Updated', isAdmin: false, description: ''
+    });
+  });
+
+  it('returns 404 and performs no write when updating a missing user', async () => {
+    usersRepository.findOne.mockResolvedValue(null);
+    await expect(service.updateUser(7, { username: 'Updated' })).rejects.toBeInstanceOf(NotFoundException);
+    expect(usersRepository.save).not.toHaveBeenCalled();
   });
 
   it('lists users with and without workspace filters', async () => {
@@ -294,6 +327,19 @@ describe('UsersService', () => {
     await expect(service.canUserCodeInWorkspace(0, 7)).resolves.toBe(false);
   });
 
+  it('reads coding capability from the caller transaction when supplied', async () => {
+    const findOne = jest.fn().mockResolvedValue(null);
+    const manager = { getRepository: jest.fn().mockReturnValue({ findOne }) };
+    workspaceUserRepository.findOne.mockResolvedValue({ userId: 1 });
+
+    await expect(service.canUserCodeInWorkspace(1, 7, manager as unknown as EntityManager)).resolves.toBe(false);
+    expect(manager.getRepository).toHaveBeenCalledWith(WorkspaceUser);
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspaceId: 7, userId: 1, canCode: true })
+    }));
+    expect(workspaceUserRepository.findOne).not.toHaveBeenCalled();
+  });
+
   it('returns access levels, workspace ids and users by identity or id', async () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce({ accessLevel: 2 });
     workspaceUserRepository.find.mockResolvedValueOnce([{ workspaceId: 3 }, { workspaceId: 4 }]);
@@ -512,6 +558,51 @@ describe('UsersService', () => {
     ]);
   });
 
+  it('audits a membership re-created after it was removed before acquiring the workspace lock', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1, workspaceId: 2, accessLevel: 1, canCode: true
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{
+      userId: 9, workspaceId: 2, accessLevel: 3, canCode: false
+    }]);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.assignUserWorkspaces(1, [2], 8)).resolves.toBe(true);
+
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledTimes(1);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 2,
+      actorUserId: 8,
+      eventType: 'ACCESS_LEVEL_CHANGED',
+      entityId: 1,
+      details: {
+        previousAccessLevel: 0, accessLevel: 1, previousCanCode: false, canCode: true
+      }
+    }));
+  });
+
+  it('does not audit stale rights when the locked membership already has the requested rights', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1, workspaceId: 2, accessLevel: 1, canCode: true
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        userId: 1, workspaceId: 2, accessLevel: 2, canCode: false
+      },
+      {
+        userId: 9, workspaceId: 2, accessLevel: 3, canCode: false
+      }
+    ]);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.assignUserWorkspaces(1, [2], 8)).resolves.toBe(true);
+
+    expect(workspaceUserRepository.save).toHaveBeenCalledWith([{
+      userId: 1, workspaceId: 2, accessLevel: 2, canCode: false
+    }]);
+    expect(JournalService.recordEventInTransaction).not.toHaveBeenCalled();
+  });
+
   it('rejects workspace assignment changes that remove the final study manager', async () => {
     workspaceUserRepository.find.mockResolvedValueOnce([{
       userId: 1,
@@ -548,7 +639,7 @@ describe('UsersService', () => {
     await expect(service.createUser({ username: 'new' } as never)).resolves.toBe(77);
   });
 
-  it('handles admin checks and keycloak users', async () => {
+  it('handles admin checks and OIDC provider users', async () => {
     usersRepository.findOne
       .mockResolvedValueOnce({ isAdmin: true })
       .mockResolvedValueOnce(null)
@@ -559,21 +650,21 @@ describe('UsersService', () => {
 
     await expect(service.getUserIsAdmin(1)).resolves.toBe(true);
     await expect(service.getUserIsAdmin(2)).resolves.toBe(false);
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: true
     } as never)).resolves.toBe(10);
     expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new', isAdmin: true });
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'fresh', identity: 'id', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(77);
   });
 
-  it('does not demote existing database admins during keycloak login', async () => {
+  it('does not demote existing database admins during OIDC login', async () => {
     usersRepository.findOne.mockResolvedValueOnce({
       id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
     });
 
-    await expect(service.createKeycloakUser({
+    await expect(service.createOidcProviderUser({
       username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(10);
 

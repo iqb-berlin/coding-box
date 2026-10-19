@@ -3,48 +3,51 @@ import { VariableBundle } from '../../../database/entities/variable-bundle.entit
 import { VariableDto } from './variable.dto';
 
 export class VariableBundleDto {
+  @ApiProperty({ type: Number, nullable: true, readOnly: true })
+  creatorUserId: number | null;
+
   @ApiProperty({
     description: 'The ID of the variable bundle',
     example: 1
   })
-    id: number;
+  id: number;
 
   @ApiProperty({
     description: 'The ID of the workspace',
     example: 1
   })
-    workspace_id: number;
+  workspace_id: number;
 
   @ApiProperty({
     description: 'The name of the variable bundle',
     example: 'Mathematical Skills'
   })
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'The description of the variable bundle',
     example: 'Variables for assessing mathematical skills',
     required: false
   })
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'The variables in the bundle',
     type: [VariableDto]
   })
-    variables: VariableDto[];
+  variables: VariableDto[];
 
   @ApiProperty({
     description: 'The date the variable bundle was created',
     example: '2025-08-04T13:58:00.000Z'
   })
-    created_at: Date;
+  created_at: Date;
 
   @ApiProperty({
     description: 'The date the variable bundle was last updated',
     example: '2025-08-04T13:58:00.000Z'
   })
-    updated_at: Date;
+  updated_at: Date;
 
   /**
      * Static method to create a DTO from an entity
@@ -52,6 +55,7 @@ export class VariableBundleDto {
   static fromEntity(entity: VariableBundle): VariableBundleDto {
     const dto = new VariableBundleDto();
     dto.id = entity.id;
+    dto.creatorUserId = entity.creatorUserId ?? null;
     dto.workspace_id = entity.workspace_id;
     dto.name = entity.name;
     dto.description = entity.description;

@@ -8,6 +8,7 @@ export type CaseSelectionMode =
 export type ReferenceMode = 'same' | 'different';
 
 export interface CoderTraining {
+  creatorUserId?: number | null;
   id: number;
   workspace_id: number;
   label: string;

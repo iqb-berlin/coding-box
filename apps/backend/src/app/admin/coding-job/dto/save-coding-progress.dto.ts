@@ -19,21 +19,21 @@ export class SaveCodingProgressDto {
     example: 'testuser@123@g1@testbooklet'
   })
   @IsString()
-    testPerson: string;
+  testPerson: string;
 
   @ApiProperty({
     description: 'Unit name',
     example: 'UNIT1'
   })
   @IsString()
-    unitId: string;
+  unitId: string;
 
   @ApiProperty({
     description: 'Variable ID',
     example: 'var001'
   })
   @IsString()
-    variableId: string;
+  variableId: string;
 
   @ApiProperty({
     description: 'Selected code object. Send null to clear the saved coding for this unit-variable combination.',
@@ -45,7 +45,7 @@ export class SaveCodingProgressDto {
   @IsObject()
   @ValidateNested()
   @Type(() => SaveCodingProgressSelectedCodeDto)
-    selectedCode?: SaveCodingProgressSelectedCodeDto | null;
+  selectedCode?: SaveCodingProgressSelectedCodeDto | null;
 
   @ApiProperty({
     description: 'Whether the unit is marked as open',
@@ -54,7 +54,7 @@ export class SaveCodingProgressDto {
   })
   @IsBoolean()
   @IsOptional()
-    isOpen?: boolean;
+  isOpen?: boolean;
 
   @ApiProperty({
     description: 'Coder notes for the unit',
@@ -63,7 +63,7 @@ export class SaveCodingProgressDto {
   })
   @IsString()
   @IsOptional()
-    notes?: string;
+  notes?: string;
 
   @ApiProperty({
     description: 'Save this entry as a coding issue review by the current user.',
@@ -72,5 +72,5 @@ export class SaveCodingProgressDto {
   })
   @IsBoolean()
   @IsOptional()
-    issueReview?: boolean;
+  issueReview?: boolean;
 }

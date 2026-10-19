@@ -1,19 +1,5 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Param,
-  Post,
-  Put,
-  Query,
-  Req,
-  UseGuards,
-  UseInterceptors,
-  UploadedFiles,
-  ParseIntPipe,
-  Logger,
-  Get,
-  NotFoundException
+  BadRequestException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -31,18 +17,15 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/test-results';
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
-import {
-  ChunkedUploadInitRequestDto,
-  ChunkedUploadInitResponseDto,
-  ChunkedUploadChunkResponseDto,
-  ChunkedUploadCompleteRequestDto
-} from '../../../../../../api-dto/files/chunked-upload.dto';
+import { ChunkedUploadInitResponseDto, ChunkedUploadChunkResponseDto } from '../../../../../../api-dto/files/chunked-upload.dto';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
@@ -172,17 +155,18 @@ export class WorkspaceTestResultsImportController {
   @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('resultType') resultType: 'logs' | 'responses',
-      @UploadedFiles() files: Express.Multer.File[],
-      @Query('overwriteExisting') overwriteExisting?: string,
-      @Query('personMatchMode') personMatchMode?: string,
-      @Query('overwriteMode') overwriteMode?: string,
-      @Query('scope') scope?: string,
-      @Query('groupName') groupName?: string,
-      @Query('bookletName') bookletName?: string,
-      @Query('unitNameOrAlias') unitNameOrAlias?: string,
-      @Query('variableId') variableId?: string,
-      @Query('subform') subform?: string
+    @Param('resultType') resultType: 'logs' | 'responses',
+    @UploadedFiles() files: Express.Multer.File[],
+    @Query('overwriteExisting') overwriteExisting?: string,
+    @Query('personMatchMode') personMatchMode?: string,
+    @Query('overwriteMode') overwriteMode?: string,
+    @Query('scope') scope?: string,
+    @Query('groupName') groupName?: string,
+    @Query('bookletName') bookletName?: string,
+    @Query('unitNameOrAlias') unitNameOrAlias?: string,
+    @Query('variableId') variableId?: string,
+    @Query('subform') subform?: string,
+    @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
     const startTime = Date.now();
 
@@ -260,7 +244,8 @@ export class WorkspaceTestResultsImportController {
           unitNameOrAlias,
           variableId,
           subform
-        }
+        },
+        request?.user.id
       );
 
       const totalTime = Date.now() - startTime;
@@ -282,9 +267,7 @@ export class WorkspaceTestResultsImportController {
         `Error queuing test results upload after ${totalTime}ms!`,
         error
       );
-      throw new BadRequestException(
-        'Uploading test results failed to queue. Please try again.'
-      );
+      throw error;
     }
   }
 
@@ -331,7 +314,7 @@ export class WorkspaceTestResultsImportController {
     }
   })
   async getJobStatus(
-  @WorkspaceId() workspaceId: number,
+    @WorkspaceId() workspaceId: number,
     @Param('job_id') jobId: string
   ) {
     const job = await this.jobQueueService.getUploadJob(jobId);
@@ -373,12 +356,12 @@ export class WorkspaceTestResultsImportController {
   })
   @ApiParam({ name: 'workspace_id', type: Number, required: true })
   @ApiParam({ name: 'resultType', enum: ['logs', 'responses'], required: true })
-  @ApiBody({ type: ChunkedUploadInitRequestDto })
+
   @ApiOkResponse({ type: ChunkedUploadInitResponseDto })
   async initChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('resultType') resultType: 'logs' | 'responses',
-      @Body() body: ChunkedUploadInitRequestDto
+    @Param('resultType') resultType: 'logs' | 'responses',
+    @ValidatedBody('ChunkedUploadInitRequestDto') body: RequestBody<'ChunkedUploadInitRequestDto'>
   ): Promise<ChunkedUploadInitResponseDto> {
     if (!body.fileName || !body.fileSize || !body.mimeType) {
       throw new BadRequestException(
@@ -432,9 +415,9 @@ export class WorkspaceTestResultsImportController {
   @ApiOkResponse({ type: ChunkedUploadChunkResponseDto })
   async uploadChunk(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('uploadId') uploadId: string,
-      @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
-      @Req() req: Request
+    @Param('uploadId') uploadId: string,
+    @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
+    @Req() req: Request
   ): Promise<ChunkedUploadChunkResponseDto> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
@@ -498,12 +481,13 @@ export class WorkspaceTestResultsImportController {
   })
   @ApiParam({ name: 'workspace_id', type: Number, required: true })
   @ApiParam({ name: 'uploadId', type: String, required: true })
-  @ApiBody({ type: ChunkedUploadCompleteRequestDto })
+
   @ApiOkResponse({ type: TestResultsUploadJobDto, isArray: true })
   async completeChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('uploadId') uploadId: string,
-      @Body() body: ChunkedUploadCompleteRequestDto
+    @Param('uploadId') uploadId: string,
+    @ValidatedBody('ChunkedUploadCompleteRequestDto', true) body: RequestBody<'ChunkedUploadCompleteRequestDto'> = {},
+    @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
@@ -615,7 +599,8 @@ export class WorkspaceTestResultsImportController {
         unitNameOrAlias: body.unitNameOrAlias,
         variableId: body.variableId,
         subform: body.subform
-      }
+      },
+      request?.user.id
     );
 
     // Cleanup session from Redis

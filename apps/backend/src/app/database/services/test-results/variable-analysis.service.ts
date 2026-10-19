@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -93,8 +94,8 @@ type VariableAnalysisExportColumnKey =
 type VariableAnalysisExportCell = string | number;
 
 type VariableAnalysisExportRow = Record<
-VariableAnalysisExportColumnKey,
-VariableAnalysisExportCell
+  VariableAnalysisExportColumnKey,
+  VariableAnalysisExportCell
 >;
 
 @Injectable()
@@ -172,23 +173,13 @@ export class VariableAnalysisService {
 
   async getAnalysisJob(
     jobId: number | string,
-    workspaceId?: number
+    workspaceId: number
   ): Promise<VariableAnalysisJobDto> {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
     );
 
-    if (!job) {
-      if (workspaceId !== undefined) {
-        throw new NotFoundException(
-          `Job with ID ${jobId} not found in workspace ${workspaceId}`
-        );
-      } else {
-        throw new NotFoundException(`Job with ID ${jobId} not found`);
-      }
-    }
-
-    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+    if (!job || !Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
       throw new NotFoundException(
         `Job with ID ${jobId} not found in workspace ${workspaceId}`
       );
@@ -212,7 +203,7 @@ export class VariableAnalysisService {
 
   async getAnalysisResults(
     jobId: number | string,
-    workspaceId?: number,
+    workspaceId: number,
     options: VariableAnalysisResultOptions = {}
   ): Promise<VariableAnalysisResultDto> {
     const job = await this.getCompletedAnalysisJob(jobId, workspaceId);
@@ -231,11 +222,11 @@ export class VariableAnalysisService {
         );
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.withSchemaCodeVisibility(
@@ -246,7 +237,7 @@ export class VariableAnalysisService {
 
   async getAnalysisResultsPage(
     jobId: number | string,
-    workspaceId?: number,
+    workspaceId: number,
     options: {
       page?: number | string;
       pageSize?: number | string;
@@ -267,11 +258,11 @@ export class VariableAnalysisService {
         return cachedPage;
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.getResultPage(
@@ -404,8 +395,9 @@ export class VariableAnalysisService {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
     );
+    if (!job || !Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) return false;
     const deleted = await this.jobQueueService.deleteVariableAnalysisJob(
-      jobId.toString()
+      jobId.toString(), workspaceId
     );
 
     if (deleted) {
@@ -419,7 +411,7 @@ export class VariableAnalysisService {
     workspaceId: number,
     jobId: string | number
   ): Promise<boolean> {
-    return this.jobQueueService.cancelVariableAnalysisJob(jobId.toString());
+    return this.jobQueueService.cancelVariableAnalysisJob(jobId.toString(), workspaceId);
   }
 
   async deleteAllJobs(workspaceId: number): Promise<void> {
@@ -438,7 +430,7 @@ export class VariableAnalysisService {
 
   private async getCompletedAnalysisJob(
     jobId: number | string,
-    workspaceId?: number
+    workspaceId: number
   ) {
     const job = await this.jobQueueService.getVariableAnalysisJob(
       jobId.toString()
@@ -448,7 +440,7 @@ export class VariableAnalysisService {
       throw new NotFoundException(`Job with ID ${jobId} not found`);
     }
 
-    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+    if (!Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
       throw new NotFoundException(
         `Job with ID ${jobId} not found in workspace ${workspaceId}`
       );
@@ -456,7 +448,7 @@ export class VariableAnalysisService {
 
     const state = await job.getState();
     if (state !== 'completed') {
-      throw new Error(
+      throw new BadRequestException(
         `Job with ID ${jobId} is not completed (status: ${state})`
       );
     }
@@ -533,7 +525,7 @@ export class VariableAnalysisService {
     }
 
     if (this.isChunkedResultManifest(cachedValue)) {
-      throw new Error(
+      throw new BadRequestException(
         'Variable analysis result is stored in chunks; use the paginated results endpoint'
       );
     }
@@ -583,11 +575,11 @@ export class VariableAnalysisService {
         return cachedResult;
       }
 
-      throw new Error(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
-      throw new Error(`Job with ID ${jobId} has no results`);
+      throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
     return this.getFilteredResultForExport(
@@ -708,7 +700,7 @@ export class VariableAnalysisService {
 
     for (let index = 0; index < manifest.frequencyChunks; index += 1) {
       const chunk = await this.cacheService.get<
-      Array<[string, VariableFrequencyDto[]]>
+        Array<[string, VariableFrequencyDto[]]>
       >(this.getFrequencyChunkKey(cacheKey, index));
       if (!chunk) {
         return null;
@@ -875,7 +867,7 @@ export class VariableAnalysisService {
 
     for (let index = 0; index < manifest.frequencyChunks; index += 1) {
       const chunk = await this.cacheService.get<
-      Array<[string, VariableFrequencyDto[]]>
+        Array<[string, VariableFrequencyDto[]]>
       >(this.getFrequencyChunkKey(cacheKey, index));
       if (!chunk) {
         return null;
@@ -1340,7 +1332,7 @@ export class VariableAnalysisService {
     row: VariableAnalysisExportRow
   ): Record<string, VariableAnalysisExportCell> {
     return VARIABLE_ANALYSIS_EXPORT_COLUMNS.reduce<
-    Record<string, VariableAnalysisExportCell>
+      Record<string, VariableAnalysisExportCell>
     >((csvRow, column) => {
       const value = row[column.key];
       csvRow[column.header] = typeof value === 'string' ?

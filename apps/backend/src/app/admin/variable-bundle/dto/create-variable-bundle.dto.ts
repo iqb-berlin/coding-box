@@ -1,6 +1,7 @@
+import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsArray, IsNotEmpty, IsOptional, IsString
+  IsArray, IsNotEmpty, IsOptional, IsString, ValidateNested
 } from 'class-validator';
 import { VariableDto } from './variable.dto';
 
@@ -11,7 +12,7 @@ export class CreateVariableBundleDto {
   })
   @IsNotEmpty()
   @IsString()
-    name: string;
+  name: string;
 
   @ApiProperty({
     description: 'The description of the variable bundle',
@@ -20,7 +21,7 @@ export class CreateVariableBundleDto {
   })
   @IsOptional()
   @IsString()
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'The variables in the bundle',
@@ -28,5 +29,7 @@ export class CreateVariableBundleDto {
     default: []
   })
   @IsArray()
-    variables: VariableDto[];
+  @ValidateNested({ each: true })
+  @Type(() => VariableDto)
+  variables: VariableDto[];
 }

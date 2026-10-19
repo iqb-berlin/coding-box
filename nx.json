@@ -95,7 +95,8 @@
         "default",
         "^production",
         "{workspaceRoot}/jest.config.ts",
-        "{workspaceRoot}/jest.preset.js"
+        "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/qa/**/*"
       ]
     },
     "e2e": {

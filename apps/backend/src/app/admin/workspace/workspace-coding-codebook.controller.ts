@@ -26,6 +26,7 @@ import { WorkspaceId } from './workspace.decorator';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { JobQueueService, CodebookJobResult } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { rethrowDownloadError } from '../../http/download-error';
 import {
   CodeBookContentSetting,
   CodebookExportFormat,
@@ -137,8 +138,8 @@ export class WorkspaceCodingCodebookController {
   })
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
-      @Body() body: CodebookRequestBody,
-      @Res() res: Response
+    @Body() body: CodebookRequestBody,
+    @Res() res: Response
   ): Promise<void> {
     const { missingsProfile, contentOptions, unitList } =
       this.normalizeCodebookRequest(body);
@@ -225,7 +226,7 @@ export class WorkspaceCodingCodebookController {
   })
   async startCodebookJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: CodebookRequestBody
+    @Body() body: CodebookRequestBody
   ): Promise<{ jobId: string; message: string }> {
     const { missingsProfile, contentOptions, unitList } =
       this.normalizeCodebookRequest(body);
@@ -274,7 +275,7 @@ export class WorkspaceCodingCodebookController {
   })
   async getCodebookJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<CodebookJobStatusResponse> {
     try {
       const job = await this.jobQueueService.getCodebookGenerationJob(jobId);
@@ -338,7 +339,7 @@ export class WorkspaceCodingCodebookController {
         `Error getting codebook job status: ${error.message}`,
         error.stack
       );
-      return { error: error.message };
+      throw error;
     }
   }
 
@@ -352,8 +353,8 @@ export class WorkspaceCodingCodebookController {
   })
   async downloadCodebook(
     @Param('jobId') jobId: string,
-      @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+    @WorkspaceId() workspace_id: number,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const metadata = await this.cacheService.get<CodebookJobResult>(
@@ -399,16 +400,7 @@ export class WorkspaceCodingCodebookController {
         `Error downloading codebook: ${error.message}`,
         error.stack
       );
-      if (res.headersSent || res.destroyed || res.writableEnded) {
-        if (!res.destroyed) {
-          res.destroy(error);
-        }
-        return;
-      }
-      res.removeHeader('Content-Disposition');
-      res.removeHeader('Content-Length');
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 

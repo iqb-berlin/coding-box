@@ -1,15 +1,11 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  DefaultValuePipe,
-  Get, InternalServerErrorException, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
+  BadRequestException, Controller, DefaultValuePipe, Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
-  ApiParam, ApiQuery, ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -70,9 +66,9 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async createOwnToken(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('duration') duration: string,
-      @Query('scopes') scopes: string | string[] | undefined,
-      @Req() request: RequestWithUser
+    @Param('duration') duration: string,
+    @Query('scopes') scopes: string | string[] | undefined,
+    @Req() request: RequestWithUser
   ): Promise<string> {
     if (!workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
@@ -106,10 +102,10 @@ export class WorkspaceUsersController {
   @RequireAccessLevel(3)
   async createToken(
     @Param('identity') identity: string,
-      @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('duration') duration: string,
-      @Query('scopes') scopes: string | string[] | undefined,
-      @Req() request: RequestWithUser
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('duration') duration: string,
+    @Query('scopes') scopes: string | string[] | undefined,
+    @Req() request: RequestWithUser
   ): Promise<string> {
     if (!identity || !workspaceId || !duration) {
       throw new BadRequestException('Invalid input parameters');
@@ -199,8 +195,8 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUsers(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
       const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
@@ -212,33 +208,27 @@ export class WorkspaceUsersController {
       };
     } catch (error) {
       this.logger.error(`Error retrieving users for workspace ${workspaceId}`, error);
-      throw new InternalServerErrorException('Could not retrieve workspace users');
+      throw error;
     }
   }
 
   @Post(':workspace_id/users')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiBody({
-    schema: {
-      type: 'array',
-      items: {
-        type: 'number'
-      },
-      description: 'Array of user IDs to assign to the workspace'
-    }
-  })
+
   @ApiCreatedResponse({
     description: 'Sends back the id of the new user in database',
     type: Number
   })
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
-  async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspace_id', ParseIntPipe) workspaceId: number) {
-    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
+  async setWorkspaceUsers(@ValidatedBody('WorkspaceUsersController_setWorkspaceUsers') userIds: RequestBody<'WorkspaceUsersController_setWorkspaceUsers'>,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() request?: RequestWithUser) {
+    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds, request ? Number(request.user.id) : undefined);
   }
 
   @Get(':workspace_id/coders')
@@ -275,10 +265,7 @@ export class WorkspaceUsersController {
       };
     } catch (error) {
       this.logger.error(`Error retrieving coders for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0
-      };
+      throw error;
     }
   }
 
@@ -313,7 +300,7 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findCodersByCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('job_id', ParseIntPipe) jobId: number
+    @Param('job_id', ParseIntPipe) jobId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
       // In a real implementation, this would filter coders by the specific job ID
@@ -328,10 +315,7 @@ export class WorkspaceUsersController {
       };
     } catch (error) {
       this.logger.error(`Error retrieving coders for workspace ${workspaceId} and coding job ${jobId}`);
-      return {
-        data: [],
-        total: 0
-      };
+      throw error;
     }
   }
 }

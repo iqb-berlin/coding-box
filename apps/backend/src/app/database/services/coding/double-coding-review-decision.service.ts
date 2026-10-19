@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   EntityManager, In, IsNull, Not, Repository
 } from 'typeorm';
+import { assertCodingReviewMutation } from '../shared/coding-ownership.policy';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -32,7 +33,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { CodingProgressService } from './coding-progress.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
@@ -161,7 +162,8 @@ export class DoubleCodingReviewDecisionService {
     managerName: string,
     draft: SaveDoubleCodedReviewDraftDto
   ): Promise<DoubleCodedManagerDecisionDto> {
-    return this.responseRepository.manager.transaction(async entityManager => {
+    return withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async entityManager => {
+      await assertCodingReviewMutation(entityManager, workspaceId, responseId, managerUserId);
       const sourceUnitId = this.normalizeExplicitReplayInteger(draft.sourceUnitId);
       if (sourceUnitId === undefined || sourceUnitId <= 0) {
         throw new BadRequestException('A valid review source unit is required');
@@ -268,13 +270,16 @@ export class DoubleCodingReviewDecisionService {
     responseId: number,
     managerUserId: number
   ): Promise<{ success: boolean }> {
-    const result = await this.reviewDecisionRepository.delete({
-      workspace_id: workspaceId,
-      response_id: responseId,
-      manager_user_id: managerUserId,
-      state: 'draft'
+    return withWorkspaceTestResultsMutationTransaction(this.reviewDecisionRepository.manager, async manager => {
+      await assertCodingReviewMutation(manager, workspaceId, responseId, managerUserId);
+      const result = await manager.getRepository(DoubleCodingReviewDecision).delete({
+        workspace_id: workspaceId,
+        response_id: responseId,
+        manager_user_id: managerUserId,
+        state: 'draft'
+      });
+      return { success: (result.affected || 0) > 0 };
     });
-    return { success: (result.affected || 0) > 0 };
   }
 
   async applyDoubleCodedResolutions(
@@ -303,7 +308,7 @@ export class DoubleCodingReviewDecisionService {
         `Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`
       );
 
-      const application = await this.responseRepository.manager.transaction(
+      const application = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager,
         async transactionalEntityManager => {
           await lockWorkspaceTestResultsMutationInTransaction(
             transactionalEntityManager,
@@ -491,7 +496,7 @@ export class DoubleCodingReviewDecisionService {
         await reconcileDecision(decision);
       }
     } else {
-      await this.responseRepository.manager.transaction(async entityManager => {
+      await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async entityManager => {
         await lockWorkspaceTestResultsMutationInTransaction(
           entityManager,
           workspaceId

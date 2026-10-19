@@ -4,7 +4,8 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany
+  OneToMany,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
@@ -14,18 +15,22 @@ import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
  * A variable bundle is a collection of variables that can be used together
  */
 @Entity({ name: 'variable_bundle' })
+@Index(['workspace_id', 'creatorUserId'])
 export class VariableBundle {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    workspace_id: number;
+  workspace_id: number;
+
+  @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
+  creatorUserId: number | null;
 
   @Column()
-    name: string;
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-    description?: string;
+  description?: string;
 
   /**
    * Array of variables in the bundle
@@ -33,14 +38,14 @@ export class VariableBundle {
    * Stored as a JSON array
    */
   @Column({ type: 'jsonb' })
-    variables: Array<{ unitName: string; variableId: string }>;
+  variables: Array<{ unitName: string; variableId: string }>;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-    updated_at: Date;
+  updated_at: Date;
 
   @OneToMany(() => CodingJobVariableBundle, codingJobVariableBundle => codingJobVariableBundle.variable_bundle, { cascade: true })
-    codingJobVariableBundles: CodingJobVariableBundle[];
+  codingJobVariableBundles: CodingJobVariableBundle[];
 }

@@ -111,13 +111,11 @@ describe('WsAdminComponent', () => {
 
     expect(links).toEqual([
       'ws-admin.coding-overview',
-      'ws-admin.manual-coding',
-      'ws-admin.export'
+      'ws-admin.manual-coding'
     ]);
     expect(navLinks.map(link => link.path)).toEqual([
       'coding/statistics',
-      'coding/manual',
-      'coding/export'
+      'coding/manual'
     ]);
   });
 
@@ -127,8 +125,7 @@ describe('WsAdminComponent', () => {
     expect(links).toEqual([
       'ws-admin.my-coding-jobs',
       'ws-admin.coding-overview',
-      'ws-admin.manual-coding',
-      'ws-admin.export'
+      'ws-admin.manual-coding'
     ]);
   });
 
@@ -138,8 +135,7 @@ describe('WsAdminComponent', () => {
     expect(links).toEqual([
       'ws-admin.my-coding-jobs',
       'ws-admin.coding-overview',
-      'ws-admin.manual-coding',
-      'ws-admin.export'
+      'ws-admin.manual-coding'
     ]);
   });
 

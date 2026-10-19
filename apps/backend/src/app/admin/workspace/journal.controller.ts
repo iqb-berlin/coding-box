@@ -9,7 +9,8 @@ import {
   Query,
   Req,
   Res,
-  UseGuards
+  UseGuards,
+  ValidationPipe
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import {
@@ -51,8 +52,8 @@ export class JournalController {
 
   @Post(':workspace_id/journal')
   @ApiOperation({
-    summary: 'Create a journal entry',
-    description: 'Creates a new journal entry for tracking actions in the workspace'
+    summary: 'Create a manual journal note',
+    description: 'Creates a user-authored note, not a trusted backend audit event'
   })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiBody({ type: CreateJournalEntryDto })
@@ -66,16 +67,28 @@ export class JournalController {
   @RequireAccessLevel(3)
   async createJournalEntry(
     @WorkspaceId() workspaceId: number,
-      @Body() createJournalEntryDto: CreateJournalEntryDto,
-      @Req() request: RequestWithUser
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) createJournalEntryDto: CreateJournalEntryDto,
+    @Req() request: RequestWithUser
   ): Promise<AuditJournalEntryDto> {
     const details = this.parseDetails(createJournalEntryDto.details);
-    const entityType = createJournalEntryDto.entityType || createJournalEntryDto.entity_type;
-    const eventType = createJournalEntryDto.eventType?.trim() ||
-      this.journalService.mapLegacyEventType(createJournalEntryDto.action_type, entityType);
-    const actorType = createJournalEntryDto.actorType ?
-      this.parseActorType(createJournalEntryDto.actorType) :
-      'user';
+    if (createJournalEntryDto.entityType !== undefined && createJournalEntryDto.entity_type !== undefined &&
+        createJournalEntryDto.entityType !== createJournalEntryDto.entity_type) {
+      throw new BadRequestException('Conflicting entity type aliases');
+    }
+    if (createJournalEntryDto.entityId !== undefined && createJournalEntryDto.entity_id !== undefined &&
+        createJournalEntryDto.entityId !== createJournalEntryDto.entity_id) {
+      throw new BadRequestException('Conflicting entity ID aliases');
+    }
+    const entityType = createJournalEntryDto.entityType || createJournalEntryDto.entity_type || 'workspace';
+    if (createJournalEntryDto.actorType && createJournalEntryDto.actorType !== 'user') {
+      throw new BadRequestException('Manual journal entries must have actorType user');
+    }
+    if (createJournalEntryDto.eventType && createJournalEntryDto.eventType !== 'MANUAL_NOTE_CREATED') {
+      throw new BadRequestException('Only manual notes may be created through the journal endpoint');
+    }
+    if (createJournalEntryDto.jobId || createJournalEntryDto.correlationId) {
+      throw new BadRequestException('Manual notes cannot claim a job or request correlation');
+    }
     const result = createJournalEntryDto.result ?
       this.parseResult(createJournalEntryDto.result) :
       'success';
@@ -83,16 +96,19 @@ export class JournalController {
     const entry = await this.journalService.recordEvent({
       workspaceId,
       actorUserId: request.user?.id,
-      actorType,
-      eventType,
-      legacyActionType: createJournalEntryDto.action_type,
+      actorType: 'user',
+      eventType: 'MANUAL_NOTE_CREATED',
+      legacyActionType: 'create',
       entityType,
       entityId: createJournalEntryDto.entityId ?? createJournalEntryDto.entity_id ?? null,
-      result,
+      result: 'success',
       summary: createJournalEntryDto.summary,
-      details,
-      correlationId: createJournalEntryDto.correlationId,
-      jobId: createJournalEntryDto.jobId
+      details: {
+        ...details,
+        source: 'manual',
+        reportedActionType: createJournalEntryDto.action_type || 'create',
+        reportedResult: result
+      }
     });
 
     return this.journalService.toAuditDto(entry);
@@ -186,18 +202,18 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntries(
     @WorkspaceId() workspaceId: number,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string,
-      @Query('userId') userId?: string,
-      @Query('actorUserId') actorUserId?: string,
-      @Query('actorType') actorType?: string,
-      @Query('eventType') eventType?: string,
-      @Query('actionType') actionType?: string,
-      @Query('entityType') entityType?: string,
-      @Query('entityId') entityId?: string,
-      @Query('result') result?: string,
-      @Query('fromDate') fromDate?: string,
-      @Query('toDate') toDate?: string
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('userId') userId?: string,
+    @Query('actorUserId') actorUserId?: string,
+    @Query('actorType') actorType?: string,
+    @Query('eventType') eventType?: string,
+    @Query('actionType') actionType?: string,
+    @Query('entityType') entityType?: string,
+    @Query('entityId') entityId?: string,
+    @Query('result') result?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     const filters: {
       workspaceId: number;
@@ -292,10 +308,10 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByEntity(
     @WorkspaceId() workspaceId: number,
-      @Param('entityType') entityType: string,
-      @Param('entityId') entityId: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('entityType') entityType: string,
+    @Param('entityId') entityId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     return this.journalService.search(
       {
@@ -339,9 +355,9 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByUser(
     @WorkspaceId() workspaceId: number,
-      @Param('userId') userId: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     const userFilters: { actorUserId?: number; legacyUserId?: string } = {};
     this.applyUserIdFilter(userFilters, userId);
@@ -386,9 +402,9 @@ export class JournalController {
   @RequireAccessLevel(3)
   async getJournalEntriesByAction(
     @WorkspaceId() workspaceId: number,
-      @Param('actionType') actionType: string,
-      @Query('page') page?: string,
-      @Query('limit') limit?: string
+    @Param('actionType') actionType: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ): Promise<PaginatedAuditJournalEntriesDto> {
     return this.journalService.search(
       {
@@ -427,7 +443,7 @@ export class JournalController {
   @RequireAccessLevel(3)
   async downloadJournalEntriesAsCsv(
     @WorkspaceId() workspaceId: number,
-      @Res() response: Response
+    @Res() response: Response
   ): Promise<void> {
     const csvData = await this.journalService.generateCsv(workspaceId);
     response.send(csvData);

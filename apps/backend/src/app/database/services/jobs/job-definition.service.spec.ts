@@ -1,7 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
 import { In } from 'typeorm';
+import { VariableBundle } from '../../entities/variable-bundle.entity';
 import type { DistributionVariableUsageByStatus } from '../coding/coding-job.service';
 import { JobDefinitionService } from './job-definition.service';
+import { JournalService } from '../shared/journal.service';
+// Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('../coding/coding-job.service', () => ({
   CodingJobService: jest.fn()
@@ -20,8 +32,9 @@ const createRepo = () => {
     remove: jest.fn(),
     manager: {
       transaction: jest.fn(async (callback: (manager: {
-        getRepository: jest.Mock;
+        query: jest.Mock; getRepository: jest.Mock;
       }) => Promise<unknown>) => callback({
+        query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn(() => repo)
       }))
     }
@@ -52,11 +65,18 @@ describe('JobDefinitionService', () => {
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let missingsProfilesService: { resolveMissingsProfileId: jest.Mock };
   let service: JobDefinitionService;
+  let transactionManager: { query: jest.Mock; getRepository: jest.Mock };
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
     usersRepository = createRepo();
+    transactionManager = {
+      query: jest.fn().mockResolvedValue([]),
+      getRepository: jest.fn(entity => (entity === VariableBundle ? variableBundleRepository : jobDefinitionRepository))
+    };
+    jobDefinitionRepository.manager.transaction.mockImplementation(async callback => callback(transactionManager));
     codingJobService = {
       createCodingJob: jest.fn(),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
@@ -332,8 +352,10 @@ describe('JobDefinitionService', () => {
       name: 'Lesen Klasse 4',
       description: 'Erste Kodierwelle',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
-      assignedCoders: [1]
-    }, 7)).resolves.toMatchObject({
+      assignedCoders: [1],
+      creatorUserId: 99
+    } as never, 7, 7)).resolves.toMatchObject({
+      creatorUserId: 7,
       name: 'Lesen Klasse 4',
       description: 'Erste Kodierwelle'
     });
@@ -1154,8 +1176,8 @@ describe('JobDefinitionService', () => {
       missings_profile_id: 77
     });
 
-    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, undefined);
-    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77);
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, undefined, transactionManager);
+    expect(missingsProfilesService.resolveMissingsProfileId).toHaveBeenCalledWith(7, 77, transactionManager);
   });
 
   it('scopes single job definition lookup to the workspace', async () => {
@@ -1335,7 +1357,7 @@ describe('JobDefinitionService', () => {
         { coderId: 3, capacityPercent: 100 }
       ]
     });
-    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([2, 3], 7);
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([2, 3], 7, transactionManager);
   });
 
   it('updates metadata directly even when coding jobs already exist', async () => {
@@ -1624,7 +1646,7 @@ describe('JobDefinitionService', () => {
     await expect(service.updateJobDefinition(2, 7, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
-    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7, transactionManager);
   });
 
   it('rejects approval updates when existing assigned coders are no longer coding-enabled', async () => {
@@ -1649,7 +1671,7 @@ describe('JobDefinitionService', () => {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7, transactionManager);
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
@@ -1915,7 +1937,8 @@ describe('JobDefinitionService', () => {
       },
       expect.objectContaining({
         getRepository: expect.any(Function)
-      })
+      }),
+      undefined
     );
     expect(jobDefinitionRepository.manager.transaction).toHaveBeenCalledTimes(1);
     expect(jobDefinitionRepository.save).toHaveBeenCalled();
@@ -2350,11 +2373,15 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 2,
       max_coding_cases: 4
+    }));
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 7, entityId: 2, eventType: 'JOB_DEFINITION_UPDATED'
     }));
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [
@@ -2432,7 +2459,8 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -2817,7 +2845,7 @@ describe('JobDefinitionService', () => {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7, transactionManager);
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
@@ -2994,7 +3022,8 @@ describe('JobDefinitionService', () => {
         allowComments: false,
         suppressGeneralInstructions: true
       },
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [
@@ -3258,7 +3287,8 @@ describe('JobDefinitionService', () => {
           caseOrderingMode: undefined
         }]
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 

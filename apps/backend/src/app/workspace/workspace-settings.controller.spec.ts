@@ -10,6 +10,7 @@ import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
 } from '../../../../../api-dto/workspaces/workspace-setting-defaults';
+import { JournalService } from '../database/services/shared/journal.service';
 
 interface TransactionalSettingRepositoryMock {
   findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
@@ -30,6 +31,7 @@ describe('WorkspaceSettingsController', () => {
   let settingRepository: SettingRepositoryMock;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     transactionalSettingRepository = {
       findOne: jest.fn(),
       create: jest.fn((setting: Partial<Setting>) => setting as Setting),

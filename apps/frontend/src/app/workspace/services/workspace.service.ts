@@ -8,8 +8,7 @@ import {
   of,
   tap
 } from 'rxjs';
-import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/paginated-workspaces-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { SERVER_URL } from '../../injection-tokens';
@@ -25,7 +24,7 @@ export class WorkspaceService {
   private accessRightsMatrixCache$ = new BehaviorSubject<AccessRightsMatrixDto | null>(null);
 
   get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   markTestTakersAsExcluded(workspaceId: number, logins: string[]): Observable<boolean> {
@@ -61,7 +60,7 @@ export class WorkspaceService {
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
     return this.http
       .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
@@ -78,7 +77,7 @@ export class WorkspaceService {
   getWorkspaceUsers(workspaceId: number): Observable<PaginatedWorkspaceUserDto> {
     return this.http
       .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         catchError(() => of({
           data: [],
@@ -89,7 +88,7 @@ export class WorkspaceService {
       );
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
+  addWorkspace(workspaceData: RequestBody<'CreateWorkspaceDto'>): Observable<number | null> {
     return this.http
       .post<number>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
@@ -110,7 +109,7 @@ export class WorkspaceService {
       );
   }
 
-  changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
+  changeWorkspace(workspaceData: RequestBody<'WorkspaceFullDto'>): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
@@ -156,7 +155,7 @@ export class WorkspaceService {
 
     return this.http
       .get<AccessRightsMatrixDto>(`${this.serverUrl}admin/workspace/access-rights-matrix`,
-      { headers: this.authHeader })
+        { headers: this.authHeader })
       .pipe(
         tap(matrix => this.accessRightsMatrixCache$.next(matrix)),
         catchError(() => {

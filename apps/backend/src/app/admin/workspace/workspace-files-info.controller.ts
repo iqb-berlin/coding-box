@@ -1,13 +1,5 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Put,
-  Query,
-  UseGuards
+  BadRequestException, Controller, Delete, Get, Param, Put, Query, UseGuards
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -18,6 +10,8 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
@@ -87,7 +81,7 @@ export class WorkspaceFilesInfoController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getVocs(
     @Param('workspace_id') workspace_id: number,
-      @Param('vocs') vocs: string
+    @Param('vocs') vocs: string
   ): Promise<FilesDto[]> {
     return this.workspaceFilesService.getVocs(workspace_id, vocs);
   }
@@ -187,17 +181,13 @@ export class WorkspaceFilesInfoController {
   })
   async saveReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Body() override: CodingReplayAnchorOverride
+    @ValidatedBody('CodingReplayAnchorOverride') override: RequestBody<'CodingReplayAnchorOverride'>
   ): Promise<CodingReplayAnchorOverride> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    try {
-      return await this.replayAnchorService.upsertOverride(workspace_id, override);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
+    return this.replayAnchorService.upsertOverride(workspace_id, override);
   }
 
   @Delete(':workspace_id/files/replay-anchor-overrides')
@@ -217,8 +207,8 @@ export class WorkspaceFilesInfoController {
   })
   async deleteReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Query('unitName') unitName: string,
-      @Query('variableId') variableId: string
+    @Query('unitName') unitName: string,
+    @Query('variableId') variableId: string
   ): Promise<{ deleted: boolean }> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
@@ -256,7 +246,7 @@ export class WorkspaceFilesInfoController {
   })
   async getVariableInfoForScheme(
     @Param('workspace_id') workspace_id: number,
-      @Param('scheme_file_id') scheme_file_id: string
+    @Param('scheme_file_id') scheme_file_id: string
   ): Promise<VariableInfo[]> {
     return this.workspaceFilesService.getVariableInfoForScheme(
       workspace_id,

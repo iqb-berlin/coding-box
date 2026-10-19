@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress';
+import { loadAspectPlayer } from './cypress/support/aspect-player-task.cjs';
 
 function requireExecutedSpec(on: Cypress.PluginEvents): void {
   on('after:spec', (spec, results) => {
@@ -16,6 +17,7 @@ export default defineConfig({
     justInTimeCompile: false,
     setupNodeEvents(on, config) {
       requireExecutedSpec(on);
+      on('task', { 'replay:aspect-player': loadAspectPlayer });
       config.screenshotsFolder = 'cypress/component-screenshots';
       config.videosFolder = 'cypress/component-videos';
       return config;

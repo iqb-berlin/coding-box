@@ -9,6 +9,8 @@ import {
 } from './import-comparison-dialog.component';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
+import { AppService } from '../../../core/services/app.service';
 
 jest.unmock('@angular/material/snack-bar');
 
@@ -56,6 +58,8 @@ describe('External coding import delayed responses without Zone.js', () => {
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data },
+        { provide: CodingPermissionsService, useValue: { load: jest.fn(), canApply: true } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 12 } },
         { provide: TestPersonCodingService, useValue: service }
       ]
     }).compileComponents();

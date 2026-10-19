@@ -1,30 +1,15 @@
 import {
-  Controller,
-  Get,
-  Query,
-  Res,
-  Req,
-  UseGuards,
-  Body,
-  Post,
-  Param,
-  Delete,
-  Logger,
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException
+  Controller, Get, Query, Res, Req, UseGuards, Post, Param, Delete, Logger, BadRequestException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiBadRequestResponse,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBody
+  ApiOkResponse, ApiBadRequestResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import { rethrowDownloadError } from '../../http/download-error';
 import {
   JobQueueService,
   ExportJobProgress,
@@ -60,6 +45,7 @@ import {
 } from '../../database/services/coding/item-matrix-export-incomplete.error';
 
 type RequestUser = { id?: number | string; userId?: number | string };
+
 type ByVariableExportEstimateResponse = {
   exportType: 'by-variable' | 'by-variable-compact';
   unitVariableCount: number;
@@ -285,10 +271,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsCsv(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -340,10 +326,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsExcel(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -409,10 +395,10 @@ export class WorkspaceCodingExportController {
   })
   async getCodingListAsJson(
     @WorkspaceId() workspace_id: number,
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('trainingRequired') trainingRequired: string,
-      @Res() res: Response
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('trainingRequired') trainingRequired: string,
+    @Res() res: Response
   ): Promise<void> {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
@@ -489,16 +475,16 @@ export class WorkspaceCodingExportController {
   })
   async getCodingResultsByVersion(
     @WorkspaceId() workspace_id: number,
-      @Query('version') version: 'v1' | 'v2' | 'v3',
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('version') version: 'v1' | 'v2' | 'v3',
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
-      @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', {
-        transform: value => value === 'true'
-      })
+    @Query('includeGeoGebraResponseValues', {
+      transform: value => value === 'true'
+    })
                    includeGeoGebraResponseValues: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -627,18 +613,18 @@ export class WorkspaceCodingExportController {
   })
   async getCodingResultsByVersionAsExcel(
     @WorkspaceId() workspace_id: number,
-      @Query('version') version: 'v1' | 'v2' | 'v3',
-      @Query('authToken') authToken: string,
-      @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('version') version: 'v1' | 'v2' | 'v3',
+    @Query('authToken') authToken: string,
+    @Query('serverUrl') serverUrl: string,
+    @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
-      @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', {
-        transform: value => value === 'true'
-      })
+    @Query('includeGeoGebraResponseValues', {
+      transform: value => value === 'true'
+    })
                    includeGeoGebraResponseValues: boolean,
-      @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
+    @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -756,9 +742,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsAggregated(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -809,7 +795,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -868,9 +854,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsByCoder(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -907,7 +893,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -985,12 +971,12 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsByVariable(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('includeModalValue') includeModalValue?: string,
-      @Query('includeDoubleCoded') includeDoubleCoded?: string,
-      @Query('includeComments') includeComments?: string,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('includeModalValue') includeModalValue?: string,
+    @Query('includeDoubleCoded') includeDoubleCoded?: string,
+    @Query('includeComments') includeComments?: string,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -1033,7 +1019,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1092,9 +1078,9 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingResultsDetailed(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes')
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query('outputCommentsInsteadOfCodes')
                    outputCommentsInsteadOfCodes?: string,
                    @Query('includeReplayUrl') includeReplayUrl?: string,
                    @Query('authToken') authToken?: string,
@@ -1128,7 +1114,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1169,10 +1155,10 @@ export class WorkspaceCodingExportController {
   })
   async exportCodingTimesReport(
     @WorkspaceId() workspace_id: number,
-      @Res() res: Response,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+    @Res() res: Response,
+    @Query('anonymizeCoders') anonymizeCoders?: string,
+    @Query('usePseudoCoders') usePseudoCoders?: string,
+    @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     const anonymizeCodersParam = anonymizeCoders === 'true';
     const usePseudoCodersParam = usePseudoCoders === 'true';
@@ -1203,7 +1189,7 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: BackgroundExportRequest
+    @ValidatedBody('BackgroundExportRequest') body: RequestBody<'BackgroundExportRequest'>
   ): Promise<ByVariableExportEstimateResponse> {
     if (
       body.exportType !== 'by-variable' &&
@@ -1229,110 +1215,7 @@ export class WorkspaceCodingExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Start a background export job',
-    schema: {
-      type: 'object',
-      required: ['exportType'],
-      properties: {
-        exportType: {
-          type: 'string',
-          enum: [
-            'aggregated',
-            'by-coder',
-            'by-variable',
-            'by-variable-compact',
-            'detailed',
-            'coding-times',
-            'coding-list',
-            'results-by-version',
-            'item-matrix',
-            'psychometrics'
-          ],
-          description: 'Type of export to generate'
-        },
-        version: {
-          type: 'string',
-          enum: ['v1', 'v2', 'v3'],
-          description: 'Coding result version for results-by-version exports'
-        },
-        format: {
-          type: 'string',
-          enum: ['csv', 'excel', 'json'],
-          description:
-            'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
-        },
-        matrixValue: {
-          type: 'string',
-          enum: ['code', 'score'],
-          description: 'Cell value for item-matrix exports'
-        },
-        partWholeCorrection: {
-          type: 'boolean',
-          description:
-            'Subtract the current item score from its domain score. Defaults to true.'
-        },
-        missingsProfileId: {
-          type: 'number',
-          description:
-            'Missing profile used for codes and missing scores. Required for item-matrix and every results-by-version export.'
-        },
-        notReachedScope: {
-          type: 'string',
-          enum: ['unit', 'testlet', 'booklet'],
-          description: 'Range used to distinguish mnr from omitted items'
-        },
-        recodeTrailingOmissions: {
-          type: 'boolean',
-          description:
-            'Recode trailing omissions as mnr for testlet or booklet scope'
-        },
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['unitId', 'itemId'],
-            properties: {
-              unitId: { type: 'string' },
-              itemId: { type: 'string' }
-            }
-          },
-          description: 'Selected VOMD items; omitted means all items'
-        },
-        domain: {
-          type: 'object',
-          description:
-            'Psychometric domain selection: the whole workspace or one complete, single-valued VOMD field'
-        },
-        maxCategoryCount: {
-          type: 'number',
-          description:
-            'Maximum number of raw categories per item. Defaults to 10.'
-        },
-        outputCommentsInsteadOfCodes: { type: 'boolean' },
-        includeReplayUrl: { type: 'boolean' },
-        includeResponseValues: { type: 'boolean' },
-        includeGeoGebraResponseValues: { type: 'boolean' },
-        includeGeoGebraFiles: { type: 'boolean' },
-        anonymizeCoders: { type: 'boolean' },
-        usePseudoCoders: { type: 'boolean' },
-        doubleCodingMethod: {
-          type: 'string',
-          enum: [
-            'new-row-per-variable',
-            'new-column-per-coder',
-            'most-frequent'
-          ]
-        },
-        includeComments: { type: 'boolean' },
-        includeModalValue: { type: 'boolean' },
-        includeDoubleCoded: { type: 'boolean' },
-        excludeAutoCoded: { type: 'boolean' },
-        trainingRequired: { type: 'boolean' },
-        authToken: { type: 'string' }
-      }
-    }
-  })
+
   @ApiOkResponse({
     description: 'Export job created successfully',
     schema: {
@@ -1348,8 +1231,8 @@ export class WorkspaceCodingExportController {
   })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
-      @Req() req: Request,
-      @Body() body: unknown
+    @Req() req: Request,
+    @ValidatedBody('BackgroundExportRequest') body: RequestBody<'BackgroundExportRequest'>
   ): Promise<{ jobId: string; message: string }> {
     let request: BackgroundExportRequest;
     try {
@@ -1479,7 +1362,7 @@ export class WorkspaceCodingExportController {
   })
   async getExportJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<ExportJobStatusResponseDto> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1520,7 +1403,7 @@ export class WorkspaceCodingExportController {
         `Error getting export job status: ${error.message}`,
         error.stack
       );
-      return { error: error.message };
+      throw error;
     }
   }
 
@@ -1560,8 +1443,8 @@ export class WorkspaceCodingExportController {
   })
   async downloadExport(
     @Param('jobId') jobId: string,
-      @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+    @WorkspaceId() workspace_id: number,
+    @Res() res: Response
   ): Promise<void> {
     try {
       const metadata = await this.exportArtifactService.getArtifact(jobId);
@@ -1611,7 +1494,7 @@ export class WorkspaceCodingExportController {
         `Error downloading export: ${error.message}`,
         error.stack
       );
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1623,7 +1506,7 @@ export class WorkspaceCodingExportController {
   @ApiOkResponse({ description: 'Non-personal item matrix diagnostics' })
   async getItemMatrixExportDiagnostics(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<ItemMatrixExportDiagnosticsDto> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -1660,8 +1543,8 @@ export class WorkspaceCodingExportController {
   })
   async downloadIncompleteItemMatrix(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string,
-      @Res() res: Response
+    @Param('jobId') jobId: string,
+    @Res() res: Response
   ): Promise<void> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -1743,17 +1626,17 @@ export class WorkspaceCodingExportController {
     }
   })
   async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
-  Array<{
-    jobId: string;
-    status: ExportJobStateDto;
-    progress: number;
-    progressPhase?: ExportJobProgressPhaseDto;
-    processedRows?: number;
-    totalRows?: number;
-    progressMessage?: string;
-    exportType: string;
-    createdAt: number;
-  }>
+    Array<{
+      jobId: string;
+      status: ExportJobStateDto;
+      progress: number;
+      progressPhase?: ExportJobProgressPhaseDto;
+      processedRows?: number;
+      totalRows?: number;
+      progressMessage?: string;
+      exportType: string;
+      createdAt: number;
+    }>
   > {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
@@ -1802,7 +1685,7 @@ export class WorkspaceCodingExportController {
   })
   async deleteExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1821,7 +1704,7 @@ export class WorkspaceCodingExportController {
 
       await this.exportArtifactService.deleteArtifacts(jobId);
 
-      const success = await this.jobQueueService.deleteExportJob(jobId);
+      const success = await this.jobQueueService.deleteExportJob(jobId, workspace_id);
       if (success) {
         return {
           success: true,
@@ -1837,10 +1720,7 @@ export class WorkspaceCodingExportController {
         `Error deleting export job: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        message: error.message
-      };
+      throw error;
     }
   }
 
@@ -1865,7 +1745,7 @@ export class WorkspaceCodingExportController {
   })
   async cancelExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+    @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
@@ -1901,10 +1781,10 @@ export class WorkspaceCodingExportController {
       }
 
       // Mark the job as cancelled (for active jobs to check)
-      const marked = await this.jobQueueService.markExportJobCancelled(jobId);
+      const marked = await this.jobQueueService.markExportJobCancelled(jobId, workspace_id);
 
       // Try to remove the job from queue
-      const removed = await this.jobQueueService.cancelExportJob(jobId);
+      const removed = await this.jobQueueService.cancelExportJob(jobId, workspace_id);
 
       const stateAfterCancellationRequest = await job.getState();
       if (stateAfterCancellationRequest === 'completed') {
@@ -1955,10 +1835,7 @@ export class WorkspaceCodingExportController {
         `Error cancelling export job: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        message: error.message
-      };
+      throw error;
     }
   }
 }
