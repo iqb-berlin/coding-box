@@ -16,10 +16,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
-
 import {
   catchError, forkJoin, map, Observable, of
 } from 'rxjs';
+import { ItemMatrixDiagnosticsHistoryComponent } from './item-matrix-diagnostics-history.component';
+
 import { AppService } from '../../../core/services/app.service';
 import {
   ExportJobConfig,
@@ -62,6 +63,7 @@ type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
   styleUrls: ['./export.component.scss'],
   standalone: true,
   imports: [
+    ItemMatrixDiagnosticsHistoryComponent,
     TranslateModule,
     MatCardModule,
     MatButtonModule,

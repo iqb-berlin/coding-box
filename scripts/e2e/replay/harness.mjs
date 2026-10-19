@@ -428,8 +428,9 @@ async function verifyIncompleteItemMatrix(state) {
     /^Itemdatensatz-UNVOLLSTAENDIG-\d{4}-\d{2}-\d{2}\.csv$/.test(entry)
   );
   if (
-    entries.length !== 3 ||
+    entries.length !== 4 ||
     !entries.includes('diagnose.csv') ||
+    !entries.includes('diagnose-gruppiert.csv') ||
     !entries.includes('README.txt') ||
     !matrixEntry
   ) {
@@ -458,9 +459,16 @@ async function verifyIncompleteItemMatrix(state) {
   const diagnosis = zip.readAsText('diagnose.csv');
   if (
     !diagnosis.includes('unresolved-status') ||
-    fixtureIdentityValues().some((value) => diagnosis.includes(value))
+    !diagnosis.includes('person_login') ||
+    !diagnosis.includes('booklet_id') ||
+    !diagnosis.includes('spaltennummer') ||
+    diagnosis.trim().split(/\r?\n/).length !== 3
   ) {
-    throw new Error('diagnose.csv is incomplete or contains personal fields.');
+    throw new Error('diagnose.csv does not contain the complete cell diagnosis.');
+  }
+  const groupedDiagnosis = zip.readAsText('diagnose-gruppiert.csv');
+  if (fixtureIdentityValues().some((value) => groupedDiagnosis.includes(value))) {
+    throw new Error('The grouped diagnosis contains personal fields.');
   }
   const readme = zip.readAsText('README.txt');
   if (

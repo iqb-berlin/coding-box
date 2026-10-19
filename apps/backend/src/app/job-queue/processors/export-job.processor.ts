@@ -34,6 +34,7 @@ import type {
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../api-dto/coding/export-request.dto';
 import { ItemMatrixExportIncompleteError } from '../../database/services/coding/item-matrix-export-incomplete.error';
+import { ItemMatrixDiagnosticsWriter } from '../../database/services/coding/item-matrix-diagnostics-writer';
 
 @Injectable()
 @Processor('data-export')
@@ -370,6 +371,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.jobQueueService.createExportJobCancellationSignal(jobId);
     let filePath: string | undefined;
     let workingDirectory: string | undefined;
+    let itemMatrixArchiveId: string | undefined;
 
     try {
       await this.checkCancellation(job);
@@ -548,7 +550,10 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
             await checkCancellation();
           };
 
+          const diagnosticsPath = path.join(path.dirname(filePath), 'diagnose.csv');
+          const diagnosticsWriter = await ItemMatrixDiagnosticsWriter.create(diagnosticsPath);
           const itemMatrixOptions = {
+            onDiagnostic: (cell: Parameters<ItemMatrixDiagnosticsWriter['write']>[0]) => diagnosticsWriter.write(cell),
             workspaceId: job.data.workspaceId,
             missingsProfileId: job.data.missingsProfileId,
             matrixValue: job.data.matrixValue || 'score',
@@ -560,22 +565,42 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
             checkCancellation
           };
           let diagnostics: ItemMatrixExportDiagnosticsDto;
-          if (job.data.format === 'excel') {
-            diagnostics =
+          try {
+            if (job.data.format === 'excel') {
+              diagnostics =
               await this.codingExportOrchestratorService.exportItemMatrixAsExcelToFile(
                 filePath,
                 itemMatrixOptions
               );
-          } else {
-            diagnostics =
+            } else {
+              diagnostics =
               await this.codingExportOrchestratorService.exportItemMatrixAsCsvToFile(
                 filePath,
                 itemMatrixOptions
               );
+            }
+          } finally {
+            await diagnosticsWriter.close();
           }
           if (diagnostics.total > 0) {
+            await checkCancellation();
+            itemMatrixArchiveId = await this.exportArtifactService.publishItemMatrixDiagnostics(
+              job.data.workspaceId,
+              {
+                jobId,
+                createdAt: Date.now(),
+                total: diagnostics.total,
+                version: job.data.version || 'v2',
+                matrixValue: job.data.matrixValue || 'score',
+                missingsProfileId: job.data.missingsProfileId
+              },
+              diagnostics,
+              diagnosticsPath
+            );
+            diagnostics.archiveId = itemMatrixArchiveId;
             await this.updateJobProgress(job, 90, { phase: 'finalizing' });
             await this.exportArtifactService.publishIncompleteArtifact({
+              diagnosticsPath,
               jobId,
               matrixPath: filePath,
               matrixExtension: job.data.format === 'excel' ? 'xlsx' : 'csv',
@@ -841,6 +866,9 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       return metadata;
     } catch (error) {
       if (error instanceof ExportJobCancelledException) {
+        if (itemMatrixArchiveId) {
+          await this.exportArtifactService.diagnosticsArchive.remove(job.data.workspaceId, itemMatrixArchiveId);
+        }
         this.logger.log(
           `Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`
         );

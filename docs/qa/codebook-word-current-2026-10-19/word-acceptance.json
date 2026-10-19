@@ -1,0 +1,292 @@
+{
+  "date": "2026-10-19",
+  "application": "Microsoft Word Web Viewer",
+  "viewer": "https://view.officeapps.live.com/op/view.aspx",
+  "inputCommit": "678016743e17135af43bc8447fc1419bda37d81e",
+  "inputPath": "docs/qa/codebook-word-current-2026-10-19",
+  "packageSha256": "09694cd2b4d108882fca32434d7586b4de7bbf448a2d490c3f94e939020c81a7",
+  "synthetic": true,
+  "capture": "Original PNG page images exposed by Word in its rendered document DOM, 1587 x 2245 pixels; not locally converted or recreated",
+  "documents": [
+    {
+      "file": "kodierbox-rich-scores.docx",
+      "pages": 3,
+      "saved": 3
+    },
+    {
+      "file": "kodierbox-inline-mixed-code-no-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "kodierbox-inline-mixed-code-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "kodierbox-inline-mixed-general-no-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "kodierbox-inline-mixed-general-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "kodierbox-rich-no-scores.docx",
+      "pages": 3,
+      "saved": 3
+    },
+    {
+      "file": "kodierbox.docx",
+      "pages": 3,
+      "saved": 3
+    },
+    {
+      "file": "studio-inline-mixed-code-no-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "studio-inline-mixed-code-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "studio-inline-mixed-general-no-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "studio-inline-mixed-general-scores.docx",
+      "pages": 1,
+      "saved": 1
+    },
+    {
+      "file": "studio-rich-no-scores.docx",
+      "pages": 3,
+      "saved": 3
+    },
+    {
+      "file": "studio-rich-scores.docx",
+      "pages": 3,
+      "saved": 3
+    },
+    {
+      "file": "studio.docx",
+      "pages": 3,
+      "saved": 3
+    }
+  ],
+  "documentCount": 14,
+  "renderedPages": 26,
+  "pagePairs": [
+    {
+      "box": "kodierbox-inline-mixed-code-no-scores-page1.png",
+      "studio": "studio-inline-mixed-code-no-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": false,
+      "differentPixels": 66,
+      "totalPixels": 3562815,
+      "differenceBounds": [
+        197,
+        209,
+        1007,
+        478
+      ],
+      "boxSha256": "b379c87cfb3d79a843d1e7ce53aa3f2be4edc29813bc490fdf7e710344cb04f6",
+      "studioSha256": "93173a9e28152d09c129eda25c53043917661d97c9112399cc2e5d2c0b54974e"
+    },
+    {
+      "box": "kodierbox-inline-mixed-code-scores-page1.png",
+      "studio": "studio-inline-mixed-code-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": false,
+      "differentPixels": 66,
+      "totalPixels": 3562815,
+      "differenceBounds": [
+        197,
+        209,
+        1116,
+        478
+      ],
+      "boxSha256": "dfa29ac49d86ae53e315c45d49afa574105843ac299d521c1eb596fd91b2bbdd",
+      "studioSha256": "7039535b3b1cfa9adfb572386cc02ebd0889cfba0adcc6856c5a77af25b3ad1f"
+    },
+    {
+      "box": "kodierbox-inline-mixed-general-no-scores-page1.png",
+      "studio": "studio-inline-mixed-general-no-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "ff3ed303d9f7f5ccc69f2a71dd2dc097937b4fc4b86cfc2de8007ec83edd6dfc",
+      "studioSha256": "ff3ed303d9f7f5ccc69f2a71dd2dc097937b4fc4b86cfc2de8007ec83edd6dfc"
+    },
+    {
+      "box": "kodierbox-inline-mixed-general-scores-page1.png",
+      "studio": "studio-inline-mixed-general-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "842c6cf2f81c8a13f95f6331f42fff94d67165bf8ab1c7ec5e6d7acc6b03e16e",
+      "studioSha256": "842c6cf2f81c8a13f95f6331f42fff94d67165bf8ab1c7ec5e6d7acc6b03e16e"
+    },
+    {
+      "box": "kodierbox-page1.png",
+      "studio": "studio-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "f57e82e745f56e57e65b8a948279250ae35931f1b9d77e302efa29f0eeef05cc",
+      "studioSha256": "f57e82e745f56e57e65b8a948279250ae35931f1b9d77e302efa29f0eeef05cc"
+    },
+    {
+      "box": "kodierbox-page2.png",
+      "studio": "studio-page2.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "275d83c949622d5d1351996c396828f39b85f96070fab08521949cb818474aec",
+      "studioSha256": "275d83c949622d5d1351996c396828f39b85f96070fab08521949cb818474aec"
+    },
+    {
+      "box": "kodierbox-page3.png",
+      "studio": "studio-page3.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "a6616899cc04710b57570bde9f20a207dad1259e003b5327707f1e3b33858ca7",
+      "studioSha256": "a6616899cc04710b57570bde9f20a207dad1259e003b5327707f1e3b33858ca7"
+    },
+    {
+      "box": "kodierbox-rich-no-scores-page1.png",
+      "studio": "studio-rich-no-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "1ca5580e4d7f41d154fc1e86c5f720e6ef9c820341a3c682695fdcd787f56b2a",
+      "studioSha256": "1ca5580e4d7f41d154fc1e86c5f720e6ef9c820341a3c682695fdcd787f56b2a"
+    },
+    {
+      "box": "kodierbox-rich-no-scores-page2.png",
+      "studio": "studio-rich-no-scores-page2.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "7f1cb335961b0a5873fa4b3293fd9efaec1320b72313d5a03affa90be0e1ca2d",
+      "studioSha256": "7f1cb335961b0a5873fa4b3293fd9efaec1320b72313d5a03affa90be0e1ca2d"
+    },
+    {
+      "box": "kodierbox-rich-no-scores-page3.png",
+      "studio": "studio-rich-no-scores-page3.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "50e6592c78123d26ba86f66479176495766e152105a4c198a3781744539f5fa2",
+      "studioSha256": "50e6592c78123d26ba86f66479176495766e152105a4c198a3781744539f5fa2"
+    },
+    {
+      "box": "kodierbox-rich-scores-page1.png",
+      "studio": "studio-rich-scores-page1.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "154e4f2253fb7a0f59646e8d6f36617e6314d758fdc17260840fdcf2f7160fbf",
+      "studioSha256": "154e4f2253fb7a0f59646e8d6f36617e6314d758fdc17260840fdcf2f7160fbf"
+    },
+    {
+      "box": "kodierbox-rich-scores-page2.png",
+      "studio": "studio-rich-scores-page2.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "4eb204957fc10c3213e3d0555d097ca7d6c91d2895c36b0201409b85681e1034",
+      "studioSha256": "4eb204957fc10c3213e3d0555d097ca7d6c91d2895c36b0201409b85681e1034"
+    },
+    {
+      "box": "kodierbox-rich-scores-page3.png",
+      "studio": "studio-rich-scores-page3.png",
+      "dimensions": [
+        1587,
+        2245
+      ],
+      "pixelIdentical": true,
+      "differentPixels": 0,
+      "totalPixels": 3562815,
+      "differenceBounds": null,
+      "boxSha256": "69e9f6128327b74117ec0cf062f4f6b5aba91f1e905f3eb8862ebb0ea9334680",
+      "studioSha256": "69e9f6128327b74117ec0cf062f4f6b5aba91f1e905f3eb8862ebb0ea9334680"
+    }
+  ],
+  "visualChecks": [
+    "Complete baseline: 22 variable headings, Missing 0 and 99, tables and wrapped identifiers",
+    "Rich fixture: score column on/off, rule texts, connections, paragraphs, highlight, underline, italic, strike, list, inline formula and image",
+    "Negative image fixtures: two deliberate invalid images each produce the expected error text; following valid image, formula, red text and line break remain visible",
+    "All seven Kodierbox variants visually inspected in full; corresponding Studio pages compared; two raster differences also visually inspected"
+  ],
+  "result": "passed within stated scope",
+  "limits": [
+    "Microsoft Word Web Viewer, not a fresh Windows/Desktop Word or LibreOffice acceptance",
+    "11 of 13 page pairs pixel-identical; two code-level negative-image variants differ in 66 of 3562815 pixels each (visually no content/layout difference); exact pixel parity is not claimed for those two",
+    "Default Word pagination may separate a variable heading or general instruction from its following table; pagination redesign is outside this package update",
+    "Original reported document and original Schemer HTML/version unavailable",
+    "Pinned package verified, not independently rebuilt from library source in this run"
+  ]
+}

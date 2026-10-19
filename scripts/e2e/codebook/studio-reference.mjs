@@ -14,7 +14,7 @@ export async function loadStudioReference(root) {
   // Resolve dependencies from Studio's actual installation; never write to it.
   new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(path.join(root, 'package.json')), module, module.exports);
   const generator = module.exports.DownloadWorkspacesClass;
-  const tarball = await readFile(path.join(root, 'vendor/iqb-ngx-coding-components-4.1.0-dev.ff15d6d.tgz'));
+  const tarball = await readFile(path.join(root, 'vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz'));
   return {
     metadata: {
       commit: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),

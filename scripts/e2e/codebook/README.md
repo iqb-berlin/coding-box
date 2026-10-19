@@ -49,7 +49,7 @@ npx nx run backend:verify-codebook-autocoder-live
 
 To also compare against a real installed Studio checkout, add
 `STUDIO_REFERENCE_ROOT=/absolute/path/to/studio-checkout`. It must contain the
-shared `4.1.0-dev.ff15d6d` tarball and installed dependencies. The reference loads
+shared `4.1.0-dev.d79ca05` tarball and installed dependencies. The reference loads
 the actual Studio adapter and its installed generator without modifying the
 checkout. Studio receives the explicitly expected filtered subset and item
 identities; Studio repository/profile boundaries remain in memory. DOCX

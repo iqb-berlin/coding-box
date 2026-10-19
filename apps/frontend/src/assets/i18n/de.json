@@ -106,8 +106,8 @@
       "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie „Nach Variable, kompakt“ oder schränken Sie die Auswahl ein.",
       "item-matrix-incomplete-title": "Itemdatensatz nicht vollständig exportierbar",
       "item-matrix-incomplete-message": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Der reguläre Export wurde abgelehnt. Sie können die Ursachen prüfen oder ein deutlich gekennzeichnetes unvollständiges Paket herunterladen.",
-      "item-matrix-incomplete-expired": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Diagnose und unvollständiges Paket sind abgelaufen; starten Sie den Export erneut.",
-      "item-matrix-diagnostics-load-failed": "Die Matrixdiagnose konnte nicht geladen werden. Starten Sie den Export gegebenenfalls erneut.",
+      "item-matrix-incomplete-expired": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Das temporäre Paket ist abgelaufen. Gespeicherte Zelldiagnosen finden Sie im Exportbereich unter „Gespeicherte Itemmatrix-Diagnosen“. Für ältere Exporte ohne Archiv ist ein neuer Export nötig.",
+      "item-matrix-diagnostics-load-failed": "Die Matrixdiagnose konnte nicht geladen werden. Prüfen Sie die gespeicherten Diagnosen im Exportbereich.",
       "item-matrix-incomplete-download-failed": "Das unvollständige Paket konnte nicht heruntergeladen werden. Falls es abgelaufen ist, starten Sie den Export erneut.",
       "remove-failed": "Der Export konnte nicht vollständig gelöscht werden und bleibt deshalb in der Liste. Versuchen Sie es erneut.",
       "generic-title": "Export fehlgeschlagen"
@@ -129,11 +129,14 @@
       "reason": "Ursache",
       "all-reasons": "Alle Ursachen",
       "results": "{{filtered}} von {{total}} Diagnosegruppen",
-      "download": "Gefilterte Diagnose als CSV",
+      "download": "Gefilterte Übersicht als CSV",
+      "download-full": "Vollständige Zelldiagnose als CSV",
       "booklet": "Booklet",
       "column": "Spalte",
       "count": "Betroffene Zellen",
       "sample-rows": "Beispielzeilen",
+      "unit": "Unit",
+      "variable": "Variable",
       "action": "Empfohlene Maßnahme",
       "empty": "Keine Diagnosegruppe entspricht den Filtern.",
       "reasons": {
@@ -554,6 +557,15 @@
     }
   },
   "ws-admin": {
+    "diagnostics-history": {
+      "title": "Gespeicherte Itemmatrix-Diagnosen",
+      "description": "Vollständige Fehlerlisten bleiben auch nach Ablauf oder Entfernen der Exportaufträge erhalten. Die Zelldiagnose enthält Personenkennungen und die genaue Position jeder betroffenen Zelle.",
+      "refresh": "Gespeicherte Diagnosen laden / aktualisieren",
+      "failed": "Die Diagnose konnte nicht geladen werden. Bitte erneut versuchen.",
+      "empty": "Keine gespeicherten Diagnosen vorhanden.",
+      "cells": "{{count}} betroffene Zellen",
+      "open": "Übersicht anzeigen"
+    },
     "name": "Name",
     "hint": "Zugriffsrechte: Bitte links Arbeitsbereich wählen",
     "access-for-workspace": "Zugriffsrechte für \"{{workspace}}\"",
