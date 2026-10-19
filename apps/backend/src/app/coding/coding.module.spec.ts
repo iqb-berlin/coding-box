@@ -9,6 +9,7 @@ import {
   Connection, DataSource, EntityManager, getMetadataArgsStorage
 } from 'typeorm';
 // Load the application first so this test uses the production module evaluation order.
+import '../config/startup-environment.test.factory';
 import { AppModule } from '../app.module';
 import { CodingAggregationPeerService } from '../database/services/coding/coding-aggregation-peer.service';
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
