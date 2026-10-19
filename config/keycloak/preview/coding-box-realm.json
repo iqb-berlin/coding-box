@@ -1,0 +1,25 @@
+{
+  "realm": "coding-box",
+  "displayName": "IQB-Kodierbox",
+  "enabled": true,
+  "sslRequired": "none",
+  "loginTheme": "kodierbox",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "internationalizationEnabled": false,
+  "clients": [
+    {
+      "clientId": "coding-box",
+      "name": "IQB-Kodierbox",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "protocol": "openid-connect",
+      "redirectUris": ["http://localhost:8087/theme-callback"],
+      "attributes": { "login_theme": "kodierbox" }
+    }
+  ]
+}
