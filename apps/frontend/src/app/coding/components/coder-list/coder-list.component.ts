@@ -20,8 +20,9 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import {
-  FormBuilder,
+  NonNullableFormBuilder,
   FormGroup,
+  FormControl,
   ReactiveFormsModule,
   Validators
 } from '@angular/forms';
@@ -61,13 +62,18 @@ export class CoderListComponent implements OnInit {
   private coderService = inject(CoderService);
   private readonly destroyRef = inject(DestroyRef);
   private snackBar = inject(MatSnackBar);
-  private fb = inject(FormBuilder);
+  private fb = inject(NonNullableFormBuilder);
 
   protected displayedColumns: string[] = ['selectCheckbox', 'name', 'displayName', 'email', 'assignedJobs'];
   dataSource = new MatTableDataSource<Coder>([]);
   protected selection = new SelectionModel<Coder>(true, []);
   protected readonly isLoading = signal(false);
-  coderForm: FormGroup;
+  coderForm: FormGroup<{
+    name: FormControl<string>;
+    displayName: FormControl<string>;
+    email: FormControl<string>;
+  }>;
+
   isEditing = false;
   editingCoderId: number | null = null;
 
@@ -135,7 +141,7 @@ export class CoderListComponent implements OnInit {
       return;
     }
 
-    const newCoder = this.coderForm.value;
+    const newCoder = this.coderForm.getRawValue();
 
     this.coderService.createCoder(newCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
@@ -171,7 +177,7 @@ export class CoderListComponent implements OnInit {
       return;
     }
 
-    const updatedCoder = this.coderForm.value;
+    const updatedCoder = this.coderForm.getRawValue();
 
     this.coderService.updateCoder(this.editingCoderId, updatedCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
