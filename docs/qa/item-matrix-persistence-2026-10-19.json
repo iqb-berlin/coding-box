@@ -1,0 +1,76 @@
+{
+  "sourceCommit": "6a117ec3f5449eeee73da7fdbc0ea9f23df214f2",
+  "createdAt": "2026-10-19T10:54:38.838Z",
+  "synthetic": true,
+  "persons": 2740,
+  "expectedCells": 5480,
+  "backendSha256": "0dd0dfa106e6f6c8e3e2ee0381e7874da3374521234c85769a0a438066c89d2a",
+  "exports": [
+    {
+      "format": "csv",
+      "matrixValue": "score",
+      "jobId": "1",
+      "archiveId": "92cfa89c-33a4-47f0-bf6a-c9d9e3b286b7",
+      "cells": 5480,
+      "reasons": {
+        "derived-result-missing": 2740,
+        "derived-source-unresolved": 2740
+      },
+      "csvSha256": "cbcb185c7390e3e6f9eccba01a4b892d3b5a7b68f4a7e3fae7157dccd1e0bc75",
+      "workerProcessedOn": 1792407279311,
+      "workerFinishedOn": 1792407282525,
+      "queueAndCacheRemoved": true,
+      "crossWorkspaceDenied": true
+    },
+    {
+      "format": "excel",
+      "matrixValue": "code",
+      "jobId": "2",
+      "archiveId": "91933caa-b247-4eaa-b838-718e7b3e5705",
+      "cells": 5480,
+      "reasons": {
+        "derived-result-missing": 2740,
+        "derived-source-unresolved": 2740
+      },
+      "csvSha256": "cbcb185c7390e3e6f9eccba01a4b892d3b5a7b68f4a7e3fae7157dccd1e0bc75",
+      "workerProcessedOn": 1792407282909,
+      "workerFinishedOn": 1792407285820,
+      "queueAndCacheRemoved": true,
+      "crossWorkspaceDenied": true
+    }
+  ],
+  "workspaceId": 1,
+  "responseFingerprint": "17ee5b189df9a722e1f1f0511d6d2829",
+  "afterApiAndWorkerRestart": true,
+  "unauthenticatedDownloadDenied": true,
+  "verificationRunnerSha256": "2e1acc768989bf73c4e7d3753b7611ae48435853de8f041be3511e95ffa0b2d4",
+  "browser": {
+    "productionFrontend": true,
+    "authentication": "actual OIDC authorization-code and S256 PKCE login",
+    "apiResponsesMocked": false,
+    "archivesListedAfterRestart": 2,
+    "diagnosisGroups": [
+      2740,
+      2740
+    ],
+    "downloadMatchesArchive": true,
+    "javascriptErrors": false
+  },
+  "localValidation": {
+    "frontend": {
+      "suites": 280,
+      "tests": 3042,
+      "lint": true,
+      "productionBuild": true
+    },
+    "backend": {
+      "suites": 218,
+      "tests": 3402,
+      "skipped": 67,
+      "lint": true,
+      "productionBuild": true,
+      "installationNote": "Initial reproducibility assertion failed because a shared dependency directory resolved outside this checkout. After placing an unchanged local Responses copy, its 21-test suite passed; the other 217 suites passed in the complete run."
+    },
+    "inventoryTests": 2
+  }
+}
