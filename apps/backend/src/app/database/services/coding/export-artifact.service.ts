@@ -1,12 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import type {
   ItemMatrixExportDiagnosticsDto,
+  ItemMatrixDiagnosticsArchiveEntryDto,
   ItemMatrixExportErrorDetailsDto,
   ItemMatrixExportRequest
 } from '../../../../../../../api-dto/coding/export-request.dto';
 import { CacheService } from '../../../cache/cache.service';
+import Workspace from '../../entities/workspace.entity';
+import { ItemMatrixDiagnosticsArchive } from './item-matrix-diagnostics-archive';
 import type { ExportJobResult } from '../../../job-queue/job-queue.service';
 import {
   CachedItemMatrixDiagnostics,
@@ -14,6 +19,7 @@ import {
 } from './item-matrix-export-diagnostics.util';
 
 interface PublishIncompleteItemMatrixArtifactOptions {
+  diagnosticsPath?: string;
   jobId: string;
   matrixPath: string;
   matrixExtension: 'csv' | 'xlsx';
@@ -41,11 +47,37 @@ interface PublishExportArtifactOptions {
 
 @Injectable()
 export class ExportArtifactService {
+  readonly diagnosticsArchive = new ItemMatrixDiagnosticsArchive();
   static readonly ttlSeconds = 3600;
 
   private readonly logger = new Logger(ExportArtifactService.name);
 
-  constructor(private readonly cacheService: CacheService) {}
+  constructor(
+    private readonly cacheService: CacheService,
+    @InjectRepository(Workspace) private readonly workspaceRepository: Repository<Workspace>
+  ) {}
+
+  async publishItemMatrixDiagnostics(
+    workspaceId: number,
+    entry: Omit<ItemMatrixDiagnosticsArchiveEntryDto, 'archiveId'>,
+    diagnostics: ItemMatrixExportDiagnosticsDto,
+    csvPath: string
+  ): Promise<string> {
+    if (!await this.workspaceRepository.existsBy({ id: workspaceId })) {
+      throw new Error('Cannot archive diagnostics for a deleted workspace');
+    }
+    const archiveId = await this.diagnosticsArchive.publish(workspaceId, entry, diagnostics, csvPath);
+    try {
+      // Workspace deletion can commit and remove its directory during the copy.
+      if (!await this.workspaceRepository.existsBy({ id: workspaceId })) {
+        throw new Error('Cannot archive diagnostics for a deleted workspace');
+      }
+      return archiveId;
+    } catch (error) {
+      await this.diagnosticsArchive.remove(workspaceId, archiveId);
+      throw error;
+    }
+  }
 
   static getDiagnosticsCacheKey(jobId: string): string {
     return `item-matrix-diagnostics:${jobId}`;
@@ -85,7 +117,8 @@ export class ExportArtifactService {
           matrixValue: options.matrixValue,
           missingsProfileId: options.missingsProfileId,
           createdAt
-        }
+        },
+        options.diagnosticsPath
       );
       await options.checkCancellation();
       packagePath = this.moveArtifact(packageWorkingPath, options.tempDir);
