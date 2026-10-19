@@ -94,15 +94,23 @@ gezielt in der Admin-Konsole aendern, statt den Realm erneut zu importieren.
 
 ## Pruefung Und Ruecknahme
 
-Historische Pruefnotiz aus der Theme-Entwicklung, bei der Abtrennung dieses
-Pakets nicht erneut im Browser bestaetigt: Mit Keycloak 22.0.5 wurden Login mit/ohne
-Mehrsprachigkeit, Sprachwechsel Deutsch/Englisch, sichtbare Login- und
-Registrierungsfehler, erfolgreiche Registrierung und erneuter Login mit
-Autorisierungscode-Austausch sowie das Passwort-Reset-Formular. Die Ansichten
-wurden bei 1440, 375 und 320 Pixeln Breite geprueft. Ein E-Mail-Versand ist
-ohne SMTP-Konfiguration nicht Teil dieser Vorschau. Aktuell erneut geprueft
-sind nur Compose-Konfiguration, Realm-JSON, Logo und schreibgeschuetzte
-Mounts. Der Docker-Daemon war fuer einen erneuten Login-Test nicht erreichbar.
+Am 19.10.2026 wurde das aktuelle Theme in isolierten lokalen Containern mit
+Keycloak **22.0.5, 26.4.0 und 26.7.3** erneut im Browser abgenommen. Alle drei
+Versionen bestanden Login mit und ohne Mehrsprachigkeit, Sprachwechsel nach
+Englisch, sichtbare Login- und Registrierungsfehler, erfolgreiche Registrierung
+und erneuten Login mit echtem OIDC-Autorisierungscode-Austausch. Ein nur lokal
+erreichbarer SMTP-Mailfaenger ermoeglichte den vollstaendigen Passwort-Reset
+ueber den versandten Aktionslink und anschliessenden Login mit dem neuen
+Testpasswort. Diese SMTP-Ergaenzung gehoert nur zur Abnahme, nicht zur
+Standardvorschau oder Produktionskonfiguration.
+
+Desktop (1440 Pixel), mobile Ansichten (375 und 320 Pixel), Tastaturnavigation
+und sichtbarer Fokus wurden geprueft; die Bedienelemente blieben im Viewport.
+Es traten keine JavaScript-Fehler oder fehlgeschlagenen Theme-Ressourcen auf.
+Verwendet wurden ausschliesslich synthetische Testkonten. Ergebnisse und
+Pruefsummen der betrachteten Bildschirmbilder stehen in
+[`docs/qa/keycloak-theme-2026-10-19.json`](../../docs/qa/keycloak-theme-2026-10-19.json).
+Die Merge-Abnahme aktiviert das Theme in keiner laufenden Installation.
 
 Vor einer produktiven Aktivierung die tatsaechlich eingesetzte
 Keycloak-Version pruefen und das Theme mit dieser Version lokal testen:
