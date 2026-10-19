@@ -36,6 +36,8 @@ export type ItemMatrixCellFailureReason =
   | 'missing-score';
 
 export interface ItemMatrixExportDiagnosticGroupDto {
+  unitId?: string;
+  variableId?: string;
   reasonCode: ItemMatrixCellFailureReason;
   bookletName: string;
   columnName: string;
@@ -44,9 +46,34 @@ export interface ItemMatrixExportDiagnosticGroupDto {
 }
 
 export interface ItemMatrixExportDiagnosticsDto {
+  archiveId?: string;
   total: number;
   sampleLimit: number;
   groups: ItemMatrixExportDiagnosticGroupDto[];
+}
+
+export interface ItemMatrixExportDiagnosticCellDto {
+  rowNumber: number;
+  columnNumber: number;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletId: number;
+  bookletName: string;
+  columnName: string;
+  unitId: string;
+  variableId: string;
+  reasonCode: ItemMatrixCellFailureReason;
+}
+
+export interface ItemMatrixDiagnosticsArchiveEntryDto {
+  archiveId: string;
+  jobId: string;
+  createdAt: number;
+  total: number;
+  version: ExportVersion;
+  matrixValue: 'code' | 'score';
+  missingsProfileId: number;
 }
 
 export interface ItemMatrixExportErrorDetailsDto {

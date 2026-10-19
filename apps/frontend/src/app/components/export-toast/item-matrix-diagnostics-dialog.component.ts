@@ -45,7 +45,9 @@ import { GermanPaginatorIntl } from '../../shared/services/german-paginator-intl
   styleUrls: ['./item-matrix-diagnostics-dialog.component.scss']
 })
 export class ItemMatrixDiagnosticsDialogComponent {
-  protected readonly data = inject<ItemMatrixExportDiagnosticsDto>(MAT_DIALOG_DATA);
+  protected readonly data = inject<ItemMatrixExportDiagnosticsDto & {
+    downloadFullCsv?: () => void;
+  }>(MAT_DIALOG_DATA);
 
   private readonly dialogRef = inject<
     MatDialogRef<ItemMatrixDiagnosticsDialogComponent>
@@ -86,6 +88,8 @@ export class ItemMatrixDiagnosticsDialogComponent {
         this.getSuggestedAction(group.reasonCode),
         group.bookletName,
         group.columnName,
+        group.unitId || '',
+        group.variableId || '',
         group.sampleRowNumbers.join(' ')
       ].some(value => value.toLocaleLowerCase().includes(search)))
     ));
@@ -126,7 +130,9 @@ export class ItemMatrixDiagnosticsDialogComponent {
       'spalte',
       'anzahl',
       'beispielzeilen',
-      'empfohlene_massnahme'
+      'empfohlene_massnahme',
+      'unit',
+      'variable'
     ]];
     this.filteredGroups.forEach(group => rows.push([
       group.reasonCode,
@@ -135,7 +141,9 @@ export class ItemMatrixDiagnosticsDialogComponent {
       group.columnName,
       group.count,
       group.sampleRowNumbers.join(', '),
-      this.getSuggestedAction(group.reasonCode)
+      this.getSuggestedAction(group.reasonCode),
+      group.unitId || '',
+      group.variableId || ''
     ]));
     const csv = `\uFEFF${rows.map(row => (
       row.map(value => this.escapeCsv(value)).join(';')

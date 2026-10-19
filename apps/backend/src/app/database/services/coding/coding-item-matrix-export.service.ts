@@ -11,6 +11,7 @@ import {
   ItemDatasetNotReachedScope,
   ItemDatasetOptionsDto,
   ItemDatasetSelection,
+  ItemMatrixExportDiagnosticCellDto,
   ItemMatrixExportDiagnosticGroupDto,
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
@@ -54,6 +55,7 @@ export type ItemMatrixFormat = 'csv' | 'excel';
 export type ItemMatrixVersion = 'v1' | 'v2' | 'v3';
 
 export interface ItemMatrixExportConfiguration {
+  onDiagnostic?: (cell: ItemMatrixExportDiagnosticCellDto) => Promise<void>;
   missingsProfileId: number;
   notReachedScope?: ItemDatasetNotReachedScope;
   recodeTrailingOmissions?: boolean;
@@ -572,6 +574,7 @@ export class CodingItemMatrixExportService {
       .addOrderBy('person.login', 'ASC')
       .addOrderBy('person.code', 'ASC')
       .addOrderBy('bookletinfo.name', 'ASC')
+      .addOrderBy('booklet.id', 'ASC')
       .getRawMany<RawMatrixRow>();
     return rows
       .filter(
@@ -664,8 +667,22 @@ export class CodingItemMatrixExportService {
               start + rowIndex + 2,
               row.bookletName,
               column.header,
-              error.reason
+              error.reason,
+              { unitId: column.unitId, variableId: column.sourceVariableId || column.variableId }
             );
+            await configuration.onDiagnostic?.({
+              rowNumber: start + rowIndex + 2,
+              columnNumber: fixedHeaders.length + index + 1,
+              personLogin: row.personLogin,
+              personCode: row.personCode,
+              personGroup: row.personGroup,
+              bookletId: row.bookletId,
+              bookletName: row.bookletName,
+              columnName: column.header,
+              unitId: column.unitId,
+              variableId: column.sourceVariableId || column.variableId,
+              reasonCode: error.reason
+            });
             exportRow[column.header] = '';
           }
         }
@@ -690,11 +707,13 @@ export class CodingItemMatrixExportService {
     rowNumber: number,
     bookletName: string,
     columnName: string,
-    reasonCode: ItemDatasetCellExportFailureReason
+    reasonCode: ItemDatasetCellExportFailureReason,
+    variable?: { unitId: string; variableId: string }
   ): void {
     collector.total += 1;
     const key = [reasonCode, bookletName, columnName].join('\u001F');
     const group = collector.groups.get(key) || {
+      ...variable,
       reasonCode,
       bookletName,
       columnName,

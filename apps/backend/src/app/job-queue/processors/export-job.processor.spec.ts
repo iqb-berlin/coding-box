@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PassThrough, Readable } from 'stream';
+import { ItemMatrixDiagnosticsArchive } from '../../database/services/coding/item-matrix-diagnostics-archive';
 import {
   CodingExportOrchestratorService,
   CodingExportService,
@@ -27,6 +28,15 @@ jest.mock('../../database/services/test-results', () => ({
 }));
 
 describe('ExportJobProcessor', () => {
+  let archiveDirectory: string;
+  beforeEach(() => {
+    archiveDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'diagnostics-processor-'));
+    jest.spyOn(ItemMatrixDiagnosticsArchive.prototype, 'getRootDirectory').mockReturnValue(archiveDirectory);
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    fs.rmSync(archiveDirectory, { recursive: true, force: true });
+  });
   const noItemMatrixDiagnostics = {
     total: 0,
     sampleLimit: 20,
@@ -97,6 +107,8 @@ describe('ExportJobProcessor', () => {
       )
     };
 
+    const workspaceRepository = { existsBy: jest.fn().mockResolvedValue(true) };
+    const exportArtifactService = new ExportArtifactService(cacheService as unknown as CacheService, workspaceRepository as never);
     const processor = new ExportJobProcessor(
       codingExportService as unknown as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
@@ -104,9 +116,7 @@ describe('ExportJobProcessor', () => {
       cacheService as unknown as CacheService,
       jobQueueService as unknown as JobQueueService,
       codingPsychometricExportService as unknown as CodingPsychometricExportService,
-      new ExportArtifactService(
-        cacheService as unknown as CacheService
-      )
+      exportArtifactService
     );
 
     return {
@@ -115,7 +125,9 @@ describe('ExportJobProcessor', () => {
       codingExportOrchestratorService,
       cacheService,
       jobQueueService,
-      codingPsychometricExportService
+      codingPsychometricExportService,
+      workspaceRepository,
+      exportArtifactService
     };
   };
 
@@ -665,6 +677,7 @@ describe('ExportJobProcessor', () => {
       ).toHaveBeenCalledWith(expect.stringMatching(/\.csv$/), {
         workspaceId: 7,
         missingsProfileId: 4,
+        onDiagnostic: expect.any(Function),
         matrixValue: 'score',
         version: 'v2',
         notReachedScope: 'unit',
@@ -696,7 +709,22 @@ describe('ExportJobProcessor', () => {
       createProcessor();
     let rawMatrixPath: string | undefined;
     codingExportOrchestratorService.exportItemMatrixAsCsvToFile.mockImplementationOnce(
-      async (filePath: string) => {
+      async (filePath: string, options?: { onDiagnostic: (cell: object) => Promise<void> }) => {
+        for (const rowNumber of [2, 3]) {
+          await options!.onDiagnostic({
+            rowNumber,
+            columnNumber: 5,
+            personLogin: 'login',
+            personCode: 'code',
+            personGroup: 'group',
+            bookletId: 42,
+            bookletName: 'BOOKLET-1',
+            columnName: 'UNIT1_1',
+            unitId: 'UNIT1',
+            variableId: 'VAR1',
+            reasonCode: 'derived-result-missing'
+          });
+        }
         rawMatrixPath = filePath;
         await fs.promises.writeFile(filePath, '\uFEFFheader\r\nlogin;code;;;');
         return {
@@ -744,7 +772,8 @@ describe('ExportJobProcessor', () => {
           'Itemdatensatz-UNVOLLSTAENDIG-' +
             `${new Date().toISOString().slice(0, 10)}.csv`,
           'README.txt',
-          'diagnose.csv'
+          'diagnose.csv',
+          'diagnose-gruppiert.csv'
         ].sort()
       );
       const matrixEntry = zip
@@ -759,7 +788,13 @@ describe('ExportJobProcessor', () => {
       const diagnosis = zip.readAsText('diagnose.csv');
       expect(diagnosis).toContain('derived-result-missing');
       expect(diagnosis).toContain('BOOKLET-1');
-      expect(diagnosis).not.toContain('login;code');
+      expect(diagnosis).toContain('"login";"code"');
+      expect(diagnosis.trim().split('\r\n')).toHaveLength(3);
+      const archive = new ItemMatrixDiagnosticsArchive();
+      const saved = await archive.list(7);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ total: 2, jobId: 'job-1' });
+      expect(fs.readFileSync((await archive.getCsvPath(7, saved[0].archiveId))!, 'utf8')).toBe(diagnosis);
       expect(zip.readAsText('README.txt')).toContain(
         'UNVOLLSTÄNDIGER ITEMDATENSATZ'
       );
@@ -883,7 +918,6 @@ describe('ExportJobProcessor', () => {
     const {
       processor,
       codingExportOrchestratorService,
-      cacheService,
       jobQueueService
     } = createProcessor();
     const job = createJob({
@@ -919,12 +953,7 @@ describe('ExportJobProcessor', () => {
       filePath: ''
     });
     expect(rawMatrixPath && fs.existsSync(rawMatrixPath)).toBe(false);
-    expect(cacheService.delete).toHaveBeenCalledWith(
-      'item-matrix-incomplete-result:job-1'
-    );
-    expect(cacheService.delete).toHaveBeenCalledWith(
-      'item-matrix-diagnostics:job-1'
-    );
+    expect(await new ItemMatrixDiagnosticsArchive().list(7)).toEqual([]);
   });
 
   it('removes published incomplete artifacts when cancellation arrives during caching', async () => {
@@ -979,6 +1008,7 @@ describe('ExportJobProcessor', () => {
 
     expect(rawMatrixPath && fs.existsSync(rawMatrixPath)).toBe(false);
     expect(packagePath && fs.existsSync(packagePath)).toBe(false);
+    expect(await new ItemMatrixDiagnosticsArchive().list(7)).toEqual([]);
     expect(cacheService.delete).toHaveBeenCalledWith(
       'item-matrix-incomplete-result:job-1'
     );
@@ -1008,6 +1038,7 @@ describe('ExportJobProcessor', () => {
       ).toHaveBeenCalledWith(expect.stringMatching(/\.xlsx$/), {
         workspaceId: 7,
         missingsProfileId: 4,
+        onDiagnostic: expect.any(Function),
         matrixValue: 'code',
         version: 'v3',
         notReachedScope: 'unit',
