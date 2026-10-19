@@ -1,0 +1,138 @@
+{
+  "date": "2026-10-19",
+  "themeSource": "409278daba6ec6a7ad4654a878d9a489a99bfb26",
+  "acceptedOnDevelop": "3ba72a90c095d6903cc87a609aedf08573615fc1",
+  "environment": "isolated local Docker, headed Chrome, disposable realms and SMTP capture",
+  "productionActivation": false,
+  "targetProductionKeycloakVersion": "not established; verify before activation",
+  "results": [
+    {
+      "version": "22.0.5",
+      "synthetic": true,
+      "checks": [
+        "desktop and mobile layout",
+        "keyboard navigation and visible focus",
+        "invalid login error visible",
+        "registration field error visible",
+        "registration and real authorization code exchange",
+        "login with registered user and real authorization code exchange",
+        "password reset through local SMTP capture and login with new fixture password",
+        "English localization",
+        "realm without internationalization"
+      ],
+      "pageErrors": [],
+      "resourceFailures": [],
+      "viewports": [
+        {
+          "width": 375,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        },
+        {
+          "width": 320,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "version": "26.4.0",
+      "synthetic": true,
+      "checks": [
+        "desktop and mobile layout",
+        "keyboard navigation and visible focus",
+        "invalid login error visible",
+        "registration field error visible",
+        "registration and real authorization code exchange",
+        "login with registered user and real authorization code exchange",
+        "password reset through local SMTP capture and login with new fixture password",
+        "English localization",
+        "realm without internationalization"
+      ],
+      "pageErrors": [],
+      "resourceFailures": [],
+      "viewports": [
+        {
+          "width": 375,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        },
+        {
+          "width": 320,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "version": "26.7.3",
+      "synthetic": true,
+      "checks": [
+        "desktop and mobile layout",
+        "keyboard navigation and visible focus",
+        "invalid login error visible",
+        "registration field error visible",
+        "registration and real authorization code exchange",
+        "login with registered user and real authorization code exchange",
+        "password reset through local SMTP capture and login with new fixture password",
+        "English localization",
+        "realm without internationalization"
+      ],
+      "pageErrors": [],
+      "resourceFailures": [],
+      "viewports": [
+        {
+          "width": 375,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        },
+        {
+          "width": 320,
+          "noHorizontalOverflow": true,
+          "controlsInViewport": true
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "keycloak-22.0.5-desktop.png",
+      "sha256": "1db061675f413ce002e44c754b7ee8e126202c9180876e747533efe566905268"
+    },
+    {
+      "file": "keycloak-22.0.5-mobile.png",
+      "sha256": "2c2b595b742c623b8ca93cb3d6e0ec30e7495269659d065f90fe754fb6d5504b"
+    },
+    {
+      "file": "keycloak-22.0.5-registration.png",
+      "sha256": "1b1ce518df91e556ae69003bc4302309a719d9f54c5b2fd6772989d56dddfd99"
+    },
+    {
+      "file": "keycloak-26.4.0-desktop.png",
+      "sha256": "5d6252ea5a20864a68ed3abe3f19485fc5d4f676c52cdc5309d8553797c3d9fc"
+    },
+    {
+      "file": "keycloak-26.4.0-mobile.png",
+      "sha256": "fef531fcd10323423cd5cc3ae4d80a1790bbf7a6009bc62429d1c8da83611e88"
+    },
+    {
+      "file": "keycloak-26.4.0-registration.png",
+      "sha256": "20fb5d9d34b4924c31cb7c8bf3d39fc0c308bb1ffad853ad390b1fdce0c2895b"
+    },
+    {
+      "file": "keycloak-26.7.3-desktop.png",
+      "sha256": "5d6252ea5a20864a68ed3abe3f19485fc5d4f676c52cdc5309d8553797c3d9fc"
+    },
+    {
+      "file": "keycloak-26.7.3-mobile.png",
+      "sha256": "fef531fcd10323423cd5cc3ae4d80a1790bbf7a6009bc62429d1c8da83611e88"
+    },
+    {
+      "file": "keycloak-26.7.3-registration.png",
+      "sha256": "989a827dd1ca71b321eae0e61554bbefd8e90fdd15293a5ca2850345c5bc5ec7"
+    }
+  ]
+}
