@@ -80,23 +80,23 @@ export class DoubleCodedReviewFacade {
   readonly managerDraftUpdates$ = this.managerDraftUpdatesSubject.asObservable();
 
   private readonly replayDecisionByResponseId = new Map<
-  number,
-  ReplayDecisionResult
+    number,
+    ReplayDecisionResult
   >();
 
   private readonly defaultReviewValueByResponseId = new Map<
-  number,
-  { selectedValue: string; comment: string }
+    number,
+    { selectedValue: string; comment: string }
   >();
 
   private readonly managerDraftCommandQueues = new Map<
-  number,
-  Subject<ManagerDraftCommand>
+    number,
+    Subject<ManagerDraftCommand>
   >();
 
   private readonly lastManagerDraftCommandSignatureByResponseId = new Map<
-  number,
-  string
+    number,
+    string
   >();
 
   private readonly destroy$ = new Subject<void>();

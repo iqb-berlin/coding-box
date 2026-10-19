@@ -423,14 +423,14 @@ export class CodingJobQueryService {
     jobIds: number[],
     workspaceId: number
   ): Promise<
-    Map<
-    number,
-    { progress: number; coded: number; total: number; open: number }
-    >
+      Map<
+        number,
+        { progress: number; coded: number; total: number; open: number }
+      >
     > {
     const progressByJobId = new Map<
-    number,
-    { progress: number; coded: number; total: number; open: number }
+      number,
+      { progress: number; coded: number; total: number; open: number }
     >();
     jobIds.forEach(jobId => progressByJobId.set(jobId, {
       progress: 0,
@@ -1008,8 +1008,8 @@ export class CodingJobQueryService {
           [],
           [],
           new Map<
-          number,
-          { progress: number; coded: number; total: number; open: number }
+            number,
+            { progress: number; coded: number; total: number; open: number }
           >(),
           new Map<number, CodingJobIssueSummary>()
         ];
@@ -1023,8 +1023,8 @@ export class CodingJobQueryService {
     });
 
     const variablesByJobId = new Map<
-    number,
-    { unitName: string; variableId: string }[]
+      number,
+      { unitName: string; variableId: string }[]
     >();
     allVariables.forEach(variable => {
       if (!variablesByJobId.has(variable.coding_job_id)) {
@@ -1037,8 +1037,8 @@ export class CodingJobQueryService {
     });
 
     const variableBundlesByJobId = new Map<
-    number,
-    { name: string; variables: { unitName: string; variableId: string }[] }[]
+      number,
+      { name: string; variables: { unitName: string; variableId: string }[] }[]
     >();
     variableBundleEntities.forEach(bundleAssignment => {
       if (!variableBundlesByJobId.has(bundleAssignment.coding_job_id)) {

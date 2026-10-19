@@ -81,10 +81,10 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   readonly isLoading = signal(false);
   readonly selectedMissingsProfile = signal<number>(0);
   readonly missingsProfiles = signal<
-  {
-    id: number;
-    label: string;
-  }[]
+    {
+      id: number;
+      label: string;
+    }[]
   >([{ id: 0, label: '' }]);
 
   readonly selectedJobDefinitionId = signal<number | null>(null);

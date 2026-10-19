@@ -104,9 +104,9 @@ export class WorkspaceTestResultsManagementController {
   @RequireAccessLevel(3)
   async findTestResults(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20,
-                                         @Query('searchText') searchText?: string
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20,
+    @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] =
             await this.workspaceTestResultsService.findTestResults(workspace_id, {
@@ -153,8 +153,8 @@ export class WorkspaceTestResultsManagementController {
   @RequireAccessLevel(3)
   async quickSearchTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Query('q') query: string,
-                                         @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
+    @Query('q') query: string,
+    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
   ): Promise<QuickSearchResult> {
     return this.workspaceTestResultsService.quickSearchTestResults(
       workspaceId,
@@ -168,15 +168,15 @@ export class WorkspaceTestResultsManagementController {
   @RequireAccessLevel(3)
   async deleteTestGroups(
     @Query('testPersons') testPersonIds: string,
-      @Param('workspace_id') workspaceId: string,
-      @Req() req: RequestWithUser
+    @Param('workspace_id') workspaceId: string,
+    @Req() req: RequestWithUser
   ): Promise<{
-        success: boolean;
-        report: {
-          deletedPersons: string[];
-          warnings: string[];
-        };
-      }> {
+      success: boolean;
+      report: {
+        deletedPersons: string[];
+        warnings: string[];
+      };
+    }> {
     return this.workspaceTestResultsService.deleteTestPersons(
       Number(workspaceId),
       testPersonIds,
@@ -194,7 +194,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
+    @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResults(
       workspaceId,
@@ -212,8 +212,8 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
-      @Req() req: RequestWithUser
+    @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
+    @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
       'validation-task',
@@ -242,7 +242,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResultResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>
+    @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResultResponses(
       workspaceId,
@@ -260,8 +260,8 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultResponsesJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>,
-      @Req() req: RequestWithUser
+    @ValidatedBody('TestResultsResponseCleanupRequestDto') request: RequestBody<'TestResultsResponseCleanupRequestDto'>,
+    @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
       'validation-task',
@@ -290,7 +290,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestLogs(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
+    @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestLogs(
       workspaceId,
@@ -308,8 +308,8 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
-      @Req() req: RequestWithUser
+    @ValidatedBody('TestResultsDeleteRequestDto') request: RequestBody<'TestResultsDeleteRequestDto'>,
+    @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
       'validation-task',
@@ -365,15 +365,15 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteUnit(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('unitId', ParseIntPipe) unitId: number,
-      @Req() req: RequestWithUser
+    @Param('unitId', ParseIntPipe) unitId: number,
+    @Req() req: RequestWithUser
   ): Promise<{
-        success: boolean;
-        report: {
-          deletedUnit: number | null;
-          warnings: string[];
-        };
-      }> {
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }> {
     const result = await this.workspaceTestResultsService.deleteUnit(
       workspaceId,
       unitId,
@@ -405,7 +405,7 @@ export class WorkspaceTestResultsManagementController {
   @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Param('personId', ParseIntPipe) personId: number
+    @Param('personId', ParseIntPipe) personId: number
   ): Promise<PersonTestResult[]> {
     return this.workspaceTestResultsService.findPersonTestResults(
       personId,
@@ -450,15 +450,15 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteBooklet(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Param('bookletId', ParseIntPipe) bookletId: number,
-      @Req() req: RequestWithUser
+    @Param('bookletId', ParseIntPipe) bookletId: number,
+    @Req() req: RequestWithUser
   ): Promise<{
-        success: boolean;
-        report: {
-          deletedBooklet: number | null;
-          warnings: string[];
-        };
-      }> {
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }> {
     const result = await this.workspaceTestResultsService.deleteBooklet(
       workspaceId,
       bookletId,
@@ -494,9 +494,9 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findBookletsByName(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('bookletName') bookletName: string,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('bookletName') bookletName: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<BookletSearchResult> {
     return this.workspaceTestResultsService.findBookletsByName(
       workspace_id,
@@ -529,9 +529,9 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUnitsByName(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
-      @Query('unitName') unitName: string,
-                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
+    @Query('unitName') unitName: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<UnitSearchResult> {
     return this.workspaceTestResultsService.findUnitsByName(
       workspace_id,

@@ -7,12 +7,12 @@ export class VariableDto {
     example: 'math101'
   })
   @IsString()
-    unitName: string;
+  unitName: string;
 
   @ApiProperty({
     description: 'The variable ID',
     example: 'addition'
   })
   @IsString()
-    variableId: string;
+  variableId: string;
 }

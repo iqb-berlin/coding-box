@@ -177,8 +177,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   readonly allCoders = signal<Coder[]>([]);
 
   private jobDetailsCache = new Map<
-  number,
-  { variables?: Variable[]; variableBundles?: VariableBundle[] }
+    number,
+    { variables?: Variable[]; variableBundles?: VariableBundle[] }
   >();
 
   private preloadedVariables: Variable[] | null = null;

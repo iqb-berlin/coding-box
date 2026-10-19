@@ -672,8 +672,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     decision: DoubleCodedManagerDecisionDto
   ): string {
     const fallbackByState: Record<
-    DoubleCodedManagerDecisionDto['state'],
-    string
+      DoubleCodedManagerDecisionDto['state'],
+      string
     > = {
       draft: 'Entwurf',
       applied: 'Angewendet',

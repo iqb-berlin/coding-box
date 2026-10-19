@@ -18,7 +18,7 @@ import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-re
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
 
 type ProcessOverviewValidationTask = Pick<
-ValidationTask,
+  ValidationTask,
 |
 'id' | 'workspace_id' | 'validation_type' | 'status' | 'progress' | 'progress_message' | 'error'
 >;

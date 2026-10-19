@@ -723,9 +723,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
               this.firstTestFilesImportData = data;
 
               const ref = this.dialog.open<
-              TestFilesUploadConflictsDialogComponent,
-              { conflicts: typeof initialConflicts },
-              TestFilesUploadConflictsDialogResult
+                TestFilesUploadConflictsDialogComponent,
+                { conflicts: typeof initialConflicts },
+                TestFilesUploadConflictsDialogResult
               >(TestFilesUploadConflictsDialogComponent, {
                 width: '800px',
                 maxWidth: '95vw',

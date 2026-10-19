@@ -245,8 +245,8 @@ export class AuthController {
   })
   async login(
     @Res() res: Response,
-      @Query('redirect_uri') redirectUri?: string,
-      @Query('browser_challenge') browserChallenge?: string
+    @Query('redirect_uri') redirectUri?: string,
+    @Query('browser_challenge') browserChallenge?: string
   ): Promise<void> {
     this.logger.log('Initiating OpenID Connect Provider login');
 
@@ -293,8 +293,8 @@ export class AuthController {
   @ApiQuery({ name: 'state', description: 'State parameter for security' })
   async callback(
     @Query('code') code: string,
-      @Query('state') state: string,
-      @Res() res: Response
+    @Query('state') state: string,
+    @Res() res: Response
   ): Promise<void> {
     this.logger.log('Processing OpenID Connect Provider callback');
 
@@ -488,7 +488,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async logout(
     @Body() logoutData: { refresh_token: string },
-      @Res() res: Response
+    @Res() res: Response
   ): Promise<void> {
     this.logger.log('Processing OpenID Connect Provider SSO logout');
 
@@ -542,7 +542,7 @@ export class AuthController {
   })
   async redirectToProfile(
     @Res() res: Response,
-      @Query('redirect_uri') redirectUri?: string
+    @Query('redirect_uri') redirectUri?: string
   ): Promise<void> {
     this.logger.log('Redirecting to OpenID Connect Provider profile management');
 

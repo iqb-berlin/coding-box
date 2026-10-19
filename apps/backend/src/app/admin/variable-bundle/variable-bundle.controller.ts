@@ -72,8 +72,8 @@ export class VariableBundleController {
   })
   async getVariableBundles(
     @WorkspaceId() workspaceId: number,
-      @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number
   ): Promise<{ data: VariableBundleDto[]; total: number; page: number; limit: number }> {
     const result = await this.variableBundleService.getVariableBundles(workspaceId, page, limit);
     return {
@@ -112,7 +112,7 @@ export class VariableBundleController {
   })
   async getVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+    @Param('id') id: number
   ): Promise<VariableBundleDto> {
     const variableBundle = await this.variableBundleService.getVariableBundle(id, workspaceId);
     return VariableBundleDto.fromEntity(variableBundle);
@@ -140,8 +140,8 @@ export class VariableBundleController {
   })
   async createVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Body() createVariableBundleDto: CreateVariableBundleDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Body() createVariableBundleDto: CreateVariableBundleDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     const variableBundle = await this.variableBundleService.createVariableBundle(
       workspaceId,
@@ -182,9 +182,9 @@ export class VariableBundleController {
   })
   async updateVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateVariableBundleDto: UpdateVariableBundleDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Body() updateVariableBundleDto: UpdateVariableBundleDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     const variableBundle = await this.variableBundleService.updateVariableBundle(
       id,
@@ -228,8 +228,8 @@ export class VariableBundleController {
   })
   async deleteVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     return this.variableBundleService.deleteVariableBundle(id, workspaceId, ownershipRequest.user?.id);
   }
@@ -265,9 +265,9 @@ export class VariableBundleController {
   })
   async addVariableToBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() variable: VariableDto,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Body() variable: VariableDto,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     const variableBundle = await this.variableBundleService.addVariableToBundle(
       id,
@@ -318,10 +318,10 @@ export class VariableBundleController {
   })
   async removeVariableFromBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Param('unitName') unitName: string,
-      @Param('variableId') variableId: string,
-      @Req() ownershipRequest: { user?: { id?: number } }
+    @Param('id') id: number,
+    @Param('unitName') unitName: string,
+    @Param('variableId') variableId: string,
+    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     const variableBundle = await this.variableBundleService.removeVariableFromBundle(
       id,

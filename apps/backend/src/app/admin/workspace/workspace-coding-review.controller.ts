@@ -352,8 +352,8 @@ export class WorkspaceCodingReviewController {
   })
   async getDoubleCodedVariablesForReview(
     @WorkspaceId() workspace_id: number,
-      @Query(requestValidationPipe) query: DoubleCodedReviewQueryDto,
-      @Req() req: Request
+    @Query(requestValidationPipe) query: DoubleCodedReviewQueryDto,
+    @Req() req: Request
   ): Promise<DoubleCodedReviewResponse> {
     return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspace_id,
@@ -432,7 +432,7 @@ export class WorkspaceCodingReviewController {
     }
   })
   async reconcileDoubleCodedAggregation(
-  @WorkspaceId() workspace_id: number,
+    @WorkspaceId() workspace_id: number,
     @Body(requestValidationPipe) body: ReconcileDoubleCodedAggregationRequestDto
   ) {
     return this.doubleCodingReviewDecisionService.reconcileAppliedAggregationResolutions(
@@ -540,7 +540,7 @@ export class WorkspaceCodingReviewController {
   })
   async applyDoubleCodedResolutions(
     @WorkspaceId() workspace_id: number,
-      @Body(requestValidationPipe)
+    @Body(requestValidationPipe)
                    body: ApplyDoubleCodedResolutionsRequestDto,
                    @Req() req: Request
   ): Promise<DoubleCodedResolutionResponse> {
@@ -584,7 +584,7 @@ export class WorkspaceCodingReviewController {
     schema: doubleCodedManagerDecisionSchema
   })
   async saveDoubleCodedReviewDraft(
-  @WorkspaceId() workspace_id: number,
+    @WorkspaceId() workspace_id: number,
     @Param('responseId', ParseIntPipe) responseId: number,
     @Body(requestValidationPipe) body: SaveDoubleCodedReviewDraftRequestDto,
     @Req() req: Request
@@ -614,7 +614,7 @@ export class WorkspaceCodingReviewController {
     }
   })
   async deleteDoubleCodedReviewDraft(
-  @WorkspaceId() workspace_id: number,
+    @WorkspaceId() workspace_id: number,
     @Param('responseId', ParseIntPipe) responseId: number,
     @Req() req: Request
   ) {

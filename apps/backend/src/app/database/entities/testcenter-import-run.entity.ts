@@ -7,15 +7,15 @@ import Workspace from './workspace.entity';
 @Entity('testcenter_import_run')
 export class TestcenterImportRun {
   @PrimaryColumn({ type: 'int' })
-    workspace_id!: number;
+  workspace_id!: number;
 
   @PrimaryColumn({ type: 'varchar', length: 128 })
-    import_run_id!: string;
+  import_run_id!: string;
 
   @Column({ type: 'jsonb' })
-    progress!: ImportWorkspaceFilesProgressDto;
+  progress!: ImportWorkspaceFilesProgressDto;
 
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-    workspace!: Workspace;
+  workspace!: Workspace;
 }
