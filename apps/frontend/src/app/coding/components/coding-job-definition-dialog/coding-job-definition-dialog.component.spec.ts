@@ -1007,6 +1007,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
         await jest.advanceTimersByTimeAsync(0);
 
         expect(mockCodingJobBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
+          workspace_id: 1,
+          name: '',
+          status: 'pending',
           assignedCoders: [1],
           variables: [mockVariables[0]]
         }));
