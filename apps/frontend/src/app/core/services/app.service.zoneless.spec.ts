@@ -33,6 +33,8 @@ describe('AppService auth state without Zone.js', () => {
       ]
     });
     service = TestBed.inject(AppService);
+    service.loggedUser = { sub: 'identity' };
+    localStorage.setItem('auth_token', 'test-access-token');
     http = TestBed.inject(HttpTestingController);
   });
 

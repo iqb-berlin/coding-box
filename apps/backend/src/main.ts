@@ -7,9 +7,11 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { configureShutdownHooks } from './app/config/shutdown';
 import { AppModule } from './app/app.module';
 import { ExportWorkerModule } from './app/export-worker/export-worker.module';
 import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
+import { createRequestValidationPipe } from './app/http/request-validation';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
 import {
   createRequestMonitoringMiddleware
@@ -23,15 +25,16 @@ import { RuntimeConfigService } from './app/config/runtime-config.service';
 async function bootstrap() {
   if (isExportWorkerProcess()) {
     const workerApp = await NestFactory.createApplicationContext(ExportWorkerModule);
-    workerApp.enableShutdownHooks();
+    configureShutdownHooks(workerApp);
     Logger.log('Export worker started');
     return;
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  configureShutdownHooks(app);
   const configService = app.get(ConfigService);
   const runtimeConfig = app.get(RuntimeConfigService);
-  const host = configService.get('API_HOST') || 'localhost';
+  const host = configService.get('API_HOST') || '0.0.0.0';
   const port = 3333;
   const globalPrefix = 'api';
   const getPoolSnapshot = createPostgresPoolSnapshotProvider(
@@ -40,6 +43,7 @@ async function bootstrap() {
 
   app.use(requestIdMiddleware);
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
+  app.useGlobalPipes(createRequestValidationPipe());
 
   app.use((req, _res, next) => {
     const [pathname, query = ''] = req.url.split('?', 2);

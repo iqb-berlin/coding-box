@@ -3,7 +3,6 @@ import {
 } from '@angular/router';
 import { inject } from '@angular/core';
 import { firstValueFrom, forkJoin } from 'rxjs';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
@@ -69,15 +68,14 @@ export function createPersonalCodingJobsGuardResult(
 
 const isAccessAllowed = async (
   _route: ActivatedRouteSnapshot,
-  state: RouterStateSnapshot,
-  authGuardData: AuthGuardData
+  state: RouterStateSnapshot
 ): Promise<boolean | UrlTree> => {
   const appService = inject(AppService);
   const authService = inject(AuthService);
   const userService = inject(UserService);
   const router = inject(Router);
 
-  if (!authGuardData.authenticated) {
+  if (!authService.isLoggedIn()) {
     return createReAuthenticationUrlTree(router, state.url);
   }
 
@@ -117,4 +115,4 @@ const isAccessAllowed = async (
   }
 };
 
-export const canActivatePersonalCodingJobs = createAuthGuard<CanActivateFn>(isAccessAllowed);
+export const canActivatePersonalCodingJobs: CanActivateFn = isAccessAllowed;

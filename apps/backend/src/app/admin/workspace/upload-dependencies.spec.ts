@@ -1,4 +1,4 @@
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import FormData = require('form-data');
 
 // Keep parser failures in a child process: a vulnerable Multer version throws
@@ -33,6 +33,7 @@ process.on('uncaughtException', error => {
   process.exit(2);
 });
 server.listen(0, '127.0.0.1', () => {
+  process.send('ready', () => process.disconnect());
   const boundary = 'upload-regression';
   const parts = scenario.fields.map(([name, value]) =>
     '--' + boundary + '\\r\\nContent-Disposition: form-data; name="' + name + '"\\r\\n\\r\\n' + value + '\\r\\n');
@@ -58,16 +59,49 @@ server.listen(0, '127.0.0.1', () => {
 `;
 
 describe('Upload dependency security', () => {
-  const probe = (fields: string[][], disk = false) => spawnSync(
-    process.execPath,
-    ['-e', uploadProbe, require.resolve('@nestjs/platform-express'), JSON.stringify({ fields, disk })],
-    { encoding: 'utf8', timeout: 5000 }
-  );
+  const probe = (fields: string[][], disk = false): Promise<{
+    status: number | null;
+    stdout: string;
+    stderr: string;
+  }> => new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      ['-e', uploadProbe, require.resolve('@nestjs/platform-express'), JSON.stringify({ fields, disk })],
+      { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] }
+    );
+    let stdout = '';
+    let stderr = '';
+    let finished = false;
+    const fail = (error: Error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
+      child.kill('SIGKILL');
+      reject(error);
+    };
+    // Nest's cold import is slower under CI coverage and contention. The parser
+    // keeps its own five-second limit once the child has loaded and is listening.
+    let deadline = setTimeout(() => fail(new Error('Upload probe startup timed out')), 30000);
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr += chunk; });
+    child.on('message', message => {
+      if (message === 'ready' && !finished) {
+        clearTimeout(deadline);
+        deadline = setTimeout(() => fail(new Error('Upload probe request timed out')), 5000);
+      }
+    });
+    child.once('error', fail);
+    child.once('close', status => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(deadline);
+      resolve({ status, stdout, stderr });
+    });
+  });
 
-  it.each([false, true])('preserves valid multipart uploads (disk storage: %s)', disk => {
-    const result = probe([['metadata[title]', 'Example']], disk);
+  it.each([false, true])('preserves valid multipart uploads (disk storage: %s)', async disk => {
+    const result = await probe([['metadata[title]', 'Example']], disk);
 
-    expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
       status: 200,
@@ -76,18 +110,17 @@ describe('Upload dependency security', () => {
         files: [{ name: 'unit.xml', data: '<unit>ä</unit>' }]
       }
     });
-  });
+  }, 40000);
 
   it.each([
     { name: 'array length overflow', fields: [['metadata[4294967294]', 'value'], ['metadata[]', 'value']] },
     { name: 'array length overflow with leading zero', fields: [['metadata[04294967294]', 'value'], ['metadata[]', 'value']] }
-  ])('rejects $name through normal request completion', ({ fields }) => {
-    const result = probe(fields);
+  ])('rejects $name through normal request completion', async ({ fields }) => {
+    const result = await probe(fields);
 
-    expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).status).toBe(400);
-  });
+  }, 40000);
 });
 
 describe('Outgoing multipart headers', () => {

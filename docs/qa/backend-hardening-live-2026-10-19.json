@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-19",
+  "fixture": "isolated PostgreSQL/Redis; 163 current Liquibase changesets applied",
+  "binarySha256": "3b63dd377467d35d562649459398f30d685db998bb6a250b3cc6bab1555d4666",
+  "probes": [
+    {
+      "role": "api",
+      "invalidConfiguration": "JWT_SECRET",
+      "exit": {
+        "code": 1,
+        "signal": null
+      },
+      "connections": {
+        "postgres": 0,
+        "redis": 1
+      }
+    },
+    {
+      "role": "api",
+      "started": true,
+      "active": {
+        "postgres": 1,
+        "redis": 40
+      },
+      "shutdown": {
+        "signal": "SIGTERM",
+        "elapsedMs": 6098,
+        "exit": {
+          "code": null,
+          "signal": "SIGTERM"
+        },
+        "after": {
+          "postgres": 0,
+          "redis": 1
+        }
+      }
+    },
+    {
+      "role": "export-worker",
+      "started": true,
+      "active": {
+        "postgres": 1,
+        "redis": 16
+      },
+      "shutdown": {
+        "signal": "SIGTERM",
+        "elapsedMs": 612,
+        "exit": {
+          "code": null,
+          "signal": "SIGTERM"
+        },
+        "after": {
+          "postgres": 0,
+          "redis": 1
+        }
+      }
+    }
+  ],
+  "success": true
+}

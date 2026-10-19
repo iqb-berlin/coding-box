@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../../database/services/users';
+import { JournalService } from '../../database/services/shared/journal.service';
 import {
   WORKSPACE_API_TOKEN_TYPE,
   WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS_ENV,
@@ -19,11 +20,13 @@ describe('AuthService', () => {
   let usersService: jest.Mocked<UsersService>;
   let jwtService: jest.Mocked<JwtService>;
   let configService: jest.Mocked<ConfigService>;
+  let journalService: { recordEvent: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: JournalService, useValue: { recordEvent: jest.fn().mockResolvedValue({}) } },
         {
           provide: HttpService,
           useValue: createMock<HttpService>()
@@ -47,6 +50,7 @@ describe('AuthService', () => {
     usersService = module.get(UsersService);
     jwtService = module.get(JwtService);
     configService = module.get(ConfigService);
+    journalService = module.get(JournalService);
     configService.get.mockReturnValue(undefined);
   });
 
@@ -75,21 +79,38 @@ describe('AuthService', () => {
 
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 5,
           username: 'study-manager',
-          sub: {
-            id: 5,
-            username: 'study-manager',
-            isAdmin: false
-          },
+          sub: '5',
           workspace: 7,
           tokenType: WORKSPACE_API_TOKEN_TYPE,
           scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
         },
-        { expiresIn: '1d' }
+        {
+          expiresIn: '1d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
       expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
       expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+      expect(journalService.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        workspaceId: 7,
+        actorUserId: 5,
+        actorType: 'user',
+        eventType: 'ACCESS_TOKEN_CREATED',
+        entityId: 5,
+        details: { durationDays: 1, scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ] }
+      }));
+      expect(JSON.stringify(journalService.recordEvent.mock.calls)).not.toContain('signed-token');
+    });
+
+    it('does not return a token when the journal cannot persist its creation', async () => {
+      journalService.recordEvent.mockRejectedValueOnce(new Error('audit unavailable'));
+      await expect(service.createToken('identity-1', 7, 1, [WORKSPACE_TOKEN_SCOPE_REPLAY_READ], 5))
+        .rejects.toThrow('audit unavailable');
     });
 
     it('rejects token creation for another identity without workspace admin access', async () => {
@@ -169,7 +190,7 @@ describe('AuthService', () => {
         expect.objectContaining({
           scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
         }),
-        { expiresIn: '90d' }
+        expect.objectContaining({ expiresIn: '90d' })
       );
     });
 
@@ -265,13 +286,10 @@ describe('AuthService', () => {
       expect(usersService.findUserById).toHaveBeenCalledWith(12);
       expect(jwtService.sign).toHaveBeenCalledWith(
         {
+          token_use: 'workspace',
           userId: 12,
           username: 'coder',
-          sub: {
-            id: 12,
-            username: 'coder',
-            isAdmin: false
-          },
+          sub: '12',
           workspace: 7,
           tokenType: WORKSPACE_API_TOKEN_TYPE,
           scopes: [
@@ -279,7 +297,12 @@ describe('AuthService', () => {
             WORKSPACE_TOKEN_SCOPE_REPLAY_STATISTICS_WRITE
           ]
         },
-        { expiresIn: '1d' }
+        {
+          expiresIn: '1d',
+          issuer: 'coding-box',
+          audience: 'coding-box-workspace-token',
+          algorithm: 'HS256'
+        }
       );
     });
 

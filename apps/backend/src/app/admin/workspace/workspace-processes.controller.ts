@@ -1,5 +1,10 @@
 import {
-  Controller, Get, Delete, Param, UseGuards, ParseIntPipe, InternalServerErrorException
+  Controller,
+  Get,
+  Delete,
+  Param,
+  UseGuards,
+  ParseIntPipe
 } from '@nestjs/common';
 import {
   ApiTags, ApiOperation, ApiBearerAuth, ApiParam
@@ -24,11 +29,7 @@ export class WorkspaceProcessesController {
     name: 'workspace_id', required: true, description: 'Workspace ID', type: Number
   })
   async getProcesses(@Param('workspace_id', ParseIntPipe) wsId: number): Promise<ProcessDto[]> {
-    try {
-      return await this.jobQueueService.getAllWorkspaceJobs(wsId);
-    } catch (e) {
-      throw new InternalServerErrorException(e.message);
-    }
+    return this.jobQueueService.getAllWorkspaceJobs(wsId);
   }
 
   @Delete(':queueName/:id')
@@ -40,13 +41,9 @@ export class WorkspaceProcessesController {
   @ApiParam({ name: 'id', required: true })
   async deleteProcess(
     @Param('workspace_id', ParseIntPipe) wsId: number,
-      @Param('queueName') queueName: string,
-      @Param('id') id: string
+    @Param('queueName') queueName: string,
+    @Param('id') id: string
   ): Promise<boolean> {
-    try {
-      return await this.jobQueueService.cancelWorkspaceJob(wsId, queueName, id);
-    } catch (e) {
-      throw new InternalServerErrorException(e.message);
-    }
+    return this.jobQueueService.cancelWorkspaceJob(wsId, queueName, id);
   }
 }

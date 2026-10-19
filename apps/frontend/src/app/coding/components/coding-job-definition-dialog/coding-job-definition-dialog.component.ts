@@ -72,6 +72,7 @@ export interface CodingJobDefinitionDialogData {
 }
 
 export interface JobDefinition {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;

@@ -21,7 +21,7 @@ export class SimpleVariableBundleDto {
   })
   @IsNumber()
   @IsOptional()
-    id?: number;
+  id?: number;
 
   @ApiProperty({
     description: 'The name of the variable bundle',
@@ -30,7 +30,7 @@ export class SimpleVariableBundleDto {
   })
   @IsString()
   @IsOptional()
-    name?: string;
+  name?: string;
 
   @ApiProperty({
     description: 'The description of the variable bundle',
@@ -39,7 +39,7 @@ export class SimpleVariableBundleDto {
   })
   @IsString()
   @IsOptional()
-    description?: string;
+  description?: string;
 
   @ApiProperty({
     description: 'Case ordering mode for the bundle',
@@ -49,7 +49,7 @@ export class SimpleVariableBundleDto {
   })
   @IsString()
   @IsOptional()
-    caseOrderingMode?: 'continuous' | 'alternating';
+  caseOrderingMode?: 'continuous' | 'alternating';
 
   @ApiProperty({
     description: 'The variables in the bundle',
@@ -58,5 +58,5 @@ export class SimpleVariableBundleDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => VariableDto)
-    variables: VariableDto[];
+  variables: VariableDto[];
 }

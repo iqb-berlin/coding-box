@@ -59,7 +59,7 @@ export class AdminSystemNotificationController {
   @ApiOkResponse({ type: SystemNotificationDto })
   update(
     @Param('id', ParseIntPipe) id: number,
-      @Body(requestValidationPipe) input: UpdateSystemNotificationDto
+    @Body(requestValidationPipe) input: UpdateSystemNotificationDto
   ): Promise<SystemNotificationDto> {
     return this.service.update(id, input);
   }

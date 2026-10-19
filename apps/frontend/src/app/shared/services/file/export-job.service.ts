@@ -115,8 +115,8 @@ export class ExportJobService implements OnDestroy {
   private downloadSubscriptions = new Map<string, Subscription>();
   private incompleteDownloadCancellations = new Map<string, Subject<void>>();
   private itemMatrixExpirationTimers = new Map<
-  string,
-  ReturnType<typeof setTimeout>
+    string,
+    ReturnType<typeof setTimeout>
   >();
 
   private stopPolling$ = new Subject<void>();

@@ -19,29 +19,29 @@ import { CaseOrderingMode } from './job-definition.entity';
 @Entity({ name: 'coding_job_variable_bundle' })
 export class CodingJobVariableBundle {
   @PrimaryGeneratedColumn()
-    id: number;
+  id: number;
 
   @Column()
-    coding_job_id: number;
+  coding_job_id: number;
 
   @Column()
-    variable_bundle_id: number;
+  variable_bundle_id: number;
 
   @Column({
     type: 'enum',
     enum: ['continuous', 'alternating'],
     nullable: true
   })
-    case_ordering_mode: CaseOrderingMode | null;
+  case_ordering_mode: CaseOrderingMode | null;
 
   @CreateDateColumn()
-    created_at: Date;
+  created_at: Date;
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-    coding_job: CodingJob;
+  coding_job: CodingJob;
 
   @ManyToOne(() => VariableBundle)
   @JoinColumn({ name: 'variable_bundle_id' })
-    variable_bundle: VariableBundle;
+  variable_bundle: VariableBundle;
 }

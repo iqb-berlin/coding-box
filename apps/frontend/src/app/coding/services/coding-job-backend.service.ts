@@ -1,8 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { forkJoin, Observable, of } from 'rxjs';
-import { map, switchMap, tap } from 'rxjs/operators';
-import Keycloak from 'keycloak-js';
+import {
+  forkJoin, Observable, of
+} from 'rxjs';
+import {
+  map, switchMap, tap
+} from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type {
@@ -98,6 +101,7 @@ export function getDownloadFileName(
 }
 
 interface JobDefinitionApiResponse {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;
@@ -116,12 +120,12 @@ interface JobDefinitionApiResponse {
   planned_variable_usage?: Record<string, number>;
   plannedVariableUsage?: Record<string, number>;
   planned_variable_usage_by_status?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   plannedVariableUsageByStatus?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   duration_seconds?: number;
   max_coding_cases?: number | null;
@@ -166,19 +170,19 @@ export interface JobDefinitionDistributionSnapshot {
   };
   distributionByCoderId: Record<string, Record<string, number>>;
   doubleCodingInfo: Record<
-  string,
-  {
-    totalCases: number;
-    distinctCases?: number;
-    codingTasksTotal?: number;
-    doubleCodedCases: number;
-    singleCodedCasesAssigned: number;
-    doubleCodedCasesPerCoderId: Record<string, number>;
-  }
+    string,
+    {
+      totalCases: number;
+      distinctCases?: number;
+      codingTasksTotal?: number;
+      doubleCodedCases: number;
+      singleCodedCasesAssigned: number;
+      doubleCodedCasesPerCoderId: Record<string, number>;
+    }
   >;
   aggregationInfo: Record<
-  string,
-  { uniqueCases: number; totalResponses: number }
+    string,
+    { uniqueCases: number; totalResponses: number }
   >;
   matchingFlags: string[];
   pairDistribution: Record<string, number>;
@@ -195,6 +199,7 @@ export interface JobDefinitionDistributionSnapshot {
 }
 
 export interface JobDefinition {
+  creatorUserId?: number | null;
   id?: number;
   name?: string;
   description?: string | null;
@@ -208,8 +213,8 @@ export interface JobDefinition {
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
   plannedVariableUsageByStatus?: Record<
-  string,
-  DistributionVariableUsageByStatus
+    string,
+    DistributionVariableUsageByStatus
   >;
   durationSeconds?: number;
   maxCodingCases?: number | null;
@@ -312,11 +317,10 @@ export interface ManualCodingScopeSummary {
 export class CodingJobBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private keycloak = inject(Keycloak, { optional: true });
   private validationTaskStateService = inject(ValidationTaskStateService);
 
-  private getAuthHeader(authToken?: string): Record<string, string> {
-    return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+  private getAuthHeader(authToken?: string) {
+    return { Authorization: `Bearer ${authToken || localStorage.getItem('auth_token')}` };
   }
 
   private get authHeader(): Record<string, string> {
@@ -324,14 +328,7 @@ export class CodingJobBackendService {
   }
 
   private getFetchAuthHeader(authToken?: string): Record<string, string> {
-    if (authToken) {
-      return this.getAuthHeader(authToken);
-    }
-
-    const token = this.keycloak?.authenticated ?
-      this.keycloak.token :
-      undefined;
-    return this.getAuthHeader(token);
+    return this.getAuthHeader(authToken);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
@@ -508,9 +505,9 @@ export class CodingJobBackendService {
 
     return this.http
       .get<PaginatedResponse<unknown>>(url, {
-      params,
-      headers: this.authHeader
-    })
+        params,
+        headers: this.authHeader
+      })
       .pipe(
         map(response => ({
           ...response,
@@ -551,6 +548,30 @@ export class CodingJobBackendService {
     return this.http.put<CodingJob>(url, codingJob, {
       headers: this.getAuthHeader(authToken)
     });
+  }
+
+  updateCodingJobStatus(
+    workspaceId: number,
+    codingJobId: number,
+    status: 'active' | 'paused' | 'completed',
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/status`;
+    return this.http.put<CodingJob>(url, { status }, { headers: this.getAuthHeader(authToken) });
+  }
+
+  updateCodingJobComment(
+    workspaceId: number,
+    codingJobId: number,
+    comment: string,
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/comment`;
+    return this.http.put<CodingJob>(url, { comment }, { headers: this.getAuthHeader(authToken) });
+  }
+
+  deleteCodingJobs(workspaceId: number, ids: number[]): Observable<{ success: boolean }> {
+    return this.http.post<{ success: boolean }>(`${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/bulk-delete`, { ids }, { headers: this.authHeader });
   }
 
   deleteCodingJob(
@@ -660,19 +681,19 @@ export class CodingJobBackendService {
     includeDeriveErrorOnly?: boolean,
     excludeJobDefinitionId?: number
   ): Observable<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      deriveErrorResponseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      availableCasesWithDeriveError?: number;
-      uniqueCasesAfterAggregationWithDeriveError?: number;
-      isDerived: boolean;
-      coderTrainingRequired?: boolean;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        deriveErrorResponseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
+        isDerived: boolean;
+        coderTrainingRequired?: boolean;
+      }[]
     > {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
@@ -696,19 +717,19 @@ export class CodingJobBackendService {
     }
     params = params.set('_t', Date.now().toString());
     return this.http.get<
-    {
-      unitName: string;
-      variableId: string;
-      responseCount: number;
-      deriveErrorResponseCount: number;
-      casesInJobs: number;
-      availableCases: number;
-      uniqueCasesAfterAggregation: number;
-      availableCasesWithDeriveError?: number;
-      uniqueCasesAfterAggregationWithDeriveError?: number;
-      isDerived: boolean;
-      coderTrainingRequired?: boolean;
-    }[]
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        deriveErrorResponseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+        uniqueCasesAfterAggregation: number;
+        availableCasesWithDeriveError?: number;
+        uniqueCasesAfterAggregationWithDeriveError?: number;
+        isDerived: boolean;
+        coderTrainingRequired?: boolean;
+      }[]
     >(url, { params, headers: this.authHeader });
   }
 
@@ -803,10 +824,10 @@ export class CodingJobBackendService {
   updateCodingJobKeepalive(
     workspaceId: number,
     codingJobId: number,
-    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>,
+    status: 'active' | 'paused' | 'completed',
     authToken?: string
   ): void {
-    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/status`;
     fetch(url, {
       method: 'PUT',
       keepalive: true,
@@ -814,7 +835,7 @@ export class CodingJobBackendService {
         ...this.getFetchAuthHeader(authToken),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(codingJob)
+      body: JSON.stringify({ status })
     }).catch(() => undefined);
   }
 
@@ -938,8 +959,8 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
     return this.http
       .post<ApplyCodingResultsResponse>(url, options, {
-      headers: this.authHeader
-    })
+        headers: this.authHeader
+      })
       .pipe(
         tap(result => {
           if (result.success) {
@@ -955,10 +976,10 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/bulk-apply-results`;
     return this.http
       .post<BulkApplyCodingResultsResponse>(
-      url,
-      {},
-      { headers: this.authHeader }
-    )
+        url,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(result => {
           if (result.success && result.totalUpdatedResponses > 0) {
@@ -1022,12 +1043,13 @@ export class CodingJobBackendService {
       undefined;
     return this.http
       .get<JobDefinitionApiResponse[]>(url, {
-      headers: this.authHeader,
-      params
-    })
+        headers: this.authHeader,
+        params
+      })
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
+          creatorUserId: def.creatorUserId ?? null,
           name: def.name,
           description: def.description,
           status: def.status,
@@ -1128,10 +1150,10 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/refresh-apply`;
     return this.http
       .post<JobDefinitionRefreshApplyResultDto>(
-      url,
-      {},
-      { headers: this.authHeader }
-    )
+        url,
+        {},
+        { headers: this.authHeader }
+      )
       .pipe(
         tap(result => {
           if (result.success) {
@@ -1160,8 +1182,8 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-apply`;
     return this.http
       .post<JobDefinitionRefreshApplyResultDto>(url, jobDefinition, {
-      headers: this.authHeader
-    })
+        headers: this.authHeader
+      })
       .pipe(
         tap(result => {
           if (result.success) {

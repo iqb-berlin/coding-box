@@ -58,8 +58,7 @@ export class WsAdminComponent implements OnInit {
 
   private baseCodingManagerLinks: WsAdminNavLink[] = [
     { path: 'coding/statistics', label: 'ws-admin.coding-overview' },
-    { path: 'coding/manual', label: 'ws-admin.manual-coding' },
-    { path: 'coding/export', label: 'ws-admin.export' }
+    { path: 'coding/manual', label: 'ws-admin.manual-coding' }
   ];
 
   protected readonly navLinks = signal<WsAdminNavLink[]>([]);

@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { WorkspaceSettingsService } from './workspace-settings.service';
 import { WorkspaceSettingsController } from './workspace-settings.controller';
 import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -10,6 +11,7 @@ import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
 } from '../../../../../api-dto/workspaces/workspace-setting-defaults';
+import { JournalService } from '../database/services/shared/journal.service';
 
 interface TransactionalSettingRepositoryMock {
   findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
@@ -30,6 +32,7 @@ describe('WorkspaceSettingsController', () => {
   let settingRepository: SettingRepositoryMock;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     transactionalSettingRepository = {
       findOne: jest.fn(),
       create: jest.fn((setting: Partial<Setting>) => setting as Setting),
@@ -52,7 +55,7 @@ describe('WorkspaceSettingsController', () => {
       }
     };
     controller = new WorkspaceSettingsController(
-      settingRepository as unknown as Repository<Setting>
+      new WorkspaceSettingsService(settingRepository as unknown as Repository<Setting>)
     );
   });
 

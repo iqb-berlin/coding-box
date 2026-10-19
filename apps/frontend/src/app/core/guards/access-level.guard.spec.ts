@@ -9,18 +9,6 @@ import { AppService, AuthBootstrapStatus } from '../services/app.service';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { WorkspaceAccessService } from '../services/workspace-access.service';
 
-jest.mock('keycloak-angular', () => ({
-  createAuthGuard: jest.fn((
-    isAccessAllowed: (
-      route: ActivatedRouteSnapshot,
-      state: RouterStateSnapshot,
-      authData: { authenticated: boolean }
-    ) => Promise<boolean | UrlTree>
-  ) => (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => isAccessAllowed(route, state, {
-    authenticated: true
-  }))
-}));
-
 describe('Access Level Guard', () => {
   let mockAuthService: jest.Mocked<AuthService>;
   let mockUserService: jest.Mocked<UserService>;
@@ -43,6 +31,7 @@ describe('Access Level Guard', () => {
     authDataSubject = new BehaviorSubject(defaultAuthData);
 
     mockAuthService = {
+      isLoggedIn: jest.fn().mockReturnValue(true),
       getRoles: jest.fn()
     } as unknown as jest.Mocked<AuthService>;
 
@@ -79,6 +68,53 @@ describe('Access Level Guard', () => {
   });
 
   describe('Guard Implementation', () => {
+    it('requires an OIDC session before querying workspace users or assignments', async () => {
+      const { canActivateCodingJobs } = await import('./access-level.guard');
+      const redirect = {} as UrlTree;
+      const state = { url: '/workspace-admin/123/coding/my-jobs' } as RouterStateSnapshot;
+      mockAuthService.isLoggedIn.mockReturnValue(false);
+      mockRouter.createUrlTree.mockReturnValue(redirect);
+
+      const result = await TestBed.runInInjectionContext(() => canActivateCodingJobs()(
+        { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot,
+        state
+      ));
+
+      expect(result).toBe(redirect);
+      expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/home'], {
+        queryParams: { auth: 'session-expired', returnUrl: state.url }
+      });
+      expect(mockUserService.getUsers).not.toHaveBeenCalled();
+      expect(mockWorkspaceAccessService.hasAssignedCodingJobs).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])('checks assignment access for a coder without canCode: %s', async assigned => {
+      const { canActivateCodingJobs } = await import('./access-level.guard');
+      const denied = {} as UrlTree;
+      authDataSubject.next({ ...defaultAuthData, userId: 42 });
+      mockAuthService.getRoles.mockReturnValue([]);
+      mockUserService.getUsers.mockReturnValue(of([{
+        id: 42, name: 'Coder', isAdmin: false, accessLevel: 1, canCode: false
+      }]));
+      mockWorkspaceAccessService.hasAssignedCodingJobs.mockReturnValue(of(assigned));
+      mockRouter.createUrlTree.mockReturnValue(denied);
+
+      const result = await TestBed.runInInjectionContext(() => canActivateCodingJobs()(
+        { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot,
+        { url: '/workspace-admin/123/coding/my-jobs' } as RouterStateSnapshot
+      ));
+
+      expect(result).toBe(assigned ? true : denied);
+      expect(mockWorkspaceAccessService.hasAssignedCodingJobs).toHaveBeenCalledWith(123);
+      if (assigned) {
+        expect(mockRouter.createUrlTree).not.toHaveBeenCalled();
+      } else {
+        expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/home'], {
+          queryParams: { auth: 'access-denied', returnUrl: '/workspace-admin/123/coding/my-jobs' }
+        });
+      }
+    });
+
     it.each([true, false])('uses assignments when redirecting a coder from management: %s', async assigned => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       const denied = {} as UrlTree;
@@ -125,6 +161,22 @@ describe('Access Level Guard', () => {
       expect(mockRouter.createUrlTree).not.toHaveBeenCalledWith(['/workspace-admin/123/coding/my-jobs']);
     });
 
+    it.each([2, 3])('handles the former coding export URL at level %s', async level => {
+      const { canActivateCodingExport } = await import('./access-level.guard');
+      const route = { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot;
+      const state = { url: '/workspace-admin/123/coding/export' } as RouterStateSnapshot;
+      authDataSubject.next({ ...defaultAuthData, userId: 42 });
+      mockAuthService.getRoles.mockReturnValue([]);
+      mockUserService.getUsers.mockReturnValue(of([{
+        id: 42, name: 'Manager', isAdmin: false, accessLevel: level
+      }]));
+      const redirect = {} as UrlTree;
+      mockRouter.createUrlTree.mockReturnValue(redirect);
+      const result = await TestBed.runInInjectionContext(() => canActivateCodingExport()(route, state));
+      expect(result).toBe(level === 2 ? redirect : true);
+      if (level === 2) expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/workspace-admin/123/coding/manual']);
+      else expect(mockRouter.createUrlTree).not.toHaveBeenCalled();
+    });
     it('should be defined and importable', async () => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       expect(canActivateAccessLevel).toBeDefined();
@@ -505,23 +557,16 @@ describe('Access Level Guard', () => {
     });
   });
 
-  describe('Integration with Keycloak', () => {
-    it('should use keycloak-angular createAuthGuard', async () => {
-      // The guard is created using keycloak-angular's createAuthGuard
-      // which handles authentication validation
+  describe('Integration with backend OIDC auth', () => {
+    it('should create the access-level guard', async () => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       const guard = canActivateAccessLevel(1);
       expect(guard).toBeDefined();
     });
 
     it('should validate authentication status before checking access level', () => {
-      // The guard checks the authenticated property from AuthGuardData
-      // This is handled by keycloak-angular internally
-      const mockAuthData = { authenticated: true };
-      expect(mockAuthData.authenticated).toBe(true);
-
-      const mockUnauthData = { authenticated: false };
-      expect(mockUnauthData.authenticated).toBe(false);
+      mockAuthService.isLoggedIn.mockReturnValue(false);
+      expect(mockAuthService.isLoggedIn()).toBe(false);
     });
   });
 });

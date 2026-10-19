@@ -1,10 +1,7 @@
 import {
-  BadRequestException,
-  ExecutionContext,
-  INestApplication,
-  InternalServerErrorException
+  BadRequestException, ExecutionContext, INestApplication, ForbiddenException
 } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
@@ -12,13 +9,16 @@ import { AuthService } from '../../auth/service/auth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard } from './access-level.guard';
+import { UsersService } from '../../database/services/users';
 
 type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUsers' | 'findCoders' | 'setWorkspaceUsers'>>;
 
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
   let workspaceUsersService: WorkspaceUsersServiceMock;
-  let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId' | 'getWorkspaceTokenPolicy'>>;
+  let authService: jest.Mocked<Pick<AuthService,
+  'createToken' | 'createTokenForUserId' | 'getWorkspaceTokenPolicy' | 'canAccessWorkSpace'>>;
+  let usersService: jest.Mocked<Pick<UsersService, 'getUserIsAdmin' | 'getUserAccessLevel'>>;
 
   beforeEach(() => {
     workspaceUsersService = {
@@ -29,6 +29,9 @@ describe('WorkspaceUsersController', () => {
     authService = {
       createToken: jest.fn(),
       createTokenForUserId: jest.fn(),
+      canAccessWorkSpace: jest.fn().mockImplementation((userId: number, workspaceId: number) => Promise.resolve(
+        userId === 4 || (workspaceId === 3 && [1, 2, 3].includes(userId))
+      )),
       getWorkspaceTokenPolicy: jest.fn().mockReturnValue({
         scopes: {
           'replay:read': { maxDurationDays: 90 },
@@ -37,6 +40,12 @@ describe('WorkspaceUsersController', () => {
         }
       })
     };
+    usersService = {
+      getUserIsAdmin: jest.fn().mockImplementation((userId: number) => Promise.resolve(userId === 4)),
+      getUserAccessLevel: jest.fn().mockImplementation((userId: number, workspaceId: number) => Promise.resolve(
+        workspaceId === 3 && [1, 2, 3].includes(userId) ? userId : null
+      ))
+    };
 
     controller = new WorkspaceUsersController(
       workspaceUsersService as unknown as WorkspaceUsersService,
@@ -44,8 +53,8 @@ describe('WorkspaceUsersController', () => {
     );
   });
 
-  async function createTestApp(): Promise<INestApplication> {
-    const module: TestingModule = await Test.createTestingModule({
+  async function createTestApp(enforcePermissions = false): Promise<INestApplication> {
+    const builder = Test.createTestingModule({
       controllers: [WorkspaceUsersController],
       providers: [
         {
@@ -55,21 +64,26 @@ describe('WorkspaceUsersController', () => {
         {
           provide: AuthService,
           useValue: authService
+        },
+        {
+          provide: UsersService,
+          useValue: usersService
         }
       ]
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          context.switchToHttp().getRequest().user = { id: 12 };
+          const request = context.switchToHttp().getRequest();
+          request.user = { id: Number(request.headers['x-test-user-id'] || 12) };
           return true;
         }
-      })
-      .overrideGuard(WorkspaceGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(AccessLevelGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      });
+    if (!enforcePermissions) {
+      builder.overrideGuard(WorkspaceGuard).useValue({ canActivate: () => true });
+      builder.overrideGuard(AccessLevelGuard).useValue({ canActivate: () => true });
+    }
+    const module: TestingModule = await builder.compile();
 
     const app = module.createNestApplication();
     await app.init();
@@ -222,10 +236,17 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('findUsers', () => {
-    it('throws when workspace users cannot be retrieved', async () => {
-      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+    it('passes the original server failure to the global filter', async () => {
+      const error = new Error('database unavailable');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
 
-      await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
+    });
+
+    it('preserves workspace access errors', async () => {
+      const error = new ForbiddenException('Workspace access denied');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
     });
 
     it('parses the workspace id from the route before retrieving users', async () => {
@@ -307,12 +328,62 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('setWorkspaceUsers', () => {
+    it('requires workspace admin access level metadata and uses workspace_id route param', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        WorkspaceUsersController.prototype.setWorkspaceUsers
+      );
+
+      expect(guards).toEqual([JwtAuthGuard, WorkspaceGuard, AccessLevelGuard]);
+      expect(Reflect.getMetadata('accessLevel', WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(3);
+      expect(Reflect.getMetadata(PATH_METADATA, WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(':workspace_id/users');
+    });
+
+    it.each([
+      { userId: 1, workspaceId: 3 },
+      { userId: 2, workspaceId: 3 },
+      { userId: 3, workspaceId: 4 },
+      { userId: 5, workspaceId: 3 }
+    ])('denies user $userId changing membership in workspace $workspaceId', async ({ userId, workspaceId }) => {
+      const app = await createTestApp(true);
+      try {
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/${workspaceId}/users`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-test-user-id': String(userId) },
+          body: JSON.stringify([userId, 7])
+        });
+
+        expect(response.status).toBe(401);
+        expect(workspaceUsersService.setWorkspaceUsers).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    });
+
+    it.each([3, 4])('preserves user $userId authorized membership management', async userId => {
+      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+      const app = await createTestApp(true);
+      try {
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-test-user-id': String(userId) },
+          body: JSON.stringify([7, 8])
+        });
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toBe(true);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], userId);
+      } finally {
+        await app.close();
+      }
+    });
+
     it('delegates workspace user assignment', async () => {
       workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
 
-      await expect(controller.setWorkspaceUsers([7, 8], 3)).resolves.toBe(true);
+      await expect(controller.setWorkspaceUsers([7, 8], 3, { user: { id: 12 } })).resolves.toBe(true);
 
-      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], 12);
     });
 
     it('parses the workspace id from the route before delegating', async () => {
@@ -330,7 +401,7 @@ describe('WorkspaceUsersController', () => {
 
         expect(response.status).toBe(201);
         await expect(response.json()).resolves.toBe(true);
-        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8], 12);
       } finally {
         await app?.close();
       }

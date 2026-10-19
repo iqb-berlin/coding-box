@@ -1,5 +1,3 @@
-const keycloakUrl = 'https://keycloak.kodierbox.iqb.hu-berlin.de';
-
 interface WorkspaceStubOptions {
   workspaceId: number;
   userId?: number;
@@ -34,45 +32,15 @@ const createToken = (nonce: string, identity: string, roles: string[]): string =
 Cypress.Commands.add(
   'mockKeycloakAuthentication',
   (identity = 'e2e-user', roles = ['admin']) => {
-    let nonce = '';
-    cy.intercept(
-      'GET',
-      `${keycloakUrl}/realms/coding-box/protocol/openid-connect/auth*`,
-      request => {
-        const url = new URL(request.url);
-        nonce = url.searchParams.get('nonce') || '';
-        const redirectUri = url.searchParams.get('redirect_uri') || '';
-        const state = url.searchParams.get('state') || '';
-        request.redirect(
-          `${redirectUri}#code=e2e-code&state=${state}` +
-            '&session_state=e2e-session',
-          302
-        );
-      }
-    );
-    cy.intercept(
-      'POST',
-      `${keycloakUrl}/realms/coding-box/protocol/openid-connect/token`,
-      request => {
-        const token = createToken(nonce, identity, roles);
-        request.reply({
-          access_token: token,
-          refresh_token: token,
-          id_token: token,
-          expires_in: 3600,
-          refresh_expires_in: 3600,
-          token_type: 'Bearer',
-          session_state: 'e2e-session'
-        });
-      }
-    );
-    cy.intercept('GET', `${keycloakUrl}/realms/coding-box/account`, {
-      body: {
-        id: identity,
-        username: identity,
-        firstName: 'E2E',
-        lastName: 'User'
-      }
+    const token = createToken('', identity, roles);
+    // Keep existing workflow fixtures authenticated through the backend OIDC session.
+    cy.on('window:before:load', win => {
+      win.localStorage.setItem('auth_token', token);
+      win.localStorage.setItem('refresh_token', token);
+      win.localStorage.setItem('id_token', token);
+    });
+    cy.intercept('POST', '**/api/auth/refresh', {
+      body: { access_token: token, refresh_token: token, expires_in: 3600, token_type: 'Bearer' }
     });
   }
 );

@@ -5,6 +5,7 @@ import {
   ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ
@@ -27,10 +28,10 @@ export class WorkspacePlayerController {
   @Get(':workspace_id/player/:playerName')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @ApiParam({ name: 'workspace_id', type: Number })
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   async findPlayer(
     @WorkspaceId() workspaceId: number,
-      @Param('playerName') playerName: string
+    @Param('playerName') playerName: string
   ): Promise<FilesDto[]> {
     return this.workspacePlayerService.findPlayer(workspaceId, playerName);
   }
@@ -40,7 +41,7 @@ export class WorkspacePlayerController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findTestPersonUnits(
     @WorkspaceId() id: number,
-      @Param('testPerson') testPerson: string
+    @Param('testPerson') testPerson: string
   ): Promise<ResponseEntity[]> {
     return this.workspacePlayerService.findTestPersonUnits(id, testPerson);
   }
@@ -54,11 +55,11 @@ export class WorkspacePlayerController {
 
   @Get(':workspace_id/:unit/unitDef')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnitDef(
     @Param('workspace_id') workspace_id: number,
-      @Param('unit') unit: string
+    @Param('unit') unit: string
   ): Promise<FilesDto[]> {
     const unitIdToUpperCase = unit.toUpperCase();
     return this.workspacePlayerService.findUnitDef(
@@ -69,11 +70,11 @@ export class WorkspacePlayerController {
 
   @Get(':workspace_id/unit/:unitId')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findUnit(
     @WorkspaceId() id: number,
-      @Param('unitId') unitId: string
+    @Param('unitId') unitId: string
   ): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
     return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
@@ -81,7 +82,7 @@ export class WorkspacePlayerController {
 
   @Get(':workspace_id/booklet/:bookletId/units')
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'bookletId', type: String })
   @ApiQuery({ name: 'testPerson', type: String, required: false })
@@ -94,9 +95,9 @@ export class WorkspacePlayerController {
   })
   async getBookletUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('bookletId') bookletId: string,
-      @Query('testPerson') testPerson?: string,
-      @Query('includeReplayStatus') includeReplayStatus?: string
+    @Param('bookletId') bookletId: string,
+    @Query('testPerson') testPerson?: string,
+    @Query('includeReplayStatus') includeReplayStatus?: string
   ): Promise<BookletUnit[]> {
     return this.workspacePlayerService.getBookletUnits(
       workspaceId,

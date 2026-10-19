@@ -107,7 +107,7 @@ export class CodebookGenerationService {
                               profile.missings;
             if (Array.isArray(profileMissings) && profileMissings.length > 0) {
               missings = profileMissings.map(m => ({
-                code: m.code.toString(),
+                code: m.code,
                 label: m.label,
                 description: m.description
               }));
@@ -387,7 +387,8 @@ export class CodebookGenerationService {
 
       const variableCodings = this.filterVariableCodingsByAllowedVariables(
         scheme.variableCodings,
-        allowedVariables
+        allowedVariables,
+        unit.itemVariableReferences ?? scheme.variableCodings
       );
 
       if (variableCodings.length === 0) {
@@ -396,6 +397,8 @@ export class CodebookGenerationService {
 
       return {
         ...unit,
+        itemVariableReferences: unit.itemVariableReferences ??
+          scheme.variableCodings.map(({ id, alias }) => ({ id, alias })),
         scheme: JSON.stringify({
           ...scheme,
           variableCodings
@@ -411,10 +414,13 @@ export class CodebookGenerationService {
 
   private filterVariableCodingsByAllowedVariables(
     variableCodings: Array<{ id?: string; alias?: string }>,
-    allowedVariables: Set<string>
+    allowedVariables: Set<string>,
+    originalVariableReferences: ReadonlyArray<{ id?: string; alias?: string }>
   ): Array<{ id?: string; alias?: string }> {
     const aliasesInScheme = new Set(
-      variableCodings
+      // A preceding filter must not turn a removed public alias into the
+      // technical ID of a surviving variable when filters are intersected.
+      originalVariableReferences
         .map(variableCoding => this.normalizeVariableId(variableCoding.alias))
         .filter(alias => alias !== '')
     );

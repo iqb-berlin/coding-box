@@ -40,6 +40,7 @@ import {
   switchMap,
   takeUntil,
   takeWhile,
+  timeout,
   timer as rxjsTimer
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -271,8 +272,8 @@ interface P {
 }
 
 const RESPONSE_STATUS_INFO: Record<
-string,
-{ numeric: number; description: string }
+  string,
+  { numeric: number; description: string }
 > = {
   UNSET: {
     numeric: 0,
@@ -409,6 +410,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
+  private testResultsRequest = { page: 0, limit: 50, searchText: '' };
+  private testResultsRequestGeneration = 0;
   private deleteTaskSubscription: Subscription | null = null;
   private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -441,6 +444,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly testPerson = signal<P | null>(null);
   protected readonly selectedBooklet = signal<Booklet | string>('');
   protected readonly isLoading = signal<boolean>(true);
+  protected readonly testResultsLoadFailed = signal(false);
   protected readonly isUploadingResults = signal<boolean>(false);
   protected readonly isSearching = signal<boolean>(false);
   readonly isLoadingBooklets = signal<boolean>(false);
@@ -558,6 +562,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.testResultsRequestGeneration += 1;
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
@@ -756,20 +761,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.booklets() || this.booklets().length === 0) {
       return;
     }
-    this.unitTagsMap.set(new Map());
+    const next = new Map<number, UnitTagDto[]>();
     this.booklets().forEach(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
         booklet.units.forEach(unit => {
           if (unit.id && unit.tags) {
-            this.unitTagsMap.update(value => {
-              const next = new Map(value);
-              next.set(unit.id, unit.tags);
-              return next;
-            });
+            next.set(unit.id, unit.tags);
           }
         });
       }
     });
+    this.unitTagsMap.set(next);
   }
 
   loadAllUnitNotes(): void {
@@ -799,12 +801,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: notesByUnitId => {
-          Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-            this.unitNotesMap.update(value => {
-              const next = new Map(value);
+          this.unitNotesMap.update(value => {
+            const next = new Map(value);
+            Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
               next.set(Number(unitId), notes as UnitNoteDto[]);
-              return next;
             });
+            return next;
           });
         },
         error: () => {
@@ -1277,25 +1279,37 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     limit: number = 50,
     searchText: string = ''
   ): void {
+    this.testResultsRequestGeneration += 1;
+    const requestGeneration = this.testResultsRequestGeneration;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.testResultsRequest = { page, limit, searchText };
     this.isLoading.set(true);
+    this.testResultsLoadFailed.set(false);
     this.testResultService
-      .getTestResults(
-        this.appService.selectedWorkspaceId,
-        page,
-        limit,
-        searchText
-      ).pipe(takeUntilDestroyed(this.destroyRef))
+      .getTestResults(workspaceId, page, limit, searchText)
+      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) return;
           this.isLoading.set(false);
           this.isSearching.set(false);
           const { data, total } = response;
           this.updateTable(data, total);
         },
         error: () => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) return;
           this.isLoading.set(false);
+          this.isSearching.set(false);
+          this.testResultsLoadFailed.set(true);
         }
       });
+  }
+
+  retryTestResultsLoad(): void {
+    const { page, limit, searchText } = this.testResultsRequest;
+    this.createTestResultsList(page, limit, searchText);
   }
 
   private loadWorkspaceOverview(): void {
@@ -1519,12 +1533,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           }
 
           const dialogRef = this.dialog.open<
-          TestResultsLogAnomalyDetailsDialogComponent,
-          {
-            affectedBooklets: number;
-            rows: LogAnomalyDetailRow[];
-            truncated: boolean;
-          },
+            TestResultsLogAnomalyDetailsDialogComponent,
+            {
+              affectedBooklets: number;
+              rows: LogAnomalyDetailRow[];
+              truncated: boolean;
+            },
           TestResultsLogAnomalyDetailsDialogResult | undefined
           >(TestResultsLogAnomalyDetailsDialogComponent, {
             width: '900px',
@@ -1630,7 +1644,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     try {
       return await firstValueFrom(
-        getCodingFreshness.call(this.statisticsService, workspaceId)
+        getCodingFreshness.call(this.statisticsService, workspaceId).pipe(timeout(5000))
       );
     } catch {
       return null;
@@ -1642,7 +1656,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   ): Promise<{ overview: AppliedResultsOverview | null; loadFailed: boolean }> {
     try {
       const overview = await firstValueFrom(
-        this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+        this.testPersonCodingService.getAppliedResultsOverview(workspaceId).pipe(timeout(5000))
       );
       return {
         overview,
@@ -1661,8 +1675,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
     const map = (this.overview()?.responseStatusCounts || {}) as Record<
-    string,
-    number
+      string,
+      number
     >;
     const total = this.overviewResponseStatusTotal();
     return Object.entries(map)
@@ -2026,7 +2040,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       try {
         loadedBeforeOverview = await firstValueFrom(
-          this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+          this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(5000), takeUntil(cancellation)),
           { defaultValue: null }
         );
       } catch {
@@ -2074,7 +2088,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
         // A loaded overview is the reliable result. It may legitimately be unchanged
         // when an import only confirms already existing data.
-        for (let i = 0; i < 12; i += 1) {
+        const deadline = Date.now() + 20000;
+        for (let i = 0; i < 4 && Date.now() < deadline; i += 1) {
           if (cancelled) return { overview: beforeOverview, loaded: false, changed: false };
           progressState$?.next({
             title: 'Testcenter-Import',
@@ -2082,38 +2097,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             phase: 'refreshingOverview',
             phaseLabel: 'Übersicht wird aktualisiert',
             message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
-            percent: Math.min(95, Math.round(((i + 1) / 12) * 100)),
-            mode: 'determinate'
+            mode: 'indeterminate'
           });
 
           let current: TestResultsOverviewResponse | null = null;
           try {
             current = await firstValueFrom(
-              this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
+              this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(Math.min(5000, Math.max(1, deadline - Date.now()))), takeUntil(cancellation)),
               { defaultValue: null }
             );
           } catch {
             current = null;
           }
           if (!current) {
-            await sleep(1000);
+            if (Date.now() < deadline) await sleep(Math.min(1000, deadline - Date.now()));
             continue;
           }
           return { overview: current, loaded: true, changed: hasOverviewChanged(current) };
         }
-        let finalOverview: TestResultsOverviewResponse | null = null;
-        try {
-          finalOverview = await firstValueFrom(
-            this.testResultService.getWorkspaceOverview(workspaceId).pipe(takeUntil(cancellation)),
-            { defaultValue: null }
-          );
-        } catch {
-          finalOverview = null;
-        }
         return {
-          overview: finalOverview || this.overview() || beforeOverview,
-          loaded: !!finalOverview,
-          changed: !!finalOverview && hasOverviewChanged(finalOverview)
+          overview: this.overview() || beforeOverview,
+          loaded: false,
+          changed: false
         };
       };
 
@@ -2274,7 +2279,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             importedResponses: payload.importedResponses,
             overviewPending,
             overviewMessage: overviewPending ?
-              'Der Import wurde vom Server angenommen, aber die aktualisierte Übersicht konnte noch nicht zuverlässig gelesen werden. Bitte diese Ansicht in Kürze aktualisieren.' :
+              this.translateService.instant('testcenter-import.overview-pending') :
               undefined,
             codingFreshness: codingFreshness || undefined
           };
@@ -2316,8 +2321,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
         const optionsRef = this.dialog.open<
-        TestResultsUploadOptionsDialogComponent,
-        TestResultsUploadOptionsDialogData,
+          TestResultsUploadOptionsDialogComponent,
+          TestResultsUploadOptionsDialogData,
         TestResultsUploadOptionsDialogResult | undefined
         >(TestResultsUploadOptionsDialogComponent, {
           width: '600px',

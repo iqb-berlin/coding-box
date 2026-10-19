@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Brackets, In, Repository } from 'typeorm';
+import {
+  Brackets, EntityManager, In, Repository
+} from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import {
   Log,
@@ -22,6 +24,10 @@ import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
+
+export type TestResultsImportAuditContext = Pick<RecordAuditJournalEventInput,
+'workspaceId' | 'actorUserId' | 'actorType' | 'jobId' | 'correlationId'> & { source: 'upload' | 'testcenter' };
 
 export interface TestResultsMutationSummary {
   addedUnitIds: number[];
@@ -63,6 +69,7 @@ type ResponseInsertEntry = {
 @Injectable()
 export class PersonPersistenceService {
   private readonly logger = new Logger(PersonPersistenceService.name);
+  private importTransaction = false;
 
   constructor(
     @InjectRepository(Persons)
@@ -86,6 +93,45 @@ export class PersonPersistenceService {
     @InjectRepository(UnitLog)
     private unitLogRepository: Repository<UnitLog>
   ) { }
+
+  private forImportTransaction(manager: EntityManager): PersonPersistenceService {
+    const service = new PersonPersistenceService(
+      manager.getRepository(Persons),
+      manager.getRepository(Booklet),
+      manager.getRepository(Unit),
+      manager.getRepository(UnitLastState),
+      manager.getRepository(BookletInfo),
+      manager.getRepository(ResponseEntity),
+      manager.getRepository(ChunkEntity),
+      manager.getRepository(BookletLog),
+      manager.getRepository(Session),
+      manager.getRepository(UnitLog)
+    );
+    service.importTransaction = true;
+    return service;
+  }
+
+  private async completeWrites(writes: Promise<unknown>[]): Promise<void> {
+    // Batch and unit transactions must wait for every write before rolling back.
+    const results = await Promise.allSettled(writes);
+    for (const result of results) {
+      if (result.status === 'rejected') throw result.reason;
+    }
+  }
+
+  private recordImportBatch(manager: EntityManager, audit: TestResultsImportAuditContext,
+                            success: boolean, details: Record<string, unknown>) {
+    const { source, ...provenance } = audit;
+    return JournalService.recordEventInTransaction(manager, {
+      ...provenance,
+      eventType: 'TEST_RESULTS_IMPORTED',
+      entityType: 'workspace',
+      entityId: audit.workspaceId,
+      result: success ? 'success' : 'failure',
+      summary: 'Test results import batch committed',
+      details: { source, ...details }
+    });
+  }
 
   /**
    * Mark persons as not to be considered
@@ -160,8 +206,26 @@ export class PersonPersistenceService {
     workspace_id: number,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
-    issues: TestResultsUploadIssueDto[] = []
+    issues: TestResultsUploadIssueDto[] = [],
+    audit?: TestResultsImportAuditContext
   ): Promise<TestResultsMutationSummary> {
+    if (audit) {
+      if (audit.workspaceId !== workspace_id) throw new Error('Import audit workspace does not match');
+      const issueOffset = issues.length;
+      return this.personsRepository.manager.transaction(async manager => {
+        const result = await this.forImportTransaction(manager).processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
+        await this.recordImportBatch(manager, audit, !issues.slice(issueOffset).some(issue => issue.level === 'error'), {
+          phase: 'responses',
+          personCount: personList.length,
+          overwriteMode,
+          savedResponses: result.savedResponseCount || 0,
+          deletedResponses: result.deletedResponseCount || 0,
+          addedUnitCount: result.addedUnitIds.length,
+          changedUnitCount: result.changedUnitIds.length
+        });
+        return result;
+      });
+    }
     const mutationSummary = this.createMutationSummary();
     try {
       if (!Array.isArray(personList) || personList.length === 0) {
@@ -220,6 +284,7 @@ export class PersonPersistenceService {
 
       if (!persons || persons.length === 0) {
         this.logger.warn(`No persons found for workspace_id: ${workspace_id}`);
+        issues.push({ level: 'error', category: 'other', message: 'Die importierten Testpersonen konnten nach dem Speichern nicht gelesen werden.' });
         return mutationSummary;
       }
 
@@ -258,6 +323,8 @@ export class PersonPersistenceService {
               }
             }
           } catch (bookletError) {
+            if (this.importTransaction) throw bookletError;
+            issues.push({ level: 'error', category: 'other', message: `Testheft ${booklet.id} konnte nicht gespeichert werden: ${bookletError.message}` });
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${person.id}: ${bookletError.message}`
             );
@@ -271,7 +338,9 @@ export class PersonPersistenceService {
         `${totalResponsesProcessed} responses processed, ${totalResponsesSkipped} responses skipped.`
       );
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process person booklets: ${error.message}`);
+      issues.push({ level: 'error', category: 'other', message: `Testdaten konnten nicht vollständig gespeichert werden: ${error.message}` });
     }
 
     this.dedupeMutationSummaryUnitIds(mutationSummary);
@@ -311,6 +380,7 @@ export class PersonPersistenceService {
 
     if (!person.id) {
       this.logger.error(`Person ID is missing for person: ${person.group}-${person.login}-${person.code}`);
+      issues.push({ level: 'error', category: 'other', message: `Testheft ${booklet.id} konnte keiner gespeicherten Testperson zugeordnet werden.` });
       return mutationSummary;
     }
 
@@ -331,61 +401,72 @@ export class PersonPersistenceService {
       const batchSize = 10;
       for (let i = 0; i < booklet.units.length; i += batchSize) {
         const unitBatch = booklet.units.slice(i, i + batchSize);
-        await Promise.all(
+        await this.completeWrites(
           unitBatch.map(async unit => {
             if (!unit || !unit.id) {
               return;
             }
             try {
-              const existingUnit = await this.unitRepository.findOne({
-                where: { alias: unit.alias, name: unit.id, bookletid: targetBooklet.id }
-              });
+              const persistUnit = async (manager: EntityManager) => {
+                await manager.query("SET LOCAL statement_timeout = '120s'");
+                const summary = this.createMutationSummary();
+                const unitRepository = manager.getRepository(Unit);
+                const existingUnit = await unitRepository.findOne({
+                  where: { alias: unit.alias, name: unit.id, bookletid: targetBooklet.id }
+                });
 
-              if (existingUnit && overwriteMode === 'skip') {
-                mutationSummary.skippedExistingUnitIds?.push(existingUnit.id);
-                mutationSummary.skippedExistingResponseCount =
-                  (mutationSummary.skippedExistingResponseCount || 0) +
-                  this.countUnitResponses(unit);
-                return;
-              }
-
-              const isNewUnit = !existingUnit;
-              const targetUnit = existingUnit || await this.unitRepository.save(
-                this.unitRepository.create({
-                  alias: unit.alias,
-                  name: unit.id,
-                  bookletid: targetBooklet.id
-                })
-              );
-
-              if (targetUnit) {
-                await Promise.all([
-                  this.saveUnitLastState(unit, targetUnit),
-                  this.processChunks(unit, targetUnit, booklet)
-                ]);
-                const responseResult = await this.processSubforms(unit, targetUnit, overwriteMode);
-                mutationSummary.savedResponseCount =
-                  (mutationSummary.savedResponseCount || 0) + responseResult.saved;
-                mutationSummary.deletedResponseCount =
-                  (mutationSummary.deletedResponseCount || 0) + responseResult.deleted;
-                mutationSummary.skippedExistingResponseCount =
-                  (mutationSummary.skippedExistingResponseCount || 0) + responseResult.skipped;
-                if (isNewUnit) {
-                  mutationSummary.addedUnitIds.push(targetUnit.id);
-                  mutationSummary.addedResponseCount += responseResult.saved;
-                } else if (overwriteMode === 'merge' && responseResult.saved > 0) {
-                  mutationSummary.addedResponseIds?.push(...responseResult.addedResponseIds);
-                } else if (
-                  responseResult.saved > 0 ||
-                  responseResult.deleted > 0 ||
-                  overwriteMode === 'replace'
-                ) {
-                  mutationSummary.changedUnitIds.push(targetUnit.id);
-                  mutationSummary.changedResponseCount +=
-                    responseResult.saved + responseResult.deleted;
+                if (existingUnit && overwriteMode === 'skip') {
+                  summary.skippedExistingUnitIds?.push(existingUnit.id);
+                  summary.skippedExistingResponseCount =
+                    (summary.skippedExistingResponseCount || 0) +
+                    this.countUnitResponses(unit);
+                  return summary;
                 }
-              }
+
+                const isNewUnit = !existingUnit;
+                const targetUnit = existingUnit || await unitRepository.save(
+                  unitRepository.create({
+                    alias: unit.alias,
+                    name: unit.id,
+                    bookletid: targetBooklet.id
+                  })
+                );
+
+                if (targetUnit) {
+                  await this.completeWrites([
+                    this.saveUnitLastState(unit, targetUnit, manager),
+                    this.processChunks(unit, targetUnit, booklet, manager)
+                  ]);
+                  const responseResult = await this.processSubforms(unit, targetUnit, overwriteMode, manager);
+                  if (!responseResult.success) throw new Error('Antworten konnten nicht gespeichert werden.');
+                  summary.savedResponseCount = responseResult.saved;
+                  summary.deletedResponseCount = responseResult.deleted;
+                  summary.skippedExistingResponseCount = responseResult.skipped;
+                  if (isNewUnit) {
+                    summary.addedUnitIds.push(targetUnit.id);
+                    summary.addedResponseCount += responseResult.saved;
+                  } else if (overwriteMode === 'merge' && responseResult.saved > 0) {
+                    summary.addedResponseIds?.push(...responseResult.addedResponseIds);
+                  } else if (
+                    responseResult.saved > 0 ||
+                    responseResult.deleted > 0 ||
+                    overwriteMode === 'replace'
+                  ) {
+                    summary.changedUnitIds.push(targetUnit.id);
+                    summary.changedResponseCount +=
+                      responseResult.saved + responseResult.deleted;
+                  }
+                }
+                return summary;
+              };
+              // Audited batches already own a transaction. Concurrent nested
+              // savepoints on its shared query runner cannot isolate units.
+              const unitSummary = this.importTransaction ?
+                await persistUnit(this.unitRepository.manager) :
+                await this.unitRepository.manager.transaction(persistUnit);
+              this.mergeMutationSummary(mutationSummary, unitSummary);
             } catch (unitError) {
+              if (this.importTransaction) throw unitError;
               const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
               this.logger.error(msg);
               issues.push({ level: 'error', message: msg, category: 'other' });
@@ -405,9 +486,10 @@ export class PersonPersistenceService {
    * @param unit - The unit data with last state
    * @param savedUnit - The persisted unit entity
    */
-  async saveUnitLastState(unit: TcMergeUnit, savedUnit: Unit): Promise<void> {
+  async saveUnitLastState(unit: TcMergeUnit, savedUnit: Unit, manager?: EntityManager): Promise<void> {
+    const repository = manager?.getRepository(UnitLastState) || this.unitLastStateRepository;
     try {
-      const currentLastState = await this.unitLastStateRepository.find({
+      const currentLastState = await repository.find({
         where: { unitid: savedUnit.id }
       });
 
@@ -419,14 +501,16 @@ export class PersonPersistenceService {
         }));
 
         if (lastStateEntries.length > 0) {
-          await this.unitLastStateRepository.insert(lastStateEntries);
+          await repository.insert(lastStateEntries);
           if (lastStateEntries.length > 10) {
             this.logger.log(`Saved ${lastStateEntries.length} laststate entries for unit ${unit.id}`);
           }
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save last state for unit ${unit.id}: ${error.message}`);
+      if (manager) throw error;
     }
   }
 
@@ -441,17 +525,19 @@ export class PersonPersistenceService {
   async processSubforms(
     unit: TcMergeUnit,
     savedUnit: Unit,
-    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    manager?: EntityManager
   ): Promise<ResponseProcessingResult> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
-        return await this.saveSubformResponsesForUnit(savedUnit, subforms, overwriteMode);
+        return await this.saveSubformResponsesForUnit(savedUnit, subforms, overwriteMode, manager);
       }
       return {
         success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
       return {
         success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
@@ -466,11 +552,12 @@ export class PersonPersistenceService {
    * @param savedUnit - The persisted unit entity
    * @param booklet - The booklet containing the unit
    */
-  async processChunks(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet): Promise<void> {
+  async processChunks(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet, manager?: EntityManager): Promise<void> {
+    const repository = manager?.getRepository(ChunkEntity) || this.chunkRepository;
     try {
       // Always rewrite chunk rows for a unit to keep uploads idempotent
       // and avoid stale/duplicate chunk mappings in replay.
-      await this.chunkRepository.delete({ unitid: savedUnit.id });
+      await repository.delete({ unitid: savedUnit.id });
 
       if (!Array.isArray(unit.chunks) || unit.chunks.length === 0) {
         return;
@@ -513,13 +600,15 @@ export class PersonPersistenceService {
 
       const chunkEntries = Array.from(dedupeMap.values());
       if (chunkEntries.length > 0) {
-        await this.chunkRepository.insert(chunkEntries);
+        await repository.insert(chunkEntries);
         if (chunkEntries.length > 5) {
           this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id}`);
         }
       }
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
+      if (manager) throw error;
     }
   }
 
@@ -534,8 +623,10 @@ export class PersonPersistenceService {
   async saveSubformResponsesForUnit(
     savedUnit: Unit,
     subforms: TcMergeSubForms[],
-    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    manager?: EntityManager
   ): Promise<ResponseProcessingResult> {
+    const repository = manager?.getRepository(ResponseEntity) || this.responseRepository;
     try {
       let totalResponsesSaved = 0;
       let totalResponsesSkipped = 0;
@@ -568,7 +659,7 @@ export class PersonPersistenceService {
             const variables = Array.from(new Set(responseEntries.map(r => r.variableid)));
 
             if (overwriteMode === 'replace') {
-              const deleteResult = await this.responseRepository
+              const deleteResult = await repository
                 .createQueryBuilder()
                 .delete()
                 .from(ResponseEntity)
@@ -581,7 +672,7 @@ export class PersonPersistenceService {
 
             let filteredEntries = responseEntries;
             if (overwriteMode === 'skip' || overwriteMode === 'merge') {
-              const existing = await this.responseRepository.find({
+              const existing = await repository.find({
                 where: {
                   unitid: Number(savedUnit.id),
                   subform: subform.id,
@@ -603,9 +694,9 @@ export class PersonPersistenceService {
             const BATCH_SIZE = 1000;
             for (let i = 0; i < filteredEntries.length; i += BATCH_SIZE) {
               const batch = filteredEntries.slice(i, i + BATCH_SIZE);
-              const savedResponses = await this.responseRepository.save(batch);
+              const savedResponses = await repository.save(batch);
               addedResponseIds.push(
-                ...(await this.collectSavedResponseIds(savedResponses, batch))
+                ...(await this.collectSavedResponseIds(savedResponses, batch, repository, !!manager))
               );
             }
             totalResponsesSaved += filteredEntries.length;
@@ -621,6 +712,7 @@ export class PersonPersistenceService {
         addedResponseIds: Array.from(new Set(addedResponseIds))
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
       return {
         success: false,
@@ -634,7 +726,9 @@ export class PersonPersistenceService {
 
   private async collectSavedResponseIds(
     savedResponses: Array<Partial<ResponseEntity>>,
-    entries: ResponseInsertEntry[]
+    entries: ResponseInsertEntry[],
+    repository = this.responseRepository,
+    requireIds = false
   ): Promise<number[]> {
     const savedIds = this.uniquePositiveIds(
       (savedResponses || []).map(response => Number(response.id))
@@ -645,16 +739,17 @@ export class PersonPersistenceService {
     }
 
     try {
-      const fallbackIds = await this.findResponseIdsForEntries(entries);
+      const fallbackIds = await this.findResponseIdsForEntries(entries, repository);
       return this.uniquePositiveIds([...savedIds, ...fallbackIds]);
     } catch (error) {
+      if (requireIds || this.importTransaction) throw error;
       const detail = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn(`Could not resolve saved response ids after import: ${detail}`);
       return savedIds;
     }
   }
 
-  private async findResponseIdsForEntries(entries: ResponseInsertEntry[]): Promise<number[]> {
+  private async findResponseIdsForEntries(entries: ResponseInsertEntry[], repository = this.responseRepository): Promise<number[]> {
     const unitIds = this.uniquePositiveIds(entries.map(entry => entry.unitid));
     const variableIds = Array.from(new Set(
       entries
@@ -666,7 +761,7 @@ export class PersonPersistenceService {
     }
 
     const targetKeys = new Set(entries.map(entry => this.responseEntryKey(entry)));
-    const rows = await this.responseRepository.find({
+    const rows = await repository.find({
       where: {
         unitid: In(unitIds),
         variableid: In(variableIds)
@@ -757,7 +852,8 @@ export class PersonPersistenceService {
     persons: Person[],
     unitLogs: Log[],
     bookletLogs: Log[],
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    audit?: TestResultsImportAuditContext
   ): Promise<{
       success: boolean;
       totalBooklets: number;
@@ -765,6 +861,16 @@ export class PersonPersistenceService {
       totalLogsSkipped: number;
       issues?: TestResultsUploadIssueDto[];
     }> {
+    if (audit) {
+      if (persons.some(person => person.workspace_id !== audit.workspaceId)) throw new Error('Import audit workspace does not match');
+      return this.personsRepository.manager.transaction(async manager => {
+        const result = await this.forImportTransaction(manager).processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs);
+        await this.recordImportBatch(manager, audit, result.success, {
+          phase: 'logs', savedLogs: result.totalLogsSaved, skippedLogs: result.totalLogsSkipped, overwriteExistingLogs
+        });
+        return result;
+      });
+    }
     let totalBooklets = 0;
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
@@ -879,12 +985,18 @@ export class PersonPersistenceService {
               totalLogsSkipped += logsResult.skipped;
             } else {
               success = false;
+              issues.push({ level: 'error', category: 'other', message: `Logs für Testheft ${booklet.id} konnten nicht gespeichert werden.` });
             }
 
             await this.storeBookletSessions(booklet, existingBooklet, overwriteExistingLogs);
-            await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
+            const unitLogsResult = await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
+            totalLogsSaved += unitLogsResult.saved;
+            totalLogsSkipped += unitLogsResult.skipped;
+            success = success && unitLogsResult.success;
           } catch (error) {
+            if (this.importTransaction) throw error;
             success = false;
+            issues.push({ level: 'error', category: 'other', message: `Logs für Testheft ${booklet.id} konnten nicht vollständig gespeichert werden: ${error.message}` });
             this.logger.error(
               `Failed to process booklet ${booklet.id} for person ${originalPerson.code}: ${error.message}`
             );
@@ -905,6 +1017,7 @@ export class PersonPersistenceService {
         issues: issues.length > 0 ? issues : undefined
       };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Critical error while processing person logs: ${error.message}`
       );
@@ -912,7 +1025,8 @@ export class PersonPersistenceService {
         success: false,
         totalBooklets,
         totalLogsSaved,
-        totalLogsSkipped
+        totalLogsSkipped,
+        issues: [...issues, { level: 'error', category: 'other', message: `Logs konnten nicht vollständig gespeichert werden: ${error.message}` }]
       };
     }
   }
@@ -961,6 +1075,7 @@ export class PersonPersistenceService {
 
       return { success: true, saved: booklet.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for booklet ${booklet.id}: ${error.message}`
       );
@@ -1058,9 +1173,10 @@ export class PersonPersistenceService {
     person: Person,
     overwriteExistingLogs: boolean = true,
     issues?: TestResultsUploadIssueDto[]
-  ): Promise<void> {
+  ): Promise<{ success: boolean; saved: number; skipped: number }> {
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
+    let success = true;
 
     for (const unit of booklet.units) {
       if (!unit || !unit.id) {
@@ -1109,6 +1225,9 @@ export class PersonPersistenceService {
       if (result.success) {
         totalLogsSaved += result.saved;
         totalLogsSkipped += result.skipped;
+      } else {
+        success = false;
+        issues?.push({ level: 'error', category: 'other', message: `Logs für Unit ${unit.id} konnten nicht gespeichert werden.` });
       }
     }
 
@@ -1116,6 +1235,7 @@ export class PersonPersistenceService {
       `Processed unit logs for booklet ${booklet.id}: ` +
       `${totalLogsSaved} logs saved, ${totalLogsSkipped} logs skipped`
     );
+    return { success, saved: totalLogsSaved, skipped: totalLogsSkipped };
   }
 
   /**
@@ -1166,6 +1286,7 @@ export class PersonPersistenceService {
       this.logger.log(`Saved ${unit.logs.length} logs for unit ${unit.id}`);
       return { success: true, saved: unit.logs.length, skipped: 0 };
     } catch (error) {
+      if (this.importTransaction) throw error;
       this.logger.error(
         `Failed to save logs for unit ${unit.id}: ${error.message}`
       );

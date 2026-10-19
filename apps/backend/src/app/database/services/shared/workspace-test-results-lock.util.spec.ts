@@ -1,9 +1,71 @@
 import {
   tryWithWorkspaceTestResultsMutationLock,
-  withWorkspaceTestResultsMutationLock
+  withWorkspaceTestResultsMutationLock,
+  withWorkspaceTestResultsMutationTransaction,
+  withWorkspaceTestcenterImportLock
 } from './workspace-test-results-lock.util';
 
 describe('workspace test results mutation lock', () => {
+  it('admits repository transactions and session locks through the same pool before BEGIN', async () => {
+    let releaseImport: () => void = () => undefined;
+    const importPending = new Promise<void>(resolve => { releaseImport = resolve; });
+    let importStarted: () => void = () => undefined;
+    const started = new Promise<void>(resolve => { importStarted = resolve; });
+    const queryRunner = {
+      connect: jest.fn(), query: jest.fn().mockResolvedValue([{ locked: true }]), release: jest.fn()
+    };
+    const connection = { options: { extra: { max: 2 } }, createQueryRunner: jest.fn(() => queryRunner) };
+    const transactionManager = {};
+    const factory = { connection, transaction: jest.fn(async callback => callback(transactionManager)) };
+    const imported = withWorkspaceTestcenterImportLock(connection as never, 1, async () => {
+      importStarted();
+      await importPending;
+    });
+    await started;
+    const callback = jest.fn().mockResolvedValue('saved');
+    const mutation = withWorkspaceTestResultsMutationTransaction(factory as never, callback);
+    // Try operations must fail promptly rather than wait for the running import.
+    await expect(tryWithWorkspaceTestResultsMutationLock(connection as never, 2, jest.fn()))
+      .resolves.toEqual({ acquired: false });
+    expect(factory.transaction).not.toHaveBeenCalled();
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
+    releaseImport();
+    await imported;
+    await expect(mutation).resolves.toBe('saved');
+    expect(callback).toHaveBeenCalledWith(transactionManager);
+  });
+
+  it('returns transaction admission after BEGIN fails', async () => {
+    const factory = {
+      options: { extra: { max: 2 } },
+      transaction: jest.fn().mockRejectedValueOnce(new Error('BEGIN failed')).mockResolvedValueOnce('saved')
+    };
+    await expect(withWorkspaceTestResultsMutationTransaction(factory as never, jest.fn())).rejects.toThrow('BEGIN failed');
+    await expect(withWorkspaceTestResultsMutationTransaction(factory as never, jest.fn())).resolves.toBe('saved');
+  });
+
+  it('returns try-lock admission and releases the runner after connection failure', async () => {
+    const queryRunner = {
+      connect: jest.fn().mockRejectedValueOnce(new Error('connect failed')).mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ locked: true }]),
+      release: jest.fn()
+    };
+    const connection = { options: { extra: { max: 2 } }, createQueryRunner: () => queryRunner };
+    await expect(tryWithWorkspaceTestResultsMutationLock(connection as never, 1, jest.fn())).rejects.toThrow('connect failed');
+    await expect(tryWithWorkspaceTestResultsMutationLock(connection as never, 1, async () => 'saved'))
+      .resolves.toEqual({ acquired: true, value: 'saved' });
+    expect(queryRunner.release).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a concurrent import without executing its callback or releasing another run lock', async () => {
+    const queryRunner = { connect: jest.fn(), query: jest.fn().mockResolvedValue([{ locked: false }]), release: jest.fn() };
+    const callback = jest.fn();
+    await expect(withWorkspaceTestcenterImportLock({ createQueryRunner: () => queryRunner } as never, 1, callback)).rejects.toThrow('bereits');
+    expect(callback).not.toHaveBeenCalled();
+    expect(queryRunner.query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalled();
+  });
+
   it('releases the query runner when advisory lock acquisition fails', async () => {
     const lockError = new Error('lock failed');
     const queryRunner = {

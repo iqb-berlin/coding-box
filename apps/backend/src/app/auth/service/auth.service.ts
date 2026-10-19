@@ -2,11 +2,14 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../database/services/users';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { JournalService } from '../../database/services/shared/journal.service';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import {
   createWorkspaceTokenPolicy,
@@ -18,18 +21,43 @@ import {
   WorkspaceTokenPolicy,
   WorkspaceTokenScope
 } from '../workspace-token';
+import {
+  WORKSPACE_TOKEN_AUDIENCE,
+  WORKSPACE_TOKEN_ISSUER,
+  WORKSPACE_TOKEN_USE
+} from '../workspace-token.constants';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private journalService: JournalService
   ) {
   }
 
   getWorkspaceTokenPolicy(): WorkspaceTokenPolicy {
     return createWorkspaceTokenPolicy(this.getReplayReadMaxDurationDays());
+  }
+
+  async storeOidcProviderUser(user: CreateUserDto) {
+    const {
+      username, lastName, firstName, email, identity, issuer, isAdmin
+    } = user;
+    const userId = await this.usersService.createOidcProviderUser({
+      identity: identity,
+      username: username,
+      email: email,
+      lastName: lastName,
+      firstName: firstName,
+      issuer: issuer,
+      isAdmin: isAdmin
+    });
+    this.logger.log(`OIDC Provider User with id '${userId}' stored in database.`);
+    return userId;
   }
 
   async createToken(
@@ -52,7 +80,7 @@ export class AuthService {
         throw new ForbiddenException('Users need workspace admin access to create tokens for another identity');
       }
     }
-    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    return this.createAuditedWorkspaceToken(user, workspaceId, duration, scopes, requesterUserId ?? user.id);
   }
 
   async createTokenForUserId(
@@ -66,7 +94,24 @@ export class AuthService {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
 
-    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    return this.createAuditedWorkspaceToken(user, workspaceId, duration, scopes, userId);
+  }
+
+  private async createAuditedWorkspaceToken(user: UserFullDto, workspaceId: number, duration: number,
+                                            scopes: WorkspaceTokenScope[], actorUserId: number): Promise<string> {
+    const token = this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    await this.journalService.recordEvent({
+      workspaceId,
+      actorUserId,
+      actorType: 'user',
+      eventType: 'ACCESS_TOKEN_CREATED',
+      entityType: 'workspace-user',
+      entityId: user.id,
+      result: 'success',
+      summary: 'Workspace access token created',
+      details: { durationDays: duration, scopes: Array.from(new Set(scopes)) }
+    });
+    return token;
   }
 
   private signWorkspaceToken(
@@ -78,14 +123,20 @@ export class AuthService {
     this.validateWorkspaceTokenScopes(scopes);
     this.validateWorkspaceTokenDuration(duration, scopes);
     const payload = {
+      token_use: WORKSPACE_TOKEN_USE,
       userId: user.id,
       username: user.username,
-      sub: user,
+      sub: String(user.id),
       workspace: workspaceId,
       tokenType: WORKSPACE_API_TOKEN_TYPE,
       scopes: Array.from(new Set(scopes))
     };
-    const token = this.jwtService.sign(payload, { expiresIn: `${duration}d` });
+    const token = this.jwtService.sign(payload, {
+      expiresIn: `${duration}d`,
+      issuer: WORKSPACE_TOKEN_ISSUER,
+      audience: WORKSPACE_TOKEN_AUDIENCE,
+      algorithm: 'HS256'
+    });
     return JSON.stringify(token);
   }
 

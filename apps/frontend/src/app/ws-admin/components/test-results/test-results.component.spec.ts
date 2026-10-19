@@ -8,7 +8,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { provideHttpClient } from '@angular/common/http';
-import { Subject, of, throwError } from 'rxjs';
+import {
+  NEVER, Subject, of, throwError
+} from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { environment } from '../../../../environments/environment';
@@ -295,6 +297,26 @@ describe('TestResultsComponent', () => {
             })),
             invalidateCache: jest.fn(),
             flatResponseFilterRequests$: of(),
+            workspaceCacheInvalidated$: of(),
+            getFlatResponseFilterOptions: jest.fn().mockReturnValue(of({
+              codes: [],
+              groups: [],
+              logins: [],
+              booklets: [],
+              units: [],
+              responses: [],
+              responseStatuses: [],
+              tags: [],
+              processingDurations: [],
+              unitProgresses: [],
+              sessionBrowsers: [],
+              sessionOs: [],
+              sessionScreens: [],
+              sessionIds: []
+            })),
+            getFlatResponses: jest.fn().mockReturnValue(of({
+              data: [], total: 0, page: 1, limit: 100
+            })),
             previewDeleteTestResults: jest.fn().mockReturnValue(of(null)),
             createDeleteTestResultsJob: jest.fn(),
             previewDeleteTestLogs: jest.fn().mockReturnValue(of(null)),
@@ -337,11 +359,16 @@ describe('TestResultsComponent', () => {
         }
       },
       'test-results-page': {
+        loading: 'Testergebnisse werden geladen...',
+        retry: 'Wiederholen',
         'coding-status': {
           'manual-title': 'Kodierstatus wird manuell aktualisiert',
           'manual-text': 'Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus nur bei Bedarf.',
           refresh: 'Kodierstatus aktualisieren'
         }
+      },
+      'search-filter': {
+        'test-results-load-error': 'Testergebnisse konnten nicht geladen werden.'
       }
     });
     translateService.use('de');
@@ -356,6 +383,368 @@ describe('TestResultsComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('renders delayed initial errors and retries through native zoneless notifications', async () => {
+    fixture.destroy();
+    const service = TestBed.inject(TestResultService);
+    const first = new Subject<{ data: []; total: number }>();
+    const retry = new Subject<{ data: { id: number; code: string; group: string; login: string }[]; total: number }>();
+    jest.mocked(service.getTestResults).mockClear();
+    jest.mocked(service.getTestResults).mockReturnValueOnce(first).mockReturnValueOnce(retry);
+    fixture = TestBed.createComponent(TestResultsComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('Testergebnisse werden geladen...');
+    first.error(new Error('temporary failure'));
+    await fixture.whenStable();
+    const notice = fixture.nativeElement.querySelector('.test-results-load-error') as HTMLElement;
+    expect(notice.textContent).toContain('Testergebnisse konnten nicht geladen werden.');
+    expect(fixture.nativeElement.textContent).not.toContain('Keine Testergebnisse vorhanden');
+    (notice.querySelector('button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Testergebnisse werden geladen...');
+    retry.next({
+      data: [{
+        id: 1, code: 'P1', group: 'G1', login: 'recovered-person'
+      }],
+      total: 1
+    });
+    retry.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('recovered-person');
+    expect(component.isLoading()).toBe(false);
+    expect(component.testResultsLoadFailed()).toBe(false);
+  });
+
+  it('does not present a previous empty list as the outcome of a pending or failed search', async () => {
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.data-card .empty-state-container')).not.toBeNull();
+    const response = new Subject<{ data: []; total: number }>();
+    jest.mocked(TestBed.inject(TestResultService).getTestResults).mockReturnValueOnce(response);
+    component.isSearching.set(true);
+    component.createTestResultsList(0, 50, 'query');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.data-card .empty-state-container')).toBeNull();
+    response.error(new Error('search failed'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.data-card .empty-state-container')).toBeNull();
+    component.retryTestResultsLoad();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.data-card .empty-state-container')).not.toBeNull();
+  });
+
+  it('keeps the newest delayed search visible when the older request fails later', async () => {
+    const older = new Subject<{ data: []; total: number }>();
+    const latest = new Subject<{ data: { id: number; code: string; group: string; login: string }[]; total: number }>();
+    jest.mocked(TestBed.inject(TestResultService).getTestResults).mockReturnValueOnce(older).mockReturnValueOnce(latest);
+    fixture.autoDetectChanges();
+    component.createTestResultsList(0, 50, 'older');
+    component.createTestResultsList(0, 50, 'latest');
+    latest.next({
+      data: [{
+        id: 2, code: 'P2', group: 'G1', login: 'current-person'
+      }],
+      total: 1
+    });
+    latest.complete();
+    await fixture.whenStable();
+    older.error(new Error('obsolete failure'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('current-person');
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+    expect(component.isLoading()).toBe(false);
+  });
+
+  it('cancels the pending person list across a workspace change and return', async () => {
+    const response = new Subject<{ data: []; total: number }>();
+    jest.mocked(TestBed.inject(TestResultService).getTestResults).mockReturnValueOnce(response);
+    component.createTestResultsList();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(response.observed).toBe(false);
+    response.next({ data: [], total: 10 });
+    await fixture.whenStable();
+    expect(component.totalRecords()).toBe(0);
+    expect(component.testResultsLoadFailed()).toBe(false);
+  });
+
+  it('shows an initial load error and reloads results through the visible retry action', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getTestResults: jest.Mock;
+    };
+    fixture.destroy();
+    testResultService.getTestResults.mockClear();
+    testResultService.getTestResults.mockReturnValueOnce(
+      throwError(() => new Error('temporary failure'))
+    );
+    fixture = TestBed.createComponent(TestResultsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.isLoading()).toBe(false);
+    expect(component.dataSource).toBeUndefined();
+    expect(component.testResultsLoadFailed()).toBe(true);
+    const errorNotice: HTMLElement = fixture.nativeElement.querySelector('.test-results-load-error');
+    expect(errorNotice.textContent).toContain('Testergebnisse konnten nicht geladen werden.');
+    expect(fixture.nativeElement.textContent).not.toContain('Keine Testergebnisse vorhanden');
+    const retryButton = errorNotice.querySelector('button') as HTMLButtonElement;
+    expect(retryButton.textContent).toContain('Wiederholen');
+
+    const retryResponse = new Subject<{
+      data: { id: number; code: string; group: string; login: string }[];
+      total: number;
+    }>();
+    testResultService.getTestResults.mockReturnValueOnce(retryResponse);
+    retryButton.click();
+    fixture.detectChanges();
+
+    expect(testResultService.getTestResults).toHaveBeenNthCalledWith(2, 1, 0, 50, '');
+    expect(component.isLoading()).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain('Testergebnisse werden geladen...');
+    expect(fixture.nativeElement.textContent).not.toContain('Keine Testergebnisse vorhanden');
+
+    retryResponse.next({
+      data: [{
+        id: 1,
+        code: 'P1',
+        group: 'G1',
+        login: 'person-1'
+      }],
+      total: 1
+    });
+    retryResponse.complete();
+    fixture.detectChanges();
+
+    expect(component.isLoading()).toBe(false);
+    expect(component.testResultsLoadFailed()).toBe(false);
+    expect(component.dataSource.data).toHaveLength(1);
+    expect(component.totalRecords()).toBe(1);
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('person-1');
+  });
+
+  it('ends a failed search without replacing existing results and permits a retry', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getTestResults: jest.Mock;
+    };
+    testResultService.getTestResults.mockReturnValueOnce(of({
+      data: [{
+        id: 1,
+        code: 'P1',
+        group: 'G1',
+        login: 'person-1'
+      }],
+      total: 1
+    }));
+    component.createTestResultsList();
+    const previousDataSource = component.dataSource;
+    testResultService.getTestResults.mockReturnValueOnce(
+      throwError(() => new Error('temporary failure'))
+    );
+    component.isSearching.set(true);
+
+    component.createTestResultsList(0, 50, 'person');
+
+    expect(component.isLoading()).toBe(false);
+    expect(component.isSearching()).toBe(false);
+    expect(component.testResultsLoadFailed()).toBe(true);
+    expect(component.dataSource).toBe(previousDataSource);
+    expect(component.totalRecords()).toBe(1);
+
+    testResultService.getTestResults.mockReturnValueOnce(of({ data: [], total: 0 }));
+    component.retryTestResultsLoad();
+
+    expect(testResultService.getTestResults).toHaveBeenLastCalledWith(1, 0, 50, 'person');
+    expect(component.testResultsLoadFailed()).toBe(false);
+    expect(component.dataSource.data).toEqual([]);
+    expect(component.totalRecords()).toBe(0);
+  });
+
+  it.each(['before', 'after'])(
+    'ignores an older search error arriving %s the latest search succeeds',
+    errorOrder => {
+      const testResultService = TestBed.inject(TestResultService) as unknown as {
+        getTestResults: jest.Mock;
+      };
+      const olderResponse = new Subject<{ data: []; total: number }>();
+      const latestResponse = new Subject<{
+        data: { id: number; code: string; group: string; login: string }[];
+        total: number;
+      }>();
+      testResultService.getTestResults
+        .mockReturnValueOnce(olderResponse)
+        .mockReturnValueOnce(latestResponse);
+      component.createTestResultsList(0, 50, 'older');
+      component.isSearching.set(true);
+      component.createTestResultsList(0, 50, 'latest');
+
+      if (errorOrder === 'before') {
+        olderResponse.error(new Error('outdated failure'));
+        expect(component.isLoading()).toBe(true);
+        expect(component.isSearching()).toBe(true);
+        expect(component.testResultsLoadFailed()).toBe(false);
+      }
+      latestResponse.next({
+        data: [{
+          id: 2, code: 'P2', group: 'G2', login: 'latest-person'
+        }],
+        total: 1
+      });
+      latestResponse.complete();
+      if (errorOrder === 'after') {
+        olderResponse.error(new Error('outdated failure'));
+      }
+      fixture.detectChanges();
+
+      expect(component.isLoading()).toBe(false);
+      expect(component.isSearching()).toBe(false);
+      expect(component.testResultsLoadFailed()).toBe(false);
+      expect(component.dataSource.data[0].login).toBe('latest-person');
+      expect(component.totalRecords()).toBe(1);
+      expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+      expect(fixture.nativeElement.textContent).toContain('latest-person');
+    }
+  );
+
+  it('preserves the latest search failure when an older search succeeds later', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getTestResults: jest.Mock;
+    };
+    const olderResponse = new Subject<{
+      data: { id: number; code: string; group: string; login: string }[];
+      total: number;
+    }>();
+    const latestResponse = new Subject<{ data: []; total: number }>();
+    const previousDataSource = component.dataSource;
+    testResultService.getTestResults
+      .mockReturnValueOnce(olderResponse)
+      .mockReturnValueOnce(latestResponse);
+    component.createTestResultsList(0, 50, 'older');
+    component.createTestResultsList(0, 50, 'latest');
+    latestResponse.error(new Error('current failure'));
+
+    olderResponse.next({
+      data: [{
+        id: 1, code: 'P1', group: 'G1', login: 'outdated-person'
+      }],
+      total: 1
+    });
+    olderResponse.complete();
+    fixture.detectChanges();
+
+    expect(component.dataSource).toBe(previousDataSource);
+    expect(component.totalRecords()).toBe(0);
+    expect(component.testResultsLoadFailed()).toBe(true);
+    expect(fixture.nativeElement.querySelector('.test-results-load-error')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('outdated-person');
+    component.retryTestResultsLoad();
+    expect(testResultService.getTestResults).toHaveBeenLastCalledWith(1, 0, 50, 'latest');
+  });
+
+  it.each(['success', 'error'])(
+    'ignores a pending request %s after switching workspaces',
+    outcome => {
+      const testResultService = TestBed.inject(TestResultService) as unknown as {
+        getTestResults: jest.Mock;
+      };
+      const pendingResponse = new Subject<{ data: []; total: number }>();
+      const previousDataSource = component.dataSource;
+      testResultService.getTestResults.mockReturnValueOnce(pendingResponse);
+      component.createTestResultsList();
+      appService.selectedWorkspaceId = 2;
+
+      if (outcome === 'success') {
+        pendingResponse.next({ data: [], total: 10 });
+        pendingResponse.complete();
+      } else {
+        pendingResponse.error(new Error('previous workspace failure'));
+      }
+
+      expect(component.dataSource).toBe(previousDataSource);
+      expect(component.totalRecords()).toBe(0);
+      expect(component.testResultsLoadFailed()).toBe(false);
+      expect(component.isLoading()).toBe(true);
+    }
+  );
+
+  it.each(['success', 'error'])(
+    'ignores a pending request %s after destroying the component',
+    outcome => {
+      const testResultService = TestBed.inject(TestResultService) as unknown as {
+        getTestResults: jest.Mock;
+      };
+      const pendingResponse = new Subject<{ data: []; total: number }>();
+      const previousDataSource = component.dataSource;
+      testResultService.getTestResults.mockReturnValueOnce(pendingResponse);
+      component.createTestResultsList();
+      fixture.destroy();
+
+      if (outcome === 'success') {
+        pendingResponse.next({ data: [], total: 10 });
+        pendingResponse.complete();
+      } else {
+        pendingResponse.error(new Error('late failure'));
+      }
+
+      expect(component.dataSource).toBe(previousDataSource);
+      expect(component.totalRecords()).toBe(0);
+      expect(component.testResultsLoadFailed()).toBe(false);
+      expect(component.isLoading()).toBe(true);
+    }
+  );
+
+  it.each(['pending', 'failed'])(
+    'loads the flat table independently of a %s initial person-list request',
+    personListState => {
+      const testResultService = TestBed.inject(TestResultService) as unknown as {
+        getTestResults: jest.Mock;
+        getFlatResponses: jest.Mock;
+      };
+      fixture.destroy();
+      const pendingResponse = new Subject<{ data: []; total: number }>();
+      testResultService.getTestResults.mockReturnValueOnce(pendingResponse);
+      fixture = TestBed.createComponent(TestResultsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      if (personListState === 'failed') {
+        pendingResponse.error(new Error('person-list failure'));
+        fixture.detectChanges();
+      }
+      expect(component.dataSource).toBeUndefined();
+
+      const viewToggle = Array.from(
+        fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>
+      ).find(button => button.textContent?.includes('Tabellenansicht')) as HTMLButtonElement;
+      viewToggle.click();
+      fixture.detectChanges();
+
+      expect(component.isTableView()).toBe(true);
+      expect(fixture.nativeElement.querySelector('coding-box-test-results-flat-table')).not.toBeNull();
+      expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+        1, expect.objectContaining({ page: 1, limit: 100 }), { suppressGlobalHttpError: true }
+      );
+      expect(fixture.nativeElement.querySelector('.test-results-load-error')).toBeNull();
+      expect(fixture.nativeElement.textContent).not.toContain('Testergebnisse werden geladen...');
+      expect(fixture.nativeElement.textContent).not.toContain('Keine Testergebnisse vorhanden');
+
+      viewToggle.click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('coding-box-test-results-flat-table')).toBeNull();
+      if (personListState === 'failed') {
+        expect(fixture.nativeElement.querySelector('.test-results-load-error')).not.toBeNull();
+      } else {
+        expect(fixture.nativeElement.textContent).toContain('Testergebnisse werden geladen...');
+        pendingResponse.complete();
+      }
+    }
+  );
 
   it('should not load log anomaly summary automatically on init', () => {
     const testResultService = TestBed.inject(TestResultService) as unknown as {
@@ -980,6 +1369,42 @@ describe('TestResultsComponent', () => {
     expect(component.codingFreshnessWarnings()).toEqual([]);
     expect(component.hasCodingFreshnessWarning()).toBe(false);
     expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('shows an import result even when all post-import overview requests never respond', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    const progressClose = jest.fn();
+    service.getWorkspaceOverview.mockReturnValueOnce(of({})).mockReturnValue(NEVER);
+    const statistics = TestBed.inject(CodingStatisticsService) as unknown as { getCodingFreshness: jest.Mock };
+    const coding = TestBed.inject(TestPersonCodingService) as unknown as { getAppliedResultsOverview: jest.Mock };
+    statistics.getCodingFreshness.mockReturnValue(NEVER);
+    coding.getAppliedResultsOverview.mockReturnValue(NEVER);
+    dialog.open.mockImplementation((type: unknown) => {
+      if (type === TestCenterImportComponent) {
+        return {
+          afterClosed: () => of({
+            didImport: true,
+            resultType: 'responses',
+            importedResponses: true,
+            uploadResult: { success: true, issues: [] }
+          })
+        };
+      }
+      if (type === TestResultsImportProgressDialogComponent) return { close: progressClose };
+      return { close: jest.fn(), afterClosed: () => of(undefined) };
+    });
+    jest.useFakeTimers();
+    try {
+      await component.testCenterImport();
+      await jest.advanceTimersByTimeAsync(31000);
+      expect(progressClose).toHaveBeenCalled();
+      const resultCall = dialog.open.mock.calls.find(([type]) => type === TestResultsUploadResultDialogComponent);
+      expect(resultCall?.[1].data.result).toMatchObject({ overviewPending: true });
+      expect(resultCall?.[1].data.manualAppliedResultsOverviewLoadFailed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should show second auto-coding as waiting while manual coding results are still open', () => {

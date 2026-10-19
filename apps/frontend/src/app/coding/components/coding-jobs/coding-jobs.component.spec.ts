@@ -6,6 +6,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { of, Subject, throwError } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -74,6 +75,7 @@ describe('CodingJobsComponent', () => {
       ),
       getBulkCodingProgress: jest.fn().mockReturnValue(of({})),
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
+      deleteCodingJobs: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
       prepareCodingJobReview: jest
         .fn()
@@ -154,6 +156,12 @@ describe('CodingJobsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         provideZonelessChangeDetection(),
         {
           provide: CodingJobBackendService,
@@ -178,6 +186,12 @@ describe('CodingJobsComponent', () => {
       .overrideComponent(CodingJobsComponent, {
         add: {
           providers: [
+            {
+              provide: CodingPermissionsService,
+              useValue: {
+                load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+              }
+            },
             {
               provide: CodingJobBackendService,
               useValue: codingJobBackendServiceMock
@@ -759,6 +773,16 @@ describe('CodingJobsComponent', () => {
     ).toBe(false);
   });
 
+  it.each(['review', 'results_applied'])('hides restart for a protected %s job with open units', status => {
+    const job = {
+      ...mockCodingJobs[0],
+      status
+    } as CodingJob;
+
+    expect(component.canStartCodingJob(job)).toBe(true);
+    expect(component.canRestartCodingJob(job)).toBe(false);
+  });
+
   it('hides job management actions without coding-manager access', async () => {
     component.canManageCodingJobs.set(false);
     fixture.detectChanges();
@@ -865,9 +889,8 @@ describe('CodingJobsComponent', () => {
       await jest.advanceTimersByTimeAsync(0); // Dialog afterClosed
       await jest.runOnlyPendingTimersAsync(); // All deletions
 
-      expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(
-        1
-      );
+      expect(codingJobBackendServiceMock.deleteCodingJobs).toHaveBeenCalledWith(1, jobs.map(job => job.id));
+      expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
       expect(matSnackBarMock.open).toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
@@ -878,6 +901,18 @@ describe('CodingJobsComponent', () => {
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks mixed-owner bulk deletion before confirmation or a request', () => {
+    const permissions = component.permissions;
+    (permissions.canEdit as jest.Mock).mockImplementation(job => job.creatorUserId === 7);
+    const jobs = component.dataSource.data.map((job, index) => ({ ...job, id: index + 1, creatorUserId: index === 0 ? 7 : 8 }));
+    component.selection.clear();
+    component.selection.select(...jobs);
+    expect(component.canDeleteSelectedJobs()).toBe(false);
+    component.bulkDeleteCodingJobs();
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.deleteCodingJobs).not.toHaveBeenCalled();
   });
 
   it('should handle window focus when auto reload is enabled', () => {
@@ -1008,6 +1043,39 @@ describe('CodingJobsComponent', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it.each(['review', 'results_applied'])('does not restart a protected %s job programmatically', status => {
+    const job = {
+      ...mockCodingJobs[0],
+      status
+    } as CodingJob;
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of(true)
+    });
+
+    component.restartCodingJob(job);
+
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('does not restart a job that becomes protected while confirmation is open', () => {
+    const job = { ...mockCodingJobs[0] } as CodingJob;
+    const confirmation = new Subject<boolean>();
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => confirmation
+    });
+
+    component.restartCodingJob(job);
+    job.status = 'review';
+    confirmation.next(true);
+    confirmation.complete();
+
+    expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.startCodingJob).not.toHaveBeenCalled();
   });
 
   it('should calculate next id correctly', () => {

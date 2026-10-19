@@ -1,3 +1,9 @@
+import { ImportResultDto } from './import-options.dto';
+
+export type TestcenterImportPhase =
+  | 'fetching-responses' | 'saving-responses'
+  | 'fetching-logs' | 'saving-logs' | 'finalizing';
+
 export type ImportWorkspaceOptionKey =
   | 'definitions'
   | 'units'
@@ -29,4 +35,9 @@ export interface ImportWorkspaceFilesProgressDto {
   options: ImportWorkspaceOptionProgressDto[];
   error?: string;
   updatedAt: number;
+  startedAt?: number;
+  phaseStartedAt?: number;
+  phase?: TestcenterImportPhase;
+  currentGroup?: string;
+  result?: ImportResultDto;
 }

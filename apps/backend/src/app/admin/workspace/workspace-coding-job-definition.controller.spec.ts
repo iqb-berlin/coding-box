@@ -54,13 +54,13 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.updateJobDefinition(5, 42, { status: 'approved' })).resolves.toMatchObject({
+    await expect(controller.updateJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } } as never)).resolves.toMatchObject({
       id: 42,
       workspace_id: 5,
       status: 'approved'
     });
 
-    expect(jobDefinitionService.updateJobDefinition).toHaveBeenCalledWith(42, 5, { status: 'approved' });
+    expect(jobDefinitionService.updateJobDefinition).toHaveBeenCalledWith(42, 5, { status: 'approved' }, 7);
   });
 
   it('approves job definitions through the workspace-scoped service path', async () => {
@@ -73,13 +73,13 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.approveJobDefinition(5, 42, { status: 'approved' })).resolves.toMatchObject({
+    await expect(controller.approveJobDefinition(5, 42, { status: 'approved' }, { user: { id: 7 } } as never)).resolves.toMatchObject({
       id: 42,
       workspace_id: 5,
       status: 'approved'
     });
 
-    expect(jobDefinitionService.approveJobDefinition).toHaveBeenCalledWith(42, 5, { status: 'approved' });
+    expect(jobDefinitionService.approveJobDefinition).toHaveBeenCalledWith(42, 5, { status: 'approved' }, 7);
   });
 
   it('deletes job definitions through the workspace-scoped service path', async () => {
@@ -88,12 +88,12 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.deleteJobDefinition(5, 42)).resolves.toEqual({
+    await expect(controller.deleteJobDefinition(5, 42, { user: { id: 7 } } as never)).resolves.toEqual({
       success: true,
       message: 'Job definition deleted successfully'
     });
 
-    expect(jobDefinitionService.deleteJobDefinition).toHaveBeenCalledWith(42, 5);
+    expect(jobDefinitionService.deleteJobDefinition).toHaveBeenCalledWith(42, 5, 7);
   });
 
   it('creates coding jobs through the job definition service', async () => {
@@ -109,12 +109,12 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.createCodingJobFromDefinition(5, 42)).resolves.toMatchObject({
+    await expect(controller.createCodingJobFromDefinition(5, 42, { user: { id: 7 } } as never)).resolves.toMatchObject({
       success: true,
       jobsCreated: 2
     });
 
-    expect(jobDefinitionService.createCodingJobFromDefinition).toHaveBeenCalledWith(42, 5);
+    expect(jobDefinitionService.createCodingJobFromDefinition).toHaveBeenCalledWith(42, 5, 7);
   });
 
   it('previews coding jobs through the normalized job definition service path', async () => {

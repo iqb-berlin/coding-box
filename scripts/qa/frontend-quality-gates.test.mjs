@@ -15,9 +15,102 @@ import { hashFrontendArtifact } from './hash-frontend-artifact.mjs';
 const workspace = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const { ESLint } = require('eslint');
-const eslint = new ESLint({ cwd: workspace });
+const eslint = new ESLint({
+  cwd: workspace,
+  overrideConfig: {
+    parserOptions: {
+      // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
+      disallowAutomaticSingleRunInference: true
+    }
+  }
+});
 const templatePath = 'apps/frontend/src/app/components/home/home.component.html';
 const componentPath = 'apps/frontend/src/app/components/home/home.component.ts';
+
+test('TypeScript-ESLint and migrated IQB formatting rules remain active', async () => {
+  const parserVersion = require('@typescript-eslint/parser/package.json').version;
+  assert.equal(parserVersion, require('@typescript-eslint/eslint-plugin/package.json').version);
+  assert.match(parserVersion, /^8\./);
+  const [result] = await eslint.lintText('export const values: any = [1, 2,];', {
+    filePath: componentPath
+  });
+  for (const rule of ['@typescript-eslint/no-explicit-any', '@stylistic/comma-dangle']) {
+    assert.ok(result.messages.some(message => message.ruleId === rule), JSON.stringify(result.messages));
+  }
+  assert.ok(!result.messages.some(message => /Definition for rule .* was not found/.test(message.message)),
+    JSON.stringify(result.messages));
+});
+
+test('CommonJS import-equals stays supported while variable require calls are rejected', async () => {
+  const filePath = 'apps/backend/src/app/database/services/coding/coding-list-stream.service.ts';
+  const [supported] = await eslint.lintText("import fs = require('fs');\nexport { fs };\n", { filePath });
+  assert.ok(!supported.messages.some(message => message.ruleId === '@typescript-eslint/no-require-imports'),
+    JSON.stringify(supported.messages));
+  const [unsupported] = await eslint.lintText("export const fs = require('fs');\n", { filePath });
+  assert.ok(unsupported.messages.some(message => message.ruleId === '@typescript-eslint/no-require-imports'),
+    JSON.stringify(unsupported.messages));
+});
+
+test('replacement semantic rules still reject unsafe types, throws and imprecise numbers', async () => {
+  const fixtures = [
+    ['export type Empty = {};', '@typescript-eslint/no-empty-object-type'],
+    ['export type Wrapped = String;', '@typescript-eslint/no-wrapper-object-types'],
+    ['export type Callable = Function;', '@typescript-eslint/no-unsafe-function-type'],
+    ["export function fail(): never { throw 'failure'; }", '@typescript-eslint/only-throw-error'],
+    ['export const imprecise = 9007199254740993;', 'no-loss-of-precision']
+  ];
+  for (const filePath of [componentPath, 'apps/backend/src/app/app.controller.ts']) {
+    for (const [source, rule] of fixtures) {
+      const [result] = await eslint.lintText(source, { filePath });
+      assert.ok(result.messages.some(message => message.ruleId === rule),
+        `${filePath}: ${rule}: ${JSON.stringify(result.messages)}`);
+    }
+    const [compatible] = await eslint.lintText(`
+      export interface Contract { value: string; }
+      export interface Derived extends Contract {}
+      export function recover(): void { try { throw new Error('probe'); } catch (error) { return; } }
+    `, { filePath });
+    assert.ok(!compatible.messages.some(message => [
+      '@typescript-eslint/no-empty-object-type', '@typescript-eslint/no-unused-vars'
+    ].includes(message.ruleId)), JSON.stringify(compatible.messages));
+  }
+});
+
+test('synthetic lint fixtures check their supplied source under CI=true', () => {
+  const env = { ...process.env, CI: 'true' };
+  // Start an independent test runner instead of inheriting Node's child-test protocol.
+  delete env.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, [
+    '--test', '--test-reporter=tap',
+    '--test-name-pattern=TypeScript-ESLint and migrated|replacement semantic rules',
+    fileURLToPath(import.meta.url)
+  ], {
+    cwd: workspace,
+    env,
+    encoding: 'utf8',
+    timeout: 60000
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /# pass 2\b/);
+  assert.match(result.stdout, /# fail 0\b/);
+});
+
+test('the vendored lint adapter is locked and available before Docker dependency installation', () => {
+  const manifest = JSON.parse(readFileSync(join(workspace, 'package.json'), 'utf8'));
+  const lock = JSON.parse(readFileSync(join(workspace, 'package-lock.json'), 'utf8'));
+  assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
+  assert.deepEqual(lock.packages[''].devDependencies, manifest.devDependencies);
+  assert.equal(manifest.devDependencies['@iqb/eslint-config'], 'file:vendor/eslint-config');
+  assert.equal(lock.packages['node_modules/@iqb/eslint-config'].link, true);
+  assert.equal(lock.packages['node_modules/@iqb/eslint-config'].resolved, 'vendor/eslint-config');
+  const replayDockerfile = readFileSync(join(workspace, 'scripts/e2e/replay/Dockerfile'), 'utf8');
+  assert.match(replayDockerfile.split('npm ci')[0], /COPY vendor \.\/vendor/);
+  const rootDockerfile = readFileSync(join(workspace, 'Dockerfile'), 'utf8');
+  assert.match(rootDockerfile.split('npm ci')[0], /COPY \. \./);
+  const dockerignore = readFileSync(join(workspace, '.dockerignore'), 'utf8');
+  assert.doesNotMatch(dockerignore, /^\/?vendor(?:\/|\s*$)/m);
+});
 
 test('external Angular templates report invalid syntax', async () => {
   const [result] = await eslint.lintText('<div>{{ ??? }}</div>', { filePath: templatePath });
@@ -245,7 +338,7 @@ test('the actual lint job checks earlier commits and rejects frontend failures',
   }
 });
 
-test('the actual backend job checks earlier commits, excludes frontend, and rejects test failures', () => {
+test('the actual backend job checks its complete suite and rejects test failures', () => {
   const yaml = require('js-yaml');
   const schema = yaml.DEFAULT_SCHEMA.extend([
     new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
@@ -278,14 +371,22 @@ test('the actual backend job checks earlier commits, excludes frontend, and reje
       fs.writeFileSync(project + '.tested', 'checked');
       if (project === 'frontend' || fs.existsSync('fail-backend')) process.exitCode = 1;
     `);
+    writeFileSync(join(directory, 'typecheck.cjs'), `
+      const fs = require('node:fs');
+      fs.writeFileSync('typecheck.tested', 'checked');
+      if (fs.existsSync('fail-typecheck')) process.exitCode = 1;
+    `);
     for (const project of ['frontend', 'backend']) {
       const root = join(directory, 'apps', project);
       mkdirSync(root, { recursive: true });
       writeFileSync(join(root, 'project.json'), JSON.stringify({
         name: project,
-        targets: { test: { executor: 'nx:run-commands', options: {
-          command: `node test.cjs ${project}`
-        } } }
+        targets: {
+          test: { executor: 'nx:run-commands', options: { command: `node test.cjs ${project}` } },
+          ...(project === 'backend' ? { typecheck: {
+            executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
+          } } : {})
+        }
       }));
       writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
     }
@@ -304,15 +405,25 @@ test('the actual backend job checks earlier commits, excludes frontend, and reje
       '--withTarget=test', '--json']);
     assert.deepEqual(JSON.parse(affected.stdout), []);
 
-    const script = config['test-backend'].script.join('\n');
+    const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
+    assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
     writeFileSync(join(directory, 'fail-backend'), 'fail');
     const failed = run('sh', ['-eu', '-c', script]);
     assert.ifError(failed.error);
     assert.equal(failed.status, 1, failed.stdout + failed.stderr);
     assert.match(failed.stdout + failed.stderr, /backend:test/);
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+    rmSync(join(directory, 'fail-backend'));
+    rmSync(join(directory, 'backend.tested'));
+    writeFileSync(join(directory, 'fail-typecheck'), 'fail');
+    const failedTypes = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failedTypes.error);
+    assert.equal(failedTypes.status, 1, failedTypes.stdout + failedTypes.stderr);
+    assert.match(failedTypes.stdout + failedTypes.stderr, /backend:typecheck/);
+    assert.equal(existsSync(join(directory, 'backend.tested')), false);
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -377,7 +488,7 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   assert.doesNotMatch(job, /frontend:lint|nx build frontend|frontend:test-zoneless/);
   assert.doesNotMatch(ci, /\ntest-(?:frontend-zoneless|zoneless-approval|browser-zoneless|browser-production):/);
   const backend = ci.split('\ntest-backend:\n')[1].split('\ntest-frontend:\n')[0];
-  assert.match(backend, /--target=test --exclude=frontend/);
+  assert.match(backend, /nx test backend --configuration=ci/);
   assert.match(backend, /allow_failure: false/);
   assert.match(backend, /--passWithNoTests=false/);
   const browser = ci.split('\ntest-browser:\n')[1].split('\ntest-replay-live:\n')[0];

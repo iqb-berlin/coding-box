@@ -1,4 +1,4 @@
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
@@ -654,6 +654,131 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
+  it('reads and writes reset freshness and job status on the supplied transaction manager', async () => {
+    const countsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }])
+    });
+    const transactionFreshnessRepository = { upsert: jest.fn().mockResolvedValue({}) };
+    const transactionResponseRepository = { createQueryBuilder: jest.fn().mockReturnValue(countsQb) };
+    const manager = {
+      getRepository: jest.fn(entity => (entity === CodingUnitFreshness ? transactionFreshnessRepository : transactionResponseRepository)),
+      query: jest.fn().mockResolvedValue([{ revision: 9 }])
+    } as unknown as EntityManager;
+
+    await service.markVersionsPendingAfterReset(1, { v1: [10], v3: [10] }, manager);
+
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1', [1]
+    );
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('resp.unitid = ANY($2::int[])'), [1, [10], 'stale_source', 'RESET']
+    );
+    expect(transactionFreshnessRepository.upsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unit_id: 10, version: 'v1', state: 'PENDING', source_revision: 9
+      }),
+      expect.objectContaining({
+        unit_id: 10, version: 'v3', state: 'PENDING', source_revision: 9
+      })
+    ], ['workspace_id', 'unit_id', 'version']);
+    expect(connection.query).not.toHaveBeenCalled();
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(freshnessRepository.upsert).not.toHaveBeenCalled();
+  });
+
+  it('resolves reset workspace exclusions on the transaction and propagates their failure', async () => {
+    const exclusions = { globalIgnoredUnits: ['IGNORED'], ignoredBooklets: [], testletIgnoredUnits: [] };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue(exclusions)
+    } as unknown as WorkspaceExclusionService;
+    service = new CodingFreshnessService(freshnessRepository, responseRepository, connection, workspaceExclusionService);
+    const unitQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ id: 10 }]) });
+    const countsQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }]) });
+    const manager = {
+      createQueryBuilder: jest.fn().mockReturnValue(unitQb),
+      getRepository: jest.fn(entity => (entity === CodingUnitFreshness ?
+        { upsert: jest.fn().mockResolvedValue({}) } :
+        { createQueryBuilder: jest.fn().mockReturnValue(countsQb) })),
+      query: jest.fn().mockResolvedValue([{ revision: 9 }])
+    } as unknown as EntityManager;
+
+    const sourceUnitIds = await service.markVersionsPendingAfterReset(1, { v1: [10, 20] }, manager);
+
+    expect(sourceUnitIds).toEqual([10]);
+    expect(workspaceExclusionService.resolveExclusionsForQueries).toHaveBeenCalledWith(1, manager);
+    expect(unitQb.andWhere).toHaveBeenCalledWith('unit.id IN (:...unitIds)', { unitIds: [10, 20] });
+    expect(countsQb.andWhere).toHaveBeenCalledWith('response.unitid IN (:...unitIds)', { unitIds: [10] });
+    expect(connection.createQueryBuilder).not.toHaveBeenCalled();
+    jest.mocked(workspaceExclusionService.resolveExclusionsForQueries).mockRejectedValueOnce(new Error('exclusions unavailable'));
+
+    await expect(service.markVersionsPendingAfterReset(1, { v1: [10] }, manager))
+      .rejects.toThrow('exclusions unavailable');
+  });
+
+  it('clears manual freshness only for reset batch units inside the transaction', async () => {
+    const execute = jest.fn().mockResolvedValue({});
+    const deleteQb = queryBuilder({
+      delete: jest.fn().mockReturnThis(), execute
+    });
+    const unitQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ id: 10 }, { id: 20 }]) });
+    const transactionRepository = { createQueryBuilder: jest.fn().mockReturnValue(deleteQb) };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(transactionRepository),
+      createQueryBuilder: jest.fn().mockReturnValue(unitQb)
+    } as unknown as EntityManager;
+
+    await service.clearVersionsAfterReset(1, ['v2'], ['UNIT_A'], ['VAR_A'], { unitIds: [10, 10, 0], manager });
+
+    expect(manager.getRepository).toHaveBeenCalledWith(CodingUnitFreshness);
+    expect(deleteQb.where).toHaveBeenCalledWith('workspace_id = :workspaceId', { workspaceId: 1 });
+    expect(deleteQb.andWhere).toHaveBeenCalledWith('version IN (:...versions)', { versions: ['v2'] });
+    expect(deleteQb.andWhere).toHaveBeenCalledWith('unit_id IN (:...resetUnitIds)', { resetUnitIds: [10] });
+    expect(deleteQb.andWhere).toHaveBeenCalledWith('unit_id IN (:...unitIds)', { unitIds: [10, 20] });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(freshnessRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(connection.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('does not expand an empty reset batch to the whole workspace', async () => {
+    const manager = { getRepository: jest.fn() } as unknown as EntityManager;
+
+    await service.clearVersionsAfterReset(1, ['v2'], undefined, undefined, { unitIds: [], manager });
+    await service.markExistingAutoCodingVersionsPendingAfterResetScope(1, ['v1', 'v3'], undefined, undefined, {
+      unitIds: [], manager
+    });
+
+    expect(manager.getRepository).not.toHaveBeenCalled();
+    expect(freshnessRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('reopens existing auto-coding freshness only in the reset batch transaction scope', async () => {
+    const scopeQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, version: 'v3' }])
+    });
+    const countsQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }]) });
+    const transactionResponseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValueOnce(scopeQb).mockReturnValueOnce(countsQb)
+    };
+    const transactionFreshnessRepository = { upsert: jest.fn().mockResolvedValue({}) };
+    const manager = {
+      getRepository: jest.fn(entity => (entity === CodingUnitFreshness ? transactionFreshnessRepository : transactionResponseRepository)),
+      query: jest.fn().mockResolvedValue([{ revision: 9 }])
+    } as unknown as EntityManager;
+
+    await service.markExistingAutoCodingVersionsPendingAfterResetScope(1, ['v3'], undefined, undefined, { unitIds: [10], manager });
+
+    expect(scopeQb.andWhere).toHaveBeenCalledWith('response.unitid IN (:...unitIds)', { unitIds: [10] });
+    expect(transactionFreshnessRepository.upsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unit_id: 10, version: 'v3', state: 'PENDING', source_revision: 9
+      })
+    ], ['workspace_id', 'unit_id', 'version']);
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(freshnessRepository.upsert).not.toHaveBeenCalled();
+    expect(connection.query).not.toHaveBeenCalled();
+  });
+
   it('batches reset freshness count queries and upserts for large reset scopes', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
 
@@ -703,13 +828,14 @@ describe('CodingFreshnessService', () => {
       .mockReturnValueOnce(scopeQb)
       .mockReturnValueOnce(responseCountsQb);
 
-    await service.markExistingAutoCodingVersionsPendingAfterResetScope(
+    const sourceUnitIds = await service.markExistingAutoCodingVersionsPendingAfterResetScope(
       1,
       ['v1', 'v2', 'v3'],
       ['UNIT_A'],
       ['VAR_A']
     );
 
+    expect(sourceUnitIds).toEqual([10]);
     expect(scopeQb.andWhere).toHaveBeenCalledWith(
       'unit.name IN (:...unitNames)',
       { unitNames: ['UNIT_A'] }
@@ -801,6 +927,65 @@ describe('CodingFreshnessService', () => {
       expect.stringContaining('resp.unitid = ANY($2::int[])'),
       [1, [10], 'stale_source', 'RESULT_UPDATED']
     );
+  });
+
+  it('counts the union of reset source units and exact manual-result responses on the transaction', async () => {
+    const manager = { query: jest.fn().mockResolvedValue([]) } as unknown as EntityManager;
+
+    await service.markCodingJobsStaleForResetScope(1, [10, 10, -1], [100, 100, 0], manager);
+
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('AND (resp.unitid = ANY($2::int[]) OR cju.response_id = ANY($5::int[]))'),
+      [1, [10], 'stale_source', 'RESET', [100]]
+    );
+    const sql = jest.mocked(manager.query).mock.calls[0][0];
+    expect(sql).toContain('COUNT(DISTINCT cju.response_id)');
+    expect(sql).toContain("COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name))");
+    expect(sql).toContain('cj.workspace_id = $1');
+    expect(sql).toContain('cj.training_id IS NULL');
+    expect(sql).not.toContain("cj.status = 'results_applied'");
+    expect(connection.query).not.toHaveBeenCalled();
+  });
+
+  it('does not broaden an empty reset job scope to all workspace jobs', async () => {
+    const manager = { query: jest.fn() } as unknown as EntityManager;
+
+    await service.markCodingJobsStaleForResetScope(1, [], [], manager);
+
+    expect(manager.query).not.toHaveBeenCalled();
+    expect(connection.query).not.toHaveBeenCalled();
+  });
+
+  it('updates cumulative v2 reset counts only for completed stale-source jobs without changing their state or reason', async () => {
+    const manager = { query: jest.fn().mockResolvedValue([]) } as unknown as EntityManager;
+
+    await service.updateStaleCodingJobResetCountsForResponseIds(1, [100, 100, 101, 0, -1], manager);
+
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('cju.response_id = ANY($2::int[])'), [1, [100, 101]]
+    );
+    const sql = jest.mocked(manager.query).mock.calls[0][0];
+    expect(sql).toContain("AND cj.status = 'completed'");
+    expect(sql).toContain("AND cj.freshness_status = 'stale_source'");
+    expect(sql).toContain('cj.workspace_id = $1');
+    expect(sql).toContain('COALESCE(cju.workspace_id, cj.workspace_id) = $1');
+    expect(sql).toContain('cj.training_id IS NULL');
+    expect(sql).toContain('coding_issue_review');
+    expect(sql).toContain('COUNT(DISTINCT cju.response_id)');
+    expect(sql).toContain("COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name))");
+    expect(sql).not.toContain('SET status =');
+    expect(sql).not.toContain('freshness_reason =');
+    expect(sql).not.toContain('SET freshness_status =');
+    expect(connection.query).not.toHaveBeenCalled();
+  });
+
+  it('skips cumulative v2 reset count updates for an empty response scope', async () => {
+    const manager = { query: jest.fn() } as unknown as EntityManager;
+
+    await service.updateStaleCodingJobResetCountsForResponseIds(1, [0, -1], manager);
+
+    expect(manager.query).not.toHaveBeenCalled();
+    expect(connection.query).not.toHaveBeenCalled();
   });
 
   it('moves applied jobs back to completed when cleared manual results can be reapplied', async () => {

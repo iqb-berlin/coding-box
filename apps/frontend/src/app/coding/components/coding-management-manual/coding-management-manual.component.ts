@@ -848,8 +848,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       const detection = await this.detectCodingImportFormat(file);
       const dialogResult = await firstValueFrom(
         this.dialog.open<
-        CodingImportFormatDialogComponent,
-        CodingImportFormatDialogData,
+          CodingImportFormatDialogComponent,
+          CodingImportFormatDialogData,
         CodingImportFormatDialogResult | undefined
         >(CodingImportFormatDialogComponent, {
           width: '720px',
@@ -5120,6 +5120,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected onApplyEmptyResponseCoding(): void {
+    if (!this.canApplyCompletedJobResults()) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     const emptyResponseMissing = this.emptyResponseMissing();
     if (!workspaceId || !this.responseAnalysis() || !emptyResponseMissing) {

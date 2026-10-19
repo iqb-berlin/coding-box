@@ -140,7 +140,7 @@ describe('Zoneless import and review notifications', () => {
       createdAt: savedAt, updatedAt: savedAt, finalizedAt: null, legacy: false
     };
     const item: DoubleCodedReviewItemDto = {
-      responseId: 501, sourceUnitId: 1501, unitName: 'UNIT_REVIEW', variableId: 'VAR',
+      responseId: 501, sourceUnitId: 1501, canEditDraft: true, unitName: 'UNIT_REVIEW', variableId: 'VAR',
       personLogin: 'synthetic-person', personCode: 'P001', personGroup: 'GROUP', bookletName: 'BOOKLET',
       givenAnswer: 'Synthetic review answer', isResolved: false,
       appliedCode: null, appliedScore: null, appliedComment: null,
@@ -171,7 +171,7 @@ describe('Zoneless import and review notifications', () => {
     let loads = 0;
     cy.intercept('GET', '**/api/admin/workspace/5/coding/double-coded-review?*', request => {
       loads += 1;
-      request.reply({ delay: 300, body: { data: [item], total: 1, page: 1, limit: 50 } });
+      request.reply({ delay: 300, body: { data: [item], total: 1, page: 1, limit: 50, canApplyResults: true } });
     }).as('reviewData');
     const draftGate = createResponseGate();
     cy.intercept('PUT', '**/api/admin/workspace/5/coding/double-coded-review/501/draft', async request => {

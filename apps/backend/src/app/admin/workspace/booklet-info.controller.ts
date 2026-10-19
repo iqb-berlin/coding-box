@@ -10,7 +10,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
   WORKSPACE_TOKEN_SCOPE_REPLAY_READ
@@ -21,7 +21,7 @@ import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-i
 
 @ApiTags('Booklet Info')
 @Controller('admin/workspace/:workspaceId/booklet')
-@UseGuards(JwtAuthGuard, WorkspaceGuard)
+@UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
 export class BookletInfoController {
   constructor(private readonly bookletInfoService: BookletInfoService) {}
 
@@ -37,7 +37,7 @@ export class BookletInfoController {
   })
   async getBookletInfo(
     @Param('workspaceId') workspaceId: number,
-      @Param('bookletId') bookletId: string
+    @Param('bookletId') bookletId: string
   ): Promise<BookletInfoDto> {
     return this.bookletInfoService.getBookletInfo(workspaceId, bookletId);
   }

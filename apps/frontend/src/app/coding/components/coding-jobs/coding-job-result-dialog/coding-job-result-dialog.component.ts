@@ -124,6 +124,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     codingJob: CodingJob;
     workspaceId: number;
     canApplyResults?: boolean;
+    canEdit?: boolean;
   }>(MAT_DIALOG_DATA);
 
   private readonly destroyRef = inject(DestroyRef);
@@ -860,7 +861,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   isCodingIssueReviewEnabled(): boolean {
-    return this.data.codingJob.status === 'review';
+    return this.data.canEdit === true && this.data.codingJob.status === 'review';
   }
 
   canReviewCodingResult(result: CodingResult): boolean {
