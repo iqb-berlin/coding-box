@@ -110,6 +110,13 @@
       "options": {
         "command": "node scripts/e2e/codebook/verify-live.mjs"
       }
+    },
+    "verify-hardening-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/backend-hardening/verify-runtime.mjs"
+      }
     }
   }
 }

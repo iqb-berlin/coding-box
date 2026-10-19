@@ -73,7 +73,7 @@ async function createApplication(): Promise<TestingModule> {
     .overrideProvider(Connection)
     .useValue({})
     .overrideProvider(getRedisConnectionToken())
-    .useValue({});
+    .useValue({ disconnect: jest.fn() });
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',
