@@ -57,11 +57,49 @@
     {
       "file": "1075-installation-comparison.log",
       "sha256": "f0ee556b82038a124f09dc3e284e2c6298b78e84820c8572863e4fb329c2a647"
+    },
+    {
+      "file": "1075-combined-backend.log",
+      "sha256": "a5aa669030bcef64074ce3785d099f03f15aacd6905421171192aa1bf1fe0677"
+    },
+    {
+      "file": "1075-combined-frontend.log",
+      "sha256": "2b354f628c3197131093ff0fc79136dd931ac4950c6bf70e41be81360410c581"
+    },
+    {
+      "file": "1075-combined-inventory.log",
+      "sha256": "5c0b0c6ed903d249d5d8cdb8fc7de82d2c87e081cbdc4db5fdf3d1f8a748878b"
+    },
+    {
+      "file": "1075-combined-backend-build.log",
+      "sha256": "7e9e098178c430d1ac88932ae550adc5e7b87b07538d3197b532a06dc01f1888"
+    },
+    {
+      "file": "1075-combined-frontend-build.log",
+      "sha256": "6c15a46957a8d6e47831bd06931862b83f447845f4ba643c6497f0824edc8e2f"
+    },
+    {
+      "file": "1075-combined-live.log",
+      "sha256": "62dd6a1be6d69aaeb8ce9605d61b645fcd81a1034205e516ce549ad8d792104d"
     }
   ],
   "limits": [
     "Original host browser flow proof keeps its original source commit; no fresh Codebook frontend interaction rerun in this acceptance",
     "No native install scripts or Docker application image build in this acceptance",
     "No fresh library source build, Desktop Word or original real Schemer case acceptance"
-  ]
+  ],
+  "integration": {
+    "source": "2cd87d22a055adf21d5f33bd77f1102d7c0efe48",
+    "diagnosticsHead": "cd46f88bcf0568d34bd913cc50b6508fd1687b35",
+    "backendSuites": 13,
+    "backendTests": 212,
+    "frontendSuites": 4,
+    "frontendTests": 71,
+    "inventoryRegressionTests": 2,
+    "backendProductionBuild": "passed",
+    "frontendProductionBuild": "passed",
+    "liveDownloads": 24,
+    "solverCases": 6,
+    "report": "live-services-report.json"
+  }
 }

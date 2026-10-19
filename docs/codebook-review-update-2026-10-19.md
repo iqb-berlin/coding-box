@@ -58,8 +58,12 @@ Am Quellstand `0e4c62c2668ee6be8db87d2f833e8a45b87b5fbd` mit `develop`
 zuletzt ohne Nx-Cache und beide Inventar-Regressionsfälle. Der Inventareintrag
 für das aktualisierte Paket wurde korrigiert; die bestehende Risikoprüfung bleibt aktiv.
 
-Der erneute Lauf mit gebauten Diensten, PostgreSQL, Redis/Bull und echtem
-Keycloak bestätigt wieder **24 Downloads und sechs SOLVER-Fälle**.
+Mit dem Diagnose-Stand aus #1076 zusammengeführt (Quellstand
+`2cd87d22a055adf21d5f33bd77f1102d7c0efe48`) bestehen zusätzlich
+**212 Backend-Tests / 13 Suites**, **71 Frontend-Tests / 4 Suites**, beide
+Inventar-Regressionsfälle und beide Produktionsbuilds. Der erneute Lauf mit
+gebauten Diensten, PostgreSQL, Redis/Bull und echtem Keycloak bestätigt auch auf
+diesem kombinierten Stand **24 Downloads und sechs SOLVER-Fälle**.
 Die **4.694 Exportpaare** der tatsächlich installierten Hosts stimmen überein.
 Das Bibliothekspaket wurde dabei anhand aller 20 Dateien gegen den gepinnten
 Tarball verifiziert, in diesem Lauf aber nicht erneut aus Bibliotheksquellen gebaut.
