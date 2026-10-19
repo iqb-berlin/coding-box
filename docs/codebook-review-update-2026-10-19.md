@@ -1,7 +1,7 @@
 # Codebook-Paketupdate vom 19.10.2026
 
 Folgeänderung zur integrierten [#1041](https://github.com/iqb-berlin/coding-box/pull/1041),
-auf aktuellem `develop` `abb620e7703dd1909c6914929877de1b41f6186e`.
+ursprünglich auf `develop` `abb620e7703dd1909c6914929877de1b41f6186e`.
 Das Paket **4.1.0-dev.d79ca05** stammt aus Bibliothekscommit
 `d79ca05365e6073bfd650e2dfa180c05d3ffc5b8`
 ([coding-components #251](https://github.com/iqb-berlin/coding-components/pull/251)).
@@ -49,9 +49,34 @@ Die bestehende OIDC-, SOLVER-, Workspace- und Queue-Logik wird beibehalten.
 [Prüfsummen und genaue Ergebnisse](codebook-review-update-2026-10-19.json).
 Alle Daten sind synthetisch und liegen in isolierten lokalen Diensten.
 
-Die vollständigen Host-Unit-Suiten, native Installationsskripte und ein
-Docker-Imagebuild wurden bei diesem Paketupdate nicht neu ausgeführt.
-Entfernte CI am neuen PR-Head separat prüfen. Keine neue Microsoft-Word-Abnahme:
-Word ist lokal nicht installiert. Originaldatei und ursprüngliche Schemer-HTML-Version
-sind unbekannt. Ältere Word-Nachweise gelten ausschließlich für ihre damaligen
-Paket- und Quellstände. Kein Alpha-Kandidat, Tag, Registry-Release, Merge oder Deployment.
+## Erneute Abnahme auf synchronisiertem develop
+
+Am Quellstand `0e4c62c2668ee6be8db87d2f833e8a45b87b5fbd` mit `develop`
+`3ba72a90c095d6903cc87a609aedf08573615fc1` erneut lokal bestanden:
+**3.392 Backend-Tests / 217 Suites** (67 Tests in 8 Suites übersprungen),
+**3.039 Frontend-Tests / 279 Suites**, beide Lint-Aufrufe, beide Produktionsbuilds
+zuletzt ohne Nx-Cache und beide Inventar-Regressionsfälle. Der Inventareintrag
+für das aktualisierte Paket wurde korrigiert; die bestehende Risikoprüfung bleibt aktiv.
+
+Der erneute Lauf mit gebauten Diensten, PostgreSQL, Redis/Bull und echtem
+Keycloak bestätigt wieder **24 Downloads und sechs SOLVER-Fälle**.
+Die **4.694 Exportpaare** der tatsächlich installierten Hosts stimmen überein.
+Das Bibliothekspaket wurde dabei anhand aller 20 Dateien gegen den gepinnten
+Tarball verifiziert, in diesem Lauf aber nicht erneut aus Bibliotheksquellen gebaut.
+[Genauer aktueller Host-Nachweis](qa/codebook-word-current-2026-10-19/host-validation.json)
+und [echter Dienstebericht](qa/codebook-word-current-2026-10-19/live-services-report.json).
+
+**Neue Microsoft-Word-Web-Abnahme:** 14 frisch erzeugte DOCX-Dateien aus genau
+diesem Paket wurden in Microsofts Word Web Viewer geöffnet. Alle 26 gerenderten
+Seiten sind gesichert; Tabellen, Formeln, Bilder und Formatierungen wurden betrachtet.
+11 von 13 Studio-/Kodierbox-Seitenpaaren sind pixelgleich, zwei unterscheiden
+sich in jeweils 66 Pixeln ohne sichtbaren Inhalts- oder Layoutunterschied.
+[Dokumente, gerenderte Seiten, Prüfsummen und Grenzen](qa/codebook-word-current-2026-10-19/README.md).
+Dies ersetzt keinen neuen Desktop-Word-Nachweis. Der ursprüngliche reale Fehlerfall
+und die ursprüngliche Schemer-HTML-Version bleiben unbekannt.
+
+Die weiter oben beschriebene Codebook-Browserinteraktion behält ihren ursprünglichen
+Quellstand; sie wurde für diese Folgeabnahme nicht erneut durchgeführt. Native
+Installationsskripte und ein Docker-Anwendungsimage wurden ebenfalls nicht erneut
+gebaut. Entfernte CI gilt nur für den jeweiligen PR-Head und wird vor dem Merge
+separat geprüft. Kein Alpha-Kandidat, Tag, Registry-Release oder Deployment.
