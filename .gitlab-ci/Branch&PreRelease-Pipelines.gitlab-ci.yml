@@ -17,12 +17,12 @@
 .default_db_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    # Feature branches replace the duplicate develop-PR pipeline, which always
+    # ran these image and Liquibase checks, including documentation-only changes.
     - if: $CI_COMMIT_BRANCH &&
         $CI_COMMIT_BRANCH != "main" &&
         $CI_COMMIT_BRANCH != "develop" &&
         $CI_PIPELINE_SOURCE != "external_pull_request_event"
-      changes:
-        - database/*
     - if: $CI_COMMIT_TAG
       when: never
 
