@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { RedisModule } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
+import { InjectRedis, RedisModule } from '@nestjs-modules/ioredis';
 import { CacheService } from './cache.service';
 
 @Module({
@@ -21,4 +22,11 @@ import { CacheService } from './cache.service';
   providers: [CacheService],
   exports: [CacheService]
 })
-export class CacheClientModule { }
+export class CacheClientModule implements OnApplicationShutdown {
+  constructor(@InjectRedis() private readonly redis: Redis) {}
+
+  onApplicationShutdown(): void {
+    // Close the owned socket without waiting on a command that could retry indefinitely.
+    this.redis.disconnect();
+  }
+}
