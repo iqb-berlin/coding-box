@@ -7,6 +7,8 @@ export default {
   preset: '../../jest.preset.js',
   globals: {},
   testEnvironment: 'node',
+  // Recycle retained compiler/coverage state between suites on the CI runner.
+  workerIdleMemoryLimit: '1GB',
   transform: {
     '^.+\\.[tj]s$': [
       'ts-jest',
