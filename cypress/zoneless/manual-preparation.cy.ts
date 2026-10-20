@@ -197,10 +197,12 @@ describe('Zoneless manual preparation workflows', () => {
     openTraining();
     cy.wrap(null).should(() => { expect(reads).to.equal(1); });
     cy.get('@training').find('.close-button').click();
+    cy.get('coding-box-coder-training').should('not.exist');
+    // Deliver the obsolete response after destruction, before waiting for the new view.
+    cy.then(() => oldGate.release());
     openTraining();
     cy.get('@training').find('mat-select[formControlName="referenceTrainingIds"]').click();
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
-    cy.then(() => oldGate.release());
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');
     cy.get('@training').find('.close-button').click();
