@@ -5,8 +5,8 @@ import { firstValueFrom } from 'rxjs';
 import { createHash, randomBytes } from 'crypto';
 import { CacheService } from '../../cache/cache.service';
 import { AuthFailureException } from '../auth-failure.exception';
-import { normalizeRequestId } from '../../http/request-id';
 import { AuthErrorCode } from '../../../../../../api-dto/auth-error-dto';
+import { isHttpEndpoint, logAuthProviderFailure } from '../auth-provider-errors';
 
 export interface OidcConfiguration {
   issuer: string;
@@ -67,8 +67,8 @@ export class OidcAuthService {
   }
 
   getIssuer(): string {
-    if (!this.oidcConfiguration.issuer) {
-      throw new UnauthorizedException('OpenID Connect issuer configuration is missing');
+    if (!isHttpEndpoint(this.oidcConfiguration.issuer)) {
+      throw new AuthFailureException('configuration-error');
     }
     return this.oidcConfiguration.issuer;
   }
@@ -80,8 +80,8 @@ export class OidcAuthService {
    * @returns Authorization URL
    */
   getAuthorizationUrl(state: string, redirectUri: string, codeChallenge?: string): string {
-    if (!this.oidcConfiguration.authorization_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect configuration is missing');
+    if (!isHttpEndpoint(this.oidcConfiguration.authorization_endpoint) || !this.oAuth2ClientId?.trim()) {
+      throw new AuthFailureException('configuration-error');
     }
 
     const params = new URLSearchParams({
@@ -106,9 +106,9 @@ export class OidcAuthService {
    * @param redirectUri - The same redirect URI used in authorization request
    * @returns Token response from OpenID Connect Provider
    */
-  async exchangeCodeForToken(code: string, redirectUri: string, codeVerifier?: string): Promise<OidcTokenResponse> {
-    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
+  async exchangeCodeForToken(code: string, redirectUri: string, codeVerifier?: string, requestId?: string): Promise<OidcTokenResponse> {
+    if (!isHttpEndpoint(this.oidcConfiguration.token_endpoint) || !this.oAuth2ClientId?.trim()) {
+      throw new AuthFailureException('configuration-error');
     }
 
     if (!codeVerifier) {
@@ -132,6 +132,7 @@ export class OidcAuthService {
 
       const response = await firstValueFrom(
         this.httpService.post(this.oidcConfiguration.token_endpoint, params.toString(), {
+          timeout: this.refreshTimeoutMs,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
@@ -139,10 +140,12 @@ export class OidcAuthService {
       );
 
       this.logger.log('Successfully obtained access token from authorization code');
+      if (typeof response.data?.access_token !== 'string' || !response.data.access_token.trim()) {
+        throw new AuthFailureException('provider-unavailable');
+      }
       return response.data;
-    } catch (error) {
-      this.logger.error('Failed to exchange authorization code for token:', error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to exchange authorization code for token');
+    } catch (error: unknown) {
+      throw this.providerFailure(error, 'oidc-code-exchange-failed', this.oidcConfiguration.token_endpoint, requestId);
     }
   }
 
@@ -152,7 +155,7 @@ export class OidcAuthService {
    * @returns Refreshed token response from OpenID Connect Provider
    */
   async refreshToken(refreshToken: string, requestId?: string): Promise<OidcTokenResponse> {
-    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId) {
+    if (!isHttpEndpoint(this.oidcConfiguration.token_endpoint) || !this.oAuth2ClientId?.trim()) {
       throw new AuthFailureException('configuration-error');
     }
 
@@ -187,28 +190,7 @@ export class OidcAuthService {
       }
       return response.data;
     } catch (error: unknown) {
-      const providerError = error as { response?: { status?: number; data?: { error?: string } } } | null;
-      const status = providerError?.response?.status;
-      const providerCode = providerError?.response?.data?.error;
-      let code: AuthErrorCode = 'provider-unavailable';
-      if (status === 400 && providerCode === 'invalid_grant') code = 'session-invalid';
-      else if (status !== undefined && [400, 401, 403].includes(status)) code = 'configuration-error';
-      const failure = new AuthFailureException(code);
-      let endpoint = 'configured-token-endpoint';
-      try {
-        const url = new URL(this.oidcConfiguration.token_endpoint);
-        endpoint = `${url.origin}${url.pathname}`;
-      } catch {
-        // Invalid configuration must not expose credentials or replace the classified failure.
-      }
-      this.logger.warn({
-        event: 'oidc-refresh-failed',
-        errorClass: failure.code,
-        endpoint,
-        httpStatus: typeof status === 'number' ? status : null,
-        requestId: normalizeRequestId(requestId)
-      });
-      throw failure;
+      throw this.providerFailure(error, 'oidc-refresh-failed', this.oidcConfiguration.token_endpoint, requestId);
     }
   }
 
@@ -217,23 +199,26 @@ export class OidcAuthService {
    * @param accessToken - Access token from OpenID Connect Provider
    * @returns User information
    */
-  async getUserInfo(accessToken: string): Promise<OidcUserInfo> {
-    if (!this.oidcConfiguration.userinfo_endpoint) {
-      throw new UnauthorizedException('OpenID Connect userinfo endpoint configuration is missing');
+  async getUserInfo(accessToken: string, requestId?: string): Promise<OidcUserInfo> {
+    if (!isHttpEndpoint(this.oidcConfiguration.userinfo_endpoint)) {
+      throw new AuthFailureException('configuration-error');
     }
 
     try {
       const response = await firstValueFrom(
         this.httpService.get(this.oidcConfiguration.userinfo_endpoint, {
+          timeout: this.refreshTimeoutMs,
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
         })
       );
+      if (typeof response.data?.sub !== 'string' || !response.data.sub.trim()) {
+        throw new AuthFailureException('provider-unavailable');
+      }
       return response.data;
-    } catch (error) {
-      this.logger.error('Failed to get user info:', error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to get user information');
+    } catch (error: unknown) {
+      throw this.providerFailure(error, 'oidc-userinfo-failed', this.oidcConfiguration.userinfo_endpoint, requestId, true);
     }
   }
 
@@ -244,8 +229,8 @@ export class OidcAuthService {
    * @returns Logout URL
    */
   getLogoutUrl(idToken: string, redirectUri: string): string {
-    if (!this.oidcConfiguration.end_session_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect end session endpoint configuration is missing');
+    if (!isHttpEndpoint(this.oidcConfiguration.end_session_endpoint) || !this.oAuth2ClientId?.trim()) {
+      throw new AuthFailureException('configuration-error');
     }
 
     const params = new URLSearchParams({
@@ -263,8 +248,8 @@ export class OidcAuthService {
    * @returns Promise that resolves when logout is complete
    */
   async logoutWithRefreshToken(refreshToken: string): Promise<void> {
-    if (!this.oidcConfiguration.end_session_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect end session endpoint configuration is missing');
+    if (!isHttpEndpoint(this.oidcConfiguration.end_session_endpoint) || !this.oAuth2ClientId?.trim()) {
+      throw new AuthFailureException('configuration-error');
     }
 
     const params = new URLSearchParams({
@@ -282,6 +267,7 @@ export class OidcAuthService {
 
       await firstValueFrom(
         this.httpService.post(this.oidcConfiguration.end_session_endpoint, params.toString(), {
+          timeout: this.refreshTimeoutMs,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
@@ -289,9 +275,8 @@ export class OidcAuthService {
       );
 
       this.logger.log('Successfully logged out from OpenID Connect Provider SSO session');
-    } catch (error) {
-      this.logger.error('Failed to logout from OpenID Connect Provider:', error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to logout from OpenID Connect Provider');
+    } catch (error: unknown) {
+      throw this.providerFailure(error, 'oidc-logout-failed', this.oidcConfiguration.end_session_endpoint);
     }
   }
 
@@ -301,8 +286,8 @@ export class OidcAuthService {
    * @returns Profile management URL
    */
   getProfileUrl(redirectUri?: string): string {
-    if (!this.oidcConfiguration.account_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect account endpoint configuration is missing');
+    if (!isHttpEndpoint(this.oidcConfiguration.account_endpoint) || !this.oAuth2ClientId?.trim()) {
+      throw new AuthFailureException('configuration-error');
     }
 
     if (redirectUri) {
@@ -320,6 +305,19 @@ export class OidcAuthService {
     const codeVerifier = randomBytes(32).toString('base64url');
     const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
     return { codeVerifier, codeChallenge };
+  }
+
+  private providerFailure(error: unknown, event: string, endpoint: string, requestId?: string, userInfo = false): AuthFailureException {
+    const providerError = error as { response?: { status?: number; data?: { error?: string } } } | null;
+    const status = providerError?.response?.status;
+    let code: AuthErrorCode = error instanceof AuthFailureException ? error.code : 'provider-unavailable';
+    if ((status === 400 && providerError?.response?.data?.error === 'invalid_grant') || (userInfo && status === 401)) {
+      code = 'session-invalid';
+    } else if (status !== undefined && [400, 401, 403, 404].includes(status)) {
+      code = 'configuration-error';
+    }
+    logAuthProviderFailure(this.logger, event, endpoint, code, typeof status === 'number' ? status : null, requestId);
+    return new AuthFailureException(code);
   }
 
   async storePkceVerifier(

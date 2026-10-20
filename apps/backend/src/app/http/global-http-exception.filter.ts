@@ -99,7 +99,12 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     };
 
     if (exception instanceof AuthFailureException) {
-      return { ...baseBody, code: exception.code, message: exception.message };
+      return {
+        ...baseBody,
+        path: baseBody.path.split('?', 1)[0],
+        code: exception.code,
+        message: exception.message
+      };
     }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {

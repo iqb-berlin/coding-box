@@ -11,7 +11,9 @@ import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredent
 import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
-import { RequestWithRequestId } from '../http/request-id';
+import { normalizeRequestId, RequestWithRequestId } from '../http/request-id';
+import { AuthFailureException } from './auth-failure.exception';
+import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -105,13 +107,16 @@ export class AuthController {
     }
   }
 
-  private buildErrorRedirectUrl(redirectUri?: string): string {
+  private buildErrorRedirectUrl(redirectUri?: string, code?: AuthErrorCode, requestId?: string): string {
     const redirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
     if (!redirectUrl) {
-      return this.getDefaultLoginErrorRedirect();
+      const failureParams = code ? `&auth_error=${code}${requestId ? `&request_id=${encodeURIComponent(normalizeRequestId(requestId))}` : ''}` : '';
+      return `${this.getDefaultLoginErrorRedirect()}${failureParams}`;
     }
 
     redirectUrl.searchParams.set('error', 'authentication_failed');
+    if (code) redirectUrl.searchParams.set('auth_error', code);
+    if (requestId) redirectUrl.searchParams.set('request_id', normalizeRequestId(requestId));
     return redirectUrl.toString();
   }
 
@@ -247,7 +252,8 @@ export class AuthController {
   async login(
     @Res() res: Response,
     @Query('redirect_uri') redirectUri?: string,
-    @Query('browser_challenge') browserChallenge?: string
+    @Query('browser_challenge') browserChallenge?: string,
+    @Req() request?: RequestWithRequestId
   ): Promise<void> {
     this.logger.log('Initiating OpenID Connect Provider login');
 
@@ -275,8 +281,20 @@ export class AuthController {
     }
 
     // Get authorization URL with proper OAuth redirect_uri (callback)
-    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, oAuth2Endpoint, codeChallenge);
-    res.redirect(authUrl);
+    try {
+      const authUrl = this.oidcAuthService.getAuthorizationUrl(state, oAuth2Endpoint, codeChallenge);
+      res.redirect(authUrl);
+    } catch (error) {
+      if (!(error instanceof AuthFailureException)) throw error;
+      this.logger.warn({
+        event: 'oidc-login-failed',
+        errorClass: error.code,
+        endpoint: '/auth/login',
+        httpStatus: error.getStatus(),
+        requestId: normalizeRequestId(request?.requestId)
+      });
+      res.redirect(this.buildErrorRedirectUrl(redirectUri, error.code, request?.requestId));
+    }
   }
 
   /**
@@ -295,7 +313,8 @@ export class AuthController {
   async callback(
     @Query('code') code: string,
     @Query('state') state: string,
-    @Res() res: Response
+    @Res() res: Response,
+    @Req() request?: RequestWithRequestId
   ): Promise<void> {
     this.logger.log('Processing OpenID Connect Provider callback');
 
@@ -343,10 +362,11 @@ export class AuthController {
       const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(
         code,
         oAuth2Endpoint,
-        pkceSession.codeVerifier
+        pkceSession.codeVerifier,
+        request?.requestId
       );
 
-      const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
+      const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token, request?.requestId);
 
       const userData: CreateUserDto = {
         identity: userInfo.sub,
@@ -381,7 +401,14 @@ export class AuthController {
       redirectUrl.searchParams.set('auth_code', exchangeCode);
       res.redirect(redirectUrl.toString());
     } catch (error) {
-      this.logger.error('OpenID Connect Provider callback failed:', error);
+      const failure = error instanceof AuthFailureException ? error : undefined;
+      this.logger.warn({
+        event: 'oidc-callback-failed',
+        errorClass: failure?.code || 'callback-failed',
+        endpoint: '/auth/callback',
+        httpStatus: failure?.getStatus() || 500,
+        requestId: normalizeRequestId(request?.requestId)
+      });
       // Decode redirect URI from state for error handling too
       let errorRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
@@ -393,7 +420,7 @@ export class AuthController {
         }
       }
 
-      res.redirect(this.buildErrorRedirectUrl(errorRedirectUri));
+      res.redirect(this.buildErrorRedirectUrl(errorRedirectUri, failure?.code, request?.requestId));
     }
   }
 
@@ -513,10 +540,15 @@ export class AuthController {
         success: true
       });
     } catch (error) {
-      this.logger.error('Logout failed:', error);
-      if (error instanceof UnauthorizedException) {
+      this.logger.warn('OIDC logout failed; provider diagnostics are recorded separately');
+      if (error instanceof AuthFailureException) {
+        res.status(error.getStatus()).json({
+          ...error.getResponse() as object,
+          success: false
+        });
+      } else if (error instanceof UnauthorizedException) {
         res.status(HttpStatus.UNAUTHORIZED).json({
-          error: error.message,
+          error: 'Logout authorization failed',
           success: false
         });
       } else {
