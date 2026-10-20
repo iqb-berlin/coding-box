@@ -78,6 +78,8 @@ describe('real Keycloak coding session', () => {
       replay.host = local.host;
       const [route, query = ''] = replay.hash.split('?');
       const params = new URLSearchParams(query);
+      // Exercise the browser's OIDC session for coding writes.
+      params.delete('auth');
       params.set('mode', 'coding');
       params.set('codingJobId', String(setup.codingJobId));
       params.set('workspaceId', String(setup.workspaceId));
@@ -100,6 +102,11 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (request.body.notes === 'Persisted live note') {
+        const bearer = String(request.headers.authorization).split(' ')[1];
+        const payload = JSON.parse(Cypress.Buffer.from(bearer.split('.')[1], 'base64').toString());
+        expect(payload.iss, 'coding write uses the provider session').to.equal(
+          new URL('/realms/coding-e2e', setup.keycloakUrl).toString()
+        );
         request.alias = 'persistedNote';
       }
     });
@@ -150,8 +157,8 @@ describe('real Keycloak coding session', () => {
       expect(outageNoteWrites, 'protected write was held back').to.equal(0);
     });
     cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
-    cy.task('coding:set-provider-available', true, { log: false });
     cy.get('.auth-refresh-unavailable button').click();
+    cy.task('coding:set-provider-available', true, { log: false });
     cy.wait('@outageNote').its('response.statusCode').should('eq', 201);
     cy.get('.auth-refresh-unavailable').should('not.exist');
     cy.reload();
@@ -760,10 +767,9 @@ describe('real Keycloak coding session', () => {
       .should('have.attr', 'aria-checked', 'true');
 
     cy.intercept('POST', '**/export/sqlite/job').as('startDatabaseExport');
-    let runningPolls = 3;
+    let releaseExportCompletion = false;
     cy.intercept('GET', /\/export\/sqlite\/job\/[^/]+$/, request => {
-      if (runningPolls > 0) {
-        runningPolls -= 1;
+      if (!releaseExportCompletion) {
         request.reply({ statusCode: 200, body: { status: 'running', progress: 42 } });
       } else {
         request.continue();
@@ -783,6 +789,7 @@ describe('real Keycloak coding session', () => {
     }
     cy.get('coding-box-ws-settings .database-export-card .export-progress')
       .should('be.visible');
+    cy.then(() => { releaseExportCompletion = true; });
     cy.wait('@downloadDatabaseExport', { timeout: 120_000 })
       .its('response.statusCode').should('eq', 200);
     cy.get('coding-box-ws-settings .database-export-card .export-progress')
