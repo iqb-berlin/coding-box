@@ -24,6 +24,20 @@ image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
 
 workflow:
   rules:
+    # Feature-branch push pipelines include the complete develop-PR job set.
+    # Suppress only the matching same-repository GitHub PR event; keep main PRs
+    # and incomplete/foreign PR metadata on their existing validation path.
+    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" &&
+        $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME == $CI_COMMIT_BRANCH &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME != "develop" &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME != "main" &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY == $CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA &&
+        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA == $CI_COMMIT_SHA
+      when: never
     # The GitHub project bot cannot pull from the group-level Dependency Proxy.
     # Use the same public upstream images without granting it group access.
     - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")
@@ -110,7 +124,8 @@ gemnasium-dependency_scanning:
   interruptible: true
   allow_failure: true
   rules:
-    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
+    # Retain the former develop-PR scan in the canonical feature-branch run.
+    - !reference [ .default_rules, rules ]
     - when: never
   needs: []

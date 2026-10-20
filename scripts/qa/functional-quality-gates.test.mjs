@@ -28,26 +28,100 @@ const resolve = name => {
   return { ...(job.extends ? resolve(job.extends) : {}), ...job };
 };
 function matches(expression, env) {
-  return expression.split(/\s*\|\|\s*/).some(or => or.split(/\s*&&\s*/).every(atom => {
-    const match = atom.trim().match(/^\$(\w+)(?:\s*(==|!=|=~)\s*(?:"([^"]*)"|\$(\w+)))?$/);
-    assert.ok(match, `Unsupported rule expression: ${atom}`);
-    const [, key, op, literal, variable] = match;
-    const left = env[key] || '';
-    const right = variable ? (env[variable] || '') : literal;
-    if (!op) return Boolean(left);
-    if (op === '==') return left === right;
-    if (op === '!=') return left !== right;
-    assert.ok(right.startsWith('/') && right.endsWith('/'));
-    return new RegExp(right.slice(1, -1)).test(left);
-  }));
+  const booleans = expression.replace(/\$(\w+)(?:\s*(==|!=|=~)\s*(?:"([^"]*)"|\$(\w+)))?/g,
+    (_atom, key, op, literal, variable) => {
+      const left = env[key] || '';
+      const right = variable ? (env[variable] || '') : literal;
+      if (!op) return String(Boolean(left));
+      if (op === '==') return String(left === right);
+      if (op === '!=') return String(left !== right);
+      assert.ok(right.startsWith('/') && right.endsWith('/'));
+      return String(new RegExp(right.slice(1, -1)).test(left));
+    });
+  // Only boolean operators reach the VM; variable values are never evaluated.
+  assert.match(booleans, /^(?:true|false|&&|\|\||[()\s])+$/,
+    `Unsupported rule expression: ${expression}`);
+  return runInNewContext(booleans, {}, { timeout: 1000 });
+}
+function selectedRule(rules, env) {
+  return rules.flatMap(rule => Array.isArray(rule) ? config[rule[0]][rule[1]] : [rule])
+    .find(candidate => !candidate.if || matches(candidate.if, env));
 }
 function selected(name, env) {
-  const rules = resolve(name).rules.flatMap(rule => Array.isArray(rule) ? config[rule[0]][rule[1]] : [rule]);
-  const rule = rules.find(candidate => !candidate.if || matches(candidate.if, env));
+  const rule = selectedRule(resolve(name).rules, env);
   return Boolean(rule && rule.when !== 'never');
 }
+const workflowRule = env => selectedRule(config.workflow.rules, env);
+const pipelineSelected = env => {
+  const rule = workflowRule(env);
+  return Boolean(rule && rule.when !== 'never');
+};
+const featurePush = {
+  CI_PIPELINE_SOURCE: 'push', CI_COMMIT_BRANCH: 'feature-fixture',
+  CI_COMMIT_SHA: 'a'.repeat(40)
+};
+const githubDevelopPr = {
+  ...featurePush, CI_PIPELINE_SOURCE: 'external_pull_request_event',
+  CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME: 'develop',
+  CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME: featurePush.CI_COMMIT_BRANCH,
+  CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA: featurePush.CI_COMMIT_SHA,
+  CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY: 'iqb-berlin/coding-box',
+  CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY: 'iqb-berlin/coding-box'
+};
+
+test('a same-repository GitHub develop PR selects exactly one complete pipeline', () => {
+  assert.equal(pipelineSelected(githubDevelopPr), false);
+  assert.equal(pipelineSelected(featurePush), true);
+  const env = { ...config.variables, ...featurePush };
+  for (const name of [...gates, 'install-dependencies', 'build-app', 'test-browser',
+    'audit-app', 'build-db-image', 'build-liquibase-image', 'test-db',
+    'gemnasium-dependency_scanning']) {
+    assert.ok(selected(name, env), `Canonical feature pipeline is missing ${name}`);
+    // The former external PR checks ran even for documentation-only changes.
+    assert.equal(selectedRule(resolve(name).rules, env).changes, undefined, name);
+    for (const dependency of resolve(name).needs || []) {
+      if (dependency.optional) continue;
+      const needed = typeof dependency === 'string' ? dependency : dependency.job;
+      assert.ok(selected(needed, env), `${name} needs absent ${needed}`);
+    }
+  }
+});
+
+test('feature branches keep their complete pipeline before and after a PR is closed', () => {
+  assert.equal(pipelineSelected(featurePush), true);
+  // GitHub PRs do not populate the native GitLab MR variable.
+  assert.equal(pipelineSelected({ ...featurePush, CI_OPEN_MERGE_REQUESTS: '' }), true);
+});
+
+for (const field of ['CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME',
+  'CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA', 'CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY',
+  'CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY', 'CI_COMMIT_SHA', 'CI_COMMIT_BRANCH']) {
+  test(`incomplete PR metadata retains validation when ${field} is missing`, () => {
+    for (const value of [undefined, '']) {
+      const env = { ...githubDevelopPr, [field]: value };
+      assert.equal(pipelineSelected(env), true);
+      assert.equal(workflowRule(env).variables.DOCKER_HUB_PROXY, '');
+    }
+  });
+}
+
+for (const [label, values] of [
+  ['foreign repository', { CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY: 'other/coding-box' }],
+  ['different source SHA', { CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA: 'b'.repeat(40) }],
+  ['different source branch', { CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME: 'other-feature' }],
+  ['back-merge from main', { CI_COMMIT_BRANCH: 'main', CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME: 'main' }],
+  ['develop source branch', { CI_COMMIT_BRANCH: 'develop', CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME: 'develop' }],
+  ['main target', { CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME: 'main' }]
+]) {
+  test(`${label} keeps the external PR pipeline and its public-image fallback`, () => {
+    const env = { ...githubDevelopPr, ...values };
+    assert.equal(pipelineSelected(env), true);
+    assert.equal(workflowRule(env).variables.DOCKER_HUB_PROXY, '');
+    assert.equal(workflowRule(env).variables.DOCKER_IMAGE, 'docker:28');
+  });
+}
 const scenarios = [
-  ['GitHub develop PR', { CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME: 'develop', CI_PIPELINE_SOURCE: 'external_pull_request_event' }],
+  ['GitHub develop PR fallback', { CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME: 'develop', CI_PIPELINE_SOURCE: 'external_pull_request_event' }],
   ['GitHub main PR', { CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME: 'main', CI_PIPELINE_SOURCE: 'external_pull_request_event' }],
   ['GitLab develop MR', { CI_MERGE_REQUEST_TARGET_BRANCH_NAME: 'develop', CI_PIPELINE_SOURCE: 'merge_request_event' }],
   ['GitLab main MR', { CI_MERGE_REQUEST_TARGET_BRANCH_NAME: 'main', CI_PIPELINE_SOURCE: 'merge_request_event' }],
@@ -60,6 +134,7 @@ const scenarios = [
 for (const [label, values] of scenarios) {
   test(`${label} includes every blocking functional gate and its dependencies`, () => {
     const env = { ...config.variables, ...values };
+    assert.ok(pipelineSelected(env), `${label}: pipeline is absent`);
     for (const gate of gates) {
       assert.ok(selected(gate, env), `${label}: ${gate} is absent`);
       assert.equal(resolve(gate).allow_failure, false, gate);
