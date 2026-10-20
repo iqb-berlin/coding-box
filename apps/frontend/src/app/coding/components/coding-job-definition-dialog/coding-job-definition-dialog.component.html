@@ -190,14 +190,14 @@
         <div class="coding-job-count-info">
           <mat-icon class="info-icon">info</mat-icon>
           <span class="count-label">{{ 'coding-job-definition-dialog.job-count.label' | translate }}</span>
-          <span class="count-value">{{ getCodingJobCount() }}</span>
-          @if (getCodingJobCount() === 0) {
+          <span class="count-value">{{ workloadSummary().jobCount }}</span>
+          @if (workloadSummary().jobCount === 0) {
           <span class="count-description">{{ 'coding-job-definition-dialog.job-count.none' | translate }}</span>
           }
-          @if (getCodingJobCount() === 1) {
+          @if (workloadSummary().jobCount === 1) {
           <span class="count-description">{{ 'coding-job-definition-dialog.job-count.single' | translate }}</span>
           }
-          @if (getCodingJobCount() > 1) {
+          @if (workloadSummary().jobCount > 1) {
           <span class="count-description">{{ 'coding-job-definition-dialog.job-count.multiple' | translate }}</span>
           }
         </div>
@@ -227,32 +227,32 @@
               <div class="count-item">
                 <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.total-cases' | translate
                   }}</span>
-                <span class="count-value">{{ getTotalCodingCases() }}</span>
+                <span class="count-value">{{ workloadSummary().totalCases }}</span>
               </div>
               <div class="count-item">
                 <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.estimated-time' | translate
                   }}</span>
-                <span class="count-value">{{ getFormattedTotalTime() }}</span>
+                <span class="count-value">{{ workloadSummary().formattedTotalTime }}</span>
               </div>
               @if (selectedCoders.selected.length > 0) {
               <div class="count-item">
                 <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.time-per-coder' | translate
                   }}</span>
-                <span class="count-value">{{ getFormattedTimePerCoder() }}</span>
+                <span class="count-value">{{ workloadSummary().formattedTimePerCoder }}</span>
               </div>
               }
             </div>
 
-            @if (getUnavailableSelectedCodingCases() > 0 || getMaxCasesLimitReduction() > 0) {
+            @if (workloadSummary().unavailableCases > 0 || workloadSummary().limitReduction > 0) {
             <div class="selection-availability-note">
               <mat-icon>info</mat-icon>
               <span>
-                {{ getTotalCodingCases() }} Fälle werden in neue Jobs übernommen.
-                @if (getUnavailableSelectedCodingCases() > 0) {
-                {{ getUnavailableSelectedCodingCases() }} ausgewählte Fälle sind bereits verteilt oder durch eine andere Definition reserviert.
+                {{ workloadSummary().totalCases }} Fälle werden in neue Jobs übernommen.
+                @if (workloadSummary().unavailableCases > 0) {
+                {{ workloadSummary().unavailableCases }} ausgewählte Fälle sind bereits verteilt oder durch eine andere Definition reserviert.
                 }
-                @if (getMaxCasesLimitReduction() > 0) {
-                {{ getMaxCasesLimitReduction() }} verfügbare Fälle werden durch die maximale Fallzahl begrenzt.
+                @if (workloadSummary().limitReduction > 0) {
+                {{ workloadSummary().limitReduction }} verfügbare Fälle werden durch die maximale Fallzahl begrenzt.
                 }
               </span>
             </div>

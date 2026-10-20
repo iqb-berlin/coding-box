@@ -185,6 +185,21 @@ interface EstimatedDistributionItem {
   remaining: number;
 }
 
+interface CodingWorkloadSummary {
+  jobCount: number;
+  selectedCases: number;
+  distributableCases: number;
+  unavailableCases: number;
+  limitReduction: number;
+  totalCases: number;
+  doubleCodedCases: number;
+  totalCodingTasks: number;
+  totalTimeSeconds: number;
+  timePerCoderSeconds: number;
+  formattedTotalTime: string;
+  formattedTimePerCoder: string;
+}
+
 interface DistributionPreviewSummary {
   totalCases: number;
   doubleCodedCases: number;
@@ -326,7 +341,21 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private baseAvailableCasesByVariable = new Map<string, number>();
   private baseAvailableCasesWithDeriveErrorByVariable = new Map<string, number>();
   private definitionDistributionSeed?: string;
-  private distributionPreviewSummary: DistributionPreviewSummary | null = null;
+  private readonly distributionPreviewSummary = signal<DistributionPreviewSummary | null>(null);
+  // Form and SelectionModel events invalidate one shared, memoized calculation.
+  private readonly workloadRevision = signal(0);
+  private readonly durationRevision = signal(0);
+  private readonly estimatedVariableCaseCounts = computed(() => {
+    this.workloadRevision();
+    return this.getSelectedDistributionVariableCaseCountsAfterLimit();
+  });
+
+  protected readonly workloadSummary = computed(() => {
+    this.workloadRevision();
+    this.durationRevision();
+    return this.calculateWorkloadSummary();
+  });
+
   private readonly distributionPreviewRefresh$ = new Subject<void>();
   private readonly distributionPreviewDebounceMs = 300;
   private selectionPreviewSubscription = new Subscription();
@@ -349,6 +378,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.restoreDefinitionRecoveryDraft());
     this.bindSelectionPreviewRefresh();
+    this.codingJobForm.controls.durationSeconds.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.durationRevision.update(revision => revision + 1));
     merge(
       this.codingJobForm.get('doubleCodingAbsolute')!.valueChanges,
       this.codingJobForm.get('doubleCodingPercentage')!.valueChanges,
@@ -365,9 +397,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe(preview => {
-        this.distributionPreviewSummary = preview ?
-          this.buildDistributionPreviewSummary(preview) :
-          null;
+        this.distributionPreviewSummary.set(preview ? this.buildDistributionPreviewSummary(preview) : null);
         this.changeDetectorRef.markForCheck();
       });
     this.loadIncludeDeriveErrorSetting();
@@ -654,11 +684,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   private queueDistributionPreviewRefresh(): void {
+    this.workloadRevision.update(revision => revision + 1);
     if (this.data.mode !== 'definition' || this.isReadOnly) {
       return;
     }
 
-    this.distributionPreviewSummary = null;
+    this.distributionPreviewSummary.set(null);
     this.changeDetectorRef.markForCheck();
     this.distributionPreviewRefresh$.next();
   }
@@ -1338,6 +1369,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.selectedVariableBundles.selected.map(bundle => bundlesById.get(bundle.id) || bundle)
     );
     this.bindSelectionPreviewRefresh();
+    this.queueDistributionPreviewRefresh();
   }
 
   private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'deriveErrorResponseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'availableCasesWithDeriveError' | 'uniqueCasesAfterAggregationWithDeriveError' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
@@ -1512,14 +1544,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getCodingJobCount(): number {
-    const itemCount = this.selectedVariableValues().length + this.selectedVariableBundles.selected.length;
-    const coderCount = this.selectedCoders.selected.length;
-
-    if (itemCount === 0 || coderCount === 0) {
-      return 0;
-    }
-
-    return itemCount * coderCount;
+    return this.workloadSummary().jobCount;
   }
 
   private getVariableEffectiveCases(variable: Variable): number {
@@ -1602,7 +1627,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.hasDeriveErrorResponses(variable);
   }
 
-  getSelectedEffectiveCodingCases(): number {
+  private calculateSelectedEffectiveCodingCases(): number {
     let total = this.selectedVariableValues()
       .reduce((sum, variable) => sum + this.getVariableEffectiveCases(variable), 0);
 
@@ -1615,7 +1640,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return total;
   }
 
-  getDistributableCodingCasesBeforeLimit(): number {
+  private calculateDistributableCodingCases(): number {
     let total = this.selectedVariableValues()
       .reduce((sum, variable) => sum + this.getVariableAvailableCases(variable), 0);
 
@@ -1628,47 +1653,24 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return total;
   }
 
+  getSelectedEffectiveCodingCases(): number {
+    return this.workloadSummary().selectedCases;
+  }
+
+  getDistributableCodingCasesBeforeLimit(): number {
+    return this.workloadSummary().distributableCases;
+  }
+
   getUnavailableSelectedCodingCases(): number {
-    return Math.max(
-      0,
-      this.getSelectedEffectiveCodingCases() - this.getDistributableCodingCasesBeforeLimit()
-    );
+    return this.workloadSummary().unavailableCases;
   }
 
   getMaxCasesLimitReduction(): number {
-    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
-    const total = this.getDistributableCodingCasesBeforeLimit();
-
-    if (
-      this.data.mode === 'definition' &&
-      typeof maxCases === 'number' &&
-      maxCases > 0
-    ) {
-      return Math.max(0, total - Math.min(total, maxCases));
-    }
-
-    return 0;
+    return this.workloadSummary().limitReduction;
   }
 
   getTotalCodingCases(): number {
-    if (this.distributionPreviewSummary) {
-      return this.distributionPreviewSummary.totalCases;
-    }
-
-    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
-    const isDefinitionMode = this.data.mode === 'definition';
-    let total = this.getDistributableCodingCasesBeforeLimit();
-
-    // Apply global cap per job definition (only in definition mode)
-    if (
-      isDefinitionMode &&
-      typeof maxCases === 'number' &&
-      maxCases > 0
-    ) {
-      total = Math.min(total, maxCases);
-    }
-
-    return total;
+    return this.workloadSummary().totalCases;
   }
 
   private getSelectedDistributionVariableCaseCountsAfterLimit(): number[] {
@@ -1850,63 +1852,67 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  getTotalDoubleCodedCases(): number {
-    if (this.distributionPreviewSummary) {
-      return this.distributionPreviewSummary.doubleCodedCases;
+  private calculateWorkloadSummary(): CodingWorkloadSummary {
+    const { maxCodingCases, durationSeconds } = this.codingJobForm.getRawValue();
+    const selectedCases = this.calculateSelectedEffectiveCodingCases();
+    const distributableCases = this.calculateDistributableCodingCases();
+    const limitedCases = this.data.mode === 'definition' && typeof maxCodingCases === 'number' && maxCodingCases > 0 ?
+      Math.min(distributableCases, maxCodingCases) : distributableCases;
+    const preview = this.distributionPreviewSummary();
+    const totalCases = preview?.totalCases ?? limitedCases;
+    const doubleCodedCases = preview?.doubleCodedCases ?? this.estimatedVariableCaseCounts()
+      .reduce((sum, cases) => sum + this.getDoubleCodedCasesForVariable(cases), 0);
+    const totalCodingTasks = preview?.totalCodingTasks ?? totalCases + doubleCodedCases;
+    const durationPerCase = durationSeconds || 1;
+    const totalTimeSeconds = totalCodingTasks * durationPerCase;
+    const capacityWeights = this.selectedCoders.selected.map(coder => this.getCoderCapacityPercent(coder) / 100);
+    const totalCapacityWeight = capacityWeights.reduce((sum, weight) => sum + weight, 0);
+    const previewTaskCounts = Object.values(preview?.tasksPerCoder ?? {}).map(Number).filter(Number.isFinite);
+    let timePerCoderSeconds = totalTimeSeconds;
+    if (previewTaskCounts.length > 0) {
+      timePerCoderSeconds = Math.max(...previewTaskCounts) * durationPerCase;
+    } else if (totalCapacityWeight > 0) {
+      timePerCoderSeconds = Math.ceil((totalTimeSeconds / totalCapacityWeight) * Math.max(...capacityWeights));
     }
 
-    return this.getSelectedDistributionVariableCaseCountsAfterLimit()
-      .reduce(
-        (sum, totalCases) => sum + this.getDoubleCodedCasesForVariable(totalCases),
-        0
-      );
+    return {
+      jobCount: (this.selectedVariableValues().length + this.selectedVariableBundles.selected.length) * this.selectedCoders.selected.length,
+      selectedCases,
+      distributableCases,
+      unavailableCases: Math.max(0, selectedCases - distributableCases),
+      limitReduction: distributableCases - limitedCases,
+      totalCases,
+      doubleCodedCases,
+      totalCodingTasks,
+      totalTimeSeconds,
+      timePerCoderSeconds,
+      formattedTotalTime: this.formatTime(totalTimeSeconds),
+      formattedTimePerCoder: this.formatTime(timePerCoderSeconds)
+    };
+  }
+
+  getTotalDoubleCodedCases(): number {
+    return this.workloadSummary().doubleCodedCases;
   }
 
   getTotalCodingTasks(): number {
-    if (this.distributionPreviewSummary) {
-      return this.distributionPreviewSummary.totalCodingTasks;
-    }
-
-    return this.getTotalCodingCases() + this.getTotalDoubleCodedCases();
+    return this.workloadSummary().totalCodingTasks;
   }
 
   getTotalTimeInSeconds(): number {
-    const durationPerCase = this.codingJobForm.getRawValue().durationSeconds || 1;
-    return this.getTotalCodingTasks() * durationPerCase;
+    return this.workloadSummary().totalTimeSeconds;
   }
 
   getTimePerCoderInSeconds(): number {
-    if (this.distributionPreviewSummary?.tasksPerCoder) {
-      const durationPerCase = this.codingJobForm.getRawValue().durationSeconds || 1;
-      const taskCounts = Object.values(this.distributionPreviewSummary.tasksPerCoder)
-        .map(tasks => Number(tasks))
-        .filter(tasks => Number.isFinite(tasks));
-
-      if (taskCounts.length > 0) {
-        return Math.max(...taskCounts) * durationPerCase;
-      }
-    }
-
-    const totalTime = this.getTotalTimeInSeconds();
-    const capacityWeights = this.selectedCoders.selected.map(
-      coder => this.getCoderCapacityPercent(coder) / 100
-    );
-    if (capacityWeights.length === 0) return totalTime;
-
-    const totalCapacityWeight = capacityWeights.reduce((sum, weight) => sum + weight, 0);
-    if (totalCapacityWeight <= 0) return totalTime;
-
-    const normalizedLoadSeconds = totalTime / totalCapacityWeight;
-    const highestCapacityWeight = Math.max(...capacityWeights);
-    return Math.ceil(normalizedLoadSeconds * highestCapacityWeight);
+    return this.workloadSummary().timePerCoderSeconds;
   }
 
   getFormattedTotalTime(): string {
-    return this.formatTime(this.getTotalTimeInSeconds());
+    return this.workloadSummary().formattedTotalTime;
   }
 
   getFormattedTimePerCoder(): string {
-    return this.formatTime(this.getTimePerCoderInSeconds());
+    return this.workloadSummary().formattedTimePerCoder;
   }
 
   private formatTime(seconds: number): string {

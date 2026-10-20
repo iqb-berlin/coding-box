@@ -325,7 +325,7 @@
                                         min="2"
                                         max="100"
                                         step="1"
-                                        [disabled]="!!responseAnalysisValue?.isCalculating"
+                                        [disabled]="!!responseAnalysisValue?.isCalculating || isSavingMatchingMode()"
                                         />
                                     </mat-form-field>
                                     <div class="threshold-help">
