@@ -8,7 +8,7 @@ import { AuthFailureException } from './auth-failure.exception';
 import { isHttpEndpoint, JwksEndpointFailure, logAuthProviderFailure } from './auth-provider-errors';
 import { RequestWithRequestId } from '../http/request-id';
 
-function createSecretProvider(issuer: string, jwksUri: string, clientId: string) {
+function createSecretProvider(issuer: string | undefined, jwksUri: string | undefined, clientId: string | undefined) {
   const logger = new Logger(JwtStrategy.name);
   const configured = isHttpEndpoint(issuer) && isHttpEndpoint(jwksUri) && !!clientId?.trim();
   const provider = configured ? passportJwtSecret({
@@ -25,7 +25,7 @@ function createSecretProvider(issuer: string, jwksUri: string, clientId: string)
 
   return (request: RequestWithRequestId, token: string, done: (error: Error | null, key?: string | Buffer) => void) => {
     const fail = (failure: AuthFailureException, providerStatus: number | null = null) => {
-      logAuthProviderFailure(logger, 'oidc-jwks-failed', jwksUri, failure.code, providerStatus, request?.requestId);
+      logAuthProviderFailure(logger, 'oidc-jwks-failed', jwksUri || '', failure.code, providerStatus, request?.requestId);
       done(failure);
     };
     if (!provider) {
@@ -64,8 +64,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     configService: ConfigService,
     private readonly usersService: UsersService
   ) {
-    const oidcIssuer = configService.get('OIDC_ISSUER');
-    const oidcJwksUri = configService.get('OIDC_JWKS_URI');
+    const oidcIssuer = configService.get<string>('OIDC_ISSUER');
+    const oidcJwksUri = configService.get<string>('OIDC_JWKS_URI');
     const oAuth2ClientId = configService.get<string>('OAUTH2_CLIENT_ID');
 
     super({

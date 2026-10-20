@@ -109,14 +109,15 @@ export class AuthController {
 
   private buildErrorRedirectUrl(redirectUri?: string, code?: AuthErrorCode, requestId?: string): string {
     const redirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
+    const publicRequestId = normalizeRequestId(requestId);
     if (!redirectUrl) {
-      const failureParams = code ? `&auth_error=${code}${requestId ? `&request_id=${encodeURIComponent(normalizeRequestId(requestId))}` : ''}` : '';
+      const failureParams = code ? `&auth_error=${code}${publicRequestId ? `&request_id=${encodeURIComponent(publicRequestId)}` : ''}` : '';
       return `${this.getDefaultLoginErrorRedirect()}${failureParams}`;
     }
 
     redirectUrl.searchParams.set('error', 'authentication_failed');
     if (code) redirectUrl.searchParams.set('auth_error', code);
-    if (requestId) redirectUrl.searchParams.set('request_id', normalizeRequestId(requestId));
+    if (publicRequestId) redirectUrl.searchParams.set('request_id', publicRequestId);
     return redirectUrl.toString();
   }
 
