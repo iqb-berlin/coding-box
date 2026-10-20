@@ -22,6 +22,32 @@ does not undo shared tags already updated after the functional gates passed.
 Review the individual jobs and their reports before merging; a successful build
 alone is not test evidence.
 
+For same-repository GitHub feature pull requests targeting `develop`, the branch
+push pipeline is the authoritative check for that commit. GitLab would otherwise
+start both a push and an external pull-request pipeline. The feature-branch run
+therefore also includes the dependency scan and the database image/Liquibase
+checks previously selected by the external pull-request event, even when only
+documentation changed. Branches without an open pull request receive the same
+checks.
+
+Only the redundant external event is suppressed, and only when its source
+repository, feature branch and source SHA identify the same commit. Pull requests
+targeting `main`, back-merges from `main`, native GitLab merge requests, direct
+`develop`/`main` pushes and release tags keep their existing pipeline selection.
+Incomplete source metadata or a foreign repository retains the external pipeline.
+`CI_OPEN_MERGE_REQUESTS` is not used to detect GitHub pull requests.
+The GitHub push webhook and mirrored branch builds must remain enabled. When a
+pull request is opened without a new commit, its check uses the existing branch
+pipeline for that SHA. After rollout, verify both a new push and opening a pull
+request against GitHub's reported commit status.
+
+For that rollout check, filter GitLab's pipeline list to the feature branch and
+record the commit SHA and pipeline ID before opening the PR. Opening the PR must
+retain that single pipeline, and GitHub's GitLab status must link to it. Push a
+subsequent commit with the PR open, then verify one new push pipeline for the new
+SHA, including the database, dependency-scan and functional jobs. Check the final
+GitHub status against that pipeline's result before merging.
+
 ## Coverage and assertions
 
 Jest requires at least 60% statements, branches, functions and lines in each
