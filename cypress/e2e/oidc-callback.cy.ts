@@ -123,4 +123,53 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
     cy.get('.reauthentication-hint').should('not.exist');
     cy.get('.auth-refresh-unavailable').should('not.exist');
   });
+
+  it('shows a provider callback configuration failure without an automatic login loop', () => {
+    let loginRequests = 0;
+    cy.intercept('GET', '**/api/auth/login*', () => { loginRequests += 1; });
+    cy.visit('/?error=authentication_failed&auth_error=configuration-error&request_id=callback-request');
+    cy.get('.auth-login-failed').should('contain.text', 'Konfigurationsfehler').and('contain.text', 'callback-request');
+    cy.get('.auth-login-failed button').should('be.visible');
+    cy.location('search').should('eq', '');
+    cy.then(() => expect(loginRequests).to.equal(0));
+  });
+
+  it('shows a failed code exchange without redirecting back to the unavailable provider', () => {
+    cy.intercept('POST', '**/api/auth/exchange', {
+      statusCode: 503, body: { code: 'provider-unavailable' }, headers: { 'X-Request-Id': 'exchange-request' }
+    }).as('failedExchange');
+    cy.visit('/?auth_code=login-code');
+    cy.wait('@failedExchange');
+    cy.get('.auth-login-failed').should('contain.text', 'Anmeldedienst ist derzeit nicht erreichbar').and('contain.text', 'exchange-request');
+    cy.location('search').should('eq', '');
+    cy.get('.reauthentication-hint').should('not.exist');
+  });
+
+  it('shows a JWKS configuration error and recovers the bootstrap through an explicit retry', () => {
+    let configured = false;
+    let bootstrapRequests = 0;
+    cy.intercept('GET', '**/api/auth-data*', request => {
+      bootstrapRequests += 1;
+      request.reply(configured ? {
+        body: { userId: 7, userName: 'OIDC User', isAdmin: false, workspaces: [{ id: 12, name: 'Configured Workspace' }] }
+      } : { statusCode: 503, body: { code: 'configuration-error' } });
+    }).as('jwksBootstrap');
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.setItem('auth_token', token(3600));
+        win.localStorage.setItem('refresh_token', 'retained-refresh-token');
+      }
+    });
+    cy.wait('@jwksBootstrap');
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Konfigurationsfehler');
+    cy.get('.reauthentication-hint').should('not.exist');
+    cy.then(() => {
+      expect(bootstrapRequests).to.equal(1);
+      configured = true;
+    });
+    cy.contains('button', 'Erneut laden').click();
+    cy.wait('@jwksBootstrap');
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Configured Workspace');
+    cy.window().then(win => expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token'));
+  });
 });
