@@ -48,6 +48,14 @@ describe('waitForRequiredAuthData', () => {
     await expect(result).resolves.toBe('auth-data-failed');
   });
 
+  it('returns a recoverable failure immediately when refresh is unavailable', async () => {
+    const appService = {
+      authData$: new BehaviorSubject(defaultAuthData).asObservable(),
+      authBootstrapStatus$: new BehaviorSubject<AuthBootstrapStatus>('refresh-unavailable').asObservable()
+    } as AppService;
+    await expect(waitForRequiredAuthData(appService)).resolves.toBe('auth-data-failed');
+  });
+
   it('should resolve session-expired when the Keycloak session expires while waiting', async () => {
     const authDataSubject = new BehaviorSubject<AuthDataDto>(defaultAuthData);
     const authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('backend-login-running');

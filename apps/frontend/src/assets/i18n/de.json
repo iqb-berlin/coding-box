@@ -943,6 +943,10 @@
     "created_at": "Hochgeladen am"
   },
   "error": {
+    "auth_login_failed_title": "Anmeldung nicht abgeschlossen",
+    "auth_login_failed_message": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte starten Sie die Anmeldung erneut. Bleibt der Fehler bestehen, wenden Sie sich an die Administration.",
+    "auth_provider_unavailable_message": "Der Anmeldedienst ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.",
+    "auth_provider_unavailable_title": "Anmeldung kann gerade nicht geprüft werden",
     "general": "Fehler: {{error}}",
     "noWorkspaceSelected": "Kein Workspace ausgewählt",
     "unknown": "Unbekannter Fehler",
@@ -956,6 +960,12 @@
     "session_expiry_warning_title": "Sitzung läuft bald ab",
     "session_expiry_warning_message": "Sie waren längere Zeit nicht aktiv. Ihre Sitzung läuft in wenigen Minuten ab.",
     "session_extend_button": "Sitzung verlängern",
+    "auth_refresh_unavailable_title": "Anmeldung kann gerade nicht erneuert werden",
+    "auth_refresh_unavailable_message": "Der Anmeldedienst oder die Verbindung ist vorübergehend nicht verfügbar. Ihre Sitzung und Eingaben bleiben erhalten. Speichern und Laden sind erst nach erfolgreicher Erneuerung wieder möglich. Versuchen Sie es in einem Moment erneut.",
+    "auth_configuration_error_message": "Die Anmeldung kann wegen eines Konfigurationsfehlers nicht erneuert werden. Ihre Sitzung bleibt erhalten. Bitte wenden Sie sich mit der Anfrage-ID an die Administration.",
+    "auth_refresh_retry": "Anmeldung erneut prüfen",
+    "auth_refresh_pending_save_message": "Ihre Eingabe bleibt erhalten und wird nach erfolgreicher Erneuerung der Anmeldung erneut gespeichert.",
+    "backend_auth_rejected_message": "Die Anmeldung beim Anmeldedienst war erfolgreich, aber das Backend hat den Zugriff abgelehnt. Bitte versuchen Sie es erneut. Bleibt der Fehler bestehen, wenden Sie sich an die Administration.",
     "error_title": "Fehler",
     "requests_affected": "{{count}} Anfragen betroffen",
     "show_details": "Details anzeigen",
