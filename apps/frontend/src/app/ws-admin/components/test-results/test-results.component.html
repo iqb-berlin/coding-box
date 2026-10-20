@@ -246,86 +246,13 @@
   </div>
   }
 
-  <div class="overview-card">
-    <h2 class="section-title">Testergebnis-Übersicht</h2>
-    <p class="section-description">
-      Alle Kennzahlen beziehen sich auf den aktuellen Arbeitsbereich.
-    </p>
-    <mat-divider></mat-divider>
-
-    @if (isLoadingOverview()) {
-    <div class="loading-container">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Übersicht wird geladen...</p>
-    </div>
-    } @if (!isLoadingOverview() && overviewValue) {
-    <div class="overview-grid">
-      <div class="overview-metric">
-        <div class="label">Testgruppen</div>
-        <div class="value">{{ overviewValue.testGroups | number:'1.0-0' }}</div>
-      </div>
-      <div class="overview-metric">
-        <div class="label">Testpersonen</div>
-        <div class="value">{{ overviewValue.testPersons | number:'1.0-0' }}</div>
-      </div>
-      <div class="overview-metric">
-        <div class="label">Verschiedene Aufgaben</div>
-        <div class="value">{{ overviewValue.uniqueUnits | number:'1.0-0' }}</div>
-      </div>
-      <div class="overview-metric">
-        <div class="label">Verschiedene Testhefte</div>
-        <div class="value">{{ overviewValue.uniqueBooklets | number:'1.0-0' }}</div>
-      </div>
-      <div class="overview-metric">
-        <div class="label">Antwortwerte gesamt</div>
-        <div class="value">{{ overviewValue.uniqueResponses | number:'1.0-0' }}</div>
-      </div>
-    </div>
-
-    <div class="overview-status">
-      <h3 class="sub-title">Statusverteilung der Antwortwerte</h3>
-      <div class="status-grid">
-        @for (sc of overviewStatusCounts; track sc.status) {
-        <button
-          type="button"
-          class="status-chip"
-          [class.is-active]="quickSearchTableFiltersValue?.responseStatus === sc.status && isTableView()"
-          [matTooltip]="getResponseStatusTooltip(sc.status)"
-          [attr.aria-label]="'Antwortstatus ' + sc.status + ' in der Tabellenansicht anzeigen'"
-          (click)="openResponseStatusInTable(sc.status)"
-        >
-          <span class="status">{{ sc.status }}</span>
-          <span class="count">{{ sc.count | number:'1.0-0' }}</span>
-          <span class="percent">{{ sc.percent | number:'1.0-1' }}%</span>
-        </button>
-        }
-      </div>
-    </div>
-
-    <p class="overview-scope-note">
-      Basis: berücksichtigte Testpersonen; ignorierte Inhalte und automatisch erzeugte Antwortwerte sind ausgeschlossen.
-    </p>
-
-    <div class="overview-distributions">
-      <button
-        mat-stroked-button
-        type="button"
-        (click)="openSessionDistributionsDialog()"
-      >
-        <mat-icon>devices</mat-icon>
-        Sitzungsdaten
-      </button>
-    </div>
-    } @if (!isLoadingOverview() && !overviewValue) {
-    <div class="empty-state-container" style="max-width: unset">
-      <mat-icon class="empty-state-icon">info</mat-icon>
-      <h2 class="empty-state-title">Keine Übersicht verfügbar</h2>
-      <p class="empty-state-description">
-        Die Übersicht konnte nicht geladen werden.
-      </p>
-    </div>
-    }
-  </div>
+  <coding-box-test-results-overview
+    [overview]="overviewValue"
+    [loading]="isLoadingOverview()"
+    [selectedStatus]="isTableView() ? quickSearchTableFiltersValue?.responseStatus : undefined"
+    (statusSelected)="openResponseStatusInTable($event)"
+    (sessionDetailsRequested)="openSessionDistributionsDialog()"
+  />
 
   <input
     #hiddenResponsesFileInput
