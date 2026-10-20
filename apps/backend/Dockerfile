@@ -27,11 +27,10 @@ USER node
 WORKDIR /usr/src/coding-box-${PROJECT}
 RUN mkdir packages
 
-# Install dependencies from the same commit-pinned Codebook build as the frontend.
-COPY --chown=node:node --from=base /usr/src/coding-box-base/vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz ./vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz
+# Install the published runtime dependencies generated from the root package pins.
 COPY --chown=node:node --from=base /usr/src/coding-box-base/dist/apps/${PROJECT}/package.json .
 RUN --mount=type=cache,target=~/.npm \
-    npm pkg set dependencies.@iqb/ngx-coding-components=file:vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz overrides.image-size=2.0.3 && \
+    npm pkg set overrides.image-size=2.0.3 && \
     npm install --omit=dev --no-fund
 
 # Install PostgreSQL client (missing in dist/apps/backend/package.json - nx bug?)

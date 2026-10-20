@@ -33,10 +33,42 @@ const codes: VariableCodingData['codes'] = [
 ];
 const serializedInput = (value: unknown) => JSON.parse(JSON.stringify(value));
 
-describe('Responses 5.3.1 with the original Kodierbox solver contract', () => {
+describe('Responses 5.4.0 with the original Kodierbox solver contract', () => {
   it('keeps the generated engine reproducible from the installed current package', () => {
     execFileSync(process.execPath, ['scripts/build-autocoder-compat.mjs', '--check'], {
       cwd: process.cwd(), stdio: 'pipe'
+    });
+  });
+
+  describe.each(['SUM_SCORE', 'SUM_CODE', 'CONCAT_CODE'] as const)('%s partial credit', sourceType => {
+    it.each([
+      ['TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL', 'DISPLAYED'],
+      ['TAKE_EMPTY_AS_ZERO_IF_PARTIAL', 'INVALID']
+    ] as const)('supports %s only when enabled', (option, status) => {
+      const scheme: VariableCodingData[] = [
+        { id: 'A', sourceType: 'BASE', codes: [] },
+        { id: 'B', sourceType: 'BASE', codes: [] },
+        {
+          id: 'D',
+          sourceType,
+          deriveSources: ['A', 'B'],
+          sourceParameters: { processing: [option] },
+          codes: []
+        }
+      ];
+      const input = [
+        {
+          id: 'A', value: 1, status: 'CODING_COMPLETE', code: 2, score: 3
+        },
+        { id: 'B', value: null, status }
+      ];
+      const expectedValue = { SUM_SCORE: 3, SUM_CODE: 2, CONCAT_CODE: '2_x' }[sourceType];
+      const output = Compatible.code(serializedInput(input), scheme);
+      expect(output.find(r => r.id === 'D')).toMatchObject({ value: expectedValue, status: 'NO_CODING' });
+      expect(output).toEqual(Current.code(serializedInput(input), scheme));
+      expect(output.find(r => r.id === 'B')).toEqual(input[1]);
+      scheme[2].sourceParameters = { processing: [] };
+      expect(Compatible.code(serializedInput(input), scheme).find(r => r.id === 'D')?.status).toBe('INVALID');
     });
   });
 
