@@ -14,12 +14,14 @@ export async function loadStudioReference(root) {
   // Resolve dependencies from Studio's actual installation; never write to it.
   new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(path.join(root, 'package.json')), module, module.exports);
   const generator = module.exports.DownloadWorkspacesClass;
-  const tarball = await readFile(path.join(root, 'vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz'));
+  const lock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
+  const codebookPackage = lock.packages['node_modules/@iqb/ngx-coding-components'];
   return {
     metadata: {
       commit: execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       sourceSha256: createHash('sha256').update(sourceBytes).digest('hex'),
-      packageSha256: createHash('sha256').update(tarball).digest('hex'),
+      packageVersion: codebookPackage.version,
+      packageIntegrity: codebookPackage.integrity,
       persistence: 'Studio repository/profile boundaries in memory; Kodierbox HTTP/DB/Redis live',
       scope: 'Studio receives the explicitly expected variable subset and item identities; it has no Kodierbox job/bundle filter'
     },

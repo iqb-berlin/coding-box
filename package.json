@@ -41,9 +41,9 @@
     "@angular/router": "21.2.25",
     "@iqb/metadata-components": "1.0.0",
     "@iqb/metadata-resolver": "0.2.0",
-    "@iqb/ngx-coding-components": "file:vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz",
-    "@iqb/responses": "5.3.1",
-    "@iqbspecs/coding-scheme": "^3.4.1",
+    "@iqb/ngx-coding-components": "4.1.0",
+    "@iqb/responses": "5.5.0",
+    "@iqbspecs/coding-scheme": "^3.5.0",
     "@iqbspecs/metadata-profile": "^0.11.1",
     "@iqbspecs/metadata-values": "^3.0.1",
     "@iqbspecs/response": "1.5.1",
@@ -207,7 +207,9 @@
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
     "handlebars": "4.7.10",
-    "image-size": "2.0.3"
+    "image-size": "2.0.3",
+    "follow-redirects": "1.16.1",
+    "@modelcontextprotocol/sdk": "1.32.1"
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
