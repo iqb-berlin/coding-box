@@ -247,7 +247,7 @@
                       (keydown)="$event.stopPropagation()">
                   </mat-form-field>
                 </div>
-                @for (bundle of filteredBundles$ | async; track bundle.id) {
+                @for (bundle of filteredBundles(); track bundle.id) {
                   <mat-option [value]="bundle.id"
                     [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                     {{bundle.name}}
@@ -378,7 +378,8 @@
         <div class="variable-selection-row">
           <mat-form-field appearance="outline" class="variable-multiselect-field">
             <mat-label>Variablen auswählen</mat-label>
-            <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
+            <mat-select placeholder="Variable(n) auswählen" multiple [value]="manualVariableKeys()" [disabled]="!canEditTraining"
+              (selectionChange)="onVariablesSelectionChange($event.value)">
               <div class="select-search-container">
                 <mat-form-field appearance="fill" class="select-search-field">
                   <mat-icon matPrefix>search</mat-icon>
@@ -386,7 +387,7 @@
                     (keydown)="$event.stopPropagation()">
                 </mat-form-field>
               </div>
-              @for (variable of filteredVariables$ | async; track variable.unitName + '::' + variable.variableId) {
+              @for (variable of filteredVariables(); track variable.unitName + '::' + variable.variableId) {
                 <mat-option
                   [value]="variable.unitName + '::' + variable.variableId">
                   {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
