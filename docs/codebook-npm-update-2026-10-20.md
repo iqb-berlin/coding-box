@@ -31,6 +31,10 @@ jeweils einschließlich des Verhaltens ohne Aktivierung.
   JSON und allen verglichenen DOCX-Bestandteilen identisch. Alle **20
   Paketdateien** entsprechen dem Build. Code/Missing 0, Scores, Bilder, Formeln,
   Leerzeichen und unveränderte alte Studio-Referenzen sind enthalten.
+- Zoneless-CI-Prüfung: Inventar mit **8.860 Einträgen** konsistent,
+  Risikoreferenzen und **2 Inventar-Regressionsfälle** bestanden. Nur der
+  Fingerprint der aktualisierten Bibliothek ist angepasst; ihr Einzelreview
+  bleibt offen. Das ist keine vollständige neue Zoneless-Abnahme.
 - Bibliothek: **1.343 Tests**, frischer Consumer mit ESM/CommonJS, JSON/DOCX und
   striktem TypeScript mit Bundler/NodeNext bestanden.
 
