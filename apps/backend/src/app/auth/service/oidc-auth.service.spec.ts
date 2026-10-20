@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { of, throwError } from 'rxjs';
@@ -8,7 +9,7 @@ import { CacheService } from '../../cache/cache.service';
 describe('OidcAuthService', () => {
   let service: OidcAuthService;
   let cacheService: jest.Mocked<Pick<CacheService, 'set' | 'getAndDelete' | 'getAndDeleteIfFieldMatches'>>;
-  let httpService: jest.Mocked<Pick<HttpService, 'post'>>;
+  let httpService: jest.Mocked<Pick<HttpService, 'post' | 'get'>>;
 
   beforeEach(() => {
     cacheService = {
@@ -17,7 +18,8 @@ describe('OidcAuthService', () => {
       getAndDeleteIfFieldMatches: jest.fn()
     };
     httpService = {
-      post: jest.fn()
+      post: jest.fn(),
+      get: jest.fn()
     };
 
     service = new OidcAuthService(
@@ -26,6 +28,7 @@ describe('OidcAuthService', () => {
         get: jest.fn((key: string) => ({
           OIDC_ISSUER: 'https://issuer.example.test/realms/coding-box',
           OIDC_TOKEN_ENDPOINT: 'https://issuer.example.test/token',
+          OIDC_USERINFO_ENDPOINT: 'https://issuer.example.test/userinfo',
           OAUTH2_CLIENT_ID: 'coding-box',
           OAUTH2_CLIENT_SECRET: 'client-secret'
         })[key] || '')
@@ -44,7 +47,7 @@ describe('OidcAuthService', () => {
       { get: () => undefined } as unknown as ConfigService,
       cacheService as unknown as CacheService
     );
-    expect(() => unconfiguredService.getIssuer()).toThrow('OpenID Connect issuer configuration is missing');
+    expect(() => unconfiguredService.getIssuer()).toThrow('The authentication provider configuration requires attention');
   });
 
   it('stores server PKCE verifiers and browser challenges in the shared cache', async () => {
@@ -153,7 +156,7 @@ describe('OidcAuthService', () => {
     expect(httpService.post).toHaveBeenCalledWith(
       'https://issuer.example.test/token',
       expect.stringContaining('grant_type=refresh_token'),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      { timeout: 10_000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
     expect(httpService.post.mock.calls[0][1]).toContain('refresh_token=refresh-token');
     expect(httpService.post.mock.calls[0][1]).toContain('client_secret=client-secret');
@@ -162,6 +165,87 @@ describe('OidcAuthService', () => {
   it('rejects failed token refreshes', async () => {
     httpService.post.mockReturnValue(throwError(() => new Error('refresh failed')) as never);
 
-    await expect(service.refreshToken('refresh-token')).rejects.toThrow('Failed to refresh access token');
+    await expect(service.refreshToken('refresh-token')).rejects.toMatchObject({
+      code: 'provider-unavailable'
+    });
+  });
+
+  it.each([
+    [400, 'invalid_grant', 401, 'session-invalid'],
+    [400, 'invalid_client', 503, 'configuration-error'],
+    [401, 'invalid_client', 503, 'configuration-error'],
+    [403, 'access_denied', 503, 'configuration-error'],
+    [429, 'temporarily_unavailable', 503, 'provider-unavailable'],
+    [500, 'invalid_grant', 503, 'provider-unavailable'],
+    [503, 'temporarily_unavailable', 503, 'provider-unavailable']
+  ])('classifies provider HTTP %s / %s as %s / %s without exposing provider data', async (status, error, expectedStatus, code) => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      httpService.post.mockReturnValue(throwError(() => ({
+        response: { status, data: { error, error_description: 'private-refresh-token' } },
+        config: { data: 'client_secret=private-client-secret' }
+      })) as never);
+      const failure = await service.refreshToken('private-refresh-token', 'request-123').catch(value => value);
+      expect(failure.getStatus()).toBe(expectedStatus);
+      expect(failure.getResponse()).toEqual({ code, message: expect.any(String) });
+      expect(warn).toHaveBeenCalledWith({
+        event: 'oidc-refresh-failed',
+        errorClass: code,
+        endpoint: 'https://issuer.example.test/token',
+        httpStatus: status,
+        requestId: 'request-123'
+      });
+      expect(JSON.stringify([failure.getResponse(), warn.mock.calls])).not.toContain('private-');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reports missing token endpoint configuration separately from an invalid session', async () => {
+    const unconfigured = new OidcAuthService(
+      httpService as unknown as HttpService,
+      { get: () => undefined } as unknown as ConfigService,
+      cacheService as unknown as CacheService
+    );
+    await expect(unconfigured.refreshToken('refresh-token')).rejects.toMatchObject({ code: 'configuration-error' });
+    expect(httpService.post).not.toHaveBeenCalled();
+  });
+
+  it('classifies a malformed provider success response as unavailable', async () => {
+    httpService.post.mockReturnValue(of({ data: { message: 'unexpected provider page' } }) as never);
+    await expect(service.refreshToken('refresh-token')).rejects.toMatchObject({ code: 'provider-unavailable' });
+  });
+
+  it.each([
+    [400, 'invalid_grant', 'session-invalid'],
+    [401, 'invalid_client', 'configuration-error'],
+    [503, 'temporarily_unavailable', 'provider-unavailable'],
+    [undefined, undefined, 'provider-unavailable']
+  ])('classifies authorization-code exchange failures without logging codes or secrets (%s)', async (status, error, code) => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      httpService.post.mockReturnValue(throwError(() => ({
+        response: { status, data: { error, error_description: 'private-auth-code' } },
+        config: { data: 'private-client-secret' }
+      })) as never);
+      await expect(service.exchangeCodeForToken('private-auth-code', 'https://app.test', 'private-verifier', 'exchange-request'))
+        .rejects.toMatchObject({ code });
+      expect(httpService.post.mock.calls[0][2]).toMatchObject({ timeout: 10_000 });
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+        event: 'oidc-code-exchange-failed', errorClass: code, requestId: 'exchange-request'
+      }));
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private-');
+    } finally { warn.mockRestore(); }
+  });
+
+  it.each([[401, 'session-invalid'], [503, 'provider-unavailable']])('classifies userinfo HTTP %s as %s', async (status, code) => {
+    httpService.get.mockReturnValue(throwError(() => ({ response: { status, data: 'private-provider-detail' } })) as never);
+    await expect(service.getUserInfo('private-access-token', 'userinfo-request')).rejects.toMatchObject({ code });
+    expect(httpService.get.mock.calls[0][1]).toMatchObject({ timeout: 10_000 });
+  });
+
+  it('rejects a malformed userinfo success response', async () => {
+    httpService.get.mockReturnValue(of({ data: { email: 'private@example.test' } }) as never);
+    await expect(service.getUserInfo('access-token')).rejects.toMatchObject({ code: 'provider-unavailable' });
   });
 });

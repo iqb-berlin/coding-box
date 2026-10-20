@@ -1,27 +1,35 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {
   BehaviorSubject,
   firstValueFrom,
   Observable,
+  Subject,
   tap
 } from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
 import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
+import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
+import { SessionRecoveryService } from './session-recovery.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
+  private readonly authenticationRecoveredSubject = new Subject<void>();
+  readonly authenticationRecovered$ = this.authenticationRecoveredSubject.asObservable();
+  private readonly refreshFailureState = signal<AuthRefreshUnavailableError | null>(null);
+  readonly refreshFailure = this.refreshFailureState.asReadonly();
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly appService = inject(AppService);
+  private readonly sessionRecovery = inject(SessionRecoveryService);
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
@@ -105,6 +113,7 @@ export class AuthService {
   }
 
   async login(returnUrl?: string): Promise<void> {
+    this.appService.clearLoginFailure();
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
     const browserVerifier = this.encodeBase64Url(globalThis.crypto.getRandomValues(new Uint8Array(32)));
     const challengeDigest = await globalThis.crypto.subtle.digest(
@@ -126,6 +135,8 @@ export class AuthService {
     return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, {
       code,
       browser_verifier: browserVerifier
+    }, {
+      context: suppressGlobalAndAuthRedirectHttpErrorContext()
     }).pipe(
       tap(() => globalThis.sessionStorage.removeItem(this.loginVerifierKey))
     );
@@ -215,6 +226,11 @@ export class AuthService {
     const refreshPromise: Promise<string | undefined> = firstValueFrom(this.refreshToken(refreshToken))
       .then(tokenResponse => {
         if (!isCurrentSession()) return undefined;
+        if (typeof tokenResponse?.access_token !== 'string' || !tokenResponse.access_token.trim()) {
+          throw new AuthRefreshUnavailableError();
+        }
+        const recoveredFromFailure = this.refreshFailureState() !== null;
+        this.refreshFailureState.set(null);
         this.storeAccessToken(tokenResponse.access_token);
 
         if (tokenResponse.id_token) {
@@ -225,14 +241,26 @@ export class AuthService {
           this.setRefreshToken(tokenResponse.refresh_token);
         }
 
+        if (recoveredFromFailure) this.authenticationRecoveredSubject.next();
         return tokenResponse.access_token;
       })
-      .catch(() => {
-        if (isCurrentSession()) {
+      .catch((error: unknown) => {
+        if (!isCurrentSession()) return undefined;
+        if (error instanceof HttpErrorResponse && error.status === 401) {
           this.clearStoredTokens();
           this.appService.requireReAuthentication(this.router.url);
+          return undefined;
         }
-        return undefined;
+        const response = error instanceof HttpErrorResponse ? error : undefined;
+        const requestId = response?.headers.get('X-Request-Id') || response?.error?.requestId;
+        const failure = new AuthRefreshUnavailableError(
+          response?.error?.code === 'configuration-error' ? 'configuration-error' : 'provider-unavailable',
+          response?.status,
+          typeof requestId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(requestId) ? requestId : ''
+        );
+        this.refreshFailureState.set(failure);
+        this.sessionRecovery.captureRegisteredDrafts();
+        throw failure;
       })
       .finally(() => {
         if (this.refreshInFlight?.promise === refreshPromise) this.refreshInFlight = undefined;
@@ -257,6 +285,7 @@ export class AuthService {
   private invalidatePendingRefresh(): void {
     this.sessionGeneration += 1;
     this.refreshInFlight = undefined;
+    this.refreshFailureState.set(null);
   }
 
   private isTokenValid(token: string, minValidity = 0): boolean {
