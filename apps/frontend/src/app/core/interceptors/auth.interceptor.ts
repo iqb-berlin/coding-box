@@ -20,6 +20,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
 import { AuthRequestCancelledError } from './auth-request-cancelled.error';
 import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
+import { getAuthProviderFailureCode } from './auth-provider-failure';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
   SUPPRESS_GLOBAL_HTTP_ERROR
@@ -76,6 +77,18 @@ export const authInterceptor: HttpInterceptorFn = (
 
                 if (suppressBackendLoginAuthDataError || staleSessionAuthError ||
                   (req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) && req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT))) {
+                  return;
+                }
+
+                const providerFailureCode = getAuthProviderFailureCode(error);
+                if (providerFailureCode && isBackendRequest(req.url, serverUrl) &&
+                  !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+                  sessionGeneration === authService.getSessionGeneration() && currentToken &&
+                  modifiedReq.headers.get('Authorization') === `Bearer ${currentToken}`) {
+                  if (!appService.isBackendLoginRunning()) {
+                    appService.recordAuthProviderFailure(providerFailureCode, httpErrorInfo.requestId);
+                  }
+                  suppressGlobalErrorMessage = true;
                   return;
                 }
 

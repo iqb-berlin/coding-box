@@ -85,7 +85,7 @@ export class ErrorMessageDisplayComponent {
   }
 
   protected async retryAuthentication(): Promise<void> {
-    if (this.retryingAuthentication()) return;
+    if (this.retryingAuthentication() || this.appService.authBootstrapStatus === 'backend-login-running') return;
     const generation = this.authService.getSessionGeneration();
     this.retryingAuthentication.set(true);
     try {

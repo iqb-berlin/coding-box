@@ -25,6 +25,9 @@ describe('ErrorMessageDisplayComponent', () => {
     setNeedsReAuthentication: jest.Mock;
     setSessionExpiryWarning: jest.Mock;
     requireReAuthentication: jest.Mock;
+    loginFailure?: { code: string; requestId: string };
+    authProviderFailure?: { code: string; requestId: string };
+    authBootstrapStatus?: string;
   };
   let authService: {
     refreshFailure: WritableSignal<AuthRefreshUnavailableError | null>;
@@ -74,6 +77,43 @@ describe('ErrorMessageDisplayComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).not.toContain('error.reauthentication_title');
+  });
+
+  it('shows an actionable login configuration failure with a request ID', () => {
+    appService.loginFailure = { code: 'configuration-error', requestId: 'login-request' };
+    fixture.detectChanges();
+    const alert = fixture.nativeElement.querySelector('.auth-login-failed');
+    expect(alert.textContent).toContain('error.auth_configuration_error_message');
+    expect(alert.textContent).toContain('login-request');
+    alert.querySelector('button').click();
+    expect(authService.login).toHaveBeenCalled();
+  });
+
+  it('offers backend verification after a protected request fails because of the provider', () => {
+    appService.needsReAuthentication = false;
+    appService.authProviderFailure = { code: 'configuration-error', requestId: 'provider-request' };
+    const restored = jest.fn();
+    fixture.componentInstance.authenticationRestored.subscribe(restored);
+    fixture.detectChanges();
+    const banner = fixture.nativeElement.querySelector('.auth-refresh-unavailable');
+    expect(banner.textContent).toContain('error.auth_configuration_error_message');
+    expect(banner.textContent).toContain('provider-request');
+    banner.querySelector('button').click();
+    return fixture.whenStable().then(() => {
+      expect(restored).toHaveBeenCalledTimes(1);
+      expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    });
+  });
+
+  it('prevents repeated retries while backend authentication is being verified', () => {
+    appService.needsReAuthentication = false;
+    appService.authProviderFailure = { code: 'provider-unavailable', requestId: 'provider-request' };
+    appService.authBootstrapStatus = 'backend-login-running';
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('.auth-refresh-unavailable button');
+    expect(button.disabled).toBe(true);
+    button.click();
+    expect(authService.getValidToken).not.toHaveBeenCalled();
   });
 
   it('should show the global reauthentication message outside the home route', () => {

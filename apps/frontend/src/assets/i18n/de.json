@@ -943,6 +943,10 @@
     "created_at": "Hochgeladen am"
   },
   "error": {
+    "auth_login_failed_title": "Anmeldung nicht abgeschlossen",
+    "auth_login_failed_message": "Die Anmeldung konnte nicht abgeschlossen werden. Bitte starten Sie die Anmeldung erneut. Bleibt der Fehler bestehen, wenden Sie sich an die Administration.",
+    "auth_provider_unavailable_message": "Der Anmeldedienst ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.",
+    "auth_provider_unavailable_title": "Anmeldung kann gerade nicht geprüft werden",
     "general": "Fehler: {{error}}",
     "noWorkspaceSelected": "Kein Workspace ausgewählt",
     "unknown": "Unbekannter Fehler",

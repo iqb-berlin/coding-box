@@ -12,6 +12,7 @@ const mockAuthService = {
 
 const mockAppService = {
   authDataFailureStatus: null as number | null,
+  authDataFailureCode: null as string | null,
   reAuthenticationReturnUrl: '/coding',
   needsReAuthentication: false,
   retryAuthDataLoad: jest.fn().mockReturnValue(of(false))
@@ -26,6 +27,7 @@ describe('UserWorkspacesComponent', () => {
     mockAuthService.isLoggedIn.mockReturnValue(true);
     mockAppService.needsReAuthentication = false;
     mockAppService.authDataFailureStatus = null;
+    mockAppService.authDataFailureCode = null;
     mockAppService.retryAuthDataLoad.mockReturnValue(of(false));
 
     await TestBed.configureTestingModule({
@@ -65,6 +67,18 @@ describe('UserWorkspacesComponent', () => {
     component.login();
 
     expect(mockAuthService.login).toHaveBeenCalledWith('/coding');
+  });
+
+  it.each([
+    ['configuration-error', 'error.auth_configuration_error_message'],
+    ['provider-unavailable', 'error.auth_provider_unavailable_message']
+  ])('shows appropriate bootstrap recovery for %s', (code, message) => {
+    mockAppService.authDataFailureCode = code;
+    fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(message);
+    expect(fixture.nativeElement.textContent).not.toContain('error.reauthentication_message');
+    expect(getButtonByText('home.retry-auth-data')).toBeDefined();
   });
 
   it('should show a loading state until auth data is available', () => {

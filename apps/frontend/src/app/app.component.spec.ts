@@ -3,7 +3,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { signal } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
-import { Observable, Subject, of } from 'rxjs';
+import {
+  Observable, Subject, of, throwError
+} from 'rxjs';
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
@@ -29,9 +32,12 @@ describe('AppComponent', () => {
     authData$: Observable<AuthDataDto>;
     processMessagePost: jest.Mock;
     loadAuthenticatedUser: jest.Mock;
+    retryAuthDataLoad: jest.Mock;
     setAuthBootstrapStatus: jest.Mock;
     completeBackendLogin: jest.Mock;
+    markLoginFailed: jest.Mock;
     authBootstrapStatus: string;
+    authProviderFailure?: { code: string; requestId: string };
     normalizeInternalRoute: jest.Mock;
     isLoggedIn: boolean;
     loggedUser?: unknown;
@@ -70,8 +76,10 @@ describe('AppComponent', () => {
       authData$: of(AppService.defaultAuthData),
       processMessagePost: jest.fn(),
       loadAuthenticatedUser: jest.fn().mockReturnValue(of(true)),
+      retryAuthDataLoad: jest.fn().mockReturnValue(of(true)),
       setAuthBootstrapStatus: jest.fn(),
       completeBackendLogin: jest.fn(),
+      markLoginFailed: jest.fn(),
       authBootstrapStatus: 'ready',
       normalizeInternalRoute: jest.fn((returnUrl?: string) => (
         returnUrl &&
@@ -151,6 +159,37 @@ describe('AppComponent', () => {
     expect(TestBed.inject(SystemNotificationService).stopPolling).toHaveBeenCalled();
   });
 
+  it('shows a classified callback error and removes diagnostics from the URL without starting another login', async () => {
+    window.history.replaceState(null, '', '/?error=authentication_failed&auth_error=configuration-error&request_id=login-request#/home');
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('configuration-error', 'login-request');
+    expect(authService.exchangeLoginCode).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps failed login-code exchanges recoverable without an automatic redirect loop', async () => {
+    window.history.replaceState(null, '', '/?auth_code=private-code#/home');
+    authService.exchangeLoginCode.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 503, error: { code: 'provider-unavailable' }, headers: new HttpHeaders({ 'X-Request-Id': 'exchange-request' })
+    })));
+    const fixture = TestBed.createComponent(AppComponent);
+    await expect(fixture.componentInstance.ngOnInit()).resolves.toBeUndefined();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('provider-unavailable', 'exchange-request');
+    expect(authService.setToken).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
+  it.each([0, 503])('classifies an unavailable exchange without a backend error code (HTTP %s)', async status => {
+    window.history.replaceState(null, '', '/?auth_code=private-code#/home');
+    authService.exchangeLoginCode.mockReturnValue(throwError(() => new HttpErrorResponse({ status })));
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('provider-unavailable', null);
+    expect(authService.setToken).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
   it('keeps bootstrap recoverable after an unavailable refresh and loads auth data after retry', async () => {
     authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
     const fixture = TestBed.createComponent(AppComponent);
@@ -169,6 +208,17 @@ describe('AppComponent', () => {
     await component.handleAuthenticationRestored();
     expect(appService.completeBackendLogin).toHaveBeenCalledTimes(1);
     expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('verifies backend authentication before restoring drafts after a JWKS outage', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authProviderFailure = { code: 'provider-unavailable', requestId: 'provider-request' };
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.retryAuthDataLoad).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+    expect(appService.completeBackendLogin).not.toHaveBeenCalled();
   });
 
   it('retries an interrupted auth-data bootstrap after successful renewal', async () => {

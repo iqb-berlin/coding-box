@@ -110,6 +110,7 @@ export class AuthService {
   }
 
   async login(returnUrl?: string): Promise<void> {
+    this.appService.clearLoginFailure();
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
     const browserVerifier = this.encodeBase64Url(globalThis.crypto.getRandomValues(new Uint8Array(32)));
     const challengeDigest = await globalThis.crypto.subtle.digest(
@@ -131,6 +132,8 @@ export class AuthService {
     return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, {
       code,
       browser_verifier: browserVerifier
+    }, {
+      context: suppressGlobalAndAuthRedirectHttpErrorContext()
     }).pipe(
       tap(() => globalThis.sessionStorage.removeItem(this.loginVerifierKey))
     );

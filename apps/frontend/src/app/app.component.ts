@@ -11,6 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
@@ -144,6 +145,11 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   protected async handleAuthenticationRestored(): Promise<void> {
+    if (this.isLoggedIn() && this.appService.authProviderFailure) {
+      this.setAuthState();
+      await firstValueFrom(this.appService.retryAuthDataLoad());
+      return;
+    }
     if (this.isLoggedIn() && this.appService.authBootstrapStatus === 'ready') {
       this.appService.completeBackendLogin();
       return;
@@ -185,6 +191,12 @@ export class AppComponent implements OnInit, OnDestroy {
       const urlParams = new URLSearchParams(window.location.search);
       const authCode = urlParams.get('auth_code');
 
+      if (urlParams.get('error') === 'authentication_failed') {
+        this.appService.markLoginFailed(urlParams.get('auth_error'), urlParams.get('request_id'));
+        this.removeAuthCallbackParams();
+        return undefined;
+      }
+
       const hasLegacyTokenParams = urlParams.has('token') || urlParams.has('id_token') || urlParams.has('refresh_token');
 
       if (authCode) {
@@ -206,8 +218,14 @@ export class AppComponent implements OnInit, OnDestroy {
       if (hasLegacyTokenParams) {
         this.removeAuthCallbackParams();
       }
-    } catch {
-      this.authService.login();
+    } catch (error) {
+      let code: unknown;
+      if (error instanceof HttpErrorResponse) {
+        const unavailable = [0, 408, 429, 500, 502, 503, 504].includes(error.status);
+        code = error.error?.code || (unavailable ? 'provider-unavailable' : 'session-invalid');
+      }
+      this.appService.markLoginFailed(code, error instanceof HttpErrorResponse ? error.headers.get('X-Request-Id') : undefined);
+      this.removeAuthCallbackParams();
     }
     return undefined;
   }
@@ -225,7 +243,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private removeAuthCallbackParams(postLoginReturnUrl?: string): void {
     const url = new URL(window.location.href);
-    ['auth_code', 'token', 'id_token', 'refresh_token'].forEach(param => url.searchParams.delete(param));
+    ['auth_code', 'token', 'id_token', 'refresh_token', 'error', 'auth_error', 'request_id'].forEach(param => url.searchParams.delete(param));
     if (postLoginReturnUrl) {
       url.hash = postLoginReturnUrl;
     }
