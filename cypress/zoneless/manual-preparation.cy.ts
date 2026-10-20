@@ -105,6 +105,49 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@training').find('.start-training-button').should('be.enabled');
   }
 
+  it('keeps matching options when the extracted settings view is recreated', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/statistics?*', { body: { totalResponses: 0, statusCounts: {} } });
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/aggregation-settings', request => {
+      expect(request.body.threshold).to.equal(3);
+      expect(request.body.flags).to.deep.equal(['IGNORE_CASE']);
+      request.reply({ delay: 300, body: { success: true, threshold: 3, flags: request.body.flags, aggregationActive: true, revertedResponses: 0, message: 'saved' } });
+    }).as('saveMatching');
+    openManual();
+    cy.contains('coding-box-coding-management-manual button', 'Aktualisieren').click();
+    cy.get('coding-box-manual-coding-aggregation-settings').as('settings');
+    cy.get('@settings').find('input[type="number"]').should('have.value', '2');
+    cy.get('@settings').find('mat-checkbox').first().click();
+    cy.get('@settings').should('contain.text', 'Optionen geändert');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.get('coding-box-manual-coding-aggregation-settings').should('not.exist');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Vorbereitung').click();
+    cy.get('coding-box-manual-coding-aggregation-settings mat-checkbox input').first().should('be.checked');
+    cy.get('coding-box-manual-coding-aggregation-settings').should('contain.text', 'Optionen geändert');
+    cy.get('coding-box-manual-coding-aggregation-settings input[type="number"]').clear().type('3');
+    cy.get('coding-box-manual-coding-aggregation-settings .saving-indicator').should('be.visible');
+    cy.wait('@saveMatching');
+    cy.get('coding-box-manual-coding-aggregation-settings input[type="number"]').should('have.value', '3');
+    cy.get('coding-box-manual-coding-aggregation-settings .saving-indicator').should('not.exist');
+    cy.get('coding-box-manual-coding-aggregation-settings mat-checkbox input').first().should('be.checked');
+    cy.screenshot('manual-aggregation-settings-refactor', { capture: 'viewport' });
+  });
+
+  it('interprets quoted CSV headers and permits selecting the same file again after cancelling', () => {
+    setup();
+    openManual();
+    const file = { contents: Cypress.Buffer.from('\uFEFF"Unit Alias";"Variable-ID";"score"\nUNIT_A;VAR_1;1'), fileName: 'codes.csv', mimeType: 'text/csv' };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      cy.get('coding-box-coding-management-manual input[type="file"]').selectFile(file, { force: true });
+      cy.get('coding-box-coding-import-format-dialog').should('contain.text', 'codes.csv');
+      cy.get('coding-box-coding-import-format-dialog mat-dialog-content').should('be.visible');
+      cy.get('coding-box-coding-import-format-dialog .header-list').should('contain.text', 'unit_alias').and('contain.text', 'variable_id');
+      cy.get('coding-box-coding-import-format-dialog').contains('button', 'Abbrechen').click();
+      cy.get('coding-box-coding-import-format-dialog').should('not.exist');
+      cy.get('coding-box-coding-management-manual .header-actions button').first().should('be.enabled');
+    }
+  });
+
   it('renders delayed reference trainings and preserves selections through a failed save and retry', () => {
     setup();
     const trainingsGate = gate();
