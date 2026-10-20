@@ -188,26 +188,29 @@ describe('real Keycloak coding session', () => {
 
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
-      if (failNotes)
+      if (failNotes) {
+        request.alias = 'failedDraftNote';
         request.reply({
           statusCode: 503,
           body: { message: 'Simulated connection loss' }
         });
-      else request.continue();
+      } else request.continue();
     });
     cy.get('coding-box-code-selector textarea')
       .clear()
       .type('Recovered live draft')
       .blur();
-    let observeRevokedRefresh = false;
+    cy.wait('@failedDraftNote').its('response.statusCode').should('eq', 503);
+
+    let holdRevokedRefresh = true;
+    const revokedRefreshReleases: (() => void)[] = [];
     cy.intercept('POST', '**/api/auth/refresh', request => {
-      if (observeRevokedRefresh) {
-        request.alias = 'expiredRefresh';
-      }
+      if (!holdRevokedRefresh) return;
+      request.alias = 'expiredRefresh';
+      return new Promise<void>(resolve => {
+        revokedRefreshReleases.push(() => { request.continue(); resolve(); });
+      });
     });
-    cy.task('coding:expire-session', null, { log: false });
-    // Observe the real backend response only after Keycloak confirms revocation.
-    cy.then(() => { observeRevokedRefresh = true; });
     cy.window().then(win => win.localStorage.removeItem('auth_token'));
     cy.get('coding-box-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
@@ -219,6 +222,16 @@ describe('real Keycloak coding session', () => {
         field.value = 'Recovered live draft';
         field.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
+    });
+    // Keep the browser request upstream of the backend until Keycloak has
+    // confirmed revocation; an earlier in-flight 200 is not revocation evidence.
+    cy.wrap(null).should(() => {
+      expect(revokedRefreshReleases, 'browser refresh held before revocation').not.to.be.empty;
+    });
+    cy.task('coding:expire-session', null, { log: false });
+    cy.then(() => {
+      holdRevokedRefresh = false;
+      revokedRefreshReleases.forEach(release => release());
     });
     cy.wait('@expiredRefresh').then(({ response }) => {
       expect(response?.statusCode).to.equal(401);
@@ -240,7 +253,6 @@ describe('real Keycloak coding session', () => {
     });
     cy.then(() => {
       failNotes = false;
-      observeRevokedRefresh = false;
     });
     cy.get('.re-authentication button').click();
     cy.origin(
