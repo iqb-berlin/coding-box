@@ -114,6 +114,12 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.authService.authenticationRecovered$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.appService.authBootstrapStatus === 'checking' || this.appService.authBootstrapStatus === 'backend-login-running') return;
+        this.handleAuthenticationRestored().catch(() => undefined);
+      });
     this.systemNotifications.startPolling();
     const postLoginReturnUrl = await this.handleAuthCallback();
     let refreshUnavailable = false;
@@ -145,7 +151,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   protected async handleAuthenticationRestored(): Promise<void> {
-    if (this.isLoggedIn() && this.appService.authProviderFailure) {
+    if (this.isLoggedIn() && (this.appService.authProviderFailure || this.appService.authBootstrapStatus === 'auth-data-failed')) {
       this.setAuthState();
       await firstValueFrom(this.appService.retryAuthDataLoad());
       return;

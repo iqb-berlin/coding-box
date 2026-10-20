@@ -475,6 +475,10 @@ describe('AuthService', () => {
 
   it.each([400, 403, 408, 429, 500, 502, 503, 504])('preserves the session and blocks API writes after refresh HTTP %s, then recovers on retry', async status => {
     const tokens = storeSession();
+    const recovered = jest.fn();
+    const subscription = service.authenticationRecovered$.subscribe(() => recovered({
+      token: service.getToken(), refreshToken: service.getRefreshToken()
+    }));
     const originalTokens = new Map(tokens);
     const response = firstValueFrom(TestBed.inject(HttpClient).post('http://localhost:3333/api/workspaces', {}));
     const rejection = expect(response).rejects.toBeInstanceOf(AuthRefreshUnavailableError);
@@ -482,6 +486,7 @@ describe('AuthService', () => {
       { code: 'provider-unavailable', requestId: 'request-123' }, { status, statusText: 'Unavailable' }
     );
     await rejection;
+    expect(recovered).not.toHaveBeenCalled();
     expect(tokens).toEqual(originalTokens);
     expect(service.refreshFailure()).toMatchObject({ status, requestId: 'request-123' });
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
@@ -496,6 +501,9 @@ describe('AuthService', () => {
     await expect(retry).resolves.toBe(freshToken);
     expect(service.refreshFailure()).toBeNull();
     expect(tokens.get('refresh_token')).toBe('rotated-refresh-token');
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered).toHaveBeenCalledWith({ token: freshToken, refreshToken: 'rotated-refresh-token' });
+    subscription.unsubscribe();
   });
 
   it('preserves registered coding drafts when refresh is temporarily unavailable', async () => {

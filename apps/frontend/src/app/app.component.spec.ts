@@ -17,6 +17,7 @@ import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 describe('AppComponent', () => {
   let authService: {
+    authenticationRecovered$: Subject<void>;
     exchangeLoginCode: jest.Mock;
     setToken: jest.Mock;
     setIdToken: jest.Mock;
@@ -55,6 +56,7 @@ describe('AppComponent', () => {
 
   beforeEach(async () => {
     authService = {
+      authenticationRecovered$: new Subject<void>(),
       exchangeLoginCode: jest.fn().mockReturnValue(of({
         access_token: 'access-token',
         token_type: 'Bearer',
@@ -210,6 +212,23 @@ describe('AppComponent', () => {
     expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
   });
 
+  it('restores coding drafts when a background request recovers authentication', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    authService.authenticationRecovered$.next();
+    expect(appService.completeBackendLogin).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the initial backend bootstrap in charge while it is running', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authBootstrapStatus = 'backend-login-running';
+    authService.authenticationRecovered$.next();
+    expect(appService.completeBackendLogin).not.toHaveBeenCalled();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
   it('verifies backend authentication before restoring drafts after a JWKS outage', async () => {
     const fixture = TestBed.createComponent(AppComponent);
     await fixture.componentInstance.ngOnInit();
@@ -227,7 +246,8 @@ describe('AppComponent', () => {
     appService.authBootstrapStatus = 'auth-data-failed';
     const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
     await component.handleAuthenticationRestored();
-    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(2);
+    expect(appService.retryAuthDataLoad).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
   });
 
   it('updates workspace state after asynchronous auth data arrives without zones', async () => {
