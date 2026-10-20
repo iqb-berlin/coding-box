@@ -144,7 +144,10 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   protected async handleAuthenticationRestored(): Promise<void> {
-    if (this.isLoggedIn()) return;
+    if (this.isLoggedIn() && this.appService.authBootstrapStatus === 'ready') {
+      this.appService.completeBackendLogin();
+      return;
+    }
     this.setAuthState();
     await this.loadAuthData(this.appService.loggedUser?.sub || '');
   }

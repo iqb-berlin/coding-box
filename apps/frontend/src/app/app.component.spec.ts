@@ -30,6 +30,8 @@ describe('AppComponent', () => {
     processMessagePost: jest.Mock;
     loadAuthenticatedUser: jest.Mock;
     setAuthBootstrapStatus: jest.Mock;
+    completeBackendLogin: jest.Mock;
+    authBootstrapStatus: string;
     normalizeInternalRoute: jest.Mock;
     isLoggedIn: boolean;
     loggedUser?: unknown;
@@ -69,6 +71,8 @@ describe('AppComponent', () => {
       processMessagePost: jest.fn(),
       loadAuthenticatedUser: jest.fn().mockReturnValue(of(true)),
       setAuthBootstrapStatus: jest.fn(),
+      completeBackendLogin: jest.fn(),
+      authBootstrapStatus: 'ready',
       normalizeInternalRoute: jest.fn((returnUrl?: string) => (
         returnUrl &&
         returnUrl.startsWith('/') &&
@@ -158,6 +162,24 @@ describe('AppComponent', () => {
     await component.handleAuthenticationRestored();
     expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
   });
+  it('notifies draft recovery after renewal in an already bootstrapped session', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.completeBackendLogin).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries an interrupted auth-data bootstrap after successful renewal', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authBootstrapStatus = 'auth-data-failed';
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(2);
+  });
+
   it('updates workspace state after asynchronous auth data arrives without zones', async () => {
     const authData = new Subject<AuthDataDto>();
     appService.authData$ = authData;

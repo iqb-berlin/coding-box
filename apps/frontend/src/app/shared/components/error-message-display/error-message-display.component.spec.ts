@@ -153,6 +153,13 @@ describe('ErrorMessageDisplayComponent', () => {
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
+  it('hides an obsolete refresh outage after reauthentication has become necessary', () => {
+    appService.needsReAuthentication = true;
+    authService.refreshFailure.set(new AuthRefreshUnavailableError());
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.auth-refresh-unavailable')).toBeNull();
+  });
+
   it.each(['discarded', 'failed'])('preserves a newer session when the old extension is %s', async outcome => {
     let finishRefresh!: (token: string | undefined) => void;
     let rejectRefresh!: (error: Error) => void;
