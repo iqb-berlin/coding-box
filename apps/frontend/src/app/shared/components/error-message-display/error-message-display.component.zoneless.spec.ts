@@ -1,5 +1,5 @@
 /* eslint-disable max-classes-per-file -- Separate route and shell hosts keep the warning component alive during navigation. */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -42,7 +42,7 @@ describe('Global authentication messages on navigation without Zone.js', () => {
         provideHttpClientTesting(),
         { provide: SERVER_URL, useValue: '/api/' },
         { provide: LogoService, useValue: { getLogoSettings: () => of(null) } },
-        { provide: AuthService, useValue: { getValidToken: jest.fn().mockResolvedValue('token') } }
+        { provide: AuthService, useValue: { refreshFailure: signal(null), getValidToken: jest.fn().mockResolvedValue('token') } }
       ]
     }).compileComponents();
     router = TestBed.inject(Router);

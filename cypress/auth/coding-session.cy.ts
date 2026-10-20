@@ -25,6 +25,10 @@ describe('real Keycloak coding session', () => {
     cy.task('coding:cleanup', null, { log: false });
   });
 
+  afterEach(() => {
+    cy.task('coding:set-provider-available', true, { log: false });
+  });
+
   it('persists coding, recovers an expired session, and completes the job', () => {
     cy.intercept(
       'POST',
@@ -74,6 +78,8 @@ describe('real Keycloak coding session', () => {
       replay.host = local.host;
       const [route, query = ''] = replay.hash.split('?');
       const params = new URLSearchParams(query);
+      // Exercise the browser's OIDC session for coding writes.
+      params.delete('auth');
       params.set('mode', 'coding');
       params.set('codingJobId', String(setup.codingJobId));
       params.set('workspaceId', String(setup.workspaceId));
@@ -96,6 +102,11 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (request.body.notes === 'Persisted live note') {
+        const bearer = String(request.headers.authorization).split(' ')[1];
+        const payload = JSON.parse(Cypress.Buffer.from(bearer.split('.')[1], 'base64').toString());
+        expect(payload.iss, 'coding write uses the provider session').to.equal(
+          new URL('/realms/coding-e2e', setup.keycloakUrl).toString()
+        );
         request.alias = 'persistedNote';
       }
     });
@@ -119,6 +130,39 @@ describe('real Keycloak coding session', () => {
       'have.value',
       'Persisted live note'
     );
+
+    let outageNoteWrites = 0;
+    let refreshBeforeOutage: string | null = null;
+    cy.intercept('POST', '**/coding-job/*/notes', request => {
+      if (request.body.notes === 'Provider outage draft') {
+        outageNoteWrites += 1;
+        request.alias = 'outageNote';
+      }
+    });
+    cy.task('coding:set-provider-available', false, { log: false });
+    cy.window().then(win => {
+      refreshBeforeOutage = win.localStorage.getItem('refresh_token');
+      win.localStorage.removeItem('auth_token');
+    });
+    cy.intercept('POST', '**/api/auth/refresh').as('providerOutage');
+    cy.get('coding-box-code-selector textarea').clear().type('Provider outage draft').blur();
+    cy.wait('@providerOutage').then(({ response }) => {
+      expect(response?.statusCode).to.equal(503);
+      expect(response?.body.code).to.equal('provider-unavailable');
+    });
+    cy.get('.auth-refresh-unavailable').should('be.visible');
+    cy.get('.re-authentication').should('not.exist');
+    cy.window().then(win => {
+      expect(win.localStorage.getItem('refresh_token')).to.equal(refreshBeforeOutage);
+      expect(outageNoteWrites, 'protected write was held back').to.equal(0);
+    });
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
+    cy.get('.auth-refresh-unavailable button').click();
+    cy.task('coding:set-provider-available', true, { log: false });
+    cy.wait('@outageNote').its('response.statusCode').should('eq', 201);
+    cy.get('.auth-refresh-unavailable').should('not.exist');
+    cy.reload();
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
 
     // Hold a real progress save while the coder adds a problem marker.
     let releaseProgress: (() => void) | undefined;
@@ -144,30 +188,29 @@ describe('real Keycloak coding session', () => {
 
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
-      if (failNotes)
+      if (failNotes) {
+        request.alias = 'failedDraftNote';
         request.reply({
           statusCode: 503,
           body: { message: 'Simulated connection loss' }
         });
-      else request.continue();
+      } else request.continue();
     });
     cy.get('coding-box-code-selector textarea')
       .clear()
       .type('Recovered live draft')
       .blur();
-    let rejectExpiredRefresh = false;
+    cy.wait('@failedDraftNote').its('response.statusCode').should('eq', 503);
+
+    let holdRevokedRefresh = true;
+    const revokedRefreshReleases: (() => void)[] = [];
     cy.intercept('POST', '**/api/auth/refresh', request => {
-      if (rejectExpiredRefresh) {
-        request.alias = 'expiredRefresh';
-        request.reply({
-          statusCode: 400,
-          body: { error: 'invalid_grant', error_description: 'Session not active' }
-        });
-      }
+      if (!holdRevokedRefresh) return;
+      request.alias = 'expiredRefresh';
+      return new Promise<void>(resolve => {
+        revokedRefreshReleases.push(() => { request.continue(); resolve(); });
+      });
     });
-    // A refresh can race with the server-side session revocation. Arm its observer first.
-    cy.then(() => { rejectExpiredRefresh = true; });
-    cy.task('coding:expire-session', null, { log: false });
     cy.window().then(win => win.localStorage.removeItem('auth_token'));
     cy.get('coding-box-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
@@ -180,7 +223,20 @@ describe('real Keycloak coding session', () => {
         field.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
     });
-    cy.wait('@expiredRefresh').its('response.statusCode').should('eq', 400);
+    // Keep the browser request upstream of the backend until Keycloak has
+    // confirmed revocation; an earlier in-flight 200 is not revocation evidence.
+    cy.wrap(null).should(() => {
+      expect(revokedRefreshReleases, 'browser refresh held before revocation').not.to.be.empty;
+    });
+    cy.task('coding:expire-session', null, { log: false });
+    cy.then(() => {
+      holdRevokedRefresh = false;
+      revokedRefreshReleases.forEach(release => release());
+    });
+    cy.wait('@expiredRefresh').then(({ response }) => {
+      expect(response?.statusCode).to.equal(401);
+      expect(response?.body.code).to.equal('session-invalid');
+    });
     cy.get('.re-authentication button', { timeout: 60_000 }).should(
       'be.visible'
     );
@@ -197,7 +253,6 @@ describe('real Keycloak coding session', () => {
     });
     cy.then(() => {
       failNotes = false;
-      rejectExpiredRefresh = false;
     });
     cy.get('.re-authentication button').click();
     cy.origin(
@@ -271,6 +326,37 @@ describe('real Keycloak coding session', () => {
     cy.contains('coding-box-account-action button', 'Abmelden').click();
     cy.get('.login-button').should('be.visible');
     cy.get('.re-authentication').should('not.exist');
+  });
+
+  it('shows a real backend 401 after a successful provider login without discarding the refresh session', () => {
+    cy.intercept('POST', '**/api/auth/exchange', request => {
+      request.continue(response => {
+        // Keep the provider login real, then invalidate the signature in transit.
+        // The future expiry prevents proactive refresh from replacing this token.
+        const [header, encoded, signature] = response.body.access_token.split('.');
+        const payload = JSON.parse(Cypress.Buffer.from(encoded, 'base64').toString());
+        payload.exp = Math.floor(Date.now() / 1000) + 3600;
+        const changed = Cypress.Buffer.from(JSON.stringify(payload)).toString('base64')
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        response.body.access_token = `${header}.${changed}.${signature}`;
+      });
+    }).as('providerLogin');
+    cy.intercept('GET', '**/api/auth-data*').as('rejectedBootstrap');
+    cy.visit('/');
+    cy.get('.login-button').click();
+    cy.origin(setup.keycloakUrl, { args: { username: setup.username, password: setup.password } },
+      ({ username, password }) => {
+        cy.get('#username').type(username);
+        cy.get('#password').type(password, { log: false });
+        cy.get('#kc-login').click();
+      });
+    cy.wait('@providerLogin', { log: false }).its('response.statusCode').should('eq', 200);
+    cy.wait('@rejectedBootstrap').its('response.statusCode').should('eq', 401);
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Backend hat den Zugriff abgelehnt');
+    cy.get('.reauthentication-hint').should('not.exist');
+    cy.window().then(win => {
+      expect(win.localStorage.getItem('refresh_token')).to.be.a('string').and.not.be.empty;
+    });
   });
 
   it('uploads responses through the UI and shows the backend result', () => {
@@ -693,10 +779,9 @@ describe('real Keycloak coding session', () => {
       .should('have.attr', 'aria-checked', 'true');
 
     cy.intercept('POST', '**/export/sqlite/job').as('startDatabaseExport');
-    let runningPolls = 3;
+    let releaseExportCompletion = false;
     cy.intercept('GET', /\/export\/sqlite\/job\/[^/]+$/, request => {
-      if (runningPolls > 0) {
-        runningPolls -= 1;
+      if (!releaseExportCompletion) {
         request.reply({ statusCode: 200, body: { status: 'running', progress: 42 } });
       } else {
         request.continue();
@@ -716,6 +801,7 @@ describe('real Keycloak coding session', () => {
     }
     cy.get('coding-box-ws-settings .database-export-card .export-progress')
       .should('be.visible');
+    cy.then(() => { releaseExportCompletion = true; });
     cy.wait('@downloadDatabaseExport', { timeout: 120_000 })
       .its('response.statusCode').should('eq', 200);
     cy.get('coding-box-ws-settings .database-export-card .export-progress')

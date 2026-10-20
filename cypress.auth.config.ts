@@ -1,6 +1,6 @@
 import { defineConfig } from 'cypress';
 import { createReplayHarness } from './scripts/e2e/replay/harness.mjs';
-import { expireAuthSession } from './scripts/e2e/replay/auth-fixture.mjs';
+import { expireAuthSession, setAuthProviderAvailable } from './scripts/e2e/replay/auth-fixture.mjs';
 
 export default defineConfig({
   video: false,
@@ -20,6 +20,7 @@ export default defineConfig({
         'coding:read-file-settings': () => harness.readFileSettings(),
         'coding:prepare-file-settings': () => harness.prepareFileSettings(),
         'coding:expire-session': () => expireAuthSession(),
+        'coding:set-provider-available': (available: boolean) => setAuthProviderAvailable(available),
         'coding:cleanup': () => harness.cleanup()
       });
       on('after:run', () => harness.cleanup());
