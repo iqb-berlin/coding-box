@@ -2,6 +2,26 @@
   class="error-messages-container priority-errors"
   [class.re-authentication-active]="showGlobalReAuthenticationMessage"
 >
+  @if (authService.refreshFailure(); as failure) {
+  <div class="error-message backend-unavailable auth-refresh-unavailable" role="alert">
+    <div class="error-content">
+      <mat-icon class="error-icon">cloud_off</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.auth_refresh_unavailable_title' | translate }}</h3>
+        <p>{{ (failure.code === 'configuration-error' ? 'error.auth_configuration_error_message' : 'error.auth_refresh_unavailable_message') | translate }}</p>
+        @if (failure.requestId) {
+        <small>{{ 'error.details_request_id' | translate }} {{ failure.requestId }}</small>
+        }
+      </div>
+    </div>
+    <div class="error-actions">
+      <button mat-raised-button color="primary" [disabled]="retryingAuthentication()" (click)="retryAuthentication()">
+        {{ 'error.auth_refresh_retry' | translate }}
+      </button>
+    </div>
+  </div>
+  }
+
   @if (appService.backendUnavailable) {
   <div class="error-message backend-unavailable">
     <div class="error-content">

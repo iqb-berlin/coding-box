@@ -11,6 +11,7 @@ const mockAuthService = {
 };
 
 const mockAppService = {
+  authDataFailureStatus: null as number | null,
   reAuthenticationReturnUrl: '/coding',
   needsReAuthentication: false,
   retryAuthDataLoad: jest.fn().mockReturnValue(of(false))
@@ -24,6 +25,7 @@ describe('UserWorkspacesComponent', () => {
     jest.clearAllMocks();
     mockAuthService.isLoggedIn.mockReturnValue(true);
     mockAppService.needsReAuthentication = false;
+    mockAppService.authDataFailureStatus = null;
     mockAppService.retryAuthDataLoad.mockReturnValue(of(false));
 
     await TestBed.configureTestingModule({
@@ -49,6 +51,14 @@ describe('UserWorkspacesComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('shows a backend rejection separately from a session expiry', () => {
+    mockAppService.authDataFailureStatus = 401;
+    fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('error.backend_auth_rejected_message');
+    expect(fixture.nativeElement.textContent).not.toContain('error.reauthentication_message');
   });
 
   it('should login with a pending reauthentication return URL', () => {

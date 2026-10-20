@@ -1,5 +1,5 @@
 import {
-  Component, inject, signal, ChangeDetectionStrategy
+  Component, inject, signal, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -10,6 +10,7 @@ import { NavigationEnd, Router } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
 import {
   AppHttpError,
   AppHttpErrorRequest
@@ -24,6 +25,8 @@ import {
   styleUrls: ['./error-message-display.component.scss']
 })
 export class ErrorMessageDisplayComponent {
+  readonly authenticationRestored = output<void>();
+  protected readonly retryingAuthentication = signal(false);
   protected appService: AppService = inject(AppService);
   authService = inject(AuthService);
   private router = inject(Router);
@@ -76,8 +79,24 @@ export class ErrorMessageDisplayComponent {
         return;
       }
       if (generation === this.authService.getSessionGeneration()) this.appService.setSessionExpiryWarning(false);
+    } catch (error) {
+      if (!(error instanceof AuthRefreshUnavailableError)) requireCurrentSessionReauthentication();
+    }
+  }
+
+  protected async retryAuthentication(): Promise<void> {
+    if (this.retryingAuthentication()) return;
+    const generation = this.authService.getSessionGeneration();
+    this.retryingAuthentication.set(true);
+    try {
+      const token = await this.authService.getValidToken();
+      if (token && generation === this.authService.getSessionGeneration()) {
+        this.authenticationRestored.emit();
+      }
     } catch {
-      requireCurrentSessionReauthentication();
+      // AuthService owns error classification and preserves a newer session.
+    } finally {
+      this.retryingAuthentication.set(false);
     }
   }
 

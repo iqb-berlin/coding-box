@@ -15,6 +15,7 @@ import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
@@ -114,7 +115,13 @@ export class AppComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.systemNotifications.startPolling();
     const postLoginReturnUrl = await this.handleAuthCallback();
-    const activeToken = await this.authService.getValidToken(0);
+    let refreshUnavailable = false;
+    const activeToken = await this.authService.getValidToken(0).catch(error => {
+      if (!(error instanceof AuthRefreshUnavailableError)) throw error;
+      refreshUnavailable = true;
+      this.appService.setAuthBootstrapStatus('refresh-unavailable');
+      return undefined;
+    });
 
     if (activeToken) {
       this.setAuthState();
@@ -122,7 +129,7 @@ export class AppComponent implements OnInit, OnDestroy {
       if (postLoginReturnUrl) {
         this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
       }
-    } else {
+    } else if (!refreshUnavailable) {
       this.appService.setAuthBootstrapStatus('ready');
     }
 
@@ -134,6 +141,12 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.authSessionActivity.stop();
     this.systemNotifications.stopPolling();
+  }
+
+  protected async handleAuthenticationRestored(): Promise<void> {
+    if (this.isLoggedIn()) return;
+    this.setAuthState();
+    await this.loadAuthData(this.appService.loggedUser?.sub || '');
   }
 
   private updateCurrentWorkspaceName(): void {

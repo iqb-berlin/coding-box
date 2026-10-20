@@ -40,6 +40,7 @@ export type AuthBootstrapStatus =
   | 'backend-login-running'
   | 'ready'
   | 'session-expired'
+  | 'refresh-unavailable'
   | 'auth-data-failed';
 
 export type AuthDataRefreshOutcome =
@@ -256,12 +257,13 @@ export class AppService {
           this.updateAuthData(authData);
           return true;
         }),
-        catchError(() => of(false)),
+        catchError(error => {
+          this.markAuthDataFailed(error?.status);
+          return of(false);
+        }),
         map(success => {
           if (success) {
             this.completeBackendLogin();
-          } else {
-            this.markAuthDataFailed();
           }
           return success;
         })
@@ -296,8 +298,8 @@ export class AppService {
           this.completeBackendLogin();
           return true;
         }),
-        catchError(() => {
-          if (isCurrentSession()) this.markAuthDataFailed();
+        catchError(error => {
+          if (isCurrentSession()) this.markAuthDataFailed(error?.status);
           return of(false);
         }),
         // Global authentication must finish even if the retrying view is destroyed.
@@ -480,6 +482,7 @@ export class AppService {
   }
 
   completeBackendLogin(): void {
+    this.authDataFailureStatusState.set(null);
     this.clearAuthenticationErrorMessages();
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(false);
@@ -487,7 +490,14 @@ export class AppService {
     this.sessionRecoveryService.notifyRestoredAuthentication();
   }
 
-  markAuthDataFailed(): void {
+  private readonly authDataFailureStatusState = signal<number | null>(null);
+
+  get authDataFailureStatus(): number | null {
+    return this.authDataFailureStatusState();
+  }
+
+  markAuthDataFailed(status?: number): void {
+    this.authDataFailureStatusState.set(status ?? null);
     this.setAuthBootstrapStatus('auth-data-failed');
   }
 
@@ -527,6 +537,7 @@ export class AppService {
     clearReturnUrl?: boolean;
     clearRecoveryDrafts?: boolean;
   } = {}): void {
+    this.authDataFailureStatusState.set(null);
     this.invalidatePendingAuthDataRefreshes();
     localStorage.removeItem('auth_token');
     localStorage.removeItem('id_token');

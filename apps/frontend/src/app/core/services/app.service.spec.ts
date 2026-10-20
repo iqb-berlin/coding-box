@@ -217,6 +217,7 @@ describe('AppService', () => {
         httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
         expect(loginResult).toBe(false);
         expect(service.authBootstrapStatus).toBe('auth-data-failed');
+        expect(service.authDataFailureStatus).toBe(401);
       } finally {
         jest.useRealTimers();
       }
