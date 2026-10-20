@@ -105,6 +105,43 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@training').find('.start-training-button').should('be.enabled');
   }
 
+  it('preserves newer input and the saving indicator while an older threshold save finishes', () => {
+    setup();
+    const firstSave = gate();
+    const secondSave = gate();
+    const thresholds: number[] = [];
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/statistics?version=v2', {
+      body: { totalResponses: 0, statusCounts: {} }
+    });
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/aggregation-settings', async request => {
+      thresholds.push(request.body.threshold);
+      await (thresholds.length === 1 ? firstSave.wait : secondSave.wait);
+      request.reply({ body: {
+        success: true,
+        threshold: request.body.threshold,
+        flags: request.body.flags,
+        aggregationActive: false,
+        revertedResponses: 0,
+        message: 'saved'
+      } });
+    }).as('saveThreshold');
+    openManual();
+    cy.get('.threshold-control input').scrollIntoView().as('threshold').should('be.enabled');
+    cy.get('@threshold').type('{selectall}3').should('have.value', '3');
+    cy.wrap(thresholds).should('deep.equal', [3]);
+    cy.get('@threshold').type('{selectall}4').should('have.value', '4');
+    cy.then(() => { expect(thresholds).to.deep.equal([3]); });
+    cy.then(() => firstSave.release());
+    cy.wait('@saveThreshold').its('request.body.threshold').should('eq', 3);
+    cy.wrap(thresholds).should('deep.equal', [3, 4]);
+    cy.get('@threshold').should('have.value', '4');
+    cy.get('.threshold-control .saving-indicator').should('be.visible');
+    cy.then(() => secondSave.release());
+    cy.wait('@saveThreshold').its('request.body.threshold').should('eq', 4);
+    cy.get('@threshold').should('have.value', '4');
+    cy.get('.threshold-control .saving-indicator').should('not.exist');
+  });
+
   it('renders delayed reference trainings and preserves selections through a failed save and retry', () => {
     setup();
     const trainingsGate = gate();
