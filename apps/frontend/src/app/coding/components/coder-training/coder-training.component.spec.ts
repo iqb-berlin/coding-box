@@ -9,6 +9,7 @@ import {
 } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
+import { CoderTraining } from '../../models/coder-training.model';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -256,6 +257,38 @@ describe('CoderTrainingComponent', () => {
     fixture.destroy();
 
     expect(releaseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an old reference response after a reopened view has received fresh references', async () => {
+    const oldReferences = new Subject<CoderTraining[]>();
+    const freshReferences = new Subject<CoderTraining[]>();
+    codingTrainingBackendService.getCoderTrainings
+      .mockReturnValueOnce(oldReferences)
+      .mockReturnValueOnce(freshReferences);
+    fixture.detectChanges();
+    const closedComponent = component;
+    expect(oldReferences.observed).toBe(true);
+    fixture.destroy();
+    expect(oldReferences.observed).toBe(false);
+
+    fixture = TestBed.createComponent(CoderTrainingComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    const freshTraining: CoderTraining = {
+      id: 8,
+      workspace_id: 1,
+      label: 'Fresh reference',
+      created_at: new Date(),
+      updated_at: new Date(),
+      jobsCount: 1
+    };
+    freshReferences.next([freshTraining]);
+    await fixture.whenStable();
+    oldReferences.next([{ ...freshTraining, id: 7, label: 'Old reference' }]);
+    await fixture.whenStable();
+
+    expect(closedComponent.availableTrainings()).toEqual([]);
+    expect(component.availableTrainings()).toEqual([freshTraining]);
   });
 
   it('releases the coder subscription when the component is destroyed', () => {
