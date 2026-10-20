@@ -33,7 +33,7 @@ const codes: VariableCodingData['codes'] = [
 ];
 const serializedInput = (value: unknown) => JSON.parse(JSON.stringify(value));
 
-describe('Responses 5.4.0 with the original Kodierbox solver contract', () => {
+describe('Responses 5.5.0 with the original Kodierbox solver contract', () => {
   it('keeps the generated engine reproducible from the installed current package', () => {
     execFileSync(process.execPath, ['scripts/build-autocoder-compat.mjs', '--check'], {
       cwd: process.cwd(), stdio: 'pipe'
