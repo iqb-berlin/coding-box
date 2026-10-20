@@ -74,10 +74,15 @@ try {
   report.backendArtifactSha256 = createHash('sha256').update(await readFile('dist/apps/backend/main.js')).digest('hex');
   report.frontendArtifactSha256 = await hashFrontendArtifact('dist/apps/frontend');
   report.runnerSha256 = createHash('sha256').update(await readFile('scripts/e2e/codebook/verify-live.mjs')).digest('hex');
-  report.packageSha256 = createHash('sha256').update(await readFile('vendor/iqb-ngx-coding-components-4.1.0-dev.d79ca05.tgz')).digest('hex');
+  const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));
+  const codebookPackage = lock.packages['node_modules/@iqb/ngx-coding-components'];
+  report.packageVersion = codebookPackage.version;
+  report.packageIntegrity = codebookPackage.integrity;
+  assert.match(report.packageIntegrity, /^sha512-/);
   const studio = process.env.STUDIO_REFERENCE_ROOT ? await loadStudioReference(process.env.STUDIO_REFERENCE_ROOT) : null;
   if (studio) {
-    assert.equal(studio.metadata.packageSha256, report.packageSha256);
+    assert.equal(studio.metadata.packageVersion, report.packageVersion);
+    assert.equal(studio.metadata.packageIntegrity, report.packageIntegrity);
     report.studio = studio.metadata;
   }
   const workspace = Number(await json('/admin/workspace', { name: `Codebook proof ${Date.now()}`, settings: {} }));
