@@ -17,6 +17,7 @@ import {
 import { DecodedToken } from './auth.models';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { AuthErrorCode } from '../../../../../../api-dto/auth-error-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
@@ -40,6 +41,7 @@ export type AuthBootstrapStatus =
   | 'backend-login-running'
   | 'ready'
   | 'session-expired'
+  | 'refresh-unavailable'
   | 'auth-data-failed';
 
 export type AuthDataRefreshOutcome =
@@ -256,12 +258,13 @@ export class AppService {
           this.updateAuthData(authData);
           return true;
         }),
-        catchError(() => of(false)),
+        catchError(error => {
+          this.markAuthDataFailed(error?.status, error?.error?.code);
+          return of(false);
+        }),
         map(success => {
           if (success) {
             this.completeBackendLogin();
-          } else {
-            this.markAuthDataFailed();
           }
           return success;
         })
@@ -296,8 +299,8 @@ export class AppService {
           this.completeBackendLogin();
           return true;
         }),
-        catchError(() => {
-          if (isCurrentSession()) this.markAuthDataFailed();
+        catchError(error => {
+          if (isCurrentSession()) this.markAuthDataFailed(error?.status, error?.error?.code);
           return of(false);
         }),
         // Global authentication must finish even if the retrying view is destroyed.
@@ -355,7 +358,7 @@ export class AppService {
     return request$.pipe(
       retry({
         count: AUTH_BOOTSTRAP_RETRY_DELAYS_MS.length,
-        delay: (error: { status?: number }, retryCount: number) => {
+        delay: (error: { status?: number; error?: { code?: unknown } }, retryCount: number) => {
           if (!this.isRetryableAuthBootstrapError(error)) {
             return throwError(() => error);
           }
@@ -365,8 +368,8 @@ export class AppService {
     );
   }
 
-  private isRetryableAuthBootstrapError(error: { status?: number }): boolean {
-    return RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES.has(error.status ?? -1);
+  private isRetryableAuthBootstrapError(error: { status?: number; error?: { code?: unknown } }): boolean {
+    return error.error?.code !== 'configuration-error' && RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES.has(error.status ?? -1);
   }
 
   private loadLogoSettings(): void {
@@ -480,6 +483,10 @@ export class AppService {
   }
 
   completeBackendLogin(): void {
+    this.authDataFailureStatusState.set(null);
+    this.authDataFailureCodeState.set(null);
+    this.clearLoginFailure();
+    this.authProviderFailureState.set(null);
     this.clearAuthenticationErrorMessages();
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(false);
@@ -487,8 +494,59 @@ export class AppService {
     this.sessionRecoveryService.notifyRestoredAuthentication();
   }
 
-  markAuthDataFailed(): void {
+  private readonly authDataFailureStatusState = signal<number | null>(null);
+  private readonly authDataFailureCodeState = signal<AuthErrorCode | null>(null);
+  private readonly loginFailureState = signal<{ code: AuthErrorCode; requestId: string } | null>(null);
+  private readonly authProviderFailureState = signal<{ code: Exclude<AuthErrorCode, 'session-invalid'>; requestId: string } | null>(null);
+
+  get authProviderFailure(): { code: Exclude<AuthErrorCode, 'session-invalid'>; requestId: string } | null {
+    return this.authProviderFailureState();
+  }
+
+  recordAuthProviderFailure(code: unknown, requestId?: unknown): void {
+    if (code !== 'provider-unavailable' && code !== 'configuration-error') return;
+    this.sessionRecoveryService.captureRegisteredDrafts();
+    this.authProviderFailureState.set({
+      code,
+      requestId: this.normalizeAuthRequestId(requestId)
+    });
+  }
+
+  get authDataFailureCode(): AuthErrorCode | null {
+    return this.authDataFailureCodeState();
+  }
+
+  get loginFailure(): { code: AuthErrorCode; requestId: string } | null {
+    return this.loginFailureState();
+  }
+
+  markLoginFailed(code: unknown, requestId?: unknown): void {
+    this.loginFailureState.set({
+      code: this.normalizeAuthErrorCode(code) || 'session-invalid',
+      requestId: this.normalizeAuthRequestId(requestId)
+    });
+  }
+
+  clearLoginFailure(): void {
+    this.loginFailureState.set(null);
+  }
+
+  get authDataFailureStatus(): number | null {
+    return this.authDataFailureStatusState();
+  }
+
+  markAuthDataFailed(status?: number, code?: unknown): void {
+    this.authDataFailureStatusState.set(status ?? null);
+    this.authDataFailureCodeState.set(this.normalizeAuthErrorCode(code));
     this.setAuthBootstrapStatus('auth-data-failed');
+  }
+
+  private normalizeAuthErrorCode(code: unknown): AuthErrorCode | null {
+    return code === 'session-invalid' || code === 'configuration-error' || code === 'provider-unavailable' ? code : null;
+  }
+
+  private normalizeAuthRequestId(value: unknown): string {
+    return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? value : '';
   }
 
   normalizeInternalRoute(returnUrl?: string): string | undefined {
@@ -527,6 +585,10 @@ export class AppService {
     clearReturnUrl?: boolean;
     clearRecoveryDrafts?: boolean;
   } = {}): void {
+    this.authDataFailureStatusState.set(null);
+    this.authDataFailureCodeState.set(null);
+    this.clearLoginFailure();
+    this.authProviderFailureState.set(null);
     this.invalidatePendingAuthDataRefreshes();
     localStorage.removeItem('auth_token');
     localStorage.removeItem('id_token');

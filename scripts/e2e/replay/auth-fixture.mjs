@@ -7,6 +7,20 @@ import { FILE_ACCESS_USERS } from './file-access-users.mjs';
 
 const exec = promisify(execFile);
 
+export async function setAuthProviderAvailable(available, environment = process.env) {
+  const project = environment.REPLAY_E2E_COMPOSE_PROJECT;
+  if (typeof available !== 'boolean' || !/^coding-box-replay-[a-z0-9-]+$/.test(project || '')) {
+    throw new Error('Provider availability changes require a disposable replay Compose project.');
+  }
+  const container = await findComposeContainer(project, 'keycloak');
+  const { stdout } = await exec('docker', ['inspect', '--format', '{{.State.Paused}}', container]);
+  const paused = stdout.trim() === 'true';
+  if (paused === available) {
+    await exec('docker', [available ? 'unpause' : 'pause', container]);
+  }
+  return null;
+}
+
 export async function setupCodingFixture(state, environment) {
   const { config, workspaceId, adminToken } = state;
   const api = async (route, body, method = 'POST') => {

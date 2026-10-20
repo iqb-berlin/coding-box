@@ -18,7 +18,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
-  distinctUntilChanged,
+  catchError,
+  concatMap,
+  defer,
+  EMPTY,
   firstValueFrom,
   map,
   switchMap
@@ -132,6 +135,12 @@ interface SavedCodeProgress {
   id?: number;
   codingIssueOption?: number;
   [key: string]: unknown;
+}
+
+interface AggregationThresholdChange {
+  workspaceId: number;
+  threshold: number;
+  version: number;
 }
 
 type PlanningStatusState =
@@ -371,7 +380,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<CodingJobsReloadScope>();
 
-  private thresholdChangeSubject = new Subject<number>();
+  private readonly thresholdChangeSubject = new Subject<AggregationThresholdChange>();
+  private thresholdChangeVersion = 0;
 
   private statisticsRefreshSubject = new Subject<void>();
 
@@ -547,40 +557,47 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.thresholdChangeSubject
       .pipe(
         debounceTime(1000), // Wait for user to stop typing
-        distinctUntilChanged(),
-        takeUntil(this.destroy$)
-      )
-      .subscribe((threshold: number) => {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (workspaceId) {
+        // Keep writes ordered; canceling an HTTP subscription cannot undo a server write.
+        concatMap(change => {
           const localFlagsAfterSave = [...this.responseMatchingFlags()];
-          const flagsToPersist = this.getPersistableResponseMatchingFlags(localFlagsAfterSave);
-          this.isApplyingDuplicateAggregation.set(true);
-          this.testPersonCodingService
-            .saveAggregationSettings(workspaceId, threshold, flagsToPersist)
-            .pipe(
-              finalize(() => {
-                this.isApplyingDuplicateAggregation.set(false);
-              }),
-              takeUntil(this.destroy$)
-            )
-            .subscribe({
-              next: result => {
-                if (!result.success) {
-                  this.showError(result.message);
-                  return;
-                }
-                this.persistedResponseMatchingFlags = [...result.flags];
-                this.responseMatchingFlags.set(this.buildResponseMatchingFlagsAfterSettingsSave(result.flags, localFlagsAfterSave));
-                this.duplicateAggregationThreshold.set(this.normalizeAggregationThreshold(result.threshold));
-                this.refreshAggregationDependentViews();
-              },
-              error: () => {
+          return defer(() => {
+            if (!this.isCurrentThresholdChange(change)) {
+              return EMPTY;
+            }
+            return this.testPersonCodingService.saveAggregationSettings(
+              change.workspaceId,
+              change.threshold,
+              this.getPersistableResponseMatchingFlags(localFlagsAfterSave)
+            );
+          }).pipe(
+            tap(result => {
+              if (!this.isCurrentThresholdChange(change)) return;
+              if (!result.success) {
+                this.showError(result.message);
+                return;
+              }
+              this.persistedResponseMatchingFlags = [...result.flags];
+              this.responseMatchingFlags.set(this.buildResponseMatchingFlagsAfterSettingsSave(result.flags, localFlagsAfterSave));
+              this.duplicateAggregationThreshold.set(this.normalizeAggregationThreshold(result.threshold));
+              this.refreshAggregationDependentViews();
+            }),
+            catchError(() => {
+              if (this.isCurrentThresholdChange(change)) {
                 this.showError('Fehler beim Speichern der Aggregationseinstellungen');
               }
-            });
-        }
-      });
+              return EMPTY;
+            }),
+            finalize(() => {
+              if (change.version === this.thresholdChangeVersion) {
+                this.isApplyingDuplicateAggregation.set(false);
+              }
+            })
+          );
+        }),
+        takeUntil(this.destroy$),
+        finalize(() => this.isApplyingDuplicateAggregation.set(false))
+      )
+      .subscribe();
 
     this.testPersonCodingService.autoCodingCompleted$
       .pipe(takeUntil(this.destroy$))
@@ -641,6 +658,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
 
     this.jobDefinitionChangeSubject.complete();
+    this.thresholdChangeSubject.complete();
     this.statisticsRefreshSubject.complete();
   }
 
@@ -5345,7 +5363,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   onThresholdChanged(newValue: number | string | null): void {
-    if (this.responseAnalysis()?.isCalculating) {
+    if (this.responseAnalysis()?.isCalculating || this.isSavingMatchingMode()) {
       return;
     }
     const normalizedValue = this.normalizeAggregationThreshold(newValue);
@@ -5354,7 +5372,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
     this.emptyPageIndex.set(0);
     this.duplicatePageIndex.set(0);
-    this.thresholdChangeSubject.next(normalizedValue);
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.thresholdChangeVersion += 1;
+    this.isApplyingDuplicateAggregation.set(true);
+    this.thresholdChangeSubject.next({
+      workspaceId,
+      threshold: normalizedValue,
+      version: this.thresholdChangeVersion
+    });
+  }
+
+  private isCurrentThresholdChange(change: AggregationThresholdChange): boolean {
+    // Invalidate old replies as soon as input changes, including during debounce.
+    return change.version === this.thresholdChangeVersion &&
+      change.workspaceId === this.appService.selectedWorkspaceId;
   }
 
   protected onEmptyPageChange(event: PageEvent): void {

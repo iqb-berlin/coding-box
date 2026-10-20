@@ -4,6 +4,7 @@ import {
 import { Router } from '@angular/router';
 import { AppService } from './app.service';
 import { AuthService } from './auth.service';
+import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
 import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   AUTH_SESSION_IDLE_TIMEOUT_MS,
@@ -225,7 +226,9 @@ export class AuthSessionActivityService implements OnDestroy {
       .then(token => {
         if (!token) expireCurrentSession();
       })
-      .catch(expireCurrentSession);
+      .catch(error => {
+        if (!(error instanceof AuthRefreshUnavailableError)) expireCurrentSession();
+      });
   }
 
   private parseActivityMessage(rawMessage: string): { source?: string; timestamp?: number } | null {

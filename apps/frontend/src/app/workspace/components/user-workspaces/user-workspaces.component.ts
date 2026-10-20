@@ -28,6 +28,12 @@ export class UserWorkspacesComponent {
   readonly authDataLoaded = input(false);
   protected readonly authDataReloadRunning = signal(false);
 
+  protected get authDataErrorMessage(): string {
+    if (this.appService.authDataFailureCode === 'configuration-error') return 'error.auth_configuration_error_message';
+    if (this.appService.authDataFailureCode === 'provider-unavailable') return 'error.auth_provider_unavailable_message';
+    return this.appService.authDataFailureStatus === 401 ? 'error.backend_auth_rejected_message' : 'home.auth-data-load-error';
+  }
+
   protected get showLoading(): boolean {
     const authBootstrapStatus = this.authBootstrapStatus();
     return this.authService.isLoggedIn() === true &&

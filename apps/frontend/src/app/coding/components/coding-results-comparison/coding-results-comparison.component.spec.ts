@@ -21,6 +21,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingResultsComparisonComponent', () => {
@@ -1925,6 +1926,52 @@ describe('CodingResultsComparisonComponent', () => {
         }
       ]
     });
+  });
+
+  it.each([
+    ['refresh', () => new AuthRefreshUnavailableError()],
+    ['JWKS outage', () => new HttpErrorResponse({ status: 503, error: { code: 'provider-unavailable' } })],
+    ['JWKS configuration', () => new HttpErrorResponse({ status: 503, error: { code: 'configuration-error' } })]
+  ])('keeps a discussion draft through %s failure and saves it after recovery', (_source, makeError) => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(makeError));
+    appService.needsReAuthentication = false;
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
+    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
+    component.discussionNotesByResponseId.update(current => ({ ...current, 1: 'Replay note' }));
+
+    component.onDiscussionCodeBlur(row, 2);
+
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(of({ code: 7, score: 2, notes: 'Replay note' }));
+    sessionRecoveryService.notifyRestoredAuthentication();
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(2);
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toBeNull();
   });
 
   it('should restore a discussion recovery draft after authentication is ready again', () => {

@@ -1522,6 +1522,59 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(mockCodingJobBackendService.updateJobDefinition).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('refreshes cached totals when selected bundle rows are reloaded (readOnly=%s)', readOnly => {
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
+    createComponent({ readOnly });
+    const selectedBundle = component.variableBundles()[0];
+    component.selectedVariableBundles.select(selectedBundle);
+    expect(component.getTotalCodingCases()).toBe(18);
+
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockReturnValueOnce(of([
+      { ...selectedBundle, variables: [mockVariables[1]] }
+    ]));
+    component.loadVariableBundles();
+
+    expect(component.selectedVariableBundles.selected[0].variables).toHaveLength(1);
+    expect(component.getTotalCodingCases()).toBe(5);
+    expect(component.getFormattedTotalTime()).toBe('0:05');
+  });
+
+  it('shares the fallback calculation across all summary bindings until inputs change', () => {
+    createComponent();
+    const estimate = jest.spyOn(component as unknown as {
+      getSelectedDistributionVariableCaseCountsAfterLimit(): number[];
+    }, 'getSelectedDistributionVariableCaseCountsAfterLimit');
+    component.selectedVariables().select({
+      unitName: 'Large unit', variableId: 'Large variable', responseCount: 100000, availableCases: 100000
+    });
+    component.selectedCoders.select(mockCoders[0], mockCoders[1]);
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: 2, durationSeconds: 60 });
+
+    expect(component.getTotalCodingCases()).toBe(100000);
+    expect(component.getTotalCodingTasks()).toBe(100002);
+    expect(component.getTotalTimeInSeconds()).toBe(6000120);
+    expect(component.getTimePerCoderInSeconds()).toBe(3000060);
+    fixture.detectChanges();
+    fixture.detectChanges();
+    component.getFormattedTotalTime();
+    component.getFormattedTimePerCoder();
+    expect(estimate).toHaveBeenCalledTimes(1);
+
+    component.codingJobForm.patchValue({ durationSeconds: 30, name: 'Renamed definition' });
+    expect(component.getTotalTimeInSeconds()).toBe(3000060);
+    expect(estimate).toHaveBeenCalledTimes(1);
+
+    component.codingJobForm.controls.maxCodingCases.setValue(100);
+    expect(component.getTotalCodingTasks()).toBe(102);
+    expect(component.getMaxCasesLimitReduction()).toBe(99900);
+    fixture.detectChanges();
+    expect(estimate).toHaveBeenCalledTimes(2);
+
+    component.selectedVariables().clear();
+    expect(component.getTotalCodingTasks()).toBe(0);
+    expect(component.getFormattedTotalTime()).toBe('0:00');
+  });
+
   it('should calculate double coding totals per selected variable', () => {
     createComponent();
 
