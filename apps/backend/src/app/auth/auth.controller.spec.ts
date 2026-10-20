@@ -238,7 +238,7 @@ describe('AuthController', () => {
       refresh_token: 'rotated-refresh-token'
     });
 
-    expect(oidcAuthService.refreshToken).toHaveBeenCalledWith('refresh-token');
+    expect(oidcAuthService.refreshToken).toHaveBeenCalledWith('refresh-token', undefined);
   });
 
   it('rejects expired one-time login codes', async () => {

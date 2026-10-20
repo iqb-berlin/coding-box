@@ -4,6 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { createHash, randomBytes } from 'crypto';
 import { CacheService } from '../../cache/cache.service';
+import { AuthFailureException } from '../auth-failure.exception';
+import { normalizeRequestId } from '../../http/request-id';
+import { AuthErrorCode } from '../../../../../../api-dto/auth-error-dto';
 
 export interface OidcConfiguration {
   issuer: string;
@@ -43,6 +46,7 @@ export class OidcAuthService {
   private readonly oAuth2ClientSecret?: string;
   private readonly pkceTtlSeconds = 5 * 60;
   private readonly tokenExchangeTtlSeconds = 60;
+  private readonly refreshTimeoutMs = 10_000;
 
   constructor(
     private readonly httpService: HttpService,
@@ -147,13 +151,13 @@ export class OidcAuthService {
    * @param refreshToken - Refresh token from the provider
    * @returns Refreshed token response from OpenID Connect Provider
    */
-  async refreshToken(refreshToken: string): Promise<OidcTokenResponse> {
+  async refreshToken(refreshToken: string, requestId?: string): Promise<OidcTokenResponse> {
     if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
+      throw new AuthFailureException('configuration-error');
     }
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is required');
+      throw new AuthFailureException('session-invalid');
     }
 
     const params = new URLSearchParams({
@@ -171,16 +175,40 @@ export class OidcAuthService {
 
       const response = await firstValueFrom(
         this.httpService.post(this.oidcConfiguration.token_endpoint, params.toString(), {
+          timeout: this.refreshTimeoutMs,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
       );
 
+      if (typeof response.data?.access_token !== 'string' || !response.data.access_token.trim()) {
+        throw new AuthFailureException('provider-unavailable');
+      }
       return response.data;
-    } catch (error) {
-      this.logger.error('Failed to refresh access token:', error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to refresh access token');
+    } catch (error: unknown) {
+      const providerError = error as { response?: { status?: number; data?: { error?: string } } } | null;
+      const status = providerError?.response?.status;
+      const providerCode = providerError?.response?.data?.error;
+      let code: AuthErrorCode = 'provider-unavailable';
+      if (status === 400 && providerCode === 'invalid_grant') code = 'session-invalid';
+      else if (status !== undefined && [400, 401, 403].includes(status)) code = 'configuration-error';
+      const failure = new AuthFailureException(code);
+      let endpoint = 'configured-token-endpoint';
+      try {
+        const url = new URL(this.oidcConfiguration.token_endpoint);
+        endpoint = `${url.origin}${url.pathname}`;
+      } catch {
+        // Invalid configuration must not expose credentials or replace the classified failure.
+      }
+      this.logger.warn({
+        event: 'oidc-refresh-failed',
+        errorClass: failure.code,
+        endpoint,
+        httpStatus: typeof status === 'number' ? status : null,
+        requestId: normalizeRequestId(requestId)
+      });
+      throw failure;
     }
   }
 

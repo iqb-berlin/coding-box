@@ -1,9 +1,9 @@
 import {
-  Controller, Post, Body, Logger, HttpCode, HttpStatus, Get, Query, Res,
+  Controller, Post, Body, Logger, HttpCode, HttpStatus, Get, Query, Res, Req,
   UnauthorizedException
 } from '@nestjs/common';
 import {
-  ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation
+  ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation, ApiResponse
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { randomBytes } from 'crypto';
@@ -11,6 +11,7 @@ import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredent
 import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+import { RequestWithRequestId } from '../http/request-id';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -462,10 +463,12 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Invalid or expired refresh token'
   })
+  @ApiResponse({ status: HttpStatus.SERVICE_UNAVAILABLE, description: 'Provider unavailable or authentication configuration requires attention' })
   async refreshToken(
-    @Body() refreshData: { refresh_token: string }
+    @Body() refreshData: { refresh_token: string },
+    @Req() request?: RequestWithRequestId
   ): Promise<OidcTokenResponse> {
-    return this.oidcAuthService.refreshToken(refreshData?.refresh_token);
+    return this.oidcAuthService.refreshToken(refreshData?.refresh_token, request?.requestId);
   }
 
   @Post('logout')
