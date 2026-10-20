@@ -7,6 +7,7 @@ import {
   BehaviorSubject,
   firstValueFrom,
   Observable,
+  Subject,
   tap
 } from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
@@ -20,6 +21,8 @@ import { SessionRecoveryService } from './session-recovery.service';
   providedIn: 'root'
 })
 export class AuthService {
+  private readonly authenticationRecoveredSubject = new Subject<void>();
+  readonly authenticationRecovered$ = this.authenticationRecoveredSubject.asObservable();
   private readonly refreshFailureState = signal<AuthRefreshUnavailableError | null>(null);
   readonly refreshFailure = this.refreshFailureState.asReadonly();
   private readonly http = inject(HttpClient);
@@ -226,6 +229,7 @@ export class AuthService {
         if (typeof tokenResponse?.access_token !== 'string' || !tokenResponse.access_token.trim()) {
           throw new AuthRefreshUnavailableError();
         }
+        const recoveredFromFailure = this.refreshFailureState() !== null;
         this.refreshFailureState.set(null);
         this.storeAccessToken(tokenResponse.access_token);
 
@@ -237,6 +241,7 @@ export class AuthService {
           this.setRefreshToken(tokenResponse.refresh_token);
         }
 
+        if (recoveredFromFailure) this.authenticationRecoveredSubject.next();
         return tokenResponse.access_token;
       })
       .catch((error: unknown) => {

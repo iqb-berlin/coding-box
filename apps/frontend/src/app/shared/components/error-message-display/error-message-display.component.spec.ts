@@ -188,7 +188,7 @@ describe('ErrorMessageDisplayComponent', () => {
     });
     (fixture.nativeElement.querySelector('.auth-refresh-unavailable button') as HTMLButtonElement).click();
     await fixture.whenStable();
-    expect(restored).toHaveBeenCalledTimes(1);
+    expect(restored).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('.auth-refresh-unavailable')).toBeNull();
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
