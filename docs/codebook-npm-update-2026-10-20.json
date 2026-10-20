@@ -79,7 +79,18 @@
     "autocoderGeneratedFromResponses": "5.4.0",
     "newPartialCreditFactoryCases": 6,
     "legacySolverReference": "5.2.0",
-    "rootInstallIgnoreScripts": true
+    "rootInstallIgnoreScripts": true,
+    "zonelessInventory": {
+      "entries": 8860,
+      "onlyUpdatedLibraryFingerprint": true,
+      "libraryEntryReviewStatus": "open",
+      "regressionTestsPassed": 2,
+      "riskCoverageReferencesVerified": true,
+      "areas": 6,
+      "mechanisms": 7,
+      "findings": 57,
+      "fullZonelessAcceptance": false
+    }
   },
   "boundaries": {
     "fullFrontendSuite": false,
