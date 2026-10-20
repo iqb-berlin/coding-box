@@ -1,9 +1,48 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passportJwtSecret } from 'jwks-rsa';
 import { UsersService } from '../database/services/users';
+import { AuthFailureException } from './auth-failure.exception';
+import { isHttpEndpoint, JwksEndpointFailure, logAuthProviderFailure } from './auth-provider-errors';
+import { RequestWithRequestId } from '../http/request-id';
+
+function createSecretProvider(issuer: string, jwksUri: string, clientId: string) {
+  const logger = new Logger(JwtStrategy.name);
+  const configured = isHttpEndpoint(issuer) && isHttpEndpoint(jwksUri) && !!clientId?.trim();
+  const provider = configured ? passportJwtSecret({
+    cache: true,
+    rateLimit: true,
+    jwksRequestsPerMinute: 5,
+    jwksUri,
+    fetcher: async uri => {
+      const response = await fetch(uri, { signal: AbortSignal.timeout(5_000), redirect: 'error' });
+      if (!response.ok) throw new JwksEndpointFailure(response.status);
+      return response.json();
+    }
+  }) : undefined;
+
+  return (request: RequestWithRequestId, token: string, done: (error: Error | null, key?: string | Buffer) => void) => {
+    const fail = (failure: AuthFailureException, providerStatus: number | null = null) => {
+      logAuthProviderFailure(logger, 'oidc-jwks-failed', jwksUri, failure.code, providerStatus, request?.requestId);
+      done(failure);
+    };
+    if (!provider) {
+      fail(new AuthFailureException('configuration-error'));
+      return;
+    }
+    provider(request, token, (error, key) => {
+      if (error) {
+        fail(error instanceof AuthFailureException ? error : new AuthFailureException('provider-unavailable'),
+          error instanceof JwksEndpointFailure ? error.providerStatus : null);
+        return;
+      }
+      // Unknown kid, invalid signature, issuer, audience, and expiry remain JWT failures.
+      done(null, key);
+    });
+  };
+}
 
 interface OidcJwtPayload {
   sub?: string;
@@ -32,12 +71,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKeyProvider: passportJwtSecret({
-        cache: true,
-        rateLimit: true,
-        jwksRequestsPerMinute: 5,
-        jwksUri: `${oidcJwksUri}`
-      }),
+      secretOrKeyProvider: createSecretProvider(oidcIssuer, oidcJwksUri, oAuth2ClientId),
       issuer: `${oidcIssuer}`,
       algorithms: ['RS256']
     });

@@ -7,6 +7,7 @@ import { OAuth2ClientCredentialsService } from './service/oauth2-client-credenti
 import { OidcAuthService } from './service/oidc-auth.service';
 import { UsersService } from '../database/services/users';
 import { JwtStrategy } from './jwt.strategy';
+import { AuthFailureException } from './auth-failure.exception';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -172,6 +173,14 @@ describe('AuthController', () => {
     );
   });
 
+  it('returns login configuration failures to the allowed frontend for actionable recovery', async () => {
+    oidcAuthService.getAuthorizationUrl?.mockImplementation(() => { throw new AuthFailureException('configuration-error'); });
+    await controller.login(response, '/workspace/1', browserChallenge, { requestId: 'login-request' } as never);
+    expect(redirect).toHaveBeenCalledWith(
+      'https://app.example.test/workspace/1?error=authentication_failed&auth_error=configuration-error&request_id=login-request'
+    );
+  });
+
   it('keeps the existing user id when a renamed OIDC user logs in through the callback and JWT guard', async () => {
     const existingUser = {
       id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false
@@ -228,6 +237,16 @@ describe('AuthController', () => {
     );
 
     expect(oidcAuthService.consumeTokenExchange).toHaveBeenCalledWith('exchange-code', browserVerifier);
+  });
+
+  it.each(['provider-unavailable', 'configuration-error'] as const)('redirects callback failures with a fixed %s code', async code => {
+    oidcAuthService.exchangeCodeForToken?.mockRejectedValue(new AuthFailureException(code));
+    await controller.callback('private-auth-code', encodedState('/workspace/1'), response, { requestId: 'login-request' } as never);
+    expect(redirect).toHaveBeenCalledWith(
+      `https://app.example.test/workspace/1?error=authentication_failed&auth_error=${code}&request_id=login-request`
+    );
+    expect(oidcAuthService.storeTokenExchange).not.toHaveBeenCalled();
+    expect(authService.storeOidcProviderUser).not.toHaveBeenCalled();
   });
 
   it('refreshes OIDC tokens through the backend refresh endpoint', async () => {
