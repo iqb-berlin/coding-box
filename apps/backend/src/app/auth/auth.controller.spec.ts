@@ -181,6 +181,14 @@ describe('AuthController', () => {
     );
   });
 
+  it('omits invalid request IDs from login failure redirects', async () => {
+    oidcAuthService.getAuthorizationUrl?.mockImplementation(() => { throw new AuthFailureException('configuration-error'); });
+    await controller.login(response, '/workspace/1', browserChallenge, { requestId: 'private\nrequest' } as never);
+    expect(redirect).toHaveBeenCalledWith(
+      'https://app.example.test/workspace/1?error=authentication_failed&auth_error=configuration-error'
+    );
+  });
+
   it('keeps the existing user id when a renamed OIDC user logs in through the callback and JWT guard', async () => {
     const existingUser = {
       id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false
