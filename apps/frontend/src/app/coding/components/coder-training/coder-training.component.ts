@@ -1,8 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, inject, output, input, DestroyRef, ChangeDetectionStrategy, signal, effect, untracked
+  Component, OnInit, OnDestroy, inject, output, input, DestroyRef, ChangeDetectionStrategy, signal, computed, Signal, effect, untracked
 } from '@angular/core';
-import { AsyncPipe } from '@angular/common';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -26,7 +25,7 @@ import {
   FormControl
 } from '@angular/forms';
 import {
-  map, startWith, Observable, combineLatest, BehaviorSubject, tap, catchError, of
+  map, startWith, catchError, of
 } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
@@ -128,7 +127,6 @@ interface BundleOrderingOverride {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    AsyncPipe,
     TranslateModule,
     MatButton,
     MatIcon,
@@ -195,26 +193,35 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   protected readonly isLoadingVariables = signal(false);
   protected readonly isLoadingBundles = signal(false);
 
-  private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
-
   trainingForm: CoderTrainingForm;
   get canEditTraining(): boolean {
     const training = this.editTraining();
     return training ? this.permissions.canEdit(training) : this.permissions.canCreate;
   }
 
-  variableFilterCtrl = new FormControl('');
-  bundleFilterCtrl = new FormControl('');
-  bundleSelection$ = new BehaviorSubject<number[]>([]);
-  manualVariablesSelectControl = new FormControl<string[]>([]); // Stable control for mat-select
-  private isSyncing = false;
+  readonly variableFilterCtrl = this.fb.control('');
+  readonly bundleFilterCtrl = this.fb.control('');
+  private readonly variableFilter = toSignal(this.variableFilterCtrl.valueChanges, { initialValue: '' });
+  private readonly bundleFilter = toSignal(this.bundleFilterCtrl.valueChanges, { initialValue: '' });
+  private readonly includeDerivedVariablesValue: Signal<boolean>;
+  readonly manualVariableKeys: Signal<string[]>;
   private hasPopulatedTrainingSettings = false;
   private hasPopulatedTrainingSelections = false;
   private availableVariablesLoaded = false;
   private availableBundlesLoaded = false;
 
-  filteredVariables$!: Observable<Variable[]>;
-  filteredBundles$!: Observable<VariableBundle[]>;
+  readonly filteredVariables = computed(() => this.getSelectableManualVariables(
+    this.variableFilter(),
+    Array.from(this.selectedBundleIds()),
+    this.includeDerivedVariablesValue(),
+    this.availableVariables()
+  ));
+
+  readonly filteredBundles = computed(() => {
+    const search = this.bundleFilter().toLowerCase();
+    return this.availableBundles().filter(bundle => bundle.name.toLowerCase().includes(search) ||
+      bundle.description?.toLowerCase().includes(search));
+  });
 
   constructor() {
     this.trainingForm = this.fb.group({
@@ -232,83 +239,28 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     // Initialize grouped variables
     this.updateGroupedVariables();
-    this.setupFilters();
-    this.setupManualSelectSync();
+    this.includeDerivedVariablesValue = toSignal(this.trainingForm.controls.includeDerivedVariables.valueChanges, {
+      initialValue: this.trainingForm.controls.includeDerivedVariables.value
+    });
+    // The FormArray owns the selection; mat-select only displays its derived keys.
+    this.manualVariableKeys = toSignal(this.variablesFormArray.valueChanges.pipe(
+      map(() => this.getManualVariableKeys())
+    ), { initialValue: this.getManualVariableKeys() });
     this.setupDerivedVariableSync();
     this.setupReferenceModeValidation();
     effect(() => {
       const editable = this.canEditTraining;
-      for (const control of [this.trainingForm, this.manualVariablesSelectControl]) {
-        if (editable && control.disabled) control.enable({ emitEvent: false });
-        if (!editable && control.enabled) control.disable({ emitEvent: false });
-      }
+      if (editable && this.trainingForm.disabled) this.trainingForm.enable({ emitEvent: false });
+      if (!editable && this.trainingForm.enabled) this.trainingForm.disable({ emitEvent: false });
       if (editable) untracked(() => this.restoreTrainingRecoveryDraft());
     });
   }
 
-  private setupManualSelectSync(): void {
-    // 1. Sync FormArray -> FormControl (Initial & External Changes)
-    this.variablesFormArray.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        if (this.isSyncing) return;
-
-        const manualVarKeys = this.variablesFormArray.controls
-          .filter(c => !c.controls.bundleId.value)
-          .map(c => `${c.controls.unitId.value}::${c.controls.variableId.value}`)
-          .filter(key => key !== '::');
-
-        const currentSelectedKeys = this.manualVariablesSelectControl.value || [];
-        const sortedManual = [...manualVarKeys].sort();
-        const sortedCurrent = [...currentSelectedKeys].sort();
-
-        if (JSON.stringify(sortedManual) !== JSON.stringify(sortedCurrent)) {
-          this.manualVariablesSelectControl.setValue(manualVarKeys, { emitEvent: false });
-        }
-      });
-
-    // 2. Sync FormControl -> FormArray (User Selection via UI)
-    this.manualVariablesSelectControl.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(selectedVarIds => {
-        if (this.isSyncing) return;
-
-        if (selectedVarIds) {
-          this.isSyncing = true;
-          try {
-            this.onVariablesSelectionChange(selectedVarIds);
-          } finally {
-            this.isSyncing = false;
-          }
-        }
-      });
-  }
-
-  private setupFilters(): void {
-    this.filteredVariables$ = combineLatest([
-      this.variableFilterCtrl.valueChanges.pipe(startWith('')),
-      this.bundleSelection$,
-      this.manualVariablesSelectControl.valueChanges.pipe(startWith([])),
-      this.trainingForm.get('includeDerivedVariables')!.valueChanges.pipe(startWith(true)),
-      this._availableVariables$
-    ]).pipe(
-      map(([filter, selectedBundleIds, , includeDerivedVariables, availableVariables]) => this.getSelectableManualVariables(
-        filter || '',
-        selectedBundleIds,
-        !!includeDerivedVariables,
-        availableVariables
-      ))
-    );
-
-    this.filteredBundles$ = this.bundleFilterCtrl.valueChanges.pipe(
-      startWith(''),
-      map(filter => {
-        const search = (filter || '').toLowerCase();
-        return this.availableBundles().filter(b => b.name.toLowerCase().includes(search) ||
-          (b.description && b.description.toLowerCase().includes(search))
-        );
-      })
-    );
+  private getManualVariableKeys(): string[] {
+    return this.variablesFormArray.controls
+      .filter(control => !control.controls.bundleId.value)
+      .map(control => `${control.controls.unitId.value}::${control.controls.variableId.value}`)
+      .filter(key => key !== '::');
   }
 
   private setupDerivedVariableSync(): void {
@@ -350,38 +302,26 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.loadAvailableTrainings();
     this.populateTrainingSettingsFromTraining();
 
-    // Variable and bundle selections depend on the loaded option lists.
-    combineLatest([
-      this._availableVariables$,
-      this.variableBundleService.getBundles(1, 100).pipe(
-        map(({ bundles }: { bundles: VariableBundle[] }) => bundles),
-        tap(() => {
-          this.availableBundlesLoaded = true;
-        }),
-        catchError(() => {
-          this.availableBundlesLoaded = true;
-          return of([] as VariableBundle[]);
-        })
-      )
-    ]).pipe(
+    this.isLoadingBundles.set(true);
+    this.variableBundleService.getBundles(1, 100).pipe(
+      map(({ bundles }: { bundles: VariableBundle[] }) => bundles),
+      catchError(() => of([] as VariableBundle[])),
       takeUntilDestroyed(this.destroyRef)
-    ).subscribe(([variables, bundles]: [Variable[], VariableBundle[]]) => {
-      this.availableVariables.set(variables);
+    ).subscribe(bundles => {
       this.availableBundles.set(bundles);
-
-      if (
-        this.editTraining() &&
-        this.availableVariablesLoaded &&
-        this.availableBundlesLoaded &&
-        !this.hasPopulatedTrainingSelections
-      ) {
-        this.populateTrainingSelectionsFromTraining();
-      }
-
-      this.restoreTrainingRecoveryDraft();
-      this.isLoadingVariables.set(false);
+      this.availableBundlesLoaded = true;
       this.isLoadingBundles.set(false);
+      this.restoreLoadedTrainingSelections();
     });
+  }
+
+  private restoreLoadedTrainingSelections(): void {
+    if (!this.availableVariablesLoaded || !this.availableBundlesLoaded) return;
+
+    if (this.editTraining() && !this.hasPopulatedTrainingSelections) {
+      this.populateTrainingSelectionsFromTraining();
+    }
+    this.restoreTrainingRecoveryDraft();
   }
 
   private populateFormFromTraining(): void {
@@ -468,7 +408,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           }
         }
       });
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
 
     this.updateGroupedVariables();
@@ -504,7 +443,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       formValue: this.getTrainingRecoveryFormValue(),
       selectedCoderIds: Array.from(this.selectedCoders()),
       selectedBundleIds: Array.from(this.selectedBundleIds()),
-      manualVariableKeys: this.manualVariablesSelectControl.value || [],
+      manualVariableKeys: this.manualVariableKeys(),
       variables: this.variablesFormArray.controls.map(control => ({
         variableId: control.controls.variableId.value || '',
         unitId: control.controls.unitId.value || '',
@@ -613,7 +552,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     this.selectedCoders.set(new Set(draft.selectedCoderIds));
     this.selectedBundleIds.set(new Set(draft.selectedBundleIds));
-    this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
 
     draft.variables.forEach(variable => {
       if (variable.bundleId && variable.bundleCaseOrderingMode) {
@@ -632,12 +570,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       );
     });
 
-    this.isSyncing = true;
-    try {
-      this.manualVariablesSelectControl.setValue(draft.manualVariableKeys, { emitEvent: false });
-    } finally {
-      this.isSyncing = false;
-    }
     this.variableFilterCtrl.setValue(draft.variableFilter || '');
     this.bundleFilterCtrl.setValue(draft.bundleFilter || '');
 
@@ -666,13 +598,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         next: variables => {
           this.availableVariables.set(variables);
           this.availableVariablesLoaded = true;
-          this._availableVariables$.next(variables);
+          this.restoreLoadedTrainingSelections();
           this.isLoadingVariables.set(false);
         },
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.availableVariablesLoaded = true;
-          this._availableVariables$.next([]);
+          this.availableVariables.set([]);
+          this.restoreLoadedTrainingSelections();
           this.isLoadingVariables.set(false);
         }
       });
@@ -862,16 +795,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     indexesToRemove.reverse().forEach(index => this.variablesFormArray.removeAt(index));
 
-    const manualSelection = this.manualVariablesSelectControl.value || [];
-    const filteredManualSelection = manualSelection.filter(key => {
-      const [unitId, variableId] = key.split('::');
-      return !this.isDerivedVariableKey(unitId, variableId);
-    });
-
-    if (filteredManualSelection.length !== manualSelection.length) {
-      this.manualVariablesSelectControl.setValue(filteredManualSelection, { emitEvent: false });
-    }
-
     this.pruneSelectedBundlesWithoutVariables();
     this.updateGroupedVariables();
     this.checkForOverlaps();
@@ -890,7 +813,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (prunedBundleIds.length !== selectedBundleIds.length) {
       this.selectedBundleIds.set(new Set(prunedBundleIds));
-      this.bundleSelection$.next(prunedBundleIds);
     }
   }
 
@@ -940,7 +862,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasSelectableManualVariables(): boolean {
-    const selectedManualKeys = new Set(this.manualVariablesSelectControl.value || []);
+    const selectedManualKeys = new Set(this.manualVariableKeys());
     return this.getSelectableManualVariableKeys().some(key => !selectedManualKeys.has(key));
   }
 
@@ -950,19 +872,19 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   selectAllManualVariables(): void {
     if (!this.canEditTraining) return;
-    const selectedManualKeys = this.manualVariablesSelectControl.value || [];
+    const selectedManualKeys = this.manualVariableKeys();
     const selectableManualKeys = this.getSelectableManualVariableKeys();
     const nextSelection = Array.from(new Set([...selectedManualKeys, ...selectableManualKeys]));
 
     if (nextSelection.length !== selectedManualKeys.length) {
-      this.manualVariablesSelectControl.setValue(nextSelection);
+      this.onVariablesSelectionChange(nextSelection);
     }
   }
 
   clearManualVariables(): void {
     if (!this.canEditTraining) return;
     if (this.hasManualVariablesSelected()) {
-      this.manualVariablesSelectControl.setValue([]);
+      this.onVariablesSelectionChange([]);
     }
   }
 
@@ -1141,17 +1063,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       removedBundleIds.forEach(bundleId => {
         this.removeBundle(bundleId);
       });
-
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
   }
 
   onVariablesSelectionChange(selectedVarKeys: string[]): void {
     if (!this.canEditTraining) return;
-    const currentManualKeys = this.variablesFormArray.controls
-      .filter(c => !c.controls.bundleId.value)
-      .map(c => `${c.controls.unitId.value}::${c.controls.variableId.value}`)
-      .filter(key => key !== '::');
+    const currentManualKeys = this.getManualVariableKeys();
 
     const newKeys = selectedVarKeys.filter(key => !currentManualKeys.includes(key));
     const removedKeys = currentManualKeys.filter(key => !selectedVarKeys.includes(key));
@@ -1210,7 +1127,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       next.delete(bundleId);
       return next;
     });
-    this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
+
     this.updateGroupedVariables();
     this.showSuccess(`Variablenbündel "${bundle.name}" entfernt.`);
     this.checkForOverlaps();
@@ -1833,7 +1750,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         }
         this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
       });
-      this.bundleSelection$.next(Array.from(this.selectedBundleIds()));
     }
 
     this.updateGroupedVariables();
