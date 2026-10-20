@@ -5,6 +5,16 @@ import path from 'node:path';
 import test from 'node:test';
 import { FIXTURE_ADMIN_USERNAME, prepareAuthEnvironment } from './auth-environment.mjs';
 import { createAdminToken } from './harness.mjs';
+import { setAuthProviderAvailable } from './auth-fixture.mjs';
+
+test('provider outage controls refuse missing or non-disposable projects and invalid states', async () => {
+  for (const project of [undefined, 'production', 'coding-box', 'coding-box-replay-']) {
+    for (const available of [true, false]) {
+      await assert.rejects(setAuthProviderAvailable(available, { REPLAY_E2E_COMPOSE_PROJECT: project }), /disposable replay Compose project/);
+    }
+  }
+  await assert.rejects(setAuthProviderAvailable('pause', { REPLAY_E2E_COMPOSE_PROJECT: 'coding-box-replay-test' }), /disposable replay Compose project/);
+});
 
 test('generates a separate fixture login with the backend audience and a short-lived browser session', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'oidc-harness-'));

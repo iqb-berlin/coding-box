@@ -25,6 +25,10 @@ describe('real Keycloak coding session', () => {
     cy.task('coding:cleanup', null, { log: false });
   });
 
+  afterEach(() => {
+    cy.task('coding:set-provider-available', true, { log: false });
+  });
+
   it('persists coding, recovers an expired session, and completes the job', () => {
     cy.intercept(
       'POST',
@@ -120,6 +124,39 @@ describe('real Keycloak coding session', () => {
       'Persisted live note'
     );
 
+    let outageNoteWrites = 0;
+    let refreshBeforeOutage: string | null = null;
+    cy.intercept('POST', '**/coding-job/*/notes', request => {
+      if (request.body.notes === 'Provider outage draft') {
+        outageNoteWrites += 1;
+        request.alias = 'outageNote';
+      }
+    });
+    cy.task('coding:set-provider-available', false, { log: false });
+    cy.window().then(win => {
+      refreshBeforeOutage = win.localStorage.getItem('refresh_token');
+      win.localStorage.removeItem('auth_token');
+    });
+    cy.intercept('POST', '**/api/auth/refresh').as('providerOutage');
+    cy.get('coding-box-code-selector textarea').clear().type('Provider outage draft').blur();
+    cy.wait('@providerOutage').then(({ response }) => {
+      expect(response?.statusCode).to.equal(503);
+      expect(response?.body.code).to.equal('provider-unavailable');
+    });
+    cy.get('.auth-refresh-unavailable').should('be.visible');
+    cy.get('.re-authentication').should('not.exist');
+    cy.window().then(win => {
+      expect(win.localStorage.getItem('refresh_token')).to.equal(refreshBeforeOutage);
+      expect(outageNoteWrites, 'protected write was held back').to.equal(0);
+    });
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
+    cy.task('coding:set-provider-available', true, { log: false });
+    cy.get('.auth-refresh-unavailable button').click();
+    cy.wait('@outageNote').its('response.statusCode').should('eq', 201);
+    cy.get('.auth-refresh-unavailable').should('not.exist');
+    cy.reload();
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
+
     // Hold a real progress save while the coder adds a problem marker.
     let releaseProgress: (() => void) | undefined;
     let holdProgress = true;
@@ -155,19 +192,15 @@ describe('real Keycloak coding session', () => {
       .clear()
       .type('Recovered live draft')
       .blur();
-    let rejectExpiredRefresh = false;
+    let observeRevokedRefresh = false;
     cy.intercept('POST', '**/api/auth/refresh', request => {
-      if (rejectExpiredRefresh) {
+      if (observeRevokedRefresh) {
         request.alias = 'expiredRefresh';
-        request.reply({
-          statusCode: 401,
-          body: { code: 'session-invalid', message: 'The authentication session is no longer valid' }
-        });
       }
     });
-    // A refresh can race with the server-side session revocation. Arm its observer first.
-    cy.then(() => { rejectExpiredRefresh = true; });
     cy.task('coding:expire-session', null, { log: false });
+    // Observe the real backend response only after Keycloak confirms revocation.
+    cy.then(() => { observeRevokedRefresh = true; });
     cy.window().then(win => win.localStorage.removeItem('auth_token'));
     cy.get('coding-box-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
@@ -180,7 +213,10 @@ describe('real Keycloak coding session', () => {
         field.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
     });
-    cy.wait('@expiredRefresh').its('response.statusCode').should('eq', 401);
+    cy.wait('@expiredRefresh').then(({ response }) => {
+      expect(response?.statusCode).to.equal(401);
+      expect(response?.body.code).to.equal('session-invalid');
+    });
     cy.get('.re-authentication button', { timeout: 60_000 }).should(
       'be.visible'
     );
@@ -197,7 +233,7 @@ describe('real Keycloak coding session', () => {
     });
     cy.then(() => {
       failNotes = false;
-      rejectExpiredRefresh = false;
+      observeRevokedRefresh = false;
     });
     cy.get('.re-authentication button').click();
     cy.origin(
@@ -271,6 +307,37 @@ describe('real Keycloak coding session', () => {
     cy.contains('coding-box-account-action button', 'Abmelden').click();
     cy.get('.login-button').should('be.visible');
     cy.get('.re-authentication').should('not.exist');
+  });
+
+  it('shows a real backend 401 after a successful provider login without discarding the refresh session', () => {
+    cy.intercept('POST', '**/api/auth/exchange', request => {
+      request.continue(response => {
+        // Keep the provider login real, then invalidate the signature in transit.
+        // The future expiry prevents proactive refresh from replacing this token.
+        const [header, encoded, signature] = response.body.access_token.split('.');
+        const payload = JSON.parse(Cypress.Buffer.from(encoded, 'base64').toString());
+        payload.exp = Math.floor(Date.now() / 1000) + 3600;
+        const changed = Cypress.Buffer.from(JSON.stringify(payload)).toString('base64')
+          .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        response.body.access_token = `${header}.${changed}.${signature}`;
+      });
+    }).as('providerLogin');
+    cy.intercept('GET', '**/api/auth-data*').as('rejectedBootstrap');
+    cy.visit('/');
+    cy.get('.login-button').click();
+    cy.origin(setup.keycloakUrl, { args: { username: setup.username, password: setup.password } },
+      ({ username, password }) => {
+        cy.get('#username').type(username);
+        cy.get('#password').type(password, { log: false });
+        cy.get('#kc-login').click();
+      });
+    cy.wait('@providerLogin', { log: false }).its('response.statusCode').should('eq', 200);
+    cy.wait('@rejectedBootstrap').its('response.statusCode').should('eq', 401);
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Backend hat den Zugriff abgelehnt');
+    cy.get('.reauthentication-hint').should('not.exist');
+    cy.window().then(win => {
+      expect(win.localStorage.getItem('refresh_token')).to.be.a('string').and.not.be.empty;
+    });
   });
 
   it('uploads responses through the UI and shows the backend result', () => {
