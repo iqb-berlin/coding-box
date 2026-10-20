@@ -207,7 +207,9 @@
     "proxy-addr": "2.0.8",
     "source-map-js": "1.2.2",
     "handlebars": "4.7.10",
-    "image-size": "2.0.3"
+    "image-size": "2.0.3",
+    "follow-redirects": "1.16.1",
+    "@modelcontextprotocol/sdk": "1.32.1"
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
