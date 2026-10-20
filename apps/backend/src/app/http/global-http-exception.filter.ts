@@ -10,6 +10,8 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { MulterError } from 'multer';
+import { AuthFailureException } from '../auth/auth-failure.exception';
+import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 import {
   REQUEST_ID_HEADER,
   RequestWithRequestId,
@@ -20,6 +22,7 @@ interface ErrorResponseBody {
   statusCode: number;
   message: string | string[];
   error?: string;
+  code?: AuthErrorCode;
   requestId: string;
   timestamp: string;
   path: string;
@@ -94,6 +97,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: request.originalUrl || request.url
     };
+
+    if (exception instanceof AuthFailureException) {
+      return { ...baseBody, code: exception.code, message: exception.message };
+    }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       return {

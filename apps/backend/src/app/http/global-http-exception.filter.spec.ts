@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { GlobalHttpExceptionFilter } from './global-http-exception.filter';
+import { AuthFailureException } from '../auth/auth-failure.exception';
 import {
   REQUEST_ID_HEADER,
   RequestWithRequestId
@@ -67,6 +68,15 @@ describe('GlobalHttpExceptionFilter', () => {
       expect.stringContaining('[request-1] GET /api/admin/workspace/5/journal failed with 500'),
       expect.any(String)
     );
+  });
+
+  it.each(['provider-unavailable', 'configuration-error'] as const)('preserves safe auth diagnostics for %s with a request id', code => {
+    const { host, response } = createHost({ requestId: 'auth-request-123' });
+    new GlobalHttpExceptionFilter().catch(new AuthFailureException(code), host);
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 503, code, message: expect.any(String), requestId: 'auth-request-123'
+    }));
   });
 
   it('should preserve client error bodies and add the request id', () => {
