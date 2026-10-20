@@ -33,6 +33,7 @@ describe('authInterceptor', () => {
       isBackendLoginRunning: jest.fn().mockReturnValue(false),
       requireReAuthentication: jest.fn(),
       addErrorMessage: jest.fn(),
+      recordAuthProviderFailure: jest.fn(),
       needsReAuthentication: false,
       reAuthenticationReturnUrl: undefined
     } as unknown as jest.Mocked<AppService>;
@@ -91,6 +92,37 @@ describe('authInterceptor', () => {
     expect(req.request.headers.get('Accept')).toBe('application/json');
     expect(req.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
     req.flush({});
+  });
+
+  it.each(['provider-unavailable', 'configuration-error'])('retains the current session and records protected-request failure %s', async code => {
+    http.post('/api/discussions', { note: 'pending note' }).subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/discussions').flush({ code }, {
+      status: 503, statusText: 'Service Unavailable', headers: { 'X-Request-Id': 'provider-request' }
+    });
+    expect(appService.recordAuthProviderFailure).toHaveBeenCalledWith(code, 'provider-request');
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not apply an old provider failure to a newer session', async () => {
+    http.get('/api/discussions').subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    const request = httpMock.expectOne('/api/discussions');
+    authService.getSessionGeneration.mockReturnValue(1);
+    authService.getToken.mockReturnValue('new-session-token');
+    request.flush({ code: 'provider-unavailable' }, { status: 503, statusText: 'Service Unavailable' });
+    expect(appService.recordAuthProviderFailure).not.toHaveBeenCalled();
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('leaves provider failures during bootstrap to its dedicated recovery state', async () => {
+    appService.isBackendLoginRunning.mockReturnValue(true);
+    http.get('/api/auth-data').subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/auth-data').flush({ code: 'configuration-error' }, { status: 503, statusText: 'Service Unavailable' });
+    expect(appService.recordAuthProviderFailure).not.toHaveBeenCalled();
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it('should not attach authorization to non-backend requests', () => {

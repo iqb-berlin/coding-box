@@ -1928,7 +1928,11 @@ describe('CodingResultsComparisonComponent', () => {
     });
   });
 
-  it('keeps a discussion draft through a temporary refresh failure and saves it after renewal', () => {
+  it.each([
+    ['refresh', () => new AuthRefreshUnavailableError()],
+    ['JWKS outage', () => new HttpErrorResponse({ status: 503, error: { code: 'provider-unavailable' } })],
+    ['JWKS configuration', () => new HttpErrorResponse({ status: 503, error: { code: 'configuration-error' } })]
+  ])('keeps a discussion draft through %s failure and saves it after recovery', (_source, makeError) => {
     const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
     const row = {
       responseId: 1,
@@ -1941,7 +1945,7 @@ describe('CodingResultsComparisonComponent', () => {
       discussionSource: null as 'manual' | 'auto_agreement' | null,
       coders: []
     };
-    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(() => new AuthRefreshUnavailableError()));
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(makeError));
     appService.needsReAuthentication = false;
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;

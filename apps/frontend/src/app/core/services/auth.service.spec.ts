@@ -22,7 +22,7 @@ jest.unmock('jwt-decode');
 describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
-  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage' | 'setBackendUnavailable'>>;
+  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'clearLoginFailure' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage' | 'setBackendUnavailable'>>;
   let locationMock: Pick<Location, 'href' | 'origin'>;
   let storageMock: {
     getItem: jest.Mock;
@@ -103,6 +103,7 @@ describe('AuthService', () => {
       serverUrl: 'http://localhost:3333/api/',
       reAuthenticationReturnUrl: '/coding',
       createLoginRedirectUri: jest.fn().mockReturnValue('http://localhost/#/coding'),
+      clearLoginFailure: jest.fn(),
       markExplicitLogoutInProgress: jest.fn(),
       clearAuthState: jest.fn(),
       requireReAuthentication: jest.fn(),

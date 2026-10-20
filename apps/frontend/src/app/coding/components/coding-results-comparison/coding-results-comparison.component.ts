@@ -46,6 +46,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
+import { getAuthProviderFailureCode } from '../../../core/interceptors/auth-provider-failure';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
@@ -1240,7 +1241,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
           }
           this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
           if (this.isRecoverableDiscussionAuthError(error)) {
-            const message = error instanceof AuthRefreshUnavailableError ?
+            const message = error instanceof AuthRefreshUnavailableError || getAuthProviderFailureCode(error) ?
               this.translate.instant('error.auth_refresh_pending_save_message') :
               'Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.';
             this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: message }));
@@ -1491,7 +1492,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   private isRecoverableDiscussionAuthError(error: unknown): boolean {
-    return error instanceof AuthRefreshUnavailableError || this.appService.needsReAuthentication ||
+    return error instanceof AuthRefreshUnavailableError || !!getAuthProviderFailureCode(error) || this.appService.needsReAuthentication ||
       (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403));
   }
 
