@@ -14,6 +14,7 @@ import { AppService } from './app.service';
 import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
 import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
+import { SessionRecoveryService } from './session-recovery.service';
 
 @Injectable({
   providedIn: 'root'
@@ -25,6 +26,7 @@ export class AuthService {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly appService = inject(AppService);
+  private readonly sessionRecovery = inject(SessionRecoveryService);
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
@@ -249,6 +251,7 @@ export class AuthService {
           typeof requestId === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(requestId) ? requestId : ''
         );
         this.refreshFailureState.set(failure);
+        this.sessionRecovery.captureRegisteredDrafts();
         throw failure;
       })
       .finally(() => {

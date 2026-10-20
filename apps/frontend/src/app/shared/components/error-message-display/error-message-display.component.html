@@ -2,7 +2,7 @@
   class="error-messages-container priority-errors"
   [class.re-authentication-active]="showGlobalReAuthenticationMessage"
 >
-  @if (authService.refreshFailure(); as failure) {
+  @if (!appService.needsReAuthentication && authService.refreshFailure(); as failure) {
   <div class="error-message backend-unavailable auth-refresh-unavailable" role="alert">
     <div class="error-content">
       <mat-icon class="error-icon">cloud_off</mat-icon>

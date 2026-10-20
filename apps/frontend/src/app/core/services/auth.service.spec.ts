@@ -6,6 +6,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom, of } from 'rxjs';
+import { SessionRecoveryService } from './session-recovery.service';
 import { AuthService } from './auth.service';
 import { AppService } from './app.service';
 import { authInterceptor } from '../interceptors/auth.interceptor';
@@ -494,6 +495,22 @@ describe('AuthService', () => {
     await expect(retry).resolves.toBe(freshToken);
     expect(service.refreshFailure()).toBeNull();
     expect(tokens.get('refresh_token')).toBe('rotated-refresh-token');
+  });
+
+  it('preserves registered coding drafts when refresh is temporarily unavailable', async () => {
+    storeSession();
+    const drafts = new Map<string, string>();
+    sessionStorageMock.getItem.mockImplementation(key => drafts.get(key) ?? null);
+    sessionStorageMock.setItem.mockImplementation((key, value) => drafts.set(key, value));
+    const recovery = TestBed.inject(SessionRecoveryService);
+    recovery.setOwnerId('oidc-user-id');
+    recovery.registerProvider({ key: 'pending-coding', capture: () => ({ notes: 'Unsaved coding note' }) });
+    const pending = service.getValidToken();
+    const rejection = expect(pending).rejects.toBeInstanceOf(AuthRefreshUnavailableError);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({}, { status: 503, statusText: 'Unavailable' });
+    await rejection;
+    expect(recovery.peekDraft('pending-coding')).toEqual({ notes: 'Unsaved coding note' });
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it('distinguishes configuration failures without clearing the session', async () => {
