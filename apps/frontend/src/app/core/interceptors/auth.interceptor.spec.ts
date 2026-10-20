@@ -12,6 +12,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { finalize } from 'rxjs';
 import { authInterceptor } from './auth.interceptor';
 import { AuthRequestCancelledError } from './auth-request-cancelled.error';
+import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
   SUPPRESS_GLOBAL_HTTP_ERROR
@@ -168,6 +169,16 @@ describe('authInterceptor', () => {
     expect(error).toHaveBeenCalledWith(expect.any(AuthRequestCancelledError));
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('blocks a write without requesting reauthentication when renewal is temporarily unavailable', async () => {
+    const error = jest.fn();
+    authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+    http.post('/api/workspaces', {}).subscribe({ error });
+    await Promise.resolve();
+    httpMock.expectNone('/api/workspaces');
+    expect(error).toHaveBeenCalledWith(expect.any(AuthRefreshUnavailableError));
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it('should replace stale stored-token authorization headers with a refreshed access token', async () => {

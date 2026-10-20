@@ -17,7 +17,7 @@
     } @else if (showAuthDataError) {
       <div class="workspace-state workspace-state-error" role="alert">
         <mat-icon>sync_problem</mat-icon>
-        <p>{{ 'home.auth-data-load-error' | translate }}</p>
+        <p>{{ (appService.authDataFailureStatus === 401 ? 'error.backend_auth_rejected_message' : 'home.auth-data-load-error') | translate }}</p>
         <div class="workspace-state-actions">
           <button
             mat-raised-button

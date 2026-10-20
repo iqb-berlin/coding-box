@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, signal, WritableSignal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, Subject } from 'rxjs';
@@ -11,6 +11,7 @@ import { ErrorMessageDisplayComponent } from './error-message-display.component'
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
+import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
 
 describe('ErrorMessageDisplayComponent', () => {
   let fixture: ComponentFixture<ErrorMessageDisplayComponent>;
@@ -26,6 +27,7 @@ describe('ErrorMessageDisplayComponent', () => {
     requireReAuthentication: jest.Mock;
   };
   let authService: {
+    refreshFailure: WritableSignal<AuthRefreshUnavailableError | null>;
     login: jest.Mock; getValidToken: jest.Mock; getSessionGeneration: jest.Mock; getRefreshToken: jest.Mock;
   };
   let router: { url: string; events: Subject<RouterEvent> };
@@ -48,6 +50,7 @@ describe('ErrorMessageDisplayComponent', () => {
       requireReAuthentication: jest.fn()
     };
     authService = {
+      refreshFailure: signal<AuthRefreshUnavailableError | null>(null),
       login: jest.fn(),
       getSessionGeneration: jest.fn().mockReturnValue(0),
       getRefreshToken: jest.fn().mockReturnValue('refresh-token'),
@@ -127,6 +130,27 @@ describe('ErrorMessageDisplayComponent', () => {
     await fixture.componentInstance.handleExtendSession();
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+  });
+
+  it('keeps an unavailable renewal visible and offers retry without expiring the session', async () => {
+    appService.needsReAuthentication = false;
+    authService.refreshFailure.set(new AuthRefreshUnavailableError('provider-unavailable', 503, 'request-123'));
+    authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.auth-refresh-unavailable').textContent).toContain('request-123');
+    await fixture.componentInstance.handleExtendSession();
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    const restored = jest.fn();
+    fixture.componentInstance.authenticationRestored.subscribe(restored);
+    authService.getValidToken.mockImplementation(async () => {
+      authService.refreshFailure.set(null);
+      return 'fresh-token';
+    });
+    (fixture.nativeElement.querySelector('.auth-refresh-unavailable button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(restored).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.querySelector('.auth-refresh-unavailable')).toBeNull();
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it.each(['discarded', 'failed'])('preserves a newer session when the old extension is %s', async outcome => {
@@ -248,6 +272,7 @@ describe('ErrorMessageDisplayComponent zoneless session warning', () => {
         {
           provide: AuthService,
           useValue: {
+            refreshFailure: signal(null),
             getValidToken: jest.fn().mockResolvedValue('token'),
             getSessionGeneration: jest.fn().mockReturnValue(0),
             getRefreshToken: jest.fn().mockReturnValue('refresh-token')

@@ -7,6 +7,7 @@ import { Observable, Subject, of } from 'rxjs';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 import { SystemNotificationService } from './core/services/system-notification.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
@@ -144,6 +145,18 @@ describe('AppComponent', () => {
 
     expect(authSessionActivity.stop).toHaveBeenCalled();
     expect(TestBed.inject(SystemNotificationService).stopPolling).toHaveBeenCalled();
+  });
+
+  it('keeps bootstrap recoverable after an unavailable refresh and loads auth data after retry', async () => {
+    authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+    const fixture = TestBed.createComponent(AppComponent);
+    await expect(fixture.componentInstance.ngOnInit()).resolves.toBeUndefined();
+    expect(appService.setAuthBootstrapStatus).toHaveBeenCalledWith('refresh-unavailable');
+    expect(appService.setAuthBootstrapStatus).not.toHaveBeenCalledWith('ready');
+    expect(appService.loadAuthenticatedUser).not.toHaveBeenCalled();
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
   });
   it('updates workspace state after asynchronous auth data arrives without zones', async () => {
     const authData = new Subject<AuthDataDto>();

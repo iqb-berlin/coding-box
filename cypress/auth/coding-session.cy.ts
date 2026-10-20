@@ -160,8 +160,8 @@ describe('real Keycloak coding session', () => {
       if (rejectExpiredRefresh) {
         request.alias = 'expiredRefresh';
         request.reply({
-          statusCode: 400,
-          body: { error: 'invalid_grant', error_description: 'Session not active' }
+          statusCode: 401,
+          body: { code: 'session-invalid', message: 'The authentication session is no longer valid' }
         });
       }
     });
@@ -180,7 +180,7 @@ describe('real Keycloak coding session', () => {
         field.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
     });
-    cy.wait('@expiredRefresh').its('response.statusCode').should('eq', 400);
+    cy.wait('@expiredRefresh').its('response.statusCode').should('eq', 401);
     cy.get('.re-authentication button', { timeout: 60_000 }).should(
       'be.visible'
     );
