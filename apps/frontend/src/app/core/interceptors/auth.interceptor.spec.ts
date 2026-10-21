@@ -34,6 +34,7 @@ describe('authInterceptor', () => {
       requireReAuthentication: jest.fn(),
       addErrorMessage: jest.fn(),
       recordAuthProviderFailure: jest.fn(),
+      setBackendUnavailable: jest.fn(),
       needsReAuthentication: false,
       reAuthenticationReturnUrl: undefined
     } as unknown as jest.Mocked<AppService>;
@@ -279,7 +280,7 @@ describe('authInterceptor', () => {
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
-  it('should suppress global error messages when requested by request context', async () => {
+  it.each([500, 504, 999])('leaves a locally handled HTTP %s failure to the requesting view', async status => {
     const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
 
     http.get('/api/admin/workspace/5/coding/freshness', { context }).subscribe({
@@ -290,11 +291,43 @@ describe('authInterceptor', () => {
     await Promise.resolve();
 
     const req = httpMock.expectOne('/api/admin/workspace/5/coding/freshness');
-    req.flush('Gateway Timeout', { status: 504, statusText: 'Gateway Timeout' });
+    req.flush('Backend unavailable', { status, statusText: 'Backend unavailable' });
 
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(appService.setBackendUnavailable).not.toHaveBeenCalled();
     expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it.each([500, 999])('still reports an unhandled HTTP %s backend outage globally', async status => {
+    http.get('/api/workspaces').subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/workspaces').flush('Backend unavailable', {
+      status, statusText: 'Backend unavailable'
+    });
+
+    expect(appService.setBackendUnavailable).toHaveBeenCalledWith(true);
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
+      'Schließen',
+      expect.objectContaining({ duration: 0 })
+    );
+    expect(appService.addErrorMessage).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Forbidden', 'Sie haben keine Berechtigung für diese Aktion'],
+    ['Access level too low', 'Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion']
+  ])('reports a protected-action 403 without ending the session: %s', async (message, expected) => {
+    http.post('/api/admin/system-notifications', {}).subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/admin/system-notifications').flush({ message }, {
+      status: 403, statusText: 'Forbidden'
+    });
+
+    expect(snackBar.open).toHaveBeenCalledWith(expected, 'Schließen', expect.objectContaining({ duration: 5000 }));
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
   });
 
   it('should still handle suppressed 401 errors as expired sessions', async () => {

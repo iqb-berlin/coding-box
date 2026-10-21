@@ -92,7 +92,8 @@ export const authInterceptor: HttpInterceptorFn = (
                   return;
                 }
 
-                if (error.status === 500 || error.status === 999) {
+                if ((error.status === 500 || error.status === 999) &&
+                  !req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)) {
                   appService.setBackendUnavailable(true);
                   snackBar.open(
                     'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
