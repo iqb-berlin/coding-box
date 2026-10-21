@@ -1,6 +1,7 @@
 import {
   Component, inject, OnInit, computed, signal, viewChild, effect, ChangeDetectionStrategy, OnDestroy, AfterViewInit
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
@@ -312,10 +313,49 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     )) : trainings;
   });
 
-  selectedTrainings = new SelectionModel<number>(true, []);
-  comparisonData: TrainingComparison[] = [];
+  readonly selectedTrainings = new SelectionModel<number>(true, []);
+  private readonly trainingSelectionChange = toSignal(this.selectedTrainings.changed, { initialValue: null });
+  private readonly comparisonDataState = signal<TrainingComparison[]>([]);
+
+  get comparisonData(): TrainingComparison[] {
+    return this.comparisonDataState();
+  }
+
+  set comparisonData(value: TrainingComparison[]) {
+    this.comparisonDataState.set(value);
+  }
+
   withinTrainingData: WithinTrainingComparison[] = [];
-  comparisonMode: CodingResultsComparisonMode = 'between-trainings';
+  private readonly comparisonModeState = signal<CodingResultsComparisonMode>('between-trainings');
+
+  get comparisonMode(): CodingResultsComparisonMode {
+    return this.comparisonModeState();
+  }
+
+  set comparisonMode(value: CodingResultsComparisonMode) {
+    this.comparisonModeState.set(value);
+  }
+
+  // Scan result codes once per page; selection and label changes only filter the training list.
+  private readonly trainingIdsWithCodes = computed(() => {
+    const ids = new Set<number>();
+    this.comparisonData.forEach(row => row.coders.forEach(coder => {
+      if (coder.code !== null) ids.add(coder.trainingId);
+    }));
+    return ids;
+  });
+
+  private readonly selectedTrainingsWithoutCodes = computed(() => {
+    if (this.comparisonMode !== 'between-trainings' || this.comparisonData.length === 0) {
+      return [];
+    }
+    this.trainingSelectionChange();
+    const idsWithCodes = this.trainingIdsWithCodes();
+    return this.availableTrainings().filter(training => (
+      this.selectedTrainings.isSelected(training.id) && !idsWithCodes.has(training.id)
+    ));
+  });
+
   selectedTrainingForWithin: number | null = null;
 
   availableCoders: Array<{ jobId: number; coderName: string }> = [];
@@ -653,19 +693,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       (this.data.selectedTraining?.id === this.selectedTrainingForWithin ? this.data.selectedTraining : undefined);
   }
 
-  private getSelectedTrainingsWithoutCodes(): CoderTraining[] {
-    if (this.comparisonMode !== 'between-trainings' || this.comparisonData.length === 0) {
-      return [];
-    }
-
-    return this.availableTrainings().filter(training => (
-      this.selectedTrainings.isSelected(training.id) &&
-      !this.comparisonData.some(row => (
-        row.coders.some(coder => coder.trainingId === training.id && coder.code !== null)
-      ))
-    ));
-  }
-
   private formatTrainingList(trainings: CoderTraining[]): string {
     const visible = trainings.slice(0, 3).map(training => this.getTrainingOptionTitle(training));
     const remaining = trainings.length - visible.length;
@@ -694,7 +721,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       });
     }
 
-    const trainingsWithoutCodes = this.getSelectedTrainingsWithoutCodes();
+    const trainingsWithoutCodes = this.selectedTrainingsWithoutCodes();
     if (trainingsWithoutCodes.length > 0) {
       warnings.push({
         icon: 'playlist_remove',

@@ -224,6 +224,66 @@ describe('CodingResultsComparisonComponent', () => {
     sessionStorage.clear();
   });
 
+  it('caches warning code scans while keeping training selections, labels and reloaded results current', () => {
+    const codeReads = jest.fn((): string | null => null);
+    const trainings = [{ id: 1, label: 'Training A' }, { id: 2, label: 'Training B' }] as CoderTraining[];
+    component.availableTrainings.set(trainings);
+    component.selectedTrainings.select(1, 2);
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.totalItems = 1;
+    component.comparisonData = [{
+      responseId: 1,
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      personCode: '',
+      personLogin: '',
+      personGroup: '',
+      testPerson: '',
+      coders: [{
+        trainingId: 1, trainingLabel: 'Training A', coderId: 101, coderName: 'Ada', code: '1', score: 1
+      }, {
+        trainingId: 2,
+        trainingLabel: 'Training B',
+        coderId: 201,
+        coderName: 'Ben',
+        get code() { return codeReads(); },
+        score: null
+      }]
+    }];
+    const view = component as unknown as { getComparisonWarnings(): Array<{ icon: string; text: string }> };
+    const missingCodesWarning = () => view.getComparisonWarnings().find(warning => warning.icon === 'playlist_remove');
+
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    const initialReads = codeReads.mock.calls.length;
+    expect(initialReads).toBeGreaterThan(0);
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    expect(codeReads).toHaveBeenCalledTimes(initialReads);
+
+    component.selectedTrainings.deselect(2);
+    expect(missingCodesWarning()).toBeUndefined();
+    component.selectedTrainings.select(2);
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    component.availableTrainings.set([trainings[0], { ...trainings[1], label: 'Renamed training' }]);
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    expect(codeReads).toHaveBeenCalledTimes(initialReads);
+
+    component.comparisonData = component.comparisonData.map(row => ({
+      ...row, coders: row.coders.map(coder => ({ ...coder, code: '1' }))
+    }));
+    expect(missingCodesWarning()).toBeUndefined();
+
+    component.comparisonData = component.comparisonData.map(row => ({
+      ...row, coders: row.coders.filter(coder => coder.trainingId === 1)
+    }));
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    component.comparisonMode = 'within-training';
+    expect(missingCodesWarning()).toBeUndefined();
+    component.comparisonMode = 'between-trainings';
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    component.comparisonData = [];
+    expect(missingCodesWarning()).toBeUndefined();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

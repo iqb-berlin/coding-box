@@ -20,9 +20,11 @@ const infoCases = [
 
 describe('Zoneless information dialogs from the results table', () => {
   let unexpectedRequests: string[];
+  let responseGateReleases: Array<() => void>;
 
   beforeEach(() => {
     unexpectedRequests = [];
+    responseGateReleases = [];
     cy.intercept('**/api/**', request => {
       unexpectedRequests.push(`${request.method} ${request.url}`);
       request.reply({ statusCode: 501, body: { message: 'Missing fixture' } });
@@ -57,6 +59,7 @@ describe('Zoneless information dialogs from the results table', () => {
   });
 
   afterEach(() => {
+    responseGateReleases.splice(0).forEach(release => release());
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
@@ -95,6 +98,51 @@ describe('Zoneless information dialogs from the results table', () => {
     cy.then(() => { releaseNotes(); });
     cy.wait('@notes');
     cy.get('td.mat-column-actions').should('contain.text', 'circle');
+  });
+
+  it('keeps note markers on the current page when previous-page notes arrive late', () => {
+    let releaseOldNotes!: () => void;
+    const oldNotesGate = new Cypress.Promise<void>(resolve => { releaseOldNotes = resolve; });
+    responseGateReleases.push(releaseOldNotes);
+    let oldRequests = 0;
+    let oldReplies = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/test-results/flat-responses?*', request => {
+      const unitId = Number(request.query.page) === 2 ? 11 : 10;
+      request.reply({ body: {
+        data: [{ bookletId: 1, responseId: unitId, unitId, personId: 20, code: 'C', group: 'G', login: 'synthetic',
+          booklet: 'BOOKLET_ZL', unit: `UNIT_${unitId}`, response: 'v', responseStatus: 'VALUE_CHANGED', responseValue: 'synthetic', tags: [] }],
+        total: 101
+      } });
+    }).as('flatPage');
+    cy.intercept('POST', '**/api/admin/workspace/5/unit-notes/units/notes', async request => {
+      if (request.body.unitIds.includes(10)) {
+        oldRequests += 1;
+        await oldNotesGate;
+        request.reply({ body: {} });
+        oldReplies += 1;
+      } else {
+        request.alias = 'currentNotes';
+        request.reply({ body: { 11: [{ id: 11, unitId: 11, note: 'Current page note' }] } });
+      }
+    });
+
+    cy.contains('button', 'Ergebnisbrowser').click();
+    cy.get('coding-box-test-results-flat-table').should('not.exist');
+    cy.contains('button', 'Tabellenansicht').click();
+    cy.wait('@flatPage');
+    cy.get('coding-box-test-results-flat-table').as('table');
+    cy.get('@table').find('td.mat-column-unit').should('contain.text', 'UNIT_10');
+    cy.wrap(null).should(() => { expect(oldRequests).to.be.greaterThan(0); });
+    cy.get('@table').find('.mat-mdc-paginator-navigation-next').click();
+    cy.wait('@flatPage');
+    cy.wait('@currentNotes');
+    cy.get('@table').find('td.mat-column-unit').should('contain.text', 'UNIT_11');
+    cy.get('@table').find('td.mat-column-actions').should('contain.text', 'circle');
+
+    cy.then(() => releaseOldNotes());
+    cy.wrap(null).should(() => { expect(oldReplies).to.equal(oldRequests); });
+    cy.get('@table').find('td.mat-column-unit').should('contain.text', 'UNIT_11');
+    cy.get('@table').find('td.mat-column-actions').should('contain.text', 'circle');
   });
 
   for (const info of infoCases) {
