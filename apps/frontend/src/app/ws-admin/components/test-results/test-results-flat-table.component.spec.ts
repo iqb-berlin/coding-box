@@ -93,6 +93,7 @@ describe('TestResultsFlatTableComponent', () => {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 1,
+            selectedWorkspaceId$: new Subject<number>(),
             createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
         },
@@ -111,6 +112,83 @@ describe('TestResultsFlatTableComponent', () => {
 
   afterEach(() => {
     fixture.destroy();
+  });
+
+  it.each(['success', 'error'])('keeps current-page note markers after a late previous-page %s', outcome => {
+    const oldNotes = new Subject<Record<number, UnitNoteDto[]>>();
+    const currentNotes = new Subject<Record<number, UnitNoteDto[]>>();
+    const notesService = jest.spyOn(TestBed.inject(UnitNoteService), 'getNotesForMultipleUnits')
+      .mockReturnValueOnce(oldNotes)
+      .mockReturnValueOnce(currentNotes);
+    const page = (unitId: number) => ({
+      data: [{
+        bookletId: unitId,
+        responseId: unitId,
+        unitId,
+        personId: unitId,
+        code: 'person',
+        group: '',
+        login: '',
+        booklet: '',
+        unit: '',
+        response: '',
+        responseStatus: '',
+        responseValue: '',
+        tags: [],
+        logAnomalies: []
+      }],
+      total: 2,
+      page: unitId,
+      limit: 1
+    });
+    testResultService.getFlatResponses
+      .mockReturnValueOnce(of(page(1)))
+      .mockReturnValueOnce(of(page(2)));
+    component.ngOnInit();
+    component.onFlatPaginatorChange({
+      length: 2, pageIndex: 1, pageSize: 1, previousPageIndex: 0
+    });
+    expect(notesService.mock.calls.map(call => call[1])).toEqual([[1], [2]]);
+
+    currentNotes.next({
+      2: [{
+        id: 2, unitId: 2, note: 'Current page', createdAt: new Date(), updatedAt: new Date()
+      }]
+    });
+    const view = component as unknown as { hasNotesForRow(row: { unitId: number }): boolean };
+    expect(view.hasNotesForRow({ unitId: 2 })).toBe(true);
+
+    if (outcome === 'success') oldNotes.next({});
+    else oldNotes.error(new Error('Previous page failed'));
+
+    expect(component.flatData()[0].unitId).toBe(2);
+    expect(view.hasNotesForRow({ unitId: 2 })).toBe(true);
+    expect(oldNotes.observed).toBe(false);
+  });
+
+  it.each(['filter', 'empty-page', 'workspace', 'destroy'])('cancels pending note markers on %s', change => {
+    const notes = new Subject<Record<number, UnitNoteDto[]>>();
+    jest.spyOn(TestBed.inject(UnitNoteService), 'getNotesForMultipleUnits').mockReturnValue(notes);
+    testResultService.getFlatResponses.mockReturnValueOnce(of({
+      data: [{ unitId: 1 }], total: 1, page: 1, limit: 100
+    }));
+    component.ngOnInit();
+    expect(notes.observed).toBe(true);
+
+    if (change === 'filter') component.onFlatFilterChanged();
+    if (change === 'empty-page') {
+      component.onFlatPaginatorChange({
+        length: 1, pageIndex: 1, pageSize: 100, previousPageIndex: 0
+      });
+    }
+    if (change === 'workspace') {
+      const app = TestBed.inject(AppService);
+      app.selectedWorkspaceId = 2;
+      (app.selectedWorkspaceId$ as Subject<number>).next(2);
+    }
+    if (change === 'destroy') fixture.destroy();
+
+    expect(notes.observed).toBe(false);
   });
 
   it.each(['notes', 'frequencies'])('renders delayed %s without another user action', async kind => {
