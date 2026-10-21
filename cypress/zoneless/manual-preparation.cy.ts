@@ -105,6 +105,65 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@training').find('.start-training-button').should('be.enabled');
   }
 
+  it('updates the workload estimate from variable selection, case limit and duration without losing the form', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [{ id: 1, label: 'IQB-Standard' }] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').find('[formControlName="name"]').type('Workload draft');
+    cy.get('@definitionDialog').find('[formControlName="durationSeconds"]').type('{selectall}30');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').click();
+    cy.get('@definitionDialog').contains('.count-item', 'Für neue Jobs verfügbar:').find('.count-value').should('have.text', '10');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '5:00');
+    cy.get('@definitionDialog').find('[formControlName="maxCodingCases"]').type('4');
+    cy.get('@definitionDialog').contains('.count-item', 'Für neue Jobs verfügbar:').find('.count-value').should('have.text', '4');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '2:00');
+    cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Workload draft');
+  });
+
+  it('estimates a scoped manual export, offers the compact format and releases startup after failure', () => {
+    setup();
+    let attempts = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', { delay: 300, body: [definition] }).as('exportDefinitions');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/export/estimate', request => {
+      expect(request.body.exportType).to.equal('by-variable');
+      expect(request.body.jobDefinitionIds).to.deep.equal([99]);
+      expect(request.body.excludeAutoCoded).to.equal(true);
+      request.reply({ delay: 300, body: { exportType: 'by-variable', unitVariableCount: 1200, worksheetLimit: 1000, exceedsWorksheetLimit: true } });
+    }).as('estimateManualExport');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/export/start', request => {
+      attempts += 1;
+      expect(request.body.exportType).to.equal('by-variable-compact');
+      expect(request.body.jobDefinitionIds).to.deep.equal([99]);
+      expect(request.body.excludeAutoCoded).to.equal(true);
+      request.reply({ delay: 300, statusCode: 503, body: { message: 'Temporarily unavailable' } });
+    }).as('startManualExport');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.get('#manual-execution').contains('button', 'Export').as('exportButton').should('be.enabled').click();
+    cy.wait('@exportDefinitions');
+    cy.get('@exportButton').click();
+    cy.get('coding-box-manual-coding-export-dialog').as('exportDialog');
+    cy.get('@exportDialog').find('mat-radio-button[value="new-row-per-variable"] input[type="radio"]').check({ force: true }).should('be.checked');
+    cy.get('@exportDialog').find('mat-select').first().click();
+    cy.contains('mat-option', 'Browser definition').click();
+    cy.get('@exportDialog').find('mat-select').first().type('{esc}');
+    cy.get('@exportDialog').find('mat-dialog-actions button').last().click();
+    cy.wait('@estimateManualExport');
+    cy.get('coding-box-confirm-dialog').should('contain.text', '1200');
+    cy.get('coding-box-confirm-dialog').contains('button', 'kompakt', { matchCase: false }).click();
+    cy.get('@exportButton').should('be.disabled');
+    cy.wait('@startManualExport');
+    cy.get('@exportButton').should('be.enabled');
+    cy.get('mat-snack-bar-container').should('contain.text', 'Datenexport konnte nicht gestartet werden');
+    cy.then(() => { expect(attempts).to.equal(1); });
+  });
+
   it('keeps matching options when the extracted settings view is recreated', () => {
     setup();
     cy.intercept('GET', '**/api/admin/workspace/5/coding/statistics?*', { body: { totalResponses: 0, statusCounts: {} } });
