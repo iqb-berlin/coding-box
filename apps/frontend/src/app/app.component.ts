@@ -13,7 +13,7 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { filter, firstValueFrom } from 'rxjs';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
@@ -64,8 +64,16 @@ export class AppComponent implements OnInit, OnDestroy {
   protected readonly currentWorkspaceName = signal('');
   private readonly destroyRef = inject(DestroyRef);
   private readonly snackBar = inject(MatSnackBar);
+  private authDataFailureSnackBar?: MatSnackBarRef<TextOnlySnackBar>;
 
   constructor() {
+    effect(() => {
+      if (this.appService.authBootstrapStatus === 'ready') {
+        this.authDataFailureSnackBar?.dismiss();
+        this.authDataFailureSnackBar = undefined;
+      }
+    });
+
     effect(() => {
       const sessionActive = this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
       untracked(() => {
@@ -98,7 +106,7 @@ export class AppComponent implements OnInit, OnDestroy {
       if (success) {
         this.snackBar.dismiss();
       } else {
-        this.snackBar.open(
+        this.authDataFailureSnackBar = this.snackBar.open(
           'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
           'Schließen',
           {

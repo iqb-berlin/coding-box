@@ -1,5 +1,6 @@
 import { Subscription } from 'rxjs';
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -123,9 +124,9 @@ export class SystemNotificationsComponent implements OnInit {
         this.notifications.set(notifications);
         this.loading.set(false);
       },
-      error: () => {
+      error: (error: HttpErrorResponse) => {
         this.loading.set(false);
-        this.showMessage('system-notifications.load-error');
+        this.showRequestError(error, 'system-notifications.load-error');
       }
     });
   }
@@ -188,7 +189,7 @@ export class SystemNotificationsComponent implements OnInit {
         this.cancelEdit();
         this.load();
       },
-      error: () => this.showMessage('system-notifications.save-error')
+      error: (error: HttpErrorResponse) => this.showRequestError(error, 'system-notifications.save-error')
     });
   }
 
@@ -216,7 +217,7 @@ export class SystemNotificationsComponent implements OnInit {
         if (this.editingId() === notification.id) this.cancelEdit();
         this.load();
       },
-      error: () => this.showMessage('system-notifications.delete-error')
+      error: (error: HttpErrorResponse) => this.showRequestError(error, 'system-notifications.delete-error')
     });
   }
 
@@ -254,6 +255,12 @@ export class SystemNotificationsComponent implements OnInit {
     const date = new Date(value);
     const offset = date.getTimezoneOffset() * 60_000;
     return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  }
+
+  private showRequestError(error: HttpErrorResponse, key: string): void {
+    // The interceptor already provides the authentication/permission guidance.
+    if (error.status === 401 || error.status === 403) return;
+    this.showMessage(key);
   }
 
   private showMessage(key: string): void {
