@@ -58,6 +58,7 @@ import {
   TestResultsFlatTableSettingsDialogResult
 } from './test-results-flat-table-settings-dialog.component';
 import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 
 interface FlatResponseRow {
   bookletId: number;
@@ -341,6 +342,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
   private flatResponsesSubscription?: Subscription;
+  private notesPresenceSubscription?: Subscription;
   private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
   private readonly backendInvalidRegexFields =
@@ -1138,6 +1140,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   ngOnDestroy(): void {
     this.flatSearchSubscription.unsubscribe();
     this.flatResponsesSubscription?.unsubscribe();
+    this.cancelNotesPresenceRequest();
     this.workspaceCacheInvalidatedSubscription.unsubscribe();
     this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
     );
@@ -1206,6 +1209,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.flatResponsesRequestSequence += 1;
     this.flatResponsesSubscription?.unsubscribe();
     this.flatResponsesSubscription = undefined;
+    this.cancelNotesPresenceRequest();
     this.isLoadingFlat.set(false);
     this.flatPageIndex.set(0);
     this.flatSearchSubject.next();
@@ -1500,6 +1504,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const validPage = Math.max(0, page);
     this.flatResponsesRequestSequence += 1;
     const requestSequence = this.flatResponsesRequestSequence;
+    this.cancelNotesPresenceRequest();
     this.isLoadingFlat.set(true);
 
     const sessionFilterActive = this.flatFilters().sessionFilter;
@@ -1683,8 +1688,16 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .join('\n');
   }
 
+  private cancelNotesPresenceRequest(): void {
+    this.notesPresenceSubscription?.unsubscribe();
+    this.notesPresenceSubscription = undefined;
+  }
+
   private loadNotesPresenceForCurrentPage(): void {
-    if (!this.appService.selectedWorkspaceId) {
+    this.cancelNotesPresenceRequest();
+    this.unitIdsWithNotes.set(new Set<number>());
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
       return;
     }
 
@@ -1692,12 +1705,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       new Set((this.flatData() || []).map(r => r.unitId).filter(id => !!id))
     );
     if (unitIds.length === 0) {
-      this.unitIdsWithNotes.set(new Set<number>());
       return;
     }
 
-    this.unitNoteService
-      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds).pipe(takeUntilDestroyed(this.destroyRef))
+    this.notesPresenceSubscription = this.unitNoteService
+      .getNotesForMultipleUnits(workspaceId, unitIds).pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe({
         next: notesByUnitId => {
           const nextSet = new Set<number>();

@@ -218,9 +218,10 @@
                   <div
                     class="comparison-table"
                     >
-                    @if (getComparisonWarnings().length > 0) {
+                    @let comparisonWarnings = getComparisonWarnings();
+                    @if (comparisonWarnings.length > 0) {
                       <div class="comparison-warning-list">
-                        @for (warning of getComparisonWarnings(); track warning.text) {
+                        @for (warning of comparisonWarnings; track warning.text) {
                           <div
                             class="comparison-warning"
                             [class.comparison-warning-warn]="warning.severity === 'warn'"
