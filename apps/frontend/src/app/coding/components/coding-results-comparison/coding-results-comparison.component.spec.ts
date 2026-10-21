@@ -10,7 +10,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Observable, of, Subject, throwError
+  BehaviorSubject, Observable, of, Subject, throwError
 } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -94,6 +94,8 @@ describe('CodingResultsComparisonComponent', () => {
     open: jest.Mock;
   };
   let appService: {
+    selectedWorkspaceId: number;
+    selectedWorkspaceId$: BehaviorSubject<number>;
     authData: { userName: string };
     loggedUser: { preferred_username?: string } | undefined;
     createOwnToken: jest.Mock;
@@ -136,6 +138,8 @@ describe('CodingResultsComparisonComponent', () => {
       open: jest.fn()
     };
     appService = {
+      selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new BehaviorSubject(1),
       authData: { userName: 'Test User' },
       loggedUser: undefined,
       createOwnToken: jest.fn(),
