@@ -1,8 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { SystemNotificationDto } from '../../../../../../../api-dto/system-notifications/system-notification.dto';
 import {
   SystemNotificationSeverity,
   SystemNotificationType
@@ -13,8 +15,9 @@ import { SystemNotificationsComponent } from './system-notifications.component';
 describe('SystemNotificationsComponent', () => {
   let fixture: ComponentFixture<SystemNotificationsComponent>;
   let component: SystemNotificationsComponent;
+  const snackBar = { open: jest.fn() };
   const service = {
-    getAll: jest.fn(() => of([])),
+    getAll: jest.fn(() => of<SystemNotificationDto[]>([])),
     create: jest.fn(input => of({ id: 1, ...input })),
     update: jest.fn((id, input) => of({ id, ...input })),
     delete: jest.fn(() => of(undefined))
@@ -32,13 +35,73 @@ describe('SystemNotificationsComponent', () => {
       ],
       providers: [
         { provide: SystemNotificationService, useValue: service },
-        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: MatSnackBar, useValue: snackBar },
         { provide: MatDialog, useValue: dialog }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(SystemNotificationsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  describe.each(['getAll', 'create', 'update', 'delete'] as const)('%s errors', operation => {
+    const execute = () => {
+      const notification = {
+        id: 9,
+        title: 'Notice',
+        message: 'Pending text',
+        type: SystemNotificationType.Info,
+        severity: SystemNotificationSeverity.Low,
+        enabled: true,
+        dismissible: false,
+        startsAt: null,
+        endsAt: null,
+        visibleFrom: null,
+        visibleUntil: null,
+        createdAt: '2026-07-01T00:00:00Z',
+        updatedAt: '2026-07-01T00:00:00Z'
+      } satisfies SystemNotificationDto;
+      if (operation === 'getAll') {
+        component.load();
+      } else if (operation === 'delete') {
+        component.delete(notification);
+      } else {
+        if (operation === 'update') {
+          service.getAll.mockReturnValueOnce(of([notification]));
+          component.load();
+          fixture.detectChanges();
+          fixture.nativeElement.querySelector('button[aria-label="system-notifications.edit"]').click();
+        }
+        component.form.patchValue({ title: 'Notice', message: 'Pending text' });
+        component.save();
+      }
+    };
+
+    it.each([401, 403])('preserves the central authentication/permission hint for HTTP %s', status => {
+      service[operation].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status })));
+
+      execute();
+
+      expect(snackBar.open).not.toHaveBeenCalled();
+      if (operation === 'getAll') expect(component.loading()).toBe(false);
+      if (operation === 'create' || operation === 'update') {
+        expect(component.form.controls.message.value).toBe('Pending text');
+      }
+    });
+
+    it('retains the operation-specific fallback for other failures', () => {
+      service[operation].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+      execute();
+
+      const key = {
+        getAll: 'load',
+        create: 'save',
+        update: 'save',
+        delete: 'delete'
+      }[operation];
+      expect(snackBar.open).toHaveBeenCalledWith(`system-notifications.${key}-error`, '', { duration: 3000 });
+    });
   });
 
   it('rejects invalid event and visibility windows', () => {
