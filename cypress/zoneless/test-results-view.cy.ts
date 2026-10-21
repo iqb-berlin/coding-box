@@ -90,6 +90,7 @@ describe('zoneless test-results view', () => {
       cy.wait('@overview');
       cy.contains('coding-box-test-results .overview-metric', 'Testpersonen')
         .find('.value').should('have.text', '3');
+      if (!leaveView) cy.screenshot('test-results-overview-refactor', { capture: 'viewport' });
       cy.get('coding-box-test-results .action-bar')
         .contains('button', 'Import').click();
       cy.get('coding-box-test-results-import-dialog')

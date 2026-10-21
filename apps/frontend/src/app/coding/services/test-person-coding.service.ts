@@ -1087,14 +1087,17 @@ export class TestPersonCodingService {
     data: ExternalCodingImportWithPreviewDto,
     onProgress: (progress: number, message: string) => void,
     onComplete: (result: ExternalCodingImportResultDto) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     try {
       const token = await this.getValidAuthToken();
+      if (signal?.aborted) return;
       const response = await fetch(
         `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/stream`,
         {
           method: 'POST',
+          signal,
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -1103,6 +1106,7 @@ export class TestPersonCodingService {
         }
       );
 
+      if (signal?.aborted) return;
       if (!response.ok) {
         onError(`HTTP ${response.status}: ${response.statusText}`);
         return;
@@ -1121,6 +1125,7 @@ export class TestPersonCodingService {
         let done = false;
         while (!done) {
           const result = await reader.read();
+          if (signal?.aborted) return;
           done = result.done;
           const value = result.value;
 
@@ -1132,6 +1137,7 @@ export class TestPersonCodingService {
           buffer = lines.pop() || ''; // Keep incomplete line in buffer
 
           for (const line of lines) {
+            if (signal?.aborted) return;
             if (line.startsWith('data: ')) {
               try {
                 const progressData = JSON.parse(line.substring(6));
@@ -1155,6 +1161,7 @@ export class TestPersonCodingService {
         reader.releaseLock();
       }
     } catch (error: unknown) {
+      if (signal?.aborted) return;
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';
       onError(`Failed to start import: ${errorMessage}`);

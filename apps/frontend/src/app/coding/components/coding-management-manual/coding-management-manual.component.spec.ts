@@ -9,13 +9,16 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   Observable, of, Subject, throwError
 } from 'rxjs';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
+import { AggregationSettingsResponse, TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { AppService } from '../../../core/services/app.service';
 import { environment } from '../../../../environments/environment';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { CoderService } from '../../services/coder.service';
-import { AggregationSettingsResponse, TestPersonCodingService } from '../../services/test-person-coding.service';
 import {
   createReplayAuthTokenError,
   ExportJobService
@@ -195,7 +198,7 @@ describe('CodingManagementManualComponent', () => {
       .mockImplementation(() => undefined);
 
     componentInternals.setResponseAnalysisGuardActive(true);
-    component.ngOnDestroy();
+    fixture.destroy();
 
     expect(setGuardSpy).toHaveBeenCalledWith(5, true);
     expect(trackGuardSpy).toHaveBeenCalledWith(5, 2);
@@ -216,7 +219,7 @@ describe('CodingManagementManualComponent', () => {
       .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
       .mockImplementation(() => undefined);
 
-    component.ngOnDestroy();
+    fixture.destroy();
 
     expect(setGuardSpy).not.toHaveBeenCalledWith(5, false);
   });
@@ -262,7 +265,7 @@ describe('CodingManagementManualComponent', () => {
       expect(getResponseAnalysisSpy).toHaveBeenCalledTimes(2);
       expect(setGuardSpy).toHaveBeenLastCalledWith(5, false);
     } finally {
-      component.ngOnDestroy();
+      fixture.destroy();
       jest.useRealTimers();
     }
   });
@@ -347,7 +350,7 @@ describe('CodingManagementManualComponent', () => {
       )
       .mockImplementation();
 
-    component.ngOnDestroy();
+    fixture.destroy();
     componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
@@ -383,7 +386,7 @@ describe('CodingManagementManualComponent', () => {
     setGuardSpy.mockClear();
 
     component.onManualTabChanged(2);
-    component.ngOnDestroy();
+    fixture.destroy();
 
     expect(trackGuardSpy).toHaveBeenCalledTimes(1);
     expect(trackGuardSpy).toHaveBeenCalledWith(5, 2);
@@ -1202,7 +1205,7 @@ describe('CodingManagementManualComponent', () => {
       loadCompletedJobsReadyForApply: () => void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.codingJobBackendService = {
+    Object.assign(TestBed.inject(CodingJobBackendService), {
       getCodingJobs: jest.fn().mockReturnValue(of({ data: jobs })),
       getBulkCodingProgress: jest.fn().mockReturnValue(of({
         1: {
@@ -1216,7 +1219,7 @@ describe('CodingManagementManualComponent', () => {
           }
         }
       }))
-    };
+    });
 
     componentInternals.loadCompletedJobsReadyForApply();
 
@@ -1867,20 +1870,21 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const statistics = fixture.debugElement.injector.get(ManualCodingStatisticsFacade);
     const variableCoverageSpy = jest
-      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .spyOn(statistics, 'loadVariableCoverageOverview')
       .mockImplementation();
     const caseCoverageSpy = jest
-      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .spyOn(statistics, 'loadCaseCoverageOverview')
       .mockImplementation();
     const codingProgressSpy = jest
-      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .spyOn(statistics, 'loadCodingProgressOverview')
       .mockImplementation();
     const incompleteVariablesSpy = jest
-      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .spyOn(statistics, 'loadCodingIncompleteVariables')
       .mockImplementation();
     const manualFreshnessDecisionSpy = jest
-      .spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+      .spyOn(statistics, 'loadManualFreshnessDecisionData')
       .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
@@ -1922,16 +1926,17 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.isLoadingCodingProgress.set(true);
+    const statistics = fixture.debugElement.injector.get(ManualCodingStatisticsFacade);
     const variableCoverageSpy = jest
-      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .spyOn(statistics, 'loadVariableCoverageOverview')
       .mockImplementation();
-    jest.spyOn(componentInternals, 'loadCaseCoverageOverview')
+    jest.spyOn(statistics, 'loadCaseCoverageOverview')
       .mockImplementation();
-    jest.spyOn(componentInternals, 'loadCodingProgressOverview')
+    jest.spyOn(statistics, 'loadCodingProgressOverview')
       .mockImplementation();
-    jest.spyOn(componentInternals, 'loadCodingIncompleteVariables')
+    jest.spyOn(statistics, 'loadCodingIncompleteVariables')
       .mockImplementation();
-    jest.spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+    jest.spyOn(statistics, 'loadManualFreshnessDecisionData')
       .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
@@ -2191,20 +2196,21 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const statistics = fixture.debugElement.injector.get(ManualCodingStatisticsFacade);
     const variableCoverageSpy = jest
-      .spyOn(componentInternals, 'loadVariableCoverageOverview')
+      .spyOn(statistics, 'loadVariableCoverageOverview')
       .mockImplementation();
     const caseCoverageSpy = jest
-      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .spyOn(statistics, 'loadCaseCoverageOverview')
       .mockImplementation();
     const codingProgressSpy = jest
-      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .spyOn(statistics, 'loadCodingProgressOverview')
       .mockImplementation();
     const incompleteVariablesSpy = jest
-      .spyOn(componentInternals, 'loadCodingIncompleteVariables')
+      .spyOn(statistics, 'loadCodingIncompleteVariables')
       .mockImplementation();
     const manualFreshnessDecisionSpy = jest
-      .spyOn(componentInternals, 'loadManualFreshnessDecisionData')
+      .spyOn(statistics, 'loadManualFreshnessDecisionData')
       .mockImplementation();
     const loadCodingFreshnessSpy = jest
       .spyOn(componentInternals, 'loadCodingFreshness')
@@ -2275,7 +2281,6 @@ describe('CodingManagementManualComponent', () => {
   it('should not reload planning job definitions after auto coding completes in planning', () => {
     component.selectedManualTabIndex.set(1);
     component.autoRefreshManualCodingJobs.set(true);
-    setCompletePlanningState();
     const componentInternals = component as unknown as {
       hasLoadedManualCodingJobRefreshSetting: boolean;
       appService: { selectedWorkspaceId: number };
@@ -2293,6 +2298,7 @@ describe('CodingManagementManualComponent', () => {
       refresh: refreshJobDefinitionsSpy
     } as unknown as ReturnType<CodingManagementManualComponent['codingJobDefinitionsComponent']>);
     componentInternals.appService.selectedWorkspaceId = 5;
+    setCompletePlanningState();
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
     expect(component.shouldShowPlanningOverview()).toBe(true);
     const refreshAllStatisticsSpy = jest
@@ -3769,7 +3775,7 @@ describe('CodingManagementManualComponent', () => {
       loadManualFreshnessDecisionData(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.codingJobBackendService = {
+    Object.assign(TestBed.inject(CodingJobBackendService), {
       getCodingJobs: jest.fn().mockReturnValue(of({
         data: [{
           id: 1,
@@ -3784,10 +3790,10 @@ describe('CodingManagementManualComponent', () => {
           codedUnits: 8
         }]
       }))
-    };
-    componentInternals.doubleCodedReviewApi = {
+    });
+    Object.assign(TestBed.inject(DoubleCodedReviewApiService), {
       getDoubleCodedVariablesForReview
-    };
+    });
     component.isLoadingDoubleCodingConflictSummary.set(true);
     componentInternals.openDoubleCodingConflictCount = 4;
 
@@ -3809,12 +3815,12 @@ describe('CodingManagementManualComponent', () => {
       loadManualTabData(tab: 'preparation' | 'planning' | 'training' | 'execution' | 'completion'): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.testPersonCodingService = {
+    Object.assign(TestBed.inject(TestPersonCodingService), {
       getAggregationSettings: jest.fn().mockReturnValue(of({
         flags: [ResponseMatchingFlag.NO_AGGREGATION],
         threshold: 2
       }))
-    };
+    });
     jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
 
     component.isLoadingResponseAnalysis.set(false);
