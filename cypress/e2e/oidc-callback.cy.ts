@@ -61,6 +61,79 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
     }).as('authData');
   });
 
+  it('F03 shows an authorization explanation after a protected view returns HTTP 403', () => {
+    cy.intercept('GET', '**/api/admin/system-notifications', { statusCode: 403, body: { message: 'Forbidden' } }).as('deniedAction');
+    cy.visit('/', { onBeforeLoad(win) {
+      win.localStorage.setItem('auth_token', token(3600));
+      win.localStorage.setItem('refresh_token', 'retained-refresh-token');
+    } });
+    cy.wait('@authData');
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Recovered Workspace');
+    cy.window().then(win => { win.location.hash = '/admin/notifications'; });
+    cy.wait('@deniedAction').its('response.statusCode').should('eq', 403);
+    cy.get('coding-box-system-notifications-admin').should('be.visible');
+    cy.get('mat-snack-bar-container').should('have.length', 1).and('be.visible');
+    cy.get('.re-authentication, .reauthentication-hint, .login-button').should('not.exist');
+    cy.window().then(win => { expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token'); });
+    cy.get('mat-snack-bar-container').should('contain.text', 'Berechtigung')
+      .and('not.contain.text', 'Systemhinweise konnten nicht geladen werden');
+    cy.get('mat-snack-bar-container .mdc-snackbar__label').should('be.visible');
+    cy.screenshot('F03-protected-view-403', { capture: 'viewport', disableTimersAndAnimations: false });
+  });
+
+  it('F04 shows a failed auth-data load and restores the workspace list on retry', () => {
+    let available = false;
+    let requests = 0;
+    cy.intercept('GET', '**/api/auth-data*', request => {
+      requests += 1;
+      request.reply(available ? { body: { userId: 7, userName: 'OIDC User', isAdmin: true, workspaces: [{ id: 12, name: 'Recovered Workspace' }] } } :
+        { statusCode: 500, body: { message: 'Acceptance test unavailable' } });
+    }).as('authDataOutage');
+    cy.visit('/', { onBeforeLoad(win) {
+      win.localStorage.setItem('auth_token', token(3600));
+      win.localStorage.setItem('refresh_token', 'retained-refresh-token');
+    } });
+    cy.get('coding-box-user-workspaces-area', { timeout: 15000 }).should('contain.text', 'Die Sitzungsdaten konnten noch nicht geladen werden');
+    cy.get('coding-box-user-workspaces-area').should('not.contain.text', 'Keine Arbeitsbereiche');
+    cy.get('.re-authentication, .reauthentication-hint').should('not.exist');
+    cy.window().then(win => { expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token'); });
+    cy.then(() => { expect(requests, 'initial request and bounded retries').to.equal(4); available = true; });
+    cy.screenshot('F04-auth-data-error', { capture: 'viewport' });
+    cy.contains('coding-box-user-workspaces-area button', 'Erneut laden').click();
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Recovered Workspace');
+    cy.get('coding-box-user-workspaces-area').should('not.contain.text', 'Die Sitzungsdaten konnten noch nicht geladen werden');
+    cy.get('coding-box-error-message-display .backend-unavailable').should('not.exist');
+    cy.get('mat-snack-bar-container').should('not.exist');
+    cy.window().then(win => { expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token'); });
+    cy.screenshot('F04-auth-data-recovered', { capture: 'viewport' });
+  });
+
+  it('F03 preserves the permission hint and pending input when saving returns HTTP 403', () => {
+    cy.intercept('GET', '**/api/admin/system-notifications', { body: [] });
+    cy.intercept('POST', '**/api/admin/system-notifications', {
+      statusCode: 403, body: { message: 'Access level too low' }
+    }).as('deniedSave');
+    cy.visit('/', { onBeforeLoad(win) {
+      win.localStorage.setItem('auth_token', token(3600));
+      win.localStorage.setItem('refresh_token', 'retained-refresh-token');
+    } });
+    cy.wait('@authData');
+    cy.get('coding-box-user-workspaces-area').should('contain.text', 'Recovered Workspace');
+    cy.window().then(win => { win.location.hash = '/admin/notifications'; });
+    cy.get('coding-box-system-notifications-admin input[formControlName="title"]').type('Pending notice');
+    cy.get('coding-box-system-notifications-admin textarea[formControlName="message"]').type('Pending text');
+    cy.get('coding-box-system-notifications-admin button[type="submit"]').click();
+    cy.wait('@deniedSave').its('response.statusCode').should('eq', 403);
+    cy.get('mat-snack-bar-container').should('contain.text', 'Zugriffsberechtigung')
+      .and('not.contain.text', 'Systemhinweis konnte nicht gespeichert werden');
+    cy.get('input[formControlName="title"]').should('have.value', 'Pending notice');
+    cy.get('textarea[formControlName="message"]').should('have.value', 'Pending text');
+    cy.get('.re-authentication, .reauthentication-hint, .login-button').should('not.exist');
+    cy.window().then(win => { expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token'); });
+    cy.get('mat-snack-bar-container .mdc-snackbar__label').should('be.visible');
+    cy.screenshot('F03-protected-save-403', { capture: 'viewport', disableTimersAndAnimations: false });
+  });
+
   it('retains a refresh session during a provider outage and recovers through the retry button', () => {
     let available = false;
     cy.intercept('POST', '**/api/auth/refresh', request => {

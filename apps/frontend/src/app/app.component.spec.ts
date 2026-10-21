@@ -290,4 +290,30 @@ describe('AppComponent', () => {
     expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalled();
     expect((appService as unknown as AppService).errorMessagesDisabled).toBe(false);
   });
+
+  it('clears its auth-data failure hint on recovery without dismissing another action hint', async () => {
+    const status = signal('auth-data-failed');
+    Object.defineProperty(appService, 'authBootstrapStatus', { get: () => status() });
+    appService.loadAuthenticatedUser.mockReturnValue(of(false));
+    const snackBar = TestBed.inject(MatSnackBar) as unknown as { open: jest.Mock; dismiss: jest.Mock };
+    const failureHint = { dismiss: jest.fn() };
+    const actionHint = { dismiss: jest.fn() };
+    snackBar.open.mockReturnValue(failureHint);
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.whenStable();
+    expect(snackBar.open).toHaveBeenCalled();
+    expect(failureHint.dismiss).not.toHaveBeenCalled();
+
+    snackBar.open.mockReturnValueOnce(actionHint);
+    snackBar.open('Another action');
+    status.set('backend-login-running');
+    await fixture.whenStable();
+    expect(failureHint.dismiss).not.toHaveBeenCalled();
+
+    status.set('ready');
+    await fixture.whenStable();
+    expect(failureHint.dismiss).toHaveBeenCalledTimes(1);
+    expect(actionHint.dismiss).not.toHaveBeenCalled();
+    expect(snackBar.dismiss).not.toHaveBeenCalled();
+  });
 });
