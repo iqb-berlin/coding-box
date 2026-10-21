@@ -49,15 +49,17 @@ npx nx run backend:verify-codebook-autocoder-live
 
 To also compare against a real installed Studio checkout, add
 `STUDIO_REFERENCE_ROOT=/absolute/path/to/studio-checkout`. It must contain the
-shared `4.1.0-dev.d79ca05` tarball and installed dependencies. The reference loads
-the actual Studio adapter and its installed generator without modifying the
+published `@iqb/ngx-coding-components@4.1.0` package and installed dependencies.
+Both lockfiles must record the same package version and integrity. The reference
+loads the actual Studio adapter and its installed generator without modifying the
 checkout. Studio receives the explicitly expected filtered subset and item
 identities; Studio repository/profile boundaries remain in memory. DOCX
 comparison removes only creation/modification timestamps, then compares every
 ZIP entry. The JSON comparison is structural and complete.
 
-The report includes build, runner and package SHA-256 values, jobs, progress,
-worker timestamps, expected scope/options, actual download hashes, independent
+The report includes build and runner SHA-256 values, package version and SHA-512
+integrity, jobs, progress, worker timestamps, expected scope/options, actual
+download hashes, independent
 Responses 5.2.0 results and PostgreSQL result rows. Exports cover all/job/bundle/
 intersection/reverse scopes, score/instruction toggles, missing profiles,
 internal IDs before aliases, and legacy metadata values `0` and `false`.

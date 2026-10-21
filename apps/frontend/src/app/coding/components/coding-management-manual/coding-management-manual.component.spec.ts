@@ -12,9 +12,10 @@ import {
 import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { AggregationSettingsResponse, TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
+import { AppService } from '../../../core/services/app.service';
 import { environment } from '../../../../environments/environment';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { CoderService } from '../../services/coder.service';
@@ -572,6 +573,190 @@ describe('CodingManagementManualComponent', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  describe('aggregation threshold saves', () => {
+    let requests: { threshold: number; reply: Subject<AggregationSettingsResponse> }[];
+    let refreshSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      requests = [];
+      TestBed.inject(AppService).selectedWorkspaceId = 5;
+      component.responseMatchingFlags.set([ResponseMatchingFlag.NO_AGGREGATION]);
+      jest.spyOn(TestBed.inject(TestPersonCodingService), 'saveAggregationSettings')
+        .mockImplementation((_workspaceId, threshold) => {
+          const reply = new Subject<AggregationSettingsResponse>();
+          requests.push({ threshold, reply });
+          return reply;
+        });
+      refreshSpy = jest.spyOn(component as unknown as {
+        refreshAggregationDependentViews: () => void;
+      }, 'refreshAggregationDependentViews').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      fixture.destroy();
+      jest.useRealTimers();
+    });
+
+    function completeRequest(index: number): void {
+      requests[index].reply.next({
+        success: true,
+        threshold: requests[index].threshold,
+        flags: [ResponseMatchingFlag.NO_AGGREGATION],
+        aggregationActive: false,
+        revertedResponses: 0,
+        message: 'saved'
+      });
+      requests[index].reply.complete();
+    }
+
+    it('serializes writes and applies only the newest input', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(1000);
+
+      expect(requests.map(request => request.threshold)).toEqual([3]);
+      completeRequest(0);
+      expect(requests.map(request => request.threshold)).toEqual([3, 4]);
+      expect(component.duplicateAggregationThreshold()).toBe(4);
+      expect(component.isApplyingDuplicateAggregation()).toBe(true);
+      expect(refreshSpy).not.toHaveBeenCalled();
+
+      completeRequest(1);
+      expect(component.duplicateAggregationThreshold()).toBe(4);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves newer input and the saving indicator during its debounce period', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(500);
+      completeRequest(0);
+
+      expect(component.duplicateAggregationThreshold()).toBe(4);
+      expect(component.isApplyingDuplicateAggregation()).toBe(true);
+      expect(refreshSpy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(500);
+      expect(requests.map(request => request.threshold)).toEqual([3, 4]);
+      completeRequest(1);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+    });
+
+    it('continues with a queued change after a failed older write', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(1000);
+      requests[0].reply.error(new Error('save failed'));
+
+      expect(requests.map(request => request.threshold)).toEqual([3, 4]);
+      expect(component.duplicateAggregationThreshold()).toBe(4);
+      expect(component.isApplyingDuplicateAggregation()).toBe(true);
+      completeRequest(1);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips queued values superseded by input still being debounced', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(5);
+      completeRequest(0);
+
+      expect(requests.map(request => request.threshold)).toEqual([3]);
+      expect(component.duplicateAggregationThreshold()).toBe(5);
+      expect(component.isApplyingDuplicateAggregation()).toBe(true);
+      jest.advanceTimersByTime(1000);
+      expect(requests.map(request => request.threshold)).toEqual([3, 5]);
+      completeRequest(1);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+    });
+
+    it('does not start a threshold write while matching mode is being saved', () => {
+      (component as unknown as { isSavingMatchingMode: WritableSignal<boolean> })
+        .isSavingMatchingMode.set(true);
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+
+      expect(requests).toEqual([]);
+      expect(component.duplicateAggregationThreshold()).toBe(2);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+    });
+
+    it('uses matching options available when the queued write starts', () => {
+      component.onThresholdChanged(3);
+      component.responseMatchingFlags.set([
+        ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE
+      ]);
+      jest.advanceTimersByTime(1000);
+      expect(TestBed.inject(TestPersonCodingService).saveAggregationSettings)
+        .toHaveBeenCalledWith(5, 3, [ResponseMatchingFlag.NO_AGGREGATION]);
+      completeRequest(0);
+      expect(component.responseMatchingFlags()).toEqual([
+        ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE
+      ]);
+    });
+
+    it.each(['http', 'response'])('allows retrying the same threshold after a %s failure', failure => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      if (failure === 'http') {
+        requests[0].reply.error(new Error('save failed'));
+      } else {
+        requests[0].reply.next({
+          success: false,
+          threshold: 2,
+          flags: [],
+          aggregationActive: false,
+          revertedResponses: 0,
+          message: 'save failed'
+        });
+        requests[0].reply.complete();
+      }
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      expect(requests.map(request => request.threshold)).toEqual([3, 3]);
+      completeRequest(1);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('discards queued writes and late replies when destroyed', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(1000);
+      fixture.destroy();
+
+      expect(requests[0].reply.observed).toBe(false);
+      completeRequest(0);
+      jest.advanceTimersByTime(1000);
+      expect(requests.map(request => request.threshold)).toEqual([3]);
+      expect(refreshSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not save queued changes into another workspace or apply old replies there', () => {
+      component.onThresholdChanged(3);
+      jest.advanceTimersByTime(1000);
+      component.onThresholdChanged(4);
+      jest.advanceTimersByTime(1000);
+      TestBed.inject(AppService).selectedWorkspaceId = 6;
+      completeRequest(0);
+
+      expect(requests.map(request => request.threshold)).toEqual([3]);
+      expect(component.duplicateAggregationThreshold()).toBe(4);
+      expect(component.isApplyingDuplicateAggregation()).toBe(false);
+      expect(refreshSpy).not.toHaveBeenCalled();
+    });
   });
 
   it('ignores response matching changes while aggregation settings are saving', () => {

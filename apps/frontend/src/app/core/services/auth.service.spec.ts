@@ -6,10 +6,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom, of } from 'rxjs';
+import { SessionRecoveryService } from './session-recovery.service';
 import { AuthService } from './auth.service';
 import { AppService } from './app.service';
 import { authInterceptor } from '../interceptors/auth.interceptor';
 import { AuthRequestCancelledError } from '../interceptors/auth-request-cancelled.error';
+import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationBatchRunnerService } from '../../shared/services/validation/validation-batch-runner.service';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
@@ -20,7 +22,7 @@ jest.unmock('jwt-decode');
 describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
-  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage' | 'setBackendUnavailable'>>;
+  let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'clearLoginFailure' | 'markExplicitLogoutInProgress' | 'clearAuthState' | 'requireReAuthentication' | 'addErrorMessage' | 'setBackendUnavailable'>>;
   let locationMock: Pick<Location, 'href' | 'origin'>;
   let storageMock: {
     getItem: jest.Mock;
@@ -101,6 +103,7 @@ describe('AuthService', () => {
       serverUrl: 'http://localhost:3333/api/',
       reAuthenticationReturnUrl: '/coding',
       createLoginRedirectUri: jest.fn().mockReturnValue('http://localhost/#/coding'),
+      clearLoginFailure: jest.fn(),
       markExplicitLogoutInProgress: jest.fn(),
       clearAuthState: jest.fn(),
       requireReAuthentication: jest.fn(),
@@ -228,7 +231,7 @@ describe('AuthService', () => {
     expect(storageMock.setItem).toHaveBeenCalledWith('refresh_token', 'rotated-refresh-token');
   });
 
-  it.each([401, 500])('should clear stored tokens and require reauthentication when refresh fails with %s', async status => {
+  it('should clear stored tokens and require reauthentication when refresh is rejected with 401', async () => {
     storageMock.getItem.mockImplementation((key: string) => ({
       auth_token: createToken(-30),
       refresh_token: 'refresh-token'
@@ -237,7 +240,7 @@ describe('AuthService', () => {
     const tokenPromise = service.getValidToken();
 
     const req = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
-    req.flush('Refresh failed', { status, statusText: 'Refresh failed' });
+    req.flush('Refresh failed', { status: 401, statusText: 'Unauthorized' });
 
     await expect(tokenPromise).resolves.toBeUndefined();
     expect(storageMock.removeItem).toHaveBeenCalledWith('auth_token');
@@ -455,12 +458,12 @@ describe('AuthService', () => {
     request.flush([]);
   });
 
-  it.each([401, 500])('rejects a waiting API request when the current refresh fails with %s', async status => {
+  it('rejects a waiting API request when the current refresh is invalid', async () => {
     const tokens = storeSession();
     const response = firstValueFrom(TestBed.inject(HttpClient).get('http://localhost:3333/api/workspaces'));
     const rejection = expect(response).rejects.toBeInstanceOf(AuthRequestCancelledError);
     const refresh = httpMock.expectOne('http://localhost:3333/api/auth/refresh');
-    refresh.flush('Refresh failed', { status, statusText: 'Refresh failed' });
+    refresh.flush('Refresh failed', { status: 401, statusText: 'Unauthorized' });
 
     await rejection;
 
@@ -468,6 +471,79 @@ describe('AuthService', () => {
     expect(tokens.size).toBe(0);
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
     expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 403, 408, 429, 500, 502, 503, 504])('preserves the session and blocks API writes after refresh HTTP %s, then recovers on retry', async status => {
+    const tokens = storeSession();
+    const recovered = jest.fn();
+    const subscription = service.authenticationRecovered$.subscribe(() => recovered({
+      token: service.getToken(), refreshToken: service.getRefreshToken()
+    }));
+    const originalTokens = new Map(tokens);
+    const response = firstValueFrom(TestBed.inject(HttpClient).post('http://localhost:3333/api/workspaces', {}));
+    const rejection = expect(response).rejects.toBeInstanceOf(AuthRefreshUnavailableError);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush(
+      { code: 'provider-unavailable', requestId: 'request-123' }, { status, statusText: 'Unavailable' }
+    );
+    await rejection;
+    expect(recovered).not.toHaveBeenCalled();
+    expect(tokens).toEqual(originalTokens);
+    expect(service.refreshFailure()).toMatchObject({ status, requestId: 'request-123' });
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.setBackendUnavailable).not.toHaveBeenCalled();
+    httpMock.expectNone('http://localhost:3333/api/workspaces');
+
+    const retry = service.getValidToken();
+    const freshToken = createToken(300);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({
+      access_token: freshToken, refresh_token: 'rotated-refresh-token'
+    });
+    await expect(retry).resolves.toBe(freshToken);
+    expect(service.refreshFailure()).toBeNull();
+    expect(tokens.get('refresh_token')).toBe('rotated-refresh-token');
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered).toHaveBeenCalledWith({ token: freshToken, refreshToken: 'rotated-refresh-token' });
+    subscription.unsubscribe();
+  });
+
+  it('preserves registered coding drafts when refresh is temporarily unavailable', async () => {
+    storeSession();
+    const drafts = new Map<string, string>();
+    sessionStorageMock.getItem.mockImplementation(key => drafts.get(key) ?? null);
+    sessionStorageMock.setItem.mockImplementation((key, value) => drafts.set(key, value));
+    const recovery = TestBed.inject(SessionRecoveryService);
+    recovery.setOwnerId('oidc-user-id');
+    recovery.registerProvider({ key: 'pending-coding', capture: () => ({ notes: 'Unsaved coding note' }) });
+    const pending = service.getValidToken();
+    const rejection = expect(pending).rejects.toBeInstanceOf(AuthRefreshUnavailableError);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({}, { status: 503, statusText: 'Unavailable' });
+    await rejection;
+    expect(recovery.peekDraft('pending-coding')).toEqual({ notes: 'Unsaved coding note' });
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes configuration failures without clearing the session', async () => {
+    const tokens = storeSession();
+    const pending = service.getValidToken();
+    const rejection = expect(pending).rejects.toMatchObject({ code: 'configuration-error' });
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({
+      code: 'configuration-error', requestId: 'invalid\nrequest-id'
+    }, { status: 503, statusText: 'Unavailable' });
+    await rejection;
+    expect(service.refreshFailure()?.requestId).toBe('');
+    expect(tokens.get('refresh_token')).toBe('old-refresh-token');
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('preserves the session when a refresh returns a malformed success response', async () => {
+    const tokens = storeSession();
+    const original = new Map(tokens);
+    const pending = service.getValidToken();
+    const rejection = expect(pending).rejects.toBeInstanceOf(AuthRefreshUnavailableError);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({ message: 'invalid response' });
+    await rejection;
+    expect(tokens).toEqual(original);
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
   });
 
   it('requires reauthentication when the current expired session has no refresh token', async () => {

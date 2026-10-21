@@ -2,6 +2,44 @@
   class="error-messages-container priority-errors"
   [class.re-authentication-active]="showGlobalReAuthenticationMessage"
 >
+  @if (appService.loginFailure; as failure) {
+  <div class="error-message auth-login-failed" role="alert">
+    <div class="error-content">
+      <mat-icon class="error-icon">login</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.auth_login_failed_title' | translate }}</h3>
+        <p>{{ (failure.code === 'configuration-error' ? 'error.auth_configuration_error_message' : failure.code === 'provider-unavailable' ? 'error.auth_provider_unavailable_message' : 'error.auth_login_failed_message') | translate }}</p>
+        @if (failure.requestId) {
+        <small>{{ 'error.details_request_id' | translate }} {{ failure.requestId }}</small>
+        }
+      </div>
+    </div>
+    <div class="error-actions">
+      <button mat-raised-button color="primary" (click)="handleLogin()">{{ 'error.login_button' | translate }}</button>
+    </div>
+  </div>
+  }
+
+  @if (!appService.needsReAuthentication && (authService.refreshFailure() || appService.authProviderFailure); as failure) {
+  <div class="error-message backend-unavailable auth-refresh-unavailable" role="alert">
+    <div class="error-content">
+      <mat-icon class="error-icon">cloud_off</mat-icon>
+      <div class="error-text">
+        <h3>{{ (authService.refreshFailure() ? 'error.auth_refresh_unavailable_title' : 'error.auth_provider_unavailable_title') | translate }}</h3>
+        <p>{{ (failure.code === 'configuration-error' ? 'error.auth_configuration_error_message' : authService.refreshFailure() ? 'error.auth_refresh_unavailable_message' : 'error.auth_provider_unavailable_message') | translate }}</p>
+        @if (failure.requestId) {
+        <small>{{ 'error.details_request_id' | translate }} {{ failure.requestId }}</small>
+        }
+      </div>
+    </div>
+    <div class="error-actions">
+      <button mat-raised-button color="primary" [disabled]="retryingAuthentication() || appService.authBootstrapStatus === 'backend-login-running'" (click)="retryAuthentication()">
+        {{ 'error.auth_refresh_retry' | translate }}
+      </button>
+    </div>
+  </div>
+  }
+
   @if (appService.backendUnavailable) {
   <div class="error-message backend-unavailable">
     <div class="error-content">

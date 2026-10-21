@@ -3,16 +3,21 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { signal } from '@angular/core';
 import { LocationStrategy } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
-import { Observable, Subject, of } from 'rxjs';
+import {
+  Observable, Subject, of, throwError
+} from 'rxjs';
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 import { SystemNotificationService } from './core/services/system-notification.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 describe('AppComponent', () => {
   let authService: {
+    authenticationRecovered$: Subject<void>;
     exchangeLoginCode: jest.Mock;
     setToken: jest.Mock;
     setIdToken: jest.Mock;
@@ -28,7 +33,12 @@ describe('AppComponent', () => {
     authData$: Observable<AuthDataDto>;
     processMessagePost: jest.Mock;
     loadAuthenticatedUser: jest.Mock;
+    retryAuthDataLoad: jest.Mock;
     setAuthBootstrapStatus: jest.Mock;
+    completeBackendLogin: jest.Mock;
+    markLoginFailed: jest.Mock;
+    authBootstrapStatus: string;
+    authProviderFailure?: { code: string; requestId: string };
     normalizeInternalRoute: jest.Mock;
     isLoggedIn: boolean;
     loggedUser?: unknown;
@@ -46,6 +56,7 @@ describe('AppComponent', () => {
 
   beforeEach(async () => {
     authService = {
+      authenticationRecovered$: new Subject<void>(),
       exchangeLoginCode: jest.fn().mockReturnValue(of({
         access_token: 'access-token',
         token_type: 'Bearer',
@@ -67,7 +78,11 @@ describe('AppComponent', () => {
       authData$: of(AppService.defaultAuthData),
       processMessagePost: jest.fn(),
       loadAuthenticatedUser: jest.fn().mockReturnValue(of(true)),
+      retryAuthDataLoad: jest.fn().mockReturnValue(of(true)),
       setAuthBootstrapStatus: jest.fn(),
+      completeBackendLogin: jest.fn(),
+      markLoginFailed: jest.fn(),
+      authBootstrapStatus: 'ready',
       normalizeInternalRoute: jest.fn((returnUrl?: string) => (
         returnUrl &&
         returnUrl.startsWith('/') &&
@@ -145,6 +160,96 @@ describe('AppComponent', () => {
     expect(authSessionActivity.stop).toHaveBeenCalled();
     expect(TestBed.inject(SystemNotificationService).stopPolling).toHaveBeenCalled();
   });
+
+  it('shows a classified callback error and removes diagnostics from the URL without starting another login', async () => {
+    window.history.replaceState(null, '', '/?error=authentication_failed&auth_error=configuration-error&request_id=login-request#/home');
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('configuration-error', 'login-request');
+    expect(authService.exchangeLoginCode).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps failed login-code exchanges recoverable without an automatic redirect loop', async () => {
+    window.history.replaceState(null, '', '/?auth_code=private-code#/home');
+    authService.exchangeLoginCode.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 503, error: { code: 'provider-unavailable' }, headers: new HttpHeaders({ 'X-Request-Id': 'exchange-request' })
+    })));
+    const fixture = TestBed.createComponent(AppComponent);
+    await expect(fixture.componentInstance.ngOnInit()).resolves.toBeUndefined();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('provider-unavailable', 'exchange-request');
+    expect(authService.setToken).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
+  it.each([0, 503])('classifies an unavailable exchange without a backend error code (HTTP %s)', async status => {
+    window.history.replaceState(null, '', '/?auth_code=private-code#/home');
+    authService.exchangeLoginCode.mockReturnValue(throwError(() => new HttpErrorResponse({ status })));
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    expect(appService.markLoginFailed).toHaveBeenCalledWith('provider-unavailable', null);
+    expect(authService.setToken).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('');
+  });
+
+  it('keeps bootstrap recoverable after an unavailable refresh and loads auth data after retry', async () => {
+    authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+    const fixture = TestBed.createComponent(AppComponent);
+    await expect(fixture.componentInstance.ngOnInit()).resolves.toBeUndefined();
+    expect(appService.setAuthBootstrapStatus).toHaveBeenCalledWith('refresh-unavailable');
+    expect(appService.setAuthBootstrapStatus).not.toHaveBeenCalledWith('ready');
+    expect(appService.loadAuthenticatedUser).not.toHaveBeenCalled();
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
+  });
+  it('notifies draft recovery after renewal in an already bootstrapped session', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.completeBackendLogin).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores coding drafts when a background request recovers authentication', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    authService.authenticationRecovered$.next();
+    expect(appService.completeBackendLogin).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the initial backend bootstrap in charge while it is running', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authBootstrapStatus = 'backend-login-running';
+    authService.authenticationRecovered$.next();
+    expect(appService.completeBackendLogin).not.toHaveBeenCalled();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('verifies backend authentication before restoring drafts after a JWKS outage', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authProviderFailure = { code: 'provider-unavailable', requestId: 'provider-request' };
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.retryAuthDataLoad).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+    expect(appService.completeBackendLogin).not.toHaveBeenCalled();
+  });
+
+  it('retries an interrupted auth-data bootstrap after successful renewal', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    appService.authBootstrapStatus = 'auth-data-failed';
+    const component = fixture.componentInstance as unknown as { handleAuthenticationRestored(): Promise<void> };
+    await component.handleAuthenticationRestored();
+    expect(appService.retryAuthDataLoad).toHaveBeenCalledTimes(1);
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledTimes(1);
+  });
+
   it('updates workspace state after asynchronous auth data arrives without zones', async () => {
     const authData = new Subject<AuthDataDto>();
     appService.authData$ = authData;

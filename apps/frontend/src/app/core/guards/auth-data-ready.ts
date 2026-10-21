@@ -20,8 +20,8 @@ export async function waitForRequiredAuthData(appService: AppService): Promise<R
         map(() => 'ready' as const)
       ),
       appService.authBootstrapStatus$.pipe(
-        filter(status => status === 'auth-data-failed' || status === 'session-expired'),
-        map(status => status as RequiredAuthDataStatus)
+        filter(status => status === 'auth-data-failed' || status === 'session-expired' || status === 'refresh-unavailable'),
+        map(status => (status === 'refresh-unavailable' ? 'auth-data-failed' : status as RequiredAuthDataStatus))
       )
     ).pipe(timeout(AUTH_DATA_READY_TIMEOUT_MS))
   );

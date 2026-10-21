@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-20",
+  "host": "coding-box",
+  "baseCommit": "df946eb32",
+  "release": {
+    "date": "2026-10-20",
+    "package": "@iqb/ngx-coding-components",
+    "version": "4.1.0",
+    "distTags": {
+      "latest": "4.1.0"
+    },
+    "publishedAt": "2026-10-20T08:26:24.963Z",
+    "sourceCommit": "acbad15fe3e4a047398fc5505e4ca878bc38de42",
+    "tarball": "https://registry.npmjs.org/@iqb/ngx-coding-components/-/ngx-coding-components-4.1.0.tgz",
+    "integrity": "sha512-p0niy5YhpyjwmW0/qZn+WFuETeFJnCUw+rahdx0W1RVc146KfNAUwXuTczxPgvsCBFOeEK+3Ul5HJ+WmKBkKuQ==",
+    "sha256": "6226a01e8df5165ec6be0c7458bc4de3297bb6e1853442ea63245e4823298aa7",
+    "publicDownloadVerified": true,
+    "freshNpmCacheDownloadVerified": true,
+    "libraryTests": 1343,
+    "consumer": {
+      "esm": true,
+      "commonjs": true,
+      "json": true,
+      "docx": true,
+      "typescriptBundler": true,
+      "typescriptNodeNext": true
+    },
+    "comparisonRunnerSha256": "661b14d1087705eb322fc94c578b40f7552fd9edeebc6c5742cd80abcf7dc3c5",
+    "comparisonRunnerAdaptations": [
+      "Published npm URL and downloaded tarball replace the local vendor archive",
+      "Responses peer assertion updated to ^5.4.0; test cases and independent references unchanged"
+    ]
+  },
+  "hostComparison": {
+    "hostExportPairs": 4694,
+    "optionCombinations": 768,
+    "missingCases": 3,
+    "formats": 2,
+    "originalStudioWhitespaceCases": 20,
+    "inlineImageCases": 5,
+    "inlineImageExportPairs": 40,
+    "identicalJson": true,
+    "identicalAllDocxParts": true,
+    "artifactIntegrity": "sha512-p0niy5YhpyjwmW0/qZn+WFuETeFJnCUw+rahdx0W1RVc146KfNAUwXuTczxPgvsCBFOeEK+3Ul5HJ+WmKBkKuQ==",
+    "identicalInstalledPackageFiles": true,
+    "installedPackageFiles": 20,
+    "responsesVersion": "5.4.0",
+    "responsesPeerRange": "^5.4.0",
+    "responsesSharedWithHost": true,
+    "currentVariableInfoValidated": true,
+    "storedChemistryFormatsRecognized": true,
+    "realHostAdapters": true,
+    "inMemoryRepositories": true,
+    "httpBrowserRedis": false,
+    "windowsWord": false
+  },
+  "validation": {
+    "backend": {
+      "suites": 218,
+      "skippedSuites": 8,
+      "passed": 3408,
+      "skipped": 67
+    },
+    "frontendFocused": {
+      "suites": 3,
+      "passed": 68
+    },
+    "backendProductionBuild": true,
+    "frontendProductionBuild": true,
+    "backendLint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "frontendLint": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "runtimeVersionsMatchRootLock": true,
+    "autocoderGeneratedFromResponses": "5.4.0",
+    "newPartialCreditFactoryCases": 6,
+    "legacySolverReference": "5.2.0",
+    "rootInstallIgnoreScripts": true,
+    "zonelessInventory": {
+      "entries": 8860,
+      "onlyUpdatedLibraryFingerprint": true,
+      "libraryEntryReviewStatus": "open",
+      "regressionTestsPassed": 2,
+      "riskCoverageReferencesVerified": true,
+      "areas": 6,
+      "mechanisms": 7,
+      "findings": 57,
+      "fullZonelessAcceptance": false
+    }
+  },
+  "boundaries": {
+    "fullFrontendSuite": false,
+    "newHttpBrowserRedisAcceptance": false,
+    "newWordAcceptance": false,
+    "dockerImageBuild": false,
+    "remoteCi": "Check new PR head separately",
+    "merged": false,
+    "deployed": false
+  }
+}

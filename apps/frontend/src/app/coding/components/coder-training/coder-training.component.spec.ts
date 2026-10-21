@@ -1,3 +1,5 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { MatSelectHarness } from '@angular/material/select/testing';
 import { ChangeDetectorRef, computed } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -9,6 +11,8 @@ import {
 } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
+import { Variable, VariableBundle } from '../../models/coding-job.model';
+import { CoderTraining } from '../../models/coder-training.model';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -182,6 +186,54 @@ describe('CoderTrainingComponent', () => {
     expect(rows[0].classList.contains('invalid')).toBe(false);
   });
 
+  it('renders late option lists and derives the manual select value from the FormArray', async () => {
+    const variables = new Subject<Variable[]>();
+    const bundles = new Subject<{ bundles: VariableBundle[]; total: number }>();
+    const availableVariables = component.availableVariables();
+    const availableBundles = component.availableBundles();
+    codingJobBackendService.getCodingIncompleteVariables.mockReturnValue(variables);
+    variableBundleService.getBundles.mockReturnValue(bundles);
+    component.availableVariables.set([]);
+    component.availableBundles.set([]);
+    // Read the initial projections before either response arrives.
+    expect(component.filteredVariables()).toEqual([]);
+    expect(component.filteredBundles()).toEqual([]);
+    await fixture.whenStable();
+
+    variables.next(availableVariables);
+    await fixture.whenStable();
+    const loader = TestbedHarnessEnvironment.loader(fixture);
+    const manualSelect = await loader.getHarness(MatSelectHarness.with({ selector: '.variable-multiselect-field mat-select' }));
+    await manualSelect.open();
+    await manualSelect.clickOptions({ text: /UNIT - VAR/ });
+    await manualSelect.clickOptions({ text: /UNIT2 - VAR2/ });
+    await manualSelect.close();
+    expect(component.manualVariableKeys()).toEqual(['UNIT::VAR', 'UNIT2::VAR2']);
+    const retainedControl = component.variablesFormArray.at(1);
+    retainedControl.controls.sampleCount.setValue(2);
+
+    component.removeVariable(0);
+    await fixture.whenStable();
+    expect(await manualSelect.getValueText()).toContain('UNIT2 - VAR2');
+    expect(await manualSelect.getValueText()).not.toContain('UNIT - VAR');
+    expect(component.variablesFormArray.at(0)).toBe(retainedControl);
+    expect(retainedControl.controls.sampleCount.value).toBe(2);
+
+    bundles.next({ bundles: availableBundles, total: availableBundles.length });
+    await fixture.whenStable();
+    const bundleSelect = await loader.getHarness(MatSelectHarness.with({ selector: '.bundle-select-field mat-select' }));
+    await bundleSelect.open();
+    expect(await bundleSelect.getOptions()).toHaveLength(2);
+    await bundleSelect.close();
+    component.bundleFilterCtrl.setValue('Derived');
+    await bundleSelect.open();
+    expect(await (await bundleSelect.getOptions())[0].getText()).toContain('Derived Bundle');
+    expect(await bundleSelect.getOptions()).toHaveLength(1);
+    await bundleSelect.close();
+    variables.complete();
+    bundles.complete();
+  });
+
   it('covers the common training selection workflow', () => {
     const trainingStarted = jest.fn();
     const closed = jest.fn();
@@ -256,6 +308,38 @@ describe('CoderTrainingComponent', () => {
     fixture.destroy();
 
     expect(releaseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an old reference response after a reopened view has received fresh references', async () => {
+    const oldReferences = new Subject<CoderTraining[]>();
+    const freshReferences = new Subject<CoderTraining[]>();
+    codingTrainingBackendService.getCoderTrainings
+      .mockReturnValueOnce(oldReferences)
+      .mockReturnValueOnce(freshReferences);
+    fixture.detectChanges();
+    const closedComponent = component;
+    expect(oldReferences.observed).toBe(true);
+    fixture.destroy();
+    expect(oldReferences.observed).toBe(false);
+
+    fixture = TestBed.createComponent(CoderTrainingComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    const freshTraining: CoderTraining = {
+      id: 8,
+      workspace_id: 1,
+      label: 'Fresh reference',
+      created_at: new Date(),
+      updated_at: new Date(),
+      jobsCount: 1
+    };
+    freshReferences.next([freshTraining]);
+    await fixture.whenStable();
+    oldReferences.next([{ ...freshTraining, id: 7, label: 'Old reference' }]);
+    await fixture.whenStable();
+
+    expect(closedComponent.availableTrainings()).toEqual([]);
+    expect(component.availableTrainings()).toEqual([freshTraining]);
   });
 
   it('releases the coder subscription when the component is destroyed', () => {
@@ -473,7 +557,7 @@ describe('CoderTrainingComponent', () => {
     expect(component.variablesFormArray.length).toBe(1);
     expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR');
     expect(component.getSelectedDerivedVariablesCount()).toBe(0);
-    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+    expect(component.manualVariableKeys()).toEqual(['UNIT::VAR']);
   });
 
   it('selects all currently filtered manual variables and respects the derived filter', () => {
@@ -481,7 +565,7 @@ describe('CoderTrainingComponent', () => {
 
     component.selectAllManualVariables();
 
-    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT2::VAR2']);
+    expect(component.manualVariableKeys()).toEqual(['UNIT2::VAR2']);
     expect(component.selectedManualVariableIds).toEqual(['VAR2']);
 
     component.variableFilterCtrl.setValue('');
@@ -489,7 +573,7 @@ describe('CoderTrainingComponent', () => {
 
     component.selectAllManualVariables();
 
-    expect(new Set(component.manualVariablesSelectControl.value || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
+    expect(new Set(component.manualVariableKeys() || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
     expect(component.getSelectedDerivedVariablesCount()).toBe(0);
     expect(component.hasSelectableManualVariables()).toBe(false);
   });
@@ -519,7 +603,7 @@ describe('CoderTrainingComponent', () => {
 
     expect(component.getSelectedVariablesCount()).toBe(2);
     expect(component.getSelectedDerivedVariablesCount()).toBe(0);
-    expect(new Set(component.manualVariablesSelectControl.value || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
+    expect(new Set(component.manualVariableKeys() || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
 
     component.toggleCoderSelection(component.coders()[0]);
     component.trainingForm.get('trainingLabel')?.setValue('Bulk Derived');
@@ -1003,14 +1087,6 @@ describe('CoderTrainingComponent', () => {
     fixture.destroy();
     fixture = TestBed.createComponent(CoderTrainingComponent);
     component = fixture.componentInstance;
-    let restoredFilteredVariableKeys: string[] = [];
-    let restoredFilteredBundleNames: string[] = [];
-    component.filteredVariables$.subscribe(variables => {
-      restoredFilteredVariableKeys = variables.map(variable => `${variable.unitName}::${variable.variableId}`);
-    });
-    component.filteredBundles$.subscribe(bundles => {
-      restoredFilteredBundleNames = bundles.map(bundle => bundle.name);
-    });
     component.ngOnInit();
 
     expect(component.trainingForm.get('trainingLabel')?.value).toBe('Recovered training');
@@ -1023,11 +1099,11 @@ describe('CoderTrainingComponent', () => {
     expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
     expect(component.selectedCoders().has(2)).toBe(true);
     expect(component.selectedBundleArray).toEqual([5]);
-    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+    expect(component.manualVariableKeys()).toEqual(['UNIT::VAR']);
     expect(component.variableFilterCtrl.value).toBe('VAR');
     expect(component.bundleFilterCtrl.value).toBe('Derived');
-    expect(restoredFilteredVariableKeys).toEqual(['UNIT::VAR']);
-    expect(restoredFilteredBundleNames).toEqual(['Derived Bundle']);
+    expect(component.filteredVariables().map(variable => `${variable.unitName}::${variable.variableId}`)).toEqual(['UNIT::VAR']);
+    expect(component.filteredBundles().map(bundle => bundle.name)).toEqual(['Derived Bundle']);
     expect(component.variablesFormArray.controls).toEqual(expect.arrayContaining([
       expect.objectContaining({
         value: expect.objectContaining({
