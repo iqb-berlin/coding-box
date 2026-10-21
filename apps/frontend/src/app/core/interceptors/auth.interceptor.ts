@@ -19,6 +19,8 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
 import { AuthRequestCancelledError } from './auth-request-cancelled.error';
+import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
+import { getAuthProviderFailureCode } from './auth-provider-failure';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
   SUPPRESS_GLOBAL_HTTP_ERROR
@@ -73,7 +75,20 @@ export const authInterceptor: HttpInterceptorFn = (
                 suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
                   suppressBackendLoginAuthDataError || staleSessionAuthError;
 
-                if (suppressBackendLoginAuthDataError || staleSessionAuthError) {
+                if (suppressBackendLoginAuthDataError || staleSessionAuthError ||
+                  (req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) && req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT))) {
+                  return;
+                }
+
+                const providerFailureCode = getAuthProviderFailureCode(error);
+                if (providerFailureCode && isBackendRequest(req.url, serverUrl) &&
+                  !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+                  sessionGeneration === authService.getSessionGeneration() && currentToken &&
+                  modifiedReq.headers.get('Authorization') === `Bearer ${currentToken}`) {
+                  if (!appService.isBackendLoginRunning()) {
+                    appService.recordAuthProviderFailure(providerFailureCode, httpErrorInfo.requestId);
+                  }
+                  suppressGlobalErrorMessage = true;
                   return;
                 }
 
@@ -196,7 +211,10 @@ function getRequestWithAuthHeader(
 
   return from(authService.getValidToken())
     .pipe(
-      catchError(() => {
+      catchError(error => {
+        if (error instanceof AuthRefreshUnavailableError) {
+          return throwError(() => error);
+        }
         if (sessionGeneration === authService.getSessionGeneration() &&
           storedToken === authService.getToken() && storedRefreshToken === authService.getRefreshToken()) {
           appService.requireReAuthentication(router.url);

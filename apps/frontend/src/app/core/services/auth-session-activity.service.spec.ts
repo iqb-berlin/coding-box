@@ -4,6 +4,7 @@ import { Observable, Subject, of } from 'rxjs';
 import { AuthSessionActivityService } from './auth-session-activity.service';
 import { AppService } from './app.service';
 import { AuthService } from './auth.service';
+import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
 import {
   AUTH_SESSION_IDLE_TIMEOUT_MS,
   AUTH_SESSION_WARNING_DELAY_MS
@@ -258,6 +259,21 @@ describe('AuthSessionActivityService', () => {
 
       expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
       service.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not expire a session after a temporary refresh failure on user activity', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+      service.start();
+      await jest.advanceTimersByTimeAsync(AUTH_SESSION_WARNING_DELAY_MS);
+      window.dispatchEvent(new Event('mousemove'));
+      await jest.advanceTimersByTimeAsync(0);
+      expect(authService.getValidToken).toHaveBeenCalled();
+      expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
     }

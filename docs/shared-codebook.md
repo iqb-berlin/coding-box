@@ -1,5 +1,13 @@
 # Integration des gemeinsamen Codebooks
 
+## Paketupdate vom 20.10.2026
+
+Der aktuelle Stand verwendet die veröffentlichte Bibliothek **4.1.0**,
+Responses **5.4.0** und Coding-Scheme **3.5.0**. Der
+[aktuelle Prüfbericht](codebook-npm-update-2026-10-20.md) nennt Paketprüfsumme,
+Autocoder-Abgleich und Prüfgrenzen. Die nachfolgenden Berichte gehören
+zu ihren jeweils bezeichneten früheren Artefakten.
+
 ## Aktueller Entwicklungsstand vom 17.10.2026
 
 Beide Anwendungen verwenden jetzt denselben korrigierten Entwicklungsbuild
@@ -66,21 +74,18 @@ beendet die Statusabfrage, nicht den Serverjob.
 Der Wrapper meldet asynchrone Daten- und Statusänderungen an Angular und ist mit
 OnPush und zoneless Change Detection getestet.
 
-## Release-Kandidat
+## Veröffentlichtes Paket
 
-Die Abhängigkeit zeigt vor Veröffentlichung auf
-`vendor/iqb-ngx-coding-components-4.1.0.tgz`. Das Backend-Dockerfile übernimmt
-dasselbe Artefakt ausdrücklich in die Runtime-Installation. Ohne diese Zuordnung
-würde Nx die Versionsnummer 4.1.0 im generierten Runtime-Manifest ausgeben und npm
-zu früh die noch unveröffentlichte Registry-Version installieren wollen.
-
-Nach gemeinsamer Abnahme: Bibliothek veröffentlichen, die Root-Abhängigkeit auf
-4.1.0 umstellen und Lock aktualisieren. Anschließend die Tarball-COPY- und
-`npm pkg set`-Schritte im Backend-Dockerfile sowie den Tarball entfernen und die
-Runtime-Installation erneut prüfen. Nicht nur die Frontend-Abhängigkeit ändern.
+Root-Abhängigkeit und Lock verwenden die veröffentlichte Version
+`@iqb/ngx-coding-components@4.1.0`. Das von Nx generierte Runtime-Manifest nennt
+ebenfalls `4.1.0`; das Backend-Dockerfile installiert dieses Registry-Paket.
+Die frühere Tarball-Kopie und die lokale Pfadüberschreibung entfallen.
 
 Die Kodierengine verwendet wie Schemer, Validierung und Codebook-Regeltexte
-`@iqb/responses` 5.3.1. Die Bibliothek verwendet den Host-Peer. Der Anwendungs-
-und Persistenzvertrag bleibt bei response-Spezifikation 1.5.1; ein echter
-Engine-Regressionstest erhält auch den alten Status CODE_SELECTION_PENDING.
+Responses `5.4.0` mit Coding-Scheme `3.5.0`. Die erzeugte Autocoder-Kopie ist
+reproduzierbar aus diesem Paket gebaut; nur ihr mathjs-Import bleibt auf die
+bestehende SOLVER-Mathematik isoliert. Die beiden neuen Teilantwort-Optionen
+sind über die echte Factory mit und ohne Aktivierung getestet.
+Der Anwendungs- und Persistenzvertrag bleibt bei response-Spezifikation `1.5.1`;
+der Engine-Regressionstest erhält auch den alten Status CODE_SELECTION_PENDING.
 Rollback erfolgt durch die vorherige Anwendungsversion, ohne Datenmigration.

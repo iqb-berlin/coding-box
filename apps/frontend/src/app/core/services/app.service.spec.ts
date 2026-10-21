@@ -217,6 +217,7 @@ describe('AppService', () => {
         httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
         expect(loginResult).toBe(false);
         expect(service.authBootstrapStatus).toBe('auth-data-failed');
+        expect(service.authDataFailureStatus).toBe(401);
       } finally {
         jest.useRealTimers();
       }
@@ -234,6 +235,46 @@ describe('AppService', () => {
   });
 
   describe('refreshAuthData', () => {
+    it('captures coding drafts on provider failure and restores them only after a successful backend retry', () => {
+      service.loggedUser = { sub: 'owner' } as DecodedToken;
+      sessionRecoveryService.setOwnerId('owner');
+      sessionRecoveryService.registerProvider({ key: 'pending-jwks', capture: () => ({ note: 'pending note' }) });
+      let restored: unknown;
+      const subscription = sessionRecoveryService.restore$.subscribe(() => {
+        restored = sessionRecoveryService.consumeDraft('pending-jwks');
+      });
+      service.recordAuthProviderFailure('provider-unavailable', 'provider-request');
+      expect(sessionRecoveryService.peekDraft('pending-jwks')).toEqual({ note: 'pending note' });
+      expect(service.authProviderFailure).toEqual({ code: 'provider-unavailable', requestId: 'provider-request' });
+      expect(restored).toBeUndefined();
+      service.retryAuthDataLoad().subscribe();
+      httpMock.expectOne(`${mockServerUrl}auth-data?identity=owner`).flush(AppService.defaultAuthData);
+      expect(restored).toEqual({ note: 'pending note' });
+      expect(service.authProviderFailure).toBeNull();
+      expect(sessionRecoveryService.peekDraft('pending-jwks')).toBeNull();
+      subscription.unsubscribe();
+    });
+
+    it('reports configuration failures without automatic retries and clears them after a later successful bootstrap', () => {
+      service.loadAuthenticatedUser('id1').subscribe();
+      const request = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+      request.flush({ code: 'configuration-error' }, { status: 503, statusText: 'Service Unavailable' });
+      expect(service.authDataFailureCode).toBe('configuration-error');
+      expect(service.authBootstrapStatus).toBe('auth-data-failed');
+      httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
+      service.loadAuthenticatedUser('id1').subscribe();
+      httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`).flush(AppService.defaultAuthData);
+      expect(service.authDataFailureCode).toBeNull();
+    });
+
+    it('accepts only public login error classes and safe request IDs', () => {
+      service.markLoginFailed('configuration-error', 'request-123');
+      expect(service.loginFailure).toEqual({ code: 'configuration-error', requestId: 'request-123' });
+      service.markLoginFailed('private-provider-detail', 'private\nrequest');
+      expect(service.loginFailure).toEqual({ code: 'session-invalid', requestId: '' });
+      service.clearLoginFailure();
+      expect(service.loginFailure).toBeNull();
+    });
     it('should suppress global HTTP errors while manually retrying auth data', () => {
       service.loggedUser = { sub: 'user1' } as DecodedToken;
       const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
