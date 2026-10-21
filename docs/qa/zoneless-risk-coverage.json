@@ -39,7 +39,12 @@
         "apps/frontend/src/app/coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
-        "cypress/component/import-comparison-permissions.component.cy.ts"
+        "cypress/component/import-comparison-permissions.component.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-facades.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-import.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-planning.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/coding-import-file.spec.ts",
+        "apps/frontend/src/app/coding/services/external-coding-import-abort.spec.ts"
       ]
     },
     {
@@ -128,7 +133,8 @@
         "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
-        "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts"
+        "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts"
       ]
     },
     {
@@ -194,7 +200,8 @@
         "apps/frontend/src/app/ws-admin/components/export/export-start-lifecycle.zoneless.spec.ts",
         "cypress/zoneless/export-start-failure.cy.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
-        "cypress/component/import-comparison-permissions.component.cy.ts"
+        "cypress/component/import-comparison-permissions.component.cy.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts"
       ]
     },
     {

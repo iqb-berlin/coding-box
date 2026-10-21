@@ -173,7 +173,7 @@
     "koa": "3.1.2",
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
-    "vite": "7.3.6",
+    "vite": "7.3.7",
     "path-to-regexp": "8.4.2",
     "shell-quote": "1.11.0",
     "piscina": "5.3.2",
@@ -209,7 +209,9 @@
     "handlebars": "4.7.10",
     "image-size": "2.0.3",
     "follow-redirects": "1.16.1",
-    "@modelcontextprotocol/sdk": "1.32.1"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "launch-editor": "2.14.2",
+    "markdown-it": "14.3.3"
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
