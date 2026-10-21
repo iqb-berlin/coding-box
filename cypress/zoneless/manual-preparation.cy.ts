@@ -114,7 +114,6 @@ describe('Zoneless manual preparation workflows', () => {
       request.reply({ delay: 300, body: { success: true, threshold: 3, flags: request.body.flags, aggregationActive: true, revertedResponses: 0, message: 'saved' } });
     }).as('saveMatching');
     openManual();
-    cy.contains('coding-box-coding-management-manual button', 'Aktualisieren').click();
     cy.get('coding-box-manual-coding-aggregation-settings').as('settings');
     cy.get('@settings').find('input[type="number"]').should('have.value', '2');
     cy.get('@settings').find('mat-checkbox').first().click();
@@ -225,24 +224,35 @@ describe('Zoneless manual preparation workflows', () => {
     cy.then(() => { expect(saves).to.equal(2); });
   });
 
-  it('discards a reference response after closing and renders fresh references on reopening', () => {
+  it('cancels the pending reference request on closing and renders fresh references on reopening', () => {
     setup();
-    const oldGate = gate();
     let reads = 0;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', async request => {
+    let referenceAborts = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
       reads += 1;
       if (reads === 1) {
-        await oldGate.wait;
-        request.reply({ body: [{ ...training, label: 'Old reference' }] });
+        // Keep the server response pending without a route callback Promise whose
+        // four-second budget also includes unrelated Cypress UI commands.
+        request.reply({ delay: 30000, body: [{ ...training, label: 'Old reference' }] });
       } else request.reply({ body: [{ ...training, id: 8, label: 'Fresh reference' }] });
     });
     openManual();
+    cy.window().then(win => {
+      cy.spy(win.XMLHttpRequest.prototype, 'open').as('openRequest');
+    });
     openTraining();
     cy.wrap(null).should(() => { expect(reads).to.equal(1); });
+    cy.get<Cypress.Agent<sinon.SinonSpy>>('@openRequest').then(openRequest => {
+      const referenceCall = openRequest.getCalls().find(call =>
+        String(call.args[1]).endsWith('/coding/coder-trainings'));
+      expect(Boolean(referenceCall), 'reference request started').to.equal(true);
+      const request = referenceCall!.thisValue as XMLHttpRequest;
+      expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
+      request.addEventListener('abort', () => { referenceAborts += 1; });
+    });
     cy.get('@training').find('.close-button').click();
     cy.get('coding-box-coder-training').should('not.exist');
-    // Deliver the obsolete response after destruction, before waiting for the new view.
-    cy.then(() => oldGate.release());
+    cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
     cy.get('@training').find('mat-select[formControlName="referenceTrainingIds"]').click();
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
