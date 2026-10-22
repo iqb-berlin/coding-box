@@ -36,6 +36,7 @@ describe('Zoneless manual preparation workflows', () => {
 
   afterEach(() => {
     releases.splice(0).forEach(release => release());
+    cy.task('deferred:reset');
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests, 'explicit API fixtures').to.deep.equal([]); });
   });
@@ -53,6 +54,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/reset-version/active', { body: { hasActiveJob: false } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/readiness?*', { body: null });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/statistics?*', { body: { totalResponses: 0, statusCounts: {} } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/aggregation-settings', { body: { flags: [], threshold: 2 } });
     cy.intercept('GET', '**/api/admin/workspace/5/missings-profiles/IQB-Standard', { body: null });
     cy.intercept('GET', '**/api/admin/workspace/5/coders', { delay: 300, body: { data: coders, total: 2 } });
@@ -94,6 +96,19 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
     cy.get('coding-box-coder-training').as('training');
+  }
+
+  function closeTraining(): void {
+    cy.get('@training').find<HTMLButtonElement>('.close-button')
+      .should('be.visible')
+      .should(buttons => {
+        const button = buttons[0];
+        const { left, top, width, height } = button.getBoundingClientRect();
+        const target = button.ownerDocument.elementFromPoint(left + width / 2, top + height / 2);
+        expect(button.contains(target), 'close button is reachable at its center').to.equal(true);
+      })
+      // The fixed modal is already in view; scrolling its ancestors moves the background.
+      .click({ scrollBehavior: false });
   }
 
   function selectTrainingInputs(): void {
@@ -287,13 +302,14 @@ describe('Zoneless manual preparation workflows', () => {
     setup();
     let reads = 0;
     let referenceAborts = 0;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
-      reads += 1;
-      if (reads === 1) {
-        // Keep the server response pending without a route callback Promise whose
-        // four-second budget also includes unrelated Cypress UI commands.
-        request.reply({ delay: 30000, body: [{ ...training, label: 'Old reference' }] });
-      } else request.reply({ body: [{ ...training, id: 8, label: 'Fresh reference' }] });
+    cy.task<{ id: string; url: string }>('deferred:create', { body: [{ ...training, label: 'Old reference' }] }).then(gate => {
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
+        reads += 1;
+        if (reads === 1) {
+          request.url = gate.url;
+          request.continue();
+        } else request.reply({ body: [{ ...training, id: 8, label: 'Fresh reference' }] });
+      });
     });
     openManual();
     cy.window().then(win => {
@@ -309,7 +325,8 @@ describe('Zoneless manual preparation workflows', () => {
       expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
       request.addEventListener('abort', () => { referenceAborts += 1; });
     });
-    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
+    cy.get('.router-panel').scrollTo('bottom', { ensureScrollable: false });
+    closeTraining();
     cy.get('coding-box-coder-training').should('not.exist');
     cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
@@ -317,7 +334,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');
-    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
+    closeTraining();
   });
 
   for (const role of [{ name: 'coding manager', level: 2 }, { name: 'study manager', level: 3 }]) {
