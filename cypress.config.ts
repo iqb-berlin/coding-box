@@ -51,6 +51,7 @@ export default defineConfig({
     supportFile: 'cypress/support/component.ts'
   },
   e2e: {
+    experimentalMemoryManagement: true,
     setupNodeEvents(on) {
       requireExecutedSpec(on);
       const responses = createDeferredResponses();

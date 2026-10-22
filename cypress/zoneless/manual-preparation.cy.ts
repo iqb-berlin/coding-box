@@ -92,10 +92,18 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('coding-box-coding-management-manual').should('be.visible');
   }
 
-  function openTraining(): void {
+  function openTraining(options: { holdEntrance?: boolean } = {}): void {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
     cy.get('coding-box-coder-training').as('training').then(training => {
+      if (options.holdEntrance) {
+        const modal = training[0].closest('.coder-training-modal')!;
+        const held = modal.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+        held.pause();
+        held.currentTime = 0;
+        expect(modal.ownerDocument.defaultView!.getComputedStyle(modal).opacity,
+          'entrance was held at its invisible first frame').to.equal('0');
+      }
       settleTrainingEntrance(training[0]);
     });
   }
@@ -364,7 +372,7 @@ describe('Zoneless manual preparation workflows', () => {
     setup();
     let reads = 0;
     let referenceAborts = 0;
-    let pausedEntranceOpacity: string | undefined;
+    let referenceRequest: XMLHttpRequest | undefined;
     cy.task<{ id: string; url: string }>('deferred:create', { body: [{ ...training, label: 'Old reference' }] }).then(gate => {
       cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
         reads += 1;
@@ -376,29 +384,25 @@ describe('Zoneless manual preparation workflows', () => {
     });
     openManual();
     cy.window().then(win => {
-      cy.spy(win.XMLHttpRequest.prototype, 'open').as('openRequest');
-      // Reproduce CI's stalled entrance frame rather than relying on its timing.
-      const observer = new win.MutationObserver(() => {
-        const modal = win.document.querySelector('.coder-training-modal');
-        const animations = modal?.getAnimations() || [];
-        if (!modal || !animations.length) return;
-        animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
-        pausedEntranceOpacity = win.getComputedStyle(modal).opacity;
-        observer.disconnect();
+      const prototype = win.XMLHttpRequest.prototype;
+      const originalOpen = prototype.open;
+      prototype.open = new Proxy(originalOpen, {
+        apply(target, request: XMLHttpRequest, args: unknown[]) {
+          if (!referenceRequest && String(args[1]).endsWith('/coding/coder-trainings')) {
+            referenceRequest = request;
+            request.addEventListener('abort', () => { referenceAborts += 1; });
+          }
+          return Reflect.apply(target, request, args);
+        }
       });
-      observer.observe(win.document.body, { childList: true, subtree: true });
-      releases.push(() => observer.disconnect());
+      releases.push(() => { prototype.open = originalOpen; });
     });
-    openTraining();
-    cy.then(() => { expect(pausedEntranceOpacity, 'entrance was held at its invisible first frame').to.equal('0'); });
+    openTraining({ holdEntrance: true });
     cy.wrap(null).should(() => { expect(reads).to.equal(1); });
-    cy.get<Cypress.Agent<sinon.SinonSpy>>('@openRequest').then(openRequest => {
-      const referenceCall = openRequest.getCalls().find(call =>
-        String(call.args[1]).endsWith('/coding/coder-trainings'));
-      expect(Boolean(referenceCall), 'reference request started').to.equal(true);
-      const request = referenceCall!.thisValue as XMLHttpRequest;
-      expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
-      request.addEventListener('abort', () => { referenceAborts += 1; });
+    cy.then(() => {
+      // Inspect scalars only: native getters such as responseXML can throw during object formatting.
+      expect(Boolean(referenceRequest), 'reference request started').to.equal(true);
+      expect(referenceRequest!.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
     });
     cy.get('.router-panel').scrollTo('bottom', { ensureScrollable: false });
     closeTraining();
