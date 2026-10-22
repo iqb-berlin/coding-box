@@ -6,8 +6,9 @@ import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import * as fs from 'fs';
 import { unlink } from 'fs/promises';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { DataSource } from 'typeorm';
+import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, toError } from '../../../utils/error.util';
 import {
   statusStringToNumber
@@ -538,7 +539,7 @@ export class UploadResultsService {
               const progress = Math.round((bytesRead / file.size) * 100);
               if (progress > lastProgress) {
                 lastProgress = progress;
-                job.progress(progress).catch(err => {
+                job.updateProgress(progress).catch(err => {
                   this.logger.warn(`Failed to update job progress: ${err.message}`);
                 });
               }
@@ -949,7 +950,7 @@ export class UploadResultsService {
     });
 
     const jobs = await Promise.all(jobPromises);
-    const jobDtos = jobs.map(job => ({ jobId: job.id.toString() }));
+    const jobDtos = jobs.map(job => ({ jobId: requireJobId(job) }));
 
     return jobDtos;
   }

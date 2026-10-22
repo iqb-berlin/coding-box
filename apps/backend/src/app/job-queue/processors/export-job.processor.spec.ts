@@ -1,4 +1,4 @@
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import AdmZip = require('adm-zip');
 import * as fs from 'fs';
 import * as os from 'os';
@@ -50,7 +50,8 @@ describe('ExportJobProcessor', () => {
       exportType: 'coding-list',
       ...data
     } as ExportJobData,
-    progress: jest.fn().mockResolvedValue(undefined)
+    progress: 0,
+    updateProgress: jest.fn().mockResolvedValue(undefined)
   }) as unknown as Job<ExportJobData>;
 
   const createProcessor = () => {
@@ -362,7 +363,7 @@ describe('ExportJobProcessor', () => {
       const result = await processor.process(job);
       filePath = result.filePath;
 
-      expect(job.progress).toHaveBeenCalledWith(
+      expect(job.updateProgress).toHaveBeenCalledWith(
         expect.objectContaining({
           percentage: 55,
           phase: 'writing',
@@ -370,13 +371,13 @@ describe('ExportJobProcessor', () => {
           totalRows: 200
         })
       );
-      expect(job.progress).toHaveBeenCalledWith(
+      expect(job.updateProgress).toHaveBeenCalledWith(
         expect.objectContaining({
           percentage: 90,
           phase: 'finalizing'
         })
       );
-      expect(job.progress).toHaveBeenCalledWith(
+      expect(job.updateProgress).toHaveBeenCalledWith(
         expect.objectContaining({
           percentage: 100,
           phase: 'completed'

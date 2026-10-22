@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { numericJobProgress } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -98,7 +99,7 @@ export class CodingAnalysisService {
       const isCalculating = !!activeJob;
       let progress = 0;
       if (activeJob) {
-        progress = await activeJob.progress();
+        progress = numericJobProgress(activeJob);
       }
 
       if (fullAnalysis && !fullAnalysis.aggregationSummary) {

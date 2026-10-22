@@ -1,7 +1,8 @@
 import {
   Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
+import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
 import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
@@ -31,7 +32,7 @@ export class BullJobManagementService {
       }
 
       const state = await bullJob.getState();
-      if (state !== 'active' && state !== 'waiting' && state !== 'delayed') {
+      if (state !== 'active' && state !== 'waiting' && state !== 'prioritized' && state !== 'delayed') {
         return {
           success: false,
           message: `Job with ID ${jobId} cannot be paused because it is ${state}`
@@ -43,7 +44,7 @@ export class BullJobManagementService {
         isPaused: true
       };
 
-      await bullJob.update(updatedData);
+      await bullJob.updateData(updatedData);
       this.logger.log(`Job ${jobId} has been paused successfully`);
 
       return { success: true, message: `Job ${jobId} has been paused successfully` };
@@ -68,7 +69,7 @@ export class BullJobManagementService {
       }
 
       const { isPaused, ...restData } = bullJob.data;
-      await bullJob.update(restData);
+      await bullJob.updateData(restData);
 
       this.logger.log(`Job ${jobId} has been resumed successfully`);
       return { success: true, message: `Job ${jobId} has been resumed successfully` };
@@ -130,7 +131,7 @@ export class BullJobManagementService {
       return {
         success: true,
         message: `Job ${jobId} has been restarted as job ${newJob.id}`,
-        jobId: newJob.id.toString()
+        jobId: requireJobId(newJob)
       };
     } catch (error) {
       this.logger.error(`Error restarting job: ${getErrorMessage(error)}`, getErrorStack(error));
@@ -207,13 +208,13 @@ export class BullJobManagementService {
       const bullJobs = await this.jobQueueService.getTestPersonCodingJobs(workspaceId);
       for (const bullJob of bullJobs) {
         const state = await bullJob.getState();
-        const progress = await bullJob.progress() || 0;
+        const progress = bullJob.progress || 0;
         // Map Bull job state to our job status
         const status = this.mapJobStateToStatus(state);
         const { result, error } = this.extractJobResult(bullJob, state);
 
         jobs.push({
-          jobId: bullJob.id.toString(),
+          jobId: requireJobId(bullJob),
           status,
           progress: typeof progress === 'number' ? progress : 0,
           result,

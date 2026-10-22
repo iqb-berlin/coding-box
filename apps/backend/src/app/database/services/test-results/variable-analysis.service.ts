@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'crypto';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
+import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {
   VariableAnalysisResultDto,
   VariableCombo
@@ -161,7 +162,7 @@ export class VariableAnalysisService {
 
     // Map Bull job to DTO
     return VariableAnalysisJobDto.fromJob({
-      id: job.id,
+      id: requireJobId(job),
       workspaceId,
       unitId,
       variableId,
@@ -186,10 +187,10 @@ export class VariableAnalysisService {
     }
 
     const state = await job.getState();
-    const progress = await job.progress();
+    const progress = numericJobProgress(job);
 
     return VariableAnalysisJobDto.fromJob({
-      id: job.id,
+      id: requireJobId(job),
       workspaceId: job.data.workspaceId,
       unitId: job.data.unitId,
       variableId: job.data.variableId,
@@ -370,9 +371,9 @@ export class VariableAnalysisService {
     const dtos = await Promise.all(
       jobs.map(async job => {
         const state = await job.getState();
-        const progress = await job.progress();
+        const progress = numericJobProgress(job);
         return VariableAnalysisJobDto.fromJob({
-          id: job.id,
+          id: requireJobId(job),
           workspaceId: job.data.workspaceId,
           unitId: job.data.unitId,
           variableId: job.data.variableId,

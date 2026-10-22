@@ -6,6 +6,7 @@ import {
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
+import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 
 import {
@@ -308,7 +309,7 @@ export class CodingProcessService {
     return {
       totalResponses: 0,
       statusCounts: {},
-      jobId: bullJob.id.toString(),
+      jobId: requireJobId(bullJob),
       message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${bullJob.id}`
     };
   }
@@ -382,7 +383,7 @@ export class CodingProcessService {
     return {
       totalResponses: 0,
       statusCounts: {},
-      jobId: bullJob.id.toString(),
+      jobId: requireJobId(bullJob),
       message: `Processing ${includedUnitIds.length} affected coding units in the background. Check job status with jobId: ${bullJob.id}`
     };
   }
@@ -1280,8 +1281,7 @@ export class CodingProcessService {
         if (bullJob.data.isPaused) {
           return true;
         }
-        const state = await bullJob.getState();
-        return state === 'paused';
+        return false;
       }
       return false;
     } catch (error) {

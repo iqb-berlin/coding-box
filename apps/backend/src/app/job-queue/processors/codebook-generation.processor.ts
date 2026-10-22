@@ -1,38 +1,40 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
+import { requireJobId } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodebookGenerationJobData, CodebookJobResult } from '../job-queue.service';
 
 @Injectable()
-@Processor('codebook-generation')
-export class CodebookGenerationProcessor {
+@Processor('codebook-generation', { concurrency: 1 })
+export class CodebookGenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(CodebookGenerationProcessor.name);
   private readonly resultTtlSeconds = 86400;
 
   constructor(
     private readonly codebookGenerationService: CodebookGenerationService,
     private readonly cacheService: CacheService
-  ) {}
+  ) {
+    super();
+  }
 
-  @Process()
   async process(job: Job<CodebookGenerationJobData>): Promise<CodebookJobResult> {
     this.logger.log(
       `Processing codebook generation job ${job.id} for workspace ${job.data.workspaceId}`
     );
 
     try {
-      await job.progress(0);
+      await job.updateProgress(0);
 
       const {
         workspaceId, missingsProfile, contentOptions, unitIds
       } = job.data;
 
-      await job.progress(10);
+      await job.updateProgress(10);
 
       const codebook = await this.codebookGenerationService.generateCodebook(
         workspaceId,
@@ -41,7 +43,7 @@ export class CodebookGenerationProcessor {
         unitIds
       );
 
-      await job.progress(80);
+      await job.updateProgress(80);
 
       if (!codebook) {
         throw new Error('Failed to generate codebook');
@@ -59,10 +61,10 @@ export class CodebookGenerationProcessor {
 
       fs.writeFileSync(filePath, codebook);
 
-      await job.progress(90);
+      await job.updateProgress(90);
 
       const result: CodebookJobResult = {
-        fileId: job.id.toString(),
+        fileId: requireJobId(job),
         fileName,
         filePath,
         fileSize: codebook.length,
@@ -77,7 +79,7 @@ export class CodebookGenerationProcessor {
         this.resultTtlSeconds
       );
 
-      await job.progress(100);
+      await job.updateProgress(100);
       this.logger.log(`Codebook generation job ${job.id} completed successfully`);
       return result;
     } catch (error) {

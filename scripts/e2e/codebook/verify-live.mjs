@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import pg from 'pg';
-import Bull from 'bull';
+import { Queue } from 'bullmq';
 import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
 import { CodingSchemeFactory as Reference } from '@iqb/responses-legacy-reference';
@@ -42,7 +42,7 @@ async function insert(table, data) {
   return result.rows[0].id;
 }
 function queue(name) {
-  if (!queues.has(name)) queues.set(name, new Bull(name, { redis: { host: '127.0.0.1', port: 16441 }, prefix: 'codebook-proof' }));
+  if (!queues.has(name)) queues.set(name, new Queue(name, { connection: { host: '127.0.0.1', port: 16441 }, prefix: 'codebook-proof:bullmq' }));
   return queues.get(name);
 }
 async function finishJob(name, id, statusPath, expected = 'completed') {

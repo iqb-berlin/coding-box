@@ -12,21 +12,22 @@ const createJob = (
   processedOn: 110,
   finishedOn: 120,
   getState: jest.fn().mockResolvedValue(state),
-  progress: jest.fn().mockReturnValue(40),
+  progress: 40,
+  updateProgress: jest.fn().mockReturnValue(40),
   remove: jest.fn().mockResolvedValue(undefined),
-  update: jest.fn().mockResolvedValue(undefined),
-  discard: jest.fn().mockResolvedValue(undefined)
+  updateData: jest.fn().mockResolvedValue(undefined)
 });
 
 const createQueue = (job = createJob()) => ({
-  add: jest.fn().mockImplementation(async data => ({ ...job, data })),
+  add: jest.fn().mockImplementation(async (_name, data) => ({ ...job, data })),
   getJob: jest.fn().mockResolvedValue(job),
   getJobs: jest.fn().mockResolvedValue([job]),
   getJobCounts: jest.fn().mockResolvedValue({
     waiting: 1, active: 0, completed: 0, failed: 0, delayed: 0
   }),
-  isReady: jest.fn().mockResolvedValue(undefined),
-  client: { ping: jest.fn().mockResolvedValue('PONG') }
+  isPaused: jest.fn().mockResolvedValue(false),
+  waitUntilReady: jest.fn().mockResolvedValue(undefined),
+  getBackend: jest.fn().mockReturnValue({ client: Promise.resolve({ runCommand: jest.fn().mockResolvedValue('PONG') }) })
 });
 
 describe('JobQueueService', () => {
@@ -90,6 +91,8 @@ describe('JobQueueService', () => {
 
   it('looks up the requested queue and rejects jobs owned by another workspace', async () => {
     const foreignJob = createJob({ workspaceId: 2 });
+    const readForeignProgress = jest.fn(() => 40);
+    Object.defineProperty(foreignJob, 'progress', { get: readForeignProgress });
     const ownedJob = createJob({ workspaceId: 1 });
     queues[0].getJob.mockResolvedValue(foreignJob);
     queues[1].getJob.mockResolvedValue(ownedJob);
@@ -97,7 +100,7 @@ describe('JobQueueService', () => {
     await expect(service.getWorkspaceJob(1, 'test-person-coding', '17')).resolves.toBeNull();
     await expect(service.getWorkspaceJob(1, 'coding-statistics', '17')).resolves.toBe(ownedJob);
     expect(foreignJob.getState).not.toHaveBeenCalled();
-    expect(foreignJob.progress).not.toHaveBeenCalled();
+    expect(readForeignProgress).not.toHaveBeenCalled();
     await expect(service.getWorkspaceJob(0, 'coding-statistics', '17')).resolves.toBeNull();
     await expect(service.getWorkspaceJob(1, 'unknown', '17')).resolves.toBeNull();
   });
@@ -112,13 +115,14 @@ describe('JobQueueService', () => {
     'deleteVariableAnalysisJob'
   ] as const)('rejects foreign jobs before %s can read or mutate them', async operation => {
     const foreignJob = createJob({ workspaceId: 2 }, 'active');
+    const readForeignProgress = jest.fn(() => 40);
+    Object.defineProperty(foreignJob, 'progress', { get: readForeignProgress });
     queues.forEach(queue => queue.getJob.mockResolvedValue(foreignJob));
 
     await expect(service[operation]('17', 1)).resolves.toBe(false);
     expect(foreignJob.getState).not.toHaveBeenCalled();
     expect(foreignJob.remove).not.toHaveBeenCalled();
-    expect(foreignJob.update).not.toHaveBeenCalled();
-    expect(foreignJob.discard).not.toHaveBeenCalled();
+    expect(foreignJob.updateData).not.toHaveBeenCalled();
   });
 
   it('rejects unowned jobs and scopes generic queue mutations', async () => {
@@ -219,6 +223,18 @@ describe('JobQueueService', () => {
     await expect(service.addExportJob({ workspaceId: 1, userId: 2, exportType: 'coding-list' })).resolves.toHaveProperty('data.exportType', 'coding-list');
   });
 
+  it('persists retry suppression when cancelling an active coding job', async () => {
+    const activeJob = createJob({ workspaceId: 1, personIds: ['p1'], autoCoderRun: 1 }, 'active');
+    queues[0].getJob.mockResolvedValue(activeJob);
+
+    await expect(service.cancelTestPersonCodingJob('job-1', 1)).resolves.toBe(true);
+
+    expect(activeJob.updateData).toHaveBeenCalledWith({
+      workspaceId: 1, personIds: ['p1'], autoCoderRun: 1, skipRetries: true
+    });
+    expect(activeJob.remove).not.toHaveBeenCalled();
+  });
+
   it('cancels and deletes jobs across queues', async () => {
     await expect(service.cancelJob('test-person-coding', 'job-1', 1)).resolves.toBe(true);
     await expect(service.cancelJob('unknown', 'job-1', 1)).resolves.toBe(false);
@@ -284,12 +300,11 @@ describe('JobQueueService', () => {
     queues[2].getJob.mockResolvedValue(exportJob);
 
     await expect(service.cancelWorkspaceJob(1, 'data-export', 'job-1')).resolves.toBe(true);
-    expect(exportJob.update).toHaveBeenCalledWith({
+    expect(exportJob.updateData).toHaveBeenCalledWith({
       workspaceId: 1,
       exportType: 'test-results',
       isCancelled: true
     });
-    expect(exportJob.discard).toHaveBeenCalled();
     expect(exportJob.remove).not.toHaveBeenCalled();
 
     const databaseExportJob = createJob({
@@ -299,13 +314,12 @@ describe('JobQueueService', () => {
     }, 'active');
     queues[11].getJob.mockResolvedValue(databaseExportJob);
     await expect(service.cancelWorkspaceJob(1, 'database-export', 'job-1')).resolves.toBe(true);
-    expect(databaseExportJob.update).toHaveBeenCalledWith({
+    expect(databaseExportJob.updateData).toHaveBeenCalledWith({
       requestedByUserId: 3,
       scope: 'workspace',
       workspaceId: 1,
       isCancelled: true
     });
-    expect(databaseExportJob.discard).toHaveBeenCalled();
     expect(databaseExportJob.remove).not.toHaveBeenCalled();
 
     const unsupportedActiveJob = createJob({ workspaceId: 1 }, 'active');
@@ -624,7 +638,7 @@ describe('JobQueueService', () => {
     await expect(service.assertNoDependencyConflicts('data-export', 1)).resolves.toBeUndefined();
 
     await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: true });
-    queues[0].client = null;
+    queues[0].getBackend.mockReturnValue({ client: Promise.resolve(null) } as never);
     await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: false });
   });
 
@@ -634,7 +648,7 @@ describe('JobQueueService', () => {
 
     await service.deleteVariableAnalysisJobs(1);
 
-    expect(activeJob.discard).toHaveBeenCalled();
+    expect(activeJob.updateData).toHaveBeenCalledWith({ workspaceId: 1, skipRetries: true });
     expect(activeJob.remove).toHaveBeenCalled();
   });
 });

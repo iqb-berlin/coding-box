@@ -1,8 +1,8 @@
 import {
   BadRequestException, ConflictException, Controller, Delete, ForbiddenException, Get, Logger, NotFoundException, Param, Post, Req, Res, UseGuards, ParseIntPipe
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Job, Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { requireJobId, withQueueJobId } from '../../job-queue/job-queue.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -129,6 +130,7 @@ export class WorkspaceTestResultsExportController {
     const runningJobs = await this.databaseExportQueue.getJobs([
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
 
@@ -151,11 +153,11 @@ export class WorkspaceTestResultsExportController {
       );
     }
 
-    const job = await this.databaseExportQueue.add({
+    const job = await this.databaseExportQueue.add('database-export', {
       requestedByUserId: Number(req.user.id),
       scope: 'workspace',
       workspaceId: workspace_id
-    });
+    }, withQueueJobId());
 
     await this.tryRecordAuditEvent({
       workspaceId: workspace_id,
@@ -202,7 +204,7 @@ export class WorkspaceTestResultsExportController {
     const job = await this.getWorkspaceDatabaseExportJob(jobId, workspace_id);
     const state = await job.getState();
     const status = this.mapJobState(state, job);
-    const progressValue = await job.progress();
+    const progressValue = job.progress;
     const progress = this.toNumericProgress(progressValue, status);
 
     return {
@@ -380,7 +382,7 @@ export class WorkspaceTestResultsExportController {
     });
 
     return {
-      jobId: job.id.toString(),
+      jobId: requireJobId(job),
       message: 'Export job started successfully'
     };
   }
@@ -433,7 +435,7 @@ export class WorkspaceTestResultsExportController {
     });
 
     return {
-      jobId: job.id.toString(),
+      jobId: requireJobId(job),
       message: 'Export job started successfully'
     };
   }
@@ -476,9 +478,9 @@ export class WorkspaceTestResultsExportController {
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
       const state = await job.getState();
-      const progress = this.toPublicProgress(await job.progress());
+      const progress = this.toPublicProgress(job.progress);
       result.push({
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         status: this.mapDataExportJobState(state, job),
         progress: progress,
         exportType: job.data.exportType,

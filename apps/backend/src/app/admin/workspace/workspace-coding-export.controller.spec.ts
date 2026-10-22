@@ -618,7 +618,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockResolvedValue(100),
+        progress: 100,
+        updateProgress: jest.fn().mockResolvedValue(100),
         returnvalue: {
           fileId: 'job-1',
           fileName: 'export_job-1.csv',
@@ -665,7 +666,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
         getState: jest.fn().mockResolvedValue('failed'),
-        progress: jest.fn().mockResolvedValue(20),
+        progress: 20,
+        updateProgress: jest.fn().mockResolvedValue(20),
         failedReason
       })
     };
@@ -711,7 +713,8 @@ describe('WorkspaceCodingExportController', () => {
       id: 'job-1',
       data: { workspaceId: 5, exportType: 'item-matrix' },
       getState: jest.fn().mockResolvedValue('failed'),
-      progress: jest.fn().mockResolvedValue(90),
+      progress: 90,
+      updateProgress: jest.fn().mockResolvedValue(90),
       failedReason:
         'ITEM_MATRIX_UNRESOLVED_CELLS:1933 ' +
         'Itemdatensatz enthält 1933 nicht exportierbare Zellen.'
@@ -937,7 +940,14 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
         getState: jest.fn().mockResolvedValue('active'),
-        progress: jest.fn().mockResolvedValue({
+        progress: {
+          percentage: 57.4,
+          phase: 'writing',
+          processedRows: 5820,
+          totalRows: 10922,
+          message: 'Rows are being written'
+        },
+        updateProgress: jest.fn().mockResolvedValue({
           percentage: 57.4,
           phase: 'writing',
           processedRows: 5820,
@@ -970,7 +980,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5, isCancelled: true },
         getState: jest.fn().mockResolvedValue('active'),
-        progress: jest.fn().mockResolvedValue(55)
+        progress: 55,
+        updateProgress: jest.fn().mockResolvedValue(55)
       })
     };
     const controller = createController(
@@ -993,7 +1004,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
         getState: jest.fn().mockResolvedValue('stuck'),
-        progress: jest.fn().mockResolvedValue(0)
+        progress: 0,
+        updateProgress: jest.fn().mockResolvedValue(0)
       })
     };
     const controller = createController(
@@ -1016,7 +1028,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5, isCancelled: true },
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockResolvedValue(21),
+        progress: 21,
+        updateProgress: jest.fn().mockResolvedValue(21),
         returnvalue: {
           fileId: 'job-1',
           fileName: '',
@@ -1049,7 +1062,8 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
         getState: jest.fn().mockResolvedValue('failed'),
-        progress: jest.fn().mockResolvedValue(20),
+        progress: 20,
+        updateProgress: jest.fn().mockResolvedValue(20),
         failedReason: 'Export job job-1 was cancelled'
       })
     };
@@ -1080,7 +1094,8 @@ describe('WorkspaceCodingExportController', () => {
           },
           timestamp: 100,
           getState: jest.fn().mockResolvedValue('active'),
-          progress: jest.fn().mockResolvedValue(55)
+          progress: 55,
+          updateProgress: jest.fn().mockResolvedValue(55)
         },
         {
           id: 'failed-cancelled',
@@ -1088,14 +1103,16 @@ describe('WorkspaceCodingExportController', () => {
           timestamp: 101,
           failedReason: 'Export job failed-cancelled was cancelled',
           getState: jest.fn().mockResolvedValue('failed'),
-          progress: jest.fn().mockResolvedValue(20)
+          progress: 20,
+          updateProgress: jest.fn().mockResolvedValue(20)
         },
         {
           id: 'waiting-job',
           data: { workspaceId: 5, exportType: 'by-variable' },
           timestamp: 102,
           getState: jest.fn().mockResolvedValue('waiting'),
-          progress: jest.fn().mockResolvedValue(0)
+          progress: 0,
+          updateProgress: jest.fn().mockResolvedValue(0)
         }
       ])
     };

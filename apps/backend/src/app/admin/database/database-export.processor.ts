@@ -1,8 +1,9 @@
-import { Process, Processor } from '@nestjs/bull';
+import { WorkerHost, Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as fs from 'fs';
 import * as path from 'path';
+import { requireJobId, rethrowJobError } from '../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 import { DatabaseExportService } from './database-export.service';
@@ -26,26 +27,27 @@ export interface DatabaseExportJobResult {
 }
 
 @Injectable()
-@Processor('database-export')
-export class DatabaseExportProcessor {
+@Processor('database-export', { concurrency: 1 })
+export class DatabaseExportProcessor extends WorkerHost {
   private readonly logger = new Logger(DatabaseExportProcessor.name);
 
   constructor(private readonly databaseExportService: DatabaseExportService,
-              private readonly journalService: JournalService) {}
+              private readonly journalService: JournalService) {
+    super();
+  }
 
   private async isJobCancelled(job: Job<DatabaseExportJobData>): Promise<boolean> {
-    const latestJob = await job.queue.getJob(String(job.id));
+    const latestJob = await Job.fromId<DatabaseExportJobData>(this.worker, requireJobId(job));
     return latestJob?.data?.isCancelled === true;
   }
 
-  @Process()
   async process(job: Job<DatabaseExportJobData>): Promise<DatabaseExportJobResult> {
     this.logger.log(`Starting database export job ${job.id}`);
 
     let outputFilePath: string | null = null;
 
     try {
-      await job.progress(0);
+      await job.updateProgress(0);
 
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
@@ -68,7 +70,7 @@ export class DatabaseExportProcessor {
           outputFilePath,
           job.data.workspaceId,
           async progress => {
-            await job.progress(progress);
+            await job.updateProgress(progress);
           },
           async () => this.isJobCancelled(job)
         );
@@ -76,7 +78,7 @@ export class DatabaseExportProcessor {
         await this.databaseExportService.exportToSqliteFile(
           outputFilePath,
           async progress => {
-            await job.progress(progress);
+            await job.updateProgress(progress);
           },
           async () => this.isJobCancelled(job)
         );
@@ -93,7 +95,7 @@ export class DatabaseExportProcessor {
         workspaceId: job.data.workspaceId
       };
 
-      await job.progress(100);
+      await job.updateProgress(100);
       await this.recordOutcome(job, 'success', { fileSize: stats.size });
       this.logger.log(`Database export job ${job.id} completed successfully`);
 
@@ -120,7 +122,7 @@ export class DatabaseExportProcessor {
       }
 
       await this.recordOutcome(job, 'failure', { cancelled: error instanceof DatabaseExportCancelledError });
-      throw error;
+      return rethrowJobError(error, job, () => this.worker);
     }
   }
 

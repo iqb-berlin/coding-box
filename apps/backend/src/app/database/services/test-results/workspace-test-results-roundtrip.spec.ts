@@ -1,5 +1,5 @@
 import { PassThrough } from 'stream';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -360,7 +360,8 @@ describe('test results export/import roundtrip', () => {
     const file = tempCsvFile(fileContent, `roundtrip-${resultType}`);
     await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
       id: `roundtrip-${resultType}`,
-      progress: jest.fn().mockResolvedValue(undefined),
+      progress: 0,
+      updateProgress: jest.fn().mockResolvedValue(undefined),
       data: {
         workspaceId,
         file,

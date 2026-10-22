@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { Queue } from 'bull';
+import { Queue } from 'bullmq';
 import { DatabaseAdminController } from './database-admin.controller';
 import {
   DatabaseExportJobData,
@@ -23,7 +23,7 @@ describe('DatabaseAdminController', () => {
     };
   };
 
-  it('starts system database exports as Bull jobs', async () => {
+  it('starts system database exports as BullMQ jobs', async () => {
     const { controller, databaseExportQueue } = createController();
 
     await expect(controller.startDatabaseExportJob(
@@ -33,9 +33,9 @@ describe('DatabaseAdminController', () => {
       message: 'Database export job started successfully.'
     });
 
-    expect(databaseExportQueue.add).toHaveBeenCalledWith({
+    expect(databaseExportQueue.add).toHaveBeenCalledWith('database-export', {
       requestedByUserId: 5
-    });
+    }, expect.objectContaining({ jobId: expect.any(String) }));
   });
 
   it('rejects duplicate active system database exports', async () => {
@@ -65,7 +65,8 @@ describe('DatabaseAdminController', () => {
     const job = {
       data: { requestedByUserId: 5 },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       returnvalue: result
     };
     const { controller, databaseExportQueue } = createController({

@@ -3,10 +3,11 @@ import {
   Logger,
   ConflictException
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Queue, JobOptions, Job } from 'bull';
+import { Queue, JobsOptions, Job } from 'bullmq';
+import { requireJobId, withQueueJobId } from './job-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
@@ -44,6 +45,7 @@ export interface TestPersonCodingJobData {
   unitIds?: number[];
   groupNames?: string;
   isPaused?: boolean;
+  skipRetries?: boolean;
   autoCoderRun: AutoCoderRun;
   source?: 'manual-selection' | 'coding-freshness';
   freshnessVersion?: 'v1' | 'v3';
@@ -113,6 +115,7 @@ export interface CodingAnalysisJobData {
 }
 
 export interface VariableAnalysisJobData {
+  skipRetries?: boolean;
   workspaceId: number;
   unitId?: number;
   variableId?: string;
@@ -309,6 +312,7 @@ export class JobQueueService {
   }
 
   private mapBullStateToProcessStatus(state: string): ProcessDto['status'] {
+    if (state === 'prioritized' || state === 'waiting-children') return 'waiting';
     if (
       state === 'active' ||
       state === 'waiting' ||
@@ -393,7 +397,7 @@ export class JobQueueService {
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
-      const removableStates = ['waiting', 'delayed', 'paused', 'completed', 'failed', 'cancelled'];
+      const removableStates = ['waiting', 'prioritized', 'delayed', 'paused', 'completed', 'failed', 'cancelled'];
       if (removableStates.includes(state)) {
         await job.remove();
         return true;
@@ -401,17 +405,15 @@ export class JobQueueService {
 
       if (state === 'active') {
         if (queueName === 'data-export' || queueName === 'database-export') {
-          await job.update({ ...job.data, isCancelled: true });
+          await job.updateData({ ...job.data, isCancelled: true });
           if (queueName === 'data-export') {
-            this.abortExportJob(job.id.toString());
+            this.abortExportJob(requireJobId(job));
           }
-          await job.discard();
           return true;
         }
 
         if (queueName === 'test-person-coding') {
-          await job.update({ ...job.data, isPaused: true });
-          await job.discard();
+          await job.updateData({ ...job.data, isPaused: true });
           return true;
         }
 
@@ -456,8 +458,9 @@ export class JobQueueService {
 
     for (const [queueName, queue] of queues.entries()) {
       processPromises.push(
-        queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
+        queue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'completed', 'failed']).then(async jobs => {
           const existingJobs = jobs.filter(Boolean);
+          const isQueuePaused = existingJobs.length > 0 && await queue.isPaused();
           let matchedJobs = existingJobs;
           let validationTaskMap = new Map<number, ProcessOverviewValidationTask>();
           if (queueName === 'validation-task') {
@@ -483,7 +486,8 @@ export class JobQueueService {
           }
 
           const mappedPromises = matchedJobs.map(async job => {
-            const bullState = await job.getState();
+            const state = await job.getState();
+            const bullState = isQueuePaused && (state === 'waiting' || state === 'prioritized') ? 'paused' : state;
             const validationTask = queueName === 'validation-task' ?
               validationTaskMap.get(Number(job.data?.taskId)) :
               undefined;
@@ -495,7 +499,7 @@ export class JobQueueService {
             );
             let progress: unknown = typeof validationTask?.progress === 'number' ?
               validationTask.progress :
-              job.progress();
+              job.progress;
 
             // For completed jobs, ensure progress shows as 100% if it's numeric/empty
             if (status === 'completed') {
@@ -507,7 +511,7 @@ export class JobQueueService {
             }
 
             return {
-              id: job.id,
+              id: requireJobId(job),
               queueName: queueName,
               status: status,
               progress: progress,
@@ -605,7 +609,7 @@ export class JobQueueService {
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
     if (!queue) return undefined;
-    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed'])).filter(Boolean);
 
     if (queueName === 'validation-task') {
       const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
@@ -640,7 +644,7 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(
+    const jobs = (await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed'])).filter(
       Boolean
     );
     return jobs.find(job => job.data && matchFn(job.data));
@@ -648,7 +652,7 @@ export class JobQueueService {
 
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<TestPersonCodingJobData>> {
     const validatedData = {
       ...data,
@@ -666,19 +670,19 @@ export class JobQueueService {
     this.logger.log(
       `Adding test person coding job for workspace ${validatedData.workspaceId}`
     );
-    return this.testPersonCodingQueue.add(validatedData, options);
+    return this.testPersonCodingQueue.add('test-person-coding', validatedData, withQueueJobId(options));
   }
 
   async getTestPersonCodingJob(
     jobId: string
   ): Promise<Job<TestPersonCodingJobData> | null> {
-    return this.testPersonCodingQueue.getJob(jobId);
+    return (await this.testPersonCodingQueue.getJob(jobId)) ?? null;
   }
 
   async addCodingStatisticsJob(
     workspaceId: number,
     version?: 'v1' | 'v2' | 'v3',
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<CodingStatisticsJobData>> {
     const requestedVersion = this.normalizeCodingStatisticsVersion(version);
     const existing = await this.findActiveJob<CodingStatisticsJobData>(
@@ -704,8 +708,7 @@ export class JobQueueService {
       `Adding coding statistics job for workspace ${workspaceId} (version: ${requestedVersion})`
     );
     return this.codingStatisticsQueue.add(
-      { workspaceId, version: requestedVersion },
-      options
+      'coding-statistics', { workspaceId, version: requestedVersion }, withQueueJobId(options)
     );
   }
 
@@ -724,13 +727,13 @@ export class JobQueueService {
   async getCodingStatisticsJob(
     jobId: string
   ): Promise<Job<CodingStatisticsJobData> | null> {
-    return this.codingStatisticsQueue.getJob(jobId);
+    return (await this.codingStatisticsQueue.getJob(jobId)) ?? null;
   }
 
   async addFlatResponseFilterOptionsJob(
     workspaceId: number,
     processingDurationThresholdMs: number,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
     const existing = await this.findActiveJob<FlatResponseFilterOptionsJobData>(
       this.flatResponseFilterOptionsQueue,
@@ -746,22 +749,21 @@ export class JobQueueService {
       `Adding flat response filter-options cache job for workspace ${workspaceId}`
     );
     return this.flatResponseFilterOptionsQueue.add(
-      {
+      'flat-response-filter-options', {
         workspaceId,
         processingDurationThresholdMs
-      },
-      options
+      }, withQueueJobId(options)
     );
   }
 
   async addUploadJob(
     data: TestResultsUploadJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<TestResultsUploadJobData>> {
     this.logger.log(
       `Adding upload job for workspace ${data.workspaceId}, file: ${data.file.originalname}`
     );
-    return this.testResultsUploadQueue.add(data, options);
+    return this.testResultsUploadQueue.add('test-results-upload', data, withQueueJobId(options));
   }
 
   async assertNoActiveUploadForWorkspace(workspaceId: number): Promise<void> {
@@ -777,7 +779,7 @@ export class JobQueueService {
   }
 
   async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData> | null> {
-    return this.testResultsUploadQueue.getJob(jobId);
+    return (await this.testResultsUploadQueue.getJob(jobId)) ?? null;
   }
 
   async getTestPersonCodingJobs(
@@ -791,6 +793,7 @@ export class JobQueueService {
       'failed',
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
     this.logger.log(`Found ${jobs.length} jobs in total`);
@@ -807,7 +810,7 @@ export class JobQueueService {
     try {
       const state = await job.getState();
 
-      if (state === 'waiting' || state === 'delayed') {
+      if (state === 'waiting' || state === 'prioritized' || state === 'delayed') {
         await job.remove();
         this.logger.log(
           `Job ${jobId} has been cancelled and removed from queue`
@@ -816,9 +819,9 @@ export class JobQueueService {
       }
 
       if (state === 'active') {
-        await job.discard();
+        await job.updateData({ ...job.data, skipRetries: true });
         this.logger.log(
-          `Job ${jobId} is active, marked for discard (will not retry on failure)`
+          `Job ${jobId} is active, further retries disabled`
         );
         return true;
       }
@@ -857,7 +860,7 @@ export class JobQueueService {
 
   async addExportJob(
     data: ExportJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<ExportJobData>> {
     await this.assertNoDependencyConflicts('data-export', data.workspaceId);
     const existing = await this.findActiveJob<ExportJobData>(
@@ -872,11 +875,11 @@ export class JobQueueService {
     this.logger.log(
       `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
     );
-    return this.dataExportQueue.add(data, options);
+    return this.dataExportQueue.add('data-export', data, withQueueJobId(options));
   }
 
   async getExportJob(jobId: string): Promise<Job<ExportJobData> | null> {
-    return this.dataExportQueue.getJob(jobId);
+    return (await this.dataExportQueue.getJob(jobId)) ?? null;
   }
 
   async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
@@ -886,6 +889,7 @@ export class JobQueueService {
       'failed',
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
     this.logger.log(`Found ${jobs.length} export jobs in total`);
@@ -917,7 +921,7 @@ export class JobQueueService {
       const state = await job.getState();
 
       // For waiting/delayed jobs, we can remove them directly
-      if (state === 'waiting' || state === 'delayed') {
+      if (state === 'waiting' || state === 'prioritized' || state === 'delayed') {
         await job.remove();
         this.logger.log(
           `Export job ${jobId} has been cancelled and removed from queue`
@@ -926,11 +930,10 @@ export class JobQueueService {
       }
 
       // For active jobs, we can't remove them - the processor will check the isCancelled flag
-      // and handle the cancellation. We use discard() to prevent retries.
+      // and handle cancellation. The worker suppresses retries for cancelled jobs.
       if (state === 'active') {
-        await job.update({ ...job.data, isCancelled: true });
+        await job.updateData({ ...job.data, isCancelled: true });
         this.abortExportJob(jobId);
-        await job.discard();
         this.logger.log(
           `Export job ${jobId} is active, marked for cancellation (will stop at next checkpoint)`
         );
@@ -972,7 +975,7 @@ export class JobQueueService {
         ...job.data,
         isCancelled: true
       };
-      await job.update(updatedData);
+      await job.updateData(updatedData);
       this.abortExportJob(jobId);
       this.logger.log(`Export job ${jobId} has been marked as cancelled`);
       return true;
@@ -1023,7 +1026,7 @@ export class JobQueueService {
 
   async addCodebookGenerationJob(
     data: CodebookGenerationJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<CodebookGenerationJobData>> {
     const existing = await this.findActiveJob<CodebookGenerationJobData>(
       this.codebookGenerationQueue,
@@ -1037,20 +1040,20 @@ export class JobQueueService {
     this.logger.log(
       `Adding codebook generation job for workspace ${data.workspaceId} with ${data.unitIds.length} units`
     );
-    return this.codebookGenerationQueue.add(data, options);
+    return this.codebookGenerationQueue.add('codebook-generation', data, withQueueJobId(options));
   }
 
   async getCodebookGenerationJob(
     jobId: string
   ): Promise<Job<CodebookGenerationJobData> | null> {
-    return this.codebookGenerationQueue.getJob(jobId);
+    return (await this.codebookGenerationQueue.getJob(jobId)) ?? null;
   }
 
   // --- Reset Coding Version Queue Methods ---
 
   async addResetCodingVersionJob(
     data: ResetCodingVersionJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<ResetCodingVersionJobData>> {
     const existing = await this.findActiveJob<ResetCodingVersionJobData>(
       this.resetCodingVersionQueue,
@@ -1064,18 +1067,18 @@ export class JobQueueService {
     this.logger.log(
       `Adding reset coding version job for workspace ${data.workspaceId}, version ${data.version}`
     );
-    return this.resetCodingVersionQueue.add(data, options);
+    return this.resetCodingVersionQueue.add('reset-coding-version', data, withQueueJobId(options));
   }
 
   async getResetCodingVersionJob(
     jobId: string
   ): Promise<Job<ResetCodingVersionJobData> | null> {
-    return this.resetCodingVersionQueue.getJob(jobId);
+    return (await this.resetCodingVersionQueue.getJob(jobId)) ?? null;
   }
 
   async addValidationTaskJob(
     data: ValidationTaskJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<ValidationTaskJobData>> {
     const existing = await this.findActiveJob<ValidationTaskJobData>(
       this.validationTaskQueue,
@@ -1087,29 +1090,29 @@ export class JobQueueService {
       );
     }
     this.logger.log(`Adding validation task job for task ${data.taskId}`);
-    return this.validationTaskQueue.add(data, options);
+    return this.validationTaskQueue.add('validation-task', data, withQueueJobId(options));
   }
 
   async getValidationTaskJob(
     jobId: string
   ): Promise<Job<ValidationTaskJobData> | null> {
-    return this.validationTaskQueue.getJob(jobId);
+    return (await this.validationTaskQueue.getJob(jobId)) ?? null;
   }
 
   async addCodingAnalysisJob(
     data: CodingAnalysisJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<CodingAnalysisJobData>> {
     this.logger.log(
       `Adding coding analysis job for workspace ${data.workspaceId}`
     );
-    return this.responseAnalysisQueue.add(data, options);
+    return this.responseAnalysisQueue.add('response-analysis', data, withQueueJobId(options));
   }
 
   async getCodingAnalysisJob(
     jobId: string
   ): Promise<Job<CodingAnalysisJobData> | null> {
-    return this.responseAnalysisQueue.getJob(jobId);
+    return (await this.responseAnalysisQueue.getJob(jobId)) ?? null;
   }
 
   async getActiveCodingAnalysisJob(
@@ -1118,6 +1121,7 @@ export class JobQueueService {
     const jobs = await this.responseAnalysisQueue.getJobs([
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
     return (
@@ -1127,22 +1131,22 @@ export class JobQueueService {
 
   async addVariableAnalysisJob(
     data: VariableAnalysisJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<VariableAnalysisJobData>> {
     this.logger.log(
       `Adding variable analysis job for workspace ${data.workspaceId}`
     );
-    return this.variableAnalysisQueue.add(data, {
+    return this.variableAnalysisQueue.add('variable-analysis', data, withQueueJobId({
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },
       ...options
-    });
+    }));
   }
 
   async getVariableAnalysisJob(
     jobId: string
   ): Promise<Job<VariableAnalysisJobData> | null> {
-    return this.variableAnalysisQueue.getJob(jobId);
+    return (await this.variableAnalysisQueue.getJob(jobId)) ?? null;
   }
 
   async getVariableAnalysisJobs(
@@ -1156,6 +1160,7 @@ export class JobQueueService {
       'failed',
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
     return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
@@ -1190,8 +1195,8 @@ export class JobQueueService {
       try {
         const state = await job.getState();
         if (state === 'active') {
-          await job.discard();
-          // If removal fails for an active job, we at least discarded it to prevent retries
+          await job.updateData({ ...job.data, skipRetries: true });
+          // Locked active jobs can finish, but a later failure must not retry them.
           await job.remove().catch(() => { });
         } else {
           await job.remove();
@@ -1214,7 +1219,7 @@ export class JobQueueService {
     try {
       const state = await job.getState();
 
-      if (state === 'waiting' || state === 'delayed') {
+      if (state === 'waiting' || state === 'prioritized' || state === 'delayed') {
         await job.remove();
         this.logger.log(
           `Variable analysis job ${jobId} has been cancelled and removed from queue`
@@ -1223,9 +1228,9 @@ export class JobQueueService {
       }
 
       if (state === 'active') {
-        await job.discard();
+        await job.updateData({ ...job.data, skipRetries: true });
         this.logger.log(
-          `Variable analysis job ${jobId} is active, marked for discard`
+          `Variable analysis job ${jobId} is active, further retries disabled`
         );
         return true;
       }
@@ -1246,6 +1251,7 @@ export class JobQueueService {
     const jobs = await this.resetCodingVersionQueue.getJobs([
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
     return (
@@ -1257,8 +1263,8 @@ export class JobQueueService {
     try {
       this.logger.log('Checking Redis connection status...');
 
-      // Access the Redis client from the Bull queue
-      const client = this.testPersonCodingQueue.client;
+      // Use BullMQ's public Redis backend for the connectivity probe
+      const client = await this.testPersonCodingQueue.getBackend().client;
 
       if (!client) {
         return {
@@ -1268,16 +1274,22 @@ export class JobQueueService {
       }
 
       const startTime = Date.now();
-      await client.ping();
+      await client.runCommand('ping', []);
       const pingLatency = Date.now() - startTime;
-      const originalJobCounts = await this.testPersonCodingQueue.getJobCounts();
+      const originalJobCounts = await this.testPersonCodingQueue.getJobCounts('waiting', 'prioritized', 'active', 'completed', 'failed', 'delayed');
+      const isPaused = await this.testPersonCodingQueue.isPaused();
+      const waiting = (originalJobCounts.waiting ?? 0) + (originalJobCounts.prioritized ?? 0);
       const jobCounts = {
-        ...originalJobCounts,
-        paused: 0 // Default value since JobCounts doesn't include this property
+        waiting: isPaused ? 0 : waiting,
+        active: originalJobCounts.active ?? 0,
+        completed: originalJobCounts.completed ?? 0,
+        failed: originalJobCounts.failed ?? 0,
+        delayed: originalJobCounts.delayed ?? 0,
+        paused: isPaused ? waiting : 0
       };
       let isReady = false;
       try {
-        await this.testPersonCodingQueue.isReady();
+        await this.testPersonCodingQueue.waitUntilReady();
         isReady = true;
       } catch (readyError) {
         this.logger.warn(`Queue ready check failed: ${getErrorMessage(readyError)}`);
@@ -1312,7 +1324,7 @@ export class JobQueueService {
 
   async addExternalCodingImportJob(
     data: ExternalCodingImportJobData,
-    options?: JobOptions
+    options?: JobsOptions
   ): Promise<Job<ExternalCodingImportJobData>> {
     const existing = await this.findActiveJob<ExternalCodingImportJobData>(
       this.externalCodingImportQueue,
@@ -1326,17 +1338,17 @@ export class JobQueueService {
     this.logger.log(
       `Adding external coding import job for workspace ${data.workspaceId}, file: ${data.fileName}`
     );
-    return this.externalCodingImportQueue.add(data, {
+    return this.externalCodingImportQueue.add('external-coding-import', data, withQueueJobId({
       attempts: 1,
       removeOnComplete: { age: 3600 },
       removeOnFail: { age: 86400 },
       ...options
-    });
+    }));
   }
 
   async getExternalCodingImportJob(
     jobId: string
   ): Promise<Job<ExternalCodingImportJobData> | null> {
-    return this.externalCodingImportQueue.getJob(jobId);
+    return (await this.externalCodingImportQueue.getJob(jobId)) ?? null;
   }
 }

@@ -2,7 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
@@ -578,12 +578,14 @@ describe('CodingStatisticsService', () => {
       const mockAutoCodingJob: Partial<Job> = {
         data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockReturnValue(100)
+        progress: 100,
+        updateProgress: jest.fn().mockReturnValue(100)
       };
       const mockStatisticsJob: Partial<Job> = {
         data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockReturnValue(100)
+        progress: 100,
+        updateProgress: jest.fn().mockReturnValue(100)
       };
       const mockStatistics = { totalResponses: 12, statusCounts: { 5: 12 } };
 
@@ -640,12 +642,16 @@ describe('CodingStatisticsService', () => {
       const foreignJob = {
         data: { workspaceId: 2 },
         getState: jest.fn(),
-        progress: jest.fn()
+        progress: 0,
+        updateProgress: jest.fn()
       };
+      const readForeignProgress = jest.fn(() => 40);
+      Object.defineProperty(foreignJob, 'progress', { get: readForeignProgress });
       const ownJob = {
         data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockReturnValue(100)
+        progress: 100,
+        updateProgress: jest.fn().mockReturnValue(100)
       };
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(foreignJob as never);
       mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(ownJob as never);
@@ -658,7 +664,7 @@ describe('CodingStatisticsService', () => {
         status: 'completed', result: { totalResponses: 12 }
       });
       expect(foreignJob.getState).not.toHaveBeenCalled();
-      expect(foreignJob.progress).not.toHaveBeenCalled();
+      expect(readForeignProgress).not.toHaveBeenCalled();
       expect(mockJobQueueService.getWorkspaceJob).toHaveBeenCalledWith(1, 'coding-statistics', '17');
     });
 
@@ -666,8 +672,11 @@ describe('CodingStatisticsService', () => {
       const foreignJob = {
         data: { workspaceId: 2 },
         getState: jest.fn(),
-        progress: jest.fn()
+        progress: 0,
+        updateProgress: jest.fn()
       };
+      const readForeignProgress = jest.fn(() => 40);
+      Object.defineProperty(foreignJob, 'progress', { get: readForeignProgress });
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(foreignJob as never);
       mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(foreignJob as never);
 
@@ -676,7 +685,7 @@ describe('CodingStatisticsService', () => {
       await expect(service.cancelJob('17', 1)).resolves.toMatchObject({ success: false });
       await expect(service.deleteJob('17', 1)).resolves.toMatchObject({ success: false });
       expect(foreignJob.getState).not.toHaveBeenCalled();
-      expect(foreignJob.progress).not.toHaveBeenCalled();
+      expect(readForeignProgress).not.toHaveBeenCalled();
       expect(mockJobQueueService.cancelTestPersonCodingJob).not.toHaveBeenCalled();
       expect(mockJobQueueService.deleteTestPersonCodingJob).not.toHaveBeenCalled();
     });

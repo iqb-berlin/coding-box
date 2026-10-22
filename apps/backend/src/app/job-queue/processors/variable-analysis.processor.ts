@@ -1,8 +1,9 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { CacheService } from '../../cache/cache.service';
@@ -97,8 +98,8 @@ interface MultipleResponseObservedCounts {
   validCountsByComboKey: Map<string, Map<string, number>>;
 }
 
-@Processor('variable-analysis')
-export class VariableAnalysisProcessor {
+@Processor('variable-analysis', { concurrency: 1 })
+export class VariableAnalysisProcessor extends WorkerHost {
   private readonly logger = new Logger(VariableAnalysisProcessor.name);
 
   private readonly MAX_VALUES_PER_VARIABLE = 20;
@@ -123,14 +124,15 @@ export class VariableAnalysisProcessor {
     private cacheService: CacheService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private workspaceFilesService: WorkspaceFilesService
-  ) { }
+  ) {
+    super();
+  }
 
-  @Process()
   async process(job: Job<VariableAnalysisJobData>): Promise<VariableAnalysisJobResult> {
     this.logger.log(`Processing variable analysis job ${job.id} for workspace ${job.data.workspaceId}`);
 
     try {
-      await job.progress(0);
+      await job.updateProgress(0);
 
       const workspaceId = job.data.workspaceId;
       const unitId = job.data.unitId;
@@ -161,7 +163,7 @@ export class VariableAnalysisProcessor {
       const variableCombos = scopeEntries.map(entry => entry.combo);
 
       if (variableCombos.length === 0) {
-        await job.progress(100);
+        await job.updateProgress(100);
         return await this.cacheAndReturnMetadata(job, cacheKey, {
           variableCombos: [],
           frequencies: {},
@@ -191,7 +193,7 @@ export class VariableAnalysisProcessor {
         scopeEntries.map(entry => entry.logicalKey)
       );
 
-      await job.progress(25);
+      await job.updateProgress(25);
 
       const summaryRows = await this.responseRepository.query(
         `
@@ -225,7 +227,7 @@ export class VariableAnalysisProcessor {
         }
       }
 
-      await job.progress(40);
+      await job.updateProgress(40);
 
       const maxValuesParameter = `$${analysisSql.parameters.length + 1}`;
       const maxValuePreviewLengthParameter = `$${analysisSql.parameters.length + 2}`;
@@ -312,7 +314,7 @@ export class VariableAnalysisProcessor {
 
       this.applyFrequencyPercentages(variableCombos, frequencies);
 
-      await job.progress(70);
+      await job.updateProgress(70);
 
       const statusRows = await this.responseRepository.query(
         `
@@ -356,7 +358,7 @@ export class VariableAnalysisProcessor {
         }
       }
 
-      await job.progress(100);
+      await job.updateProgress(100);
       this.logger.log(`Job ${job.id} completed successfully`);
 
       return await this.cacheAndReturnMetadata(job, cacheKey, {
@@ -366,7 +368,7 @@ export class VariableAnalysisProcessor {
       });
     } catch (error) {
       this.logger.error(`Error processing job ${job.id}: ${getErrorMessage(error)}`, getErrorStack(error));
-      throw error;
+      return rethrowJobError(error, job, () => this.worker);
     }
   }
 
