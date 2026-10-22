@@ -11,8 +11,8 @@ import {
   Res,
   UseGuards
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
-import { Job, Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fs from 'fs';
+import { withQueueJobId } from '../../job-queue/job-queue.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import {
@@ -69,6 +70,7 @@ export class DatabaseAdminController {
     const runningJobs = await this.databaseExportQueue.getJobs([
       'active',
       'waiting',
+      'prioritized',
       'delayed'
     ]);
 
@@ -80,9 +82,9 @@ export class DatabaseAdminController {
       );
     }
 
-    const job = await this.databaseExportQueue.add({
+    const job = await this.databaseExportQueue.add('database-export', {
       requestedByUserId: Number(req.user.id)
-    });
+    }, withQueueJobId());
 
     return {
       jobId: String(job.id),
@@ -115,7 +117,7 @@ export class DatabaseAdminController {
 
     const state = await job.getState();
     const status = this.mapJobState(state, job);
-    const progressValue = await job.progress();
+    const progressValue = job.progress;
     const progress = this.toNumericProgress(progressValue, status);
 
     return {

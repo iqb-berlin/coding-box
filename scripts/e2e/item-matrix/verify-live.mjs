@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
-import Bull from 'bull';
+import { Queue } from 'bullmq';
 import { parseString } from 'fast-csv';
 import AdmZip from 'adm-zip';
 
@@ -15,7 +15,7 @@ const issuer = 'http://127.0.0.1:18441/realms/codebook-proof';
 const output = path.resolve(process.env.ITEM_MATRIX_PROOF_DIR || 'dist/item-matrix-proof');
 const database = new pg.Client({ host: '127.0.0.1', port: 15441,
   user: 'codebook_test', password: 'disposable_test_only', database: 'codebook_test' });
-const queue = new Bull('data-export', { redis: { host: '127.0.0.1', port: 16441 }, prefix: 'item-matrix-proof' });
+const queue = new Queue('data-export', { connection: { host: '127.0.0.1', port: 16441 }, prefix: 'item-matrix-proof:bullmq' });
 const authentication = await fetch(`${issuer}/protocol/openid-connect/token`, {
   method: 'POST', body: new URLSearchParams({ grant_type: 'password', client_id: 'codebook-proof',
     username: 'codebook-proof-admin', password: 'disposable_test_only' })
@@ -53,9 +53,9 @@ async function archivedBytes(workspace, archiveId) {
   return Buffer.from(await (await request(`/admin/workspace/${workspace}/coding/export/item-matrix-diagnostics/${archiveId}/download`)).arrayBuffer());
 }
 async function assertJobAndCacheRemoved(jobId) {
-  assert.equal(await queue.getJob(jobId), null);
+  assert.equal(await queue.getJob(jobId), undefined);
   for (const key of ['item-matrix-diagnostics', 'item-matrix-incomplete-result', 'export-result']) {
-    assert.equal(await queue.client.get(`item-matrix-proof:cache:${key}:${jobId}`), null);
+    assert.equal(await (await queue.getBackend().client).runCommand('get', [`item-matrix-proof:cache:${key}:${jobId}`]), null);
   }
 }
 await database.connect();

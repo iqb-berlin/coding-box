@@ -7,6 +7,7 @@ import {
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import { requireJobId } from '../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
@@ -1259,7 +1260,7 @@ export class WorkspaceCodingExportController {
       );
 
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: `Export job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
@@ -1376,7 +1377,7 @@ export class WorkspaceCodingExportController {
       }
 
       const state = await job.getState();
-      const progress = this.toPublicExportProgress(await job.progress());
+      const progress = this.toPublicExportProgress(job.progress);
       const failedReason = job.failedReason;
       const status = this.mapExportJobState(state, job);
 
@@ -1695,10 +1696,10 @@ export class WorkspaceCodingExportController {
       return await Promise.all(
         jobs.map(async job => {
           const state = await job.getState();
-          const progress = this.toPublicExportProgress(await job.progress());
+          const progress = this.toPublicExportProgress(job.progress);
 
           return {
-            jobId: job.id.toString(),
+            jobId: requireJobId(job),
             status: this.mapExportJobState(state, job),
             ...progress,
             exportType: job.data.exportType,

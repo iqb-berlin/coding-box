@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { CodingProcessService } from '../database/services/coding/coding-process.service';
 import { WorkspaceCodingService } from '../database/services/workspace';
 import { AutocoderRunService } from './autocoder-run.service';
@@ -24,7 +24,8 @@ describe('AutocoderRunService', () => {
       autoCoderRun: 1
     },
     getState: jest.fn().mockResolvedValue('active'),
-    progress: jest.fn().mockResolvedValue(undefined),
+    progress: 0,
+    updateProgress: jest.fn().mockResolvedValue(undefined),
     queue: {
       getJob: jest.fn().mockResolvedValue({ data: { isPaused: false } })
     }
@@ -73,7 +74,8 @@ describe('AutocoderRunService', () => {
     };
     const service = new AutocoderRunService(
       codingProcessService as unknown as CodingProcessService,
-      workspaceCodingService as unknown as WorkspaceCodingService
+      workspaceCodingService as unknown as WorkspaceCodingService,
+      { getJob: jest.fn().mockResolvedValue({ data: { isPaused: false } }) } as never
     );
     return {
       service,

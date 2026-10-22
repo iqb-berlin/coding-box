@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { requireJobId } from '../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -245,7 +246,7 @@ export class WorkspaceCodingCodebookController {
       );
 
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: `Codebook generation job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
@@ -290,7 +291,7 @@ export class WorkspaceCodingCodebookController {
       }
 
       const state = await job.getState();
-      const progress = await job.progress();
+      const progress = job.progress;
       const failedReason = job.failedReason;
 
       let status: string;

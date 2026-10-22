@@ -70,7 +70,7 @@ export class WorkspaceTestResultsImportController {
       workspaceId,
       60000,
       {
-        jobId: `flat-response-filter-options:${workspaceId}:v${nextVersion}:thr60000`,
+        jobId: `flat-response-filter-options-${workspaceId}-v${nextVersion}-thr60000`,
         removeOnComplete: true,
         removeOnFail: true
       }
@@ -327,7 +327,7 @@ export class WorkspaceTestResultsImportController {
     }
 
     const state = await job.getState();
-    const progress = await job.progress();
+    const progress = job.progress;
     const result = job.returnvalue;
     const error = job.failedReason;
 

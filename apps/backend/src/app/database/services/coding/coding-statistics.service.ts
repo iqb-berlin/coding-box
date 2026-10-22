@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatistics } from '../shared';
@@ -370,7 +371,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       if (bullJob) {
         const state = await bullJob.getState();
-        const progress = (await bullJob.progress()) || 0;
+        const progress = (bullJob.progress) || 0;
 
         const status = this.bullJobManagementService.mapJobStateToStatus(state);
         const { result, error } =
@@ -416,7 +417,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
 
       const state = await bullJob.getState();
-      const progress = (await bullJob.progress()) || 0;
+      const progress = (bullJob.progress) || 0;
       const status = this.bullJobManagementService.mapJobStateToStatus(state);
       const { result, error } =
         this.bullJobManagementService.extractJobResult(bullJob, state);
@@ -483,7 +484,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           `Reusing active coding statistics job ${activeJob.id} for workspace ${workspaceId} (version: ${version})`
         );
         return {
-          jobId: activeJob.id.toString(),
+          jobId: requireJobId(activeJob),
           message: 'Using active coding statistics job'
         };
       }
@@ -502,7 +503,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         `Created coding statistics job ${job.id} for workspace ${workspaceId}`
       );
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: 'Created coding statistics job - no cache available'
       };
     } catch (error) {

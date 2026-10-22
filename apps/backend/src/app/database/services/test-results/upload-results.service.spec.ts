@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { createMock } from '@golevelup/ts-jest';
 import * as fs from 'fs';
 import * as path from 'path';

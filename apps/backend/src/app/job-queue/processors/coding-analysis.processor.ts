@@ -1,6 +1,6 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -33,8 +33,8 @@ import {
 
 const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
 
-@Processor('response-analysis')
-export class CodingAnalysisProcessor {
+@Processor('response-analysis', { concurrency: 1 })
+export class CodingAnalysisProcessor extends WorkerHost {
   private readonly logger = new Logger(CodingAnalysisProcessor.name);
 
   constructor(
@@ -45,7 +45,13 @@ export class CodingAnalysisProcessor {
     private emptyResponseSelectionService: EmptyResponseSelectionService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
-  ) { }
+  ) {
+    super();
+  }
+
+  process(job: Job<CodingAnalysisJobData>) {
+    return this.handleResponseAnalysis(job);
+  }
 
   private async getDefaultMirCode(workspaceId: number): Promise<number> {
     if (!this.missingsProfilesService) {
@@ -60,7 +66,6 @@ export class CodingAnalysisProcessor {
     return missing.code;
   }
 
-  @Process()
   async handleResponseAnalysis(job: Job<CodingAnalysisJobData>) {
     const {
       workspaceId, matchingFlags, threshold, cacheKey
@@ -207,7 +212,7 @@ export class CodingAnalysisProcessor {
         const processed = Math.min(i + chunkSize, relevantVariables.length);
         const progress = Math.round((processed / relevantVariables.length) * 100);
         if (job) {
-          await job.progress(progress);
+          await job.updateProgress(progress);
         }
         this.logger.log(`Processed ${processed}/${relevantVariables.length} variable groups...`);
         if (global.gc) { global.gc(); }

@@ -1,6 +1,6 @@
 import * as childProcess from 'child_process';
 import * as path from 'path';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
@@ -49,7 +49,8 @@ const createJob = (data: Partial<VariableAnalysisJobData> = {}) => ({
     cacheKey: 'variable-analysis:1:job-1',
     ...data
   },
-  progress: jest.fn().mockResolvedValue(undefined)
+  progress: 0,
+  updateProgress: jest.fn().mockResolvedValue(undefined)
 }) as unknown as Job<VariableAnalysisJobData>;
 
 const findCacheSetPayload = <T>(
