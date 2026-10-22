@@ -68,7 +68,9 @@
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
         "{workspaceRoot}/scripts/qa/**/*",
-        "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*"
+        "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*",
+        { "env": "BULLMQ_TEST_REDIS_HOST" },
+        { "env": "BULLMQ_TEST_REDIS_PORT" }
       ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",

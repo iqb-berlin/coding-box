@@ -113,7 +113,9 @@ both worker and Redis afterwards. A `redis-server` binary must be available on
 The runner does not connect to the application's Redis instance.
 
 Both backend CI gates provide disposable Redis and enable this suite using
-`BULLMQ_TEST_REDIS_HOST`/`BULLMQ_TEST_REDIS_PORT`. The tests cover persisted
+`BULLMQ_TEST_REDIS_HOST`/`BULLMQ_TEST_REDIS_PORT`. These variables participate in
+the Nx test cache key, so a local run that skipped Redis tests cannot satisfy a
+CI run with Redis enabled. The tests cover persisted
 progress/results, namespace isolation, pause, prioritized work, ownership,
 conflicts, cancellation and retries. The domain autocoder is mocked in these
 queue tests; PostgreSQL workflows remain covered by their existing gates.
