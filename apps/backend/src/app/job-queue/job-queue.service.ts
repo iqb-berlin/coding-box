@@ -24,10 +24,12 @@ type ProcessOverviewValidationTask = Pick<
 'id' | 'workspace_id' | 'validation_type' | 'status' | 'progress' | 'progress_message' | 'error'
 >;
 
+export type QueuedUploadFile = Omit<FileIo, 'buffer'> & { buffer?: Buffer };
+
 export interface TestResultsUploadJobData {
   workspaceId: number;
   requestedByUserId?: number;
-  file: FileIo;
+  file: QueuedUploadFile;
   resultType: 'logs' | 'responses';
   overwriteExisting: boolean;
   personMatchMode?: 'strict' | 'loose';
@@ -254,7 +256,7 @@ export class JobQueueService {
     private readonly validationTaskRepository: Repository<ValidationTask>
   ) { }
 
-  private getQueue(name: string): Queue {
+  private getQueue(name: string): Queue | undefined {
     return this.getAllQueues().get(name);
   }
 
@@ -602,6 +604,7 @@ export class JobQueueService {
     workspaceId: number
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
+    if (!queue) return undefined;
     const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
 
     if (queueName === 'validation-task') {
@@ -668,7 +671,7 @@ export class JobQueueService {
 
   async getTestPersonCodingJob(
     jobId: string
-  ): Promise<Job<TestPersonCodingJobData>> {
+  ): Promise<Job<TestPersonCodingJobData> | null> {
     return this.testPersonCodingQueue.getJob(jobId);
   }
 
@@ -720,7 +723,7 @@ export class JobQueueService {
 
   async getCodingStatisticsJob(
     jobId: string
-  ): Promise<Job<CodingStatisticsJobData>> {
+  ): Promise<Job<CodingStatisticsJobData> | null> {
     return this.codingStatisticsQueue.getJob(jobId);
   }
 
@@ -773,7 +776,7 @@ export class JobQueueService {
     }
   }
 
-  async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData>> {
+  async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData> | null> {
     return this.testResultsUploadQueue.getJob(jobId);
   }
 
@@ -872,7 +875,7 @@ export class JobQueueService {
     return this.dataExportQueue.add(data, options);
   }
 
-  async getExportJob(jobId: string): Promise<Job<ExportJobData>> {
+  async getExportJob(jobId: string): Promise<Job<ExportJobData> | null> {
     return this.dataExportQueue.getJob(jobId);
   }
 
@@ -1039,7 +1042,7 @@ export class JobQueueService {
 
   async getCodebookGenerationJob(
     jobId: string
-  ): Promise<Job<CodebookGenerationJobData>> {
+  ): Promise<Job<CodebookGenerationJobData> | null> {
     return this.codebookGenerationQueue.getJob(jobId);
   }
 
@@ -1066,7 +1069,7 @@ export class JobQueueService {
 
   async getResetCodingVersionJob(
     jobId: string
-  ): Promise<Job<ResetCodingVersionJobData>> {
+  ): Promise<Job<ResetCodingVersionJobData> | null> {
     return this.resetCodingVersionQueue.getJob(jobId);
   }
 
@@ -1089,7 +1092,7 @@ export class JobQueueService {
 
   async getValidationTaskJob(
     jobId: string
-  ): Promise<Job<ValidationTaskJobData>> {
+  ): Promise<Job<ValidationTaskJobData> | null> {
     return this.validationTaskQueue.getJob(jobId);
   }
 
@@ -1105,7 +1108,7 @@ export class JobQueueService {
 
   async getCodingAnalysisJob(
     jobId: string
-  ): Promise<Job<CodingAnalysisJobData>> {
+  ): Promise<Job<CodingAnalysisJobData> | null> {
     return this.responseAnalysisQueue.getJob(jobId);
   }
 
@@ -1138,7 +1141,7 @@ export class JobQueueService {
 
   async getVariableAnalysisJob(
     jobId: string
-  ): Promise<Job<VariableAnalysisJobData>> {
+  ): Promise<Job<VariableAnalysisJobData> | null> {
     return this.variableAnalysisQueue.getJob(jobId);
   }
 
@@ -1333,7 +1336,7 @@ export class JobQueueService {
 
   async getExternalCodingImportJob(
     jobId: string
-  ): Promise<Job<ExternalCodingImportJobData>> {
+  ): Promise<Job<ExternalCodingImportJobData> | null> {
     return this.externalCodingImportQueue.getJob(jobId);
   }
 }

@@ -51,14 +51,16 @@ export class DatabaseExportService {
     }
 
     const db = new sqlite3.Database(outputFilePath);
-    const dbRun = promisify(db.run.bind(db));
+    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
+      db.run(sql, values, error => (error ? reject(error) : resolve()));
+    });
     const dbClose = promisify(db.close.bind(db));
 
     try {
       await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
       await this.throwIfCancelled(isCancelled);
 
-      const tables = await this.dataSource.query(`
+      const tables: { table_name: string }[] = await this.dataSource.query(`
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
@@ -66,7 +68,7 @@ export class DatabaseExportService {
       `);
 
       const exportableTables = tables
-        .map(table => table.table_name as string)
+        .map(table => table.table_name)
         .filter(tableName => !tableName.startsWith('typeorm_') && tableName !== 'migrations');
 
       await this.throwIfCancelled(isCancelled);
@@ -100,7 +102,7 @@ export class DatabaseExportService {
         await this.throwIfCancelled(isCancelled);
         this.logger.log(`Processing table: ${tableName}`);
 
-        const columns = await this.dataSource.query(`
+        const columns: ExportTableColumn[] = await this.dataSource.query(`
           SELECT column_name, data_type, is_nullable
           FROM information_schema.columns
           WHERE table_name = $1 AND table_schema = 'public'
@@ -227,7 +229,9 @@ export class DatabaseExportService {
     }
 
     const db = new sqlite3.Database(outputFilePath);
-    const dbRun = promisify(db.run.bind(db));
+    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
+      db.run(sql, values, error => (error ? reject(error) : resolve()));
+    });
     const dbClose = promisify(db.close.bind(db));
     const queryRunner = this.dataSource.createQueryRunner();
 
@@ -492,7 +496,7 @@ export class DatabaseExportService {
     tableName: string,
     queryRunner?: QueryRunner
   ): Promise<string[]> {
-    const rows = await (queryRunner || this.dataSource).query(`
+    const rows: { column_name: string }[] = await (queryRunner || this.dataSource).query(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
       INNER JOIN information_schema.key_column_usage kcu

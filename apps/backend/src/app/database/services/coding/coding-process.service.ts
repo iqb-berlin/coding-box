@@ -1346,7 +1346,7 @@ export class CodingProcessService {
             validation = this.validateCodingSchemeForUnit(
               workspaceId,
               codingSchemeRef,
-              unitFileId,
+              unitFileId ?? undefined,
               unit,
               scheme,
               preflightManager
@@ -1428,8 +1428,8 @@ export class CodingProcessService {
             }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
-          const isArrayString = /^\[.*]$/.test(response.value);
-          if (isArrayString) {
+          const isArrayString = typeof response.value === 'string' && /^\[.*]$/.test(response.value);
+          if (isArrayString && response.value !== null) {
             try {
               responseValue = JSON.parse(response.value);
             } catch (e) {
@@ -1440,7 +1440,7 @@ export class CodingProcessService {
             id: String(response.variableid),
             value: responseValue,
             status: statusNumberToString(inputStatus) as AutocoderResponse['status'],
-            subform: response.subform,
+            subform: response.subform ?? undefined,
             code: inputCode,
             score: inputScore
           };
@@ -2602,8 +2602,8 @@ export class CodingProcessService {
         nextStatesByInput.set(inputKey, shouldRestoreTuple ? {
           ...currentInput,
           status: 'CODING_COMPLETE',
-          code: target.tuple.code ?? undefined,
-          score: target.tuple.score ?? undefined
+          code: target.tuple?.code ?? undefined,
+          score: target.tuple?.score ?? undefined
         } : {
           ...currentInput,
           value: recalculatedResult.value,
@@ -2867,7 +2867,7 @@ export class CodingProcessService {
   }
 
   private normalizeAutocoderStatus(status: string): string {
-    const nonCodingStatuses = [];
+    const nonCodingStatuses: string[] = [];
     if (nonCodingStatuses.includes(status)) {
       return 'NO_CODING';
     }

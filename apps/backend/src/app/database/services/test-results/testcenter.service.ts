@@ -1178,7 +1178,7 @@ export class TestcenterService {
         if (result.issues?.some(issue => issue.level === 'error')) {
           throw new Error('Antworten wurden nicht vollständig importiert. Die betroffene Gruppe kann bereits Teildaten enthalten.');
         }
-        result.completedSteps.push('responses');
+        result.completedSteps?.push('responses');
 
         try {
           const stats = await this.personService.getImportStatistics(
@@ -1209,7 +1209,7 @@ export class TestcenterService {
         if (logsIssues.some(issue => issue.level === 'error')) {
           throw new Error('Logs wurden nicht vollständig importiert. Bereits gespeicherte Antworten bleiben erhalten.');
         }
-        result.completedSteps.push('logs');
+        result.completedSteps?.push('logs');
 
         // Calculate log coverage statistics
         try {

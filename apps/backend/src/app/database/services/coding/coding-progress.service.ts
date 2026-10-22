@@ -1,7 +1,8 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, Repository
+  Brackets, In, Repository,
+  SelectQueryBuilder
 } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -701,7 +702,7 @@ export class CodingProgressService {
     if (manualPoolOnly) {
       query.andWhere(new Brackets(qb => {
         qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
+          .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
             const exists = subQuery
               .subQuery()
               .select('1')
@@ -763,7 +764,7 @@ export class CodingProgressService {
       .andWhere('coding_job.training_id IS NULL')
       .andWhere(new Brackets(qb => {
         qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
+          .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
             const exists = subQuery
               .subQuery()
               .select('1')
@@ -860,7 +861,7 @@ export class CodingProgressService {
       .andWhere('coding_job.training_id IS NULL')
       .andWhere(new Brackets(qb => {
         qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
+          .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
             const exists = subQuery
               .subQuery()
               .select('1')
@@ -1035,7 +1036,7 @@ export class CodingProgressService {
         // Exclude pre-processed responses (not in manual coding pool)
         .andWhere(new Brackets(qb => {
           qb.where('response.code_v2 IS NULL')
-            .orWhere(subQuery => {
+            .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
               const exists = subQuery
                 .subQuery()
                 .select('1')
@@ -1512,7 +1513,7 @@ export class CodingProgressService {
       })
       .andWhere(new Brackets(qb => {
         qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
+          .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
             const exists = subQuery
               .subQuery()
               .select('1')

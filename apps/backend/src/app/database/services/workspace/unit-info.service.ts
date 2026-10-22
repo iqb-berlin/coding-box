@@ -112,7 +112,9 @@ export class UnitInfoService {
    * Validate unit XML structure
    * @param result Parsed XML result
    */
-  private validateUnitStructure(result: { Unit: UnitElement }): void {
+  private validateUnitStructure(result: { Unit: UnitElement }): asserts result is {
+    Unit: UnitElement & { Metadata: [MetadataElement & { Id: string[]; Label: string[] }, ...MetadataElement[]] }
+  } {
     if (!result || !result.Unit) {
       throw new Error('Invalid unit XML: Missing Unit element');
     }
@@ -132,7 +134,7 @@ export class UnitInfoService {
     }
 
     // Validate definition (required by schema)
-    if (!result.Unit.Definition && !result.Unit.DefinitionRef) {
+    if (!result.Unit.Definition?.length && !result.Unit.DefinitionRef?.length) {
       throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
     }
   }
@@ -142,7 +144,7 @@ export class UnitInfoService {
    * @param element Definition or DefinitionRef element
    * @param elementType Type of element ('Definition' or 'DefinitionRef')
    */
-  private validateDefinitionElement(element: XmlElement, elementType: string): void {
+  private validateDefinitionElement(element: XmlElement, elementType: string): asserts element is XmlElement & { $: XmlAttributes } {
     if (!element.$ || !element.$.player) {
       throw new Error(`Invalid unit XML: Missing required player attribute in ${elementType}`);
     }
@@ -152,7 +154,7 @@ export class UnitInfoService {
    * Validate coding scheme reference element
    * @param element CodingSchemeRef element
    */
-  private validateCodingSchemeElement(element: XmlElement): void {
+  private validateCodingSchemeElement(element: XmlElement): asserts element is XmlElement & { $: XmlAttributes } {
     // For legacy/external units we treat the schemer attribute as optional.
     // Only enforce that the element at least has an attributes object.
     if (!element.$) {
@@ -234,6 +236,8 @@ export class UnitInfoService {
         if (definitionRefElement.$.lastChange) {
           definition.lastChange = new Date(definitionRefElement.$.lastChange as string);
         }
+      } else {
+        throw new Error('Invalid unit XML: Missing Definition or DefinitionRef element');
       }
 
       let codingSchemeRef: UnitCodingSchemeRefDto | undefined;
@@ -324,7 +328,8 @@ export class UnitInfoService {
               variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
 
               if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
-                variable.values = [];
+                const variableValues: UnitVariableValueDto[] = [];
+                variable.values = variableValues;
                 valuesElement.Value.forEach((valueElement: ValueElement) => {
                   if (!valueElement.label || !valueElement.value ||
                       !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
@@ -335,7 +340,7 @@ export class UnitInfoService {
                     label: valueElement.label[0] as string || '',
                     value: valueElement.value[0] as string || ''
                   };
-                  variable.values.push(value);
+                  variableValues.push(value);
                 });
               }
             }
@@ -383,7 +388,8 @@ export class UnitInfoService {
               variable.valuesComplete = valuesElement.$ && valuesElement.$.complete === 'true';
 
               if (valuesElement.Value && Array.isArray(valuesElement.Value)) {
-                variable.values = [];
+                const variableValues: UnitVariableValueDto[] = [];
+                variable.values = variableValues;
                 valuesElement.Value.forEach((valueElement: ValueElement) => {
                   if (!valueElement.label || !valueElement.value ||
                       !Array.isArray(valueElement.label) || !Array.isArray(valueElement.value)) {
@@ -394,7 +400,7 @@ export class UnitInfoService {
                     label: valueElement.label[0] as string || '',
                     value: valueElement.value[0] as string || ''
                   };
-                  variable.values.push(value);
+                  variableValues.push(value);
                 });
               }
             }

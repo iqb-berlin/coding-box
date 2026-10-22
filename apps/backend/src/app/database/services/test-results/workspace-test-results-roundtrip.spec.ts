@@ -161,7 +161,7 @@ describe('test results export/import roundtrip', () => {
       id: 50,
       ts: 111,
       key: 'BOOKLET',
-      parameter: 'started',
+      parameter: 'started-null',
       groupname: 'group-a',
       loginname: 'login-a',
       code: 'code-a',
@@ -412,6 +412,9 @@ describe('test results export/import roundtrip', () => {
     const logsCsv = await collectStream(stream => (
       exportService.exportTestLogsToStream(workspaceId, stream)
     ));
+    // The raw log format must retain literal null text without synthetic quote markers.
+    expect(logsCsv).toContain('BOOKLET : started-null');
+    expect(logsCsv).not.toContain('nullnull');
     expect(logsCsv).toContain('LOADCOMPLETE : {browserVersion:149.0,browserName:Firefox');
     await processCsv(uploadService, logsCsv, 'logs');
 
@@ -419,7 +422,7 @@ describe('test results export/import roundtrip', () => {
     const logUnit = logBooklet.units[0];
     expect(logBooklet.logs[0]).toMatchObject({
       key: 'BOOKLET',
-      parameter: 'started',
+      parameter: 'started-null',
       ts: '111'
     });
     expect(logUnit.id).toBe('unit-visible-id');

@@ -1,10 +1,10 @@
+import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../error.util';
 /* eslint-disable no-console */
 
-import * as fs from 'fs';
 import { extractVariableLocation } from './extractVariableLocation';
-import { getErrorMessage, getErrorStack } from '../error.util';
 
-function inspectVoudFile(filePathOrContent) {
+function inspectVoudFile(filePathOrContent: string) {
   try {
     let content;
 

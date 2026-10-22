@@ -1,3 +1,4 @@
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import {
   forwardRef,
   Inject,
@@ -164,6 +165,16 @@ export class WorkspaceFilesService implements OnModuleInit {
   private readonly unitVariableCacheVersion = 'v2';
 
   private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
+
+  private toFileWriteData(file: FileUpload): QueryDeepPartialEntity<FileUpload> {
+    const { structured_data: structuredData, ...columns } = file;
+    return {
+      ...columns,
+      // PostgreSQL serializes jsonb as one value. TypeORM's deep partial type
+      // instead treats its arbitrary JSON keys as nested entity properties.
+      structured_data: structuredData as QueryDeepPartialEntity<StructuredFileData>
+    };
+  }
 
   private getCacheKey(workspaceId: number, type: string): string {
     return `workspace_files:${this.unitVariableCacheVersion}:${type}:${workspaceId}`;
@@ -1692,7 +1703,8 @@ ${bookletRefs}
         null;
       const resolvedFileId =
         fileType === 'TestTakers' ? fileId || file.originalname : fileId;
-      const resolvedFileIdNormalized = (resolvedFileId || '').toUpperCase();
+      if (!resolvedFileId) throw new Error('File metadata must contain an ID');
+      const resolvedFileIdNormalized = resolvedFileId.toUpperCase();
 
       const existingFile = await fileUploadRepository.findOne({
         where: { file_id: resolvedFileId, workspace_id: workspaceId }
@@ -1789,7 +1801,7 @@ ${bookletRefs}
       const metaDataElement = playerContent(
         'script[type="application/ld+json"]'
       );
-      let metadata = {};
+      let metadata: Record<string, unknown> = {};
 
       try {
         metadata = JSON.parse(metaDataElement.text());
@@ -2043,7 +2055,7 @@ ${bookletRefs}
 
       this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
-      await fileUploadRepository.upsert(fileUpload, [
+      await fileUploadRepository.upsert(this.toFileWriteData(fileUpload), [
         'file_id',
         'workspace_id'
       ]);
@@ -2149,7 +2161,7 @@ ${bookletRefs}
         (agg, response) => {
           const key = [response.test_person, response.unit_id].join('@@@@@@');
           if (agg[key]) {
-            if (!agg[key].responses.length && response.responses.length) {
+            if (!agg[key].responses?.length && response.responses?.length) {
               agg[key].responses = response.responses;
             }
             if (
@@ -2282,10 +2294,10 @@ ${bookletRefs}
       const shouldOverwrite = (fileId: string): boolean => !!fileId && overwriteIdSet.has(fileId);
 
       const insertableFiles = attemptedFiles.filter(
-        f => !conflictIds.has(f.fileId)
+        f => !conflictIds.has(f.fileId ?? '')
       );
       const overwriteFiles = attemptedFiles.filter(
-        f => conflictIds.has(f.fileId) && shouldOverwrite(f.fileId)
+        f => conflictIds.has(f.fileId ?? '') && shouldOverwrite(f.fileId ?? '')
       );
       const remainingConflicts = conflicts.filter(
         c => !shouldOverwrite(c.fileId)
@@ -2312,7 +2324,7 @@ ${bookletRefs}
           .createQueryBuilder()
           .insert()
           .into(FileUpload)
-          .values(registry)
+          .values(registry.map(entry => this.toFileWriteData(entry)))
           .orIgnore()
           .execute();
       }
@@ -2324,7 +2336,7 @@ ${bookletRefs}
         }))
       );
       if (overwriteRegistry.length > 0) {
-        await fileUploadRepository.upsert(overwriteRegistry, [
+        await fileUploadRepository.upsert(overwriteRegistry.map(entry => this.toFileWriteData(entry)), [
           'file_id',
           'workspace_id'
         ]);

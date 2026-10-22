@@ -61,9 +61,11 @@ export class CodingJobDto {
   @ApiProperty({
     description: 'Comment for the coding job',
     example: 'This coding job requires special attention',
+    type: String,
+    nullable: true,
     required: false
   })
-  comment?: string;
+  comment?: string | null;
 
   @ApiProperty({
     description: 'Whether scores are shown in the code selector',

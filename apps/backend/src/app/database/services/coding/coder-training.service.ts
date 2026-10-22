@@ -75,7 +75,7 @@ interface CoderTrainingResponse {
   unitAlias: string;
   variableId: string;
   unitName: string;
-  value: string;
+  value: string | null;
   personLogin: string;
   personCode: string;
   personGroup: string;
@@ -106,7 +106,9 @@ interface CoderTrainingWithJobs {
   updated_at: Date;
   jobsCount: number;
   assigned_variables?: JobDefinitionVariable[];
-  assigned_variable_bundles?: JobDefinitionVariableBundle[];
+  assigned_variable_bundles?: Array<Omit<JobDefinitionVariableBundle, 'caseOrderingMode'> & {
+    caseOrderingMode?: 'continuous' | 'alternating' | null;
+  }>;
   assigned_coders?: number[];
   case_ordering_mode?: 'continuous' | 'alternating';
   case_selection_mode?: string;
@@ -534,7 +536,7 @@ export class CoderTrainingService {
     const mirCode = mirMissing?.code ?? fallback?.mirCode;
     const mciCode = mciMissing?.code ?? fallback?.mciCode;
 
-    if (!Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
+    if (mirCode === undefined || mciCode === undefined || !Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
       throw new BadRequestException('Missing profile must define MIR and MCI codes');
     }
 
@@ -2359,7 +2361,7 @@ export class CoderTrainingService {
     responseId: number,
     code: number,
     exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
-  ): Promise<number> {
+  ): Promise<number | null> {
     const profileId = await this.resolveMissingProfileIdForResponse(
       workspaceId,
       training,
@@ -2374,7 +2376,7 @@ export class CoderTrainingService {
     workspaceId: number,
     profileId: number | null,
     code: number
-  ): Promise<number> {
+  ): Promise<number | null> {
     try {
       return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
         workspaceId,
@@ -3184,7 +3186,7 @@ export class CoderTrainingService {
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
-        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
         this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
         if (assignedVariableBundles && assignedVariableBundles.length > 0) {
           const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);

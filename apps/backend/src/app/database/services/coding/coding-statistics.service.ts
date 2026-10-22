@@ -113,7 +113,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
     const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
-    const result = await this.responseRepository.query(`
+    const result: { workspace_id: number | string }[] = await this.responseRepository.query(`
       SELECT DISTINCT person.workspace_id
       FROM response
       INNER JOIN unit ON response.unitid = unit.id
@@ -123,7 +123,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         AND person.consider = $2
     `, [codedStatuses, true]);
 
-    return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
+    return result.map(row => Number(row.workspace_id)).filter(id => !Number.isNaN(id));
   }
 
   async getCodingStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
@@ -138,7 +138,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
     }
 
-    const statistics: CodingStatistics = {
+    const statistics: CodingStatistics & Required<Pick<CodingStatistics, 'baseResponseCount' | 'derivedResponseCount' | 'derivedStatusCounts'>> = {
       totalResponses: 0,
       baseResponseCount: 0,
       derivedResponseCount: 0,
@@ -223,7 +223,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         whereCondition += ` AND (${conditions})`;
       }
 
-      const statusCountResults = await this.responseRepository.query(`
+      const statusCountResults: { statusValue: string | number; isDerived: boolean | string; count: string }[] = await this.responseRepository.query(`
         SELECT
           ${statusColumn} as "statusValue",
           ${derivedExpression} as "isDerived",

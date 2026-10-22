@@ -450,7 +450,7 @@ export class WsgCodingJobController {
       )
       ),
       total: result.total,
-      totalOpenUnits: result.totalOpenUnits,
+      totalOpenUnits: result.totalOpenUnits ?? 0,
       page: result.page,
       limit: result.limit
     };

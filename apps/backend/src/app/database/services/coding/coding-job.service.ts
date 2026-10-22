@@ -511,7 +511,7 @@ export class CodingJobService {
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
+      maxCodingCases?: number | null;
       distributionSeed?: string | number;
     }
   ): Promise<{

@@ -419,7 +419,7 @@ export class CoderTrainingResultsApplyService {
       })
       .getRawMany<{ id: number | string }>();
 
-    return new Set(rows.map(row => Number(row.id)));
+    return new Set(rows.map((row: Record<string, unknown>) => Number(row.id)));
   }
 
   private async getProductiveJobConflicts(
@@ -462,7 +462,7 @@ export class CoderTrainingResultsApplyService {
       [workspaceId, responseIds]
     );
 
-    return rows.map(row => ({
+    return rows.map((row: Record<string, unknown>) => ({
       jobUnitId: Number(row.jobUnitId),
       responseId: Number(row.responseId),
       jobId: Number(row.jobId),

@@ -200,16 +200,8 @@ export class WorkspaceFilesContentController {
       );
     }
 
-    try {
-      return await this.workspaceFilesService.getCodingSchemeByRef(
-        workspace_id,
-        coding_scheme_ref
-      );
-    } catch (error) {
-      if (error.status === 404) {
-        throw error;
-      }
-      throw error;
-    }
+    const file = await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
+    if (!file) throw new NotFoundException('Coding scheme not found');
+    return file;
   }
 }

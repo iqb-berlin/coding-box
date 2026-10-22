@@ -809,8 +809,8 @@ export class ResponseManagementService {
       let affectedUnitId: number | null = null;
       return this.connection.transaction(async manager => {
         const report = {
-          deletedResponse: null,
-          warnings: []
+          deletedResponse: null as number | null,
+          warnings: [] as string[]
         };
 
         const response = await manager

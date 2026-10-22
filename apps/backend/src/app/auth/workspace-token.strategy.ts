@@ -34,7 +34,7 @@ export class WorkspaceTokenStrategy extends PassportStrategy(Strategy, WORKSPACE
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get('JWT_SECRET'),
+      secretOrKey: configService.get<string>('JWT_SECRET') ?? '',
       algorithms: ['HS256']
     });
 

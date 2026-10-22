@@ -476,7 +476,7 @@ export class ExternalCodingImportService {
                 this.logger.debug(`Validation result: status=${validation.validatedStatus}, score=${validation.validatedScore}, isValid=${validation.validatedStatus === 'CODING_COMPLETE'}`);
 
                 affectedRows.push({
-                  unitAlias: response.unit?.alias || unitAlias,
+                  unitAlias: response.unit?.alias || unitAlias || '',
                   variableId,
                   personCode: responsePersonCode,
                   personLogin: responsePersonLogin,
@@ -1095,7 +1095,7 @@ export class ExternalCodingImportService {
       }
 
       // Check if the code exists in the variable's codes
-      const codeDefinition = variableCoding.codes.find(c => c.id === code);
+      const codeDefinition = variableCoding.codes?.find(c => c.id === code);
 
       if (!codeDefinition) {
         // Code not found in coding scheme, leave as CODING_INCOMPLETE
@@ -1218,7 +1218,7 @@ export class ExternalCodingImportService {
       let rowCount = 0;
 
       fastCsv.parseString(csvText, {
-        headers: (headers: string[]) => headers.map(header => this.normalizeHeader(header)),
+        headers: headers => headers.map(header => this.normalizeHeader(header ?? '')),
         delimiter
       })
         .on('error', error => reject(error))

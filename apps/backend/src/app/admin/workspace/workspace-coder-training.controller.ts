@@ -350,7 +350,7 @@ export class WorkspaceCoderTrainingController {
           unitAlias: string;
           variableId: string;
           unitName: string;
-          value: string;
+          value: string | null;
           personLogin: string;
           personCode: string;
           personGroup: string;

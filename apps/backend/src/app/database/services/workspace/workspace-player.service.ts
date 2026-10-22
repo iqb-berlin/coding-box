@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, FindOptionsWhere } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
@@ -390,7 +390,7 @@ export class WorkspacePlayerService {
       return null;
     }
 
-    const personWhere: Partial<Persons> = {
+    const personWhere: FindOptionsWhere<Persons> = {
       login: parsedTestPerson.login,
       code: parsedTestPerson.code,
       workspace_id: workspaceId,

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  Brackets, Repository, SelectQueryBuilder, ObjectLiteral
+} from 'typeorm';
 import { getErrorMessage } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -35,7 +37,7 @@ export class PersonQueryService {
   ) {}
 
   private applyIgnoredBookletsToQuery(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     ignoredBooklets: string[],
     bookletInfoAlias = 'bookletinfo'
   ): void {
@@ -47,14 +49,14 @@ export class PersonQueryService {
   }
 
   private applyExclusionsToQuery(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     exclusions: ResolvedWorkspaceExclusions
   ): void {
     applyResolvedExclusionsToQuery(qb, exclusions);
   }
 
   private excludeAutocoderGeneratedResponses(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     responseAlias = 'response'
   ): void {
     qb.andWhere(`${responseAlias}.is_autocoder_generated IS NOT TRUE`);
