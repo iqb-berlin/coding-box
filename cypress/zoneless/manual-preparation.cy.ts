@@ -250,7 +250,9 @@ describe('Zoneless manual preparation workflows', () => {
       expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
       request.addEventListener('abort', () => { referenceAborts += 1; });
     });
-    cy.get('@training').find('.close-button').click();
+    // The fixed modal is already visible. Auto-scrolling its ancestors can put
+    // the close button behind the workspace tabs in the CI browser viewport.
+    cy.get('@training').find('.close-button').should('be.visible').click({ scrollBehavior: false });
     cy.get('coding-box-coder-training').should('not.exist');
     cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
@@ -258,7 +260,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');
-    cy.get('@training').find('.close-button').click();
+    cy.get('@training').find('.close-button').should('be.visible').click({ scrollBehavior: false });
   });
 
   for (const role of [{ name: 'coding manager', level: 2 }, { name: 'study manager', level: 3 }]) {
