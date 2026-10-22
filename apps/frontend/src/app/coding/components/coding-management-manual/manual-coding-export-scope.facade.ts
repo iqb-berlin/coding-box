@@ -18,8 +18,10 @@ export class ManualCodingExportScopeFacade {
   private readonly coderService = inject(CoderService);
   private definitionsRequest?: Subscription;
   private codersRequest?: Subscription;
-  readonly coders = signal<Coder[]>([]);
-  readonly isLoadingCodersForExport = signal(false);
+  private readonly codersState = signal<Coder[]>([]);
+  private readonly codersLoadingState = signal(false);
+  readonly coders = this.codersState.asReadonly();
+  readonly isLoadingCodersForExport = this.codersLoadingState.asReadonly();
   private codersForExportWorkspaceId?: number;
   private hasLoadedCodersForExport = false;
   private jobDefinitionsForExport: JobDefinition[] = [];
@@ -35,13 +37,13 @@ export class ManualCodingExportScopeFacade {
       this.definitionsRequest?.unsubscribe();
       this.codersRequest?.unsubscribe();
       this.jobDefinitionsForExport = [];
-      this.coders.set([]);
+      this.codersState.set([]);
       this.jobDefinitionsForExportWorkspaceId = undefined;
       this.codersForExportWorkspaceId = undefined;
       this.hasLoadedJobDefinitionsForExport = false;
       this.hasLoadedCodersForExport = false;
       this.isLoadingJobDefinitionsForExport = false;
-      this.isLoadingCodersForExport.set(false);
+      this.codersLoadingState.set(false);
     });
   }
 
@@ -118,26 +120,26 @@ export class ManualCodingExportScopeFacade {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.coders.set([]);
+      this.codersState.set([]);
       this.codersForExportWorkspaceId = undefined;
       this.hasLoadedCodersForExport = false;
-      this.isLoadingCodersForExport.set(false);
+      this.codersLoadingState.set(false);
       return;
     }
 
     if (this.codersForExportWorkspaceId !== workspaceId) {
-      this.coders.set([]);
+      this.codersState.set([]);
       this.hasLoadedCodersForExport = false;
       this.codersForExportWorkspaceId = workspaceId;
     }
 
     this.codersRequest?.unsubscribe();
-    this.isLoadingCodersForExport.set(true);
+    this.codersLoadingState.set(true);
     this.codersRequest = this.coderService.getCodersForExport()
       .pipe(
         takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => {
           if (this.codersForExportWorkspaceId === workspaceId) {
-            this.isLoadingCodersForExport.set(false);
+            this.codersLoadingState.set(false);
           }
         })
       )
@@ -147,7 +149,7 @@ export class ManualCodingExportScopeFacade {
             return;
           }
 
-          this.coders.set(coders);
+          this.codersState.set(coders);
           this.codersForExportWorkspaceId = workspaceId;
           this.hasLoadedCodersForExport = true;
         },
@@ -156,7 +158,7 @@ export class ManualCodingExportScopeFacade {
             return;
           }
 
-          this.coders.set([]);
+          this.codersState.set([]);
           this.codersForExportWorkspaceId = workspaceId;
           this.hasLoadedCodersForExport = false;
         }

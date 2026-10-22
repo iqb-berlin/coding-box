@@ -3138,7 +3138,7 @@ describe('CodingManagementManualComponent', () => {
     const dialog = { open: jest.fn() };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      isLoadingCodersForExport: WritableSignal<boolean>;
+      isLoadingCodersForExport: () => boolean;
       appService: {
         selectedWorkspaceId: number;
       };
@@ -3154,7 +3154,7 @@ describe('CodingManagementManualComponent', () => {
       }
     ]);
     jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'ensureDefinitionsReady').mockReturnValue(true);
-    componentInternals.isLoadingCodersForExport.set(false);
+    expect(componentInternals.isLoadingCodersForExport()).toBe(false);
     jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionExport();
