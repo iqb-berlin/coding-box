@@ -46,6 +46,19 @@ business operations can be drained without interruption.
 Replay overrides whose required values become empty after trimming return
 HTTP 400 before persistence. Historical invalid entries remain ignored on read.
 
+## Authentication request validation
+
+The `auth/token`, `auth/validate`, `auth/exchange`, `auth/refresh` and `auth/logout`
+POST routes use named shared contracts for their TypeScript input, AJV validation
+and OpenAPI schemas. Required strings must be non-empty; exchange requests require
+a 43-character base64url browser verifier. Unknown fields and malformed or absent
+bodies receive HTTP 400 before authentication services or the provider are called.
+
+Client-credentials and token-validation provider calls use a ten-second timeout.
+Invalid credentials remain HTTP 401; network/server failures and invalid provider
+responses receive HTTP 503 with safe error codes and request IDs. Provider payloads
+and credentials are not included in diagnostics.
+
 ## Strict diagnostics
 
 `npx nx run backend:typecheck` checks the production TypeScript program in strict

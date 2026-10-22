@@ -9,6 +9,8 @@ export interface RequestSchema {
   additionalProperties?: boolean | RequestSchema;
   minimum?: number;
   maximum?: number;
+  minLength?: number;
+  pattern?: string;
 }
 
 export const string = { type: 'string' } as const;

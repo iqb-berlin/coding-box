@@ -5,10 +5,11 @@ describe('Backend OIDC callback', () => {
     const token = `${encode({ alg: 'RS256', typ: 'JWT' })}.${encode({
       sub: 'oidc-user', preferred_username: 'OIDC User', exp: Math.floor(Date.now() / 1000) + 3600
     })}.signature`;
+    const browserVerifier = 'V'.repeat(43);
     cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.intercept('POST', '**/api/auth/exchange', request => {
-      expect(request.body).to.deep.equal({ code: 'login-code', browser_verifier: 'browser-verifier' });
+      expect(request.body).to.deep.equal({ code: 'login-code', browser_verifier: browserVerifier });
       request.reply({ access_token: token, refresh_token: 'refresh-token', token_type: 'Bearer', expires_in: 3600 });
     }).as('exchange');
     cy.intercept('GET', '**/api/auth-data?identity=oidc-user', request => {
@@ -21,7 +22,7 @@ describe('Backend OIDC callback', () => {
 
     cy.visit('/?auth_code=login-code', {
       onBeforeLoad(win) {
-        win.sessionStorage.setItem('oidc_login_verifier', 'browser-verifier');
+        win.sessionStorage.setItem('oidc_login_verifier', browserVerifier);
       }
     });
     cy.wait('@exchange');
