@@ -1,5 +1,6 @@
 import { defineConfig } from 'cypress';
 import { loadAspectPlayer } from './cypress/support/aspect-player-task.cjs';
+import { createDeferredResponses } from './cypress/support/deferred-response-task.cjs';
 
 function requireExecutedSpec(on: Cypress.PluginEvents): void {
   on('after:spec', (spec, results) => {
@@ -52,6 +53,13 @@ export default defineConfig({
   e2e: {
     setupNodeEvents(on) {
       requireExecutedSpec(on);
+      const responses = createDeferredResponses();
+      on('task', {
+        'deferred:create': responses.create,
+        'deferred:release': responses.release,
+        'deferred:reset': responses.reset
+      });
+      on('after:run', responses.reset);
     },
     baseUrl: 'http://localhost:4200',
     specPattern: ['cypress/e2e/**/*.cy.ts', 'cypress/zoneless/**/*.cy.ts'],
