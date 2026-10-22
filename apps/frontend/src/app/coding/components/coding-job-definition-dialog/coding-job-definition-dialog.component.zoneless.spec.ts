@@ -47,7 +47,7 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
         { provide: MatDialog, useValue: { open: jest.fn() } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: TranslateService, useValue: { instant: (key: string) => key } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1, needsReAuthentication: false } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>(), needsReAuthentication: false } },
         {
           provide: CodingJobBackendService,
           useValue: {

@@ -25,6 +25,7 @@ describe('ManualCodingExportFacade', () => {
   it('waits for a decision and prevents duplicate startups throughout confirmation', () => {
     const host = TestBed.createComponent(ExportHost);
     const facade = host.componentInstance.exports;
+    expect(Reflect.get(facade.isStarting, 'set')).toBeUndefined();
     const decision = new Subject<ManualExportDecision>();
     const choose = jest.fn(() => decision);
     facade.start(5, config, choose).subscribe();
