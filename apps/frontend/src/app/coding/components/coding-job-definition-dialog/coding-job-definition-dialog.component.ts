@@ -30,9 +30,10 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionChange, SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
 import {
-  catchError, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
-  switchMap, takeUntil, timer
+  catchError, defer, EMPTY, finalize, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
+  switchMap, takeUntil, tap, timer
 } from 'rxjs';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import {
   CodingWorkload, CodingWorkloadInput, DistributionPreviewSummary, WorkloadVariable
 } from './coding-workload';
@@ -315,6 +316,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   // Form and SelectionModel events invalidate one shared, memoized calculation.
   private readonly workloadRevision = signal(0);
   private readonly durationRevision = signal(0);
+  private variableLoadRequestId = 0;
+  private readonly variableLoadRequests = new Subject<{
+    workspaceId: number;
+    unitName?: string;
+    trainingRequired?: boolean;
+    includeDeriveError?: boolean;
+    preloadedVariables?: Variable[];
+  }>();
+
   private readonly estimatedVariableCaseCounts = computed(() => {
     this.workloadRevision();
     return this.getSelectedDistributionVariableCaseCountsAfterLimit();
@@ -332,6 +342,60 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly existingJobDefinitions = signal<JobDefinition[]>([]);
   protected readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
   readonly includeDeriveErrorInManualCoding = signal(false);
+
+  constructor() {
+    // A new filter replaces both queries, including an outstanding scope summary.
+    this.variableLoadRequests.pipe(
+      switchMap(request => defer(() => {
+        this.variableLoadRequestId += 1;
+        const requestId = this.variableLoadRequestId;
+        this.isLoadingVariableAnalysis.set(true);
+        if (!request.workspaceId) {
+          this.manualCodingScopeSummary.set(null);
+          this.finishVariableLoad();
+          this.isLoadingVariableAnalysis.set(false);
+          return EMPTY;
+        }
+        const variables: Observable<Variable[]> = request.preloadedVariables ? of(request.preloadedVariables) :
+          defer(() => this.codingJobBackendService.getCodingIncompleteVariables(
+            request.workspaceId,
+            request.unitName,
+            request.trainingRequired,
+            request.includeDeriveError,
+            this.data.mode === 'definition' && this.data.isEdit ? this.data.jobDefinitionId : undefined
+          ));
+        const summary = defer(() => this.codingJobBackendService.getManualCodingScopeSummary(
+          request.workspaceId, request.unitName, request.trainingRequired
+        )).pipe(
+          tap(value => this.manualCodingScopeSummary.set(value)),
+          catchError(() => { this.manualCodingScopeSummary.set(null); return EMPTY; })
+        );
+        return merge(summary, variables.pipe(
+          tap(value => {
+            this.variables.set(value);
+            this.snapshotBaseAvailability(value);
+            this.applyJobDefinitionUsage();
+            this.applyAvailabilityFilter();
+            this.processVariableSelection();
+            this.totalVariableAnalysisRecords.set(value.length);
+            this.isLoadingVariableAnalysis.set(false);
+            this.finishVariableLoad();
+          }),
+          catchError(() => { this.finishVariableLoad(); return EMPTY; }),
+          finalize(() => {
+            // Recovery can start another load before synchronous preloaded rows finish.
+            if (requestId === this.variableLoadRequestId) this.isLoadingVariableAnalysis.set(false);
+          })
+        )).pipe(takeUntilWorkspaceChanged(this.appService, request.workspaceId));
+      })),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe();
+  }
+
+  private finishVariableLoad(): void {
+    this.variablesLoadedForRecovery = true;
+    this.restoreDefinitionRecoveryDraft();
+  }
 
   ngOnInit(): void {
     if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined && this.data.codingJob.doubleCodingAbsolute > 0) {
@@ -1005,85 +1069,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       });
   }
 
-  loadCodingIncompleteVariables(unitNameFilter?: string, forceReload: boolean = false): void {
-    this.isLoadingVariableAnalysis.set(true);
+  loadCodingIncompleteVariables(unitNameFilter?: string, forceReload = false): void {
     const trainingRequired = this.trainingRequiredFilter() === 'all' ? undefined : this.trainingRequiredFilter() === 'true';
-
-    if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
-      this.variables.set(this.data.preloadedVariables);
-      this.loadManualCodingScopeSummary(undefined, undefined);
-      this.snapshotBaseAvailability(this.variables());
-      this.applyJobDefinitionUsage();
-      this.applyAvailabilityFilter();
-      this.processVariableSelection();
-      this.totalVariableAnalysisRecords.set(this.variables().length);
-      this.isLoadingVariableAnalysis.set(false);
-      this.variablesLoadedForRecovery = true;
-      this.restoreDefinitionRecoveryDraft();
-
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.isLoadingVariableAnalysis.set(false);
-      this.variablesLoadedForRecovery = true;
-      this.restoreDefinitionRecoveryDraft();
-      return;
-    }
-
-    this.loadManualCodingScopeSummary(unitNameFilter || undefined, trainingRequired);
-    const excludeJobDefinitionId = this.data.mode === 'definition' &&
-      this.data.isEdit ?
-      this.data.jobDefinitionId :
-      undefined;
-    this.codingJobBackendService.getCodingIncompleteVariables(
-      workspaceId,
-      unitNameFilter || undefined,
+    this.variableLoadRequests.next({
+      workspaceId: this.appService.selectedWorkspaceId,
+      unitName: unitNameFilter || undefined,
       trainingRequired,
-      this.includeDeriveErrorInManualCoding() ? true : undefined,
-      excludeJobDefinitionId
-    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: variables => {
-        this.variables.set(variables);
-        this.snapshotBaseAvailability(this.variables());
-        this.applyJobDefinitionUsage();
-        this.applyAvailabilityFilter();
-        this.processVariableSelection();
-        this.totalVariableAnalysisRecords.set(variables.length);
-        this.isLoadingVariableAnalysis.set(false);
-        this.variablesLoadedForRecovery = true;
-        this.restoreDefinitionRecoveryDraft();
-      },
-      error: () => {
-        this.isLoadingVariableAnalysis.set(false);
-        this.variablesLoadedForRecovery = true;
-        this.restoreDefinitionRecoveryDraft();
-      }
-    });
-  }
-
-  private loadManualCodingScopeSummary(
-    unitNameFilter?: string,
-    trainingRequired?: boolean
-  ): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.manualCodingScopeSummary.set(null);
-      return;
-    }
-
-    this.codingJobBackendService.getManualCodingScopeSummary(
-      workspaceId,
-      unitNameFilter,
-      trainingRequired
-    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: summary => {
-        this.manualCodingScopeSummary.set(summary);
-      },
-      error: () => {
-        this.manualCodingScopeSummary.set(null);
-      }
+      includeDeriveError: this.includeDeriveErrorInManualCoding() ? true : undefined,
+      preloadedVariables: !forceReload && !unitNameFilter && trainingRequired === undefined ?
+        this.data.preloadedVariables : undefined
     });
   }
 
