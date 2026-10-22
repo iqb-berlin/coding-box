@@ -33,6 +33,9 @@ import {
   catchError, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
   switchMap, takeUntil, timer
 } from 'rxjs';
+import {
+  CodingWorkload, CodingWorkloadInput, DistributionPreviewSummary, WorkloadVariable
+} from './coding-workload';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import {
   CodingJob,
@@ -172,39 +175,6 @@ interface CreationResults {
     jobName: string;
     caseCount: number;
   }[];
-}
-
-interface EstimatedDistributionGroup {
-  variableKey: string;
-  remaining: number;
-}
-
-interface EstimatedDistributionItem {
-  groups: EstimatedDistributionGroup[];
-  nextGroupIndex: number;
-  remaining: number;
-}
-
-interface CodingWorkloadSummary {
-  jobCount: number;
-  selectedCases: number;
-  distributableCases: number;
-  unavailableCases: number;
-  limitReduction: number;
-  totalCases: number;
-  doubleCodedCases: number;
-  totalCodingTasks: number;
-  totalTimeSeconds: number;
-  timePerCoderSeconds: number;
-  formattedTotalTime: string;
-  formattedTimePerCoder: string;
-}
-
-interface DistributionPreviewSummary {
-  totalCases: number;
-  doubleCodedCases: number;
-  totalCodingTasks: number;
-  tasksPerCoder?: Record<string, number>;
 }
 
 @Component({
@@ -353,7 +323,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   protected readonly workloadSummary = computed(() => {
     this.workloadRevision();
     this.durationRevision();
-    return this.calculateWorkloadSummary();
+    return new CodingWorkload(this.workloadInput(this.distributionPreviewSummary())).summarize(() => this.estimatedVariableCaseCounts());
   });
 
   private readonly distributionPreviewRefresh$ = new Subject<void>();
@@ -1627,32 +1597,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.hasDeriveErrorResponses(variable);
   }
 
-  private calculateSelectedEffectiveCodingCases(): number {
-    let total = this.selectedVariableValues()
-      .reduce((sum, variable) => sum + this.getVariableEffectiveCases(variable), 0);
-
-    this.selectedVariableBundles.selected.forEach(bundle => {
-      bundle.variables.forEach(variable => {
-        total += this.getVariableEffectiveCases(variable as unknown as Variable);
-      });
-    });
-
-    return total;
-  }
-
-  private calculateDistributableCodingCases(): number {
-    let total = this.selectedVariableValues()
-      .reduce((sum, variable) => sum + this.getVariableAvailableCases(variable), 0);
-
-    this.selectedVariableBundles.selected.forEach(bundle => {
-      bundle.variables.forEach(variable => {
-        total += this.getVariableAvailableCases(variable as unknown as Variable);
-      });
-    });
-
-    return total;
-  }
-
   getSelectedEffectiveCodingCases(): number {
     return this.workloadSummary().selectedCases;
   }
@@ -1673,126 +1617,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return this.workloadSummary().totalCases;
   }
 
-  private getSelectedDistributionVariableCaseCountsAfterLimit(): number[] {
-    const items = this.getSelectedDistributionItems();
-    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
-    const total = items.reduce((sum, item) => sum + item.remaining, 0);
-    const targetCases =
-      this.data.mode === 'definition' &&
-      typeof maxCases === 'number' &&
-      maxCases > 0 ?
-        Math.min(total, maxCases) :
-        total;
-    const selectedCaseCountsByVariable = new Map<string, number>();
-    let selectedCases = 0;
-
-    while (selectedCases < targetCases) {
-      let progressed = false;
-
-      for (const item of items) {
-        if (selectedCases >= targetCases) {
-          break;
-        }
-
-        const variableKey = this.takeNextEstimatedItemCase(item);
-        if (!variableKey) {
-          continue;
-        }
-
-        selectedCaseCountsByVariable.set(
-          variableKey,
-          (selectedCaseCountsByVariable.get(variableKey) || 0) + 1
-        );
-        selectedCases += 1;
-        progressed = true;
-      }
-
-      if (!progressed) {
-        break;
-      }
-    }
-
-    return Array.from(selectedCaseCountsByVariable.values());
-  }
-
-  private takeNextEstimatedItemCase(item: EstimatedDistributionItem): string | undefined {
-    if (item.remaining <= 0 || item.groups.length === 0) {
-      return undefined;
-    }
-
-    for (let attempts = 0; attempts < item.groups.length; attempts += 1) {
-      const group = item.groups[item.nextGroupIndex % item.groups.length];
-      item.nextGroupIndex = (item.nextGroupIndex + 1) % item.groups.length;
-
-      if (group.remaining <= 0) {
-        continue;
-      }
-
-      group.remaining -= 1;
-      item.remaining -= 1;
-      return group.variableKey;
-    }
-
-    return undefined;
-  }
-
-  private getSelectedDistributionItems(): EstimatedDistributionItem[] {
-    const caseOrderingMode = this.codingJobForm.getRawValue().caseOrderingMode || 'continuous';
-    const items: EstimatedDistributionItem[] = [];
-
-    this.selectedVariableBundles.selected.forEach(bundle => {
-      const itemKey = `bundle:${bundle.id}`;
-      const itemCaseOrderingMode = bundle.caseOrderingMode || caseOrderingMode;
-      const cases = this.getEstimatedItemCases(
-        bundle.variables as Variable[],
-        itemCaseOrderingMode,
-        itemKey
-      );
-
-      if (cases.remaining > 0) {
-        items.push(cases);
-      }
+  private workloadInput(preview: DistributionPreviewSummary | null): CodingWorkloadInput {
+    const asWorkloadVariable = (variable: Variable): WorkloadVariable => ({
+      unitName: variable.unitName,
+      variableId: variable.variableId,
+      effectiveCases: this.getVariableEffectiveCases(variable),
+      availableCases: this.getVariableAvailableCases(variable)
     });
-
-    this.selectedVariableValues().forEach(variable => {
-      const itemKey = `${variable.unitName}::${variable.variableId}`;
-      const cases = this.getEstimatedItemCases([variable], caseOrderingMode, itemKey);
-
-      if (cases.remaining > 0) {
-        items.push(cases);
-      }
-    });
-
-    return items;
-  }
-
-  private getEstimatedItemCases(
-    variables: Variable[],
-    mode: 'continuous' | 'alternating',
-    itemKey: string
-  ): EstimatedDistributionItem {
-    const distributionSeed = this.getDistributionSeed();
-    const variableGroups = variables
-      .map(variable => ({
-        variableKey: this.getVariableUsageKey(variable.unitName, variable.variableId),
-        stratumKey: this.getEstimatedResponseStratumKey(variable, mode),
-        remaining: this.getVariableAvailableCases(variable)
-      }))
-      .filter(group => group.remaining > 0)
-      .sort((a, b) => {
-        const hashA = this.stableHash(`${distributionSeed}:${itemKey}:stratum:${a.stratumKey}`);
-        const hashB = this.stableHash(`${distributionSeed}:${itemKey}:stratum:${b.stratumKey}`);
-        return hashA - hashB || a.stratumKey.localeCompare(b.stratumKey);
-      });
-
     return {
-      groups: variableGroups.map(group => ({
-        variableKey: group.variableKey,
-        remaining: group.remaining
+      ...this.codingJobForm.getRawValue(),
+      mode: this.data.mode,
+      variables: this.selectedVariableValues().map(asWorkloadVariable),
+      bundles: this.selectedVariableBundles.selected.map(bundle => ({
+        id: bundle.id, caseOrderingMode: bundle.caseOrderingMode, variables: bundle.variables.map(asWorkloadVariable)
       })),
-      nextGroupIndex: 0,
-      remaining: variableGroups.reduce((sum, group) => sum + group.remaining, 0)
+      distributionSeed: this.getDistributionSeed(),
+      doubleCodingMode: this.doubleCodingMode(),
+      coderCapacityPercent: this.selectedCoders.selected.map(coder => this.getCoderCapacityPercent(coder)),
+      preview
     };
+  }
+
+  private getSelectedDistributionVariableCaseCountsAfterLimit(): number[] {
+    return new CodingWorkload(this.workloadInput(null)).estimateVariableCaseCounts();
   }
 
   private getDistributionSeed(): string {
@@ -1818,79 +1665,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
 
-  private getEstimatedResponseStratumKey(
-    variable: Pick<Variable, 'unitName' | 'variableId'>,
-    mode: 'continuous' | 'alternating'
-  ): string {
-    if (mode === 'alternating') {
-      return `::::${variable.unitName}::${variable.variableId}`;
-    }
-
-    return `${variable.unitName}::${variable.variableId}::::`;
-  }
-
-  private stableHash(value: string): number {
-    let hash = 0;
-
-    for (let i = 0; i < value.length; i += 1) {
-      hash = (hash * 31 + value.charCodeAt(i)) % 4294967291;
-    }
-
-    return hash;
-  }
-
-  private getDoubleCodedCasesForVariable(totalCases: number): number {
-    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.getRawValue();
-
-    if (this.doubleCodingMode() === 'absolute') {
-      return Math.min(doubleCodingAbsolute || 0, totalCases);
-    }
-
-    return Math.min(
-      Math.ceil(((doubleCodingPercentage || 0) / 100) * totalCases),
-      totalCases
-    );
-  }
-
-  private calculateWorkloadSummary(): CodingWorkloadSummary {
-    const { maxCodingCases, durationSeconds } = this.codingJobForm.getRawValue();
-    const selectedCases = this.calculateSelectedEffectiveCodingCases();
-    const distributableCases = this.calculateDistributableCodingCases();
-    const limitedCases = this.data.mode === 'definition' && typeof maxCodingCases === 'number' && maxCodingCases > 0 ?
-      Math.min(distributableCases, maxCodingCases) : distributableCases;
-    const preview = this.distributionPreviewSummary();
-    const totalCases = preview?.totalCases ?? limitedCases;
-    const doubleCodedCases = preview?.doubleCodedCases ?? this.estimatedVariableCaseCounts()
-      .reduce((sum, cases) => sum + this.getDoubleCodedCasesForVariable(cases), 0);
-    const totalCodingTasks = preview?.totalCodingTasks ?? totalCases + doubleCodedCases;
-    const durationPerCase = durationSeconds || 1;
-    const totalTimeSeconds = totalCodingTasks * durationPerCase;
-    const capacityWeights = this.selectedCoders.selected.map(coder => this.getCoderCapacityPercent(coder) / 100);
-    const totalCapacityWeight = capacityWeights.reduce((sum, weight) => sum + weight, 0);
-    const previewTaskCounts = Object.values(preview?.tasksPerCoder ?? {}).map(Number).filter(Number.isFinite);
-    let timePerCoderSeconds = totalTimeSeconds;
-    if (previewTaskCounts.length > 0) {
-      timePerCoderSeconds = Math.max(...previewTaskCounts) * durationPerCase;
-    } else if (totalCapacityWeight > 0) {
-      timePerCoderSeconds = Math.ceil((totalTimeSeconds / totalCapacityWeight) * Math.max(...capacityWeights));
-    }
-
-    return {
-      jobCount: (this.selectedVariableValues().length + this.selectedVariableBundles.selected.length) * this.selectedCoders.selected.length,
-      selectedCases,
-      distributableCases,
-      unavailableCases: Math.max(0, selectedCases - distributableCases),
-      limitReduction: distributableCases - limitedCases,
-      totalCases,
-      doubleCodedCases,
-      totalCodingTasks,
-      totalTimeSeconds,
-      timePerCoderSeconds,
-      formattedTotalTime: this.formatTime(totalTimeSeconds),
-      formattedTimePerCoder: this.formatTime(timePerCoderSeconds)
-    };
-  }
-
   getTotalDoubleCodedCases(): number {
     return this.workloadSummary().doubleCodedCases;
   }
@@ -1913,12 +1687,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   getFormattedTimePerCoder(): string {
     return this.workloadSummary().formattedTimePerCoder;
-  }
-
-  private formatTime(seconds: number): string {
-    const min = Math.floor(seconds / 60);
-    const sec = seconds % 60;
-    return `${min}:${sec.toString().padStart(2, '0')}`;
   }
 
   protected onAvailabilityChange(event: { value: 'all' | 'full' | 'partial' | 'none' }): void {
