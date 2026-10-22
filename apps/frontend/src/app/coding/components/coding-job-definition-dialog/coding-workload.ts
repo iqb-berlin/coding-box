@@ -218,7 +218,7 @@ export class CodingWorkload {
     );
   }
 
-  summarize(variableCaseCounts: number[]): CodingWorkloadSummary {
+  summarize(estimateVariableCaseCounts: () => number[]): CodingWorkloadSummary {
     const { maxCodingCases, durationSeconds } = this.input;
     const selectedCases = this.allVariables().reduce((sum, variable) => sum + variable.effectiveCases, 0);
     const distributableCases = this.allVariables().reduce((sum, variable) => sum + variable.availableCases, 0);
@@ -226,7 +226,7 @@ export class CodingWorkload {
       Math.min(distributableCases, maxCodingCases) : distributableCases;
     const preview = this.input.preview;
     const totalCases = preview?.totalCases ?? limitedCases;
-    const doubleCodedCases = preview?.doubleCodedCases ?? variableCaseCounts
+    const doubleCodedCases = preview?.doubleCodedCases ?? estimateVariableCaseCounts()
       .reduce((sum, cases) => sum + this.getDoubleCodedCasesForVariable(cases), 0);
     const totalCodingTasks = preview?.totalCodingTasks ?? totalCases + doubleCodedCases;
     const durationPerCase = durationSeconds || 1;

@@ -71,6 +71,21 @@ describe('TrainingReliabilityFacade', () => {
     expect(withMeanAgreement(empty, true).workspaceSummary.meanAgreement).toBeNull();
   });
 
+  it('keeps an active CSV request while reloading statistics for the same context', () => {
+    const pending = new Subject<Blob>();
+    exportCsv.mockReturnValue(pending);
+    const download = jest.fn();
+    facade.load(context, () => true);
+    facade.exportCsv(context, () => true).subscribe(download);
+    facade.load(context, () => true);
+    expect(facade.isExporting()).toBe(true);
+    const csv = new Blob(['same context']);
+    pending.next(csv);
+    pending.complete();
+    expect(download).toHaveBeenCalledWith(csv);
+    expect(facade.isExporting()).toBe(false);
+  });
+
   it('allows a single CSV request and releases it on failure so it can be retried', () => {
     const pending = new Subject<Blob>(); exportCsv.mockReturnValueOnce(pending);
     facade.exportCsv(context, () => true).subscribe();

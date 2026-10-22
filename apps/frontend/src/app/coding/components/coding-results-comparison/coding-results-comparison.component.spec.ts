@@ -421,6 +421,70 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.isExportingReliability()).toBe(false);
   });
 
+  it.each(['page', 'sort', 'filter', 'training', 'mode', 'coders', 'weighting', 'level'] as const)('keeps CSV exports across table navigation and cancels scope changes: %s', action => {
+    Object.defineProperty(window.URL, 'createObjectURL', { configurable: true, value: jest.fn().mockReturnValue('blob:reliability') });
+    Object.defineProperty(window.URL, 'revokeObjectURL', { configurable: true, value: jest.fn() });
+    const download = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+    const csv = new Subject<Blob>();
+    codingTrainingBackendService.exportTrainingReliabilityAsCsv.mockReturnValue(csv);
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(new Subject());
+    codingTrainingBackendService.getTrainingCohensKappa.mockReturnValue(new Subject());
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.codersFormControl.setValue([11, 12]);
+    component.kappaStatistics.set({
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        averageBrennanPredigerKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 2,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    });
+    component.exportTrainingReliability();
+    const actions = component as unknown as {
+      onComparisonPageChange(event: { pageIndex: number; pageSize: number; length: number }): void;
+      onComparisonSortChange(sort: { active: string; direction: 'asc' }): void;
+      onTrainingForWithinChange(): void;
+      onCoderSelectionChange(): void;
+      toggleWeightingMethod(): void;
+      toggleCalculationLevel(): void;
+    };
+    if (action === 'page') actions.onComparisonPageChange({ pageIndex: 1, pageSize: 50, length: 100 });
+    if (action === 'sort') actions.onComparisonSortChange({ active: 'responseId', direction: 'asc' });
+    if (action === 'filter') component.applyFilter({ target: { value: 'UNIT' } } as unknown as Event);
+    if (action === 'training') {
+      component.selectedTrainingForWithin = 6;
+      actions.onTrainingForWithinChange();
+    }
+    if (action === 'mode') {
+      component.comparisonMode = 'between-trainings';
+      component.onModeChange();
+    }
+    if (action === 'coders') {
+      component.codersFormControl.setValue([11]);
+      actions.onCoderSelectionChange();
+    }
+    if (action === 'weighting') {
+      component.useWeightedMean.set(false);
+      actions.toggleWeightingMethod();
+    }
+    if (action === 'level') {
+      component.useCodeLevel.set(false);
+      actions.toggleCalculationLevel();
+    }
+    const keepsExport = action === 'page' || action === 'sort' || action === 'filter';
+    expect(component.isExportingReliability()).toBe(keepsExport);
+    csv.next(new Blob(['csv']));
+    csv.complete();
+    expect(download).toHaveBeenCalledTimes(keepsExport ? 1 : 0);
+    expect(component.isExportingReliability()).toBe(false);
+  });
+
   it('should keep filter controls visible while comparison data reloads', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
