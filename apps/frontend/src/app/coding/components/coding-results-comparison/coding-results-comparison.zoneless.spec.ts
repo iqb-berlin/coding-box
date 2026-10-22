@@ -3,7 +3,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, Subject } from 'rxjs';
+import {
+  BehaviorSubject, Observable, of, Subject
+} from 'rxjs';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
@@ -59,7 +61,12 @@ describe('Coding comparison without Zone', () => {
         { provide: CodingStatisticsService, useValue: {} },
         { provide: TestPersonCodingService, useValue: {} },
         { provide: UserService, useValue: { getUsers: () => of([{ id: 7, accessLevel: 3 }]) } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1, authData: { userId: 7, userName: 'Manager', isAdmin: false }, needsReAuthentication: false } },
+        {
+          provide: AppService,
+          useValue: {
+            selectedWorkspaceId: 1, selectedWorkspaceId$: new BehaviorSubject(1), authData: { userId: 7, userName: 'Manager', isAdmin: false }, needsReAuthentication: false
+          }
+        },
         { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => regexResponse } },
         { provide: PostMessageService, useValue: { getMessages: () => new Subject<void>() } },
         {
