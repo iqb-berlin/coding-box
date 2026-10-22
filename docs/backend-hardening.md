@@ -59,6 +59,69 @@ Invalid credentials remain HTTP 401; network/server failures and invalid provide
 responses receive HTTP 503 with safe error codes and request IDs. Provider payloads
 and credentials are not included in diagnostics.
 
+## BullMQ queues and cutover
+
+All twelve queues use `@nestjs/bullmq` and BullMQ 6. Producers enqueue named jobs;
+processors extend `WorkerHost` and retain a concurrency of one per worker. The
+API/export-worker selection through `JOB_QUEUE_PROCESSORS` and
+`DISABLED_JOB_QUEUE_PROCESSORS` is retained. Progress is stored with
+`updateProgress()`, cooperative pause/cancellation with `updateData()`. Workers
+turn failures of stopped jobs into `UnrecoverableError` so automatic retries do
+not restart cancelled work. Ordinary retries and backoff remain available.
+Prioritized jobs participate in workspace ownership, conflict and cancellation
+checks, and appear as waiting work in the process overview (paused when their
+queue is paused).
+New jobs use UUIDs so the new queues cannot reuse old numeric IDs that still
+identify cached export results. Explicit IDs for deduplicated cache work are
+retained.
+
+Bull and BullMQ do not guarantee compatible Redis data formats. The new queue
+prefix is **`${REDIS_PREFIX}:bullmq`**, for example `coding-box:bullmq`. The cache
+prefix stays separate. See the [BullMQ migration guidance](https://docs.bullmq.io/guide/migrations/bull-to-bullmq)
+and [Nest queue integration](https://docs.nestjs.com/techniques/queues).
+
+Before deploying the new API and export worker:
+
+1. Block new queue-producing requests and quiesce scheduled producers while
+   keeping the old workers running until their work is drained.
+2. Drain all twelve old queues listed in `job-queue.config.ts`. Check the old
+   `${REDIS_PREFIX}:${queue}` namespace: `LLEN` of `wait`, `paused` and `active`,
+   and `ZCARD` of `delayed`, must all be zero. Resume or otherwise explicitly
+   settle paused/delayed work before proceeding.
+   Cooperative auto-coding pauses can also be completed jobs with
+   `data.isPaused=true`; explicitly settle those planned runs as well.
+   Stop the old API/workers and verify the counts again. If a producer raced
+   with shutdown, restart the old version to finish that work before cutover.
+3. Archive old job history and downloadable results if they must remain
+   accessible. Completed/failed jobs stay under the old prefix; the new API
+   does not read that history or automatically replay failed jobs.
+4. Deploy the API and export worker together with the same Redis settings,
+   verify a new job, and allow queue-producing requests again.
+
+Do not reuse the old prefix, flush Redis, or copy raw Bull keys into BullMQ.
+Application data and the old queue keys are retained. A rollback after accepting
+new jobs also requires draining the BullMQ queues with BullMQ workers; changing
+the application image does not transfer those jobs back to Bull.
+
+### Queue verification
+
+`npx nx run backend:verify-bullmq-live` starts its own loopback Redis process in a
+temporary directory, runs the real Nest worker integration suite, and closes
+both worker and Redis afterwards. A `redis-server` binary must be available on
+`PATH`, or supplied with `BULLMQ_REDIS_SERVER=/path/to/redis-server`. Add
+`--configuration=full` to run the complete backend suite against that fixture.
+The runner does not connect to the application's Redis instance.
+
+Both backend CI gates provide disposable Redis and enable this suite using
+`BULLMQ_TEST_REDIS_HOST`/`BULLMQ_TEST_REDIS_PORT`. The tests cover persisted
+progress/results, namespace isolation, pause, prioritized work, ownership,
+conflicts, cancellation and retries. The domain autocoder is mocked in these
+queue tests; PostgreSQL workflows remain covered by their existing gates.
+
+The Nest BullMQ 12 adapter supports Nest 11 but is ESM-only. The Node 22 Jest
+configuration transforms only this adapter and its shared helpers to CommonJS;
+the production dependency is used directly.
+
 ## Strict diagnostics
 
 `npx nx run backend:typecheck` checks the production TypeScript program in strict
