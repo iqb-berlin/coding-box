@@ -1664,7 +1664,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
 
   onModeChange(): void {
     this.cancelComparisonRequest();
-    this.resetKappaState();
+    this.reliability.reset();
     this.selectedTrainings.clear();
     this.trainingFilter.set('');
     this.selectedTrainingForWithin = null;
@@ -1684,7 +1684,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingSelectionChange(): void {
-    this.resetKappaState();
+    this.reliability.reset();
     this.hasInitializedBetweenCoderSelection = false;
     this.codersFromTrainingsFormControl.setValue([]);
     this.selectedCodersFromTrainings.clear();
@@ -1701,7 +1701,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingForWithinChange(): void {
-    this.resetKappaState();
+    this.reliability.reset();
     this.hasInitializedWithinCoderSelection = false;
     if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
       this.availableCoders = [];
@@ -2092,6 +2092,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onCoderSelectionChange(): void {
+    this.reliability.reset();
     const selectedIds = this.codersFormControl.value || [];
     this.hasInitializedWithinCoderSelection = true;
     this.selectedCoderIds.clear();
@@ -2218,7 +2219,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   private resetKappaState(): void {
-    this.reliability.reset();
+    this.reliability.resetStatistics();
   }
 
   protected toggleKappaStatistics(): void {
@@ -2229,10 +2230,12 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected toggleWeightingMethod(): void {
+    this.reliability.reset();
     this.loadKappaStatistics();
   }
 
   protected toggleCalculationLevel(): void {
+    this.reliability.reset();
     this.loadKappaStatistics();
   }
 

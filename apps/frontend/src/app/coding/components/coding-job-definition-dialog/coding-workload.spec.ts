@@ -22,7 +22,7 @@ describe('CodingWorkload', () => {
   }
   it('separates unavailable cases, limit reduction, duplicated tasks and coder capacity', () => {
     const workload = new CodingWorkload(input({ maxCodingCases: 6 }));
-    expect(workload.summarize(workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({
+    expect(workload.summarize(() => workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({
       selectedCases: 20, distributableCases: 10, unavailableCases: 10, limitReduction: 4, totalCases: 6, doubleCodedCases: 2, totalCodingTasks: 8, totalTimeSeconds: 240, timePerCoderSeconds: 160, formattedTimePerCoder: '2:40'
     }));
   });
@@ -60,7 +60,7 @@ describe('CodingWorkload', () => {
     const workload = new CodingWorkload(input({
       mode: 'job', maxCodingCases: 1, doubleCodingMode: 'percentage', doubleCodingPercentage: 25
     }));
-    expect(workload.summarize(workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({ totalCases: 10, doubleCodedCases: 3, limitReduction: 0 }));
+    expect(workload.summarize(() => workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({ totalCases: 10, doubleCodedCases: 3, limitReduction: 0 }));
   });
   it('prefers the authoritative preview and its slowest coder over estimates', () => {
     const workload = new CodingWorkload(input({
@@ -68,7 +68,7 @@ describe('CodingWorkload', () => {
         totalCases: 4, doubleCodedCases: 1, totalCodingTasks: 5, tasksPerCoder: { 1: 1, 2: 4 }
       }
     }));
-    expect(workload.summarize(workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({
+    expect(workload.summarize(() => workload.estimateVariableCaseCounts())).toEqual(expect.objectContaining({
       totalCases: 4, doubleCodedCases: 1, totalCodingTasks: 5, timePerCoderSeconds: 120
     }));
   });

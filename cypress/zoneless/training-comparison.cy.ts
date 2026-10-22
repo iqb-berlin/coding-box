@@ -92,6 +92,48 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
+  it('finishes a pending reliability export after changing the comparison page', () => {
+    const exportGate = createResponseGate();
+    let exportsStarted = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', request => {
+      request.reply({ body: { ...comparison, total: 100, totalPages: 2, page: Number(request.query.page) } });
+    }).as('comparison');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability?*', {
+      body: {
+        ...statistics,
+        variables: [{
+          unitName: 'UNIT', variableId: 'VAR', meanKappa: 0.8, meanBrennanPredigerKappa: 0.9,
+          fleissKappa: null, fleissCaseCount: 0, fleissPossibleCaseCount: 1, meanAgreement: 1,
+          caseCount: 1, validPairCount: 1, coderPairCount: 1, coderPairs: []
+        }]
+      }
+    }).as('statistics');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability/export/csv?*', async request => {
+      exportsStarted += 1;
+      await exportGate.wait;
+      request.reply({ headers: { 'content-type': 'text/csv' }, body: 'unit,variable,kappa\nUNIT,VAR,0.8' });
+    }).as('reliabilityExport');
+    openComparison();
+    cy.window().then(win => {
+      cy.stub(win.URL, 'createObjectURL').returns('blob:reliability').as('csvUrl');
+      cy.stub(win.URL, 'revokeObjectURL');
+      cy.stub(win.HTMLAnchorElement.prototype, 'click').as('downloadCsv');
+    });
+    cy.get('@dialog').find('.kappa-header').click();
+    cy.wait('@statistics');
+    cy.get('@dialog').find('.kappa-export-actions button').as('exportButton').should('be.enabled').click();
+    cy.wrap(null).should(() => { expect(exportsStarted).to.equal(1); });
+    cy.get('@dialog').find('mat-paginator .mat-mdc-paginator-navigation-next').click();
+    cy.wait('@comparison').its('request.query.page').should('equal', '2');
+    cy.wait('@statistics');
+    cy.get('@exportButton').should('be.disabled');
+    cy.then(() => exportGate.release());
+    cy.wait('@reliabilityExport');
+    cy.get('@csvUrl').should('have.been.calledOnce');
+    cy.get('@downloadCsv').should('have.been.calledOnce');
+    cy.get('@exportButton').should('be.enabled');
+  });
+
   it('renders delayed training options, filters them and sends only the visible selection', () => {
     const gate = createResponseGate();
     const trainings = [

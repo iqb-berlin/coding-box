@@ -323,7 +323,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   protected readonly workloadSummary = computed(() => {
     this.workloadRevision();
     this.durationRevision();
-    return new CodingWorkload(this.workloadInput()).summarize(this.estimatedVariableCaseCounts());
+    return new CodingWorkload(this.workloadInput(this.distributionPreviewSummary())).summarize(() => this.estimatedVariableCaseCounts());
   });
 
   private readonly distributionPreviewRefresh$ = new Subject<void>();
@@ -1617,7 +1617,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return this.workloadSummary().totalCases;
   }
 
-  private workloadInput(): CodingWorkloadInput {
+  private workloadInput(preview: DistributionPreviewSummary | null): CodingWorkloadInput {
     const asWorkloadVariable = (variable: Variable): WorkloadVariable => ({
       unitName: variable.unitName,
       variableId: variable.variableId,
@@ -1634,12 +1634,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       distributionSeed: this.getDistributionSeed(),
       doubleCodingMode: this.doubleCodingMode(),
       coderCapacityPercent: this.selectedCoders.selected.map(coder => this.getCoderCapacityPercent(coder)),
-      preview: this.distributionPreviewSummary()
+      preview
     };
   }
 
   private getSelectedDistributionVariableCaseCountsAfterLimit(): number[] {
-    return new CodingWorkload(this.workloadInput()).estimateVariableCaseCounts();
+    return new CodingWorkload(this.workloadInput(null)).estimateVariableCaseCounts();
   }
 
   private getDistributionSeed(): string {

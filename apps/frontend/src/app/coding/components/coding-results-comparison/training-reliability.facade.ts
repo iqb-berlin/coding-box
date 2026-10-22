@@ -61,16 +61,21 @@ export class TrainingReliabilityFacade {
   }
 
   reset(): void {
+    this.resetStatistics();
+    this.cancel$.next();
+  }
+
+  /** Table navigation refreshes statistics without invalidating a full-cohort CSV export. */
+  resetStatistics(): void {
     this.requestId += 1;
     this.request?.unsubscribe();
-    this.cancel$.next();
     this.isLoading.set(false);
     this.statistics.set(null);
     this.originalStatistics.set(null);
   }
 
   load(context: TrainingReliabilityContext, isCurrent: () => boolean): void {
-    this.reset();
+    this.resetStatistics();
     const requestId = this.requestId;
     this.isLoading.set(true);
     this.request = this.backend.getTrainingCohensKappa(context.workspaceId, context.trainingId, context.weighted, context.level, [...context.coderIds])
