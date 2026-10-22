@@ -1,0 +1,105 @@
+name: Production image validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-base-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - run: |
+          docker build --pull --progress=plain --tag coding-box-base:ci .
+          docker save coding-box-base:ci | zstd -T0 -o "$RUNNER_TEMP/base.tar.zst"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-base
+          path: ${{ runner.temp }}/base.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  build-app-images:
+    name: build-${{ matrix.project }}-image
+    needs: build-base-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [backend, frontend]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: image-base
+          path: ${{ runner.temp }}/images
+      - name: Build production image using this run's base
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          zstd --decompress --stdout "$RUNNER_TEMP/images/base.tar.zst" | docker load
+          docker build --progress=plain --target=prod \
+            --build-arg "PROJECT=$PROJECT" --build-arg BASE_IMAGE_NAME=coding-box-base:ci \
+            --file "apps/$PROJECT/Dockerfile" --tag "iqbberlin/coding-box-$PROJECT:ci" .
+          docker save "iqbberlin/coding-box-$PROJECT:ci" | zstd -T0 -o "$RUNNER_TEMP/$PROJECT.tar.zst"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-${{ matrix.project }}
+          path: ${{ runner.temp }}/${{ matrix.project }}.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  scan-images:
+    name: scan-${{ matrix.image }}-image
+    needs: build-app-images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # Preserve GitLab's advisory image-scan policy.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [db, liquibase, backend, frontend, traefik]
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: matrix.image != 'traefik'
+        with:
+          name: image-${{ matrix.image }}
+          path: ${{ runner.temp }}/images
+      - name: Scan vulnerabilities and flag fixable critical findings
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy" "$RUNNER_TEMP/trivy-cache"
+          target="iqbberlin/coding-box-$IMAGE:ci"
+          if [[ "$IMAGE" == traefik ]]; then
+            target=traefik:v2.11
+            docker pull "$target"
+          else
+            zstd --decompress --stdout "$RUNNER_TEMP/images/$IMAGE.tar.zst" | docker load
+          fi
+          trivy=(docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock
+            --volume "$RUNNER_TEMP/trivy:/reports" --volume "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy"
+            aquasec/trivy:latest image --timeout 30m --scanners vuln --no-progress)
+          "${trivy[@]}" --exit-code 0 --format json --output /reports/report.json "$target"
+          "${trivy[@]}" --exit-code 1 --ignore-unfixed --severity CRITICAL "$target"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: scan-${{ matrix.image }}
+          path: ${{ runner.temp }}/trivy/
+          retention-days: 30

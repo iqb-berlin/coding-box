@@ -1,0 +1,357 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['*']
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+    inputs:
+      build_images:
+        description: Also build and scan production images without publishing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  CI: 'true'
+  NX_DAEMON: 'false'
+  NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
+  FORCE_COLOR: '0'
+  NG_BUILD_MAX_WORKERS: '2'
+  CYPRESS_INSTALL_BINARY: '0'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check-config:
+    # Same-repository PRs already have the complete push run. Forks need a PR run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Record tested revision and runner
+        run: |
+          git rev-parse HEAD
+          uname -a
+          nproc
+          free -h
+          df -h .
+          docker version
+          docker compose version
+
+  install-dependencies:
+    needs: check-config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --prefer-offline --no-fund
+      - name: Package dependencies with permissions and symlinks
+        run: tar --zstd -cf "$RUNNER_TEMP/node_modules.tar.zst" node_modules
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependencies
+          path: ${{ runner.temp }}/node_modules.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  build-app:
+    needs: install-dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - run: npx --no-install nx build frontend --configuration=production
+      - run: npx --no-install nx build backend --configuration=production
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: app-build
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  test-backend:
+    needs: install-dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - run: node --test scripts/ci/*.test.mjs scripts/qa/junit-reporter.test.cjs
+      - run: npx --no-install nx run backend:typecheck
+      - run: npx --no-install nx test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: coverage/apps/backend/
+          retention-days: 30
+
+  test-frontend:
+    # Retain GitLab's serial unit-test dependency for the initial comparison.
+    needs: [install-dependencies, test-backend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - run: npx --no-install nx run frontend:test-quality-gates
+      - run: npx --no-install nx test frontend --configuration=ci --maxWorkers=2
+      - run: npx --no-install nx run frontend:zoneless-inventory-test
+      - run: npx --no-install nx run frontend:zoneless-approval
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: coverage/apps/frontend/
+          retention-days: 30
+
+  test-browser:
+    needs: [install-dependencies, build-app]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: app-build
+          path: dist/
+      - uses: ./.github/actions/setup-cypress
+      - run: npx --no-install nx run frontend:component-test --browser=electron
+      - run: npx --no-install nx run frontend:e2e --configuration=ci --browser=electron
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: |
+            cypress/screenshots
+            cypress/videos
+            cypress/component-screenshots
+            cypress/component-videos
+          retention-days: 7
+
+  live-e2e:
+    name: ${{ matrix.job }}
+    needs: install-dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job: test-replay-live
+            target: e2e-replay-live
+          - job: test-auth-live
+            target: e2e-auth-live
+          - job: test-workflows-live
+            target: e2e-workflows
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - uses: ./.github/actions/setup-cypress
+      - run: docker info && docker compose version
+      - if: matrix.job != 'test-replay-live'
+        run: npx --no-install nx run frontend:test-e2e-harness
+      - env:
+          E2E_TARGET: ${{ matrix.target }}
+          # Native Docker on the runner; each job has its own daemon and stack.
+          REPLAY_E2E_CONNECT_HOST: 127.0.0.1
+          REPLAY_E2E_PUBLISH_HOST: 127.0.0.1
+          CYPRESS_INSTALL_BINARY: ''
+        run: npx --no-install nx run "frontend:$E2E_TARGET" --configuration=production
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ${{ matrix.job }}-evidence
+          path: |
+            cypress/replay-artifacts/screenshots
+            cypress/replay-artifacts/videos
+            tmp/replay-e2e-artifacts
+          retention-days: 30
+
+  lint-app:
+    needs: install-dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - run: npx --no-install nx lint frontend
+      - run: npx --no-install nx lint backend
+
+  audit-app:
+    needs: install-dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/restore-dependencies
+      - run: npx --no-install nx run frontend:test-dependency-patches
+      - run: npm audit --audit-level high
+
+  database-images:
+    name: build-${{ matrix.image }}-image
+    needs: check-config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: db
+            file: database/Postgres.Dockerfile
+          - image: liquibase
+            file: database/Liquibase.Dockerfile
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build and export image
+        env:
+          IMAGE: ${{ matrix.image }}
+          DOCKERFILE: ${{ matrix.file }}
+        run: |
+          docker build --pull --progress=plain --file "$DOCKERFILE" --tag "iqbberlin/coding-box-$IMAGE:ci" .
+          docker save "iqbberlin/coding-box-$IMAGE:ci" | zstd -T0 -o "$RUNNER_TEMP/$IMAGE.tar.zst"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-${{ matrix.image }}
+          path: ${{ runner.temp }}/${{ matrix.image }}.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  test-db:
+    needs: database-images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: image-*
+          path: ${{ runner.temp }}/images
+          merge-multiple: true
+      - run: bash scripts/ci/test-database.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: database-evidence
+          path: ${{ runner.temp }}/database-test.log
+          retention-days: 7
+
+  dependency-scanning:
+    needs: check-config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # Same advisory policy as GitLab's Gemnasium job, using its analyzer.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - run: |
+          docker run --rm --volume "$PWD:/builds/project" --workdir /builds/project \
+            --env CI_PROJECT_DIR=/builds/project --env DS_MAX_DEPTH=2 \
+            registry.gitlab.com/security-products/gemnasium:6@sha256:2d49f29b4187a58ced4017bfe1c4dbe9882b5a904a2befcbd9c093ba35294360 /analyzer run
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: dependency-scanning
+          path: |
+            gl-dependency-scanning-report.json
+            gl-sbom-*.cdx.json
+          retention-days: 30
+
+  quality-gates:
+    if: always() && needs.check-config.result != 'skipped'
+    needs: [check-config, build-app, test-backend, test-frontend, test-browser, live-e2e, lint-app, audit-app, test-db]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every mandatory gate to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const r=JSON.parse(process.env.RESULTS); for(const [name,job] of Object.entries(r)){console.log(`${name}: ${job.result}`);if(job.result!=="success")process.exitCode=1;}'
+
+  production-images:
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main' || github.ref_type == 'tag' || inputs.build_images == true
+    needs: quality-gates
+    uses: ./.github/workflows/images.yml
+
+  timings:
+    if: always() && needs.check-config.result != 'skipped'
+    needs: [check-config, quality-gates, dependency-scanning, production-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Collect timings for this attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/compare-ci-runtimes.mjs --github-run "$GITHUB_RUN_ID" --output tmp/ci-timings
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ci-timings
+          path: tmp/ci-timings/
+          retention-days: 30
