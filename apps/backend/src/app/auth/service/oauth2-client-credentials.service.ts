@@ -1,8 +1,13 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { AuthErrorCode } from '../../../../../../api-dto/auth-error-dto';
 import { OidcUserInfo } from './oidc-auth.service';
+import { AuthFailureException } from '../auth-failure.exception';
+import { isHttpEndpoint, logAuthProviderFailure } from '../auth-provider-errors';
 
 export interface ClientCredentialsTokenResponse {
   access_token: string;
@@ -11,85 +16,76 @@ export interface ClientCredentialsTokenResponse {
   scope?: string;
 }
 
-export interface ClientCredentialsRequest {
-  client_id: string;
-  client_secret: string;
-  scope?: string;
-}
+export type ClientCredentialsRequest = RequestBody<'ClientCredentialsRequest'>;
 
 @Injectable()
 export class OAuth2ClientCredentialsService {
   private readonly logger = new Logger(OAuth2ClientCredentialsService.name);
+  private readonly providerTimeoutMs = 10_000;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService
   ) {}
 
-  /**
-   * Exchange client credentials for an access token using OAuth2 Client Credentials Flow
-   * @param clientCredentials - The client ID and secret
-   * @returns Promise<ClientCredentialsTokenResponse>
-   */
-  async getAccessToken(clientCredentials: ClientCredentialsRequest): Promise<ClientCredentialsTokenResponse> {
-    const oidcTokenEndpoint = this.configService.get<string>('OIDC_TOKEN_ENDPOINT');
-
-    if (!oidcTokenEndpoint) {
-      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
-    }
-
-    const params = new URLSearchParams();
-    params.append('grant_type', 'client_credentials');
-    params.append('client_id', clientCredentials.client_id);
-    params.append('client_secret', clientCredentials.client_secret);
-
-    if (clientCredentials.scope) {
-      params.append('scope', clientCredentials.scope);
-    }
+  async getAccessToken(
+    clientCredentials: ClientCredentialsRequest,
+    requestId?: string
+  ): Promise<ClientCredentialsTokenResponse> {
+    const endpoint = this.getEndpoint('OIDC_TOKEN_ENDPOINT');
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientCredentials.client_id,
+      client_secret: clientCredentials.client_secret
+    });
+    if (clientCredentials.scope) params.append('scope', clientCredentials.scope);
 
     try {
-      this.logger.log(`Requesting access token for client: ${clientCredentials.client_id}`);
-
       const response = await firstValueFrom(
-        this.httpService.post(oidcTokenEndpoint, params.toString(), {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
+        this.httpService.post<ClientCredentialsTokenResponse>(endpoint, params.toString(), {
+          timeout: this.providerTimeoutMs,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         })
       );
-
-      this.logger.log(`Successfully obtained access token for client: ${clientCredentials.client_id}`);
+      if (typeof response.data?.access_token !== 'string' || !response.data.access_token.trim()) {
+        throw new AuthFailureException('provider-unavailable');
+      }
       return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to obtain access token for client ${clientCredentials.client_id}:`, error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to authenticate with client credentials');
+    } catch (error: unknown) {
+      throw this.providerFailure(error, endpoint, 'oauth2-client-credentials-failed', requestId);
     }
   }
 
-  /**
-   * Validate an access token against OIDC Provider userinfo endpoint
-   * @param accessToken - The access token to validate
-   * @returns Promise<OidcUserInfo> - User info from OIDC Provider
-   */
-  async validateAccessToken(accessToken: string): Promise<OidcUserInfo> {
-    const oidcUserInfoEndpoint = this.configService.get<string>('OIDC_USERINFO_ENDPOINT');
-
-    if (!oidcUserInfoEndpoint) {
-      throw new UnauthorizedException('OpenID Connect userinfo endpoint configuration is missing');
-    }
-
+  async validateAccessToken(accessToken: string, requestId?: string): Promise<OidcUserInfo> {
+    const endpoint = this.getEndpoint('OIDC_USERINFO_ENDPOINT');
     try {
       const response = await firstValueFrom(
-        this.httpService.get(oidcUserInfoEndpoint, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`
-          }
+        this.httpService.get<OidcUserInfo>(endpoint, {
+          timeout: this.providerTimeoutMs,
+          headers: { Authorization: `Bearer ${accessToken}` }
         })
       );
+      if (typeof response.data?.sub !== 'string' || !response.data.sub.trim()) {
+        throw new AuthFailureException('provider-unavailable');
+      }
       return response.data;
-    } catch (error) {
-      this.logger.error('Failed to validate access token:', error.response?.data || error.message);
-      throw new UnauthorizedException('Invalid access token');
+    } catch (error: unknown) {
+      throw this.providerFailure(error, endpoint, 'oauth2-token-validation-failed', requestId);
     }
+  }
+
+  private getEndpoint(key: string): string {
+    const endpoint = this.configService.get<string>(key);
+    if (!isHttpEndpoint(endpoint)) throw new AuthFailureException('configuration-error');
+    return endpoint;
+  }
+
+  private providerFailure(error: unknown, endpoint: string, event: string, requestId?: string): AuthFailureException {
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    let code: AuthErrorCode = error instanceof AuthFailureException ? error.code : 'provider-unavailable';
+    if (status !== undefined && [400, 401, 403].includes(status)) code = 'session-invalid';
+    else if (status === 404) code = 'configuration-error';
+    logAuthProviderFailure(this.logger, event, endpoint, code, status ?? null, requestId);
+    return new AuthFailureException(code);
   }
 }

@@ -1,18 +1,20 @@
 import {
-  Controller, Post, Body, Logger, HttpCode, HttpStatus, Get, Query, Res, Req,
+  Controller, Post, Logger, HttpCode, HttpStatus, Get, Query, Res, Req,
   UnauthorizedException
 } from '@nestjs/common';
 import {
-  ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation, ApiResponse
+  ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiQuery, ApiOperation, ApiResponse
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { randomBytes } from 'crypto';
-import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
+import { OAuth2ClientCredentialsService, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
 import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 import { normalizeRequestId, RequestWithRequestId } from '../http/request-id';
 import { AuthFailureException } from './auth-failure.exception';
+import { ValidatedBody } from '../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../api-dto/request-contracts';
 import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 
 @ApiTags('Authentication')
@@ -128,30 +130,6 @@ export class AuthController {
    */
   @Post('token')
   @HttpCode(HttpStatus.OK)
-  @ApiBody({
-    description: 'Client credentials for OAuth2 Client Credentials Flow',
-    schema: {
-      type: 'object',
-      required: ['client_id', 'client_secret'],
-      properties: {
-        client_id: {
-          type: 'string',
-          description: 'The client identifier',
-          example: 'my-application'
-        },
-        client_secret: {
-          type: 'string',
-          description: 'The client secret',
-          example: 'my-secret-key'
-        },
-        scope: {
-          type: 'string',
-          description: 'Optional scope for the access token',
-          example: 'read write'
-        }
-      }
-    }
-  })
   @ApiOkResponse({
     description: 'Successfully obtained access token',
     schema: {
@@ -184,12 +162,14 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Invalid client credentials'
   })
+  @ApiResponse({ status: HttpStatus.SERVICE_UNAVAILABLE, description: 'Provider unavailable or authentication configuration requires attention' })
   async getClientCredentialsToken(
-    @Body() credentials: ClientCredentialsRequest
+    @ValidatedBody('ClientCredentialsRequest') credentials: RequestBody<'ClientCredentialsRequest'>,
+    @Req() request?: RequestWithRequestId
   ): Promise<ClientCredentialsTokenResponse> {
-    this.logger.log(`Client credentials token request for client: ${credentials.client_id}`);
+    this.logger.log('Client credentials token request');
 
-    return this.oauth2ClientCredentialsService.getAccessToken(credentials);
+    return this.oauth2ClientCredentialsService.getAccessToken(credentials, request?.requestId);
   }
 
   /**
@@ -199,19 +179,6 @@ export class AuthController {
    */
   @Post('validate')
   @HttpCode(HttpStatus.OK)
-  @ApiBody({
-    description: 'Access token to validate',
-    schema: {
-      type: 'object',
-      required: ['access_token'],
-      properties: {
-        access_token: {
-          type: 'string',
-          description: 'The access token to validate'
-        }
-      }
-    }
-  })
   @ApiOkResponse({
     description: 'Token is valid, returns user information',
     schema: {
@@ -222,12 +189,14 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Invalid or expired token'
   })
+  @ApiResponse({ status: HttpStatus.SERVICE_UNAVAILABLE, description: 'Provider unavailable or authentication configuration requires attention' })
   async validateToken(
-    @Body() tokenData: { access_token: string }
+    @ValidatedBody('AuthTokenValidationRequest') tokenData: RequestBody<'AuthTokenValidationRequest'>,
+    @Req() request?: RequestWithRequestId
   ): Promise<OidcUserInfo> {
     this.logger.log('Token validation request');
 
-    return this.oauth2ClientCredentialsService.validateAccessToken(tokenData.access_token);
+    return this.oauth2ClientCredentialsService.validateAccessToken(tokenData.access_token, request?.requestId);
   }
 
   /**
@@ -431,22 +400,6 @@ export class AuthController {
     summary: 'Exchange a short-lived login code',
     description: 'Exchanges the one-time login code from the callback redirect for OIDC tokens'
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        code: {
-          type: 'string',
-          description: 'Short-lived one-time login code from the frontend redirect'
-        },
-        browser_verifier: {
-          type: 'string',
-          description: 'Browser-session verifier paired with the challenge sent to the login endpoint'
-        }
-      },
-      required: ['code', 'browser_verifier']
-    }
-  })
   @ApiOkResponse({
     description: 'Successfully exchanged the one-time login code'
   })
@@ -454,7 +407,7 @@ export class AuthController {
     description: 'Invalid or expired login code'
   })
   async exchangeLoginCode(
-    @Body() exchangeData: { code: string; browser_verifier: string }
+    @ValidatedBody('AuthLoginCodeExchangeRequest') exchangeData: RequestBody<'AuthLoginCodeExchangeRequest'>
   ): Promise<OidcTokenResponse> {
     const tokenResponse = await this.oidcAuthService.consumeTokenExchange(
       exchangeData?.code,
@@ -473,18 +426,6 @@ export class AuthController {
     summary: 'Refresh an OIDC access token',
     description: 'Uses a refresh token to obtain a fresh OIDC access token'
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        refresh_token: {
-          type: 'string',
-          description: 'Refresh token from the OIDC provider'
-        }
-      },
-      required: ['refresh_token']
-    }
-  })
   @ApiOkResponse({
     description: 'Successfully refreshed the access token'
   })
@@ -493,7 +434,7 @@ export class AuthController {
   })
   @ApiResponse({ status: HttpStatus.SERVICE_UNAVAILABLE, description: 'Provider unavailable or authentication configuration requires attention' })
   async refreshToken(
-    @Body() refreshData: { refresh_token: string },
+    @ValidatedBody('AuthRefreshRequest') refreshData: RequestBody<'AuthRefreshRequest'>,
     @Req() request?: RequestWithRequestId
   ): Promise<OidcTokenResponse> {
     return this.oidcAuthService.refreshToken(refreshData?.refresh_token, request?.requestId);
@@ -504,21 +445,9 @@ export class AuthController {
     summary: 'Logout from OpenID Connect Provider SSO',
     description: 'Performs POST logout to OpenID Connect Provider to terminate SSO session using refresh token'
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        refresh_token: {
-          type: 'string',
-          description: 'Refresh token to invalidate the SSO session'
-        }
-      },
-      required: ['refresh_token']
-    }
-  })
   @HttpCode(HttpStatus.OK)
   async logout(
-    @Body() logoutData: { refresh_token: string },
+    @ValidatedBody('AuthRefreshRequest') logoutData: RequestBody<'AuthRefreshRequest'>,
     @Res() res: Response
   ): Promise<void> {
     this.logger.log('Processing OpenID Connect Provider SSO logout');
