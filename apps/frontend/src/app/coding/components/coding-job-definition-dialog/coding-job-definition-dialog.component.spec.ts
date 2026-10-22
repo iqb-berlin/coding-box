@@ -2,7 +2,7 @@ import { MAT_TABS_CONFIG } from '@angular/material/tabs';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatTabGroupHarness } from '@angular/material/tabs/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { EventEmitter } from '@angular/core';
+import { EventEmitter, WritableSignal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
@@ -11,6 +11,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { DistributionPreviewSummary } from './coding-workload';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
@@ -1537,6 +1538,30 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.selectedVariableBundles.selected[0].variables).toHaveLength(1);
     expect(component.getTotalCodingCases()).toBe(5);
     expect(component.getFormattedTotalTime()).toBe('0:05');
+  });
+
+  it('does not run or invalidate the fallback estimate when authoritative previews change', () => {
+    createComponent();
+    const internals = component as unknown as {
+      distributionPreviewSummary: WritableSignal<DistributionPreviewSummary | null>;
+      getSelectedDistributionVariableCaseCountsAfterLimit(): number[];
+    };
+    const estimate = jest.spyOn(internals, 'getSelectedDistributionVariableCaseCountsAfterLimit');
+    component.selectedVariables().select({
+      unitName: 'Large unit', variableId: 'Large variable', responseCount: 100000, availableCases: 100000
+    });
+    internals.distributionPreviewSummary.set({ totalCases: 4, doubleCodedCases: 1, totalCodingTasks: 5 });
+    expect(component.getTotalCodingTasks()).toBe(5);
+    expect(estimate).not.toHaveBeenCalled();
+
+    internals.distributionPreviewSummary.set(null);
+    expect(component.getTotalCodingTasks()).toBe(100000);
+    expect(estimate).toHaveBeenCalledTimes(1);
+    internals.distributionPreviewSummary.set({ totalCases: 7, doubleCodedCases: 1, totalCodingTasks: 8 });
+    expect(component.getTotalCodingTasks()).toBe(8);
+    internals.distributionPreviewSummary.set(null);
+    expect(component.getTotalCodingTasks()).toBe(100000);
+    expect(estimate).toHaveBeenCalledTimes(1);
   });
 
   it('shares the fallback calculation across all summary bindings until inputs change', () => {
