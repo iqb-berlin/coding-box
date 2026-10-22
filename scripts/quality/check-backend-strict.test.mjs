@@ -3,20 +3,19 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import ts from 'typescript';
-import { compareDiagnostics, requestContractBindingErrors, verifyBaseline } from './check-backend-strict.mjs';
+import { requestContractBindingErrors, verifyDiagnostics } from './check-backend-strict.mjs';
 
-const old = { file: 'legacy.ts', code: 18048, message: 'value is possibly undefined', count: 1 };
-
-test('allows existing diagnostics and reductions', () => {
-  assert.deepEqual(compareDiagnostics([old], [old]), []);
-  assert.deepEqual(compareDiagnostics([], [old]), []);
+test('requires zero diagnostics, including errors formerly accepted by a legacy baseline', () => {
+  assert.doesNotThrow(() => verifyDiagnostics([]));
+  assert.throws(() => verifyDiagnostics([
+    { file: 'legacy.ts', code: 18048, message: 'value is possibly undefined', count: 1 }
+  ]), /no legacy baseline/);
 });
 
-test('rejects new diagnostics and additional occurrences of an existing diagnostic', () => {
-  assert.deepEqual(compareDiagnostics([{ ...old, count: 2 }], [old]), [{ ...old, count: 2 }]);
-  assert.equal(compareDiagnostics([{ ...old, file: 'new.ts' }], [old]).length, 1);
-  assert.equal(compareDiagnostics([{ ...old, code: 7006 }], [old]).length, 1);
-  assert.equal(compareDiagnostics([{ ...old, message: 'different error' }], [old]).length, 1);
+test('the production compiler configuration enables strict checking', () => {
+  const config = JSON.parse(readFileSync(new URL('../../apps/backend/tsconfig.app.json', import.meta.url), 'utf8'));
+  assert.equal(config.compilerOptions.strict, true);
+  assert.equal(config.compilerOptions.strictPropertyInitialization, false);
 });
 
 test('rejects drift between the runtime contract and the declared input type', () => {
@@ -61,11 +60,6 @@ test('detects a mismatch through a renamed RequestBody import', () => {
       '/controller.ts': `import { RequestBody as Input } from './contracts'; class C { route(@ValidatedBody('A') body: Input<'${name}'>) {} }`
     }).length, count);
   }
-});
-
-test('verification rejects regression before a baseline could be pruned', () => {
-  assert.doesNotThrow(() => verifyBaseline([old], [old]));
-  assert.throws(() => verifyBaseline([{ ...old, count: 2 }], [old]), /do not expand/);
 });
 
 test('both existing backend unit gates execute strict checking before publishing can proceed', () => {

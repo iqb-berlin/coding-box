@@ -5,7 +5,9 @@
     "module": "commonjs",
     "types": ["node"],
     "emitDecoratorMetadata": true,
-    "target": "es2021"
+    "target": "es2021",
+    "strict": true,
+    "strictPropertyInitialization": false
   },
   "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/*test.factory.ts", "jest.config.ts"],
   "include": ["**/*.ts"]
