@@ -4,7 +4,7 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import {
-  FormsModule, ReactiveFormsModule, NonNullableFormBuilder, FormGroup, FormControl, Validators
+  FormsModule, ReactiveFormsModule, FormControl
 } from '@angular/forms';
 import {
   MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog
@@ -64,6 +64,7 @@ import { WorkspaceSettingsService } from '../../../shared/services/workspace/wor
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
+import { CodingJobForm, CodingJobFormValue, createCodingJobForm } from './coding-job-definition-form';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -101,25 +102,6 @@ export interface JobDefinition {
   created_at?: Date;
   updated_at?: Date;
 }
-
-interface CodingJobFormValue {
-  durationSeconds: number;
-  maxCodingCases: number | null;
-  doubleCodingAbsolute: number;
-  doubleCodingPercentage: number;
-  caseOrderingMode: 'continuous' | 'alternating';
-  showScore: boolean;
-  allowComments: boolean;
-  suppressGeneralInstructions: boolean;
-  name?: string;
-  description?: string;
-  missingsProfileId?: number;
-  status?: string;
-}
-
-type CodingJobForm = FormGroup<{
-  [Key in keyof CodingJobFormValue]: FormControl<Exclude<CodingJobFormValue[Key], undefined>>;
-}>;
 
 export const CODING_JOB_DEFINITION_RECOVERY_KEY = 'coding-job-definition-active-state';
 
@@ -218,7 +200,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
   private changeDetectorRef = inject(ChangeDetectorRef);
-  private fb = inject(NonNullableFormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
@@ -984,45 +965,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   initForm(): void {
-    this.codingJobForm = this.fb.group({
-      durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
-      maxCodingCases: this.fb.control<number | null>(this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]),
-      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
-      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
-      caseOrderingMode: this.fb.control<'continuous' | 'alternating'>(
-        this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]
-      ),
-      showScore: [this.data.codingJob?.showScore ?? this.data.mode !== 'definition'],
-      allowComments: [this.data.codingJob?.allowComments ?? true],
-      suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false]
+    this.codingJobForm = createCodingJobForm({
+      mode: this.data.mode,
+      isEdit: this.data.isEdit,
+      job: this.data.codingJob,
+      readOnly: this.isReadOnly,
+      lockStatus: this.hasExistingDefinitionJobs
     });
-
-    if (this.data.mode === 'definition') {
-      this.codingJobForm.addControl('name', this.fb.control(
-        this.data.codingJob?.name || '',
-        [Validators.required, Validators.pattern(/\S/), Validators.maxLength(255)]
-      ));
-      this.codingJobForm.addControl('description', this.fb.control(this.data.codingJob?.description || ''));
-      this.codingJobForm.addControl('missingsProfileId', this.fb.control(
-        this.data.codingJob?.missingsProfileId ?? this.data.codingJob?.missings_profile_id ?? 0,
-        [Validators.min(0)]
-      ));
-    }
-
-    if (this.data.isEdit) {
-      const defaultStatus = this.data.mode === 'definition' ? 'draft' : 'pending';
-      this.codingJobForm.addControl('status', this.fb.control(
-        this.data.codingJob?.status || defaultStatus, [Validators.required]
-      ));
-    }
-
-    if (this.hasExistingDefinitionJobs) {
-      this.codingJobForm.get('status')?.disable({ emitEvent: false });
-    }
-
-    if (this.isReadOnly) {
-      this.codingJobForm.disable({ emitEvent: false });
-    }
 
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
