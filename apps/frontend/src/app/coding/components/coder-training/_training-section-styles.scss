@@ -1,0 +1,71 @@
+@mixin sections {
+  .section {
+    display: block;
+    width: 100%;
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+
+      .section-subtitle {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .selection-count,
+        .bundle-count,
+        .variable-count {
+          font-size: 0.85rem;
+          color: #718096;
+          font-weight: 400;
+        }
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 8px;
+
+        .action-link {
+          color: #3182ce;
+          font-size: 0.8rem;
+          font-weight: 600;
+          padding: 0 4px;
+          min-width: unset;
+        }
+      }
+    }
+
+    mat-form-field.full-width {
+      width: 100%;
+    }
+  }
+  .section-divider {
+    margin: 8px 0;
+    opacity: 0.5;
+  }
+
+  @media (max-width: 600px) {
+    .section {
+      .section-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+
+        .section-subtitle {
+          flex-wrap: wrap;
+        }
+
+        .header-actions {
+          width: 100%;
+          flex-wrap: wrap;
+        }
+      }
+    }
+  }
+}
