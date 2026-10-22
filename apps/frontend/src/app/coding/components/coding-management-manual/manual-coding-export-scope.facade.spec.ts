@@ -19,6 +19,8 @@ describe('ManualCodingExportScopeFacade', () => {
     getCoders = jest.fn().mockReturnValue(of([{ id: 1, name: 'A' }]));
     TestBed.configureTestingModule({ providers: [ManualCodingExportScopeFacade, { provide: AppService, useValue: app }, { provide: CodingJobBackendService, useValue: { getJobDefinitions: getDefinitions } }, { provide: CoderService, useValue: { getCodersForExport: getCoders } }] });
     scope = TestBed.inject(ManualCodingExportScopeFacade);
+    expect(Reflect.get(scope.coders, 'set')).toBeUndefined();
+    expect(Reflect.get(scope.isLoadingCodersForExport, 'set')).toBeUndefined();
   });
 
   it('keeps a successful empty scope distinct from an unloaded scope', () => {
