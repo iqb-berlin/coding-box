@@ -56,6 +56,8 @@ festgelegt, Repository-Zugangsdaten werden nach dem Checkout nicht gespeichert.
   Der Live-Harness startet wie unter GitLab als root, damit die bestehende
   Besitzerkorrektur der privaten Realm-Datei für Keycloak-UID 1000 greift.
   Die Datei behält ihre Rechte `0600`; Cypress nutzt den Cache des Runners.
+  Anschließend erhalten ausschließlich die beiden Artefaktordner wieder den
+  Runner als Besitzer, damit der Upload auch nach Testfehlern funktioniert.
   Es gibt keine Änderung an den getesteten Live-Szenarien.
 - GitLab baut auf Feature-Branches das Frontend immer und das Backend nur bei
   Betroffenheit. GitHub baut beide vollständig. GitLabs technische CICD-Images,

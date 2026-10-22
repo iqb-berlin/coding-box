@@ -208,6 +208,14 @@ jobs:
             "REPLAY_E2E_CONNECT_HOST=$REPLAY_E2E_CONNECT_HOST" \
             "REPLAY_E2E_PUBLISH_HOST=$REPLAY_E2E_PUBLISH_HOST" \
             npx --no-install nx run "frontend:$E2E_TARGET" --configuration=production
+      - name: Return test evidence to the runner user
+        if: always()
+        run: |
+          for evidence in cypress/replay-artifacts tmp/replay-e2e-artifacts; do
+            if sudo test -e "$evidence"; then
+              sudo chown --recursive --no-dereference "$(id -u):$(id -g)" "$evidence"
+            fi
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
