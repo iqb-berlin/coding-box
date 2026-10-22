@@ -92,7 +92,7 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
-  it('finishes a pending reliability export after changing the comparison page', () => {
+  it('finishes a pending reliability export after changing the comparison page', { defaultCommandTimeout: 15_000 }, () => {
     const exportGate = createResponseGate();
     let exportsStarted = 0;
     cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', request => {

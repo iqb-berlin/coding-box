@@ -309,7 +309,7 @@ describe('Zoneless manual preparation workflows', () => {
       expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
       request.addEventListener('abort', () => { referenceAborts += 1; });
     });
-    cy.get('@training').find('.close-button').click();
+    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
     cy.get('coding-box-coder-training').should('not.exist');
     cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
@@ -317,7 +317,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');
-    cy.get('@training').find('.close-button').click();
+    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
   });
 
   for (const role of [{ name: 'coding manager', level: 2 }, { name: 'study manager', level: 3 }]) {
