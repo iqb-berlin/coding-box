@@ -129,7 +129,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     } as unknown as Partial<DistributedCodingService>;
 
     mockAppService = {
-      selectedWorkspaceId: 1
+      selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new Subject<number>()
     };
 
     mockCoderService = {
@@ -230,6 +231,126 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should create', () => {
     createComponent();
     expect(component).toBeTruthy();
+  });
+
+  it('keeps the latest filter rows and scope when earlier responses arrive last', async () => {
+    createComponent();
+    const older = new Subject<Variable[]>();
+    const newer = new Subject<Variable[]>();
+    const oldScope = new Subject<unknown>();
+    const newScope = new Subject<unknown>();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock)
+      .mockReturnValueOnce(older).mockReturnValueOnce(newer);
+    (mockCodingJobBackendService.getManualCodingScopeSummary as jest.Mock)
+      .mockReturnValueOnce(oldScope).mockReturnValueOnce(newScope);
+
+    component.unitNameFilter.set('Unit 1');
+    component.applyFilter();
+    component.unitNameFilter.set('Unit 2');
+    component.applyFilter();
+    newer.next([{ ...mockVariables[1] }]); newer.complete();
+    const summary = (manualResponseCount: number) => ({
+      manualVariableCount: 1,
+      manualResponseCount,
+      coveredSourceVariableCount: 0,
+      coveredSourceResponseCount: 0,
+      coveredSourceVariables: []
+    });
+    newScope.next(summary(5)); newScope.complete();
+    older.next([{ ...mockVariables[0] }]); older.complete();
+    oldScope.next(summary(10)); oldScope.complete();
+
+    await fixture.whenStable();
+    expect(component.dataSource.data.map(variable => variable.unitName)).toEqual(['Unit 2']);
+    expect(Reflect.get(component, 'manualCodingScopeSummary')().manualResponseCount).toBe(5);
+    expect(older.observed).toBe(false);
+    expect(oldScope.observed).toBe(false);
+  });
+
+  it('retries failed filters and cancels both requests across a workspace round trip', () => {
+    createComponent();
+    const variables = new Subject<Variable[]>();
+    const scope = new Subject<unknown>();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValueOnce(variables);
+    (mockCodingJobBackendService.getManualCodingScopeSummary as jest.Mock).mockReturnValueOnce(scope);
+    component.loadCodingIncompleteVariables('Unit 1', true);
+    variables.error(new Error('offline'));
+    scope.error(new Error('offline'));
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+
+    const pendingVariables = new Subject<Variable[]>();
+    const pendingScope = new Subject<unknown>();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValueOnce(pendingVariables);
+    (mockCodingJobBackendService.getManualCodingScopeSummary as jest.Mock).mockReturnValueOnce(pendingScope);
+    component.loadCodingIncompleteVariables('Unit 2', true);
+    expect(pendingVariables.observed).toBe(true);
+    mockAppService.selectedWorkspaceId = 2;
+    (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
+    mockAppService.selectedWorkspaceId = 1;
+    (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
+    expect(pendingVariables.observed).toBe(false);
+    expect(pendingScope.observed).toBe(false);
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+
+    component.loadCodingIncompleteVariables('Unit 2', true);
+    expect(component.variables()).toHaveLength(mockVariables.length);
+  });
+
+  it('cancels a pending filter when returning to preloaded rows', () => {
+    createComponent({ preloadedVariables: [{ ...mockVariables[1] }] });
+    const pending = new Subject<Variable[]>();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValueOnce(pending);
+    component.loadCodingIncompleteVariables('Unit 1', true);
+    expect(pending.observed).toBe(true);
+    component.loadCodingIncompleteVariables();
+    expect(pending.observed).toBe(false);
+    pending.next([{ ...mockVariables[0] }]);
+    expect(component.variables().map(variable => variable.unitName)).toEqual(['Unit 2']);
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+  });
+
+  it('cancels both queries on destruction and ignores later responses', () => {
+    createComponent();
+    const variables = new Subject<Variable[]>();
+    const scope = new Subject<unknown>();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValueOnce(variables);
+    (mockCodingJobBackendService.getManualCodingScopeSummary as jest.Mock).mockReturnValueOnce(scope);
+    component.loadCodingIncompleteVariables('Unit 1', true);
+    const before = component.variables();
+    fixture.destroy();
+    expect(variables.observed).toBe(false);
+    expect(scope.observed).toBe(false);
+    variables.next([{ ...mockVariables[0] }]);
+    expect(component.variables()).toBe(before);
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+  });
+
+  it('keeps a recovered filter loading after synchronous preloaded rows finish', () => {
+    createComponent({ preloadedVariables: cloneVariables() });
+    component.unitNameFilter.set('Unit 2');
+    const recovery = TestBed.inject(SessionRecoveryService);
+    recovery.captureRegisteredDrafts();
+    fixture.destroy();
+
+    // The setting arrives after the other recovery dependencies, then accepts
+    // preloaded rows synchronously and immediately restores the saved filter.
+    const setting = new Subject<boolean>();
+    const filteredVariables = new Subject<Variable[]>();
+    (mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding as jest.Mock).mockReturnValueOnce(setting);
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValueOnce(filteredVariables);
+    fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    setting.next(false);
+    setting.complete();
+
+    expect(component.unitNameFilter()).toBe('Unit 2');
+    expect(filteredVariables.observed).toBe(true);
+    expect(component.isLoadingVariableAnalysis()).toBe(true);
+    filteredVariables.next([{ ...mockVariables[1] }]);
+    filteredVariables.complete();
+    expect(component.isLoadingVariableAnalysis()).toBe(false);
+    expect(component.variables().map(variable => variable.unitName)).toEqual(['Unit 2']);
   });
 
   it('explains why existing job definitions are read-only', () => {

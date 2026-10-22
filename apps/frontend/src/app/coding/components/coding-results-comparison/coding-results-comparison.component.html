@@ -355,7 +355,7 @@
                                 <!-- Weighted Mean Toggle -->
                                 <div class="weighting-toggle-container">
                                   <mat-slide-toggle
-                                    [ngModel]="useWeightedMean()" (ngModelChange)="useWeightedMean.set($event)"
+                                    [ngModel]="useWeightedMean()" (ngModelChange)="setWeightingMethod($event)"
                                     (change)="toggleWeightingMethod()"
                                     color="primary"
                                     [disabled]="isLoadingKappa()"
@@ -380,7 +380,7 @@
                                 <!-- Calculation Level Toggle -->
                                 <div class="level-toggle-container">
                                   <mat-slide-toggle
-                                    [ngModel]="useCodeLevel()" (ngModelChange)="useCodeLevel.set($event)"
+                                    [ngModel]="useCodeLevel()" (ngModelChange)="setCalculationLevel($event)"
                                     (change)="toggleCalculationLevel()"
                                     color="primary"
                                     [disabled]="isLoadingKappa()"

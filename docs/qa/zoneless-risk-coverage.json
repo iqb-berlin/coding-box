@@ -46,7 +46,8 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-import-file.spec.ts",
         "apps/frontend/src/app/coding/services/external-coding-import-abort.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export.facade.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export-scope.facade.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export-scope.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts"
       ]
     },
     {
@@ -289,18 +290,19 @@
         "jobs",
         "results-validation"
       ],
-      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes."
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes. Der Variablenfilter verwirft ältere Zeilen und Scope-Summen auch im Browser. Der dialoglokale TrainingReliabilityFacade-SignalStore ersetzt Leseanfragen und unterdrückt Export-Doppelstarts; Facade- und Komponententests prüfen Fehler/Retry und abgeleitete Kennzahlen, der Browser den Trainingsvergleich gegen das Produktionsartefakt."
     },
     {
       "id": "lifecycle",
       "areas": [
+        "management",
         "results-validation",
         "files-exports-metadata",
         "administration",
         "jobs",
         "coding-replay"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung. Der dialoglokale Reliabilitäts-SignalStore ist nativ auf Injector-Isolation, nur lesbare Signals und Ereignisse, Workspace-Rundwechsel und Zerstörung geprüft."
     },
     {
       "id": "timers-promises",
