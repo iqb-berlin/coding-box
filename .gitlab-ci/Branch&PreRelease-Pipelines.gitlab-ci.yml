@@ -460,6 +460,9 @@ test-db:
 test-backend:
   stage: test-units
   image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  services:
+    - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
+      alias: bullmq-redis
   interruptible: true
   allow_failure: false
   extends: .distributed
@@ -471,6 +474,8 @@ test-backend:
     - npx nx test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
   variables:
     FORCE_COLOR: "0"
+    BULLMQ_TEST_REDIS_HOST: "bullmq-redis"
+    BULLMQ_TEST_REDIS_PORT: "6379"
   coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
   artifacts:
     when: always

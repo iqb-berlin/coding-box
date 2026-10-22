@@ -87,3 +87,23 @@ test('replay and real-auth fixtures provide explicit current OIDC verification e
     for (const key of ['OAUTH2_CLIENT_ID', 'OIDC_ISSUER', 'OIDC_JWKS_URI']) assert.ok(env[key], file + ': ' + key);
   }
 });
+
+test('both backend CI gates exercise BullMQ against Redis without making failures optional', () => {
+  const require = createRequire(import.meta.url);
+  const yaml = require('js-yaml');
+  const schema = yaml.DEFAULT_SCHEMA.extend([
+    new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
+  ]);
+  const read = file => yaml.load(readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), { schema });
+  const branch = read('.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml')['test-backend'];
+  const release = read('.gitlab-ci/Release-Pipelines.gitlab-ci.yml')['test-main-pr-backend'];
+  assert.equal(branch.allow_failure, false);
+  assert.equal(release.allow_failure, false);
+  assert.ok(branch.services.some(service => service.alias === 'bullmq-redis' && service.name.includes('redis:7.4')));
+  assert.equal(branch.variables.BULLMQ_TEST_REDIS_HOST, 'bullmq-redis');
+  assert.equal(branch.variables.BULLMQ_TEST_REDIS_PORT, '6379');
+  assert.ok(release.script.some(command => command.includes('redis:7.4') && command.includes('--network-alias bullmq-redis')));
+  const tests = release.script.find(command => command.includes('test backend --configuration=ci'));
+  assert.ok(tests.includes('--env BULLMQ_TEST_REDIS_HOST=bullmq-redis'));
+  assert.ok(tests.includes('--env BULLMQ_TEST_REDIS_PORT=6379'));
+});
