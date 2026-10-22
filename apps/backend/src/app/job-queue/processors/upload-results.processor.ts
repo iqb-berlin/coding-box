@@ -1,6 +1,7 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { UploadResultsService } from '../../database/services/test-results';
 import { TestResultsUploadJobData } from '../job-queue.service';
 
@@ -20,7 +21,7 @@ export class UploadResultsProcessor {
       this.logger.log(`Upload job ${job.id} completed successfully`);
       return result;
     } catch (error) {
-      this.logger.error(`Upload job ${job.id} failed: ${error.message}`, error.stack);
+      this.logger.error(`Upload job ${job.id} failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }

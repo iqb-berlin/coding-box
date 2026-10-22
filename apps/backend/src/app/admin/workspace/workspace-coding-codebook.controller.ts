@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -249,8 +250,8 @@ export class WorkspaceCodingCodebookController {
       };
     } catch (error) {
       this.logger.error(
-        `Error creating codebook generation job: ${error.message}`,
-        error.stack
+        `Error creating codebook generation job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -336,8 +337,8 @@ export class WorkspaceCodingCodebookController {
         throw error;
       }
       this.logger.error(
-        `Error getting codebook job status: ${error.message}`,
-        error.stack
+        `Error getting codebook job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -397,8 +398,8 @@ export class WorkspaceCodingCodebookController {
       await this.cleanupCodebookResult(filePath, cacheKey);
     } catch (error) {
       this.logger.error(
-        `Error downloading codebook: ${error.message}`,
-        error.stack
+        `Error downloading codebook: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       rethrowDownloadError(error, res);
     }
@@ -668,7 +669,7 @@ export class WorkspaceCodingCodebookController {
       }
       await this.cacheService.delete(cacheKey);
     } catch (error) {
-      this.logger.warn(`Failed to clean up codebook result: ${error.message}`);
+      this.logger.warn(`Failed to clean up codebook result: ${getErrorMessage(error)}`);
     }
   }
 }

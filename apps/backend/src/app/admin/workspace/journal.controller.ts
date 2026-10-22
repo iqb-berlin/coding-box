@@ -22,6 +22,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
+import { getErrorMessage } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
@@ -556,7 +557,7 @@ export class JournalController {
       }
       return parsed;
     } catch (error) {
-      throw new BadRequestException(`details must be a valid JSON object: ${error.message}`);
+      throw new BadRequestException(`details must be a valid JSON object: ${getErrorMessage(error)}`);
     }
   }
 }

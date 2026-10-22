@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import archiver = require('archiver');
 import { PassThrough, Writable } from 'stream';
 import { Repository } from 'typeorm';
+import { getErrorMessage, toError } from '../../../utils/error.util';
 // eslint-disable-next-line import/no-cycle
 import {
   CodingResponseFilterService,
@@ -337,7 +338,7 @@ export class CodingListStreamService {
       return anchorMaps;
     } catch (error) {
       this.logger.warn(
-        `Failed to load replay anchor overrides for workspace ${workspaceId}: ${error.message}`
+        `Failed to load replay anchor overrides for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       return new Map(
         unitNames.map(unitName => [unitName, new Map<string, string>()])
@@ -371,7 +372,7 @@ export class CodingListStreamService {
       return anchorMaps;
     } catch (error) {
       this.logger.warn(
-        `Failed to load replay anchor overrides for workspace ${workspaceId}: ${error.message}`
+        `Failed to load replay anchor overrides for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       return new Map(
         unitNames.map(unitName => [unitName, new Map<string, string>()])
@@ -503,7 +504,7 @@ export class CodingListStreamService {
         this.logger.log(`CSV stream finished. Rows written: ${totalWritten}`);
         csvStream.end();
       } catch (error) {
-        this.logger.error(`Error streaming CSV export: ${error.message}`);
+        this.logger.error(`Error streaming CSV export: ${getErrorMessage(error)}`);
         csvStream.emit('error', error);
       } finally {
         // Clear caches after export to free memory
@@ -662,7 +663,7 @@ export class CodingListStreamService {
 
       return Buffer.concat(chunks);
     } catch (error) {
-      this.logger.error(`Error creating Excel export: ${error.message}`);
+      this.logger.error(`Error creating Excel export: ${getErrorMessage(error)}`);
       throw error;
     } finally {
       // Clear caches after export to free memory
@@ -797,12 +798,12 @@ export class CodingListStreamService {
 
       this.logger.log(`Direct-to-file Excel export finished. Rows written: ${totalWritten}`);
     } catch (error) {
-      outputStream.destroy(error);
+      outputStream.destroy(toError(error));
       await streamComplete.catch(() => undefined);
-      if (this.isExportCancellationError(error)) {
-        this.logger.log(`Direct-to-file Excel export cancelled: ${error.message}`);
+      if (this.isExportCancellationError(toError(error))) {
+        this.logger.log(`Direct-to-file Excel export cancelled: ${getErrorMessage(error)}`);
       } else {
-        this.logger.error(`Error creating direct-to-file Excel export: ${error.message}`);
+        this.logger.error(`Error creating direct-to-file Excel export: ${getErrorMessage(error)}`);
       }
       throw error;
     } finally {
@@ -959,8 +960,8 @@ export class CodingListStreamService {
 
       this.fileCacheService.clearCaches();
     } catch (error) {
-      this.logger.error(`Error during JSON stream export: ${error.message}`);
-      onError(error);
+      this.logger.error(`Error during JSON stream export: ${getErrorMessage(error)}`);
+      onError(toError(error));
     }
   }
 
@@ -1107,7 +1108,7 @@ export class CodingListStreamService {
         csvStream.end();
       } catch (error) {
         this.logger.error(
-          `Error streaming CSV export for version ${version}: ${error.message}`
+          `Error streaming CSV export for version ${version}: ${getErrorMessage(error)}`
         );
         csvStream.emit('error', error);
       } finally {
@@ -1300,7 +1301,7 @@ export class CodingListStreamService {
       return Buffer.concat(chunks);
     } catch (error) {
       this.logger.error(
-        `Error during Excel export for version ${version}: ${error.message}`
+        `Error during Excel export for version ${version}: ${getErrorMessage(error)}`
       );
       throw error;
     } finally {
@@ -1465,13 +1466,13 @@ export class CodingListStreamService {
         `Direct-to-file Excel export completed for version ${version}. Rows written: ${totalWritten}`
       );
     } catch (error) {
-      outputStream.destroy(error);
+      outputStream.destroy(toError(error));
       await streamComplete.catch(() => undefined);
-      if (this.isExportCancellationError(error)) {
-        this.logger.log(`Direct-to-file Excel export for version ${version} cancelled: ${error.message}`);
+      if (this.isExportCancellationError(toError(error))) {
+        this.logger.log(`Direct-to-file Excel export for version ${version} cancelled: ${getErrorMessage(error)}`);
       } else {
         this.logger.error(
-          `Error during direct-to-file Excel export for version ${version}: ${error.message}`
+          `Error during direct-to-file Excel export for version ${version}: ${getErrorMessage(error)}`
         );
       }
       throw error;
@@ -1759,7 +1760,7 @@ export class CodingListStreamService {
       workbookStream.destroy();
       outputStream.destroy();
       this.logger.error(
-        `Error during GeoGebra ZIP export for version ${version}: ${error.message}`
+        `Error during GeoGebra ZIP export for version ${version}: ${getErrorMessage(error)}`
       );
       throw error;
     } finally {

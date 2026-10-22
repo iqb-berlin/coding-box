@@ -7,6 +7,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
   ValidationTaskJobData
 } from '../job-queue.service';
@@ -30,8 +31,8 @@ export class ValidationTaskProcessor {
       this.logger.log(`Validation task job ${job.id} completed successfully`);
     } catch (error) {
       this.logger.error(
-        `Error processing validation task job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing validation task job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

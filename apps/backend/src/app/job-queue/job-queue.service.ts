@@ -7,6 +7,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Queue, JobOptions, Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
@@ -829,7 +830,7 @@ export class JobQueueService {
       this.logger.log(`Job ${jobId} has been cancelled`);
       return true;
     } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
+      this.logger.error(`Error cancelling job: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
     }
   }
@@ -846,7 +847,7 @@ export class JobQueueService {
       this.logger.log(`Job ${jobId} has been deleted`);
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      this.logger.error(`Error deleting job: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
     }
   }
@@ -947,8 +948,8 @@ export class JobQueueService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error cancelling export job: ${error.message}`,
-        error.stack
+        `Error cancelling export job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -974,8 +975,8 @@ export class JobQueueService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error marking export job as cancelled: ${error.message}`,
-        error.stack
+        `Error marking export job as cancelled: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -990,8 +991,8 @@ export class JobQueueService {
       return job.data?.isCancelled === true;
     } catch (error) {
       this.logger.error(
-        `Error checking export job cancellation: ${error.message}`,
-        error.stack
+        `Error checking export job cancellation: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1010,8 +1011,8 @@ export class JobQueueService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error deleting export job: ${error.message}`,
-        error.stack
+        `Error deleting export job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1169,8 +1170,8 @@ export class JobQueueService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error deleting variable analysis job: ${error.message}`,
-        error.stack
+        `Error deleting variable analysis job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1194,7 +1195,7 @@ export class JobQueueService {
         }
       } catch (error) {
         this.logger.warn(
-          `Failed to remove variable analysis job ${job.id}: ${error.message}`
+          `Failed to remove variable analysis job ${job.id}: ${getErrorMessage(error)}`
         );
       }
     }
@@ -1229,8 +1230,8 @@ export class JobQueueService {
       return true; // Already finished or failed
     } catch (error) {
       this.logger.error(
-        `Error cancelling variable analysis job: ${error.message}`,
-        error.stack
+        `Error cancelling variable analysis job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1276,7 +1277,7 @@ export class JobQueueService {
         await this.testPersonCodingQueue.isReady();
         isReady = true;
       } catch (readyError) {
-        this.logger.warn(`Queue ready check failed: ${readyError.message}`);
+        this.logger.warn(`Queue ready check failed: ${getErrorMessage(readyError)}`);
       }
 
       return {
@@ -1293,13 +1294,13 @@ export class JobQueueService {
       };
     } catch (error) {
       this.logger.error(
-        `Redis connection check failed: ${error.message}`,
-        error.stack
+        `Redis connection check failed: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
 
       return {
         connected: false,
-        message: `Redis connection failed: ${error.message}`
+        message: `Redis connection failed: ${getErrorMessage(error)}`
       };
     }
   }

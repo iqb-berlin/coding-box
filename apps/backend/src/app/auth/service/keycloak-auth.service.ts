@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { getErrorMessage } from '../../utils/error.util';
 
 export interface KeycloakTokenResponse {
   access_token: string;
@@ -99,7 +100,7 @@ export class KeycloakAuthService {
       this.logger.log('Successfully obtained access token from authorization code');
       return response.data;
     } catch (error) {
-      this.logger.error('Failed to exchange authorization code for token:', error.response?.data || error.message);
+      this.logger.error('Failed to exchange authorization code for token:', getErrorMessage(error));
       throw new UnauthorizedException('Failed to exchange authorization code for token');
     }
   }
@@ -129,7 +130,7 @@ export class KeycloakAuthService {
       );
       return response.data;
     } catch (error) {
-      this.logger.error('Failed to get user info:', error.response?.data || error.message);
+      this.logger.error('Failed to get user info:', getErrorMessage(error));
       throw new UnauthorizedException('Failed to get user information');
     }
   }
@@ -199,7 +200,7 @@ export class KeycloakAuthService {
 
       this.logger.log('Successfully logged out from Keycloak SSO session');
     } catch (error) {
-      this.logger.error('Failed to logout from Keycloak:', error.response?.data || error.message);
+      this.logger.error('Failed to logout from Keycloak:', getErrorMessage(error));
       throw new UnauthorizedException('Failed to logout from Keycloak');
     }
   }

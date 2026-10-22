@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   ValidationTask,
   ValidationType
@@ -100,7 +101,7 @@ export class ValidationTaskService {
       await this.jobQueueService.addValidationTaskJob({ taskId: savedTask.id });
     } catch (error) {
       savedTask.status = 'failed';
-      savedTask.error = `Failed to queue validation task: ${error.message}`;
+      savedTask.error = `Failed to queue validation task: ${getErrorMessage(error)}`;
       await this.taskRepository.save(savedTask);
       throw error;
     }
@@ -209,7 +210,7 @@ export class ValidationTaskService {
     try {
       result = JSON.parse(task.result);
     } catch (error) {
-      this.logger.error(`Error parsing results for task ${taskId}: ${error.message}`, error.stack);
+      this.logger.error(`Error parsing results for task ${taskId}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error(`Error parsing results for task ${taskId}`);
     }
 
@@ -265,8 +266,8 @@ export class ValidationTaskService {
           taskData = JSON.parse(task.result);
         } catch (error) {
           this.logger.error(
-            `Error parsing task data for task ${taskId}: ${error.message}`,
-            error.stack
+            `Error parsing task data for task ${taskId}: ${getErrorMessage(error)}`,
+            getErrorStack(error)
           );
         }
       }
@@ -446,7 +447,7 @@ export class ValidationTaskService {
     } catch (error) {
       try {
         const task = await this.getValidationTask(taskId);
-        task.error = error.message;
+        task.error = getErrorMessage(error);
         task.status = 'failed';
         task.progress = 100;
         task.progress_message = ValidationTaskService.isDeletionTask(task.validation_type) ?
@@ -454,9 +455,9 @@ export class ValidationTaskService {
           'Validierung fehlgeschlagen.';
         await this.taskRepository.save(task);
       } catch (innerError) {
-        this.logger.error(`Failed to update task ${taskId} with error: ${innerError.message}`, innerError.stack);
+        this.logger.error(`Failed to update task ${taskId} with error: ${getErrorMessage(innerError)}`, getErrorStack(innerError));
       }
-      this.logger.error(`Failed to process task ${taskId}: ${error.message}`, error.stack);
+      this.logger.error(`Failed to process task ${taskId}: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 

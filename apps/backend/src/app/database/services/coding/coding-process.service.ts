@@ -6,6 +6,7 @@ import {
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 
 import {
   STATISTICS_IGNORED_STATUSES,
@@ -272,13 +273,13 @@ export class CodingProcessService {
         }
       } catch (error) {
         this.logger.error(
-          `Error fetching persons for groups: ${error.message}`,
-          error.stack
+          `Error fetching persons for groups: ${getErrorMessage(error)}`,
+          getErrorStack(error)
         );
         return {
           totalResponses: 0,
           statusCounts: {},
-          message: `Error fetching persons for groups: ${error.message}`
+          message: `Error fetching persons for groups: ${getErrorMessage(error)}`
         };
       }
     }
@@ -843,7 +844,7 @@ export class CodingProcessService {
       }
 
       this.logger.error(
-        `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
+        `Error while processing test persons in batch: ${getErrorMessage(error)} \n ${getErrorStack(error)}`
       );
       throw error;
     } finally {
@@ -1218,7 +1219,7 @@ export class CodingProcessService {
         );
       } catch (error) {
         this.logger.error(
-          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
+          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${getErrorMessage(error)}`
         );
         result.set(file.file_id, emptyScheme);
       }
@@ -1285,8 +1286,8 @@ export class CodingProcessService {
       return false;
     } catch (error) {
       this.logger.error(
-        `Error checking job cancellation or pause: ${error.message}`,
-        error.stack
+        `Error checking job cancellation or pause: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -2844,7 +2845,7 @@ export class CodingProcessService {
           }
         } catch (error) {
           this.logger.error(
-            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`
+            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${getErrorMessage(error)}`
           );
         }
       }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JournalEntry } from '../../entities/journal-entry.entity';
 import { sanitizeCsvText } from '../../../utils/csv.util';
 import {
@@ -195,10 +196,10 @@ export class JournalService {
       return await repository.save(entry);
     } catch (error) {
       this.logger.error(
-        `Failed to record audit journal event: ${error.message}`,
-        error.stack
+        `Failed to record audit journal event: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to record audit journal event: ${error.message}`);
+      throw new Error(`Failed to record audit journal event: ${getErrorMessage(error)}`);
     }
   }
 
@@ -241,10 +242,10 @@ export class JournalService {
       return await this.searchLegacyUserId(userId, options);
     } catch (error) {
       this.logger.error(
-        `Failed to find journal entries for user ${userId}: ${error.message}`,
-        error.stack
+        `Failed to find journal entries for user ${userId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to find journal entries: ${error.message}`);
+      throw new Error(`Failed to find journal entries: ${getErrorMessage(error)}`);
     }
   }
 
@@ -292,10 +293,10 @@ export class JournalService {
       ]);
     } catch (error) {
       this.logger.error(
-        `Failed to generate CSV for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Failed to generate CSV for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to generate CSV: ${error.message}`);
+      throw new Error(`Failed to generate CSV: ${getErrorMessage(error)}`);
     }
   }
 
@@ -368,10 +369,10 @@ export class JournalService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to search journal entries: ${error.message}`,
-        error.stack
+        `Failed to search journal entries: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to search journal entries: ${error.message}`);
+      throw new Error(`Failed to search journal entries: ${getErrorMessage(error)}`);
     }
   }
 

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
@@ -138,7 +139,7 @@ export class CodingReplayService {
           };
         } catch (error) {
           this.logger.warn(
-            `Failed to generate replay URL for response ${item.responseId}: ${error.message}`
+            `Failed to generate replay URL for response ${item.responseId}: ${getErrorMessage(error)}`
           );
           return {
             ...item,
@@ -189,7 +190,7 @@ export class CodingReplayService {
         );
       } catch (error) {
         this.logger.warn(
-          `Failed to get variable anchor maps for workspace ${workspaceId}: ${error.message}`
+          `Failed to get variable anchor maps for workspace ${workspaceId}: ${getErrorMessage(error)}`
         );
       }
     }
@@ -200,7 +201,7 @@ export class CodingReplayService {
           const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
           variablePageMaps.set(unitName, pageMap);
         } catch (error) {
-          this.logger.warn(`Failed to get variable page map for unit '${unitName}': ${error.message}`);
+          this.logger.warn(`Failed to get variable page map for unit '${unitName}': ${getErrorMessage(error)}`);
           variablePageMaps.set(unitName, new Map());
         }
       })
@@ -230,7 +231,7 @@ export class CodingReplayService {
         );
         return { ...item, replayUrl };
       } catch (error) {
-        this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+        this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${getErrorMessage(error)}`);
         return { ...item, replayUrl: '' };
       }
     });
@@ -347,7 +348,7 @@ export class CodingReplayService {
       return variablePage;
     } catch (error) {
       this.logger.warn(
-        `Failed to resolve variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${error.message}`
+        `Failed to resolve variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       return '0';
     }
@@ -394,7 +395,7 @@ export class CodingReplayService {
       );
     } catch (error) {
       this.logger.warn(
-        `Failed to resolve variableAnchor for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${error.message}`
+        `Failed to resolve variableAnchor for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       return fallbackAnchor;
     }

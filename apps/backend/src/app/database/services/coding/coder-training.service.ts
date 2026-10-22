@@ -6,6 +6,7 @@ import {
   Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
 import { createHash } from 'crypto';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -3340,8 +3341,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error creating coder training jobs: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error creating coder training jobs: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         jobsCreated: 0,
@@ -4881,8 +4882,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      this.logger.error(`Error updating coder training: ${error.message}`, error.stack);
-      return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${error.message}` };
+      this.logger.error(`Error updating coder training: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${getErrorMessage(error)}` };
     }
   }
 
@@ -4924,8 +4925,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error updating coder training label: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error updating coder training label: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         message: errorMessage
@@ -5046,8 +5047,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error deleting coder training: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error deleting coder training: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         message: errorMessage

@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import Persons from '../../entities/persons.entity';
@@ -178,9 +179,9 @@ export class WorkspacePlayerService {
     } catch (error) {
       this.logger.error(
         `Failed to retrieve files for player '${playerName}' in workspace ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
-      throw new Error(`An error occurred while fetching files for player '${playerName}': ${error.message}`);
+      throw new Error(`An error occurred while fetching files for player '${playerName}': ${getErrorMessage(error)}`);
     }
   }
 
@@ -204,7 +205,7 @@ export class WorkspacePlayerService {
     } catch (error) {
       this.logger.error(
         `Error retrieving unit definition for unit: ${unitId} in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(`Could not retrieve unit definition for unit: ${unitId}`);
     }
@@ -293,8 +294,8 @@ export class WorkspacePlayerService {
         this.logger.log(`Found ${units.length} total units in booklet ${bookletId}`);
       }
     } catch (error) {
-      this.logger.error(`Error parsing booklet XML: ${error.message}`, error.stack);
-      throw new Error(`Error parsing booklet XML: ${error.message}`);
+      this.logger.error(`Error parsing booklet XML: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Error parsing booklet XML: ${getErrorMessage(error)}`);
     }
 
     if (units.length === 0) {

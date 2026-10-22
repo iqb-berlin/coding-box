@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import { Setting } from '../../entities/setting.entity';
 
 export interface CodingReplayAnchorOverride {
@@ -139,7 +140,7 @@ export class CodingReplayAnchorService {
         .map(entry => this.tryNormalizeOverride(entry))
         .filter((entry): entry is CodingReplayAnchorOverride => entry !== null);
     } catch (error) {
-      this.logger.warn(`Failed to parse replay anchor overrides: ${error.message}`);
+      this.logger.warn(`Failed to parse replay anchor overrides: ${getErrorMessage(error)}`);
       return [];
     }
   }

@@ -22,6 +22,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { getErrorMessage } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
@@ -159,8 +160,8 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      if (error.message && error.message.includes('not found in workspace')) {
-        throw new NotFoundException(error.message);
+      if (getErrorMessage(error) && getErrorMessage(error).includes('not found in workspace')) {
+        throw new NotFoundException(getErrorMessage(error));
       }
       throw error;
     }
@@ -217,8 +218,8 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      if (error.message && error.message.includes('not found in workspace')) {
-        throw new NotFoundException(error.message);
+      if (getErrorMessage(error) && getErrorMessage(error).includes('not found in workspace')) {
+        throw new NotFoundException(getErrorMessage(error));
       }
       throw error;
     }
@@ -327,8 +328,8 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      if (error.message && error.message.includes('not found in workspace')) {
-        throw new NotFoundException(error.message);
+      if (getErrorMessage(error) && getErrorMessage(error).includes('not found in workspace')) {
+        throw new NotFoundException(getErrorMessage(error));
       }
       throw error;
     }
@@ -420,8 +421,8 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      if (error.message && error.message.includes('not found in workspace')) {
-        throw new NotFoundException(error.message);
+      if (getErrorMessage(error) && getErrorMessage(error).includes('not found in workspace')) {
+        throw new NotFoundException(getErrorMessage(error));
       }
       throw error;
     }
@@ -517,8 +518,8 @@ export class VariableAnalysisController {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      if (error.message && error.message.includes('not found in workspace')) {
-        throw new NotFoundException(error.message);
+      if (getErrorMessage(error) && getErrorMessage(error).includes('not found in workspace')) {
+        throw new NotFoundException(getErrorMessage(error));
       }
       throw error;
     }

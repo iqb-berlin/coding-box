@@ -11,6 +11,7 @@ import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
 import { pipeline } from 'stream/promises';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
   ExportJobData,
   ExportJobProgress,
@@ -132,7 +133,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       );
     } catch (error) {
       this.logger.warn(
-        `Failed to refresh export working directory lease for ${workingDirectory}: ${error.message}`
+        `Failed to refresh export working directory lease for ${workingDirectory}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -183,7 +184,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       fs.rmSync(workingDirectory, { recursive: true, force: true });
     } catch (cleanupError) {
       this.logger.warn(
-        `Failed to clean up export working directory ${workingDirectory}: ${cleanupError.message}`
+        `Failed to clean up export working directory ${workingDirectory}: ${getErrorMessage(cleanupError)}`
       );
     }
   }
@@ -215,7 +216,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Cleaned up partial export file: ${filePath}`);
     } catch (cleanupError) {
       this.logger.warn(
-        `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
+        `Failed to clean up partial file ${filePath}: ${getErrorMessage(cleanupError)}`
       );
       if (failOnError) {
         throw cleanupError;
@@ -253,13 +254,13 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
           }
         } catch (entryError) {
           this.logger.warn(
-            `Failed to clean up expired export path ${expiredPath}: ${entryError.message}`
+            `Failed to clean up expired export path ${expiredPath}: ${getErrorMessage(entryError)}`
           );
         }
       }
     } catch (error) {
       this.logger.warn(
-        `Failed to clean up expired export files: ${error.message}`
+        `Failed to clean up expired export files: ${getErrorMessage(error)}`
       );
     }
   }
@@ -876,8 +877,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
         return this.createCancelledResult(job);
       }
       this.logger.error(
-        `Error processing export job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing export job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       this.cleanupPartialExportFile(filePath);
       throw error;

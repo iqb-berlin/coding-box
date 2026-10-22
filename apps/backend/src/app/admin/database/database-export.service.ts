@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as sqlite3 from 'sqlite3';
 import { promisify } from 'util';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 
 type ExportProgressCallback = (
@@ -193,8 +194,8 @@ export class DatabaseExportService {
         await dbClose();
       } catch (closeError) {
         this.logger.error(
-          `Error closing SQLite file: ${closeError?.message || closeError}`,
-          closeError?.stack
+          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
+          getErrorStack(closeError)
         );
       }
 
@@ -203,8 +204,8 @@ export class DatabaseExportService {
           fs.unlinkSync(outputFilePath);
         } catch (cleanupError) {
           this.logger.error(
-            `Error deleting failed export file: ${cleanupError?.message || cleanupError}`,
-            cleanupError?.stack
+            `Error deleting failed export file: ${getErrorMessage(cleanupError) || cleanupError}`,
+            getErrorStack(cleanupError)
           );
         }
       }
@@ -371,8 +372,8 @@ export class DatabaseExportService {
           await queryRunner.rollbackTransaction();
         } catch (rollbackError) {
           this.logger.error(
-            `Error rolling back workspace export transaction: ${rollbackError?.message || rollbackError}`,
-            rollbackError?.stack
+            `Error rolling back workspace export transaction: ${getErrorMessage(rollbackError) || rollbackError}`,
+            getErrorStack(rollbackError)
           );
         }
       }
@@ -381,8 +382,8 @@ export class DatabaseExportService {
         await dbClose();
       } catch (closeError) {
         this.logger.error(
-          `Error closing SQLite file: ${closeError?.message || closeError}`,
-          closeError?.stack
+          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
+          getErrorStack(closeError)
         );
       }
 
@@ -391,8 +392,8 @@ export class DatabaseExportService {
           fs.unlinkSync(outputFilePath);
         } catch (cleanupError) {
           this.logger.error(
-            `Error deleting failed workspace export file: ${cleanupError?.message || cleanupError}`,
-            cleanupError?.stack
+            `Error deleting failed workspace export file: ${getErrorMessage(cleanupError) || cleanupError}`,
+            getErrorStack(cleanupError)
           );
         }
       }
@@ -404,8 +405,8 @@ export class DatabaseExportService {
           await queryRunner.release();
         } catch (releaseError) {
           this.logger.error(
-            `Error releasing workspace export query runner: ${releaseError?.message || releaseError}`,
-            releaseError?.stack
+            `Error releasing workspace export query runner: ${getErrorMessage(releaseError) || releaseError}`,
+            getErrorStack(releaseError)
           );
         }
       }

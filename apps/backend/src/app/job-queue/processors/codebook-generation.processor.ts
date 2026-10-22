@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodebookGenerationJobData, CodebookJobResult } from '../job-queue.service';
@@ -81,8 +82,8 @@ export class CodebookGenerationProcessor {
       return result;
     } catch (error) {
       this.logger.error(
-        `Error processing codebook generation job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing codebook generation job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -101,7 +102,7 @@ export class CodebookGenerationProcessor {
           }
         });
     } catch (error) {
-      this.logger.warn(`Failed to clean up expired codebook files: ${error.message}`);
+      this.logger.warn(`Failed to clean up expired codebook files: ${getErrorMessage(error)}`);
     }
   }
 }

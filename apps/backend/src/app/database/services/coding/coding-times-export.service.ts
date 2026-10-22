@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { buildCoderNameMapping } from '../../../utils/coding-utils';
 import { CodingListService } from './coding-list.service';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -301,8 +302,8 @@ export class CodingTimesExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting coding times report: ${error.message}`, error.stack);
-      throw new Error(`Could not export coding times report: ${error.message}`);
+      this.logger.error(`Error exporting coding times report: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export coding times report: ${getErrorMessage(error)}`);
     }
   }
 

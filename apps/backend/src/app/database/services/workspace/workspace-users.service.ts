@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThan, Repository } from 'typeorm';
+import { getErrorStack } from '../../../utils/error.util';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
@@ -136,7 +137,7 @@ export class WorkspaceUsersService {
       this.logger.log(`Found ${users.length} user(s) for workspace ID: ${workspaceId}`);
       return [users, users.length];
     } catch (error) {
-      this.logger.error(`Failed to retrieve users for workspace ID: ${workspaceId}`, error.stack);
+      this.logger.error(`Failed to retrieve users for workspace ID: ${workspaceId}`, getErrorStack(error));
       throw new Error('Could not retrieve workspace users');
     }
   }
@@ -181,7 +182,7 @@ export class WorkspaceUsersService {
       this.logger.log(`Found ${enhancedUsers.length} coder(s) for workspace ID: ${workspaceId}`);
       return [enhancedUsers as WorkspaceUser[], enhancedUsers.length];
     } catch (error) {
-      this.logger.error(`Failed to retrieve coders for workspace ID: ${workspaceId}`, error.stack);
+      this.logger.error(`Failed to retrieve coders for workspace ID: ${workspaceId}`, getErrorStack(error));
       throw new Error('Could not retrieve workspace coders');
     }
   }
