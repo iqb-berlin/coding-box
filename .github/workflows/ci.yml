@@ -197,7 +197,17 @@ jobs:
           REPLAY_E2E_CONNECT_HOST: 127.0.0.1
           REPLAY_E2E_PUBLISH_HOST: 127.0.0.1
           CYPRESS_INSTALL_BINARY: ''
-        run: npx --no-install nx run "frontend:$E2E_TARGET" --configuration=production
+        # Match GitLab's root harness: prepareAuthEnvironment hands the private
+        # 0600 realm fixture to Keycloak UID 1000. Keep Cypress's runner cache.
+        run: |
+          sudo env "PATH=$PATH" "CI=$CI" \
+            "NX_DAEMON=$NX_DAEMON" "NX_NO_CLOUD=$NX_NO_CLOUD" \
+            "NX_SKIP_NX_CACHE=$NX_SKIP_NX_CACHE" "FORCE_COLOR=$FORCE_COLOR" \
+            "NG_BUILD_MAX_WORKERS=$NG_BUILD_MAX_WORKERS" \
+            "CYPRESS_CACHE_FOLDER=$HOME/.cache/Cypress" \
+            "REPLAY_E2E_CONNECT_HOST=$REPLAY_E2E_CONNECT_HOST" \
+            "REPLAY_E2E_PUBLISH_HOST=$REPLAY_E2E_PUBLISH_HOST" \
+            npx --no-install nx run "frontend:$E2E_TARGET" --configuration=production
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

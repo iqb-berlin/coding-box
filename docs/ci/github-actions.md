@@ -53,6 +53,9 @@ festgelegt, Repository-Zugangsdaten werden nach dem Checkout nicht gespeichert.
   CI-Umgebung, keinen isolierten CPU-Geschwindigkeitsunterschied.
 - GitLab verwendet Container und Docker-in-Docker, GitHub Ubuntu 24.04 mit
   nativem Docker. Die Live-Harness-Konfiguration verwendet deshalb Loopback.
+  Der Live-Harness startet wie unter GitLab als root, damit die bestehende
+  Besitzerkorrektur der privaten Realm-Datei für Keycloak-UID 1000 greift.
+  Die Datei behält ihre Rechte `0600`; Cypress nutzt den Cache des Runners.
   Es gibt keine Änderung an den getesteten Live-Szenarien.
 - GitLab baut auf Feature-Branches das Frontend immer und das Backend nur bei
   Betroffenheit. GitHub baut beide vollständig. GitLabs technische CICD-Images,
