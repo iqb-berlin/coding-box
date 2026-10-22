@@ -9,6 +9,7 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   Observable, of, Subject, throwError
 } from 'rxjs';
+import { ManualCodingExportScopeFacade } from './manual-coding-export-scope.facade';
 import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
@@ -2818,28 +2819,19 @@ describe('CodingManagementManualComponent', () => {
     const dialog = { open: jest.fn() };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      jobDefinitionsForExport: Array<{
-        id: number;
-        status: 'approved';
-        assignedVariables: unknown[];
-        assignedVariableBundles: unknown[];
-      }>;
-      jobDefinitionsForExportWorkspaceId: number;
-      hasLoadedJobDefinitionsForExport: boolean;
       appService: { selectedWorkspaceId: number };
     };
     componentInternals.dialog = dialog;
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.jobDefinitionsForExport = [
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
       {
         id: 11,
         status: 'approved',
         assignedVariables: [],
         assignedVariableBundles: []
       }
-    ];
-    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
-    componentInternals.hasLoadedJobDefinitionsForExport = true;
+    ]);
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'ensureDefinitionsReady').mockReturnValue(true);
     jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionReliability();
@@ -2868,16 +2860,6 @@ describe('CodingManagementManualComponent', () => {
     };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      jobDefinitionsForExport: Array<{
-        id: number;
-        status: 'approved';
-        assignedVariables: unknown[];
-        assignedVariableBundles: unknown[];
-      }>;
-      jobDefinitionsForExportWorkspaceId: number;
-      hasLoadedJobDefinitionsForExport: boolean;
-      codersForExportWorkspaceId: number;
-      hasLoadedCodersForExport: boolean;
       appService: {
         selectedWorkspaceId: number;
         updateAuthData(authData: unknown): void;
@@ -2886,18 +2868,16 @@ describe('CodingManagementManualComponent', () => {
     componentInternals.dialog = dialog;
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.appService.updateAuthData({ userId: 9 });
-    componentInternals.jobDefinitionsForExport = [
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
       {
         id: 11,
         status: 'approved',
         assignedVariables: [],
         assignedVariableBundles: []
       }
-    ];
-    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
-    componentInternals.hasLoadedJobDefinitionsForExport = true;
-    componentInternals.codersForExportWorkspaceId = 5;
-    componentInternals.hasLoadedCodersForExport = true;
+    ]);
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'ensureDefinitionsReady').mockReturnValue(true);
+    fixture.debugElement.injector.get(ManualCodingExportScopeFacade).loadCodersForExport();
     jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionExport();
@@ -3158,16 +3138,6 @@ describe('CodingManagementManualComponent', () => {
     const dialog = { open: jest.fn() };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      jobDefinitionsForExport: Array<{
-        id: number;
-        status: 'approved';
-        assignedVariables: unknown[];
-        assignedVariableBundles: unknown[];
-      }>;
-      jobDefinitionsForExportWorkspaceId: number;
-      hasLoadedJobDefinitionsForExport: boolean;
-      codersForExportWorkspaceId?: number;
-      hasLoadedCodersForExport: boolean;
       isLoadingCodersForExport: WritableSignal<boolean>;
       appService: {
         selectedWorkspaceId: number;
@@ -3175,25 +3145,22 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.dialog = dialog;
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.jobDefinitionsForExport = [
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
       {
         id: 11,
         status: 'approved',
         assignedVariables: [],
         assignedVariableBundles: []
       }
-    ];
-    componentInternals.jobDefinitionsForExportWorkspaceId = 5;
-    componentInternals.hasLoadedJobDefinitionsForExport = true;
-    componentInternals.codersForExportWorkspaceId = 5;
-    componentInternals.hasLoadedCodersForExport = false;
+    ]);
+    jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'ensureDefinitionsReady').mockReturnValue(true);
     componentInternals.isLoadingCodersForExport.set(false);
     jest.spyOn(component, 'codingJobDefinitionsComponent').mockReturnValue(undefined);
 
     component.openExecutionExport();
 
     expect(dialog.open).not.toHaveBeenCalled();
-    expect(componentInternals.hasLoadedCodersForExport).toBe(true);
+    expect(fixture.debugElement.injector.get(ManualCodingExportScopeFacade).ensureCodersReady()).toBe(true);
   });
 
   it('should open training discussion in within-training mode', () => {

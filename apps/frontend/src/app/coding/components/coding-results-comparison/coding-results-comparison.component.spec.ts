@@ -10,7 +10,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Observable, of, Subject, throwError
+  BehaviorSubject, Observable, of, Subject, throwError
 } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -94,6 +94,8 @@ describe('CodingResultsComparisonComponent', () => {
     open: jest.Mock;
   };
   let appService: {
+    selectedWorkspaceId: number;
+    selectedWorkspaceId$: BehaviorSubject<number>;
     authData: { userName: string };
     loggedUser: { preferred_username?: string } | undefined;
     createOwnToken: jest.Mock;
@@ -136,6 +138,8 @@ describe('CodingResultsComparisonComponent', () => {
       open: jest.fn()
     };
     appService = {
+      selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new BehaviorSubject(1),
       authData: { userName: 'Test User' },
       loggedUser: undefined,
       createOwnToken: jest.fn(),
@@ -218,6 +222,66 @@ describe('CodingResultsComparisonComponent', () => {
     jest.useRealTimers();
     jest.restoreAllMocks();
     sessionStorage.clear();
+  });
+
+  it('caches warning code scans while keeping training selections, labels and reloaded results current', () => {
+    const codeReads = jest.fn((): string | null => null);
+    const trainings = [{ id: 1, label: 'Training A' }, { id: 2, label: 'Training B' }] as CoderTraining[];
+    component.availableTrainings.set(trainings);
+    component.selectedTrainings.select(1, 2);
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.totalItems = 1;
+    component.comparisonData = [{
+      responseId: 1,
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      personCode: '',
+      personLogin: '',
+      personGroup: '',
+      testPerson: '',
+      coders: [{
+        trainingId: 1, trainingLabel: 'Training A', coderId: 101, coderName: 'Ada', code: '1', score: 1
+      }, {
+        trainingId: 2,
+        trainingLabel: 'Training B',
+        coderId: 201,
+        coderName: 'Ben',
+        get code() { return codeReads(); },
+        score: null
+      }]
+    }];
+    const view = component as unknown as { getComparisonWarnings(): Array<{ icon: string; text: string }> };
+    const missingCodesWarning = () => view.getComparisonWarnings().find(warning => warning.icon === 'playlist_remove');
+
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    const initialReads = codeReads.mock.calls.length;
+    expect(initialReads).toBeGreaterThan(0);
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    expect(codeReads).toHaveBeenCalledTimes(initialReads);
+
+    component.selectedTrainings.deselect(2);
+    expect(missingCodesWarning()).toBeUndefined();
+    component.selectedTrainings.select(2);
+    expect(missingCodesWarning()?.text).toContain('Training B');
+    component.availableTrainings.set([trainings[0], { ...trainings[1], label: 'Renamed training' }]);
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    expect(codeReads).toHaveBeenCalledTimes(initialReads);
+
+    component.comparisonData = component.comparisonData.map(row => ({
+      ...row, coders: row.coders.map(coder => ({ ...coder, code: '1' }))
+    }));
+    expect(missingCodesWarning()).toBeUndefined();
+
+    component.comparisonData = component.comparisonData.map(row => ({
+      ...row, coders: row.coders.filter(coder => coder.trainingId === 1)
+    }));
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    component.comparisonMode = 'within-training';
+    expect(missingCodesWarning()).toBeUndefined();
+    component.comparisonMode = 'between-trainings';
+    expect(missingCodesWarning()?.text).toContain('Renamed training');
+    component.comparisonData = [];
+    expect(missingCodesWarning()).toBeUndefined();
   });
 
   it('should create', () => {
@@ -354,6 +418,70 @@ describe('CodingResultsComparisonComponent', () => {
       [11, 12, 13]
     );
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    expect(component.isExportingReliability()).toBe(false);
+  });
+
+  it.each(['page', 'sort', 'filter', 'training', 'mode', 'coders', 'weighting', 'level'] as const)('keeps CSV exports across table navigation and cancels scope changes: %s', action => {
+    Object.defineProperty(window.URL, 'createObjectURL', { configurable: true, value: jest.fn().mockReturnValue('blob:reliability') });
+    Object.defineProperty(window.URL, 'revokeObjectURL', { configurable: true, value: jest.fn() });
+    const download = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+    const csv = new Subject<Blob>();
+    codingTrainingBackendService.exportTrainingReliabilityAsCsv.mockReturnValue(csv);
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(new Subject());
+    codingTrainingBackendService.getTrainingCohensKappa.mockReturnValue(new Subject());
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.codersFormControl.setValue([11, 12]);
+    component.kappaStatistics.set({
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        averageBrennanPredigerKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 2,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    });
+    component.exportTrainingReliability();
+    const actions = component as unknown as {
+      onComparisonPageChange(event: { pageIndex: number; pageSize: number; length: number }): void;
+      onComparisonSortChange(sort: { active: string; direction: 'asc' }): void;
+      onTrainingForWithinChange(): void;
+      onCoderSelectionChange(): void;
+      toggleWeightingMethod(): void;
+      toggleCalculationLevel(): void;
+    };
+    if (action === 'page') actions.onComparisonPageChange({ pageIndex: 1, pageSize: 50, length: 100 });
+    if (action === 'sort') actions.onComparisonSortChange({ active: 'responseId', direction: 'asc' });
+    if (action === 'filter') component.applyFilter({ target: { value: 'UNIT' } } as unknown as Event);
+    if (action === 'training') {
+      component.selectedTrainingForWithin = 6;
+      actions.onTrainingForWithinChange();
+    }
+    if (action === 'mode') {
+      component.comparisonMode = 'between-trainings';
+      component.onModeChange();
+    }
+    if (action === 'coders') {
+      component.codersFormControl.setValue([11]);
+      actions.onCoderSelectionChange();
+    }
+    if (action === 'weighting') {
+      component.useWeightedMean.set(false);
+      actions.toggleWeightingMethod();
+    }
+    if (action === 'level') {
+      component.useCodeLevel.set(false);
+      actions.toggleCalculationLevel();
+    }
+    const keepsExport = action === 'page' || action === 'sort' || action === 'filter';
+    expect(component.isExportingReliability()).toBe(keepsExport);
+    csv.next(new Blob(['csv']));
+    csv.complete();
+    expect(download).toHaveBeenCalledTimes(keepsExport ? 1 : 0);
     expect(component.isExportingReliability()).toBe(false);
   });
 

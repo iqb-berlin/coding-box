@@ -1,6 +1,7 @@
 import {
   Component, inject, OnInit, computed, signal, viewChild, effect, ChangeDetectionStrategy, OnDestroy, AfterViewInit
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
@@ -30,15 +31,16 @@ import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  debounceTime, distinctUntilChanged, finalize, Subject, takeUntil
+  debounceTime, distinctUntilChanged, Subject, takeUntil
 } from 'rxjs';
+import { VariableKappaSummary } from './training-reliability';
+import { TrainingReliabilityFacade, TrainingReliabilityContext } from './training-reliability.facade';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import type {
-  TrainingKappaStatisticsDto,
   TrainingKappaVariableDto as KappaVariable
 } from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
@@ -170,26 +172,6 @@ interface ComparisonFilters {
 
 type RegexComparisonFilterField = 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName';
 
-type KappaStatistics = Omit<TrainingKappaStatisticsDto, 'workspaceSummary'> & {
-  workspaceSummary: TrainingKappaStatisticsDto['workspaceSummary'] & {
-    meanAgreement?: number | null;
-  };
-};
-
-interface VariableKappaSummary {
-  key: string;
-  unitName: string;
-  variableId: string;
-  meanKappa: number | null;
-  meanBrennanPredigerKappa: number | null;
-  fleissKappa: number | null;
-  fleissCaseCount: number;
-  fleissPossibleCaseCount: number;
-  meanAgreement: number | null;
-  caseCount: number;
-  validPairCount: number;
-}
-
 interface ComparisonWarning {
   icon: string;
   text: string;
@@ -247,6 +229,7 @@ interface ModalValueDisplay {
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],
   standalone: true,
+  providers: [TrainingReliabilityFacade],
   imports: [
     CommonModule,
     TranslateModule,
@@ -305,10 +288,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
   private comparisonRequestCancel$ = new Subject<void>();
-  private kappaRequestCancel$ = new Subject<void>();
   private tableFilterChanges$ = new Subject<string>();
   private comparisonRequestId = 0;
-  private kappaRequestId = 0;
   private coderTrainingsRequestId = 0;
   private hasInitializedBetweenCoderSelection = false;
   private hasInitializedWithinCoderSelection = false;
@@ -316,7 +297,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   private readonly trainingDiscussionRecoveryKey = 'training-discussion-active-state';
 
   readonly isLoading = signal(false);
-  readonly isLoadingKappa = signal(false);
+  private readonly reliability = inject(TrainingReliabilityFacade);
+  readonly isLoadingKappa = this.reliability.isLoading;
   protected readonly isApplyingDiscussionResults = signal(false);
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
   displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer', 'match'];
@@ -331,10 +313,49 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     )) : trainings;
   });
 
-  selectedTrainings = new SelectionModel<number>(true, []);
-  comparisonData: TrainingComparison[] = [];
+  readonly selectedTrainings = new SelectionModel<number>(true, []);
+  private readonly trainingSelectionChange = toSignal(this.selectedTrainings.changed, { initialValue: null });
+  private readonly comparisonDataState = signal<TrainingComparison[]>([]);
+
+  get comparisonData(): TrainingComparison[] {
+    return this.comparisonDataState();
+  }
+
+  set comparisonData(value: TrainingComparison[]) {
+    this.comparisonDataState.set(value);
+  }
+
   withinTrainingData: WithinTrainingComparison[] = [];
-  comparisonMode: CodingResultsComparisonMode = 'between-trainings';
+  private readonly comparisonModeState = signal<CodingResultsComparisonMode>('between-trainings');
+
+  get comparisonMode(): CodingResultsComparisonMode {
+    return this.comparisonModeState();
+  }
+
+  set comparisonMode(value: CodingResultsComparisonMode) {
+    this.comparisonModeState.set(value);
+  }
+
+  // Scan result codes once per page; selection and label changes only filter the training list.
+  private readonly trainingIdsWithCodes = computed(() => {
+    const ids = new Set<number>();
+    this.comparisonData.forEach(row => row.coders.forEach(coder => {
+      if (coder.code !== null) ids.add(coder.trainingId);
+    }));
+    return ids;
+  });
+
+  private readonly selectedTrainingsWithoutCodes = computed(() => {
+    if (this.comparisonMode !== 'between-trainings' || this.comparisonData.length === 0) {
+      return [];
+    }
+    this.trainingSelectionChange();
+    const idsWithCodes = this.trainingIdsWithCodes();
+    return this.availableTrainings().filter(training => (
+      this.selectedTrainings.isSelected(training.id) && !idsWithCodes.has(training.id)
+    ));
+  });
+
   selectedTrainingForWithin: number | null = null;
 
   availableCoders: Array<{ jobId: number; coderName: string }> = [];
@@ -359,29 +380,15 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   comparisonSummary: TrainingComparisonSummaryDto = { ...EMPTY_COMPARISON_SUMMARY };
 
   // Cohen's Kappa properties
-  readonly kappaStatistics = signal<KappaStatistics | null>(null);
+  readonly kappaStatistics = this.reliability.statistics;
 
   readonly showKappaStatistics = signal(false);
-  readonly useWeightedMean = signal(true);
-  readonly useCodeLevel = signal(true); // true = code level, false = score level
-  readonly isExportingReliability = signal(false);
+  readonly useWeightedMean = this.reliability.useWeightedMean;
+  readonly useCodeLevel = this.reliability.useCodeLevel; // true = code level, false = score level
+  readonly isExportingReliability = this.reliability.isExporting;
 
-  readonly originalKappaStatistics = signal<KappaStatistics | null>(null);
-  readonly variableKappaSummaries = computed<VariableKappaSummary[]>(() => (
-    this.kappaStatistics()?.variables.map(variable => ({
-      key: this.buildVariableSummaryKey(variable.unitName, variable.variableId),
-      unitName: variable.unitName,
-      variableId: variable.variableId,
-      meanKappa: variable.meanKappa ?? null,
-      meanBrennanPredigerKappa: variable.meanBrennanPredigerKappa ?? null,
-      fleissKappa: variable.fleissKappa ?? null,
-      fleissCaseCount: variable.fleissCaseCount ?? 0,
-      fleissPossibleCaseCount: variable.fleissPossibleCaseCount ?? 0,
-      meanAgreement: variable.meanAgreement ?? null,
-      caseCount: variable.caseCount ?? 0,
-      validPairCount: variable.validPairCount ?? 0
-    })) ?? []
-  ));
+  readonly originalKappaStatistics = this.reliability.originalStatistics;
+  readonly variableKappaSummaries = this.reliability.variableKappaSummaries;
 
   readonly codingIssueLabelMap: Record<number, string> = {
     [-1]: 'Code-Vergabe unsicher',
@@ -442,6 +449,10 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnInit(): void {
+    this.reliability.errors$.pipe(takeUntil(this.ngUnsubscribe)).subscribe(kind => {
+      const key = kind === 'load' ? 'coding.trainings.kappa.error' : 'coding.trainings.compare.reliability-export-error';
+      this.snackBar.open(this.translate.instant(key), this.translate.instant('common.close'), { duration: 3000 });
+    });
     this.permissions.load(this.data.workspaceId);
     this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
       key: this.trainingDiscussionRecoveryKey,
@@ -490,10 +501,9 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     this.unregisterRecoveryProvider?.();
     this.unregisterRecoveryProvider = null;
     this.cancelComparisonRequest();
-    this.cancelKappaRequest();
+    this.reliability.reset();
     this.ngUnsubscribe.next();
     this.comparisonRequestCancel$.complete();
-    this.kappaRequestCancel$.complete();
     this.tableFilterChanges$.complete();
     this.ngUnsubscribe.complete();
   }
@@ -517,19 +527,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     this.comparisonRequestId += 1;
     this.isLoading.set(true);
     return this.comparisonRequestId;
-  }
-
-  private cancelKappaRequest(): void {
-    this.kappaRequestId += 1;
-    this.kappaRequestCancel$.next();
-    this.isLoadingKappa.set(false);
-  }
-
-  private startKappaRequest(): number {
-    this.kappaRequestCancel$.next();
-    this.kappaRequestId += 1;
-    this.isLoadingKappa.set(true);
-    return this.kappaRequestId;
   }
 
   private getSelectedCoderResults(comparison: TrainingComparison | WithinTrainingComparison): ComparisonCoderResult[] {
@@ -696,19 +693,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       (this.data.selectedTraining?.id === this.selectedTrainingForWithin ? this.data.selectedTraining : undefined);
   }
 
-  private getSelectedTrainingsWithoutCodes(): CoderTraining[] {
-    if (this.comparisonMode !== 'between-trainings' || this.comparisonData.length === 0) {
-      return [];
-    }
-
-    return this.availableTrainings().filter(training => (
-      this.selectedTrainings.isSelected(training.id) &&
-      !this.comparisonData.some(row => (
-        row.coders.some(coder => coder.trainingId === training.id && coder.code !== null)
-      ))
-    ));
-  }
-
   private formatTrainingList(trainings: CoderTraining[]): string {
     const visible = trainings.slice(0, 3).map(training => this.getTrainingOptionTitle(training));
     const remaining = trainings.length - visible.length;
@@ -737,7 +721,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       });
     }
 
-    const trainingsWithoutCodes = this.getSelectedTrainingsWithoutCodes();
+    const trainingsWithoutCodes = this.selectedTrainingsWithoutCodes();
     if (trainingsWithoutCodes.length > 0) {
       warnings.push({
         icon: 'playlist_remove',
@@ -1680,7 +1664,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
 
   onModeChange(): void {
     this.cancelComparisonRequest();
-    this.resetKappaState();
+    this.reliability.reset();
     this.selectedTrainings.clear();
     this.trainingFilter.set('');
     this.selectedTrainingForWithin = null;
@@ -1700,7 +1684,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingSelectionChange(): void {
-    this.resetKappaState();
+    this.reliability.reset();
     this.hasInitializedBetweenCoderSelection = false;
     this.codersFromTrainingsFormControl.setValue([]);
     this.selectedCodersFromTrainings.clear();
@@ -1717,7 +1701,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingForWithinChange(): void {
-    this.resetKappaState();
+    this.reliability.reset();
     this.hasInitializedWithinCoderSelection = false;
     if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
       this.availableCoders = [];
@@ -2108,6 +2092,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onCoderSelectionChange(): void {
+    this.reliability.reset();
     const selectedIds = this.codersFormControl.value || [];
     this.hasInitializedWithinCoderSelection = true;
     this.selectedCoderIds.clear();
@@ -2145,53 +2130,25 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     return coder.jobId;
   }
 
-  loadKappaStatistics(): void {
-    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
-      this.resetKappaState();
-      return;
-    }
+  private reliabilityContext(): TrainingReliabilityContext | null {
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) return null;
+    return {
+      workspaceId: this.data.workspaceId,
+      trainingId: this.selectedTrainingForWithin,
+      weighted: this.useWeightedMean(),
+      level: this.useCodeLevel() ? 'code' : 'score',
+      coderIds: [...(this.codersFormControl.value || [])]
+    };
+  }
 
-    this.resetKappaState();
-    const requestId = this.startKappaRequest();
-    const trainingId = this.selectedTrainingForWithin;
-    const level = this.useCodeLevel() ? 'code' : 'score';
-    this.codingTrainingBackendService
-      .getTrainingCohensKappa(
-        this.data.workspaceId,
-        trainingId,
-        this.useWeightedMean(),
-        level,
-        this.codersFormControl.value || []
-      )
-      .pipe(
-        takeUntil(this.kappaRequestCancel$),
-        takeUntil(this.ngUnsubscribe)
-      )
-      .subscribe({
-        next: stats => {
-          if (requestId !== this.kappaRequestId ||
-            this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            return;
-          }
-          this.originalKappaStatistics.set(stats);
-          this.filterKappaStatistics();
-          this.isLoadingKappa.set(false);
-        },
-        error: () => {
-          if (requestId !== this.kappaRequestId ||
-            this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            return;
-          }
-          this.isLoadingKappa.set(false);
-          this.snackBar.open(
-            this.translate.instant('coding.trainings.kappa.error'),
-            this.translate.instant('common.close'),
-            { duration: 3000 }
-          );
-        }
-      });
+  private isCurrentReliabilityContext(context: TrainingReliabilityContext): boolean {
+    return this.comparisonMode === 'within-training' && this.selectedTrainingForWithin === context.trainingId;
+  }
+
+  loadKappaStatistics(): void {
+    const context = this.reliabilityContext();
+    if (!context) { this.reliability.reset(); return; }
+    this.reliability.load(context, () => this.isCurrentReliabilityContext(context));
   }
 
   exportTrainingReliability(): void {
@@ -2204,19 +2161,10 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       return;
     }
 
-    const trainingId = this.selectedTrainingForWithin;
-    const level = this.useCodeLevel() ? 'code' : 'score';
-    this.isExportingReliability.set(true);
-    this.codingTrainingBackendService.exportTrainingReliabilityAsCsv(
-      this.data.workspaceId,
-      trainingId,
-      this.useWeightedMean(),
-      level,
-      this.codersFormControl.value || []
-    ).pipe(
-      finalize(() => { this.isExportingReliability.set(false); }),
-      takeUntil(this.ngUnsubscribe)
-    ).subscribe({
+    const context = this.reliabilityContext();
+    if (!context) return;
+    const trainingId = context.trainingId;
+    this.reliability.exportCsv(context, () => this.isCurrentReliabilityContext(context)).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -2226,27 +2174,12 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-      },
-      error: () => {
-        this.snackBar.open(
-          this.translate.instant('coding.trainings.compare.reliability-export-error'),
-          this.translate.instant('common.close'),
-          { duration: 3000 }
-        );
       }
     });
   }
 
   filterKappaStatistics(): void {
-    const statistics = this.originalKappaStatistics();
-    if (!statistics) {
-      this.kappaStatistics.set(null);
-      return;
-    }
-
-    // The backend response is already scoped to the selected job IDs.
-    this.kappaStatistics.set(statistics);
-    this.calculateMeanAgreement();
+    this.reliability.filterStatistics();
   }
 
   private buildVariableSummaryKey(unitName: string, variableId: string): string {
@@ -2282,38 +2215,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   calculateMeanAgreement(): void {
-    const statistics = this.kappaStatistics();
-    if (!statistics) return;
-
-    let totalAgreementWeighted = 0;
-    let totalWeight = 0;
-    let totalAgreementSum = 0;
-    let pairCount = 0;
-
-    statistics.variables.forEach(variable => {
-      variable.coderPairs.forEach(pair => {
-        if (pair.validPairs > 0) { // Only consider pairs with data
-          totalAgreementWeighted += pair.agreement * pair.validPairs;
-          totalWeight += pair.validPairs;
-          totalAgreementSum += pair.agreement;
-          pairCount += 1;
-        }
-      });
-    });
-
-    const agreementSum = this.useWeightedMean() ? totalAgreementWeighted : totalAgreementSum;
-    const weight = this.useWeightedMean() ? totalWeight : pairCount;
-    const meanAgreement = weight > 0 ? agreementSum / weight : null;
-    this.kappaStatistics.set({
-      ...statistics,
-      workspaceSummary: { ...statistics.workspaceSummary, meanAgreement }
-    });
+    this.reliability.calculateMeanAgreement();
   }
 
   private resetKappaState(): void {
-    this.cancelKappaRequest();
-    this.kappaStatistics.set(null);
-    this.originalKappaStatistics.set(null);
+    this.reliability.resetStatistics();
   }
 
   protected toggleKappaStatistics(): void {
@@ -2324,10 +2230,12 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected toggleWeightingMethod(): void {
+    this.reliability.reset();
     this.loadKappaStatistics();
   }
 
   protected toggleCalculationLevel(): void {
+    this.reliability.reset();
     this.loadKappaStatistics();
   }
 
