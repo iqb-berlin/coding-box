@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Injector } from '@angular/core';
 import {
   BehaviorSubject, Subject, of, throwError
 } from 'rxjs';
@@ -20,7 +21,7 @@ describe('TrainingReliabilityFacade', () => {
   let app: { selectedWorkspaceId: number; selectedWorkspaceId$: BehaviorSubject<number> };
   let load: jest.Mock;
   let exportCsv: jest.Mock;
-  let facade: TrainingReliabilityFacade;
+  let facade: InstanceType<typeof TrainingReliabilityFacade>;
   beforeEach(() => {
     app = { selectedWorkspaceId: 5, selectedWorkspaceId$: new BehaviorSubject(5) };
     load = jest.fn().mockReturnValue(of(empty)); exportCsv = jest.fn().mockReturnValue(of(new Blob(['csv'])));
@@ -47,7 +48,8 @@ describe('TrainingReliabilityFacade', () => {
     const statistics = new Subject<KappaStatistics>(); const csv = new Subject<Blob>();
     load.mockReturnValue(statistics); exportCsv.mockReturnValue(csv);
     const download = jest.fn(); const error = jest.fn(); facade.errors$.subscribe(error);
-    facade.load(context, () => true); facade.exportCsv(context, () => true).subscribe(download);
+    facade.load(context, () => true); facade.downloads$.subscribe(({ blob }) => download(blob));
+    facade.exportCsv(context, () => true);
     if (reason === 'destroy') TestBed.resetTestingModule();
     else if (reason === 'reset') facade.reset();
     else {
@@ -76,7 +78,8 @@ describe('TrainingReliabilityFacade', () => {
     exportCsv.mockReturnValue(pending);
     const download = jest.fn();
     facade.load(context, () => true);
-    facade.exportCsv(context, () => true).subscribe(download);
+    facade.downloads$.subscribe(({ blob }) => download(blob));
+    facade.exportCsv(context, () => true);
     facade.load(context, () => true);
     expect(facade.isExporting()).toBe(true);
     const csv = new Blob(['same context']);
@@ -88,12 +91,51 @@ describe('TrainingReliabilityFacade', () => {
 
   it('allows a single CSV request and releases it on failure so it can be retried', () => {
     const pending = new Subject<Blob>(); exportCsv.mockReturnValueOnce(pending);
-    facade.exportCsv(context, () => true).subscribe();
-    facade.exportCsv(context, () => true).subscribe();
+    facade.exportCsv(context, () => true);
+    facade.exportCsv(context, () => true);
     expect(exportCsv).toHaveBeenCalledTimes(1);
     pending.error(new Error('failed'));
     expect(facade.isExporting()).toBe(false);
-    const download = jest.fn(); facade.exportCsv(context, () => true).subscribe(download);
+    const download = jest.fn(); facade.downloads$.subscribe(({ blob }) => download(blob));
+    facade.exportCsv(context, () => true);
     expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes read-only state and observable events, with options changed through commands', () => {
+    for (const value of [facade.originalStatistics, facade.statistics, facade.isLoading, facade.isExporting, facade.useWeightedMean, facade.useCodeLevel]) {
+      expect(Reflect.get(value, 'set')).toBeUndefined();
+      expect(Reflect.get(value, 'update')).toBeUndefined();
+    }
+    expect(Reflect.get(facade.errors$, 'next')).toBeUndefined();
+    expect(Reflect.get(facade.downloads$, 'next')).toBeUndefined();
+    facade.setWeightingMethod(false);
+    facade.setCalculationLevel(false);
+    expect(facade.useWeightedMean()).toBe(false);
+    expect(facade.useCodeLevel()).toBe(false);
+  });
+
+  it('keeps state local to an injector and clears accepted results on destruction', () => {
+    const localInjector = Injector.create({ providers: [TrainingReliabilityFacade], parent: TestBed.inject(Injector) });
+    const other = localInjector.get(TrainingReliabilityFacade);
+    facade.setWeightingMethod(false);
+    facade.load(context, () => true);
+    expect(facade.originalStatistics()).toBe(empty);
+    expect(other.originalStatistics()).toBeNull();
+    expect(other.useWeightedMean()).toBe(true);
+    localInjector.destroy();
+    expect(facade.originalStatistics()).toBe(empty);
+    TestBed.resetTestingModule();
+    expect(facade.originalStatistics()).toBeNull();
+    expect(facade.statistics()).toBeNull();
+  });
+
+  it('does not start requests captured for an obsolete workspace', () => {
+    const otherWorkspace = { ...context, workspaceId: 6 };
+    facade.load(otherWorkspace, () => true);
+    facade.exportCsv(otherWorkspace, () => true);
+    expect(load).not.toHaveBeenCalled();
+    expect(exportCsv).not.toHaveBeenCalled();
+    expect(facade.isLoading()).toBe(false);
+    expect(facade.isExporting()).toBe(false);
   });
 });
