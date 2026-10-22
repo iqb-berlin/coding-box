@@ -129,6 +129,59 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@training').find('.start-training-button').should('be.enabled');
   }
 
+  it('keeps the latest variable filter and scope after earlier responses arrive last', () => {
+    setup();
+    const old = gate();
+    let oldRequests = 0;
+    let oldReplies = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [{ id: 1, label: 'IQB-Standard' }] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables?*', async request => {
+      const unitName = String(request.query.unitName || '');
+      if (unitName === 'UNIT_A') {
+        oldRequests += 1;
+        await old.wait;
+        request.reply({ body: variables.filter(variable => variable.unitName === unitName) });
+        oldReplies += 1;
+      } else {
+        if (unitName === 'UNIT_B') request.alias = 'filteredVariables';
+        request.reply({ body: unitName ? variables.filter(variable => variable.unitName === unitName) : variables });
+      }
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables/scope-summary?*', async request => {
+      const unitName = String(request.query.unitName || '');
+      if (unitName === 'UNIT_A') {
+        oldRequests += 1;
+        await old.wait;
+      }
+      if (unitName === 'UNIT_B') request.alias = 'filteredScope';
+      request.reply({ body: {
+        manualVariableCount: 1, manualResponseCount: 10, coveredSourceVariableCount: 1,
+        coveredSourceResponseCount: unitName === 'UNIT_A' ? 99 : 7, coveredSourceVariables: []
+      } });
+      if (unitName === 'UNIT_A') oldReplies += 1;
+    });
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').find('input[placeholder="Filter nach Aufgaben-ID"]').type('UNIT_A');
+    cy.get('@definitionDialog').contains('button', 'Filter anwenden').click();
+    cy.wrap(null).should(() => { expect(oldRequests).to.equal(2); });
+    cy.get('@definitionDialog').find('input[placeholder="Filter nach Aufgaben-ID"]').clear().type('UNIT_B');
+    cy.get('@definitionDialog').contains('button', 'Filter anwenden').click();
+    cy.wait('@filteredVariables');
+    cy.wait('@filteredScope');
+    cy.get('@definitionDialog').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_B_VAR_1');
+    cy.get('@definitionDialog').find('.manual-scope-note').should('contain.text', '7');
+    cy.then(() => old.release());
+    cy.wrap(null).should(() => { expect(oldReplies).to.equal(2); });
+    cy.get('@definitionDialog').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_B_VAR_1');
+    cy.get('@definitionDialog').find('.manual-scope-note').should('contain.text', '7').and('not.contain.text', '99');
+  });
+
   it('updates the workload estimate from variable selection, case limit and duration without losing the form', () => {
     setup();
     cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [{ id: 1, label: 'IQB-Standard' }] });

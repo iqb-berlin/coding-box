@@ -23,6 +23,8 @@ import { WorkspaceSettingsService } from '../../../shared/services/workspace/wor
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { TrainingReliabilityFacade } from './training-reliability.facade';
+import { KappaStatistics } from './training-reliability';
 
 describe('CodingResultsComparisonComponent', () => {
   const comparisonSummary = (visibleRows: number) => ({
@@ -86,6 +88,16 @@ describe('CodingResultsComparisonComponent', () => {
     applyDiscussionResults: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
     exportTrainingReliabilityAsCsv: jest.Mock;
+  };
+  const provideKappaStatistics = (statistics: KappaStatistics | null): void => {
+    codingTrainingBackendService.getTrainingCohensKappa.mockReturnValueOnce(of(statistics));
+    fixture.debugElement.injector.get(TrainingReliabilityFacade).load({
+      workspaceId: 1,
+      trainingId: 5,
+      coderIds: [],
+      weighted: component.useWeightedMean(),
+      level: component.useCodeLevel() ? 'code' : 'score'
+    }, () => true);
   };
   let codingStatisticsService: {
     getReplayUrl: jest.Mock;
@@ -391,10 +403,10 @@ describe('CodingResultsComparisonComponent', () => {
     jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.useWeightedMean.set(false);
-    component.useCodeLevel.set(false);
+    component.setWeightingMethod(false);
+    component.setCalculationLevel(false);
     component.codersFormControl.setValue([11, 12, 13]);
-    component.kappaStatistics.set({
+    provideKappaStatistics({
       variables: [],
       workspaceSummary: {
         totalDoubleCodedResponses: 0,
@@ -432,7 +444,7 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.codersFormControl.setValue([11, 12]);
-    component.kappaStatistics.set({
+    provideKappaStatistics({
       variables: [],
       workspaceSummary: {
         totalDoubleCodedResponses: 0,
@@ -470,11 +482,11 @@ describe('CodingResultsComparisonComponent', () => {
       actions.onCoderSelectionChange();
     }
     if (action === 'weighting') {
-      component.useWeightedMean.set(false);
+      component.setWeightingMethod(false);
       actions.toggleWeightingMethod();
     }
     if (action === 'level') {
-      component.useCodeLevel.set(false);
+      component.setCalculationLevel(false);
       actions.toggleCalculationLevel();
     }
     const keepsExport = action === 'page' || action === 'sort' || action === 'filter';
@@ -2554,7 +2566,7 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   it('should clear stale kappa values when changing comparison mode', () => {
-    component.kappaStatistics.set({
+    provideKappaStatistics({
       variables: [],
       workspaceSummary: {
         totalDoubleCodedResponses: 10,
@@ -2567,7 +2579,6 @@ describe('CodingResultsComparisonComponent', () => {
         calculationLevel: 'code'
       }
     });
-    component.originalKappaStatistics.set(component.kappaStatistics());
 
     component.onModeChange();
 
@@ -2605,7 +2616,7 @@ describe('CodingResultsComparisonComponent', () => {
     ];
     component.dataSource.data = component.withinTrainingData;
     component.calculateStatistics();
-    component.originalKappaStatistics.set({
+    provideKappaStatistics({
       variables: [
         {
           unitName: 'U1',
@@ -2659,8 +2670,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     });
 
-    component.useWeightedMean.set(true);
-    component.filterKappaStatistics();
+    component.setWeightingMethod(true);
     fixture.detectChanges();
 
     const summaryTable: HTMLElement | null = fixture.nativeElement.querySelector('.variable-mean-table');
@@ -2705,7 +2715,7 @@ describe('CodingResultsComparisonComponent', () => {
     component.showKappaStatistics.set(true);
     component.codersFormControl.setValue([1, 2]);
     component.totalItems = 1;
-    component.kappaStatistics.set({
+    provideKappaStatistics({
       variables: [],
       workspaceSummary: {
         totalDoubleCodedResponses: 1,
@@ -2729,7 +2739,7 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.showKappaStatistics.set(true);
-    component.useWeightedMean.set(false);
+    component.setWeightingMethod(false);
     component.codersFormControl.setValue([1, 2, 3]);
     component.withinTrainingData = [
       {
@@ -2760,7 +2770,7 @@ describe('CodingResultsComparisonComponent', () => {
         ]
       }
     ];
-    component.originalKappaStatistics.set({
+    provideKappaStatistics({
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
@@ -2812,8 +2822,6 @@ describe('CodingResultsComparisonComponent', () => {
       }
     });
 
-    component.filterKappaStatistics();
-
     expect(component.variableKappaSummaries()[0].meanKappa).toBeCloseTo(0.85, 10);
     expect(component.variableKappaSummaries()[0].meanAgreement).toBeCloseTo(0.85, 10);
   });
@@ -2821,9 +2829,9 @@ describe('CodingResultsComparisonComponent', () => {
   it('should exclude null kappa pairs from filtered workspace average kappa denominator', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.useWeightedMean.set(true);
+    component.setWeightingMethod(true);
     component.codersFormControl.setValue([1, 2, 3]);
-    component.originalKappaStatistics.set({
+    provideKappaStatistics({
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
@@ -2875,8 +2883,6 @@ describe('CodingResultsComparisonComponent', () => {
       }
     });
 
-    component.filterKappaStatistics();
-
     expect(component.kappaStatistics()?.workspaceSummary.averageKappa).toBeCloseTo(0.8, 10);
     expect(component.kappaStatistics()?.workspaceSummary.totalCoderPairs).toBe(2);
   });
@@ -2884,9 +2890,9 @@ describe('CodingResultsComparisonComponent', () => {
   it('should preserve precise workspace kappa averages returned by the backend', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.useWeightedMean.set(true);
+    component.setWeightingMethod(true);
     component.codersFormControl.setValue([1, 2, 3]);
-    component.originalKappaStatistics.set({
+    provideKappaStatistics({
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
@@ -2938,15 +2944,13 @@ describe('CodingResultsComparisonComponent', () => {
       }
     });
 
-    component.filterKappaStatistics();
-
     expect(component.kappaStatistics()?.workspaceSummary.averageKappa).toBe(0.300502);
     expect(component.kappaStatistics()?.workspaceSummary.averageBrennanPredigerKappa).toBe(0.400502);
   });
 
-  describe('calculateMeanAgreement', () => {
+  describe('derived mean agreement', () => {
     it('should calculate weighted mean agreement correctly', () => {
-      component.kappaStatistics.set({
+      provideKappaStatistics({
         variables: [
           {
             unitName: 'U1',
@@ -2999,11 +3003,10 @@ describe('CodingResultsComparisonComponent', () => {
           calculationLevel: 'code'
         }
       });
-      const previousStatistics = component.kappaStatistics();
+      const previousStatistics = component.originalKappaStatistics();
       Object.freeze(previousStatistics?.workspaceSummary);
       Object.freeze(previousStatistics);
-      component.useWeightedMean.set(true);
-      component.calculateMeanAgreement();
+      component.setWeightingMethod(true);
 
       expect(component.kappaStatistics()).not.toBe(previousStatistics);
       expect(component.kappaStatistics()?.workspaceSummary).not.toBe(previousStatistics?.workspaceSummary);
@@ -3014,7 +3017,7 @@ describe('CodingResultsComparisonComponent', () => {
     });
 
     it('should calculate unweighted mean agreement correctly', () => {
-      component.kappaStatistics.set({
+      provideKappaStatistics({
         variables: [
           {
             unitName: 'U1',
@@ -3067,8 +3070,7 @@ describe('CodingResultsComparisonComponent', () => {
           calculationLevel: 'code'
         }
       });
-      component.useWeightedMean.set(false);
-      component.calculateMeanAgreement();
+      component.setWeightingMethod(false);
 
       // Unweighted mean: (0.8 + 0.9) / 2 = 0.85
       expect(component.kappaStatistics()?.workspaceSummary.meanAgreement).toBeCloseTo(0.85, 4);

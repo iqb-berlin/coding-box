@@ -61,6 +61,7 @@
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/testing": "^11.2.7",
     "@nestjs/typeorm": "^11.0.0",
+    "@ngrx/signals": "21.1.1",
     "@ngx-formly/core": "^7.0.0",
     "@ngx-formly/material": "^7.0.0",
     "@ngx-translate/core": "^15.0.0",
