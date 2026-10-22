@@ -40,3 +40,25 @@ The pilot does not introduce a global store or migrate unrelated features.
 Future adoption should be justified by repeated state/request logic and preserve
 the same lifecycle and context-isolation tests. Jest, Typed Reactive Forms and
 the existing API contracts remain in place.
+
+## Typed Reactive Forms
+
+Complex forms keep their typed controls, initial values and validation policies
+in feature-local `*-form.ts` modules. The job definition dialog, coder training
+and Testcenter import use independent factory-created forms. Factories do not
+need an Angular injector and do not subscribe to events or own application state.
+
+The owning component retains lifecycle-bound subscriptions, permissions,
+selection state, feedback, recovery and API orchestration. It delegates rules
+such as reference-mode requirements, effective training sample limits and
+individual Testcenter URL activation to the form module. Changes to available
+case counts are checked against current metadata as well as control validators.
+Disabled controls remain available through `getRawValue()` for existing payloads.
+
+Focused form tests cover domain boundaries and conditional validation; existing
+component and browser tests cover integration. Small view-only filter controls
+stay with their view. Signal Forms remain experimental in this Angular 21
+installation; the application continues to use stable Typed Reactive Forms.
+
+See [the large-component inventory](large-component-refactoring.md) for the
+remaining responsibility and view boundaries.
