@@ -95,7 +95,16 @@ describe('Zoneless manual preparation workflows', () => {
   function openTraining(): void {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
-    cy.get('coding-box-coder-training').as('training');
+    cy.get('coding-box-coder-training').as('training').then(training => {
+      settleTrainingEntrance(training[0]);
+    });
+  }
+
+  function settleTrainingEntrance(training: HTMLElement): void {
+    // These cases test behavior after opening, independently of the compositor's motion clock.
+    for (const selector of ['.coder-training-overlay', '.coder-training-modal']) {
+      training.closest(selector)?.getAnimations().forEach(animation => animation.finish());
+    }
   }
 
   function closeTraining(): void {
@@ -302,6 +311,7 @@ describe('Zoneless manual preparation workflows', () => {
     setup();
     let reads = 0;
     let referenceAborts = 0;
+    let pausedEntranceOpacity: string | undefined;
     cy.task<{ id: string; url: string }>('deferred:create', { body: [{ ...training, label: 'Old reference' }] }).then(gate => {
       cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
         reads += 1;
@@ -314,8 +324,20 @@ describe('Zoneless manual preparation workflows', () => {
     openManual();
     cy.window().then(win => {
       cy.spy(win.XMLHttpRequest.prototype, 'open').as('openRequest');
+      // Reproduce CI's stalled entrance frame rather than relying on its timing.
+      const observer = new win.MutationObserver(() => {
+        const modal = win.document.querySelector('.coder-training-modal');
+        const animations = modal?.getAnimations() || [];
+        if (!modal || !animations.length) return;
+        animations.forEach(animation => { animation.pause(); animation.currentTime = 0; });
+        pausedEntranceOpacity = win.getComputedStyle(modal).opacity;
+        observer.disconnect();
+      });
+      observer.observe(win.document.body, { childList: true, subtree: true });
+      releases.push(() => observer.disconnect());
     });
     openTraining();
+    cy.then(() => { expect(pausedEntranceOpacity, 'entrance was held at its invisible first frame').to.equal('0'); });
     cy.wrap(null).should(() => { expect(reads).to.equal(1); });
     cy.get<Cypress.Agent<sinon.SinonSpy>>('@openRequest').then(openRequest => {
       const referenceCall = openRequest.getCalls().find(call =>

@@ -53,14 +53,6 @@ export default defineConfig({
   e2e: {
     setupNodeEvents(on) {
       requireExecutedSpec(on);
-      on('before:browser:launch', (browser, launchOptions) => {
-        if (browser.name === 'electron' && browser.isHeadless) {
-          // Fit the 1400x1000 AUT viewport without scaling it into the default 1280x720 window.
-          launchOptions.preferences.width = 1800;
-          launchOptions.preferences.height = 1200;
-        }
-        return launchOptions;
-      });
       const responses = createDeferredResponses();
       on('task', {
         'deferred:create': responses.create,
