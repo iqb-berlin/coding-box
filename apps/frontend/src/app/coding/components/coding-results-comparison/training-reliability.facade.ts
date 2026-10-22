@@ -1,9 +1,13 @@
-import {
-  DestroyRef, Injectable, computed, inject, signal
-} from '@angular/core';
+/* NgRx hides underscore-prefixed properties from the public store API. */
+/* eslint no-underscore-dangle: ["error", { "allow": ["_errors", "_downloads", "_cancelExports", "_originalStatistics", "_isLoading", "_isExporting", "_useWeightedMean", "_useCodeLevel"] }] */
+import { computed, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
-  EMPTY, Observable, Subject, Subscription, catchError, defer, finalize, filter, takeUntil
+  patchState, signalStore, withComputed, withHooks, withMethods, withProps, withState
+} from '@ngrx/signals';
+import { rxMethod } from '@ngrx/signals/rxjs-interop';
+import {
+  EMPTY, Subject, catchError, defer, exhaustMap, finalize, switchMap, takeUntil, tap
 } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -18,101 +22,121 @@ export interface TrainingReliabilityContext {
   level: 'code' | 'score';
 }
 
-/** Reliability requests and derived statistics belong to one comparison dialog. */
-@Injectable()
-export class TrainingReliabilityFacade {
-  private readonly destroyRef = inject(DestroyRef);
-  private readonly appService = inject(AppService);
-  private readonly backend = inject(CodingTrainingBackendService);
-  private readonly cancel$ = new Subject<void>();
-  private request?: Subscription;
-  private requestId = 0;
-  readonly errors$ = new Subject<'load' | 'export'>();
-  readonly isLoading = signal(false);
-  readonly isExporting = signal(false);
-  readonly statistics = signal<KappaStatistics | null>(null);
-  readonly originalStatistics = signal<KappaStatistics | null>(null);
-  readonly useWeightedMean = signal(true);
-  readonly useCodeLevel = signal(true);
-  readonly variableKappaSummaries = computed<VariableKappaSummary[]>(() => (
-    this.statistics()?.variables.map(variable => ({
-      key: `${variable.unitName}::${variable.variableId}`,
-      unitName: variable.unitName,
-      variableId: variable.variableId,
-      meanKappa: variable.meanKappa ?? null,
-      meanBrennanPredigerKappa: variable.meanBrennanPredigerKappa ?? null,
-      fleissKappa: variable.fleissKappa ?? null,
-      fleissCaseCount: variable.fleissCaseCount ?? 0,
-      fleissPossibleCaseCount: variable.fleissPossibleCaseCount ?? 0,
-      meanAgreement: variable.meanAgreement ?? null,
-      caseCount: variable.caseCount ?? 0,
-      validPairCount: variable.validPairCount ?? 0
-    })) ?? []
-  ));
-
-  constructor() {
-    let workspaceId = this.appService.selectedWorkspaceId;
-    this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
-      if (id === workspaceId) return;
-      workspaceId = id;
-      this.reset();
-    });
-    this.destroyRef.onDestroy(() => { this.reset(); this.cancel$.complete(); this.errors$.complete(); });
-  }
-
-  reset(): void {
-    this.resetStatistics();
-    this.cancel$.next();
-  }
-
-  /** Table navigation refreshes statistics without invalidating a full-cohort CSV export. */
-  resetStatistics(): void {
-    this.requestId += 1;
-    this.request?.unsubscribe();
-    this.isLoading.set(false);
-    this.statistics.set(null);
-    this.originalStatistics.set(null);
-  }
-
-  load(context: TrainingReliabilityContext, isCurrent: () => boolean): void {
-    this.resetStatistics();
-    const requestId = this.requestId;
-    this.isLoading.set(true);
-    this.request = this.backend.getTrainingCohensKappa(context.workspaceId, context.trainingId, context.weighted, context.level, [...context.coderIds])
-      .pipe(takeUntilWorkspaceChanged(this.appService, context.workspaceId), takeUntilDestroyed(this.destroyRef), finalize(() => {
-        if (requestId === this.requestId) this.isLoading.set(false);
-      }))
-      .subscribe({
-        next: statistics => {
-          if (requestId !== this.requestId || !isCurrent()) return;
-          this.originalStatistics.set(statistics);
-          this.filterStatistics();
-          this.isLoading.set(false);
-        },
-        error: () => { if (requestId === this.requestId && isCurrent()) this.errors$.next('load'); }
-      });
-  }
-
-  filterStatistics(): void {
-    const statistics = this.originalStatistics();
-    this.statistics.set(statistics ? withMeanAgreement(statistics, this.useWeightedMean()) : null);
-  }
-
-  calculateMeanAgreement(): void {
-    const statistics = this.statistics();
-    if (statistics) this.statistics.set(withMeanAgreement(statistics, this.useWeightedMean()));
-  }
-
-  exportCsv(context: TrainingReliabilityContext, isCurrent: () => boolean): Observable<Blob> {
-    return defer(() => {
-      if (this.isExporting()) return EMPTY;
-      this.isExporting.set(true);
-      return this.backend.exportTrainingReliabilityAsCsv(context.workspaceId, context.trainingId, context.weighted, context.level, [...context.coderIds]).pipe(
-        takeUntil(this.cancel$),
-        filter(() => isCurrent()),
-        catchError(() => { if (isCurrent()) this.errors$.next('export'); return EMPTY; }),
-        finalize(() => this.isExporting.set(false))
-      );
-    }).pipe(takeUntilWorkspaceChanged(this.appService, context.workspaceId), takeUntilDestroyed(this.destroyRef));
-  }
+interface ReliabilityRequest {
+  context: TrainingReliabilityContext;
+  isCurrent: () => boolean;
 }
+
+/** Dialog-local SignalStore pilot: state is protected; views use commands and read-only signals. */
+export const TrainingReliabilityFacade = signalStore(
+  withState({
+    _originalStatistics: null as KappaStatistics | null,
+    _isLoading: false,
+    _isExporting: false,
+    _useWeightedMean: true,
+    _useCodeLevel: true
+  }),
+  withProps(() => {
+    const errors = new Subject<'load' | 'export'>();
+    const downloads = new Subject<{ blob: Blob; trainingId: number }>();
+    return {
+      _errors: errors,
+      _downloads: downloads,
+      _cancelExports: new Subject<void>(),
+      errors$: errors.asObservable(),
+      downloads$: downloads.asObservable()
+    };
+  }),
+  withComputed(({
+    _originalStatistics, _useWeightedMean, _useCodeLevel, _isLoading, _isExporting
+  }) => ({
+    originalStatistics: computed(() => _originalStatistics()),
+    useWeightedMean: computed(() => _useWeightedMean()),
+    useCodeLevel: computed(() => _useCodeLevel()),
+    isLoading: computed(() => _isLoading()),
+    isExporting: computed(() => _isExporting()),
+    statistics: computed(() => {
+      const original = _originalStatistics();
+      return original ? withMeanAgreement(original, _useWeightedMean()) : null;
+    })
+  })),
+  withComputed(({ statistics }) => ({
+    variableKappaSummaries: computed<VariableKappaSummary[]>(() => (
+      statistics()?.variables.map(variable => ({
+        key: `${variable.unitName}::${variable.variableId}`,
+        unitName: variable.unitName,
+        variableId: variable.variableId,
+        meanKappa: variable.meanKappa ?? null,
+        meanBrennanPredigerKappa: variable.meanBrennanPredigerKappa ?? null,
+        fleissKappa: variable.fleissKappa ?? null,
+        fleissCaseCount: variable.fleissCaseCount ?? 0,
+        fleissPossibleCaseCount: variable.fleissPossibleCaseCount ?? 0,
+        meanAgreement: variable.meanAgreement ?? null,
+        caseCount: variable.caseCount ?? 0,
+        validPairCount: variable.validPairCount ?? 0
+      })) ?? []
+    ))
+  })),
+  withMethods((store, backend = inject(CodingTrainingBackendService), appService = inject(AppService)) => {
+    const load = rxMethod<ReliabilityRequest | null>(switchMap(request => {
+      // switchMap tears down the previous request before the next loading state is set.
+      patchState(store, { _originalStatistics: null, _isLoading: !!request });
+      if (!request) return EMPTY;
+      const { context, isCurrent } = request;
+      return defer(() => backend.getTrainingCohensKappa(
+        context.workspaceId, context.trainingId, context.weighted, context.level, context.coderIds
+      )).pipe(
+        takeUntilWorkspaceChanged(appService, context.workspaceId),
+        tap(_originalStatistics => {
+          if (isCurrent()) patchState(store, { _originalStatistics, _isLoading: false });
+        }),
+        catchError(() => { if (isCurrent()) store._errors.next('load'); return EMPTY; }),
+        finalize(() => patchState(store, { _isLoading: false }))
+      );
+    }));
+    const exportCsv = rxMethod<ReliabilityRequest>(exhaustMap(({ context, isCurrent }) => defer(() => {
+      patchState(store, { _isExporting: true });
+      return backend.exportTrainingReliabilityAsCsv(
+        context.workspaceId, context.trainingId, context.weighted, context.level, context.coderIds
+      );
+    }).pipe(
+      takeUntilWorkspaceChanged(appService, context.workspaceId),
+      takeUntil(store._cancelExports),
+      tap(blob => { if (isCurrent()) store._downloads.next({ blob, trainingId: context.trainingId }); }),
+      catchError(() => { if (isCurrent()) store._errors.next('export'); return EMPTY; }),
+      finalize(() => patchState(store, { _isExporting: false }))
+    )));
+    const snapshot = (context: TrainingReliabilityContext): TrainingReliabilityContext => ({
+      ...context, coderIds: [...context.coderIds]
+    });
+    return {
+      load(context: TrainingReliabilityContext, isCurrent: () => boolean): void {
+        load({ context: snapshot(context), isCurrent });
+      },
+      exportCsv(context: TrainingReliabilityContext, isCurrent: () => boolean): void {
+        exportCsv({ context: snapshot(context), isCurrent });
+      },
+      /** Paging refreshes statistics while preserving a full-cohort CSV export. */
+      resetStatistics(): void { load(null); },
+      reset(): void { load(null); store._cancelExports.next(); },
+      setWeightingMethod(weighted: boolean): void { patchState(store, { _useWeightedMean: weighted }); },
+      setCalculationLevel(codeLevel: boolean): void { patchState(store, { _useCodeLevel: codeLevel }); }
+    };
+  }),
+  withHooks({
+    onInit(store) {
+      const appService = inject(AppService);
+      let workspaceId = appService.selectedWorkspaceId;
+      appService.selectedWorkspaceId$.pipe(takeUntilDestroyed()).subscribe(id => {
+        if (id !== workspaceId) { workspaceId = id; store.reset(); }
+      });
+    },
+    onDestroy(store) {
+      store.reset();
+      patchState(store, { _originalStatistics: null, _isLoading: false, _isExporting: false });
+      store._cancelExports.complete();
+      store._errors.complete();
+      store._downloads.complete();
+    }
+  })
+);
