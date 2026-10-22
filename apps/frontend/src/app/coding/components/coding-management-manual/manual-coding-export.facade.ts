@@ -20,7 +20,8 @@ export class ManualCodingExportFacade {
   private readonly appService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly jobs = inject(ExportJobService);
-  readonly isStarting = signal(false);
+  private readonly startingState = signal(false);
+  readonly isStarting = this.startingState.asReadonly();
   private active = false;
 
   start(
@@ -31,13 +32,13 @@ export class ManualCodingExportFacade {
     return defer(() => {
       if (this.active) return EMPTY;
       this.active = true;
-      this.isStarting.set(true);
+      this.startingState.set(true);
       const preparation = requiresWorksheetEstimate(config) ? this.jobs.estimateJob(workspaceId, {
         ...config, exportType: 'by-variable', doubleCodingMethod: undefined
       }).pipe(
         switchMap(estimate => {
           if (!estimate.exceedsWorksheetLimit || !estimate.worksheetLimit) return of(config);
-          this.isStarting.set(false);
+          this.startingState.set(false);
           return choose({ actual: estimate.unitVariableCount, max: estimate.worksheetLimit }).pipe(
             take(1),
             switchMap(decision => {
@@ -52,11 +53,11 @@ export class ManualCodingExportFacade {
       return preparation.pipe(
         switchMap(prepared => {
           if (prepared === 'estimate-failed') return of(prepared);
-          this.isStarting.set(true);
+          this.startingState.set(true);
           // The root service already reports job startup failures.
           return this.jobs.startJob(workspaceId, prepared).pipe(map(() => 'started' as const), catchError(() => EMPTY));
         }),
-        finalize(() => { this.active = false; this.isStarting.set(false); })
+        finalize(() => { this.active = false; this.startingState.set(false); })
       );
     }).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef));
   }

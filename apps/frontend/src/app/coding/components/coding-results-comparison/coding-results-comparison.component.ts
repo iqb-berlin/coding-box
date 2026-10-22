@@ -449,6 +449,9 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnInit(): void {
+    this.reliability.downloads$.pipe(takeUntil(this.ngUnsubscribe)).subscribe(({ blob, trainingId }) => {
+      this.downloadReliability(blob, trainingId);
+    });
     this.reliability.errors$.pipe(takeUntil(this.ngUnsubscribe)).subscribe(kind => {
       const key = kind === 'load' ? 'coding.trainings.kappa.error' : 'coding.trainings.compare.reliability-export-error';
       this.snackBar.open(this.translate.instant(key), this.translate.instant('common.close'), { duration: 3000 });
@@ -2163,23 +2166,26 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
 
     const context = this.reliabilityContext();
     if (!context) return;
-    const trainingId = context.trainingId;
-    this.reliability.exportCsv(context, () => this.isCurrentReliabilityContext(context)).subscribe({
-      next: blob => {
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `interrater-reliability-training-${trainingId}-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }
-    });
+    this.reliability.exportCsv(context, () => this.isCurrentReliabilityContext(context));
   }
 
-  filterKappaStatistics(): void {
-    this.reliability.filterStatistics();
+  private downloadReliability(blob: Blob, trainingId: number): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `interrater-reliability-training-${trainingId}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  setWeightingMethod(weighted: boolean): void {
+    this.reliability.setWeightingMethod(weighted);
+  }
+
+  setCalculationLevel(codeLevel: boolean): void {
+    this.reliability.setCalculationLevel(codeLevel);
   }
 
   private buildVariableSummaryKey(unitName: string, variableId: string): string {
@@ -2212,10 +2218,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
       return 'kappa-good';
     }
     return 'kappa-perfect';
-  }
-
-  calculateMeanAgreement(): void {
-    this.reliability.calculateMeanAgreement();
   }
 
   private resetKappaState(): void {
