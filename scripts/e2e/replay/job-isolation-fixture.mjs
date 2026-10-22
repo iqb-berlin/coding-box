@@ -7,7 +7,7 @@ import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
 
 const exec = promisify(execFile);
 
-/** Exercise real API/Bull ownership boundaries in the disposable workflow stack. */
+/** Exercise real API/BullMQ ownership boundaries in the disposable workflow stack. */
 export async function verifyJobIsolation(state) {
   const { config, workspaceId, adminToken } = state;
   assert.match(config.composeProject, /^coding-box-replay-[a-z0-9-]+$/);
@@ -42,7 +42,7 @@ export async function verifyJobIsolation(state) {
         'Expected an active job while awaiting completion');
       await delay(1000);
     }
-    assert.fail('Real Bull job did not complete within 60 seconds');
+    assert.fail('Real BullMQ job did not complete within 60 seconds');
   };
   let otherWorkspaceId;
   try {
@@ -94,7 +94,7 @@ export async function verifyJobIsolation(state) {
     assert.equal((await request(`${other}${resultsPath}`)).status, 404);
 
     // Prior browser views may have populated this exact workspace/version cache.
-    // Remove only that synthetic key so the API must return a real Bull job.
+    // Remove only that synthetic key so the API must return a real BullMQ job.
     const redisContainer = await findComposeContainer(config.composeProject, 'redis');
     const cacheKey = `replay-e2e:${config.runId}:cache:coding-statistics:schema-v5:${workspaceId}:v1`;
     const { stdout } = await exec('docker', [
