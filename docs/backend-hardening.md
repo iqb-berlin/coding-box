@@ -62,25 +62,15 @@ and credentials are not included in diagnostics.
 ## Strict diagnostics
 
 `npx nx run backend:typecheck` checks the production TypeScript program in strict
-mode, with property initialization exempted for Nest/TypeORM. The initial
-baseline was generated from unchanged develop
-`15b8674e4fa0033d695e71eee705f9b805a85344`: 783 diagnostics in 235 records.
+mode and requires zero diagnostics. Strict checking is also enabled in the normal
+backend build. Property initialization remains exempted for Nest/TypeORM entity
+and DTO properties initialized by the framework.
 
-New/increased file/code/message/count combinations fail. The checker also follows
-local, imported, renamed and generic request type aliases when checking that
-`ValidatedBody` and `RequestBody` refer to the same contract. Line movement alone
-does not invalidate existing entries. This gate does not certify that the legacy
-program is fully strict-clean.
-
-After fixing existing errors, run:
-
-```sh
-node scripts/quality/check-backend-strict.mjs --prune-baseline
-```
-
-Pruning first verifies that no regressions exist. Do not expand the baseline to
-accept new errors. Both current backend unit-test jobs run the Nx check; their
-functional gates and publishing dependencies remain intact.
+The legacy diagnostic baseline has been removed. Errors must be corrected in the
+source rather than added to an allowlist. The checker also follows local,
+imported, renamed and generic request type aliases to verify that `ValidatedBody`
+and `RequestBody` refer to the same contract. Both backend unit-test CI jobs run
+this required Nx check before publishing can proceed.
 
 ## Reproduce validation
 
