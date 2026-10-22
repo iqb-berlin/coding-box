@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import { unlink } from 'fs/promises';
 import { Job } from 'bull';
 import { DataSource } from 'typeorm';
+import { getErrorMessage, toError } from '../../../utils/error.util';
 import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
@@ -786,14 +787,14 @@ export class UploadResultsService {
             await unlink(file.path);
           }
         } catch (e) {
-          this.logger.warn(`Failed to delete temp file ${file.path}: ${e.message}`);
+          this.logger.warn(`Failed to delete temp file ${file.path}: ${getErrorMessage(e)}`);
         }
       } else {
         issues.push({ level: 'error', message: `Invalid mime type: ${file.mimetype}`, fileName: file.originalname });
       }
     } catch (e) {
-      this.logger.error(`Error processing file ${file.originalname}: ${e.message}`);
-      issues.push({ level: 'error', message: `Processing error: ${e.message}`, fileName: file.originalname });
+      this.logger.error(`Error processing file ${file.originalname}: ${getErrorMessage(e)}`);
+      issues.push({ level: 'error', message: `Processing error: ${getErrorMessage(e)}`, fileName: file.originalname });
     }
 
     try {
@@ -821,7 +822,7 @@ export class UploadResultsService {
         }
       }));
     } catch (error) {
-      this.logger.error(`Could not record upload import summary: ${error.message}`);
+      this.logger.error(`Could not record upload import summary: ${getErrorMessage(error)}`);
       issues.push({
         level: 'warning',
         category: 'other',
@@ -1017,7 +1018,7 @@ export class UploadResultsService {
               await onDataProcessed(batch);
               batch = [];
             } catch (processError) {
-              stream.destroy(processError);
+              stream.destroy(toError(processError));
               reject(processError);
             }
             stream.resume();

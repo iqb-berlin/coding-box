@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository
 } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -1312,8 +1313,8 @@ export class CodingProgressService {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting variable coverage overview: ${error.message}`,
-        error.stack
+        `Error getting variable coverage overview: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not get variable coverage overview. Please check the database connection.'

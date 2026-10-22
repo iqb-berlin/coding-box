@@ -16,6 +16,7 @@ import AdmZip = require('adm-zip');
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload, {
   NO_CODING_SCHEME_REF_NORMALIZED,
   StructuredFileData
@@ -270,7 +271,7 @@ export class WorkspaceFilesService implements OnModuleInit {
         });
       } catch (error) {
         this.logger.warn(
-          `Could not parse booklet ${bookletFile.file_id} for unit visibility in workspace ${workspaceId}: ${error.message}`
+          `Could not parse booklet ${bookletFile.file_id} for unit visibility in workspace ${workspaceId}: ${getErrorMessage(error)}`
         );
       }
     }
@@ -729,8 +730,8 @@ export class WorkspaceFilesService implements OnModuleInit {
       return Array.from(new Set(fileTypes)).sort();
     } catch (error) {
       this.logger.error(
-        `Error fetching file types for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error fetching file types for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return [];
     }
@@ -1085,8 +1086,8 @@ ${bookletRefs}
       return true;
     } catch (error) {
       this.logger.error(
-        `Error creating dummy TestTakers file for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error creating dummy TestTakers file for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1122,8 +1123,8 @@ ${bookletRefs}
         }));
     } catch (error) {
       this.logger.error(
-        `Error getting units with file IDs for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error getting units with file IDs for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return [];
     }
@@ -1157,7 +1158,7 @@ ${bookletRefs}
         }
       ];
     } catch (error) {
-      this.logger.error(`Error retrieving VOCS file: ${error.message}`);
+      this.logger.error(`Error retrieving VOCS file: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -1196,7 +1197,7 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Failed to parse metadata file ${file.filename}: ${e.message}`
+            `Failed to parse metadata file ${file.filename}: ${getErrorMessage(e)}`
           );
         }
       });
@@ -1204,7 +1205,7 @@ ${bookletRefs}
       return result.sort((a, b) => a.fileId.localeCompare(b.fileId));
     } catch (error) {
       this.logger.error(
-        `Error fetching item IDs from metadata files: ${error.message}`
+        `Error fetching item IDs from metadata files: ${getErrorMessage(error)}`
       );
       return [];
     }
@@ -1414,7 +1415,7 @@ ${bookletRefs}
         failedFiles: Array.isArray(originalFiles) ?
           originalFiles.map(file => ({
             filename: file.originalname,
-            reason: error.message
+            reason: getErrorMessage(error)
           })) :
           []
       };
@@ -1463,7 +1464,7 @@ ${bookletRefs}
       }
     } catch (error) {
       this.logger.warn(
-        `Failed to process file data for ${file.filename}, falling back to binary conversion: ${error.message}`
+        `Failed to process file data for ${file.filename}, falling back to binary conversion: ${getErrorMessage(error)}`
       );
       base64Data = Buffer.from(file.data, 'binary').toString('base64');
     }
@@ -1740,7 +1741,7 @@ ${bookletRefs}
         );
       } catch (extractError) {
         this.logger.error(
-          `Error extracting information from ${fileType} file: ${extractError.message}`
+          `Error extracting information from ${fileType} file: ${getErrorMessage(extractError)}`
         );
       }
 
@@ -1768,7 +1769,7 @@ ${bookletRefs}
         fileType
       };
     } catch (error) {
-      this.logger.error(`Error processing XML file: ${error.message}`);
+      this.logger.error(`Error processing XML file: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -1794,7 +1795,7 @@ ${bookletRefs}
         metadata = JSON.parse(metaDataElement.text());
       } catch (metadataError) {
         this.logger.warn(
-          `Error parsing metadata from HTML file: ${metadataError.message}`
+          `Error parsing metadata from HTML file: ${getErrorMessage(metadataError)}`
         );
       }
       const structuredData: StructuredFileData = {
@@ -1978,7 +1979,7 @@ ${bookletRefs}
           }
         } catch (error) {
           this.logger.warn(
-            `Could not parse XML content for ${file.originalname}: ${error.message}`
+            `Could not parse XML content for ${file.originalname}: ${getErrorMessage(error)}`
           );
         }
       }
@@ -2064,8 +2065,8 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(
-        `Error processing octet-stream file ${file.originalname}: ${error.message}`,
-        error.stack
+        `Error processing octet-stream file ${file.originalname}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -2135,8 +2136,8 @@ ${bookletRefs}
       return results;
     } catch (error) {
       this.logger.error(
-        `Error processing ZIP file ${file.originalname}: ${error.message}`,
-        error.stack
+        `Error processing ZIP file ${file.originalname}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return [this.toFailedUploadResult(file.originalname, error)];
     }
@@ -2447,8 +2448,8 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(
-        `Error retrieving coding scheme: ${error.message}`,
-        error.stack
+        `Error retrieving coding scheme: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -2538,7 +2539,7 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.error(
-            `Error parsing XML for unit file ${unitFile.file_id}: ${e.message}`
+            `Error parsing XML for unit file ${unitFile.file_id}: ${getErrorMessage(e)}`
           );
         }
       }
@@ -2546,8 +2547,8 @@ ${bookletRefs}
       return variableInfoArray;
     } catch (error) {
       this.logger.error(
-        `Error retrieving variable info: ${error.message}`,
-        error.stack
+        `Error retrieving variable info: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return [];
     }
@@ -2635,10 +2636,10 @@ ${bookletRefs}
       return zipBuffer;
     } catch (error) {
       this.logger.error(
-        `Error creating ZIP file for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error creating ZIP file for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to create ZIP file: ${error.message}`);
+      throw new Error(`Failed to create ZIP file: ${getErrorMessage(error)}`);
     }
   }
 
@@ -2769,11 +2770,11 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(
-        `Error validating TestTakers for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error validating TestTakers for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
-        `Error validating TestTakers for workspace ${workspaceId}: ${error.message}`
+        `Error validating TestTakers for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -3077,11 +3078,11 @@ ${bookletRefs}
       };
     } catch (error) {
       this.logger.error(
-        `Error validating group responses for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error validating group responses for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
-        `Error validating group responses for workspace ${workspaceId}: ${error.message}`
+        `Error validating group responses for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -3136,7 +3137,7 @@ ${bookletRefs}
         this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
       ]);
     } catch (error) {
-      this.logger.error(`Could not invalidate response deletion caches for workspace ${workspaceId}: ${error.message}`);
+      this.logger.error(`Could not invalidate response deletion caches for workspace ${workspaceId}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -3183,8 +3184,8 @@ ${bookletRefs}
       );
     } catch (error) {
       this.logger.error(
-        `Error initializing unit variable cache: ${error.message}`,
-        error.stack
+        `Error initializing unit variable cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
     }
   }
@@ -3353,8 +3354,8 @@ ${bookletRefs}
         } catch (error) {
           derivedMetadataComplete = false;
           this.logger.error(
-            `Error parsing coding scheme ${scheme.file_id}: ${error.message}`,
-            error.stack
+            `Error parsing coding scheme ${scheme.file_id}: ${getErrorMessage(error)}`,
+            getErrorStack(error)
           );
         }
       }
@@ -3671,15 +3672,15 @@ ${bookletRefs}
       );
     } catch (error) {
       this.logger.error(
-        `Error refreshing unit variable cache for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error refreshing unit variable cache for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       try {
         await this.cacheService.set(derivedMetadataCompleteKey, false);
       } catch (cacheError) {
         this.logger.error(
-          `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${cacheError.message}`,
-          cacheError.stack
+          `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${getErrorMessage(cacheError)}`,
+          getErrorStack(cacheError)
         );
       }
     }
@@ -4049,8 +4050,8 @@ ${bookletRefs}
           }
         } catch (error) {
           this.logger.error(
-            `Error parsing coding scheme ${scheme.file_id}: ${error.message}`,
-            error.stack
+            `Error parsing coding scheme ${scheme.file_id}: ${getErrorMessage(error)}`,
+            getErrorStack(error)
           );
         }
       }
@@ -4309,8 +4310,8 @@ ${bookletRefs}
       return unitVariableDetails;
     } catch (error) {
       this.logger.error(
-        `Error getting unit variable details for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error getting unit variable details for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return [];
     }

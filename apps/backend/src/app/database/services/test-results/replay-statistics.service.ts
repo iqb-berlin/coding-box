@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import type { SelectQueryBuilder } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   REPLAY_STATISTICS_SOURCE_EXTERNAL,
   REPLAY_STATISTICS_SOURCE_INTERNAL,
@@ -178,8 +179,8 @@ export class ReplayStatisticsService {
       return await this.replayStatisticsRepository.save(replayStatistics);
     } catch (error) {
       this.logger.error(
-        `Error storing replay statistics: ${error.message}`,
-        error.stack
+        `Error storing replay statistics: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -242,8 +243,8 @@ export class ReplayStatisticsService {
       });
     } catch (error) {
       this.logger.error(
-        `Error retrieving replay statistics: ${error.message}`,
-        error.stack
+        `Error retrieving replay statistics: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -294,8 +295,8 @@ export class ReplayStatisticsService {
       return summary;
     } catch (error) {
       this.logger.error(
-        `Error calculating replay source summary: ${error.message}`,
-        error.stack
+        `Error calculating replay source summary: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -335,8 +336,8 @@ export class ReplayStatisticsService {
       return frequency;
     } catch (error) {
       this.logger.error(
-        `Error calculating replay frequency: ${error.message}`,
-        error.stack
+        `Error calculating replay frequency: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -442,8 +443,8 @@ export class ReplayStatisticsService {
       };
     } catch (error) {
       this.logger.error(
-        `Error calculating duration statistics: ${error.message}`,
-        error.stack
+        `Error calculating duration statistics: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -479,8 +480,8 @@ export class ReplayStatisticsService {
       return distribution;
     } catch (error) {
       this.logger.error(
-        `Error calculating replay distribution by day: ${error.message}`,
-        error.stack
+        `Error calculating replay distribution by day: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -523,8 +524,8 @@ export class ReplayStatisticsService {
       return hourDistribution;
     } catch (error) {
       this.logger.error(
-        `Error calculating replay distribution by hour: ${error.message}`,
-        error.stack
+        `Error calculating replay distribution by hour: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -607,8 +608,8 @@ export class ReplayStatisticsService {
       };
     } catch (error) {
       this.logger.error(
-        `Error calculating replay error statistics: ${error.message}`,
-        error.stack
+        `Error calculating replay error statistics: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -649,8 +650,8 @@ export class ReplayStatisticsService {
       return distribution;
     } catch (error) {
       this.logger.error(
-        `Error calculating failure distribution by unit: ${error.message}`,
-        error.stack
+        `Error calculating failure distribution by unit: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -687,8 +688,8 @@ export class ReplayStatisticsService {
       return distribution;
     } catch (error) {
       this.logger.error(
-        `Error calculating failure distribution by day: ${error.message}`,
-        error.stack
+        `Error calculating failure distribution by day: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -732,8 +733,8 @@ export class ReplayStatisticsService {
       return hourDistribution;
     } catch (error) {
       this.logger.error(
-        `Error calculating failure distribution by hour: ${error.message}`,
-        error.stack
+        `Error calculating failure distribution by hour: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

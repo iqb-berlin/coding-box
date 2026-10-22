@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatistics } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
@@ -82,7 +83,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       await this.preloadStatisticsForWorkspaces(workspaceIds);
       this.logger.log('Finished preloading coding statistics for all workspaces');
     } catch (error) {
-      this.logger.error(`Error during application bootstrap: ${error.message}`);
+      this.logger.error(`Error during application bootstrap: ${getErrorMessage(error)}`);
     }
   }
 
@@ -101,7 +102,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           await this.getCodingStatistics(workspaceId);
         } catch (error) {
           this.logger.error(
-            `Failed to preload statistics for workspace ${workspaceId}: ${error.message}`
+            `Failed to preload statistics for workspace ${workspaceId}: ${getErrorMessage(error)}`
           );
         }
       }
@@ -269,7 +270,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       return statistics;
     } catch (error) {
-      this.logger.error(`Error getting coding statistics: ${error.message}`);
+      this.logger.error(`Error getting coding statistics: ${getErrorMessage(error)}`);
       return statistics;
     }
   }
@@ -386,8 +387,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       return null;
     } catch (error) {
       this.logger.error(
-        `Error getting job status: ${error.message}`,
-        error.stack
+        `Error getting job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -428,8 +429,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting coding statistics job status: ${error.message}`,
-        error.stack
+        `Error getting coding statistics job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -506,8 +507,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       };
     } catch (error) {
       this.logger.error(
-        `Error creating coding statistics job: ${error.message}`,
-        error.stack
+        `Error creating coding statistics job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -550,10 +551,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
       return { success: false, message: `Failed to cancel job ${jobId}` };
     } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
+      this.logger.error(`Error cancelling job: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
-        message: `Error cancelling job: ${error.message}`
+        message: `Error cancelling job: ${getErrorMessage(error)}`
       };
     }
   }
@@ -580,10 +581,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
       return { success: false, message: `Failed to delete job ${jobId}` };
     } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      this.logger.error(`Error deleting job: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
-        message: `Error deleting job: ${error.message}`
+        message: `Error deleting job: ${getErrorMessage(error)}`
       };
     }
   }

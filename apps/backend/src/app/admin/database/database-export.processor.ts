@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 import { DatabaseExportService } from './database-export.service';
 import { JournalService } from '../../database/services/shared/journal.service';
@@ -102,8 +103,8 @@ export class DatabaseExportProcessor {
         this.logger.warn(`Database export job ${job.id} was cancelled`);
       } else {
         this.logger.error(
-          `Database export job ${job.id} failed: ${error?.message || error}`,
-          error?.stack
+          `Database export job ${job.id} failed: ${getErrorMessage(error) || error}`,
+          getErrorStack(error)
         );
       }
 
@@ -112,8 +113,8 @@ export class DatabaseExportProcessor {
           fs.unlinkSync(outputFilePath);
         } catch (cleanupError) {
           this.logger.error(
-            `Failed to clean up export file ${outputFilePath}: ${cleanupError?.message || cleanupError}`,
-            cleanupError?.stack
+            `Failed to clean up export file ${outputFilePath}: ${getErrorMessage(cleanupError) || cleanupError}`,
+            getErrorStack(cleanupError)
           );
         }
       }

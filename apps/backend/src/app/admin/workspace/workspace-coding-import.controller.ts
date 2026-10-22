@@ -19,6 +19,7 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import { getErrorMessage } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -101,7 +102,7 @@ export class WorkspaceCodingImportController {
       res.write(
         `data: ${JSON.stringify({
           progress: 0,
-          message: `Import failed: ${error.message}`,
+          message: `Import failed: ${getErrorMessage(error)}`,
           error: true
         })}\n\n`
       );

@@ -4,6 +4,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, EntityManager } from 'typeorm';
 import * as cheerio from 'cheerio';
+import { getErrorMessage } from '../../../utils/error.util';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import FileUpload from '../../entities/file_upload.entity';
@@ -457,7 +458,7 @@ export class CodingJobSchemeService {
       );
     } catch (error) {
       this.logger.warn(
-        `Could not parse unit file ${unitFile.file_id}: ${error.message}`
+        `Could not parse unit file ${unitFile.file_id}: ${getErrorMessage(error)}`
       );
       return null;
     }
@@ -494,7 +495,7 @@ export class CodingJobSchemeService {
           variablePageMaps.set(unitName, pageMap);
         } catch (error) {
           this.logger.warn(
-            `Error loading variable page map for coding job unit ${unitName}: ${error.message}`
+            `Error loading variable page map for coding job unit ${unitName}: ${getErrorMessage(error)}`
           );
           variablePageMaps.set(unitName, new Map<string, string>());
         }
@@ -542,7 +543,7 @@ export class CodingJobSchemeService {
       );
     } catch (error) {
       this.logger.warn(
-        `Error loading variable anchor maps for coding job units in workspace ${workspaceId}: ${error.message}`
+        `Error loading variable anchor maps for coding job units in workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       unitNames.forEach(unitName => {
         variableAnchorMaps.set(unitName, new Map<string, string>());

@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Setting } from '../../entities/setting.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
@@ -290,7 +291,7 @@ export class CodingListQueryService {
       );
       return { items: sortedResult, total: sortedResult.length };
     } catch (error) {
-      this.logger.error(`Error fetching coding list: ${error.message}`);
+      this.logger.error(`Error fetching coding list: ${getErrorMessage(error)}`);
       return { items: [], total: 0 };
     }
   }
@@ -312,7 +313,7 @@ export class CodingListQueryService {
             );
           } catch (error) {
             this.logger.warn(
-              `Error loading variable page map for unit ${unitKey}: ${error.message}`
+              `Error loading variable page map for unit ${unitKey}: ${getErrorMessage(error)}`
             );
             variablePageMap.set(unitKey, new Map<string, string>());
           }
@@ -341,7 +342,7 @@ export class CodingListQueryService {
       );
     } catch (error) {
       this.logger.warn(
-        `Error loading replay anchor maps for workspace ${workspaceId}: ${error.message}`
+        `Error loading replay anchor maps for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       unitKeys.forEach(unitKey => variableAnchorMap.set(unitKey, new Map()));
     }

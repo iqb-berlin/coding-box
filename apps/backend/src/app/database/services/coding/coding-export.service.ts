@@ -7,6 +7,7 @@ import {
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import { Request, Response } from 'express';
+import { getErrorMessage, getErrorStack, toError } from '../../../utils/error.util';
 import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
@@ -4152,11 +4153,11 @@ export class CodingExportService {
       await checkCancellation?.();
       return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
     } catch (error) {
-      if (this.isExportCancellationError(error)) {
+      if (this.isExportCancellationError(toError(error))) {
         throw error;
       }
-      this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
-      throw new Error(`Could not export detailed coding results: ${error.message}`);
+      this.logger.error(`Error exporting detailed coding results: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export detailed coding results: ${getErrorMessage(error)}`);
     }
   }
 
@@ -4465,11 +4466,11 @@ export class CodingExportService {
       await checkCancellation?.();
       return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
     } catch (error) {
-      if (this.isExportCancellationError(error)) {
+      if (this.isExportCancellationError(toError(error))) {
         throw error;
       }
-      this.logger.error(`Error exporting coding times report: ${error.message}`, error.stack);
-      throw new Error(`Could not export coding times report: ${error.message}`);
+      this.logger.error(`Error exporting coding times report: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export coding times report: ${getErrorMessage(error)}`);
     }
   }
 

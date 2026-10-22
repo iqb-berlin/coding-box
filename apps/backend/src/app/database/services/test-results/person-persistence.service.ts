@@ -5,6 +5,7 @@ import {
   Brackets, EntityManager, In, Repository
 } from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Log,
   Person,
@@ -158,7 +159,7 @@ export class PersonPersistenceService {
       this.logger.log(`Marked ${result.affected} persons as not to be considered in workspace ${workspaceId}`);
       return result.affected > 0;
     } catch (error) {
-      this.logger.error(`Error marking persons as not considered: ${error.message}`, error.stack);
+      this.logger.error(`Error marking persons as not considered: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
     }
   }
@@ -188,7 +189,7 @@ export class PersonPersistenceService {
       this.logger.log(`Marked ${result.affected} persons as considered in workspace ${workspaceId}`);
       return result.affected > 0;
     } catch (error) {
-      this.logger.error(`Error marking persons as considered: ${error.message}`, error.stack);
+      this.logger.error(`Error marking persons as considered: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
     }
   }
@@ -324,9 +325,9 @@ export class PersonPersistenceService {
             }
           } catch (bookletError) {
             if (this.importTransaction) throw bookletError;
-            issues.push({ level: 'error', category: 'other', message: `Testheft ${booklet.id} konnte nicht gespeichert werden: ${bookletError.message}` });
+            issues.push({ level: 'error', category: 'other', message: `Testheft ${booklet.id} konnte nicht gespeichert werden: ${getErrorMessage(bookletError)}` });
             this.logger.error(
-              `Failed to process booklet ${booklet.id} for person ${person.id}: ${bookletError.message}`
+              `Failed to process booklet ${booklet.id} for person ${person.id}: ${getErrorMessage(bookletError)}`
             );
           }
         }
@@ -339,8 +340,8 @@ export class PersonPersistenceService {
       );
     } catch (error) {
       if (this.importTransaction) throw error;
-      this.logger.error(`Failed to process person booklets: ${error.message}`);
-      issues.push({ level: 'error', category: 'other', message: `Testdaten konnten nicht vollständig gespeichert werden: ${error.message}` });
+      this.logger.error(`Failed to process person booklets: ${getErrorMessage(error)}`);
+      issues.push({ level: 'error', category: 'other', message: `Testdaten konnten nicht vollständig gespeichert werden: ${getErrorMessage(error)}` });
     }
 
     this.dedupeMutationSummaryUnitIds(mutationSummary);
@@ -467,7 +468,7 @@ export class PersonPersistenceService {
               this.mergeMutationSummary(mutationSummary, unitSummary);
             } catch (unitError) {
               if (this.importTransaction) throw unitError;
-              const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
+              const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${getErrorMessage(unitError)}`;
               this.logger.error(msg);
               issues.push({ level: 'error', message: msg, category: 'other' });
             }
@@ -509,7 +510,7 @@ export class PersonPersistenceService {
       }
     } catch (error) {
       if (this.importTransaction) throw error;
-      this.logger.error(`Failed to save last state for unit ${unit.id}: ${error.message}`);
+      this.logger.error(`Failed to save last state for unit ${unit.id}: ${getErrorMessage(error)}`);
       if (manager) throw error;
     }
   }
@@ -538,7 +539,7 @@ export class PersonPersistenceService {
       };
     } catch (error) {
       if (this.importTransaction) throw error;
-      this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
+      this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${getErrorMessage(error)}`);
       return {
         success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
@@ -607,7 +608,7 @@ export class PersonPersistenceService {
       }
     } catch (error) {
       if (this.importTransaction) throw error;
-      this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${error.message}`);
+      this.logger.error(`Failed to save chunks for unit ${unit.id} in booklet ${booklet.id}: ${getErrorMessage(error)}`);
       if (manager) throw error;
     }
   }
@@ -713,7 +714,7 @@ export class PersonPersistenceService {
       };
     } catch (error) {
       if (this.importTransaction) throw error;
-      this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
+      this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${getErrorMessage(error)}`);
       return {
         success: false,
         saved: 0,
@@ -996,9 +997,9 @@ export class PersonPersistenceService {
           } catch (error) {
             if (this.importTransaction) throw error;
             success = false;
-            issues.push({ level: 'error', category: 'other', message: `Logs für Testheft ${booklet.id} konnten nicht vollständig gespeichert werden: ${error.message}` });
+            issues.push({ level: 'error', category: 'other', message: `Logs für Testheft ${booklet.id} konnten nicht vollständig gespeichert werden: ${getErrorMessage(error)}` });
             this.logger.error(
-              `Failed to process booklet ${booklet.id} for person ${originalPerson.code}: ${error.message}`
+              `Failed to process booklet ${booklet.id} for person ${originalPerson.code}: ${getErrorMessage(error)}`
             );
           }
         }
@@ -1019,14 +1020,14 @@ export class PersonPersistenceService {
     } catch (error) {
       if (this.importTransaction) throw error;
       this.logger.error(
-        `Critical error while processing person logs: ${error.message}`
+        `Critical error while processing person logs: ${getErrorMessage(error)}`
       );
       return {
         success: false,
         totalBooklets,
         totalLogsSaved,
         totalLogsSkipped,
-        issues: [...issues, { level: 'error', category: 'other', message: `Logs konnten nicht vollständig gespeichert werden: ${error.message}` }]
+        issues: [...issues, { level: 'error', category: 'other', message: `Logs konnten nicht vollständig gespeichert werden: ${getErrorMessage(error)}` }]
       };
     }
   }
@@ -1077,7 +1078,7 @@ export class PersonPersistenceService {
     } catch (error) {
       if (this.importTransaction) throw error;
       this.logger.error(
-        `Failed to save logs for booklet ${booklet.id}: ${error.message}`
+        `Failed to save logs for booklet ${booklet.id}: ${getErrorMessage(error)}`
       );
       return { success: false, saved: 0, skipped: booklet.logs.length };
     }
@@ -1152,7 +1153,7 @@ export class PersonPersistenceService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to save sessions for booklet ${booklet.id}: ${error.message}`
+        `Failed to save sessions for booklet ${booklet.id}: ${getErrorMessage(error)}`
       );
       throw error;
     }
@@ -1288,7 +1289,7 @@ export class PersonPersistenceService {
     } catch (error) {
       if (this.importTransaction) throw error;
       this.logger.error(
-        `Failed to save logs for unit ${unit.id}: ${error.message}`
+        `Failed to save logs for unit ${unit.id}: ${getErrorMessage(error)}`
       );
       return { success: false, saved: 0, skipped: unit.logs.length };
     }

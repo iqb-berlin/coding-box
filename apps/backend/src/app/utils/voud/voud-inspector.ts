@@ -2,6 +2,7 @@
 
 import * as fs from 'fs';
 import { extractVariableLocation } from './extractVariableLocation';
+import { getErrorMessage, getErrorStack } from '../error.util';
 
 function inspectVoudFile(filePathOrContent) {
   try {
@@ -51,9 +52,9 @@ function inspectVoudFile(filePathOrContent) {
 
     console.log('=== Inspection Complete ===');
   } catch (error) {
-    console.error('Error processing VOUD file:', error.message);
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
+    console.error('Error processing VOUD file:', getErrorMessage(error));
+    if (getErrorStack(error)) {
+      console.error('Stack trace:', getErrorStack(error));
     }
   }
 }

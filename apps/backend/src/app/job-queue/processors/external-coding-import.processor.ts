@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { Job } from 'bull';
 import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ExternalCodingImportService } from '../../database/services/coding';
 import { CacheService } from '../../cache/cache.service';
 import { ExternalCodingImportJobData } from '../job-queue.service';
@@ -80,8 +81,8 @@ export class ExternalCodingImportProcessor {
       };
     } catch (error) {
       this.logger.error(
-        `Error processing external coding import job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing external coding import job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     } finally {
@@ -93,7 +94,7 @@ export class ExternalCodingImportProcessor {
         }
       } catch (cleanupError) {
         this.logger.warn(
-          `Failed to clean up temp file ${tempFilePath}: ${cleanupError.message}`
+          `Failed to clean up temp file ${tempFilePath}: ${getErrorMessage(cleanupError)}`
         );
       }
     }

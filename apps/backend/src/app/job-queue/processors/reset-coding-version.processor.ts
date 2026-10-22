@@ -7,6 +7,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResetCodingVersionJobData } from '../job-queue.service';
 import { CodingVersionService } from '../../database/services/coding/coding-version.service';
 
@@ -53,8 +54,8 @@ export class ResetCodingVersionProcessor {
       return result;
     } catch (error) {
       this.logger.error(
-        `Error processing reset coding version job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing reset coding version job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

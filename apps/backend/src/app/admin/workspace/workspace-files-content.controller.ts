@@ -16,6 +16,7 @@ import {
   ApiBadRequestResponse,
   ApiTags
 } from '@nestjs/swagger';
+import { getErrorMessage } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
@@ -82,7 +83,7 @@ export class WorkspaceFilesContentController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error.message.includes('not found')) {
+      if (getErrorMessage(error).includes('not found')) {
         throw new NotFoundException(
           `Unit with ID ${unit_id} not found in workspace ${workspace_id}`
         );
@@ -144,7 +145,7 @@ export class WorkspaceFilesContentController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error.message.includes('not found')) {
+      if (getErrorMessage(error).includes('not found')) {
         throw new NotFoundException(
           `TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`
         );

@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusNumberToString,
@@ -173,7 +174,7 @@ export class CodingItemBuilderService {
       };
     } catch (error) {
       this.logger.error(
-        `Error building coding item for response ${response.id}: ${error.message}`
+        `Error building coding item for response ${response.id}: ${getErrorMessage(error)}`
       );
       return null;
     }
@@ -291,7 +292,7 @@ export class CodingItemBuilderService {
       return baseItem;
     } catch (error) {
       this.logger.error(
-        `Error building coding item with versions for response ${response.id}: ${error.message}`
+        `Error building coding item with versions for response ${response.id}: ${getErrorMessage(error)}`
       );
       return null;
     }
@@ -395,7 +396,7 @@ export class CodingItemBuilderService {
       return baseItem;
     } catch (error) {
       this.logger.error(
-        `Error building coding item with versions for response ${row.id}: ${error.message}`
+        `Error building coding item with versions for response ${row.id}: ${getErrorMessage(error)}`
       );
       return null;
     }

@@ -2,6 +2,7 @@ import {
   Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
 import { Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
 import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
 import { CodingStatistics } from '../shared';
@@ -47,8 +48,8 @@ export class BullJobManagementService {
 
       return { success: true, message: `Job ${jobId} has been paused successfully` };
     } catch (error) {
-      this.logger.error(`Error pausing job: ${error.message}`, error.stack);
-      return { success: false, message: `Error pausing job: ${error.message}` };
+      this.logger.error(`Error pausing job: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Error pausing job: ${getErrorMessage(error)}` };
     }
   }
 
@@ -72,8 +73,8 @@ export class BullJobManagementService {
       this.logger.log(`Job ${jobId} has been resumed successfully`);
       return { success: true, message: `Job ${jobId} has been resumed successfully` };
     } catch (error) {
-      this.logger.error(`Error resuming job: ${error.message}`, error.stack);
-      return { success: false, message: `Error resuming job: ${error.message}` };
+      this.logger.error(`Error resuming job: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Error resuming job: ${getErrorMessage(error)}` };
     }
   }
 
@@ -132,8 +133,8 @@ export class BullJobManagementService {
         jobId: newJob.id.toString()
       };
     } catch (error) {
-      this.logger.error(`Error restarting job: ${error.message}`, error.stack);
-      return { success: false, message: `Error restarting job: ${error.message}` };
+      this.logger.error(`Error restarting job: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Error restarting job: ${getErrorMessage(error)}` };
     }
   }
 
@@ -232,7 +233,7 @@ export class BullJobManagementService {
         });
       }
     } catch (bullError) {
-      this.logger.error(`Error getting jobs from Redis queue: ${bullError.message}`, bullError.stack);
+      this.logger.error(`Error getting jobs from Redis queue: ${getErrorMessage(bullError)}`, getErrorStack(bullError));
     }
 
     return jobs.sort((a, b) => {

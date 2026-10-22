@@ -4,6 +4,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -338,8 +339,8 @@ export class CodingValidationService {
       };
     } catch (error) {
       this.logger.error(
-        `Error validating coding completeness: ${error.message}`,
-        error.stack
+        `Error validating coding completeness: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not validate coding completeness. Please check the database connection or query.'
@@ -492,7 +493,7 @@ export class CodingValidationService {
       }
     } catch (error) {
       issues.push(
-        `Replay-Dateien konnten nicht geprüft werden: ${error.message}.`
+        `Replay-Dateien konnten nicht geprüft werden: ${getErrorMessage(error)}.`
       );
     }
 
@@ -630,8 +631,8 @@ export class CodingValidationService {
       return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
     } catch (error) {
       this.logger.error(
-        `Error getting manual coding variables: ${error.message}`,
-        error.stack
+        `Error getting manual coding variables: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not get manual coding variables. Please check the database connection.'
@@ -663,8 +664,8 @@ export class CodingValidationService {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting manual coding scope summary: ${error.message}`,
-        error.stack
+        `Error getting manual coding scope summary: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not get manual coding scope summary. Please check the database connection.'
@@ -761,8 +762,8 @@ export class CodingValidationService {
       };
     } catch (error) {
       this.logger.error(
-        `Error validating manual code availability: ${error.message}`,
-        error.stack
+        `Error validating manual code availability: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not validate manual code availability. Please check the coding schemes.'
@@ -1952,8 +1953,8 @@ export class CodingValidationService {
       return totalAppliedCount;
     } catch (error) {
       this.logger.error(
-        `Error getting applied results count: ${error.message}`,
-        error.stack
+        `Error getting applied results count: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not get applied results count. Please check the database connection.'

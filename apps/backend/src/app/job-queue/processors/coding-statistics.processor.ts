@@ -7,6 +7,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { CodingStatistics } from '../../database/services/shared';
 import { CodingStatisticsService } from '../../database/services/coding';
 
@@ -37,7 +38,7 @@ export class CodingStatisticsProcessor {
       this.logger.log(`Coding statistics job ${job.id} completed successfully`);
       return result;
     } catch (error) {
-      this.logger.error(`Error processing coding statistics job ${job.id}: ${error.message}`, error.stack);
+      this.logger.error(`Error processing coding statistics job ${job.id}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }

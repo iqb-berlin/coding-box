@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   EntityManager, In, IsNull, Not, Repository
 } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { assertCodingReviewMutation } from '../shared/coding-ownership.policy';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -337,14 +338,14 @@ export class DoubleCodingReviewDecisionService {
               if (result.status === 'skipped') skippedCount += 1;
             } catch (error) {
               this.logger.error(
-                `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
-                error.stack
+                `Error applying resolution for responseId ${decision.responseId}: ${getErrorMessage(error)}`,
+                getErrorStack(error)
               );
               failedCount += 1;
               results.push({
                 responseId: decision.responseId,
                 status: 'failed',
-                message: error.message
+                message: getErrorMessage(error)
               });
             }
           }
@@ -394,8 +395,8 @@ export class DoubleCodingReviewDecisionService {
       };
     } catch (error) {
       this.logger.error(
-        `Error applying double-coded resolutions: ${error.message}`,
-        error.stack
+        `Error applying double-coded resolutions: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not apply double-coded resolutions. Please check the database connection.'
@@ -476,8 +477,8 @@ export class DoubleCodingReviewDecisionService {
         }
       } catch (error) {
         this.logger.error(
-          `Could not reconcile aggregation siblings for responseId ${decision.response_id}: ${error.message}`,
-          error.stack
+          `Could not reconcile aggregation siblings for responseId ${decision.response_id}: ${getErrorMessage(error)}`,
+          getErrorStack(error)
         );
         result.failedCount += 1;
         result.items.push({
@@ -486,7 +487,7 @@ export class DoubleCodingReviewDecisionService {
           status: 'failed',
           siblingResponseIds: [],
           protectedPartialResponseIds: [],
-          reason: error.message
+          reason: getErrorMessage(error)
         });
       }
     };
@@ -1226,7 +1227,7 @@ export class DoubleCodingReviewDecisionService {
       };
     } catch (error) {
       this.logger.warn(
-        `Could not validate replay code ${code} for responseId ${sourceUnit.response_id}: ${error.message}`
+        `Could not validate replay code ${code} for responseId ${sourceUnit.response_id}: ${getErrorMessage(error)}`
       );
       return undefined;
     }

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { CacheService } from '../../cache/cache.service';
 import {
@@ -364,7 +365,7 @@ export class VariableAnalysisProcessor {
         total
       });
     } catch (error) {
-      this.logger.error(`Error processing job ${job.id}: ${error.message}`, error.stack);
+      this.logger.error(`Error processing job ${job.id}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -447,8 +448,8 @@ export class VariableAnalysisProcessor {
       return manifest;
     } catch (error) {
       this.logger.error(
-        `Failed to store variable analysis result chunks for ${cacheKey}: ${error.message}`,
-        error.stack
+        `Failed to store variable analysis result chunks for ${cacheKey}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       await this.cleanupFailedChunkedWrite(writtenKeys, cacheKey);
       return null;

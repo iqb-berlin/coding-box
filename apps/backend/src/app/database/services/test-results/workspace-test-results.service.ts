@@ -16,6 +16,7 @@ import * as csv from 'fast-csv';
 import * as fs from 'fs';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import {
   STATISTICS_IGNORED_STATUSES,
@@ -2270,7 +2271,7 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
         'An error occurred while fetching booklets, their info, units, and test results.'
@@ -2325,8 +2326,8 @@ export class WorkspaceTestResultsService {
       return [results, total];
     } catch (error) {
       this.logger.error(
-        `Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`,
-        error.stack
+        `Failed to fetch test results for workspace_id ${workspace_id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error('An error occurred while fetching test results');
     }
@@ -4702,7 +4703,7 @@ export class WorkspaceTestResultsService {
 
       return result;
     } catch (error) {
-      this.logger.error(`Error getting responses by status: ${error.message}`);
+      this.logger.error(`Error getting responses by status: ${getErrorMessage(error)}`);
       return [[], 0];
     }
   }
@@ -4951,7 +4952,7 @@ export class WorkspaceTestResultsService {
     try {
       await this.invalidateCachesAfterTestResultDeletion(workspaceId);
     } catch (error) {
-      this.logger.error(`Could not invalidate caches after partial deletion in workspace ${workspaceId}: ${error.message}`);
+      this.logger.error(`Could not invalidate caches after partial deletion in workspace ${workspaceId}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -7045,10 +7046,10 @@ export class WorkspaceTestResultsService {
 
       this.logger.error(
         `Failed to search for responses in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for responses: ${error.message}`
+        `An error occurred while searching for responses: ${getErrorMessage(error)}`
       );
     }
   }
@@ -7270,10 +7271,10 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for units with name: ${unitName}: ${error.message}`
+        `An error occurred while searching for units with name: ${unitName}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -7369,10 +7370,10 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to search for booklets with name: ${bookletName} in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`
+        `An error occurred while searching for booklets with name: ${bookletName}: ${getErrorMessage(error)}`
       );
     }
   }

@@ -3,6 +3,7 @@ import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import {
@@ -89,7 +90,7 @@ export class CodingAnalysisProcessor {
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis;
     } catch (error) {
-      this.logger.error(`Response analysis failed: ${error.message}`, error.stack);
+      this.logger.error(`Response analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }

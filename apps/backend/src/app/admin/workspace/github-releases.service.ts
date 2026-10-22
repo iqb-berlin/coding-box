@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { getErrorMessage } from '../../utils/error.util';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { FileIo } from './file-io.interface';
 
@@ -69,7 +70,7 @@ export class GithubReleasesService {
         })
         .filter((r): r is GithubReleaseShort => r !== null);
     } catch (error) {
-      this.logger.error(`Error fetching releases for ${type}: ${error.message}`);
+      this.logger.error(`Error fetching releases for ${type}: ${getErrorMessage(error)}`);
       throw new InternalServerErrorException('Failed to fetch releases from GitHub');
     }
   }
@@ -149,7 +150,7 @@ export class GithubReleasesService {
         true);
       return true;
     } catch (error) {
-      this.logger.error(`Error downloading/installing file: ${error.message}`);
+      this.logger.error(`Error downloading/installing file: ${getErrorMessage(error)}`);
       throw new InternalServerErrorException('Failed to download and install file');
     }
   }

@@ -2,6 +2,7 @@ import { DataSource, QueryRunner } from 'typeorm';
 import {
   forwardRef, Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
+import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -70,7 +71,7 @@ export class ResponseManagementService {
       } catch (rollbackError) {
         this.logger.error(
           'Fehler beim Rollback der Transaktion:',
-          rollbackError.message
+          getErrorMessage(rollbackError)
         );
       }
       await queryRunner.release();
@@ -295,7 +296,7 @@ export class ResponseManagementService {
           this.logger.error(
             `Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length
             }):`,
-            error.message
+            getErrorMessage(error)
           );
           throw error;
         }
@@ -332,7 +333,7 @@ export class ResponseManagementService {
 
       this.logger.error(
         'Fehler beim Aktualisieren der Responses:',
-        error.message
+        getErrorMessage(error)
       );
       await rollbackAndRelease();
       throw error;
