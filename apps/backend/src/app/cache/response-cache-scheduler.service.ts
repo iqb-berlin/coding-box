@@ -274,10 +274,9 @@ export class ResponseCacheSchedulerService {
     const unitsByPersonId = new Map<number, Unit[]>();
     for (const unit of units) {
       const personId = unit.booklet.personid;
-      if (!unitsByPersonId.has(personId)) {
-        unitsByPersonId.set(personId, []);
-      }
-      unitsByPersonId.get(personId).push(unit);
+      const personUnits = unitsByPersonId.get(personId) ?? [];
+      personUnits.push(unit);
+      unitsByPersonId.set(personId, personUnits);
     }
 
     // Attach units to each person

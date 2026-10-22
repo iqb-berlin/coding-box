@@ -127,14 +127,15 @@ export class WorkspaceCoreService {
   async patch(workspaceData: WorkspaceFullDto, actorUserId?: number): Promise<void> {
     this.logger.log(`Updating workspace with id: ${workspaceData.id}`);
     if (workspaceData.id) {
-      if (workspaceData.settings) {
+      const settings = workspaceData.settings;
+      if (settings) {
         await this.mutateAutocoderInputSettings(
           workspaceData.id,
           workspaceGroupToUpdate => {
             if (workspaceData.name) {
               workspaceGroupToUpdate.name = workspaceData.name;
             }
-            workspaceGroupToUpdate.settings = workspaceData.settings;
+            workspaceGroupToUpdate.settings = settings;
           },
           Object.keys(workspaceData),
           actorUserId
@@ -153,7 +154,7 @@ export class WorkspaceCoreService {
         });
       }
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
-      if (workspaceData.settings) {
+      if (settings) {
         await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
       }

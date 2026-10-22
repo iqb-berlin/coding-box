@@ -158,9 +158,9 @@ export class CodingVersionService {
         const previousJobScope = committedJobScope;
         const batch = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async manager => {
           await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
-          const batchResponses = await baseQueryBuilder
-            .clone()
-            .setQueryRunner(manager.queryRunner)
+          const batchQuery = baseQueryBuilder.clone();
+          if (manager.queryRunner) batchQuery.setQueryRunner(manager.queryRunner);
+          const batchResponses = await batchQuery
             .select([
               'response.id',
               'response.unitid',

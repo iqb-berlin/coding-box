@@ -763,7 +763,7 @@ export class CodingResultsService {
       [responseIds]
     );
 
-    return new Map(rows.map(row => [
+    return new Map(rows.map((row: Record<string, unknown>) => [
       Number(row.id),
       {
         status: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
@@ -824,7 +824,7 @@ export class CodingResultsService {
       params
     );
 
-    return rows.map(row => ({
+    return rows.map((row: Record<string, unknown>) => ({
       responseId: Number(row.responseId),
       statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
     }));

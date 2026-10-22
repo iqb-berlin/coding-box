@@ -157,7 +157,7 @@ export class PersonPersistenceService {
       );
 
       this.logger.log(`Marked ${result.affected} persons as not to be considered in workspace ${workspaceId}`);
-      return result.affected > 0;
+      return (result.affected ?? 0) > 0;
     } catch (error) {
       this.logger.error(`Error marking persons as not considered: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
@@ -187,7 +187,7 @@ export class PersonPersistenceService {
       );
 
       this.logger.log(`Marked ${result.affected} persons as considered in workspace ${workspaceId}`);
-      return result.affected > 0;
+      return (result.affected ?? 0) > 0;
     } catch (error) {
       this.logger.error(`Error marking persons as considered: ${getErrorMessage(error)}`, getErrorStack(error));
       return false;
@@ -495,10 +495,10 @@ export class PersonPersistenceService {
       });
 
       if (currentLastState.length === 0 && unit.laststate) {
-        const lastStateEntries = Object.entries(unit.laststate).map(([key]) => ({
+        const lastStateEntries = Object.entries(unit.laststate).map(([, state]) => ({
           unitid: savedUnit.id,
-          key: unit.laststate[key].key,
-          value: unit.laststate[key].value
+          key: state.key,
+          value: state.value
         }));
 
         if (lastStateEntries.length > 0) {
@@ -726,7 +726,7 @@ export class PersonPersistenceService {
   }
 
   private async collectSavedResponseIds(
-    savedResponses: Array<Partial<ResponseEntity>>,
+    savedResponses: Array<Pick<Partial<ResponseEntity>, 'id'>>,
     entries: ResponseInsertEntry[],
     repository = this.responseRepository,
     requireIds = false

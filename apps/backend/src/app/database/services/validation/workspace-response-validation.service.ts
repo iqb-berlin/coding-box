@@ -903,6 +903,7 @@ export class WorkspaceResponseValidationService {
       }
 
       const variableInfo = variableTypes.get(variableId);
+      if (!variableInfo) continue;
       const expectedType = variableInfo.type;
       const isMultiple = variableInfo.multiple === true;
       const isNullable = variableInfo.nullable !== false;

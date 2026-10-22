@@ -52,7 +52,7 @@ export class CodingJob {
   description?: string;
 
   @Column({ type: 'text', nullable: true })
-  comment?: string;
+  comment?: string | null;
 
   @Column({
     name: 'job_type',

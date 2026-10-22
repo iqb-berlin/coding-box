@@ -141,7 +141,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiTags('admin users')
-  async deleteUsersByIds(@Param('ids') ids: string, @Req() req): Promise<void> {
+  async deleteUsersByIds(@Param('ids') ids: string, @Req() req: { user: { id: number } }): Promise<void> {
     const idsAsNumberArray: number[] = [];
     ids.split(';').forEach(s => idsAsNumberArray.push(parseInt(s, 10)));
     return this.usersService.removeIds(idsAsNumberArray, req.user.id);
@@ -166,7 +166,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs' })
   @ApiNotFoundResponse({ description: 'One or more users not found' })
   @ApiMethodNotAllowedResponse({ description: 'Active admin user must not be deleted' })
-  async deleteUsersByQuery(@Query('id') ids: number[], @Req() req): Promise<void> {
+  async deleteUsersByQuery(@Query('id') ids: number[], @Req() req: { user: { id: number } }): Promise<void> {
     return this.usersService.removeIds(ids, req.user.id);
   }
 

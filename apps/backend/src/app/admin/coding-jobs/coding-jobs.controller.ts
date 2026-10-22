@@ -244,11 +244,11 @@ export class CodingJobsController {
       unitid: number;
       variableid: string;
       status: string;
-      value: string;
-      subform: string;
-      code_v1: number;
-      score_v1: number;
-      status_v1: string;
+      value: string | null;
+      subform: string | null;
+      code_v1: number | null;
+      score_v1: number | null;
+      status_v1: string | null;
       unit: {
         id: number;
         name: string;

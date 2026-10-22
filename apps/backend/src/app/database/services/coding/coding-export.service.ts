@@ -2,7 +2,8 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable, PassThrough } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  In, Repository, SelectQueryBuilder, FindOperator
+  In, Repository, SelectQueryBuilder, FindOperator,
+  ObjectLiteral
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
@@ -880,7 +881,7 @@ export class CodingExportService {
         bookletNameExpression: 'cju.booklet_name'
       });
       this.applyJobFilters(
-        jobUnitVariableResultsQuery as SelectQueryBuilder<unknown>,
+        jobUnitVariableResultsQuery as SelectQueryBuilder<ObjectLiteral>,
         jobDefinitionIds,
         coderTrainingIds,
         coderIds,
@@ -919,7 +920,7 @@ export class CodingExportService {
       unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
       this.applyJobFilters(
-        unitVariableResultsQuery as SelectQueryBuilder<unknown>,
+        unitVariableResultsQuery as SelectQueryBuilder<ObjectLiteral>,
         jobDefinitionIds,
         coderTrainingIds,
         coderIds,
@@ -3071,7 +3072,7 @@ export class CodingExportService {
             row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken, serverUrl);
           }
 
-          const codes: (number | null)[] = [];
+          const codes: number[] = [];
           for (const cName of coderNames) {
             const cData = p.codings[cName];
             const dName = coderMapping?.get(cName) || cName;
@@ -4642,7 +4643,7 @@ export class CodingExportService {
   }
 
   private applyJobFilters(
-    query: SelectQueryBuilder<unknown>,
+    query: SelectQueryBuilder<ObjectLiteral>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
@@ -4716,7 +4717,7 @@ export class CodingExportService {
   }
 
   private applySelectedCoderJoinFilter(
-    query: SelectQueryBuilder<unknown>,
+    query: SelectQueryBuilder<ObjectLiteral>,
     coderIds?: number[]
   ): void {
     const normalizedCoderIds = this.normalizeFilterIds(coderIds);

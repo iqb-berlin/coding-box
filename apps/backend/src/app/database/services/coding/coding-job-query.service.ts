@@ -3,7 +3,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Not, IsNull, ILike, EntityManager, SelectQueryBuilder, Brackets
+  Repository, In, Not, IsNull, ILike, EntityManager, SelectQueryBuilder, Brackets,
+  ObjectLiteral
 } from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -40,7 +41,7 @@ export class CodingJobQueryService {
     private readonly codingFreshnessService?: CodingFreshnessService
   ) {}
 
-  async applyCodingJobUnitExclusions<T>(
+  async applyCodingJobUnitExclusions<T extends ObjectLiteral>(
     queryBuilder: SelectQueryBuilder<T>,
     workspaceId: number,
     parameterPrefix: string,
@@ -84,7 +85,7 @@ export class CodingJobQueryService {
     return isCodingIssueReviewJobType(codingJob?.job_type);
   }
 
-  applyNonCodingIssueReviewJobFilter<T>(
+  applyNonCodingIssueReviewJobFilter<T extends ObjectLiteral>(
     queryBuilder: SelectQueryBuilder<T>,
     jobAlias: string,
     parameterName: string
@@ -544,7 +545,7 @@ export class CodingJobQueryService {
     }
   }
 
-  private applyCodingJobListFiltersToOpenUnitsQuery<T>(
+  private applyCodingJobListFiltersToOpenUnitsQuery<T extends ObjectLiteral>(
     queryBuilder: SelectQueryBuilder<T>,
     filters: CodingJobListFilters,
     filteredJobIds?: number[]

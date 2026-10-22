@@ -13,7 +13,8 @@ import {
   EntityManager,
   In,
   Repository,
-  SelectQueryBuilder
+  SelectQueryBuilder,
+  ObjectLiteral
 } from 'typeorm';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -2023,7 +2024,7 @@ export class CodingFreshnessService {
       .sort((a, b) => a.groupName.localeCompare(b.groupName));
   }
 
-  private async applyWorkspaceExclusions<T>(
+  private async applyWorkspaceExclusions<T extends ObjectLiteral>(
     workspaceId: number,
     query: SelectQueryBuilder<T>,
     manager?: EntityManager

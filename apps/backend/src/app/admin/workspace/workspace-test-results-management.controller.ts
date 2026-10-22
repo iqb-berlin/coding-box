@@ -173,7 +173,7 @@ export class WorkspaceTestResultsManagementController {
   ): Promise<{
       success: boolean;
       report: {
-        deletedPersons: string[];
+        deletedPersons: number[];
         warnings: string[];
       };
     }> {

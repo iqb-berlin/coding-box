@@ -44,7 +44,8 @@ const numberToStringMap = new Map(responseStatesNumericMap.map(entry => [entry.k
  * @param statusNumber The numeric status value
  * @returns The string representation of the status, or null if not found
  */
-export function statusNumberToString(statusNumber: number): ResponseStatusType | null {
+export function statusNumberToString(statusNumber: number | null | undefined): ResponseStatusType | null {
+  if (statusNumber === null || statusNumber === undefined) return null;
   return (numberToStringMap.get(statusNumber) as ResponseStatusType) || null;
 }
 
@@ -53,7 +54,10 @@ export function statusNumberToString(statusNumber: number): ResponseStatusType |
  * @param statusString The string status value
  * @returns The numeric representation of the status, or null if not found
  */
-export function statusStringToNumber(statusString: string): number | null {
+export function statusStringToNumber(statusString: ResponseStatusType): number;
+export function statusStringToNumber(statusString: string | null | undefined): number | null;
+export function statusStringToNumber(statusString: string | null | undefined): number | null {
+  if (statusString === null || statusString === undefined) return null;
   const numericStatus = parseInt(statusString, 10);
   if (!Number.isNaN(numericStatus) && numberToStringMap.has(numericStatus)) {
     return numericStatus;

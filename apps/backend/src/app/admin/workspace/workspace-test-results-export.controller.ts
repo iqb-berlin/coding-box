@@ -483,7 +483,7 @@ export class WorkspaceTestResultsExportController {
         progress: progress,
         exportType: job.data.exportType,
         createdAt: new Date(job.timestamp),
-        error: job.failedReason
+        error: job.failedReason ?? ''
       });
     }
 

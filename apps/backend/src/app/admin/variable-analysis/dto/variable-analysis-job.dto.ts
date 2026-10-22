@@ -20,7 +20,7 @@ export interface VariableAnalysisJobInput {
 
 export class VariableAnalysisJobDto {
   id: string; // Changed from number to string to support Bull IDs
-  workspace_id: number;
+  workspace_id?: number;
 
   /**
    * Optional unit ID to filter by
@@ -58,7 +58,7 @@ export class VariableAnalysisJobDto {
     dto.status = job.status;
     dto.progress = job.progress;
     dto.error = job.error; // Bull job failedReason or similar
-    dto.created_at = new Date(job.timestamp || job.created_at);
+    dto.created_at = new Date(job.timestamp ?? job.created_at ?? Date.now());
     dto.updated_at = new Date(job.finishedOn || Date.now());
     dto.type = 'variable-analysis';
     return dto;

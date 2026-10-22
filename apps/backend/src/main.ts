@@ -1,5 +1,7 @@
 import { NestFactory } from '@nestjs/core';
-import { json } from 'express';
+import {
+  json, Request, Response, NextFunction
+} from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -45,7 +47,7 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
   app.useGlobalPipes(createRequestValidationPipe());
 
-  app.use((req, _res, next) => {
+  app.use((req: Request, _res: Response, next: NextFunction) => {
     const [pathname, query = ''] = req.url.split('?', 2);
     const normalizedPathname = pathname.replace(/\/{2,}/g, '/');
     req.url = query ? `${normalizedPathname}?${query}` : normalizedPathname;
@@ -75,7 +77,7 @@ async function bootstrap() {
   app.useStaticAssets('./packages/Geogebra/GeoGebra', { prefix: '/api/packages/GeoGebra' });
   app.useStaticAssets('./packages/Geogebra', { prefix: '/api/packages/GeoGebra' });
 
-  app.use('/api/packages', (req, _res, next) => {
+  app.use('/api/packages', (req: Request, _res: Response, next: NextFunction) => {
     // Resolve top-level package directory case-insensitively.
     const match = req.url.match(/^\/([^/]+)(\/.*)?$/);
     if (match) {

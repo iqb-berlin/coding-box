@@ -108,7 +108,7 @@ export class CodingAggregationPeerService {
         )
         .andWhere(new Brackets(qb => {
           qb.where('response.code_v2 IS NULL')
-            .orWhere(subQuery => {
+            .orWhere((subQuery: SelectQueryBuilder<ResponseEntity>) => {
               const exists = subQuery
                 .subQuery()
                 .select('1')

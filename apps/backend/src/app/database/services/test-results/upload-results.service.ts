@@ -22,7 +22,7 @@ import {
   TestResultsUploadStatsDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
-import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
+import { JobQueueService, QueuedUploadFile, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
@@ -727,7 +727,7 @@ export class UploadResultsService {
                 })
               );
 
-              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
+              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope ?? 'workspace', scopeFilters);
               await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
                 const mutationSummary = await this.personService.processPersonBooklets(
                   filteredPersons,
@@ -932,10 +932,8 @@ export class UploadResultsService {
 
     const jobPromises = originalFiles.map(file => {
       // Create lightweight job payload - prevent passing buffer to Redis
-      const jobFile = { ...file };
-      if (jobFile.buffer) {
-        delete jobFile.buffer;
-      }
+      const jobFile: QueuedUploadFile = { ...file };
+      delete jobFile.buffer;
 
       return this.jobQueueService.addUploadJob({
         workspaceId: workspace_id,
@@ -967,7 +965,7 @@ export class UploadResultsService {
     return key === 'logentry' ? normalizedValue : normalizedValue.trim();
   }
 
-  private handleCsvStream<T>(
+  private handleCsvStream<T extends object>(
     bufferStream: Readable,
     resultType: 'logs' | 'responses',
     issues: TestResultsUploadIssueDto[],
@@ -985,7 +983,7 @@ export class UploadResultsService {
           `Processing CSV stream for ${resultType} in a single file pass`
       );
 
-      const stream = csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
+      const stream = csv.parseStream<T, T>(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
         .on('headers', (headers: string[]) => {
           headersValid = this.validateCsvHeaders(headers, resultType, fileName, issues);
           if (!headersValid) {

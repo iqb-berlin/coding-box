@@ -29,10 +29,10 @@ export class ResponseEntity {
   status: number;
 
   @Column({ type: 'text', nullable: true })
-  value: string;
+  value: string | null;
 
   @Column({ type: 'text', nullable: true })
-  subform: string;
+  subform: string | null;
 
   @Column({ type: 'boolean', default: false })
   is_autocoder_generated?: boolean;

@@ -303,7 +303,7 @@ export class CodingAnalysisProcessor {
           responseId: response.id,
           value: response.value,
           isCoded: response.status_v2 !== null,
-          assignedCode: response.code_v2
+          assignedCode: response.code_v2 ?? undefined
         });
         continue;
       }

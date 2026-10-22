@@ -1476,8 +1476,8 @@ export class CodingResultsExportService {
         // Collect all variables and testpersons for this coder
         const variableSet = new Set<string>();
         const testPersonMap = new Map<string, Map<string, {
-          code: number | null;
-          score: number | null;
+          code?: number | null;
+          score?: number | null;
           codingIssueOption: number | null;
         }>>();
         const testPersonComments = new Map<string, Map<string, string | null>>();
@@ -1882,7 +1882,7 @@ export class CodingResultsExportService {
               }
 
               // Add coding values for each coder
-              const codeValues: (number | null)[] = [];
+              const codeValues: number[] = [];
               for (let coderIndex = 0; coderIndex < coderList.length; coderIndex++) {
                 const coder = coderList[coderIndex];
                 const displayCoder = displayCoderList[coderIndex];

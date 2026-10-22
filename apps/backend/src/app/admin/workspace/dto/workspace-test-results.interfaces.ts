@@ -92,8 +92,8 @@ export interface PersonTestResult {
       status: string;
       value: string;
       subform: string;
-      code?: number;
-      score?: number;
+      code?: number | null;
+      score?: number | null;
       codedstatus?: string;
     }[];
     tags: {
@@ -145,8 +145,8 @@ export interface UnitSearchResult {
       variableId: string;
       value: string;
       status: string;
-      code?: number;
-      score?: number;
+      code?: number | null;
+      score?: number | null;
       codedStatus?: string;
     }[];
   }[];
@@ -159,8 +159,8 @@ export interface ResponseSearchResult {
     variableId: string;
     value: string;
     status: string;
-    code?: number;
-    score?: number;
+    code?: number | null;
+    score?: number | null;
     codedStatus?: string;
     unitId: number;
     unitName: string;

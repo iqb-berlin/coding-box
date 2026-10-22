@@ -1472,7 +1472,7 @@ export class CodingJobDistributionService {
 
     const selectedCases = this.selectCasesWithGlobalCap(
       planItems,
-      request.maxCodingCases
+      request.maxCodingCases ?? undefined
     );
     this.getDoubleCodingSettings(request);
     const selectedCaseCountsByItemKey = new Map<string, number>();
@@ -2020,7 +2020,7 @@ export class CodingJobDistributionService {
 
     const selectedCases = this.selectCasesWithGlobalCap(
       planItems,
-      request.maxCodingCases
+      request.maxCodingCases ?? undefined
     );
     const usageByVariable = new Map<string, DistributionVariableUsageByStatus>();
 
@@ -2086,7 +2086,7 @@ export class CodingJobDistributionService {
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
+      maxCodingCases?: number | null;
       distributionSeed?: string | number;
     }
   ): Promise<{

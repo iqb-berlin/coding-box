@@ -62,7 +62,7 @@ export class OidcAuthService {
       end_session_endpoint: this.configService.get<string>('OIDC_END_SESSION_ENDPOINT') ?? '',
       jwks_uri: this.configService.get<string>('OIDC_JWKS_URI') ?? ''
     };
-    this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID');
+    this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID') ?? '';
     this.oAuth2ClientSecret = this.configService.get<string>('OAUTH2_CLIENT_SECRET');
   }
 

@@ -457,14 +457,14 @@ export class WorkspaceCodingCodebookController {
     return {
       exportFormat,
       missingsProfile: `${missingsProfile}`,
-      hasOnlyManualCoding: contentOptions.hasOnlyManualCoding,
-      hasGeneralInstructions: contentOptions.hasGeneralInstructions,
-      hasDerivedVars: contentOptions.hasDerivedVars,
-      hasOnlyVarsWithCodes: contentOptions.hasOnlyVarsWithCodes,
-      hasClosedVars: contentOptions.hasClosedVars,
-      codeLabelToUpper: contentOptions.codeLabelToUpper,
-      showScore: contentOptions.showScore,
-      hideItemVarRelation: contentOptions.hideItemVarRelation,
+      hasOnlyManualCoding: contentOptions.hasOnlyManualCoding === true,
+      hasGeneralInstructions: contentOptions.hasGeneralInstructions === true,
+      hasDerivedVars: contentOptions.hasDerivedVars === true,
+      hasOnlyVarsWithCodes: contentOptions.hasOnlyVarsWithCodes === true,
+      hasClosedVars: contentOptions.hasClosedVars === true,
+      codeLabelToUpper: contentOptions.codeLabelToUpper === true,
+      showScore: contentOptions.showScore === true,
+      hideItemVarRelation: contentOptions.hideItemVarRelation === true,
       trainingRequirement: this.normalizeTrainingRequirement(
         contentOptions.trainingRequirement
       ),

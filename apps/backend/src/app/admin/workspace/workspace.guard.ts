@@ -38,7 +38,7 @@ export class WorkspaceGuard implements CanActivate {
     if (requestUser.isWorkspaceToken || requestUser.tokenUse === WORKSPACE_TOKEN_USE) {
       const tokenWorkspace = Number(requestUser.workspace);
       const userId = getDatabaseUserId(requestUser);
-      if (tokenWorkspace !== workspaceId || !Number.isInteger(userId) || userId <= 0) {
+      if (tokenWorkspace !== workspaceId || userId === undefined || !Number.isInteger(userId) || userId <= 0) {
         throw new UnauthorizedException();
       }
 
