@@ -1,0 +1,94 @@
+<div [formGroup]="form()">
+    <!-- Reference Trainings Section -->
+    @if (trainings().length > 0) {
+      <div class="section">
+        <div class="section-header">
+          <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.reference-trainings.title' | translate }}</h3>
+        </div>
+        <p class="section-description">{{ 'coding-job-definition-dialog.reference-trainings.description' | translate }}</p>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
+          <mat-select formControlName="referenceTrainingIds" multiple>
+            @for (t of trainings(); track t.id) {
+              <mat-option [value]="t.id">
+                <div class="training-option">
+                  <span class="training-option-title">{{ getTrainingOptionTitle(t) }}</span>
+                  <span class="training-option-meta">{{ getTrainingOptionMeta(t) }}</span>
+                </div>
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        @if ((form().get('referenceTrainingIds')?.value?.length || 0) > 0) {
+          <mat-radio-group
+            formControlName="referenceMode"
+            class="reference-mode-controls"
+            [class.has-error]="!hasValidReferenceMode()"
+            >
+            <mat-radio-button value="same">{{ 'coding-job-definition-dialog.reference-trainings.same' | translate }}</mat-radio-button>
+            <mat-radio-button value="different">{{ 'coding-job-definition-dialog.reference-trainings.different' | translate }}</mat-radio-button>
+          </mat-radio-group>
+        }
+        @if (!hasValidReferenceMode()) {
+          <div class="reference-mode-error">
+            <mat-icon>error_outline</mat-icon>
+            <span>Bitte wählen Sie den Vergleichsmodus für die ausgewählten Vergleichsschulungen.</span>
+          </div>
+        }
+      </div>
+    }
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Coder Selection Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">
+          Kodierer-Auswahl
+          <span class="selection-count">({{selected().size}} ausgewählt)</span>
+        </h3>
+        <div class="header-actions">
+          <button mat-button type="button" [disabled]="!editable()" (click)="selectAll.emit()" class="action-link">Alle auswählen</button>
+          <button mat-button type="button" [disabled]="!editable()" (click)="clearSelection.emit()" class="action-link">Alle abwählen</button>
+        </div>
+      </div>
+
+      <div class="coder-grid">
+        @for (coder of coders(); track coder.id) {
+          <div class="coder-item"
+            [class.selected]="selected().has(coder.id)" role="button" [attr.tabindex]="editable() ? 0 : -1" [attr.aria-disabled]="!editable()"
+            [attr.aria-pressed]="selected().has(coder.id)"
+            (click)="editable() && coderToggled.emit(coder)"
+            (keydown.enter)="editable() && coderToggled.emit(coder)"
+            (keydown.space)="editable() && coderToggled.emit(coder); $event.preventDefault()">
+            <div class="coder-avatar">
+              <mat-icon class="avatar-icon">person</mat-icon>
+            </div>
+            <div class="coder-info">
+              <span class="coder-name">{{coder.displayName || coder.name}}</span>
+              @if (coder.displayName && coder.displayName !== coder.name) {
+                <span class="coder-login">{{coder.name}}</span>
+              }
+              @if (coder.email) {
+                <span class="coder-login">{{coder.email}}</span>
+              }
+            </div>
+            @if (selected().has(coder.id)) {
+              <mat-icon class="selected-icon">check_circle</mat-icon>
+            }
+          </div>
+        }
+      </div>
+
+      @if (coders().length === 0) {
+        <div class="no-coders-message">
+          <mat-icon>group_off</mat-icon>
+          <p>Keine Kodierer verfügbar</p>
+        </div>
+      }
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+
+</div>

@@ -12,34 +12,14 @@ import {
   MatDialog,
   MatDialogRef
 } from '@angular/material/dialog';
-import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
-import {
-  FormsModule,
-  ReactiveFormsModule
-} from '@angular/forms';
-import { MatInput } from '@angular/material/input';
-import { MatOption, MatSelect } from '@angular/material/select';
-import { MatCheckbox } from '@angular/material/checkbox';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
-import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
   catchError, exhaustMap, firstValueFrom, interval, of, startWith, Subscription, switchMap
 } from 'rxjs';
-import { DatePipe } from '@angular/common';
-import {
-  MatCell,
-  MatCellDef,
-  MatColumnDef,
-  MatHeaderCell,
-  MatHeaderCellDef,
-  MatHeaderRow,
-  MatHeaderRowDef,
-  MatRow,
-  MatRowDef,
-  MatTable
-} from '@angular/material/table';
-import { MatTooltip } from '@angular/material/tooltip';
+import { TestCenterLoginStepComponent } from './test-center-login-step.component';
+import { TestCenterOptionsStepComponent } from './test-center-options-step.component';
+import { TestCenterGroupsStepComponent } from './test-center-groups-step.component';
+import { TestCenterImportProgressComponent, TestCenterImportProgressView } from './test-center-import-progress.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { ImportService, ImportOptions, Result } from '../../../shared/services/file/import.service';
 import { AppService } from '../../../core/services/app.service';
@@ -80,36 +60,16 @@ export interface ImportFormValues {
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
   imports: [
+    TestCenterImportProgressComponent,
+    TestCenterGroupsStepComponent,
+    TestCenterOptionsStepComponent,
+    TestCenterLoginStepComponent,
     MatDialogContent,
-    MatLabel,
-    MatHint,
     MatDialogActions,
     MatButton,
     MatDialogClose,
     TranslateModule,
-    MatFormField,
-    ReactiveFormsModule,
-    MatInput,
-    MatSelect,
-    MatOption,
-    MatCheckbox,
-    MatProgressSpinner,
-    MatProgressBar,
-    MatIcon,
-    FormsModule,
-    DatePipe,
-    MatTable,
-    MatHeaderCellDef,
-    MatCellDef,
-    MatHeaderRowDef,
-    MatRowDef,
-    MatColumnDef,
-    MatHeaderCell,
-    MatCell,
-    MatHeaderRow,
-    MatRow,
-    MatTooltip
-  ]
+    MatIcon]
 })
 export class TestCenterImportComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
@@ -225,6 +185,35 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     clearTestCenterImportOptions(this.importFilesForm);
   }
 
+  protected get importProgressView(): TestCenterImportProgressView {
+    return {
+      loadingGroups: this.isLoadingTestGroups(),
+      uploadingResults: this.isUploadingTestResults(),
+      uploadingFiles: this.isUploadingTestFiles(),
+      groupsProgress: this.testGroupsLoadProgress(),
+      groupsElapsedSeconds: this.testGroupsLoadElapsedSeconds(),
+      groupsMessage: this.testGroupsLoadMessage,
+      groupsPercent: this.testGroupsLoadPercent,
+      groupsElapsedText: this.testGroupsLoadElapsedText,
+      progress: this.uploadProgressDetails(),
+      total: this.totalUploadsExpected(),
+      completed: this.completedUploads(),
+      uploadPercent: this.uploadProgressPercent,
+      importPercent: this.importProgressPercent(),
+      message: this.loadingMessage(),
+      elapsedSeconds: this.importElapsedSeconds(),
+      failedGroup: this.failedGroupName(),
+      uncertain: this.resultStatusUncertain(),
+      completedGroups: this.completedGroupNames(),
+      importingGroups: this.importingTestGroups(),
+      responsesSaved: this.uploadData()?.completedSteps?.includes('responses') ?? false,
+      checkingStatus: this.isCheckingImportStatus(),
+      runId: this.importRunId,
+      options: this.visibleOptionProgress,
+      optionLabels: this.optionLabels
+    };
+  }
+
   ngOnInit(): void {
     // Ensure we always start with a clean state when the dialog opens
     this.uploadData.set(null);
@@ -258,11 +247,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   toggleRow(group: TestGroupsInfoDto): void {
     const index = this.selectedRows.indexOf(group);
-    if (index === -1) {
-      this.selectedRows.push(group);
-    } else {
-      this.selectedRows.splice(index, 1);
-    }
+    this.selectedRows = index === -1 ? [...this.selectedRows, group] : this.selectedRows.filter(row => row !== group);
   }
 
   protected isAllSelected(): boolean {

@@ -1,0 +1,70 @@
+            <div class="coders-tab-content">
+              <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
+
+              @if (loading()) {
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade verfügbare Kodierer...</p>
+              </div>
+              }
+
+              @if (!loading() && coders().length > 0) {
+              <div class="quick-selection-tools">
+                <button mat-stroked-button color="primary" type="button" (click)="toggleAll.emit()"
+                  class="select-all-button" [disabled]="readOnly()">
+                  <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                  {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                </button>
+                <div class="selection-count">
+                  {{ selected().length }} von {{ coders().length }} Kodierern ausgewählt
+                </div>
+              </div>
+
+              <div class="coders-grid-container">
+                <div class="coders-grid">
+                  @for (coder of coders(); track coder.id) {
+                  <div class="coder-card" [class.selected]="isSelected(coder)"
+                    [class.read-only]="readOnly()"
+                    (click)="!readOnly() && coderToggled.emit(coder)"
+                    role="button"
+                    tabindex="0"
+                    (keydown.enter)="onActionKeydown($event)"
+                    (keydown.space)="onActionKeydown($event)">
+                    <div class="coder-avatar">
+                      <mat-icon class="avatar-icon">person</mat-icon>
+                    </div>
+                    <div class="coder-details">
+                      <h3 class="coder-name">
+                        {{ coder.displayName || coder.name }}
+                      </h3>
+                      <p class="coder-username">{{ coder.name }}</p>
+                      @if (coder.email) {
+                      <p class="coder-email">{{ coder.email }}</p>
+                      }
+                      @if (mode() === 'definition' && isSelected(coder)) {
+                      <mat-form-field appearance="outline" class="coder-capacity-field"
+                        (click)="$event.stopPropagation()">
+                        <mat-label>Kapazität</mat-label>
+                        <input #coderCapacityInput matInput type="number" min="10" max="300" step="10"
+                          [ngModel]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
+                          [disabled]="readOnly()" (blur)="capacityChanged.emit({coder, value: coderCapacityInput.value})"
+                          matTooltip="100 % = normale Last">
+                        <span matSuffix>%</span>
+                      </mat-form-field>
+                      }
+                    </div>
+                  </div>
+                  }
+                </div>
+              </div>
+              }
+
+              @if (!loading() && coders().length === 0) {
+              <div class="empty-state">
+                <mat-icon class="empty-icon">person</mat-icon>
+                <h3>Keine Kodierer verfügbar</h3>
+                <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum
+                  Arbeitsbereich hinzu.</p>
+              </div>
+              }
+            </div>

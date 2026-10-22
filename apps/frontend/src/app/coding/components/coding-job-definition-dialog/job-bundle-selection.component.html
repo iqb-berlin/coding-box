@@ -1,0 +1,122 @@
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Name Filter</mat-label>
+                  <input matInput [ngModel]="filter()" (ngModelChange)="filterChanged.emit($event)" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Namen">
+                  @if (filter()) {
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="filterChanged.emit(''); applyFilter.emit()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                  }
+                </mat-form-field>
+
+                <button type="button" mat-raised-button color="primary" (click)="applyFilter.emit()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button type="button" mat-raised-button (click)="clearFilter.emit()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+              </div>
+            </div>
+
+
+            @if (loading()) {
+            <div class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text">Lade Variablenbündel...</p>
+            </div>
+            }
+
+            @if (!loading() && totalBundles() > 0) {
+            <div class="bundles-grid-container">
+              <div class="bundles-grid">
+                @for (row of rows(); track row.bundle.id) {
+                @let bundle = row.bundle;
+                <div class="bundle-card" [class.selected]="row.selected"
+                  [class.read-only]="readOnly()"
+                  (click)="bundleToggled.emit(bundle)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
+                  <div class="bundle-card-header">
+                    <h3 class="bundle-name">
+                      {{ bundle.name }}
+                    </h3>
+                  </div>
+                  <div class="bundle-card-content">
+                    <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
+                    <div class="bundle-stats">
+                      <span class="variable-count">{{ bundle.variables.length }} Variablen</span>
+                    </div>
+                    <div class="bundle-variables-preview">
+                      @if (bundle.variables.length > 0) {
+                      <div class="variables-preview-header">Enthaltene Variablen:</div>
+                      <div class="variables-preview-list">
+                        @for (item of row.variables; track item.variable.unitName + item.variable.variableId) {
+                        @let variable = item.variable;
+                        <div class="variable-preview-item">
+                          {{ variable.unitName }}: {{ variable.variableId }}
+                          @if (row.selected && mode() === 'definition' && item.hasDeriveError) {
+                          <mat-checkbox
+                            class="bundle-derive-error-checkbox"
+                            [checked]="item.includeDeriveError"
+                            [disabled]="readOnly()"
+                            (click)="$event.stopPropagation()"
+                            (change)="deriveErrorChanged.emit({bundle, variable, included: $event.checked})">
+                            DERIVE_ERROR
+                          </mat-checkbox>
+                          }
+                        </div>
+                        }
+                        @if (!row.selected && bundle.variables.length > 3) {
+                        <div class="variable-preview-more">
+                          +{{ bundle.variables.length - 3 }} weitere
+                        </div>
+                        }
+                      </div>
+                      @if (row.selected && mode() === 'definition') {
+                      <div class="bundle-case-ordering-mode-section" (click)="$event.stopPropagation()" role="presentation">
+                        <mat-form-field appearance="fill" class="full-width">
+                          <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate
+                            }}</mat-label>
+                          <mat-select [value]="bundle.caseOrderingMode"
+                            [disabled]="readOnly()"
+                            (selectionChange)="orderingChanged.emit({bundle, mode: $event.value})">
+                            <mat-option value="continuous">{{
+                              'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}</mat-option>
+                            <mat-option value="alternating">{{
+                              'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      }
+                      }
+                      @if (bundle.variables.length === 0) {
+                      <div class="variables-preview-empty">Keine Variablen enthalten</div>
+                      }
+                    </div>
+                  </div>
+                </div>
+                }
+              </div>
+            </div>
+
+            <div class="selection-summary">
+              <p>{{ selectedCount() }} Variablenbündel ausgewählt</p>
+            </div>
+            }
+
+            @if (!loading() && totalBundles() === 0) {
+            <div class="empty-state">
+              <mat-icon class="empty-icon">analytics</mat-icon>
+              <h3>Keine Variablenbündel verfügbar</h3>
+              <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel
+                über die Variablenbündel-Verwaltung.</p>
+            </div>
+            }

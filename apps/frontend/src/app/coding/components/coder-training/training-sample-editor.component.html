@@ -1,0 +1,324 @@
+<div [formGroup]="form()">
+    <!-- Variable Basis Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">Variablenbasis</h3>
+      </div>
+
+      <div class="variable-basis-panel">
+        <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
+          Abgeleitete Variablen einbeziehen
+          @if (view().derivedCount > 0) {
+            <span class="derived-count">
+              ({{view().derivedCount}} verfügbar)
+            </span>
+          }
+        </mat-checkbox>
+        <span class="basis-meta">
+          Standard: einbezogen
+        </span>
+      </div>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Variable Variablenbündel Selection Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">
+          Variablenbündel
+          @if (loadingBundles()) {
+            <span class="loading-text">
+              <mat-progress-spinner mode="indeterminate" diameter="16"
+              style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+              Lade Variablenbündel...
+            </span>
+          }
+          @if (!loadingBundles() && view().bundleCount > 0) {
+            <span class="bundle-count">
+              ({{view().bundleCount}} verfügbare Variablenbündel)
+            </span>
+          }
+        </h3>
+        <div class="header-actions">
+          <button mat-stroked-button color="primary" type="button" (click)="importRequested.emit()"
+            [disabled]="!editable() || loadingVariables() || loadingBundles()">
+            <mat-icon>download</mat-icon>
+            Aus Jobdefinition importieren
+          </button>
+        </div>
+      </div>
+
+      @if (!loadingBundles() && view().bundleCount > 0) {
+        <div class="bundle-selection">
+          <div class="bundle-select-container">
+            <mat-form-field appearance="outline" class="bundle-select-field">
+              <mat-label>Variablenbündel auswählen</mat-label>
+              <mat-select placeholder="Variablenbündel auswählen" multiple [value]="view().selectedBundleIds" [disabled]="!editable()"
+                (selectionChange)="bundlesChanged.emit($event.value)">
+                <div class="select-search-container">
+                  <mat-form-field appearance="fill" class="select-search-field">
+                    <mat-icon matPrefix>search</mat-icon>
+                    <input matInput [formControl]="bundleFilterCtrl()" placeholder="Suchen..."
+                      (keydown)="$event.stopPropagation()">
+                  </mat-form-field>
+                </div>
+                @for (option of view().bundles; track option.bundle.id) {
+                  @let bundle = option.bundle;
+                  <mat-option [value]="bundle.id"
+                    [matTooltip]="bundle.description || ''" matTooltipPosition="above">
+                    {{bundle.name}}
+                    <span class="bundle-variable-count">
+                      ({{option.effectiveCount}}{{ form().controls.includeDerivedVariables.value ? '' : ' von ' + bundle.variables.length }} Variablen)
+                    </span>
+                    @if (option.derivedCount > 0) {
+                      <span
+                        class="derived-chip compact"
+                        matTooltip="Dieses Variablenbündel enthält abgeleitete Variablen">
+                        {{option.derivedCount}} abgeleitet
+                      </span>
+                    }
+                  </mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+          <div class="bundle-variable-config" style="margin-top: 24px;">
+            @for (bundleGroup of view().groups; track bundleGroup.bundle.id) {
+              <div
+                class="bundle-variable-group">
+                <div class="bundle-header">
+                  <h4 class="bundle-title">
+                    <mat-icon>inventory_2</mat-icon>
+                    Variablenbündel: {{bundleGroup.bundle.name}}
+                    <span class="bundle-variable-count-badge">({{bundleGroup.variables.length}} Variablen)</span>
+                    @if (bundleGroup.derivedCount > 0) {
+                      <span
+                        class="derived-chip"
+                        matTooltip="Abgeleitete Variablen im Bündel werden standardmäßig einbezogen.">
+                        abgeleitet enthalten
+                      </span>
+                    }
+                  </h4>
+                  <div class="bundle-controls">
+                    <!-- Case Count Validation Warning for Bundle -->
+                    @if (bundleGroup.insufficient) {
+                      <div class="insufficient-cases-warning"
+                        matTooltip="Dieses Variablenbündel enthält Variablen mit weniger als {{bundleGroup.sampleCount}} verfügbaren Fällen.">
+                        <mat-icon color="warn">warning</mat-icon>
+                      </div>
+                    }
+                    <mat-form-field appearance="outline" class="bundle-sample-field">
+                      <mat-label>Stichproben pro Variable</mat-label>
+                      <input matInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
+                        (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: $any($event.target).value})" min="1"
+                        max="1000">
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" class="bundle-case-ordering-field">
+                      <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</mat-label>
+                      <mat-select
+                        [value]="bundleGroup.bundle.caseOrderingMode || form().get('caseOrderingMode')?.value" [disabled]="!editable()"
+                        (selectionChange)="bundleOrderingChanged.emit({id: bundleGroup.bundle.id, mode: $event.value})">
+                        <mat-option value="continuous">{{ 'coding-job-definition-dialog.case-ordering-mode.continuous' |
+                        translate }}</mat-option>
+                        <mat-option value="alternating">{{ 'coding-job-definition-dialog.case-ordering-mode.alternating' |
+                        translate }}</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    <button mat-icon-button type="button" [disabled]="!editable()" color="warn" (click)="bundleRemoved.emit(bundleGroup.bundle.id)"
+                      matTooltip="Variablenbündel entfernen">
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  </div>
+                </div>
+                <div class="bundle-ordering-note">
+                  <mat-icon>swap_vert</mat-icon>
+                  <span>
+                    Reihenfolge: {{bundleGroup.orderingLabel}}
+                  </span>
+                </div>
+                @if (bundleGroup.variables.length && bundleGroup.deriveErrorRows.length > 0) {
+                  <div class="bundle-derive-error-options"
+                    >
+                    @for (variableItem of bundleGroup.deriveErrorRows; track variableItem.control) {
+                      <mat-checkbox
+                        [checked]="variableItem.control.controls.includeDeriveError.value" [disabled]="!editable()"
+                        (change)="deriveErrorChanged.emit({control: variableItem.control, included: $event.checked})"
+                        matTooltip="DERIVE_ERROR-Fälle dieser Bündelvariable zusätzlich in die Schulungsstichprobe aufnehmen.">
+                        {{variableItem.control.get('unitId')?.value}} - {{variableItem.control.get('variableId')?.value}}
+                        @if (variableItem.deriveErrorCount > 0) {
+                          <span>
+                            ({{variableItem.deriveErrorCount}})
+                          </span>
+                        }
+                      </mat-checkbox>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (!loadingBundles() && view().bundleCount === 0) {
+        <div class="no-bundles-message">
+          <mat-icon>inventory_2</mat-icon>
+          <p>Keine Variablenbündel verfügbar</p>
+        </div>
+      }
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Variable Configuration Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">
+          Variablen
+          @if (loadingVariables()) {
+            <span class="loading-text">
+              <mat-progress-spinner mode="indeterminate" diameter="16"
+              style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+              Lade verfügbare Variablen...
+            </span>
+          }
+          @if (!loadingVariables() && view().variableCount > 0) {
+            <span class="variable-count">
+              ({{view().variableCount}} verfügbare Variablen)
+            </span>
+          }
+        </h3>
+      </div>
+
+      <div class="variable-selection-controls">
+        <div class="variable-selection-row">
+          <mat-form-field appearance="outline" class="variable-multiselect-field">
+            <mat-label>Variablen auswählen</mat-label>
+            <mat-select placeholder="Variable(n) auswählen" multiple [value]="view().manualKeys" [disabled]="!editable()"
+              (selectionChange)="variablesChanged.emit($event.value)">
+              <div class="select-search-container">
+                <mat-form-field appearance="fill" class="select-search-field">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [formControl]="variableFilterCtrl()" placeholder="Suchen..."
+                    (keydown)="$event.stopPropagation()">
+                </mat-form-field>
+              </div>
+              @for (option of view().variables; track option.variable.unitName + '::' + option.variable.variableId) {
+                @let variable = option.variable;
+                <mat-option
+                  [value]="variable.unitName + '::' + variable.variableId">
+                  {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+                  @if ((variable.deriveErrorResponseCount || 0) > 0) {
+                    <span class="derive-error-chip compact">
+                      +{{variable.deriveErrorResponseCount}} DERIVE_ERROR
+                    </span>
+                  }
+                  @if (option.derived) {
+                    <span class="derived-chip compact">abgeleitet</span>
+                  }
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <div class="variable-selection-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              (click)="selectAllVariables.emit()"
+              [disabled]="!editable() || !view().hasSelectableVariables"
+              matTooltip="Wählt alle aktuell gefilterten, manuell auswählbaren Variablen aus. Variablenbündel bleiben unverändert.">
+              <mat-icon>select_all</mat-icon>
+              Alle auswählen
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="clearVariables.emit()"
+              [disabled]="!editable() || !view().hasManualVariables"
+              matTooltip="Entfernt nur die manuell ausgewählten Variablen. Variablen aus Variablenbündeln bleiben erhalten.">
+              <mat-icon>clear_all</mat-icon>
+              Alle abwählen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="variable-config">
+        <!-- Manual Variables -->
+        @if (view().manual.length > 0) {
+          <div>
+            <h4 class="variable-section-title">Hinzugefügte Variablen</h4>
+            <div class="variable-list">
+              @for (item of view().manual; track item.control) {
+                <div class="variable-item" [formGroup]="item.control"
+                  [class.has-error]="item.insufficient">
+                  <div class="variable-name-cell">
+                    <mat-form-field appearance="outline" class="variable-name-field density-compact">
+                      <mat-label>Variable</mat-label>
+                      <input matInput
+                        [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
+                    </mat-form-field>
+                    @if (item.derived) {
+                      <span
+                        class="derived-chip"
+                        matTooltip="Abgeleitete Variable">
+                        abgeleitet
+                      </span>
+                    }
+                  </div>
+                  <mat-form-field appearance="outline" class="sample-count-field density-compact"
+                    [class.insufficient-input]="item.insufficient">
+                    <mat-label>Stichproben pro Variable</mat-label>
+                    <input matInput type="number" formControlName="sampleCount" min="1" [max]="item.availableCount">
+                    @if (item.insufficient) {
+                      <mat-hint class="warn-text">
+                        Max. {{item.availableCount}} Fälle verfügbar
+                      </mat-hint>
+                    }
+                  </mat-form-field>
+                  @if (item.hasDeriveError) {
+                    <mat-checkbox
+                      class="derive-error-checkbox"
+                      [checked]="item.control.controls.includeDeriveError.value" [disabled]="!editable()"
+                      (change)="deriveErrorChanged.emit({control: item.control, included: $event.checked})"
+                      matTooltip="DERIVE_ERROR-Fälle dieser Variable zusätzlich in die Schulungsstichprobe aufnehmen.">
+                      DERIVE_ERROR
+                      @if (item.deriveErrorCount > 0) {
+                        <span>
+                          ({{item.deriveErrorCount}})
+                        </span>
+                      }
+                    </mat-checkbox>
+                  }
+                  <!-- Validation/Overlap Warnings -->
+                  <div class="warning-container">
+                    @if (item.control.get('overlapWarning')?.value) {
+                      <div class="overlap-warning"
+                        matTooltip="Diese Variable ist auch in einem ausgewählten Variablenbündel enthalten.">
+                        <mat-icon>warning</mat-icon>
+                        <span>Doppelt</span>
+                      </div>
+                    }
+                    @if (item.insufficient) {
+                      <div class="insufficient-cases-warning"
+                        [matTooltip]="'Ungültige Stichprobenanzahl. Nur ' + item.availableCount + ' Fälle verfügbar.'">
+                        <mat-icon color="warn">warning</mat-icon>
+                      </div>
+                    }
+                  </div>
+                  <button mat-icon-button type="button" [disabled]="!editable()" color="warn" (click)="variableRemoved.emit(item.index)"
+                    class="remove-variable-button">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+</div>
