@@ -129,8 +129,21 @@ Der vorhandene GitHub-Run
 [39779797048](https://github.com/iqb-berlin/coding-box/actions/runs/39779797048)
 derselben SHA enthält nur `Analyze (javascript-typescript)` (CodeQL, 1:41 Jobzeit).
 Er ist keine Nachbildung dieser Pipeline und liefert keinen belastbaren
-Geschwindigkeitsvergleich. Für die neuen Workflows liegen vor dem ersten Push
-noch keine Remote-Laufzeiten vor.
+Geschwindigkeitsvergleich.
+
+Der erste abgeschlossene GitHub-Parallelversuch
+[39793668248](https://github.com/iqb-berlin/coding-box/actions/runs/39793668248)
+auf `b0c9d6169f77a90b2c4b32917c9f1893b83072ef` benötigte 23:53 Minuten bis zum
+Abschluss der Prüfjobs (1:33 initiale Wartezeit). Unit-, Build-, Lint-, Audit-,
+Datenbank- und Live-E2E-Jobs waren erfolgreich. Zwei von 160 Browser-Tests
+scheiterten an einer Dialoganimation beziehungsweise einer mehrdeutigen
+Antwortzuordnung nach dem Seitenwechsel. Der Lauf ist deshalb keine erfolgreiche
+Benchmark-Freigabe. Die aktuellen Testkorrekturen werden aus `develop` übernommen.
+
+Die abschließende GitHub-Verifikation wird mit dem integrierten Stand erneut
+vollständig ausgeführt. Ein Vergleich mit GitLab auf derselben SHA bleibt offen;
+die historische GitLab-Referenz darf nicht als kontrollierte Gegenmessung
+bezeichnet werden.
 
 Offizielle API- und Workflow-Referenzen:
 [GitHub-Workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax),

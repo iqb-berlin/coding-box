@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { prepareAuthEnvironment } from './auth-environment.mjs';
 import { startLoopbackForwarders } from './loopback-forwarders.mjs';
+import { waitForHttp } from './http-readiness.mjs';
 import {
   cleanupReplayWorkspaceFromState,
   redactReplayArtifactLog
@@ -75,6 +76,7 @@ try {
       { localPort: frontendPort, remotePort: dockerFrontendPort },
       { localPort: keycloakPort, remotePort: dockerKeycloakPort }
     ]);
+  process.stdout.write('[replay-e2e] Building and starting the disposable stack.\n');
   await run(
     compose.command,
     [
@@ -90,14 +92,18 @@ try {
     replayEnvironment
   );
 
-  await waitForHttp(`${authEnvironment.REPLAY_E2E_OIDC_ISSUER}/.well-known/openid-configuration`, 180_000);
+  process.stdout.write('[replay-e2e] Compose startup completed.\n');
+  for (const [service, url] of [
+    ['Keycloak', `${authEnvironment.REPLAY_E2E_OIDC_ISSUER}/.well-known/openid-configuration`],
+    ['backend', `${replayEnvironment.REPLAY_E2E_API_URL}/api/health`],
+    ['frontend', replayEnvironment.REPLAY_E2E_BASE_URL]
+  ]) {
+    process.stdout.write(`[replay-e2e] Waiting for ${service} (180s deadline, 5s per request).\n`);
+    await waitForHttp(url, 180_000);
+    process.stdout.write(`[replay-e2e] ${service} is ready.\n`);
+  }
 
-  await waitForHttp(
-    `${replayEnvironment.REPLAY_E2E_API_URL}/api/health`,
-    180_000
-  );
-  await waitForHttp(replayEnvironment.REPLAY_E2E_BASE_URL, 180_000);
-
+  process.stdout.write('[replay-e2e] Starting Cypress.\n');
   await run(
     'npx',
     [
@@ -208,26 +214,6 @@ async function canRun(command, args) {
   } catch {
     return false;
   }
-}
-
-async function waitForHttp(url, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  let lastStatus = 'unreachable';
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-      lastStatus = `HTTP ${response.status}`;
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      lastStatus = 'unreachable';
-    }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 500);
-    });
-  }
-  throw new Error(`Timed out waiting for ${url} (${lastStatus}).`);
 }
 
 async function captureLogs(

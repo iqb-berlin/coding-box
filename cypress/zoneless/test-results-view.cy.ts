@@ -1,11 +1,10 @@
 describe('zoneless test-results view', () => {
-  let releaseComplete: () => void;
-  afterEach(() => { releaseComplete?.(); });
+  afterEach(() => { cy.task('deferred:reset'); });
 
   for (const leaveView of [false, true]) {
     it(leaveView ? 'tracks an accepted response upload after leaving its starting view' :
       'uploads responses and refreshes the overview after processing', () => {
-      const completed = new Cypress.Promise<void>(resolve => { releaseComplete = resolve; });
+      let completionId: string;
       let uploaded = false;
       let completionRequested = false;
       const before = {
@@ -53,18 +52,15 @@ describe('zoneless test-results view', () => {
       cy.intercept('PUT', '**/api/admin/workspace/5/upload/results/upload-1/chunk/0', {
         body: { chunkIndex: 0 }
       }).as('uploadChunk');
-      cy.intercept('POST', '**/api/admin/workspace/5/upload/results/upload-1/complete',
-        (request) => {
-          expect(request.body).to.include({
-            overwriteMode: 'skip',
-            scope: 'person'
-          });
+      cy.task<{ id: string; url: string }>('deferred:create', { body: [{ jobId: 'job-1' }] }).then(gate => {
+        completionId = gate.id;
+        cy.intercept('POST', '**/api/admin/workspace/5/upload/results/upload-1/complete', request => {
+          expect(request.body).to.include({ overwriteMode: 'skip', scope: 'person' });
           completionRequested = true;
-          return completed.then(() => {
-            uploaded = true;
-            request.reply({ body: [{ jobId: 'job-1' }] });
-          });
+          request.url = gate.url;
+          request.continue();
         }).as('uploadComplete');
+      });
       cy.intercept('GET', '**/api/admin/workspace/5/upload/status/job-1', {
         body: {
           id: 'job-1',
@@ -117,7 +113,10 @@ describe('zoneless test-results view', () => {
         cy.get('coding-box-test-results').should('not.exist');
         cy.get('coding-box-test-results-import-progress-dialog').should('be.visible');
       }
-      cy.then(() => { releaseComplete(); });
+      cy.then(() => {
+        uploaded = true;
+        return cy.task('deferred:release', completionId);
+      });
       cy.wait(['@uploadComplete', '@uploadStatus']);
       cy.get('coding-box-test-results-upload-result-dialog', { timeout: 10000 })
         .should('contain.text', 'Upload-Ergebnis');
