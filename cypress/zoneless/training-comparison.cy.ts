@@ -66,6 +66,7 @@ describe('Zoneless training comparison', () => {
 
   afterEach(() => {
     responseGateReleases.splice(0).forEach(release => release());
+    cy.task('deferred:reset');
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
@@ -92,35 +93,33 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
-  // The intercepted export stays pending throughout page rendering and the
-  // statistics refresh; their combined CI duration can exceed 15 seconds.
-  it('finishes a pending reliability export after changing the comparison page', { defaultCommandTimeout: 60_000 }, () => {
-    const exportGate = createResponseGate();
+  it('finishes a pending reliability export after changing the comparison page', () => {
+    let exportId: string;
     let exportsStarted = 0;
-    let secondPageRequested = false;
     cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', request => {
-      if (request.query.page === '2') {
-        secondPageRequested = true;
-        request.alias = 'secondComparisonPage';
-      }
+      if (request.query.page === '2') request.alias = 'secondComparisonPage';
       request.reply({ body: { ...comparison, total: 100, totalPages: 2, page: Number(request.query.page) } });
     }).as('comparison');
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability?*', request => {
-      if (secondPageRequested) request.alias = 'secondPageStatistics';
-      request.reply({ body: {
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability?*', {
+      body: {
         ...statistics,
         variables: [{
           unitName: 'UNIT', variableId: 'VAR', meanKappa: 0.8, meanBrennanPredigerKappa: 0.9,
           fleissKappa: null, fleissCaseCount: 0, fleissPossibleCaseCount: 1, meanAgreement: 1,
           caseCount: 1, validPairCount: 1, coderPairCount: 1, coderPairs: []
         }]
-      } });
+      }
     }).as('statistics');
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability/export/csv?*', async request => {
-      exportsStarted += 1;
-      await exportGate.wait;
-      request.reply({ headers: { 'content-type': 'text/csv' }, body: 'unit,variable,kappa\nUNIT,VAR,0.8' });
-    }).as('reliabilityExport');
+    cy.task<{ id: string; url: string }>('deferred:create', {
+      headers: { 'content-type': 'text/csv' }, body: 'unit,variable,kappa\nUNIT,VAR,0.8'
+    }).then(gate => {
+      exportId = gate.id;
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability/export/csv?*', request => {
+        exportsStarted += 1;
+        request.url = gate.url;
+        request.continue();
+      }).as('reliabilityExport');
+    });
     openComparison();
     cy.window().then(win => {
       cy.stub(win.URL, 'createObjectURL').returns('blob:reliability').as('csvUrl');
@@ -133,9 +132,9 @@ describe('Zoneless training comparison', () => {
     cy.wrap(null).should(() => { expect(exportsStarted).to.equal(1); });
     cy.get('@dialog').find('mat-paginator .mat-mdc-paginator-navigation-next').click();
     cy.wait('@secondComparisonPage').its('request.query.page').should('equal', '2');
-    cy.wait('@secondPageStatistics');
+    cy.wait('@statistics');
     cy.get('@exportButton').should('be.disabled');
-    cy.then(() => exportGate.release());
+    cy.then(() => cy.task('deferred:release', exportId));
     cy.wait('@reliabilityExport');
     cy.get('@csvUrl').should('have.been.calledOnce');
     cy.get('@downloadCsv').should('have.been.calledOnce');
