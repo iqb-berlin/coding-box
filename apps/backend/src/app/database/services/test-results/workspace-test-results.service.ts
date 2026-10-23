@@ -5707,6 +5707,10 @@ export class WorkspaceTestResultsService {
     kind: TestResultsDeleteTargetKind,
     ids: number[]
   ): Promise<number[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
     if (kind === 'units') {
       return ids;
     }
@@ -6071,6 +6075,32 @@ export class WorkspaceTestResultsService {
         }
 
         const rows = await query.getMany();
+        ids = rows.map(row => row.id);
+        break;
+      }
+      case 'filteredGroups': {
+        // Expand matching persons to their complete groups in the same workspace.
+        // Neither the matching query nor the target query is paginated.
+        const matchingGroups = this.personsRepository
+          .createQueryBuilder('matchingPerson')
+          .select('matchingPerson.group')
+          .where('matchingPerson.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('matchingPerson.consider = :consider', { consider: true })
+          .andWhere("BTRIM(matchingPerson.group) <> ''");
+        if (normalizedRequest.searchText) {
+          matchingGroups.andWhere(
+            '(matchingPerson.code ILIKE :searchText OR matchingPerson.group ILIKE :searchText OR matchingPerson.login ILIKE :searchText)',
+            { searchText: `%${normalizedRequest.searchText}%` }
+          );
+        }
+        const rows = await this.personsRepository
+          .createQueryBuilder('person')
+          .select(['person.id'])
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
+          .andWhere(`person.group IN (${matchingGroups.getQuery()})`)
+          .setParameters(matchingGroups.getParameters())
+          .getMany();
         ids = rows.map(row => row.id);
         break;
       }
@@ -6478,7 +6508,11 @@ export class WorkspaceTestResultsService {
       case 'filteredPersons':
         return request.searchText ?
           `alle Testpersonen mit Filter "${request.searchText}"` :
-          'alle sichtbaren Testpersonen';
+          'alle Testpersonen des Arbeitsbereichs (alle Seiten)';
+      case 'filteredGroups':
+        return request.searchText ?
+          `alle Testgruppen mit Treffern für Filter "${request.searchText}" (einschließlich aller Gruppenmitglieder)` :
+          'alle Testgruppen des Arbeitsbereichs (alle Seiten)';
       case 'groups':
         return `Testgruppe(n): ${request.groups.join(', ')}`;
       case 'booklets':
