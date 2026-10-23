@@ -4,11 +4,11 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
-import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
+import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
 /** A coherent planning snapshot is cached only after all requested parts have settled. */
 @Injectable()
@@ -19,17 +19,19 @@ export class ManualCodingPlanningFacade {
   private readonly statistics = inject(ManualCodingStatisticsFacade);
   private readonly analysis = inject(ManualCodingAnalysisFacade);
   private readonly settings = inject(ManualCodingSettingsFacade);
-  readonly restored$ = new Subject<void>();
-  refreshFreshness: (options: { force?: boolean; invalidateCache?: boolean }) => void = () => undefined;
-  requestAnalysisIfNeeded: () => void = () => undefined;
+  private readonly restoredSubject = new Subject<void>();
+  readonly restored$ = this.restoredSubject.asObservable();
+  private readonly freshnessRefreshRequested = new Subject<{ force?: boolean; invalidateCache?: boolean }>();
+  readonly freshnessRefreshRequested$ = this.freshnessRefreshRequested.asObservable();
+  private readonly analysisRequested = new Subject<void>();
+  readonly analysisRequested$ = this.analysisRequested.asObservable();
   private readonly hasLoadedBundle = signal(false);
   get hasLoadedPlanningDataBundle(): boolean { return this.hasLoadedBundle(); }
-  set hasLoadedPlanningDataBundle(value: boolean) { this.hasLoadedBundle.set(value); }
-  isPlanningDataBundleLoadPending = false;
-  planningDataBundleCacheGeneration: number | null = null;
-  deferredPlanningDataBundleForceRefresh: boolean | null = null;
-  isStartingPlanningDataBundleLoad = false;
-  planningDataBundleLoadFailed = false;
+  private isPlanningDataBundleLoadPending = false;
+  private planningDataBundleCacheGeneration: number | null = null;
+  private deferredPlanningDataBundleForceRefresh: boolean | null = null;
+  private isStartingPlanningDataBundleLoad = false;
+  private planningDataBundleLoadFailed = false;
   private readonly responseAnalysis = this.analysis.responseAnalysis;
   private readonly responseAnalysisError = this.analysis.responseAnalysisError;
   private readonly codingProgressOverview = this.statistics.codingProgressOverview;
@@ -52,7 +54,7 @@ export class ManualCodingPlanningFacade {
     this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
       if (workspaceId !== id) { this.resetPlanningDataBundleState(); workspaceId = id; }
     });
-    this.destroyRef.onDestroy(() => { this.resetPlanningDataBundleState(); this.restored$.complete(); });
+    this.destroyRef.onDestroy(() => { this.resetPlanningDataBundleState(); this.restoredSubject.complete(); this.freshnessRefreshRequested.complete(); this.analysisRequested.complete(); });
   }
 
   private isLoading(): boolean {
@@ -72,25 +74,33 @@ export class ManualCodingPlanningFacade {
       return;
     }
 
-    this.deferredPlanningDataBundleForceRefresh = null;
-    this.hasLoadedPlanningDataBundle = true;
-    this.isPlanningDataBundleLoadPending = true;
-    this.planningDataBundleLoadFailed = false;
-    this.planningDataBundleCacheGeneration =
-      this.testPersonCodingService.beginManualCodingPlanningSnapshot();
+    this.beginPlanningDataRefresh();
     this.isStartingPlanningDataBundleLoad = true;
     this.statistics.loadVariableCoverageOverview();
     this.statistics.loadCaseCoverageOverview();
     this.statistics.loadCodingProgressOverview();
     this.statistics.loadCodingIncompleteVariables();
     this.statistics.loadManualFreshnessDecisionData();
-    this.refreshFreshness({
+    this.freshnessRefreshRequested.next({
       force: forceRefresh,
       invalidateCache: false
     });
-    this.requestAnalysisIfNeeded();
+    this.analysisRequested.next();
     this.isStartingPlanningDataBundleLoad = false;
     this.trySavePlanningDataBundleSnapshot();
+  }
+
+  get isRefreshPending(): boolean { return this.isPlanningDataBundleLoadPending; }
+
+  markPlanningDataAvailable(): void { this.hasLoadedBundle.set(true); }
+
+  beginPlanningDataRefresh(): void {
+    this.deferredPlanningDataBundleForceRefresh = null;
+    this.markPlanningDataAvailable();
+    this.isPlanningDataBundleLoadPending = true;
+    this.planningDataBundleLoadFailed = false;
+    this.planningDataBundleCacheGeneration =
+      this.testPersonCodingService.beginManualCodingPlanningSnapshot();
   }
 
   restorePlanningDataBundleSnapshot(): boolean {
@@ -110,9 +120,9 @@ export class ManualCodingPlanningFacade {
     }
 
     this.applyPlanningDataBundleSnapshot(snapshot);
-    this.hasLoadedPlanningDataBundle = true;
+    this.markPlanningDataAvailable();
 
-    this.restored$.next();
+    this.restoredSubject.next();
     return true;
   }
 
@@ -210,7 +220,7 @@ export class ManualCodingPlanningFacade {
   }
 
   resetPlanningDataBundleState(): void {
-    this.hasLoadedPlanningDataBundle = false;
+    this.hasLoadedBundle.set(false);
     this.isPlanningDataBundleLoadPending = false;
     this.planningDataBundleCacheGeneration = null;
     this.deferredPlanningDataBundleForceRefresh = null;
