@@ -4,6 +4,7 @@ import * as path from 'path';
 import { WorkspaceDeletionService } from './workspace-deletion.service';
 
 const createJob = (state = 'completed') => ({
+  workspaceId: 7,
   id: '17',
   queueName: 'data-export',
   returnvalue: undefined,
@@ -28,7 +29,7 @@ describe('WorkspaceDeletionService', () => {
     cache = { getStrict: jest.fn(), delete: jest.fn().mockResolvedValue(true) };
     getCount = jest.fn().mockResolvedValue(0);
     repository = {
-      find: jest.fn().mockResolvedValue([{ name: 'owned' }, { name: 'shared' }]),
+      find: jest.fn().mockResolvedValue([{ name: 'owned', workspaceId: 7 }, { name: 'shared', workspaceId: 7 }]),
       createQueryBuilder: jest.fn(() => ({ where: () => ({ getCount }) }))
     };
     service = new WorkspaceDeletionService(
@@ -103,8 +104,9 @@ describe('WorkspaceDeletionService', () => {
   });
 
   it('keeps recovery manifests scoped when a failed batch is retried for one workspace', async () => {
-    repository.find.mockResolvedValueOnce([{ name: 'seven' }]).mockResolvedValueOnce([{ name: 'eight' }]);
+    repository.find.mockResolvedValueOnce([{ name: 'seven', workspaceId: 7 }, { name: 'eight', workspaceId: 8 }]);
     await service.prepare([7, 8]);
+    expect(repository.find).toHaveBeenCalledTimes(1);
     repository.find.mockResolvedValue([]);
     jobs = [];
     expect((await service.prepare([7])).packageNames).toEqual(['seven']);
