@@ -97,18 +97,24 @@ describe('Zoneless training comparison', () => {
   it('finishes a pending reliability export after changing the comparison page', { defaultCommandTimeout: 60_000 }, () => {
     const exportGate = createResponseGate();
     let exportsStarted = 0;
+    let secondPageRequested = false;
     cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', request => {
+      if (request.query.page === '2') {
+        secondPageRequested = true;
+        request.alias = 'secondComparisonPage';
+      }
       request.reply({ body: { ...comparison, total: 100, totalPages: 2, page: Number(request.query.page) } });
     }).as('comparison');
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability?*', {
-      body: {
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability?*', request => {
+      if (secondPageRequested) request.alias = 'secondPageStatistics';
+      request.reply({ body: {
         ...statistics,
         variables: [{
           unitName: 'UNIT', variableId: 'VAR', meanKappa: 0.8, meanBrennanPredigerKappa: 0.9,
           fleissKappa: null, fleissCaseCount: 0, fleissPossibleCaseCount: 1, meanAgreement: 1,
           caseCount: 1, validPairCount: 1, coderPairCount: 1, coderPairs: []
         }]
-      }
+      } });
     }).as('statistics');
     cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/7/interrater-reliability/export/csv?*', async request => {
       exportsStarted += 1;
@@ -126,8 +132,8 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.kappa-export-actions button').as('exportButton').should('be.enabled').click();
     cy.wrap(null).should(() => { expect(exportsStarted).to.equal(1); });
     cy.get('@dialog').find('mat-paginator .mat-mdc-paginator-navigation-next').click();
-    cy.wait('@comparison').its('request.query.page').should('equal', '2');
-    cy.wait('@statistics');
+    cy.wait('@secondComparisonPage').its('request.query.page').should('equal', '2');
+    cy.wait('@secondPageStatistics');
     cy.get('@exportButton').should('be.disabled');
     cy.then(() => exportGate.release());
     cy.wait('@reliabilityExport');

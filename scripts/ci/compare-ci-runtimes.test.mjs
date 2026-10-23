@@ -112,3 +112,13 @@ test('timestamp ordering respects timezone offsets', () => {
   assert.equal(gh.initialWaitSeconds, 1800);
   assert.equal(gh.wallSeconds, 4200);
 });
+
+
+test('skipped jobs with synthetic timestamps do not change elapsed time or measured scope', () => {
+  const result = normalizeGitHub(githubRun, [githubJob(), githubJob({
+    name: 'production-images', conclusion: 'skipped',
+    started_at: timestamp(200), completed_at: timestamp(100)
+  })]);
+  assert.equal(result.wallSeconds, 80);
+  assert.deepEqual(result.jobs.map(job => job.name), ['test-backend']);
+});
