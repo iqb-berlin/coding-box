@@ -44,7 +44,7 @@ describe('Workspace request contracts over HTTP', () => {
       transaction: async callback => callback(manager)
     } as never, {
       delete: jest.fn()
-    } as never, {} as never);
+    } as never, {} as never, {} as never);
     const builder = Test.createTestingModule({
       controllers: [WorkspaceController, WorkspaceSettingsController, WorkspaceCodingCodebookController, WorkspaceCodingExportController],
       providers: [

@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { requireJobId } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
@@ -11,7 +12,7 @@ import { CodebookGenerationJobData, CodebookJobResult } from '../job-queue.servi
 
 @Injectable()
 @Processor('codebook-generation', { concurrency: 1 })
-export class CodebookGenerationProcessor extends WorkerHost {
+export class CodebookGenerationProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(CodebookGenerationProcessor.name);
   private readonly resultTtlSeconds = 86400;
 
@@ -22,7 +23,7 @@ export class CodebookGenerationProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<CodebookGenerationJobData>): Promise<CodebookJobResult> {
+  async processWorkspaceJob(job: Job<CodebookGenerationJobData>): Promise<CodebookJobResult> {
     this.logger.log(
       `Processing codebook generation job ${job.id} for workspace ${job.data.workspaceId}`
     );

@@ -72,7 +72,8 @@ describe('WorkspaceCoreService', () => {
         transaction: (callback: (manager: { save: jest.Mock }) => Promise<unknown>) => callback({ save: managerSave })
       } as never,
       cacheService as never,
-      workspaceTestResultsService as never
+      workspaceTestResultsService as never,
+      { prepare: jest.fn().mockResolvedValue({ jobs: [], packageNames: [] }), cleanup: jest.fn() } as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());

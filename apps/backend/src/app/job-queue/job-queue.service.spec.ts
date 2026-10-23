@@ -57,6 +57,20 @@ describe('JobQueueService', () => {
     );
   });
 
+  it('snapshots jobs from every state and resolves legacy validation-task ownership before deletion', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    const owned = createJob({ workspaceId: 1 });
+    const foreign = createJob({ workspaceId: 2 });
+    const validation = createJob({ taskId: 7 });
+    const global = createJob({ scope: 'system' });
+    queues[2].getJobs.mockResolvedValue([owned, foreign]);
+    queues[7].getJobs.mockResolvedValue([validation]);
+    queues[11].getJobs.mockResolvedValue([global]);
+    await expect(service.getJobsForWorkspaceDeletion([1])).resolves.toEqual([owned, validation]);
+    expect(queues[2].getJobs).toHaveBeenCalledWith(expect.arrayContaining(['active', 'waiting-children', 'completed', 'failed']));
+    expect(owned.remove).not.toHaveBeenCalled();
+  });
+
   it('adds and retrieves queue jobs', async () => {
     queues[0].getJobs.mockResolvedValue([]);
     queues[6].getJobs.mockResolvedValue([]);

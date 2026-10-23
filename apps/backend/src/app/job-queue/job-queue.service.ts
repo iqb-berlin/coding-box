@@ -153,6 +153,7 @@ export interface ExternalCodingImportJobData {
 }
 
 export interface DatabaseExportJobData {
+  workspaceArtifactPaths?: string[];
   requestedByUserId: number;
   scope?: 'system' | 'workspace';
   workspaceId?: number;
@@ -303,6 +304,28 @@ export class JobQueueService {
     const job = await queue.getJob(jobId);
     if (!job || !await this.jobBelongsToWorkspace(queueName, job, workspaceId)) return null;
     return job as Job<T>;
+  }
+
+  async getJobForWorkspaceDeletionCleanup(queueName: string, jobId: string): Promise<Job | undefined> {
+    return this.getQueue(queueName)?.getJob(jobId);
+  }
+
+  /** Snapshot before deleting validation-task rows, so legacy task-only payloads remain attributable. */
+  async getJobsForWorkspaceDeletion(workspaceIds: number[]): Promise<Job[]> {
+    const result: Job[] = [];
+    for (const [name, queue] of this.getAllQueues()) {
+      const jobs = await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed', 'waiting-children', 'completed', 'failed']);
+      for (const job of jobs.filter(Boolean)) {
+        if (name === 'database-export' && job.data.scope !== 'workspace') continue;
+        for (const workspaceId of workspaceIds) {
+          if (await this.jobBelongsToWorkspace(name, job, workspaceId)) {
+            result.push(job);
+            break;
+          }
+        }
+      }
+    }
+    return result;
   }
 
   private normalizeCodingStatisticsVersion(
