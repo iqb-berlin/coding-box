@@ -97,21 +97,27 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
     cy.get('coding-box-coder-training').as('training').then(training => {
       if (options.holdEntrance) {
-        const modal = training[0].closest('.coder-training-modal')!;
-        const held = modal.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
-        held.pause();
-        held.currentTime = 0;
-        expect(modal.ownerDocument.defaultView!.getComputedStyle(modal).opacity,
-          'entrance was held at its invisible first frame').to.equal('0');
+        for (const selector of ['.coding-container', '.coder-training-overlay', '.coder-training-modal']) {
+          const ancestor = training[0].closest(selector)!;
+          const held = ancestor.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+          held.pause();
+          held.currentTime = 0;
+          expect(ancestor.ownerDocument.defaultView!.getComputedStyle(ancestor).opacity,
+            `${selector} entrance was held at its invisible first frame`).to.equal('0');
+        }
       }
       settleTrainingEntrance(training[0]);
     });
   }
 
   function settleTrainingEntrance(training: HTMLElement): void {
-    // These cases test behavior after opening, independently of the compositor's motion clock.
-    for (const selector of ['.coder-training-overlay', '.coder-training-modal']) {
-      training.closest(selector)?.getAnimations().forEach(animation => animation.finish());
+    // Electron can stall entrance motion on the manual workspace as well as the modal.
+    // Settle only finite animations along this ancestor chain; loading indicators keep running.
+    for (let ancestor: HTMLElement | null = training; ancestor; ancestor = ancestor.parentElement) {
+      ancestor.getAnimations().forEach(animation => {
+        const endTime = animation.effect?.getComputedTiming().endTime;
+        if (typeof endTime === 'number' && Number.isFinite(endTime)) animation.finish();
+      });
     }
   }
 
