@@ -5,6 +5,7 @@ import {
   EntityManager, In, MoreThan, Repository
 } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
@@ -370,8 +371,8 @@ export class UsersService {
         throw error;
       }
       this.logger.error(
-        `Error setting workspaces for user with ID: ${userId}. Details: ${error.message}`,
-        error.stack
+        `Error setting workspaces for user with ID: ${userId}. Details: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error('Failed to set user workspaces');
     }
@@ -392,7 +393,7 @@ export class UsersService {
       this.logger.log(`User created successfully with ID: ${savedUser.id}`);
       return savedUser.id;
     } catch (error) {
-      this.logger.error('Error creating a new user', error.stack);
+      this.logger.error('Error creating a new user', getErrorStack(error));
       throw new Error('Failed to create user');
     }
   }

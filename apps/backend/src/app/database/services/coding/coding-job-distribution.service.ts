@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Connection, EntityManager } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseMatchingFlag } from '../../../../../../../api-dto/coding/response-matching-flag';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -1471,7 +1472,7 @@ export class CodingJobDistributionService {
 
     const selectedCases = this.selectCasesWithGlobalCap(
       planItems,
-      request.maxCodingCases
+      request.maxCodingCases ?? undefined
     );
     this.getDoubleCodingSettings(request);
     const selectedCaseCountsByItemKey = new Map<string, number>();
@@ -2019,7 +2020,7 @@ export class CodingJobDistributionService {
 
     const selectedCases = this.selectCasesWithGlobalCap(
       planItems,
-      request.maxCodingCases
+      request.maxCodingCases ?? undefined
     );
     const usageByVariable = new Map<string, DistributionVariableUsageByStatus>();
 
@@ -2085,7 +2086,7 @@ export class CodingJobDistributionService {
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
+      maxCodingCases?: number | null;
       distributionSeed?: string | number;
     }
   ): Promise<{
@@ -2378,13 +2379,13 @@ export class CodingJobDistributionService {
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
       this.logger.error(
-        `Error creating distributed coding jobs: ${error.message}`,
-        error.stack
+        `Error creating distributed coding jobs: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return {
         success: false,
         jobsCreated: 0,
-        message: `Failed to create distributed jobs: ${error.message}`,
+        message: `Failed to create distributed jobs: ${getErrorMessage(error)}`,
         distribution: {},
         distributionByCoderId: {},
         doubleCodingInfo: {},

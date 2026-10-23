@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { CacheService } from './cache.service';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
@@ -79,7 +80,7 @@ export class ResponseCacheSchedulerService {
       const duration = (Date.now() - startTime) / 1000;
       this.logger.log(`Finished nightly caching of all responses in ${duration.toFixed(2)} seconds`);
     } catch (error) {
-      this.logger.error(`Error in cacheAllResponses: ${error.message}`, error.stack);
+      this.logger.error(`Error in cacheAllResponses: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -160,7 +161,7 @@ export class ResponseCacheSchedulerService {
       const duration = (Date.now() - workspaceStartTime) / 1000;
       this.logger.log(`Finished processing workspace ${workspaceId} in ${duration.toFixed(2)} seconds`);
     } catch (error) {
-      this.logger.error(`Error processing workspace ${workspaceId}: ${error.message}`, error.stack);
+      this.logger.error(`Error processing workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
     }
   }
 
@@ -220,7 +221,7 @@ export class ResponseCacheSchedulerService {
       await this.cacheService.set(cacheKey, response);
       this.logger.debug(`Cached response: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
     } catch (error) {
-      this.logger.error(`Error fetching response for caching: ${error.message}`, error.stack);
+      this.logger.error(`Error fetching response for caching: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -273,10 +274,9 @@ export class ResponseCacheSchedulerService {
     const unitsByPersonId = new Map<number, Unit[]>();
     for (const unit of units) {
       const personId = unit.booklet.personid;
-      if (!unitsByPersonId.has(personId)) {
-        unitsByPersonId.set(personId, []);
-      }
-      unitsByPersonId.get(personId).push(unit);
+      const personUnits = unitsByPersonId.get(personId) ?? [];
+      personUnits.push(unit);
+      unitsByPersonId.set(personId, personUnits);
     }
 
     // Attach units to each person

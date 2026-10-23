@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, QueryRunner, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -115,7 +116,7 @@ export class VariableAnalysisReplayService {
             const parsedScheme = JSON.parse(scheme.data) as CodingScheme;
             codingSchemeMap.set(unitId, parsedScheme);
           } catch (error) {
-            this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${error.message}`, error.stack);
+            this.logger.error(`Error parsing coding scheme ${scheme.file_id}: ${getErrorMessage(error)}`, getErrorStack(error));
           }
         }
         this.logger.log(`Pre-fetched ${codingSchemeMap.size} coding schemes in ${Date.now() - startTime}ms`);
@@ -387,7 +388,7 @@ export class VariableAnalysisReplayService {
         throw regexError;
       }
 
-      this.logger.error(`Error getting variable analysis: ${error.message}`, error.stack);
+      this.logger.error(`Error getting variable analysis: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error('Could not retrieve variable analysis data. Please check the database connection or query.');
     }
   }

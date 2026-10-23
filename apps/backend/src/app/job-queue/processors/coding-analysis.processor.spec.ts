@@ -1,4 +1,4 @@
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';

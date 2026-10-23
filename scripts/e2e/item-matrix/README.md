@@ -20,7 +20,7 @@ exports use the authenticated HTTP API and the real export worker. Assertions
 cover exact cell counts, identifiers and coordinates, deterministic output,
 both diagnosis files in the incomplete ZIP, workspace isolation, and unchanged
 response records. It removes each export job through HTTP, verifies its removal
-from Bull, and downloads the same archived CSV again after job/cache cleanup.
+from BullMQ, and downloads the same archived CSV again after job/cache cleanup.
 
 Stop and restart only the two backend processes, preserving `temp`. Then run:
 

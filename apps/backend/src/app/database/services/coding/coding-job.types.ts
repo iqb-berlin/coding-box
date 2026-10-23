@@ -102,7 +102,7 @@ export type DistributionPlanRequest = {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   jobDefinitionId?: number;
   distributionSeed?: string | number;
   showScore?: boolean;
@@ -115,7 +115,7 @@ export type DistributionVariableUsageRequest = {
   selectedVariables: VariableReference[];
   selectedVariableBundles?: BundleItem[];
   caseOrderingMode?: 'continuous' | 'alternating';
-  maxCodingCases?: number;
+  maxCodingCases?: number | null;
   jobDefinitionId?: number;
   excludeJobDefinitionId?: number;
   distributionSeed?: string | number;

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
+import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WorkspaceSettingsModule } from '../../workspace/workspace-settings.module';
 import { DatabaseModule } from '../../database/database.module';

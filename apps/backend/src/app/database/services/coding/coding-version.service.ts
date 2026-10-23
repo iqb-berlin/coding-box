@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingFreshnessService } from './coding-freshness.service';
@@ -157,9 +158,9 @@ export class CodingVersionService {
         const previousJobScope = committedJobScope;
         const batch = await withWorkspaceTestResultsMutationTransaction(this.responseRepository.manager, async manager => {
           await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
-          const batchResponses = await baseQueryBuilder
-            .clone()
-            .setQueryRunner(manager.queryRunner)
+          const batchQuery = baseQueryBuilder.clone();
+          if (manager.queryRunner) batchQuery.setQueryRunner(manager.queryRunner);
+          const batchResponses = await batchQuery
             .select([
               'response.id',
               'response.unitid',
@@ -242,14 +243,14 @@ export class CodingVersionService {
         try {
           await this.invalidateCodingMutationCaches(workspaceId, version);
         } catch (cacheError) {
-          this.logger.error(`Could not invalidate caches after partial coding reset: ${cacheError.message}`);
+          this.logger.error(`Could not invalidate caches after partial coding reset: ${getErrorMessage(cacheError)}`);
         }
       }
       this.logger.error(
-        `Error resetting coding version ${version} in workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error resetting coding version ${version} in workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to reset coding version: ${error.message}`);
+      throw new Error(`Failed to reset coding version: ${getErrorMessage(error)}`);
     }
   }
 

@@ -6,6 +6,7 @@ import {
   Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
 import { createHash } from 'crypto';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -74,7 +75,7 @@ interface CoderTrainingResponse {
   unitAlias: string;
   variableId: string;
   unitName: string;
-  value: string;
+  value: string | null;
   personLogin: string;
   personCode: string;
   personGroup: string;
@@ -105,7 +106,9 @@ interface CoderTrainingWithJobs {
   updated_at: Date;
   jobsCount: number;
   assigned_variables?: JobDefinitionVariable[];
-  assigned_variable_bundles?: JobDefinitionVariableBundle[];
+  assigned_variable_bundles?: Array<Omit<JobDefinitionVariableBundle, 'caseOrderingMode'> & {
+    caseOrderingMode?: 'continuous' | 'alternating' | null;
+  }>;
   assigned_coders?: number[];
   case_ordering_mode?: 'continuous' | 'alternating';
   case_selection_mode?: string;
@@ -533,7 +536,7 @@ export class CoderTrainingService {
     const mirCode = mirMissing?.code ?? fallback?.mirCode;
     const mciCode = mciMissing?.code ?? fallback?.mciCode;
 
-    if (!Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
+    if (mirCode === undefined || mciCode === undefined || !Number.isInteger(mirCode) || !Number.isInteger(mciCode)) {
       throw new BadRequestException('Missing profile must define MIR and MCI codes');
     }
 
@@ -2358,7 +2361,7 @@ export class CoderTrainingService {
     responseId: number,
     code: number,
     exclusions: Awaited<ReturnType<WorkspaceExclusionService['resolveExclusionsForQueries']>>
-  ): Promise<number> {
+  ): Promise<number | null> {
     const profileId = await this.resolveMissingProfileIdForResponse(
       workspaceId,
       training,
@@ -2373,7 +2376,7 @@ export class CoderTrainingService {
     workspaceId: number,
     profileId: number | null,
     code: number
-  ): Promise<number> {
+  ): Promise<number | null> {
     try {
       return (await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
         workspaceId,
@@ -3183,7 +3186,7 @@ export class CoderTrainingService {
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
-        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
         this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
         if (assignedVariableBundles && assignedVariableBundles.length > 0) {
           const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
@@ -3340,8 +3343,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error creating coder training jobs: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error creating coder training jobs: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         jobsCreated: 0,
@@ -4881,8 +4884,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      this.logger.error(`Error updating coder training: ${error.message}`, error.stack);
-      return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${error.message}` };
+      this.logger.error(`Error updating coder training: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${getErrorMessage(error)}` };
     }
   }
 
@@ -4924,8 +4927,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error updating coder training label: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error updating coder training label: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         message: errorMessage
@@ -5046,8 +5049,8 @@ export class CoderTrainingService {
       });
     } catch (error) {
       if (error instanceof ForbiddenException) throw error;
-      const errorMessage = `Error deleting coder training: ${error.message}`;
-      this.logger.error(errorMessage, error.stack);
+      const errorMessage = `Error deleting coder training: ${getErrorMessage(error)}`;
+      this.logger.error(errorMessage, getErrorStack(error));
       return {
         success: false,
         message: errorMessage

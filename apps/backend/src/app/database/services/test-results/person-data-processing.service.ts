@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
   Log,
@@ -65,7 +66,7 @@ export class PersonDataProcessingService {
           });
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`);
+        this.logger.error(`Error processing row at index ${index}: ${getErrorMessage(error)}`);
       }
     });
 
@@ -106,7 +107,7 @@ export class PersonDataProcessingService {
         }
       } catch (error) {
         this.logger.error(
-          `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${error.message}`
+          `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${getErrorMessage(error)}`
         );
       }
     }
@@ -195,7 +196,7 @@ export class PersonDataProcessingService {
         this.logger.error(
           `Error processing log row at index ${index} for person: ${person.login}. Data: ${JSON.stringify(
             row
-          )}. Error: ${error.message}`
+          )}. Error: ${getErrorMessage(error)}`
         );
       }
     });
@@ -229,7 +230,7 @@ export class PersonDataProcessingService {
           b)
         );
       } catch (error) {
-        this.logger.error(`Error processing row for person ${person.login}: ${error.message}`, error.stack);
+        this.logger.error(`Error processing row for person ${person.login}: ${getErrorMessage(error)}`, getErrorStack(error));
       }
     }
     return person;
@@ -298,7 +299,7 @@ export class PersonDataProcessingService {
           unitMap.set(row.unitname, newUnit);
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`, row);
+        this.logger.error(`Error processing row at index ${index}: ${getErrorMessage(error)}`, row);
       }
     });
 
@@ -318,7 +319,7 @@ export class PersonDataProcessingService {
     try {
       return JSON.parse(responses);
     } catch (error) {
-      this.logger.error(`Error parsing responses: ${error.message}`);
+      this.logger.error(`Error parsing responses: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -336,7 +337,7 @@ export class PersonDataProcessingService {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
           return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
         } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
+          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
           return { id: chunk.subForm || chunk.id || '', responses: [] };
         }
       });
@@ -384,7 +385,7 @@ export class PersonDataProcessingService {
         value: String(value)
       }));
     } catch (error) {
-      this.logger.error(`Error parsing last state: ${error.message}`);
+      this.logger.error(`Error parsing last state: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -422,7 +423,7 @@ export class PersonDataProcessingService {
         loadTime: Number(parsedResult.loadTime) || 0
       };
     } catch (error) {
-      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
+      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${getErrorMessage(error)}`);
       return null;
     }
   }
@@ -461,7 +462,7 @@ export class PersonDataProcessingService {
             ));
           }
         } catch (error) {
-          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${error.message}`);
+          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
         }
 
         if (chunkVariables.length === 0 && parsedResponses.length === 1 && variables.size > 0) {

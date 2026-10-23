@@ -1,4 +1,4 @@
-import { SelectQueryBuilder } from 'typeorm';
+import { SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 
 export const CODING_JOB_TYPE_CODING_ISSUE_REVIEW = 'coding_issue_review';
 
@@ -8,7 +8,7 @@ export function isCodingIssueReviewJobType(
   return jobType === CODING_JOB_TYPE_CODING_ISSUE_REVIEW;
 }
 
-export function applyNonCodingIssueReviewJobFilter<T>(
+export function applyNonCodingIssueReviewJobFilter<T extends ObjectLiteral>(
   queryBuilder: SelectQueryBuilder<T>,
   jobAlias: string,
   parameterName: string

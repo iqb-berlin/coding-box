@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   ApplyTrainingDiscussionResultsRequestDto,
   ApplyTrainingDiscussionResultsResultDto,
@@ -266,8 +267,8 @@ export class CoderTrainingResultsApplyService {
         await queryRunner.rollbackTransaction();
       }
       this.logger.error(
-        `Error applying training discussion results: ${error.message}`,
-        error.stack
+        `Error applying training discussion results: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     } finally {
@@ -418,7 +419,7 @@ export class CoderTrainingResultsApplyService {
       })
       .getRawMany<{ id: number | string }>();
 
-    return new Set(rows.map(row => Number(row.id)));
+    return new Set(rows.map((row: Record<string, unknown>) => Number(row.id)));
   }
 
   private async getProductiveJobConflicts(
@@ -461,7 +462,7 @@ export class CoderTrainingResultsApplyService {
       [workspaceId, responseIds]
     );
 
-    return rows.map(row => ({
+    return rows.map((row: Record<string, unknown>) => ({
       jobUnitId: Number(row.jobUnitId),
       responseId: Number(row.responseId),
       jobId: Number(row.jobId),

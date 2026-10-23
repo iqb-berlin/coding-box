@@ -1,4 +1,4 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import {
   Injectable,
   Logger,
@@ -7,10 +7,12 @@ import {
   OnModuleDestroy,
   OnModuleInit
 } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
 import { pipeline } from 'stream/promises';
+import { requireJobId, rethrowJobError } from '../job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
   ExportJobData,
   ExportJobProgress,
@@ -37,8 +39,8 @@ import { ItemMatrixExportIncompleteError } from '../../database/services/coding/
 import { ItemMatrixDiagnosticsWriter } from '../../database/services/coding/item-matrix-diagnostics-writer';
 
 @Injectable()
-@Processor('data-export')
-export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
+@Processor('data-export', { concurrency: 1 })
+export class ExportJobProcessor extends WorkerHost implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ExportJobProcessor.name);
   private static readonly expiredFileCleanupIntervalMs = 5 * 60 * 1000;
   private static readonly workingDirectoryHeartbeatIntervalMs = 60 * 1000;
@@ -61,7 +63,9 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     private jobQueueService: JobQueueService,
     private codingPsychometricExportService: CodingPsychometricExportService,
     private exportArtifactService: ExportArtifactService
-  ) { }
+  ) {
+    super();
+  }
 
   async onModuleInit(): Promise<void> {
     const tempDir = this.getExportTempDir();
@@ -132,7 +136,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       );
     } catch (error) {
       this.logger.warn(
-        `Failed to refresh export working directory lease for ${workingDirectory}: ${error.message}`
+        `Failed to refresh export working directory lease for ${workingDirectory}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -183,7 +187,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       fs.rmSync(workingDirectory, { recursive: true, force: true });
     } catch (cleanupError) {
       this.logger.warn(
-        `Failed to clean up export working directory ${workingDirectory}: ${cleanupError.message}`
+        `Failed to clean up export working directory ${workingDirectory}: ${getErrorMessage(cleanupError)}`
       );
     }
   }
@@ -194,11 +198,11 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     if (
       job.data.isCancelled ||
-      (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
+      (await this.jobQueueService.isExportJobCancelled(requireJobId(job)))
     ) {
       this.logger.log(`Export job ${job.id} cancellation detected`);
       this.cleanupPartialExportFile(filePath);
-      throw new ExportJobCancelledException(job.id);
+      throw new ExportJobCancelledException(requireJobId(job));
     }
   }
 
@@ -215,7 +219,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.logger.log(`Cleaned up partial export file: ${filePath}`);
     } catch (cleanupError) {
       this.logger.warn(
-        `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
+        `Failed to clean up partial file ${filePath}: ${getErrorMessage(cleanupError)}`
       );
       if (failOnError) {
         throw cleanupError;
@@ -253,20 +257,20 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
           }
         } catch (entryError) {
           this.logger.warn(
-            `Failed to clean up expired export path ${expiredPath}: ${entryError.message}`
+            `Failed to clean up expired export path ${expiredPath}: ${getErrorMessage(entryError)}`
           );
         }
       }
     } catch (error) {
       this.logger.warn(
-        `Failed to clean up expired export files: ${error.message}`
+        `Failed to clean up expired export files: ${getErrorMessage(error)}`
       );
     }
   }
 
   private createCancelledResult(job: Job<ExportJobData>): ExportJobResult {
     return {
-      fileId: job.id.toString(),
+      fileId: requireJobId(job),
       fileName: '',
       filePath: '',
       fileSize: 0,
@@ -308,7 +312,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       progress.message = details.message;
     }
 
-    await job.progress(progress);
+    await job.updateProgress(progress);
   }
 
   private async writeStreamToFile(
@@ -357,7 +361,6 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  @Process({ concurrency: 1 })
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(
       `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
@@ -366,7 +369,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
 
     parseExportRequest(job.data);
 
-    const jobId = job.id.toString();
+    const jobId = requireJobId(job);
     const cancellationSignal =
       this.jobQueueService.createExportJobCancellationSignal(jobId);
     let filePath: string | undefined;
@@ -839,7 +842,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
           `Itemdatensatz-${new Date().toISOString().slice(0, 10)}.${fileExt}` :
           path.basename(filePath);
       const metadata = await this.exportArtifactService.publishArtifact({
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         workingFilePath: filePath,
         tempDir,
         fileName: finalFileName,
@@ -876,11 +879,11 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
         return this.createCancelledResult(job);
       }
       this.logger.error(
-        `Error processing export job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing export job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       this.cleanupPartialExportFile(filePath);
-      throw error;
+      return await rethrowJobError(error, job, () => this.worker);
     } finally {
       await this.stopExportWorkingDirectoryLease(workingDirectory);
       this.cleanupExportWorkingDirectory(workingDirectory);

@@ -19,6 +19,8 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import { requireJobId } from '../../job-queue/job-queue.util';
+import { getErrorMessage } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -101,7 +103,7 @@ export class WorkspaceCodingImportController {
       res.write(
         `data: ${JSON.stringify({
           progress: 0,
-          message: `Import failed: ${error.message}`,
+          message: `Import failed: ${getErrorMessage(error)}`,
           error: true
         })}\n\n`
       );
@@ -163,7 +165,7 @@ export class WorkspaceCodingImportController {
       `External coding import job ${job.id} queued for workspace ${workspace_id}`
     );
 
-    return { jobId: job.id.toString() };
+    return { jobId: requireJobId(job) };
   }
 
   @Get(':workspace_id/coding/external-coding-import/job/:jobId')
@@ -200,7 +202,7 @@ export class WorkspaceCodingImportController {
     }
 
     const state = await job.getState();
-    const progress = await job.progress();
+    const progress = job.progress;
     const failedReason = job.failedReason;
 
     let status: string;
@@ -218,8 +220,9 @@ export class WorkspaceCodingImportController {
       case 'delayed':
         status = 'pending';
         break;
-      case 'paused':
-        status = 'paused';
+      case 'prioritized':
+      case 'waiting-children':
+        status = 'pending';
         break;
       default:
         status = state;

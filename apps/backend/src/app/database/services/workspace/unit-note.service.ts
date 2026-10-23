@@ -140,7 +140,7 @@ export class UnitNoteService {
     }
 
     const result = await this.unitNoteRepository.delete(id);
-    return result.affected > 0;
+    return (result.affected ?? 0) > 0;
   }
 
   /**

@@ -50,7 +50,7 @@ export class WorkspaceFilesValidationController {
       workspaceId,
       60000,
       {
-        jobId: `flat-response-filter-options:${workspaceId}:v${nextVersion}:thr60000`,
+        jobId: `flat-response-filter-options-${workspaceId}-v${nextVersion}-thr60000`,
         removeOnComplete: true,
         removeOnFail: true
       }

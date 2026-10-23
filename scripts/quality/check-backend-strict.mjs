@@ -1,10 +1,8 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const baselinePath = path.join(root, 'apps/backend/strict-baseline.json');
 
 export function collectStrictDiagnostics(workspace = root) {
   const config = ts.readConfigFile(path.join(workspace, 'apps/backend/tsconfig.app.json'), ts.sys.readFile);
@@ -100,31 +98,21 @@ function diagnosticKey(record) {
   return JSON.stringify([record.file, record.code, record.message]);
 }
 
-export function compareDiagnostics(current, baseline) {
-  const accepted = new Map(baseline.map(record => [diagnosticKey(record), record.count]));
-  return current.filter(record => record.count > (accepted.get(diagnosticKey(record)) || 0));
-}
-
-export function verifyBaseline(current, baseline) {
-  const regressions = compareDiagnostics(current, baseline);
-  if (regressions.length) {
-    for (const record of regressions) {
+export function verifyDiagnostics(current) {
+  if (current.length) {
+    for (const record of current) {
       process.stderr.write(`${record.file}: TS${record.code}: ${record.message} (${record.count} occurrences)\n`);
     }
-    throw new Error('Backend strict typecheck found new diagnostics. Fix them; do not expand the legacy baseline.');
+    throw new Error('Backend strict typecheck found diagnostics. Fix the source; no legacy baseline is accepted.');
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
-    const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
     const current = collectStrictDiagnostics();
-    verifyBaseline(current, baseline.diagnostics);
-    if (process.argv.includes('--prune-baseline')) {
-      fs.writeFileSync(baselinePath, `${JSON.stringify({ ...baseline, diagnostics: current }, null, 2)}\n`);
-    }
+    verifyDiagnostics(current);
     const count = current.reduce((total, record) => total + record.count, 0);
-    process.stdout.write(`Backend strict typecheck passed; ${count} legacy diagnostics remain.\n`);
+    process.stdout.write(`Backend strict typecheck passed; ${count} diagnostics.\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

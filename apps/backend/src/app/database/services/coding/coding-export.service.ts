@@ -2,11 +2,13 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Readable, PassThrough } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  In, Repository, SelectQueryBuilder, FindOperator
+  In, Repository, SelectQueryBuilder, FindOperator,
+  ObjectLiteral
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import { Request, Response } from 'express';
+import { getErrorMessage, getErrorStack, toError } from '../../../utils/error.util';
 import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
@@ -879,7 +881,7 @@ export class CodingExportService {
         bookletNameExpression: 'cju.booklet_name'
       });
       this.applyJobFilters(
-        jobUnitVariableResultsQuery as SelectQueryBuilder<unknown>,
+        jobUnitVariableResultsQuery as SelectQueryBuilder<ObjectLiteral>,
         jobDefinitionIds,
         coderTrainingIds,
         coderIds,
@@ -918,7 +920,7 @@ export class CodingExportService {
       unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .innerJoin('cju.coding_job', 'cj');
       this.applyJobFilters(
-        unitVariableResultsQuery as SelectQueryBuilder<unknown>,
+        unitVariableResultsQuery as SelectQueryBuilder<ObjectLiteral>,
         jobDefinitionIds,
         coderTrainingIds,
         coderIds,
@@ -3070,7 +3072,7 @@ export class CodingExportService {
             row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken, serverUrl);
           }
 
-          const codes: (number | null)[] = [];
+          const codes: number[] = [];
           for (const cName of coderNames) {
             const cData = p.codings[cName];
             const dName = coderMapping?.get(cName) || cName;
@@ -4152,11 +4154,11 @@ export class CodingExportService {
       await checkCancellation?.();
       return outputFilePath ? Buffer.alloc(0) : Buffer.concat(chunks);
     } catch (error) {
-      if (this.isExportCancellationError(error)) {
+      if (this.isExportCancellationError(toError(error))) {
         throw error;
       }
-      this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
-      throw new Error(`Could not export detailed coding results: ${error.message}`);
+      this.logger.error(`Error exporting detailed coding results: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export detailed coding results: ${getErrorMessage(error)}`);
     }
   }
 
@@ -4465,11 +4467,11 @@ export class CodingExportService {
       await checkCancellation?.();
       return this.getStreamingWorkbookBuffer(chunks, outputFilePath);
     } catch (error) {
-      if (this.isExportCancellationError(error)) {
+      if (this.isExportCancellationError(toError(error))) {
         throw error;
       }
-      this.logger.error(`Error exporting coding times report: ${error.message}`, error.stack);
-      throw new Error(`Could not export coding times report: ${error.message}`);
+      this.logger.error(`Error exporting coding times report: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export coding times report: ${getErrorMessage(error)}`);
     }
   }
 
@@ -4641,7 +4643,7 @@ export class CodingExportService {
   }
 
   private applyJobFilters(
-    query: SelectQueryBuilder<unknown>,
+    query: SelectQueryBuilder<ObjectLiteral>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[],
@@ -4715,7 +4717,7 @@ export class CodingExportService {
   }
 
   private applySelectedCoderJoinFilter(
-    query: SelectQueryBuilder<unknown>,
+    query: SelectQueryBuilder<ObjectLiteral>,
     coderIds?: number[]
   ): void {
     const normalizedCoderIds = this.normalizeFilterIds(coderIds);

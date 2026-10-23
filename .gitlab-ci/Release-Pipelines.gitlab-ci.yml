@@ -587,7 +587,9 @@ test-main-pr-backend:
     - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:typecheck
-    - docker run --name backend-unit-${CI_JOB_ID} ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
+    - docker network create backend-unit-${CI_JOB_ID}
+    - docker run --detach --name backend-unit-redis-${CI_JOB_ID} --network backend-unit-${CI_JOB_ID} --network-alias bullmq-redis ${DOCKER_HUB_PROXY}redis:7.4-alpine --save '' --appendonly no
+    - docker run --name backend-unit-${CI_JOB_ID} --network backend-unit-${CI_JOB_ID} --env BULLMQ_TEST_REDIS_HOST=bullmq-redis --env BULLMQ_TEST_REDIS_PORT=6379 ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
   coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
   artifacts:
     when: always
@@ -602,6 +604,8 @@ test-main-pr-backend:
     - mkdir -p coverage/apps
     - docker cp backend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/coverage/apps/backend coverage/apps/backend
     - docker rm backend-unit-${CI_JOB_ID}
+    - docker rm --force backend-unit-redis-${CI_JOB_ID}
+    - docker network rm backend-unit-${CI_JOB_ID}
     - docker logout ${CI_REGISTRY}
 
 test-main-pr-frontend:

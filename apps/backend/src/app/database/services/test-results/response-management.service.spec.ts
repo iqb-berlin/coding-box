@@ -38,6 +38,26 @@ describe('ResponseManagementService', () => {
     loggerErrorSpy.mockRestore();
   });
 
+  it('retains database null for newly inserted responses without a subform', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const queryRunner = {
+      manager: { insert, query: jest.fn().mockResolvedValue([]) },
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn()
+    } as unknown as QueryRunner;
+    await createService().updateResponsesInDatabase(1, [{
+      id: -1,
+      isNew: true,
+      unitid: 7,
+      variableid: 'V1',
+      value: 'answer',
+      status: 3,
+      subform: ''
+    }], queryRunner);
+    expect(insert).toHaveBeenCalledWith(ResponseEntity, expect.objectContaining({ subform: null }));
+  });
+
   it('updates existing generated autocoder rows and clears stale generated rows', async () => {
     const cleanupSelectQueryBuilder = {
       select: jest.fn().mockReturnThis(),

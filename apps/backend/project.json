@@ -68,7 +68,9 @@
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
         "{workspaceRoot}/scripts/qa/**/*",
-        "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*"
+        "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*",
+        { "env": "BULLMQ_TEST_REDIS_HOST" },
+        { "env": "BULLMQ_TEST_REDIS_PORT" }
       ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
@@ -117,7 +119,8 @@
       "options": {
         "commands": [
           "node --test scripts/quality/check-backend-strict.test.mjs",
-          "node scripts/quality/check-backend-strict.mjs"
+          "node scripts/quality/check-backend-strict.mjs",
+          "node scripts/quality/check-entity-metadata.cjs"
         ],
         "parallel": false
       }
@@ -134,6 +137,18 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/backend-hardening/verify-runtime.mjs"
+      }
+    },
+    "verify-bullmq-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/run-bullmq-integration.mjs"
+      },
+      "configurations": {
+        "full": {
+          "command": "node scripts/qa/run-bullmq-integration.mjs --all"
+        }
       }
     }
   }

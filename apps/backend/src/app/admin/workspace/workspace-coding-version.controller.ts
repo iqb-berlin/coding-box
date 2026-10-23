@@ -5,6 +5,7 @@ import {
   ApiOkResponse, ApiParam, ApiTags, ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { requireJobId } from '../../job-queue/job-queue.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -89,17 +90,17 @@ export class WorkspaceCodingVersionController {
       entityId: workspace_id,
       result: 'started',
       summary: `Coding version reset queued for ${body.version}`,
-      jobId: job.id.toString(),
+      jobId: requireJobId(job),
       details: {
         version: body.version,
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         unitFilterCount: body.unitFilters?.length || 0,
         variableFilterCount: body.variableFilters?.length || 0
       }
     });
 
     return {
-      jobId: job.id.toString(),
+      jobId: requireJobId(job),
       message: `Reset coding version job enqueued for version ${body.version}`
     };
   }
@@ -167,7 +168,7 @@ export class WorkspaceCodingVersionController {
     }
 
     const state = await job.getState();
-    const progress = typeof job.progress() === 'number' ? job.progress() as number : 0;
+    const progress = typeof job.progress === 'number' ? job.progress as number : 0;
 
     const statusMap: Record<string, string> = {
       waiting: 'pending',
@@ -235,7 +236,7 @@ export class WorkspaceCodingVersionController {
     }
 
     const state = await job.getState();
-    const progress = typeof job.progress() === 'number' ? job.progress() as number : 0;
+    const progress = typeof job.progress === 'number' ? job.progress as number : 0;
 
     const statusMap: Record<string, string> = {
       waiting: 'pending',
@@ -245,7 +246,7 @@ export class WorkspaceCodingVersionController {
 
     return {
       hasActiveJob: true,
-      jobId: job.id.toString(),
+      jobId: requireJobId(job),
       version: job.data.version,
       progress,
       status: statusMap[state] || state

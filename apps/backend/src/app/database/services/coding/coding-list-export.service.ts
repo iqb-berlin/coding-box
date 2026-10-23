@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { Readable } from 'stream';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { CodingListService, CodingItem } from './coding-list.service';
 
 @Injectable()
@@ -86,8 +87,8 @@ export class CodingListExportService {
       );
     } catch (error) {
       this.logger.error(
-        `Error preparing coding list export for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error preparing coding list export for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
 
       if (!res.headersSent) {

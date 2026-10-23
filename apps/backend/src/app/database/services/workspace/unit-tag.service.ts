@@ -180,6 +180,6 @@ export class UnitTagService {
     }
 
     const result = await this.unitTagRepository.delete(id);
-    return result.affected > 0;
+    return (result.affected ?? 0) > 0;
   }
 }

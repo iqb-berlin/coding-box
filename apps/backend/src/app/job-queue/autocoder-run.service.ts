@@ -1,6 +1,8 @@
+import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job, Queue } from 'bullmq';
 import type { QueryRunner } from 'typeorm';
+import { requireJobId } from './job-queue.util';
 import {
   AutocoderBatchPlan,
   CodingProcessService
@@ -24,7 +26,8 @@ export class AutocoderRunService {
 
   constructor(
     private readonly codingProcessService: CodingProcessService,
-    private readonly workspaceCodingService: WorkspaceCodingService
+    private readonly workspaceCodingService: WorkspaceCodingService,
+    @InjectQueue('test-person-coding') private readonly codingQueue: Queue<TestPersonCodingJobData>
   ) {}
 
   private normalizePersonIds(personIds: string[]): string[] {
@@ -53,7 +56,7 @@ export class AutocoderRunService {
     batchNumber: number
   ): Promise<boolean> {
     const currentState = await job.getState();
-    if (currentState === 'failed' || currentState === 'paused') {
+    if (currentState === 'failed') {
       this.logger.log(
         `Job ${job.id} was ${currentState} before processing batch ${batchNumber}`
       );
@@ -62,7 +65,7 @@ export class AutocoderRunService {
 
     let isPausedInLatestJob = false;
     try {
-      const latestJob = await job.queue.getJob(job.id);
+      const latestJob = await this.codingQueue.getJob(requireJobId(job));
       isPausedInLatestJob = Boolean(latestJob?.data?.isPaused);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -120,7 +123,7 @@ export class AutocoderRunService {
     }
 
     try {
-      await job.progress(100);
+      await job.updateProgress(100);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
@@ -144,9 +147,9 @@ export class AutocoderRunService {
       statusCounts: {}
     };
 
-    await job.progress(0);
+    await job.updateProgress(0);
     if (personIds.length === 0) {
-      await job.progress(100);
+      await job.updateProgress(100);
       return combinedResult;
     }
 
@@ -181,7 +184,7 @@ export class AutocoderRunService {
           const completedShare = i / totalPersons;
           const currentShare =
             (progress / 100) * (batchPersonIds.length / totalPersons);
-          await job.progress(
+          await job.updateProgress(
             Math.min(Math.floor((completedShare + currentShare) * 90), 90)
           );
         };
@@ -190,7 +193,7 @@ export class AutocoderRunService {
           batchPersonIds,
           autoCoderRun,
           preflightProgress,
-          job.id.toString(),
+          requireJobId(job),
           job.data.unitIds,
           job.data.freshnessSourceRevision,
           preflightContext,
@@ -208,7 +211,7 @@ export class AutocoderRunService {
           }
           plans.push(plan);
         }
-        await job.progress(
+        await job.updateProgress(
           Math.min(
             Math.floor(((i + batchPersonIds.length) / totalPersons) * 90),
             90
@@ -238,7 +241,7 @@ export class AutocoderRunService {
         const persistenceProgress = async (progress: number) => {
           const completedShare = index / Math.max(plans.length, 1);
           const currentShare = progress / 100 / Math.max(plans.length, 1);
-          await job.progress(
+          await job.updateProgress(
             Math.min(90 + Math.floor((completedShare + currentShare) * 9), 99)
           );
         };
@@ -247,7 +250,7 @@ export class AutocoderRunService {
           await this.codingProcessService.persistAutocoderBatchPlan(
             plan,
             queryRunner,
-            job.id.toString(),
+            requireJobId(job),
             persistenceProgress
           );
         if (!persisted) {

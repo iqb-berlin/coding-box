@@ -16,6 +16,7 @@ import * as csv from 'fast-csv';
 import * as fs from 'fs';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import {
   STATISTICS_IGNORED_STATUSES,
@@ -511,7 +512,7 @@ export class WorkspaceTestResultsService {
   }
 
   private excludeAutocoderGeneratedResponses(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     responseAlias = 'response'
   ): void {
     qb.andWhere(
@@ -561,11 +562,11 @@ export class WorkspaceTestResultsService {
     private readonly codingStatisticsService?: CodingStatisticsService
   ) { }
 
-  private applyExclusionsToQuery(qb: SelectQueryBuilder<unknown>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
+  private applyExclusionsToQuery(qb: SelectQueryBuilder<ObjectLiteral>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
     applyResolvedExclusionsToQuery(qb, exclusions, options);
   }
 
-  private applyIgnoredBookletsToQuery(qb: SelectQueryBuilder<unknown>, ignoredBooklets: string[], bookletInfoAlias = 'bookletinfo'): void {
+  private applyIgnoredBookletsToQuery(qb: SelectQueryBuilder<ObjectLiteral>, ignoredBooklets: string[], bookletInfoAlias = 'bookletinfo'): void {
     if (ignoredBooklets.length > 0) {
       qb.andWhere(`UPPER(${bookletInfoAlias}.name) NOT IN (:...ignoredBookletsOnly)`, {
         ignoredBookletsOnly: ignoredBooklets.map(normalizeExclusionBookletId)
@@ -992,7 +993,7 @@ export class WorkspaceTestResultsService {
   }
 
   private applyLogAnomalyFilters(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     codes: LogAnomalyCode[],
     thresholds: LogAnomalyThresholds,
     exclusions?: ResolvedWorkspaceExclusions
@@ -1440,10 +1441,10 @@ export class WorkspaceTestResultsService {
       const focusLogs = logs.filter(log => log.key === 'FOCUS');
       let currentFocusLost: BookletLog | null = null;
       let maxFocusLostMs = 0;
-      focusLogs.forEach(log => {
+      for (const log of focusLogs) {
         if (log.parameter === 'HAS_NOT' && currentFocusLost === null) {
           currentFocusLost = log;
-          return;
+          continue;
         }
         if (log.parameter === 'HAS' && currentFocusLost !== null) {
           const startTs = this.toLogTimestamp(currentFocusLost.ts);
@@ -1453,7 +1454,7 @@ export class WorkspaceTestResultsService {
           }
           currentFocusLost = null;
         }
-      });
+      }
       if (currentFocusLost !== null && allTimestamps.length > 0) {
         const startTs = this.toLogTimestamp(currentFocusLost.ts);
         const endTs = Math.max(...allTimestamps);
@@ -2070,8 +2071,8 @@ export class WorkspaceTestResultsService {
             status: string;
             value: string;
             subform: string;
-            code?: number;
-            score?: number;
+            code?: number | null;
+            score?: number | null;
             codedstatus?: string;
           }[];
           tags: {
@@ -2155,8 +2156,8 @@ export class WorkspaceTestResultsService {
           status: string;
           value: string;
           subform: string;
-          code?: number;
-          score?: number;
+          code?: number | null;
+          score?: number | null;
           codedstatus?: string;
         }[]
       >();
@@ -2270,7 +2271,7 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch booklets, bookletInfo, units, and results for personId: ${personId} and workspaceId: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
         'An error occurred while fetching booklets, their info, units, and test results.'
@@ -2325,8 +2326,8 @@ export class WorkspaceTestResultsService {
       return [results, total];
     } catch (error) {
       this.logger.error(
-        `Failed to fetch test results for workspace_id ${workspace_id}: ${error.message}`,
-        error.stack
+        `Failed to fetch test results for workspace_id ${workspace_id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error('An error occurred while fetching test results');
     }
@@ -4702,7 +4703,7 @@ export class WorkspaceTestResultsService {
 
       return result;
     } catch (error) {
-      this.logger.error(`Error getting responses by status: ${error.message}`);
+      this.logger.error(`Error getting responses by status: ${getErrorMessage(error)}`);
       return [[], 0];
     }
   }
@@ -4714,7 +4715,7 @@ export class WorkspaceTestResultsService {
   ): Promise<{
       success: boolean;
       report: {
-        deletedPersons: string[];
+        deletedPersons: number[];
         warnings: string[];
       };
     }> {
@@ -4725,8 +4726,8 @@ export class WorkspaceTestResultsService {
         const result = await this.connection.transaction(async manager => {
           const ids = testPersonIds.split(',').map(id => id.trim());
           const report = {
-            deletedPersons: [],
-            warnings: []
+            deletedPersons: [] as number[],
+            warnings: [] as string[]
           };
 
           const existingPersons = await manager
@@ -4951,7 +4952,7 @@ export class WorkspaceTestResultsService {
     try {
       await this.invalidateCachesAfterTestResultDeletion(workspaceId);
     } catch (error) {
-      this.logger.error(`Could not invalidate caches after partial deletion in workspace ${workspaceId}: ${error.message}`);
+      this.logger.error(`Could not invalidate caches after partial deletion in workspace ${workspaceId}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -5288,7 +5289,7 @@ export class WorkspaceTestResultsService {
   private createResponseCleanupBaseQuery(
     workspaceId: number,
     request: NormalizedResponseCleanupRequest
-  ): SelectQueryBuilder<unknown> {
+  ): SelectQueryBuilder<ObjectLiteral> {
     const query = this.connection
       .createQueryBuilder()
       .from(ResponseEntity, 'response')
@@ -6263,7 +6264,7 @@ export class WorkspaceTestResultsService {
   }
 
   private static applyDeleteTargetFilter(
-    query: SelectQueryBuilder<unknown>,
+    query: SelectQueryBuilder<ObjectLiteral>,
     kind: TestResultsDeleteTargetKind,
     ids: number[]
   ): void {
@@ -6536,8 +6537,8 @@ export class WorkspaceTestResultsService {
       async () => {
         const result = await this.connection.transaction(async manager => {
           const report = {
-            deletedUnit: null,
-            warnings: []
+            deletedUnit: null as number | null,
+            warnings: [] as string[]
           };
 
           const unit = await manager
@@ -6634,8 +6635,8 @@ export class WorkspaceTestResultsService {
       async () => {
         const result = await this.connection.transaction(async manager => {
           const report = {
-            deletedBooklet: null,
-            warnings: []
+            deletedBooklet: null as number | null,
+            warnings: [] as string[]
           };
 
           const booklet = await manager
@@ -6720,8 +6721,8 @@ export class WorkspaceTestResultsService {
         variableId: string;
         value: string;
         status: string;
-        code?: number;
-        score?: number;
+        code?: number | null;
+        score?: number | null;
         codedStatus?: string;
         unitId: number;
         unitName: string;
@@ -6762,8 +6763,8 @@ export class WorkspaceTestResultsService {
           variableId: string;
           value: string;
           status: string;
-          code?: number;
-          score?: number;
+          code?: number | null;
+          score?: number | null;
           codedStatus?: string;
           unitId: number;
           unitName: string;
@@ -7045,10 +7046,10 @@ export class WorkspaceTestResultsService {
 
       this.logger.error(
         `Failed to search for responses in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for responses: ${error.message}`
+        `An error occurred while searching for responses: ${getErrorMessage(error)}`
       );
     }
   }
@@ -7162,8 +7163,8 @@ export class WorkspaceTestResultsService {
           variableId: string;
           value: string;
           status: string;
-          code?: number;
-          score?: number;
+          code?: number | null;
+          score?: number | null;
           codedStatus?: string;
         }[];
       }[];
@@ -7270,10 +7271,10 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to search for units with name: ${unitName} in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for units with name: ${unitName}: ${error.message}`
+        `An error occurred while searching for units with name: ${unitName}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -7369,10 +7370,10 @@ export class WorkspaceTestResultsService {
     } catch (error) {
       this.logger.error(
         `Failed to search for booklets with name: ${bookletName} in workspace: ${workspaceId}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error(
-        `An error occurred while searching for booklets with name: ${bookletName}: ${error.message}`
+        `An error occurred while searching for booklets with name: ${bookletName}: ${getErrorMessage(error)}`
       );
     }
   }
@@ -7639,7 +7640,7 @@ export class WorkspaceTestResultsService {
             id: r.variableid,
             value: value,
             status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform
+            subform: r.subform ?? undefined
           });
         });
 
@@ -7792,7 +7793,7 @@ export class WorkspaceTestResultsService {
         'logentry'
       ],
       delimiter: ';',
-      quote: null,
+      quote: false,
       alwaysWriteHeaders: true
     });
 

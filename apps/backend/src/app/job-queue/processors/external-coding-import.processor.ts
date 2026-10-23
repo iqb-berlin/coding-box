@@ -1,25 +1,27 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import {
   Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ExternalCodingImportService } from '../../database/services/coding';
 import { CacheService } from '../../cache/cache.service';
 import { ExternalCodingImportJobData } from '../job-queue.service';
 
 @Injectable()
-@Processor('external-coding-import')
-export class ExternalCodingImportProcessor {
+@Processor('external-coding-import', { concurrency: 1 })
+export class ExternalCodingImportProcessor extends WorkerHost {
   private readonly logger = new Logger(ExternalCodingImportProcessor.name);
 
   constructor(
     @Inject(forwardRef(() => ExternalCodingImportService))
     private readonly externalCodingImportService: ExternalCodingImportService,
     private readonly cacheService: CacheService
-  ) {}
+  ) {
+    super();
+  }
 
-  @Process()
   async process(job: Job<ExternalCodingImportJobData>): Promise<{
     message: string;
     processedRows: number;
@@ -35,7 +37,7 @@ export class ExternalCodingImportProcessor {
     );
 
     try {
-      await job.progress(0);
+      await job.updateProgress(0);
 
       const fileBuffer = fs.readFileSync(tempFilePath);
       const fileBase64 = fileBuffer.toString('base64');
@@ -53,7 +55,7 @@ export class ExternalCodingImportProcessor {
         },
         async (progress: number, message: string) => {
           this.logger.debug(`Job ${job.id} progress: ${progress}% - ${message}`);
-          await job.progress(progress);
+          await job.updateProgress(progress);
         },
         requestedByUserId
       );
@@ -65,7 +67,7 @@ export class ExternalCodingImportProcessor {
         3600
       );
 
-      await job.progress(100);
+      await job.updateProgress(100);
       this.logger.log(
         `External coding import job ${job.id} completed: ${result.processedRows} processed, ${result.updatedRows} updated`
       );
@@ -80,8 +82,8 @@ export class ExternalCodingImportProcessor {
       };
     } catch (error) {
       this.logger.error(
-        `Error processing external coding import job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing external coding import job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     } finally {
@@ -93,7 +95,7 @@ export class ExternalCodingImportProcessor {
         }
       } catch (cleanupError) {
         this.logger.warn(
-          `Failed to clean up temp file ${tempFilePath}: ${cleanupError.message}`
+          `Failed to clean up temp file ${tempFilePath}: ${getErrorMessage(cleanupError)}`
         );
       }
     }

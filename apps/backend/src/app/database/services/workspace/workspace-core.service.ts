@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ItemMatrixDiagnosticsArchive } from '../coding/item-matrix-diagnostics-archive';
 import { JournalService } from '../shared/journal.service';
 import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
@@ -117,7 +118,7 @@ export class WorkspaceCoreService {
     } catch (error) {
       this.logger.error(
         `Failed to create workspace with name: ${workspace.name}`,
-        error.stack
+        getErrorStack(error)
       );
       throw new Error('Workspace creation failed');
     }
@@ -126,14 +127,15 @@ export class WorkspaceCoreService {
   async patch(workspaceData: WorkspaceFullDto, actorUserId?: number): Promise<void> {
     this.logger.log(`Updating workspace with id: ${workspaceData.id}`);
     if (workspaceData.id) {
-      if (workspaceData.settings) {
+      const settings = workspaceData.settings;
+      if (settings) {
         await this.mutateAutocoderInputSettings(
           workspaceData.id,
           workspaceGroupToUpdate => {
             if (workspaceData.name) {
               workspaceGroupToUpdate.name = workspaceData.name;
             }
-            workspaceGroupToUpdate.settings = workspaceData.settings;
+            workspaceGroupToUpdate.settings = settings;
           },
           Object.keys(workspaceData),
           actorUserId
@@ -152,7 +154,7 @@ export class WorkspaceCoreService {
         });
       }
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
-      if (workspaceData.settings) {
+      if (settings) {
         await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
       }
@@ -191,7 +193,7 @@ export class WorkspaceCoreService {
           }
         } catch (error) {
           await queryRunner.rollbackTransaction();
-          this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${error.message}`, error.stack);
+          this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${getErrorMessage(error)}`, getErrorStack(error));
           throw error;
         }
       }

@@ -1,8 +1,8 @@
-import { Processor, Process } from '@nestjs/bull';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 
@@ -12,17 +12,18 @@ export interface FlatResponseFilterOptionsJobData {
 }
 
 @Injectable()
-@Processor('flat-response-filter-options')
-export class FlatResponseFilterOptionsProcessor {
+@Processor('flat-response-filter-options', { concurrency: 1 })
+export class FlatResponseFilterOptionsProcessor extends WorkerHost {
   private readonly logger = new Logger(FlatResponseFilterOptionsProcessor.name);
 
   constructor(
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService
-  ) {}
+  ) {
+    super();
+  }
 
-  @Process()
   async process(job: Job<FlatResponseFilterOptionsJobData>): Promise<void> {
     const workspaceId = Number(job.data.workspaceId);
     const threshold = Number(job.data.processingDurationThresholdMs || 60000);
@@ -31,7 +32,7 @@ export class FlatResponseFilterOptionsProcessor {
       `Processing flat response filter-options cache job ${job.id} for workspace ${workspaceId} (threshold=${threshold})`
     );
 
-    await job.progress(0);
+    await job.updateProgress(0);
 
     const versionKey =
       this.cacheService.generateFlatResponseFilterOptionsVersionKey(
@@ -55,7 +56,7 @@ export class FlatResponseFilterOptionsProcessor {
 
     await this.cacheService.set(cacheKey, result, 0);
 
-    await job.progress(100);
+    await job.updateProgress(100);
     this.logger.log(
       `Finished flat response filter-options cache job ${job.id} for workspace ${workspaceId}`
     );

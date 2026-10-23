@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
-import { Queue } from 'bull';
+import { Queue } from 'bullmq';
 import { WorkspaceTestResultsExportController } from './workspace-test-results-export.controller';
 import type { WorkspaceTestResultsService } from '../../database/services/test-results';
 import {
@@ -89,7 +89,8 @@ describe('WorkspaceTestResultsExportController', () => {
         workspaceId: 7
       },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       returnvalue: result
     };
     const databaseExportQueue = {
@@ -353,7 +354,13 @@ describe('WorkspaceTestResultsExportController', () => {
       timestamp: 123456,
       failedReason: undefined,
       getState: jest.fn().mockResolvedValue('active'),
-      progress: jest.fn().mockResolvedValue({
+      progress: {
+        percentage: 37.4,
+        phase: 'writing',
+        processedRows: 12,
+        totalRows: 30
+      },
+      updateProgress: jest.fn().mockResolvedValue({
         percentage: 37.4,
         phase: 'writing',
         processedRows: 12,
@@ -370,7 +377,8 @@ describe('WorkspaceTestResultsExportController', () => {
       timestamp: 123457,
       failedReason: undefined,
       getState: jest.fn().mockResolvedValue('failed'),
-      progress: jest.fn().mockResolvedValue(52)
+      progress: 52,
+      updateProgress: jest.fn().mockResolvedValue(52)
     };
     const completedCancelledJob = {
       id: 'job-3',
@@ -382,7 +390,8 @@ describe('WorkspaceTestResultsExportController', () => {
       timestamp: 123458,
       failedReason: undefined,
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(21)
+      progress: 21,
+      updateProgress: jest.fn().mockResolvedValue(21)
     };
     const jobQueueService = {
       getExportJobs: jest.fn().mockResolvedValue([

@@ -282,8 +282,8 @@ export class CodingJobMutationService {
         ) {
           if (normalizedCreateCodingJobDto.variableBundles[0].id) {
             const bundleIds = normalizedCreateCodingJobDto.variableBundles
-              .filter(bundle => bundle.id)
-              .map(bundle => bundle.id);
+              .map(bundle => bundle.id)
+              .filter((candidateId): candidateId is number => Boolean(candidateId));
 
             if (bundleIds.length > 0) {
               await this.assignVariableBundles(
@@ -462,8 +462,8 @@ export class CodingJobMutationService {
         if (updateCodingJobDto.variableBundles.length > 0) {
           if (updateCodingJobDto.variableBundles[0].id) {
             const bundleIds = updateCodingJobDto.variableBundles
-              .filter(bundle => bundle.id)
-              .map(bundle => bundle.id);
+              .map(bundle => bundle.id)
+              .filter((candidateId): candidateId is number => Boolean(candidateId));
 
             if (bundleIds.length > 0) {
               await this.assignVariableBundles(id, bundleIds, manager);
@@ -984,8 +984,8 @@ export class CodingJobMutationService {
     ) {
       if (createCodingJobDto.variableBundles[0].id) {
         const bundleIds = createCodingJobDto.variableBundles
-          .filter(bundle => bundle.id)
-          .map(bundle => bundle.id);
+          .map(bundle => bundle.id)
+          .filter((candidateId): candidateId is number => Boolean(candidateId));
 
         if (bundleIds.length > 0) {
           await this.assignVariableBundles(

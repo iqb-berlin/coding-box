@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, Connection, EntityManager, FindOneOptions
+  Repository, Connection, EntityManager, FindOneOptions,
+  FindOptionsWhere
 } from 'typeorm';
 import { assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
@@ -147,7 +148,7 @@ export class CodingJobProgressService {
   private getCodingJobUnitWhereForEntry(
     codingJobId: number,
     entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId'>
-  ): Partial<CodingJobUnit> {
+  ): FindOptionsWhere<CodingJobUnit> {
     const {
       login: personLogin,
       code: personCode,
@@ -155,7 +156,7 @@ export class CodingJobProgressService {
       booklet: bookletName
     } = parseCodingTestPerson(entry.testPerson);
 
-    const whereCondition: Partial<CodingJobUnit> = {
+    const whereCondition: FindOptionsWhere<CodingJobUnit> = {
       coding_job_id: codingJobId,
       unit_name: entry.unitId,
       variable_id: entry.variableId,
@@ -309,7 +310,7 @@ export class CodingJobProgressService {
   private getCodingIssueReviewUnitWhere(
     reviewJobId: number,
     sourceUnit: CodingJobUnit
-  ): Partial<CodingJobUnit> {
+  ): FindOptionsWhere<CodingJobUnit> {
     return {
       coding_job_id: reviewJobId,
       response_id: sourceUnit.response_id,
