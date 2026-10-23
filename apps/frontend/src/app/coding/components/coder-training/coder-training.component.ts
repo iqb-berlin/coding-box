@@ -48,41 +48,14 @@ import {
   getTrainingOptionTitle
 } from '../../utils/coder-training-display';
 
-export interface VariableConfig {
-  variableId: string;
-  unitId: string;
-  sampleCount: number;
-  includeDeriveError?: boolean;
-}
+import { CODER_TRAINING_RECOVERY_KEY, CoderTrainingRecoveryDraft, VariableConfig } from './coder-training.models';
+
+export { CODER_TRAINING_RECOVERY_KEY } from './coder-training.models';
+export type { CoderTrainingRecoveryDraft, VariableConfig } from './coder-training.models';
 
 export interface VariableGrouping {
   manual: { control: TrainingVariableForm; index: number }[];
   bundles: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] }[];
-}
-
-export const CODER_TRAINING_RECOVERY_KEY = 'coder-training-active-state';
-
-interface CoderTrainingRecoveryVariable {
-  variableId: string;
-  unitId: string;
-  sampleCount: number;
-  bundleId?: number;
-  bundleName?: string;
-  bundleCaseOrderingMode?: 'continuous' | 'alternating';
-  includeDeriveError?: boolean;
-}
-
-export interface CoderTrainingRecoveryDraft {
-  workspaceId?: number;
-  mode: 'create' | 'edit';
-  editTraining?: CoderTraining | null;
-  formValue: CoderTrainingFormValue;
-  selectedCoderIds: number[];
-  selectedBundleIds: number[];
-  manualVariableKeys: string[];
-  variables: CoderTrainingRecoveryVariable[];
-  variableFilter: string;
-  bundleFilter: string;
 }
 
 interface ValidationItem {

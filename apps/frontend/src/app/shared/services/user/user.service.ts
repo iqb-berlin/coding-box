@@ -49,8 +49,8 @@ export class UserService {
         {}
       )
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -61,8 +61,8 @@ export class UserService {
         newData,
         {})
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -71,8 +71,8 @@ export class UserService {
       .delete(`${this.serverUrl}admin/users/${users.join(';')}`,
         {})
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 

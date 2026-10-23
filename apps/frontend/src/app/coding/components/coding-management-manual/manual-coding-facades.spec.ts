@@ -1,22 +1,22 @@
 import { Component, DestroyRef, inject } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { BehaviorSubject, of, Subject } from 'rxjs';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
-import { ManualCodingPlanningFacade } from './manual-coding-planning.facade';
+import { BehaviorSubject, of, Subject } from 'rxjs';
+import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { AppService } from '../../../core/services/app.service';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
+import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
-import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import { ManualCodingVariableCoverageOverview } from '../../services/manual-coding-planning-snapshot.model';
-import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
-import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
-import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
-import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
+import { ManualCodingPlanningFacade } from './manual-coding-planning.facade';
+import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
+import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
 @Component({
   standalone: true,
@@ -64,7 +64,7 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
   let api: {
     getVariableCoverageOverview: jest.Mock; getResponseAnalysis: jest.Mock; saveAggregationSettings: jest.Mock;
     setResponseAnalysisGuardRunning: jest.Mock; trackResponseAnalysisGuardUntilComplete: jest.Mock;
-    saveManualCodingPlanningSnapshot: jest.Mock;
+    saveManualCodingPlanningSnapshot: jest.Mock; beginManualCodingPlanningSnapshot?: jest.Mock;
   };
   let snack: { open: jest.Mock };
   const changeWorkspace = (id: number): void => { app.selectedWorkspaceId = id; app.selectedWorkspaceId$.next(id); };
@@ -94,6 +94,22 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     fixture.detectChanges();
   });
   afterEach(() => { fixture.destroy(); jest.useRealTimers(); });
+
+  it('exposes read-only settings and event streams and owns restored snapshots', () => {
+    const flags = [ResponseMatchingFlag.NO_AGGREGATION];
+    const localFlags = [ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE];
+    host.settings.restoreSettings({ flags, threshold: 1 }, localFlags);
+    flags.push(ResponseMatchingFlag.IGNORE_WHITESPACE);
+    localFlags.length = 0;
+    expect(host.settings.persistedResponseMatchingFlags).toEqual([ResponseMatchingFlag.NO_AGGREGATION]);
+    expect(host.settings.responseMatchingFlags()).toEqual([ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE]);
+    expect(host.settings.duplicateAggregationThreshold()).toBe(2);
+    expect('set' in host.settings.responseMatchingFlags).toBe(false);
+    expect('set' in host.settings.duplicateAggregationThreshold).toBe(false);
+    expect('next' in host.settings.thresholdSaved$).toBe(false);
+    expect('next' in host.planning.restored$).toBe(false);
+    expect('next' in host.planning.freshnessRefreshRequested$).toBe(false);
+  });
 
   it('renders a delayed statistic and cancels its superseded request', async () => {
     const old = new Subject<ManualCodingVariableCoverageOverview>();
@@ -149,13 +165,12 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
   it('never caches a planning bundle between a failed analysis and its error state update', () => {
     const pending = new Subject<ResponseAnalysisDto>();
     api.getResponseAnalysis.mockReturnValue(pending);
-    host.planning.hasLoadedPlanningDataBundle = true;
-    host.planning.isPlanningDataBundleLoadPending = true;
-    host.planning.planningDataBundleCacheGeneration = 1;
+    api.beginManualCodingPlanningSnapshot = jest.fn(() => 1);
+    host.planning.beginPlanningDataRefresh();
     host.analysis.loadResponseAnalysis();
     pending.error(new Error('offline'));
     expect(api.saveManualCodingPlanningSnapshot).not.toHaveBeenCalled();
-    expect(host.planning.isPlanningDataBundleLoadPending).toBe(false);
+    expect(host.planning.isRefreshPending).toBe(false);
     expect(host.analysis.responseAnalysisError()).toContain('offline');
   });
 
@@ -174,10 +189,10 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     jest.useFakeTimers();
     const first = new Subject<unknown>(); const second = new Subject<unknown>();
     api.saveAggregationSettings.mockReturnValueOnce(first).mockReturnValueOnce(second);
-    host.settings.responseMatchingFlags.set([ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE]);
-    host.settings.duplicateAggregationThreshold.set(3); host.settings.saveThreshold(3);
+    host.settings.updateLocalMatchingFlags([ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE]);
+    host.settings.updateThreshold(3); host.settings.saveThreshold(3);
     jest.advanceTimersByTime(1000);
-    host.settings.duplicateAggregationThreshold.set(4); host.settings.saveThreshold(4);
+    host.settings.updateThreshold(4); host.settings.saveThreshold(4);
     jest.advanceTimersByTime(1000);
     expect(api.saveAggregationSettings).toHaveBeenCalledTimes(1);
     first.next({ success: true, flags: [ResponseMatchingFlag.NO_AGGREGATION], threshold: 3 }); first.complete();
@@ -203,7 +218,7 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     host.settings.saveThreshold(3);
     expect(host.settings.isSavingThreshold()).toBe(true);
     jest.advanceTimersByTime(1000);
-    host.settings.duplicateAggregationThreshold.set(4);
+    host.settings.updateThreshold(4);
     host.settings.saveThreshold(4);
     old.error(new Error('old failure'));
     expect(snack.open).not.toHaveBeenCalled();

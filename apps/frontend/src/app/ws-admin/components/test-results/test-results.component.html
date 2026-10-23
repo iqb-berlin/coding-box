@@ -279,13 +279,19 @@
   </div>
   } @if(!isUploadingResults()){
   @if (isTableView()) {
-  <coding-box-test-results-flat-table
-    [initialFilters]="quickSearchTableFiltersValue"
-    [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies()"
-    [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn()"
-    [enableRegexSearch]="enableRegexSearch()"
-    (responseDeleted)="onFlatTableResponseDeleted()"
-  ></coding-box-test-results-flat-table>
+    @defer (on immediate) {
+      <coding-box-test-results-flat-table
+        [initialFilters]="quickSearchTableFiltersValue"
+        [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies()"
+        [forceShowLogAnomalies]="forceShowLogAnomalyTableColumn()"
+        [enableRegexSearch]="enableRegexSearch()"
+        (responseDeleted)="onFlatTableResponseDeleted()"
+      />
+    } @loading (after 100ms) {
+      <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+    } @error {
+      <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+    }
   } @else {
   @if (testResultsLoadFailed()) {
   <div class="coding-freshness-banner test-results-load-error" role="alert">

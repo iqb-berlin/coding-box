@@ -157,4 +157,19 @@ describe('UserBackendService', () => {
       httpMock.expectOne(url).flush('failed', { status: 500, statusText: 'Server Error' });
     });
   });
+  describe.each(['addUser', 'changeUserData', 'deleteUsers'] as const)('%s outcome', operation => {
+    it.each([200, 400, 403, 500, 0])('reports the actual outcome for HTTP %s', status => {
+      const operations = {
+        addUser: () => service.addUser({ username: 'new-user' }),
+        changeUserData: () => service.changeUserData(7, { id: 7, username: 'updated' }),
+        deleteUsers: () => service.deleteUsers([7])
+      };
+      const received: boolean[] = [];
+      operations[operation]().subscribe(result => received.push(result));
+      const request = httpMock.expectOne(`${mockServerUrl}admin/users${operation === 'addUser' ? '' : '/7'}`);
+      if (status === 0) request.error(new ProgressEvent('error'));
+      else request.flush(null, { status, statusText: status === 200 ? 'OK' : 'Failed' });
+      expect(received).toEqual([status === 200]);
+    });
+  });
 });

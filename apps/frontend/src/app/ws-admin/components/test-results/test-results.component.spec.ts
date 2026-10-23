@@ -1,6 +1,6 @@
+import { DeferBlockBehavior, ComponentFixture, TestBed } from '@angular/core/testing';
 // eslint-disable-next-line max-classes-per-file
 import { computed, provideZonelessChangeDetection } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -155,6 +155,7 @@ describe('TestResultsComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
       imports: [
         MatCheckboxModule,
         MatTooltipModule,
@@ -702,7 +703,7 @@ describe('TestResultsComponent', () => {
 
   it.each(['pending', 'failed'])(
     'loads the flat table independently of a %s initial person-list request',
-    personListState => {
+    async personListState => {
       const testResultService = TestBed.inject(TestResultService) as unknown as {
         getTestResults: jest.Mock;
         getFlatResponses: jest.Mock;
@@ -725,6 +726,7 @@ describe('TestResultsComponent', () => {
       viewToggle.click();
       fixture.detectChanges();
 
+      await fixture.whenStable();
       expect(component.isTableView()).toBe(true);
       expect(fixture.nativeElement.querySelector('coding-box-test-results-flat-table')).not.toBeNull();
       expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
