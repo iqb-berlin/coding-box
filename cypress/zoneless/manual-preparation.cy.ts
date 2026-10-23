@@ -97,12 +97,14 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
     cy.get('coding-box-coder-training').as('training').then(training => {
       if (options.holdEntrance) {
-        const modal = training[0].closest('.coder-training-modal')!;
-        const held = modal.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
-        held.pause();
-        held.currentTime = 0;
-        expect(modal.ownerDocument.defaultView!.getComputedStyle(modal).opacity,
-          'entrance was held at its invisible first frame').to.equal('0');
+        for (const selector of ['.coding-container', '.coder-training-modal']) {
+          const ancestor = training[0].closest(selector)!;
+          const held = ancestor.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+          held.pause();
+          held.currentTime = 0;
+          expect(ancestor.ownerDocument.defaultView!.getComputedStyle(ancestor).opacity,
+            `${selector} entrance was held at its invisible first frame`).to.equal('0');
+        }
       }
       settleTrainingEntrance(training[0]);
     });
@@ -110,7 +112,8 @@ describe('Zoneless manual preparation workflows', () => {
 
   function settleTrainingEntrance(training: HTMLElement): void {
     // These cases test behavior after opening, independently of the compositor's motion clock.
-    for (const selector of ['.coder-training-overlay', '.coder-training-modal']) {
+    // CI can also leave the page ancestor's fade-in at its invisible first frame.
+    for (const selector of ['.coding-container', '.coder-training-overlay', '.coder-training-modal']) {
       training.closest(selector)?.getAnimations().forEach(animation => animation.finish());
     }
   }
