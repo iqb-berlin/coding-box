@@ -1,0 +1,111 @@
+:host { display: block; }
+
+.training-selection {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+
+  h3 {
+    margin: 0 0 12px 0;
+    color: #333;
+  }
+
+  .training-options {
+    margin-bottom: 12px;
+
+    mat-form-field {
+      width: 300px;
+    }
+  }
+}
+
+.full-width-select {
+  width: 100%;
+}
+
+.coder-selection {
+  margin-top: 16px;
+}
+
+.training-apply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+
+  button {
+    min-height: 36px;
+    white-space: normal;
+    line-height: 1.2;
+
+    mat-icon {
+      margin-right: 6px;
+    }
+  }
+}
+
+.training-checkbox {
+  display: block;
+  margin: 6px 0;
+
+  .training-option-title,
+  .training-option-meta {
+    display: block;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .training-option-title {
+    font-weight: 600;
+  }
+
+  .training-option-meta {
+    color: #6c757d;
+    font-size: 12px;
+  }
+}
+
+.training-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.25;
+
+  .training-option-title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .training-option-meta {
+    color: #6c757d;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+}
+
+.selected-training-trigger {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.selected-training-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.selected-training-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6c757d;
+  font-size: 11px;
+}
+
+@media (max-width: 768px) { .training-selection { padding: 12px; } }

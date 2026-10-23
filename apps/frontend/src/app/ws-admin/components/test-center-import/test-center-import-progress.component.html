@@ -1,0 +1,123 @@
+@if (phase() === 'options') {
+      @if (view().loadingGroups || view().uploadingResults || view().uploadingFiles) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        @if (view().loadingGroups) {
+        <p class="loading-text">
+          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+        </p>
+        <div class="test-groups-load-progress">
+          <p class="loading-subtext">{{ view().groupsMessage }}</p>
+          @if ((view().groupsProgress?.totalGroups || 0) > 0) {
+          <p class="loading-subtext">
+            Testgruppen verarbeitet:
+            {{ view().groupsProgress?.processedGroups || 0 }} /
+            {{ view().groupsProgress?.totalGroups || 0 }}
+            ({{ view().groupsPercent }}%)
+          </p>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="view().groupsPercent"
+          ></mat-progress-bar>
+          } @else {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+          }
+          @if (view().groupsElapsedSeconds > 2) {
+          <p class="loading-subtext">
+            Laufzeit: {{ view().groupsElapsedText }}
+          </p>
+          }
+        </div>
+        } @if (view().uploadingResults) {
+        <p class="loading-text">
+          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+        </p>
+        } @if (view().uploadingFiles) {
+        <p class="loading-text">Testdateien werden hochgeladen...</p>
+        @if (view().total > 0) {
+        <div class="upload-progress">
+          <p class="loading-subtext">
+            Uploads abgeschlossen: {{ view().completed }} /
+            {{ view().total }}
+          </p>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="view().uploadPercent"
+          ></mat-progress-bar>
+        </div>
+        }
+        @if (view().progress && view().options.length > 0) {
+        <div class="option-progress-list">
+          @for (option of view().options; track option.optionKey) {
+          <div class="option-progress-item">
+            <div class="option-progress-title">
+              {{ view().optionLabels[option.optionKey] }}:
+              {{ option.uploaded }} / {{ option.planned }} hochgeladen
+            </div>
+            <div class="option-progress-meta">
+              Verarbeitet: {{ option.processed }} / {{ option.planned }}
+              @if (option.currentFile) {
+              <span class="current-file">Aktuelle Datei: {{ option.currentFile }}</span>
+              }
+            </div>
+          </div>
+          }
+        </div>
+        } @if (view().progress?.currentFile) {
+        <p class="loading-subtext">
+          Aktuell wird verarbeitet: {{ view().progress?.currentFile }}
+        </p>
+        }
+        }
+      </div>
+      }
+} @else {
+    @if (view().uploadingResults) {
+    <div class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p class="loading-text">{{ view().message }}</p>
+      @if (view().progress?.phase) {
+      <p class="loading-subtext">{{ ('testcenter-import.phase.' + view().progress?.phase) | translate }} · {{ view().elapsedSeconds }} s</p>
+      }
+      @if (view().total > 0) {
+      <div class="upload-progress">
+        <p class="loading-subtext">
+          Uploads abgeschlossen: {{ view().completed }} /
+          {{ view().total }}
+        </p>
+        <mat-progress-bar
+          mode="determinate"
+          [value]="view().uploadPercent"
+        ></mat-progress-bar>
+      </div>
+      <p class="loading-subtext">Fortschritt: {{ view().uploadPercent }}%</p>
+      } @else if (view().importPercent > 0) {
+      <p class="loading-subtext">Fortschritt: {{ view().importPercent }}%</p>
+      }
+    </div>
+    } @if (!view().uploadingResults) {
+      @if (view().failedGroup || view().uncertain) {
+      <div class="error-message" role="alert">
+        <mat-icon>warning</mat-icon>
+        <div>
+          <p>{{ (view().uncertain ? 'testcenter-import.unknown' : 'testcenter-import.partial') | translate }}</p>
+          <p>{{ 'testcenter-import.completed' | translate }}: {{ view().completedGroups.join(', ') || '–' }} ({{ view().completed }} / {{ view().total }})</p>
+          <p>{{ 'testcenter-import.current-group' | translate }}: {{ view().failedGroup || view().progress?.currentGroup || view().importingGroups[view().completed] }}</p>
+          <p>{{ 'testcenter-import.remaining' | translate }}: {{ view().importingGroups.slice(view().completed + 1).join(', ') || '–' }}</p>
+          <p>{{ (view().uncertain ? 'testcenter-import.unknown-guidance' : 'testcenter-import.retry-guidance') | translate }}</p>
+          @if (view().responsesSaved && view().failedGroup) {
+          <p>{{ 'testcenter-import.responses-saved' | translate }}</p>
+          }
+          <p>{{ 'testcenter-import.run-id' | translate }}: {{ view().runId }}</p>
+          @if (view().uncertain) {
+          <p>{{ ('testcenter-import.status.' + (view().progress?.status || 'unknown')) | translate }}</p>
+          <button mat-stroked-button (click)="checkStatus.emit()" [disabled]="view().checkingStatus">
+            <mat-icon>refresh</mat-icon>{{ 'testcenter-import.check-status' | translate }}
+          </button>
+          }
+        </div>
+      </div>
+      }
+
+    }
+}

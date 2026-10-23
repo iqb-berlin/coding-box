@@ -62,3 +62,40 @@ installation; the application continues to use stable Typed Reactive Forms.
 
 See [the large-component inventory](large-component-refactoring.md) for the
 remaining responsibility and view boundaries.
+
+## Feature view boundaries
+
+The four prioritized large views use local OnPush child components with explicit
+inputs and named output events. Children do not inject the owning component or
+backend services and do not create copies of forms, selections, timers or stores.
+View projections are derived from current owner data; they are not writable
+sources for recovery or payloads.
+
+- Job definition: variable cards, bundle cards, coder capacities and distribution
+  summary are separate views. Availability and DERIVE_ERROR decisions stay with
+  the owner. The summary consumes the same memoized `CodingWorkloadSummary` that
+  the owner uses for its calculations. Capacity events return to the owner,
+  which replaces coder objects and invalidates the existing preview.
+- Coder training: participant/reference selection and the variable/bundle sample
+  editor receive the existing typed form. Sample rows refer to the original
+  FormArray controls. Selection commands, bundle updates, available-case policy,
+  permission changes, create/edit and recovery remain at the owner. The form
+  module remains the only implementation of reference/sample validation.
+- Testcenter import: login, options, groups and progress/outcome have separate
+  views. The same owner retains authentication, polling, confirmation,
+  overwrite decisions, retries and uncertain result reconciliation. Progress is
+  projected into the active step; recreating a step starts no work.
+- Results comparison: selection, the paged table and discussion fields have
+  separate views. Page and sort outputs go back to the dialog; its existing
+  dialog-local reliability store retains the full cohort/export context. The
+  table tracks projected rows by response ID so editing a draft preserves the
+  editor DOM and keyboard focus. Code/notes inputs and blur commits return to
+  the owner, which retains validation, recovery, API writes and error feedback.
+
+A comparison cohort change invalidates the discussion response context even on
+an A-to-B-to-A transition. An already accepted server write may still finish;
+its response cannot overwrite drafts in the new context. The first workspace
+change closes the old comparison dialog and cancels its subscriptions. Paging
+alone preserves the cohort and the pending reliability export. A delayed workspace
+setting reloads the table only when the effective regex mode changes; an unchanged
+setting preserves the current page.

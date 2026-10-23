@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnInit, computed, signal, viewChild, effect, ChangeDetectionStrategy, OnDestroy, AfterViewInit
+  Component, inject, OnInit, computed, signal, ChangeDetectionStrategy, OnDestroy
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -10,29 +10,31 @@ import {
   MatDialogRef
 } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { MatTableModule, MatTableDataSource } from '@angular/material/table';
-import { MatSort, MatSortModule, Sort } from '@angular/material/sort';
-import {
-  MatPaginator, MatPaginatorIntl, MatPaginatorModule, PageEvent
-} from '@angular/material/paginator';
+import { MatTableDataSource } from '@angular/material/table';
+import { Sort } from '@angular/material/sort';
+import { MatPaginatorIntl, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule, FormControl } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  debounceTime, distinctUntilChanged, Subject, takeUntil
+  debounceTime, distinctUntilChanged, filter as filterWorkspace, Subject, take, takeUntil
 } from 'rxjs';
+import {
+  TrainingComparison, WithinTrainingComparison, NotesFilterMode, ComparisonStatus, ComparisonCoderResult, ModalValueDisplay
+} from './comparison-view.models';
+import { TrainingComparisonSelectionComponent } from './training-comparison-selection.component';
+import { TrainingComparisonTableComponent, ComparisonTableRow } from './training-comparison-table.component';
 import { VariableKappaSummary } from './training-reliability';
 import { TrainingReliabilityFacade, TrainingReliabilityContext } from './training-reliability.facade';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
@@ -98,61 +100,6 @@ export interface CodingResultsComparisonDialogData {
   initialMode?: CodingResultsComparisonMode;
 }
 
-interface TrainingComparison {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  personCode: string;
-  personLogin: string;
-  personGroup: string;
-  bookletName?: string;
-  testPerson: string;
-  givenAnswer?: string;
-  coders: Array<{
-    trainingId: number;
-    trainingLabel: string;
-    coderId: number;
-    coderName: string;
-    code: string | null;
-    score: number | null;
-    notes?: string | null;
-    codingIssueOption?: number | null;
-  }>;
-}
-
-interface WithinTrainingComparison {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  testperson?: string;
-  personLogin?: string;
-  personCode?: string;
-  personGroup?: string;
-  bookletName?: string;
-  givenAnswer?: string;
-  replayCode?: number | null;
-  replayScore?: number | null;
-  discussionCode?: number | null;
-  discussionScore?: number | null;
-  discussionNotes?: string | null;
-  discussionManagerUserId?: number | null;
-  discussionManagerName?: string | null;
-  discussionSource?: 'manual' | 'auto_agreement' | null;
-  modalValueDisplay?: ModalValueDisplay;
-  coders: Array<{
-    jobId: number;
-    coderName: string;
-    code: string | null;
-    score: number | null;
-    notes?: string | null;
-    codingIssueOption?: number | null;
-  }>;
-}
-
-type NotesFilterMode = 'all' | 'none' | 'with-notes';
-type ComparisonStatus = 'match' | 'differ' | 'incomplete' | 'not_comparable';
-type ComparisonCoderResult = TrainingComparison['coders'][number] | WithinTrainingComparison['coders'][number];
-
 interface ReplayDisplayOptions {
   showScore?: boolean;
   allowComments?: boolean;
@@ -217,12 +164,6 @@ const EMPTY_COMPARISON_SUMMARY: TrainingComparisonSummaryDto = {
 
 const TABLE_FILTER_DEBOUNCE_MS = 400;
 
-interface ModalValueDisplay {
-  valueText: string;
-  deviationText: string;
-  tooltip: string;
-}
-
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-results-comparison',
@@ -231,30 +172,28 @@ interface ModalValueDisplay {
   standalone: true,
   providers: [TrainingReliabilityFacade],
   imports: [
+    TrainingComparisonTableComponent,
+    TrainingComparisonSelectionComponent,
     CommonModule,
     TranslateModule,
     FormsModule,
-    ReactiveFormsModule,
     MatDialogModule,
-    MatTableModule,
-    MatSortModule,
-    MatPaginatorModule,
     MatProgressSpinner,
     MatButtonModule,
     MatIcon,
     MatFormFieldModule,
     MatInputModule,
-    MatCheckboxModule,
     MatRadioModule,
     MatSelectModule,
     MatSlideToggleModule,
     MatTooltipModule
   ]
 })
-export class CodingResultsComparisonComponent implements OnInit, OnDestroy, AfterViewInit {
+export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   readonly permissions = inject(CodingPermissionsService);
 
   get canEditDiscussion(): boolean {
+    if (!this.contextActive) return false;
     const training = this.getSelectedWithinTraining();
     return this.permissions.canApply || (!!training && this.permissions.canEdit(training));
   }
@@ -264,17 +203,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   private paginatorIntl = inject(MatPaginatorIntl);
 
   protected readonly onActionKeydown = activateOnKeyboard;
-
-  readonly sort = viewChild(MatSort);
-  private readonly synchronizeSort = effect(() => {
-    const sort = this.sort();
-    if (sort) {
-      sort.active = this.sortBy;
-      sort.direction = this.sortDirection;
-    }
-  });
-
-  readonly matPaginator = viewChild(MatPaginator);
 
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private translate = inject(TranslateService);
@@ -287,6 +215,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   private dialog = inject(MatDialog);
   private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
+  private contextActive = true;
+  private discussionContextId = 0;
   private comparisonRequestCancel$ = new Subject<void>();
   private tableFilterChanges$ = new Subject<string>();
   private comparisonRequestId = 0;
@@ -431,6 +361,55 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     tooltip: ''
   };
 
+  protected setTrainingFilter(value: string): void {
+    this.trainingFilter.set(value.toLowerCase());
+  }
+
+  protected get comparisonCoderColumns(): { id: string; label: string }[] {
+    return this.dynamicCoderColumns.map(id => ({
+      id,
+      label: this.comparisonMode === 'between-trainings' ?
+        this.getCoderFromTrainingColumnName(id.substring(6)) : this.getCoderName(+id.substring(6))
+    }));
+  }
+
+  protected get comparisonTableRows(): ComparisonTableRow[] {
+    return this.dataSource.filteredData.map(source => {
+      const coders: ComparisonTableRow['coders'] = {};
+      this.dynamicCoderColumns.forEach(column => {
+        const key = column.substring(6);
+        const coder = this.comparisonMode === 'between-trainings' ?
+          this.getCoderFromTraining(source as TrainingComparison, key) : this.getCoderForWithin(source as WithinTrainingComparison, +key);
+        coders[column] = coder && this.hasCoderDisplayData(coder) ? {
+          code: this.getDisplayCodeText(coder.code, coder.codingIssueOption),
+          score: coder.score,
+          showScore: this.shouldShowScore(coder),
+          issueLabel: this.hasCodingIssue(coder) ? this.getCodingIssueShortLabel(coder.codingIssueOption) : '',
+          issueClass: this.getCodingIssueClass(coder),
+          issueTooltip: this.getCodingIssueTooltip(coder),
+          noteTooltip: this.hasCoderNote(coder) ? this.getCoderNoteTooltip(coder) : ''
+        } : null;
+      });
+      return {
+        source,
+        status: this.getComparisonStatus(source),
+        statusIcon: this.getComparisonStatusIcon(source),
+        statusTooltip: this.getComparisonStatusTooltip(source),
+        modalValue: (source as WithinTrainingComparison).modalValueDisplay || this.emptyModalValueDisplay,
+        discussion: {
+          editable: this.canEditDiscussion,
+          code: this.discussionCodeByResponseId()[source.responseId] || '',
+          score: this.discussionScoreByResponseId()[source.responseId] ?? null,
+          notes: this.discussionNotesByResponseId()[source.responseId] || '',
+          saving: this.isSavingDiscussionByResponseId()[source.responseId] ?? false,
+          error: this.discussionErrorByResponseId()[source.responseId] || '',
+          source: (source as WithinTrainingComparison).discussionSource ?? null
+        },
+        coders
+      };
+    });
+  }
+
   constructor() {
     this.paginatorIntl.itemsPerPageLabel = this.translate.instant('paginator.itemsPerPageLabel');
     this.paginatorIntl.nextPageLabel = this.translate.instant('paginator.nextPageLabel');
@@ -449,6 +428,20 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(
+      filterWorkspace(workspaceId => workspaceId !== this.data.workspaceId),
+      take(1),
+      takeUntil(this.ngUnsubscribe)
+    ).subscribe(() => {
+      this.contextActive = false;
+      this.coderTrainingsRequestId += 1;
+      this.cancelComparisonRequest();
+      this.invalidateDiscussionContext();
+      this.reliability.reset();
+      this.ngUnsubscribe.next();
+      this.dialogRef.close();
+    });
+    if (!this.contextActive) return;
     this.reliability.downloads$.pipe(takeUntil(this.ngUnsubscribe)).subscribe(({ blob, trainingId }) => {
       this.downloadReliability(blob, trainingId);
     });
@@ -473,12 +466,13 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId)
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(enabled => {
+        const changed = this.enableRegexSearch() !== enabled;
         this.enableRegexSearch.set(enabled);
-        this.applyTableFilters();
+        if (changed) this.applyTableFilters();
       });
 
     this.loadCoderTrainings().then(() => {
-      if (this.data.selectedTraining) {
+      if (this.contextActive && this.data.selectedTraining) {
         this.comparisonMode = 'within-training';
         this.selectedTrainingForWithin = this.data.selectedTraining.id;
         this.loadComparison();
@@ -501,6 +495,9 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   ngOnDestroy(): void {
+    this.contextActive = false;
+    this.coderTrainingsRequestId += 1;
+    this.invalidateDiscussionContext();
     this.unregisterRecoveryProvider?.();
     this.unregisterRecoveryProvider = null;
     this.cancelComparisonRequest();
@@ -509,14 +506,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     this.comparisonRequestCancel$.complete();
     this.tableFilterChanges$.complete();
     this.ngUnsubscribe.complete();
-  }
-
-  ngAfterViewInit(): void {
-    const sort = this.sort();
-    if (sort) {
-      sort.active = this.sortBy;
-      sort.direction = this.sortDirection;
-    }
   }
 
   private cancelComparisonRequest(): void {
@@ -1134,7 +1123,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     comparison: TrainingComparison | WithinTrainingComparison,
     scoreOverride?: number | null
   ): void {
-    if (!this.canEditDiscussion) return;
+    if (!this.contextActive || !this.canEditDiscussion) return;
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
       return;
     }
@@ -1152,6 +1141,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
 
     const notes = (this.discussionNotesByResponseId()[responseId] || '').trim() || null;
     const trainingId = this.selectedTrainingForWithin;
+    const contextId = this.discussionContextId;
 
     let score: number | null = null;
     if (parsedCode !== null) {
@@ -1181,9 +1171,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     ).pipe(takeUntil(this.ngUnsubscribe))
       .subscribe({
         next: result => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
+          if (!this.contextActive || contextId !== this.discussionContextId ||
+            this.comparisonMode !== 'within-training' || this.selectedTrainingForWithin !== trainingId) {
             return;
           }
           const hasPendingNotes = Object.prototype.hasOwnProperty.call(
@@ -1221,9 +1210,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
           this.clearTrainingDiscussionRecoveryEntry(responseId);
         },
         error: error => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
+          if (!this.contextActive || contextId !== this.discussionContextId ||
+            this.comparisonMode !== 'within-training' || this.selectedTrainingForWithin !== trainingId) {
             return;
           }
           this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
@@ -1665,7 +1653,16 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
     return `${coder.trainingLabel} · ID ${coder.trainingId}: ${coder.coderName}`;
   }
 
+  private invalidateDiscussionContext(): void {
+    // A -> B -> A is a different editing session. Accepted server writes may
+    // finish, but their responses cannot replace drafts in the new cohort.
+    this.discussionContextId += 1;
+    this.isSavingDiscussionByResponseId.set({});
+    this.pendingDiscussionNotesByResponseId = {};
+  }
+
   onModeChange(): void {
+    this.invalidateDiscussionContext();
     this.cancelComparisonRequest();
     this.reliability.reset();
     this.selectedTrainings.clear();
@@ -1687,6 +1684,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingSelectionChange(): void {
+    this.invalidateDiscussionContext();
     this.reliability.reset();
     this.hasInitializedBetweenCoderSelection = false;
     this.codersFromTrainingsFormControl.setValue([]);
@@ -1704,6 +1702,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onTrainingForWithinChange(): void {
+    this.invalidateDiscussionContext();
     this.reliability.reset();
     this.hasInitializedWithinCoderSelection = false;
     if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
@@ -1750,6 +1749,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onCodersFromTrainingsSelectionChange(): void {
+    this.invalidateDiscussionContext();
     const selectedKeys = this.codersFromTrainingsFormControl.value || [];
     this.hasInitializedBetweenCoderSelection = true;
     this.selectedCodersFromTrainings = new Set(selectedKeys);
@@ -1903,10 +1903,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
 
   private reloadComparisonFirstPage(): void {
     this.pageIndex = 0;
-    const paginator = this.matPaginator();
-    if (paginator) {
-      paginator.pageIndex = 0;
-    }
 
     if (this.canLoadCurrentComparison()) {
       this.loadComparison();
@@ -1947,6 +1943,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   loadComparison(): void {
+    if (!this.contextActive) return;
     if (this.comparisonMode === 'between-trainings') {
       if (this.selectedTrainings.selected.length < 2) {
         this.snackBar.open(this.translate.instant('coding.trainings.compare.notEnough'), this.translate.instant('common.close'), { duration: 3000 });
@@ -2095,6 +2092,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy, Afte
   }
 
   protected onCoderSelectionChange(): void {
+    this.invalidateDiscussionContext();
     this.reliability.reset();
     const selectedIds = this.codersFormControl.value || [];
     this.hasInitializedWithinCoderSelection = true;

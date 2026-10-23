@@ -996,12 +996,12 @@ describe('CodingResultsComparisonComponent', () => {
 
     const comparisonTable: HTMLElement = fixture.nativeElement.querySelector('.comparison-table');
     const childClasses = Array.from(comparisonTable.children)
-      .map(child => (child as HTMLElement).className);
+      .map(child => `${(child as HTMLElement).className} ${child.tagName.toLowerCase()}`);
 
     expect(childClasses.findIndex(className => className.includes('kappa-section')))
       .toBeLessThan(childClasses.findIndex(className => className.includes('table-filters')));
     expect(childClasses.findIndex(className => className.includes('table-filters')))
-      .toBeLessThan(childClasses.findIndex(className => className.includes('table-container')));
+      .toBeLessThan(childClasses.findIndex(className => className.includes('coding-box-training-comparison-table')));
   });
 
   it('should apply combined table filters for task, variable, person, agreement and notes', () => {
@@ -3075,5 +3075,68 @@ describe('CodingResultsComparisonComponent', () => {
       // Unweighted mean: (0.8 + 0.9) / 2 = 0.85
       expect(component.kappaStatistics()?.workspaceSummary.meanAgreement).toBeCloseTo(0.85, 4);
     });
+  });
+
+  it.each(['success', 'error'])('discards an old discussion %s after a training A-to-B-to-A transition', outcome => {
+    const delayed = new Subject<unknown>();
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(of(withinComparisonPage([])));
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(delayed);
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    const row = {
+      responseId: 501, unitName: 'U', variableId: 'V', coders: []
+    };
+    component.discussionCodeByResponseId.set({ 501: '1' });
+    component.onDiscussionCodeBlur(row);
+    expect(component.isSavingDiscussionByResponseId()[501]).toBe(true);
+
+    const owner = component as unknown as { onTrainingForWithinChange(): void };
+    component.selectedTrainingForWithin = 6;
+    owner.onTrainingForWithinChange();
+    component.selectedTrainingForWithin = 5;
+    owner.onTrainingForWithinChange();
+    component.discussionCodeByResponseId.set({ 501: '9' });
+    component.discussionNotesByResponseId.set({ 501: 'Current draft' });
+    const feedback = snackBar.open.mock.calls.length;
+    if (outcome === 'success') {
+      delayed.next({
+        success: true, code: 1, score: 1, notes: 'Old notes', source: 'manual', managerName: 'Old manager'
+      });
+    } else {
+      delayed.error(new Error('Old failure'));
+    }
+
+    expect(component.discussionCodeByResponseId()[501]).toBe('9');
+    expect(component.discussionNotesByResponseId()[501]).toBe('Current draft');
+    expect(component.isSavingDiscussionByResponseId()[501]).toBeUndefined();
+    expect(snackBar.open.mock.calls).toHaveLength(feedback);
+  });
+
+  it('cancels pending table and discussion work on the first workspace change, including A-to-B-to-A', () => {
+    const comparison = new Subject<unknown>();
+    const save = new Subject<unknown>();
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(comparison);
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(save);
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.loadComparison();
+    component.discussionCodeByResponseId.set({ 501: '1' });
+    component.onDiscussionCodeBlur({
+      responseId: 501, unitName: 'U', variableId: 'V', coders: []
+    });
+    expect(comparison.observed).toBe(true);
+    expect(save.observed).toBe(true);
+
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(comparison.observed).toBe(false);
+    expect(save.observed).toBe(false);
+    expect(component.isLoading()).toBe(false);
+    expect(component.isSavingDiscussionByResponseId()).toEqual({});
+    const requests = codingTrainingBackendService.getCachedWithinTrainingCodingResults.mock.calls.length;
+    component.loadComparison();
+    expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults.mock.calls).toHaveLength(requests);
   });
 });

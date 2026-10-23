@@ -1,0 +1,50 @@
+@mixin feedback {
+  .error-message,
+  .success-message {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+
+    mat-icon {
+      font-size: 24px;
+      height: 24px;
+      width: 24px;
+    }
+
+    span {
+      font-size: 14px;
+      font-weight: 500;
+    }
+  }
+
+  .error-message {
+    align-items: flex-start;
+    background-color: #ffebee;
+    border: 1px solid #ffcdd2;
+    color: #d32f2f;
+
+    mat-icon {
+      flex-shrink: 0;
+      color: #d32f2f;
+    }
+
+    > div {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+}

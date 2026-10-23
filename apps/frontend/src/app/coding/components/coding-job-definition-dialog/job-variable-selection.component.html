@@ -1,0 +1,160 @@
+@let summary = scopeSummary();
+            <div class="filter-container">
+              <div class="filter-row">
+                <mat-form-field class="filter-field">
+                  <mat-label>Aufgaben-ID Filter</mat-label>
+                  <input matInput [ngModel]="filters().unitName" (ngModelChange)="filterChanged.emit({unitName: $event})" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Aufgaben-ID">
+                  @if (filters().unitName) {
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="filterChanged.emit({unitName: ''}); applyFilter.emit()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                  }
+                </mat-form-field>
+
+                <mat-form-field class="filter-field">
+                  <mat-label>Variablen-ID Filter</mat-label>
+                  <input matInput [ngModel]="filters().variableId" (ngModelChange)="filterChanged.emit({variableId: $event})" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Variablen-ID">
+                  @if (filters().variableId) {
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="filterChanged.emit({variableId: ''}); applyFilter.emit()">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                  }
+                </mat-form-field>
+
+                <button type="button" mat-raised-button color="primary" (click)="applyFilter.emit()">
+                  <mat-icon>filter_list</mat-icon>
+                  Filter anwenden
+                </button>
+
+                <button type="button" mat-raised-button (click)="clearFilters.emit()">
+                  <mat-icon>clear</mat-icon>
+                  Filter zurücksetzen
+                </button>
+
+              </div>
+
+              <div class="filter-row availability-filter-row">
+                <span class="filter-label">Schulungsaufwand:</span>
+                <mat-button-toggle-group [ngModel]="filters().trainingRequired" (ngModelChange)="filterChanged.emit({trainingRequired: $event})" [ngModelOptions]="{standalone: true}" (change)="applyFilter.emit()">
+                  <mat-button-toggle value="all">Alle</mat-button-toggle>
+                  <mat-button-toggle value="true">Erhöht</mat-button-toggle>
+                  <mat-button-toggle value="false">Normal</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+
+              <div class="filter-row availability-filter-row">
+                <span class="filter-label">Verfügbarkeit:</span>
+                <mat-button-toggle-group [value]="filters().availability" (change)="availabilityChanged.emit($event.value)">
+                  <mat-button-toggle value="all">Alle</mat-button-toggle>
+                  <mat-button-toggle value="full">Vollständig verfügbar</mat-button-toggle>
+                  <mat-button-toggle value="partial">Teilweise verfügbar</mat-button-toggle>
+                  <mat-button-toggle value="none">Nicht verfügbar</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+            </div>
+
+            @if (loading()) {
+            <div class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text">Lade Variablen...</p>
+            </div>
+            }
+
+            @if (!loading() && summary && summary.coveredSourceResponseCount > 0) {
+            <div class="manual-scope-note">
+              <mat-icon>info</mat-icon>
+              <span>
+                {{ 'coding-job-definition-dialog.manual-scope-note' | translate:{
+                  responseCount: summary.coveredSourceResponseCount,
+                  variableCount: summary.coveredSourceVariableCount
+                } }}
+              </span>
+            </div>
+            }
+
+            @if (!loading() && totalVariables() > 0) {
+            <div class="quick-selection-tools">
+              <button mat-stroked-button color="primary" type="button" (click)="toggleAll.emit()"
+                class="select-all-button" [disabled]="readOnly()">
+                <mat-icon>{{ allSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                {{ allSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+              </button>
+              <div class="selection-count">
+                {{ selectedCount() }} von {{ rows().length }} Variablen ausgewählt
+              </div>
+            </div>
+
+            <div class="variables-grid-container">
+              <div class="variables-grid">
+                @for (row of rows(); track row.variable.unitName + row.variable.variableId) {
+                @let variable = row.variable;
+                <div class="variable-card" [class.selected]="row.selected"
+                  [class.disabled]="row.disabled" [class.read-only]="readOnly()" [class.clickable]="!readOnly() && !row.disabled"
+                  (click)="!readOnly() && !row.disabled && variableToggled.emit(variable)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
+                  <div class="variable-card-header">
+                    <div class="variable-identifiers">
+                      <div class="variable-id-row">
+                        <span class="variable-id-text">{{ variable.unitName }}_{{ variable.variableId }}</span>
+                        @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
+                        <mat-chip class="availability-chip" [class]="row.availabilityClass">
+                          {{ row.availabilityText }} verfügbar
+                        </mat-chip>
+                        } @else if (variable.responseCount !== null && variable.responseCount !== undefined) {
+                        <span class="response-count">({{ variable.responseCount }})</span>
+                        }
+
+                        @if (row.disabled) {
+                        <mat-icon class="disabled-indicator" matTooltip="{{ row.disabledReason }}"
+                          matTooltipPosition="above">block</mat-icon>
+                        }
+                      </div>
+	                      @if (variable.coderTrainingRequired || variable.isDerived) {
+	                      <div class="variable-badges">
+                        @if (variable.coderTrainingRequired) {
+                        <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
+                          <mat-icon>school</mat-icon>
+                          Schulungsaufwand
+                        </mat-chip>
+                        }
+                        @if (variable.isDerived) {
+                        <mat-chip class="derived-chip" matTooltip="Abgeleitete Variable" matTooltipPosition="above">
+                          <mat-icon class="derived-chip-icon">merge_type</mat-icon>
+                          Abgeleitet
+                        </mat-chip>
+                        }
+	                      </div>
+	                      }
+                        @if (mode() === 'definition' && row.hasDeriveError) {
+                        <div class="derive-error-option" (click)="$event.stopPropagation()" role="presentation">
+                          <mat-checkbox
+                            [checked]="row.includeDeriveError"
+                            [disabled]="readOnly() || row.disabled || !row.selected"
+                            (change)="deriveErrorChanged.emit({variable, included: $event.checked})">
+                            DERIVE_ERROR einbeziehen
+                          </mat-checkbox>
+                        </div>
+                        }
+	                    </div>
+	                  </div>
+                </div>
+                }
+              </div>
+            </div>
+            }
+
+            @if (!loading() && totalVariables() === 0) {
+            <div class="empty-state">
+              <mat-icon class="empty-icon">analytics</mat-icon>
+              <h3>Keine Variablen verfügbar</h3>
+              <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen
+                Sie es später erneut.</p>
+            </div>
+            }

@@ -82,7 +82,10 @@
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-workload.spec.ts",
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-form.spec.ts",
         "apps/frontend/src/app/coding/components/coder-training/coder-training-form.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coder-training/coder-training.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts"
       ]
     },
     {
@@ -293,7 +296,7 @@
         "jobs",
         "results-validation"
       ],
-      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes. Der Variablenfilter verwirft ältere Zeilen und Scope-Summen auch im Browser. Der dialoglokale TrainingReliabilityFacade-SignalStore ersetzt Leseanfragen und unterdrückt Export-Doppelstarts; Facade- und Komponententests prüfen Fehler/Retry und abgeleitete Kennzahlen, der Browser den Trainingsvergleich gegen das Produktionsartefakt."
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes. Der Variablenfilter verwirft ältere Zeilen und Scope-Summen auch im Browser. Der dialoglokale TrainingReliabilityFacade-SignalStore ersetzt Leseanfragen und unterdrückt Export-Doppelstarts; Facade- und Komponententests prüfen Fehler/Retry und abgeleitete Kennzahlen, der Browser den Trainingsvergleich gegen das Produktionsartefakt. Die Teilansichtsgrenzen prüfen gemeinsame Formularcontrols und Workload-Snapshots; Projektionen der Vergleichszeilen erhalten die Eingabefelder und den Fokus beim Tippen."
     },
     {
       "id": "lifecycle",
@@ -305,7 +308,7 @@
         "jobs",
         "coding-replay"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung. Der dialoglokale Reliabilitäts-SignalStore ist nativ auf Injector-Isolation, nur lesbare Signals und Ereignisse, Workspace-Rundwechsel und Zerstörung geprüft."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung. Der dialoglokale Reliabilitäts-SignalStore ist nativ auf Injector-Isolation, nur lesbare Signals und Ereignisse, Workspace-Rundwechsel und Zerstörung geprüft. Die Vergleichskomponente verwirft Diskussionsabschlüsse nach Schulung A-B-A und beendet ausstehende Tabellen-/Speicherabonnements beim ersten Workspace-Wechsel. Die Schrittansichten des Testcenter-Imports verwenden denselben Ablaufbesitzer für Optionen, Gruppenauswahl und unklaren Ergebnisstatus."
     },
     {
       "id": "timers-promises",
