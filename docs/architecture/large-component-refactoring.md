@@ -52,7 +52,8 @@ Die Folgeimplementierung basiert auf dem gepushten Formularstand
 `962be95cd1762e0c56ad51bea1bc5076ea573d1b` von PR #1090, aktualisiert am
 23.10.2026 auf `develop` bei `474dd5125f9962e4b4d8b60b3f23c0f5637bda9d`.
 Der ursprüngliche Stand war `5cd02a0bccb0c52e5b7cddb573cdcb9a2210cfa0`;
-PR #1090 ist weiterhin offen. Die vier Ansichten haben folgende lokale
+PR #1090 wurde am 23.10.2026 mit `669f3fb2a802e6498171c5f96cc3754e9d957590`
+in `develop` gemergt; #1091 wird jetzt gegen `develop` geprüft. Die vier Ansichten haben folgende lokale
 Teilansichten; die anderen 13 Komponenten wurden nicht umgebaut:
 
 | Ablaufbesitzer | Neue fachliche Teilansichten | Erhaltener Vertrag |
@@ -107,8 +108,8 @@ Komponentenscreenshots wurden bei 420 und 1.200 px auf lesbare Statushinweise un
 Umbrüche geprüft. Die Browserfälle verwenden synthetische API-/Serviceantworten;
 reale Testcenter-Verbindungen, Backend-Persistenz und fachliche Abnahme sind damit
 nicht nachgewiesen. Die lokale Validierung ersetzt weder die entfernte CI am
-PR-Head noch eine fachliche Abnahme. PR #1090 ist weiterhin die offene
-Formularbasis; die Folgeänderung wird gegen `extract-typed-form-models` geprüft.
+PR-Head noch eine fachliche Abnahme. Die Formularbasis aus PR #1090 ist
+inzwischen in `develop` integriert; die Folgeänderung wird gegen `develop` geprüft.
 
 SHA-256 des Produktionsartefakts laut `scripts/qa/hash-frontend-artifact.mjs`:
 `05ea821ef9cd951407bae21736c5aecba12d5a62cc92110de9d0e944061d5855`.
