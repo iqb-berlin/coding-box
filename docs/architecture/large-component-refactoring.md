@@ -140,6 +140,17 @@ Klick. Die Anfragenabbruch- und Wiederöffnungsprüfungen bleiben unverändert.
 Auch der anschließende vollständige Lauf bestand 160/160 E2E-Fälle in 29 Specs
 ohne Retries oder übersprungene Fälle (6:45 Minuten).
 
+Pipeline [#105107](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/105107)
+bestand 37 Komponentenfälle, zeigte aber nach dem Wiederöffnen eine weitere
+Sichtbarkeitsstörung im Referenzmenü. Der Regressionstest hält nun auch dessen
+endliche Eintrittsanimation an; der gemeinsame Helfer beendet sie vor der regulären
+Sichtbarkeitsprüfung. Die gezielte Reproduktion scheiterte zuvor mit 17/18 Fällen,
+anschließend bestanden 18/18. Ein späterer Electron-Renderer-Absturz in CI hat
+keinen bestätigten lokalen Ursachenbefund; die Pipeline wurde nach dem nächsten
+Push abgebrochen und liefert keine vollständige Freigabe. Der anschließende
+lokale Gesamtlauf bestand 160/160 E2E-Fälle in 29 Specs ohne Retries,
+übersprungene Fälle oder Renderer-Absturz (6:50 Minuten).
+
 ## Bestandsaufnahme und weitere Schnitte
 
 Die Tabelle behält die ursprüngliche Priorisierung bei und zeigt die aktuellen
