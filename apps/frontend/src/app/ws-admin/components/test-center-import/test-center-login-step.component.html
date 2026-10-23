@@ -1,0 +1,70 @@
+  <div class="auth-section">
+    <form class="auth-form" [formGroup]="form()" (ngSubmit)="submitted.emit()">
+      <div class="form-fields">
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'home.user-name' | translate }}</mat-label>
+          <input matInput formControlName="name" (keyup.enter)="pw.focus()" />
+          <mat-icon matSuffix>person</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>{{ 'home.password' | translate }}</mat-label>
+          <input
+            matInput
+            #pw
+            type="password"
+            formControlName="pw"
+            (keyup.enter)="submitted.emit()"
+          />
+          <mat-icon matSuffix>lock</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Test Center auswählen</mat-label>
+          <mat-select
+            formControlName="testCenter"
+            (valueChange)="serverSelected.emit($event)"
+          >
+            <mat-option [value]="6">individuelle Testcenter URL</mat-option>
+            @for (testCenter of testCenters();track testCenter){
+            <mat-option [value]="testCenter.id">{{
+              testCenter.label
+            }}</mat-option>
+            }
+          </mat-select>
+          <mat-icon matSuffix>cloud</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Testcenter Instanz URL verwenden</mat-label>
+          <input formControlName="testCenterIndividual" matInput type="text" />
+          <mat-icon matSuffix>link</mat-icon>
+          <mat-hint>
+            Erwartetes Format z.&nbsp;B.:
+            <code>https://mein-testcenter.example.org</code> oder
+            <code>https://mein-testcenter.example.org/tci</code>. Die URL muss
+            per HTTPS erreichbar sein.
+          </mat-hint>
+        </mat-form-field>
+      </div>
+
+      <div class="form-actions">
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="form().invalid"
+          color="primary"
+        >
+          <mat-icon>login</mat-icon>
+          {{ 'login' | translate }}
+        </button>
+      </div>
+
+      @if (authenticationError()){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ 'login-error' | translate }}</span>
+      </div>
+      }
+    </form>
+  </div>

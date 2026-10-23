@@ -1,0 +1,100 @@
+        <div class="selection-summary-container">
+          <div class="selection-card">
+            <h4>{{ 'coding-job-definition-dialog.selection-summary.title' | translate }}</h4>
+            <div class="selection-counts">
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.variables' | translate
+                  }}</span>
+                <span class="count-value">{{ variables().length }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.variable-bundles' |
+                  translate }}</span>
+                <span class="count-value">{{ bundles().length }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.coders' | translate
+                  }}</span>
+                <span class="count-value">{{ coderCount() }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.total-cases' | translate
+                  }}</span>
+                <span class="count-value">{{ summary().totalCases }}</span>
+              </div>
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.estimated-time' | translate
+                  }}</span>
+                <span class="count-value">{{ summary().formattedTotalTime }}</span>
+              </div>
+              @if (coderCount() > 0) {
+              <div class="count-item">
+                <span class="count-label">{{ 'coding-job-definition-dialog.selection-summary.time-per-coder' | translate
+                  }}</span>
+                <span class="count-value">{{ summary().formattedTimePerCoder }}</span>
+              </div>
+              }
+            </div>
+
+            @if (summary().unavailableCases > 0 || summary().limitReduction > 0) {
+            <div class="selection-availability-note">
+              <mat-icon>info</mat-icon>
+              <span>
+                {{ summary().totalCases }} Fälle werden in neue Jobs übernommen.
+                @if (summary().unavailableCases > 0) {
+                {{ summary().unavailableCases }} ausgewählte Fälle sind bereits verteilt oder durch eine andere Definition reserviert.
+                }
+                @if (summary().limitReduction > 0) {
+                {{ summary().limitReduction }} verfügbare Fälle werden durch die maximale Fallzahl begrenzt.
+                }
+              </span>
+            </div>
+            }
+
+            @if (variables().length > 0 || bundles().length > 0) {
+            <mat-expansion-panel class="selection-details">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  {{ 'coding-job-definition-dialog.selection-summary.details' | translate }}
+                </mat-panel-title>
+              </mat-expansion-panel-header>
+
+              @if (variables().length > 0) {
+              <div class="selection-section">
+                <h5>Ausgewählte Variablen</h5>
+                <div class="chip-container">
+                  @for (variable of variables().slice(0, 10); track variable.unitName +
+                  variable.variableId) {
+                  <span class="selection-chip">
+                    {{ variable.unitName }}: {{ variable.variableId }}
+                    @if (variable.includeDeriveError) {
+                    <span class="selection-chip-suffix">DERIVE_ERROR</span>
+                    }
+                  </span>
+                  }
+                  @if (variables().length > 10) {
+                  <span class="more-chip">+{{ variables().length - 10 }} weitere</span>
+                  }
+                </div>
+              </div>
+              }
+
+              @if (bundles().length > 0) {
+              <div class="selection-section">
+                <h5>Ausgewählte Variablenbündel</h5>
+                <div class="chip-container">
+                  @for (bundle of bundles().slice(0, 10); track bundle.id) {
+                  <span class="selection-chip">
+                    {{ bundle.name }} ({{ bundle.variables.length }} Variablen)
+                  </span>
+                  }
+                  @if (bundles().length > 10) {
+                  <span class="more-chip">+{{ bundles().length - 10 }} weitere</span>
+                  }
+                </div>
+              </div>
+              }
+            </mat-expansion-panel>
+            }
+          </div>
+        </div>

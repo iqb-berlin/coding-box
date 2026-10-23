@@ -1,0 +1,111 @@
+@use './test-center-feedback-styles' as feedback;
+@include feedback.feedback;
+:host { display: block; }
+
+.import-section {
+  padding: 0 24px 24px;
+
+  .import-form {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 24px;
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    transition: box-shadow 0.3s ease;
+    animation: fadeIn 0.3s ease-in-out;
+
+    &:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-content {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-bottom: 24px;
+
+      @media (min-width: 768px) {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+    }
+
+    .options-section {
+      flex: 1;
+
+      .section-title {
+        font-size: 18px;
+        font-weight: 500;
+        color: #1976d2;
+        margin: 0 0 16px 0;
+        display: flex;
+        align-items: center;
+
+        mat-icon {
+          margin-right: 8px;
+          color: #1976d2;
+        }
+      }
+
+      .checkbox-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+
+        .checkbox-item {
+          padding: 10px 12px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 8px;
+          background: #fff;
+
+          .checkbox-label {
+            font-size: 14px;
+            color: #333;
+          }
+
+          .checkbox-hint {
+            margin-left: 32px;
+          }
+        }
+      }
+    }
+
+    .workspace-section {
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+
+      button {
+        border-radius: 22px;
+        padding: 0 20px;
+        height: 44px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+        transition: all 0.2s ease;
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        }
+
+        &:active {
+          transform: translateY(0);
+          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        mat-icon {
+          margin-right: 8px;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) { .import-section { padding: 0 16px 16px; } }
+@media (max-width: 480px) { .import-section { padding: 0 12px 12px; } }
+@media (max-width: 480px) { .import-form { padding: 16px; } .checkbox-grid { grid-template-columns: 1fr; } }

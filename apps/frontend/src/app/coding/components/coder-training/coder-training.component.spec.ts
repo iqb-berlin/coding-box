@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { ChangeDetectorRef, computed } from '@angular/core';
@@ -9,6 +10,8 @@ import { FormGroup } from '@angular/forms';
 import {
   finalize, of, Subject, throwError
 } from 'rxjs';
+import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
+import { TrainingSampleEditorComponent } from './training-sample-editor.component';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
@@ -1120,5 +1123,42 @@ describe('CoderTrainingComponent', () => {
         })
       })
     ]));
+  });
+
+  it('edits the owner FormArray through the sample editor and recalculates derive-error availability', () => {
+    fixture.detectChanges();
+    const editor = fixture.debugElement.query(By.directive(TrainingSampleEditorComponent)).componentInstance as TrainingSampleEditorComponent;
+    expect(editor.form()).toBe(component.trainingForm);
+    editor.variablesChanged.emit(['UNIT::VAR']);
+    fixture.detectChanges();
+    const control = component.variablesFormArray.at(0);
+    expect(editor.view().manual[0].control).toBe(control);
+    expect(editor.view().manual[0].availableCount).toBe(8);
+
+    const input = fixture.nativeElement.querySelector('.sample-count-field input') as HTMLInputElement;
+    input.value = '9';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(control.controls.sampleCount.value).toBe(9);
+    expect(component.hasValidCaseCounts()).toBe(false);
+    editor.deriveErrorChanged.emit({ control, included: true });
+    fixture.detectChanges();
+    expect(editor.view().manual[0].availableCount).toBe(9);
+    expect(component.hasValidCaseCounts()).toBe(true);
+    expect(component.variablesFormArray.length).toBe(1);
+    expect(component.manualVariableKeys()).toEqual(['UNIT::VAR']);
+  });
+
+  it('shares reference controls with the participant view and applies owner validation', () => {
+    fixture.detectChanges();
+    const participants = fixture.debugElement.query(By.directive(TrainingParticipantSelectionComponent)).componentInstance as TrainingParticipantSelectionComponent;
+    expect(participants.form()).toBe(component.trainingForm);
+    participants.coderToggled.emit(component.coders()[0]);
+    expect(component.selectedCoders().has(component.coders()[0].id)).toBe(true);
+    participants.form().controls.referenceTrainingIds.setValue([99]);
+    expect(component.hasValidReferenceMode()).toBe(false);
+    participants.form().controls.referenceMode.setValue('same');
+    expect(component.hasValidReferenceMode()).toBe(true);
+    participants.form().controls.referenceTrainingIds.setValue([]);
+    expect(participants.form().controls.referenceMode.value).toBeNull();
   });
 });

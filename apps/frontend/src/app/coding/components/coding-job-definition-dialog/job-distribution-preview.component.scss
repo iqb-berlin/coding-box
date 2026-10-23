@@ -1,0 +1,117 @@
+:host { display: block; }
+
+.selection-summary-container {
+  margin-bottom: 20px;
+
+  .selection-card {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+    h4 {
+      margin: 0 0 16px;
+      font-size: 1.1rem;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .selection-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 16px;
+
+      .count-item {
+        background-color: white;
+        border-radius: 4px;
+        padding: 8px 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        min-width: 120px;
+
+        .count-label {
+          display: block;
+          font-size: 0.9rem;
+          color: rgba(0, 0, 0, 0.6);
+        }
+
+        .count-value {
+          display: block;
+          font-size: 1.5rem;
+          font-weight: 500;
+          color: #1976d2;
+        }
+      }
+    }
+
+    .selection-availability-note {
+      align-items: flex-start;
+      background-color: #eef6ff;
+      border: 1px solid rgba(25, 118, 210, 0.18);
+      border-radius: 4px;
+      color: #17456f;
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+
+      mat-icon {
+        color: #1976d2;
+        flex: 0 0 auto;
+        font-size: 20px;
+        height: 20px;
+        width: 20px;
+      }
+
+      span {
+        font-size: 0.9rem;
+        line-height: 1.4;
+      }
+    }
+
+    .selection-details {
+      margin-top: 8px;
+
+      .selection-section {
+        margin-bottom: 16px;
+
+        h5 {
+          margin-bottom: 8px;
+          font-weight: 500;
+        }
+
+        .chip-container {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+
+          .selection-chip {
+            background-color: #e0e0e0;
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .selection-chip-suffix {
+            background: rgba(0, 0, 0, 0.12);
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 2px 6px;
+          }
+
+          .more-chip {
+            background-color: #bbdefb;
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 0.9rem;
+          }
+        }
+      }
+    }
+  }
+}

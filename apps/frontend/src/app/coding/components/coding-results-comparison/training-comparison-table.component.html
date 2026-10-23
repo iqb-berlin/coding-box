@@ -1,0 +1,74 @@
+<div class="table-container">
+  <table mat-table [dataSource]="rows()" [trackBy]="trackRow" matSort [matSortActive]="sortBy()" [matSortDirection]="sortDirection()"
+    (matSortChange)="sortChanged.emit($event)" class="mat-elevation-z2">
+    <ng-container matColumnDef="index">
+      <th mat-header-cell *matHeaderCellDef>#</th>
+      <td mat-cell *matCellDef="let row; let i = index">{{ pageIndex() * pageSize() + i + 1 }}</td>
+    </ng-container>
+    <ng-container matColumnDef="unitVariable">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">Aufgabe/Variable</th>
+      <td mat-cell *matCellDef="let row"><div class="unit-variable-cell">
+        <div class="unit-name">{{ row.source.unitName }}</div><div class="variable-id">{{ row.source.variableId }}</div>
+      </div></td>
+    </ng-container>
+    <ng-container matColumnDef="personInfo">
+      <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">Personeninformationen</th>
+      <td mat-cell *matCellDef="let row"><div class="person-info-cell">
+        <div class="person-login">{{ row.source.personLogin || '-' }}</div><div class="person-code">{{ row.source.personCode || '-' }}</div>
+        <div class="person-group">{{ row.source.personGroup || '-' }}</div><div class="booklet-name">{{ row.source.bookletName || '-' }}</div>
+      </div></td>
+    </ng-container>
+    <ng-container matColumnDef="replay">
+      <th mat-header-cell *matHeaderCellDef>Replay</th>
+      <td mat-cell *matCellDef="let row"><button mat-icon-button type="button" color="primary"
+        (click)="replayRequested.emit(row.source)" matTooltip="Replay inkl. Kodieranweisungen öffnen"><mat-icon>play_circle</mat-icon></button></td>
+    </ng-container>
+    <ng-container matColumnDef="givenAnswer">
+      <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
+      <td mat-cell *matCellDef="let row"><div class="given-answer-cell"><div class="answer-text" [matTooltip]="row.source.givenAnswer || 'N/A'">{{ row.source.givenAnswer || 'N/A' }}</div></div></td>
+    </ng-container>
+    <ng-container matColumnDef="match">
+      <th mat-header-cell *matHeaderCellDef>Übereinstimmung</th>
+      <td mat-cell *matCellDef="let row" [class]="'match-status-' + row.status" [matTooltip]="row.statusTooltip"><mat-icon>{{ row.statusIcon }}</mat-icon></td>
+    </ng-container>
+    <ng-container matColumnDef="modalValue">
+      <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.modal-value' | translate }}</th>
+      <td mat-cell *matCellDef="let row"><div class="modal-value-cell" [matTooltip]="row.modalValue.tooltip">
+        <strong>{{ row.modalValue.valueText }}</strong><span>{{ 'coding.trainings.compare.modal-deviations' | translate:{count: row.modalValue.deviationText} }}</span>
+      </div></td>
+    </ng-container>
+    <ng-container matColumnDef="discussion">
+      <th mat-header-cell *matHeaderCellDef><div class="discussion-header"><span class="discussion-header-title">Diskussionsergebnis</span>
+        @if (managerLabel()) { <span class="discussion-header-manager">Manager: {{ managerLabel() }}</span> }
+      </div></th>
+      <td mat-cell *matCellDef="let row"><coding-box-training-discussion-editor [view]="row.discussion"
+        (codeChanged)="discussionCodeChanged.emit({row: row.source, value: $event})"
+        (notesChanged)="discussionNotesChanged.emit({row: row.source, value: $event})"
+        (committed)="discussionCommitted.emit(row.source)" /></td>
+    </ng-container>
+    @for (column of coderColumns(); track column.id) {
+      <ng-container [matColumnDef]="column.id">
+        <th mat-header-cell *matHeaderCellDef>{{ column.label }}</th>
+        <td mat-cell *matCellDef="let row"><div class="code-cell">
+          @if (row.coders[column.id]; as coder) {
+            <div class="coder-result"><div class="code-line"><span class="code-label">Code:</span><strong class="code-value">{{ coder.code }}</strong>
+              @if (coder.issueLabel) {
+                <span class="coding-issue-badge" [class]="coder.issueClass" [matTooltip]="coder.issueTooltip">
+                  <mat-icon class="coding-issue-icon" [class]="coder.issueClass" aria-hidden="true">flag</mat-icon>{{ coder.issueLabel }}
+                </span>
+              }
+              @if (coder.noteTooltip) { <mat-icon class="note-icon" [matTooltip]="coder.noteTooltip" aria-label="Kodierer-Notiz">comment</mat-icon> }
+            </div>
+            @if (coder.showScore) { <div class="score-line">Score: {{ coder.score ?? '-' }}</div> }
+            </div>
+          } @else { <span class="no-data">-</span> }
+        </div></td>
+      </ng-container>
+    }
+    <tr mat-header-row *matHeaderRowDef="columns()"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns()" [class.codes-match]="row.status === 'match'"
+      [class.codes-differ]="row.status === 'differ'" [class.codes-incomplete]="row.status === 'incomplete'" [class.codes-not-comparable]="row.status === 'not_comparable'"></tr>
+  </table>
+  <mat-paginator [length]="total()" [pageIndex]="pageIndex()" [pageSize]="pageSize()" [pageSizeOptions]="[50, 100, 200, 500]"
+    (page)="pageChanged.emit($event)" showFirstLastButtons />
+</div>
