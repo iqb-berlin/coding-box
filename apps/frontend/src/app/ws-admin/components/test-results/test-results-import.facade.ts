@@ -34,13 +34,19 @@ export class TestResultsImportFacade {
   private cancelTestCenterImport: (() => void) | null = null;
   readonly imported$ = new Subject<void>();
   readonly loadingChanged$ = new Subject<boolean>();
-  readonly isUploadingResults = signal<boolean>(false);
+  private readonly isUploadingResultsState = signal<boolean>(false);
+  readonly isUploadingResults = this.isUploadingResultsState.asReadonly();
 
-  readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
+  private readonly uploadingMessageState = signal('Ergebnisse werden hochgeladen...');
+  readonly uploadingMessage = this.uploadingMessageState.asReadonly();
   private readonly overview = this.statistics.overview;
-  private readonly codingFreshnessSummary = this.statistics.codingFreshnessSummary;
   private readonly manualAppliedResultsOverview = this.statistics.manualAppliedResultsOverview;
   private readonly manualAppliedResultsOverviewLoadFailed = this.statistics.manualAppliedResultsOverviewLoadFailed;
+
+  updateUploadProgress(uploading: boolean, message?: string): void {
+    this.isUploadingResultsState.set(uploading);
+    if (message !== undefined) this.uploadingMessageState.set(message);
+  }
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -293,7 +299,7 @@ export class TestResultsImportFacade {
           }
           if (cancelled) return;
           if (codingFreshness) {
-            this.codingFreshnessSummary.set(codingFreshness);
+            this.statistics.acceptImportedFreshness(codingFreshness);
           }
           const manualOverviewResult = workspaceId ?
             await this.statistics.fetchManualAppliedResultsOverview(workspaceId) :
@@ -302,8 +308,7 @@ export class TestResultsImportFacade {
               loadFailed: this.manualAppliedResultsOverviewLoadFailed()
             };
           if (cancelled) return;
-          this.manualAppliedResultsOverview.set(manualOverviewResult.overview);
-          this.manualAppliedResultsOverviewLoadFailed.set(manualOverviewResult.loadFailed);
+          this.statistics.acceptImportedManualOverview(manualOverviewResult);
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -409,8 +414,8 @@ export class TestResultsImportFacade {
                 sessionScreenCounts: {}
               };
               this.loadingChanged$.next(true);
-              this.isUploadingResults.set(true);
-              this.uploadingMessage.set(resultType === 'responses' ?
+              this.isUploadingResultsState.set(true);
+              this.uploadingMessageState.set(resultType === 'responses' ?
                 'Importiere Antworten... (0%)' : 'Importiere Logs... (0%)');
               this.uploadStateService.startChunkedUpload(
                 workspaceId,
@@ -423,7 +428,7 @@ export class TestResultsImportFacade {
               ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
                 error: () => {
                   this.loadingChanged$.next(false);
-                  this.isUploadingResults.set(false);
+                  this.isUploadingResultsState.set(false);
                 }
               });
             }

@@ -37,32 +37,41 @@ export class ManualCodingStatisticsFacade {
   readonly failed$ = this.failedSubject.asObservable();
   private readonly freshnessJobs = signal<ManualFreshnessJobSummary | null>(null);
   get manualFreshnessJobSummary(): ManualFreshnessJobSummary | null { return this.freshnessJobs(); }
-  set manualFreshnessJobSummary(value: ManualFreshnessJobSummary | null) { this.freshnessJobs.set(value); }
   private readonly conflictCount = signal(0);
   get openDoubleCodingConflictCount(): number { return this.conflictCount(); }
-  set openDoubleCodingConflictCount(value: number) { this.conflictCount.set(value); }
-  isLoadingManualCodingScopeSummary = false;
-  readonly isLoadingVariableCoverage = signal(false);
+  private readonly scopeLoadingState = signal(false);
+  readonly isLoadingManualCodingScopeSummary = this.scopeLoadingState.asReadonly();
+  private readonly isLoadingVariableCoverageState = signal(false);
+  readonly isLoadingVariableCoverage = this.isLoadingVariableCoverageState.asReadonly();
 
-  readonly isLoadingCaseCoverage = signal(false);
+  private readonly isLoadingCaseCoverageState = signal(false);
+  readonly isLoadingCaseCoverage = this.isLoadingCaseCoverageState.asReadonly();
 
-  readonly isLoadingCodingProgress = signal(false);
+  private readonly isLoadingCodingProgressState = signal(false);
+  readonly isLoadingCodingProgress = this.isLoadingCodingProgressState.asReadonly();
 
-  readonly isLoadingManualCodeAvailability = signal(false);
+  private readonly isLoadingManualCodeAvailabilityState = signal(false);
+  readonly isLoadingManualCodeAvailability = this.isLoadingManualCodeAvailabilityState.asReadonly();
 
-  readonly isLoadingCodingIncompleteVariables = signal(false);
+  private readonly isLoadingCodingIncompleteVariablesState = signal(false);
+  readonly isLoadingCodingIncompleteVariables = this.isLoadingCodingIncompleteVariablesState.asReadonly();
 
-  readonly isLoadingAppliedResultsOverview = signal(false);
+  private readonly isLoadingAppliedResultsOverviewState = signal(false);
+  readonly isLoadingAppliedResultsOverview = this.isLoadingAppliedResultsOverviewState.asReadonly();
 
-  readonly isLoadingKappaSummary = signal(false);
+  private readonly isLoadingKappaSummaryState = signal(false);
+  readonly isLoadingKappaSummary = this.isLoadingKappaSummaryState.asReadonly();
 
-  readonly codingProgressOverview = signal<CodingProgressOverview | null>(null);
+  private readonly codingProgressOverviewState = signal<CodingProgressOverview | null>(null);
+  readonly codingProgressOverview = this.codingProgressOverviewState.asReadonly();
 
-  readonly variableCoverageOverview = signal<ManualCodingPlanningSnapshot['variableCoverageOverview']>(null);
+  private readonly variableCoverageOverviewState = signal<ManualCodingPlanningSnapshot['variableCoverageOverview']>(null);
+  readonly variableCoverageOverview = this.variableCoverageOverviewState.asReadonly();
 
-  readonly caseCoverageOverview = signal<CaseCoverageOverview | null>(null);
+  private readonly caseCoverageOverviewState = signal<CaseCoverageOverview | null>(null);
+  readonly caseCoverageOverview = this.caseCoverageOverviewState.asReadonly();
 
-  readonly workspaceKappaSummary = signal<{
+  private readonly workspaceKappaSummaryState = signal<{
     coderPairs: Array<{
       coder1Id: number;
       coder1Name: string;
@@ -83,7 +92,9 @@ export class ManualCodingStatisticsFacade {
     };
   } | null>(null);
 
-  readonly codingIncompleteVariables = signal<{
+  readonly workspaceKappaSummary = this.workspaceKappaSummaryState.asReadonly();
+
+  private readonly codingIncompleteVariablesState = signal<{
     unitName: string;
     variableId: string;
     responseCount: number;
@@ -91,42 +102,83 @@ export class ManualCodingStatisticsFacade {
     uniqueCasesAfterAggregation?: number;
   }[]>([]);
 
-  readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
+  readonly codingIncompleteVariables = this.codingIncompleteVariablesState.asReadonly();
 
-  readonly manualCodeAvailabilityWarnings = signal<ManualCodeAvailabilityWarningDto[]>([]);
+  private readonly manualCodingScopeSummaryState = signal<ManualCodingScopeSummary | null>(null);
+  readonly manualCodingScopeSummary = this.manualCodingScopeSummaryState.asReadonly();
 
-  readonly showAllManualCodeAvailabilityWarnings = signal(false);
+  private readonly manualCodeAvailabilityWarningsState = signal<ManualCodeAvailabilityWarningDto[]>([]);
+  readonly manualCodeAvailabilityWarnings = this.manualCodeAvailabilityWarningsState.asReadonly();
 
-  readonly statusDistribution = signal<{
+  private readonly showAllManualCodeAvailabilityWarningsState = signal(false);
+  readonly showAllManualCodeAvailabilityWarnings = this.showAllManualCodeAvailabilityWarningsState.asReadonly();
+
+  private readonly statusDistributionState = signal<{
     [status: string]: number;
   }>({});
 
-  readonly statusDistributionV2 = signal<{
+  readonly statusDistribution = this.statusDistributionState.asReadonly();
+
+  private readonly statusDistributionV2State = signal<{
     [status: string]: number;
   }>({});
 
-  readonly appliedResultsOverview = signal<ManualCodingPlanningSnapshot['appliedResultsOverview']>(null);
+  readonly statusDistributionV2 = this.statusDistributionV2State.asReadonly();
 
-  readonly completedJobsReadyForApply = signal<CodingJob[]>([]);
+  private readonly appliedResultsOverviewState = signal<ManualCodingPlanningSnapshot['appliedResultsOverview']>(null);
+  readonly appliedResultsOverview = this.appliedResultsOverviewState.asReadonly();
 
-  readonly completedJobsBlockedForReview = signal<CodingJob[]>([]);
+  private readonly completedJobsReadyForApplyState = signal<CodingJob[]>([]);
+  readonly completedJobsReadyForApply = this.completedJobsReadyForApplyState.asReadonly();
 
-  readonly isLoadingCompletedJobsReadyForApply = signal(false);
+  private readonly completedJobsBlockedForReviewState = signal<CodingJob[]>([]);
+  readonly completedJobsBlockedForReview = this.completedJobsBlockedForReviewState.asReadonly();
 
-  readonly isLoadingManualFreshnessJobSummary = signal(false);
+  private readonly isLoadingCompletedJobsReadyForApplyState = signal(false);
+  readonly isLoadingCompletedJobsReadyForApply = this.isLoadingCompletedJobsReadyForApplyState.asReadonly();
 
-  readonly isLoadingDoubleCodingConflictSummary = signal(false);
+  private readonly isLoadingManualFreshnessJobSummaryState = signal(false);
+  readonly isLoadingManualFreshnessJobSummary = this.isLoadingManualFreshnessJobSummaryState.asReadonly();
 
-  readonly codingFreshnessSummary = signal<CodingFreshnessSummaryDto | null>(null);
-  readonly isLoadingCodingFreshness = signal(false);
-  lastCodingFreshnessRefreshAt = 0;
+  private readonly isLoadingDoubleCodingConflictSummaryState = signal(false);
+  readonly isLoadingDoubleCodingConflictSummary = this.isLoadingDoubleCodingConflictSummaryState.asReadonly();
 
-  cancelFreshness(): void { this.requests.get('freshness')?.unsubscribe(); }
+  private readonly codingFreshnessSummaryState = signal<CodingFreshnessSummaryDto | null>(null);
+  readonly codingFreshnessSummary = this.codingFreshnessSummaryState.asReadonly();
+  private readonly isLoadingCodingFreshnessState = signal(false);
+  readonly isLoadingCodingFreshness = this.isLoadingCodingFreshnessState.asReadonly();
+  private lastCodingFreshnessRefreshAt = 0;
+
+  cancelFreshness(clearSummary = false): void {
+    this.requests.get('freshness')?.unsubscribe();
+    if (clearSummary) this.codingFreshnessSummaryState.set(null);
+    this.isLoadingCodingFreshnessState.set(false);
+  }
+
+  toggleManualCodeAvailabilityWarnings(): void {
+    this.showAllManualCodeAvailabilityWarningsState.update(value => !value);
+  }
+
+  restorePlanningSnapshot(snapshot: Partial<ManualCodingPlanningSnapshot>): void {
+    if (snapshot.codingProgressOverview !== undefined) this.codingProgressOverviewState.set(snapshot.codingProgressOverview);
+    if (snapshot.variableCoverageOverview !== undefined) this.variableCoverageOverviewState.set(snapshot.variableCoverageOverview);
+    if (snapshot.caseCoverageOverview !== undefined) this.caseCoverageOverviewState.set(snapshot.caseCoverageOverview);
+    if (snapshot.codingIncompleteVariables !== undefined) this.codingIncompleteVariablesState.set([...snapshot.codingIncompleteVariables]);
+    if (snapshot.manualCodingScopeSummary !== undefined) this.manualCodingScopeSummaryState.set(snapshot.manualCodingScopeSummary);
+    if (snapshot.appliedResultsOverview !== undefined) this.appliedResultsOverviewState.set(snapshot.appliedResultsOverview);
+    if (snapshot.manualCodeAvailabilityWarnings !== undefined) this.setManualCodeAvailabilityWarnings([...snapshot.manualCodeAvailabilityWarnings]);
+    if (snapshot.manualFreshnessJobSummary !== undefined) this.freshnessJobs.set(snapshot.manualFreshnessJobSummary);
+    if (snapshot.openDoubleCodingConflictCount !== undefined) this.conflictCount.set(snapshot.openDoubleCodingConflictCount);
+    if (snapshot.codingFreshnessSummary !== undefined) {
+      this.codingFreshnessSummaryState.set(snapshot.codingFreshnessSummary);
+      this.lastCodingFreshnessRefreshAt = snapshot.codingFreshnessSummary ? Date.now() : 0;
+    }
+  }
 
   loadCodingFreshness(force = false): void {
     if (!force && (this.isLoadingCodingFreshness() || (this.codingFreshnessSummary() && Date.now() - this.lastCodingFreshnessRefreshAt < 30000))) return;
-    this.load('freshness', id => this.testPersonCodingService.getCodingFreshness(id), loading => this.isLoadingCodingFreshness.set(loading), summary => {
-      this.codingFreshnessSummary.set(summary); this.lastCodingFreshnessRefreshAt = Date.now();
+    this.load('freshness', id => this.testPersonCodingService.getCodingFreshness(id), loading => this.isLoadingCodingFreshnessState.set(loading), summary => {
+      this.codingFreshnessSummaryState.set(summary); this.lastCodingFreshnessRefreshAt = Date.now();
     }, () => undefined);
   }
 
@@ -181,32 +233,32 @@ export class ManualCodingStatisticsFacade {
   }
 
   loadCodingProgressOverview(): void {
-    this.load('progress', id => this.testPersonCodingService.getCodingProgressOverview(id), value => this.isLoadingCodingProgress.set(value), overview => {
-      this.codingProgressOverview.set(overview);
+    this.load('progress', id => this.testPersonCodingService.getCodingProgressOverview(id), value => this.isLoadingCodingProgressState.set(value), overview => {
+      this.codingProgressOverviewState.set(overview);
       if (!overview) this.failedSubject.next();
-    }, () => this.codingProgressOverview.set(null));
+    }, () => this.codingProgressOverviewState.set(null));
   }
 
   loadVariableCoverageOverview(): void {
-    this.load('variables', id => this.testPersonCodingService.getVariableCoverageOverview(id), value => this.isLoadingVariableCoverage.set(value), value => this.variableCoverageOverview.set(value), () => this.variableCoverageOverview.set(null));
+    this.load('variables', id => this.testPersonCodingService.getVariableCoverageOverview(id), value => this.isLoadingVariableCoverageState.set(value), value => this.variableCoverageOverviewState.set(value), () => this.variableCoverageOverviewState.set(null));
   }
 
   loadCaseCoverageOverview(): void {
-    this.load('cases', id => this.testPersonCodingService.getCaseCoverageOverview(id), value => this.isLoadingCaseCoverage.set(value), value => this.caseCoverageOverview.set(value), () => this.caseCoverageOverview.set(null));
+    this.load('cases', id => this.testPersonCodingService.getCaseCoverageOverview(id), value => this.isLoadingCaseCoverageState.set(value), value => this.caseCoverageOverviewState.set(value), () => this.caseCoverageOverviewState.set(null));
   }
 
   loadWorkspaceKappaSummary(): void {
-    this.load('kappa', id => this.testPersonCodingService.getWorkspaceCohensKappaSummary(id), value => this.isLoadingKappaSummary.set(value), value => this.workspaceKappaSummary.set(value), () => this.workspaceKappaSummary.set(null));
+    this.load('kappa', id => this.testPersonCodingService.getWorkspaceCohensKappaSummary(id), value => this.isLoadingKappaSummaryState.set(value), value => this.workspaceKappaSummaryState.set(value), () => this.workspaceKappaSummaryState.set(null));
   }
 
   loadManualFreshnessDecisionData(): void { this.loadManualFreshnessJobSummary(); }
 
   loadManualFreshnessJobSummary(): void {
-    this.load('jobs', id => this.codingJobBackendService.getCodingJobs(id), value => this.isLoadingManualFreshnessJobSummary.set(value), response => {
-      this.manualFreshnessJobSummary = buildManualFreshnessJobSummary(response.data || []);
-    }, () => { this.manualFreshnessJobSummary = null; }, () => {
+    this.load('jobs', id => this.codingJobBackendService.getCodingJobs(id), value => this.isLoadingManualFreshnessJobSummaryState.set(value), response => {
+      this.freshnessJobs.set(buildManualFreshnessJobSummary(response.data || []));
+    }, () => { this.freshnessJobs.set(null); }, () => {
       if (this.shouldLoadOpenDoubleCodingConflictSummary()) this.loadOpenDoubleCodingConflictSummary();
-      else { this.openDoubleCodingConflictCount = 0; this.isLoadingDoubleCodingConflictSummary.set(false); }
+      else { this.conflictCount.set(0); this.isLoadingDoubleCodingConflictSummaryState.set(false); }
     });
   }
 
@@ -218,22 +270,22 @@ export class ManualCodingStatisticsFacade {
   loadOpenDoubleCodingConflictSummary(): void {
     this.load('conflicts', id => this.doubleCodedReviewApi.getDoubleCodedVariablesForReview(id, {
       page: 1, limit: 1, onlyConflicts: true, excludeTrainings: true, resolvedFilter: 'unresolved', agreementFilter: 'differ'
-    }), value => this.isLoadingDoubleCodingConflictSummary.set(value), response => { this.openDoubleCodingConflictCount = response.total || 0; }, () => { this.openDoubleCodingConflictCount = 0; });
+    }), value => this.isLoadingDoubleCodingConflictSummaryState.set(value), response => { this.conflictCount.set(response.total || 0); }, () => { this.conflictCount.set(0); });
   }
 
   loadCodingIncompleteVariables(): void {
-    this.load('incomplete', id => this.codingJobBackendService.getCodingIncompleteVariables(id), value => this.isLoadingCodingIncompleteVariables.set(value), value => this.codingIncompleteVariables.set(value), () => this.codingIncompleteVariables.set([]), () => this.loadAppliedResultsOverview());
-    this.load('scope', id => this.codingJobBackendService.getManualCodingScopeSummary(id), value => { this.isLoadingManualCodingScopeSummary = value; }, value => this.manualCodingScopeSummary.set(value), () => this.manualCodingScopeSummary.set(null));
-    this.load('availability', id => this.codingJobBackendService.getManualCodeAvailabilityWarnings(id), value => this.isLoadingManualCodeAvailability.set(value), value => this.setManualCodeAvailabilityWarnings(value.warnings || []), () => this.setManualCodeAvailabilityWarnings([]));
+    this.load('incomplete', id => this.codingJobBackendService.getCodingIncompleteVariables(id), value => this.isLoadingCodingIncompleteVariablesState.set(value), value => this.codingIncompleteVariablesState.set(value), () => this.codingIncompleteVariablesState.set([]), () => this.loadAppliedResultsOverview());
+    this.load('scope', id => this.codingJobBackendService.getManualCodingScopeSummary(id), value => { this.scopeLoadingState.set(value); }, value => this.manualCodingScopeSummaryState.set(value), () => this.manualCodingScopeSummaryState.set(null));
+    this.load('availability', id => this.codingJobBackendService.getManualCodeAvailabilityWarnings(id), value => this.isLoadingManualCodeAvailabilityState.set(value), value => this.setManualCodeAvailabilityWarnings(value.warnings || []), () => this.setManualCodeAvailabilityWarnings([]));
   }
 
   setManualCodeAvailabilityWarnings(warnings: ManualCodeAvailabilityWarningDto[]): void {
-    this.manualCodeAvailabilityWarnings.set(warnings);
-    this.showAllManualCodeAvailabilityWarnings.set(false);
+    this.manualCodeAvailabilityWarningsState.set(warnings);
+    this.showAllManualCodeAvailabilityWarningsState.set(false);
   }
 
   private loadDistribution(version: 'v1' | 'v2'): void {
-    const target = version === 'v1' ? this.statusDistribution : this.statusDistributionV2;
+    const target = version === 'v1' ? this.statusDistributionState : this.statusDistributionV2State;
     this.load(`distribution-${version}`, id => this.statisticsService.getCodingStatistics(id, version), () => undefined, statistics => target.set({
       CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
       CODING_COMPLETE: statistics.statusCounts['5'] || 0,
@@ -249,8 +301,8 @@ export class ManualCodingStatisticsFacade {
   loadStatusDistributionV2(): void { this.loadDistribution('v2'); }
 
   loadAppliedResultsOverview(): void {
-    this.load('applied', id => this.testPersonCodingService.getAppliedResultsOverview(id), value => this.isLoadingAppliedResultsOverview.set(value), overview => {
-      this.appliedResultsOverview.set(overview ? {
+    this.load('applied', id => this.testPersonCodingService.getAppliedResultsOverview(id), value => this.isLoadingAppliedResultsOverviewState.set(value), overview => {
+      this.appliedResultsOverviewState.set(overview ? {
         ...overview,
         totalIncompleteVariables: this.codingIncompleteVariables().length,
         finalStatusBreakdown: {
@@ -261,7 +313,12 @@ export class ManualCodingStatisticsFacade {
         }
       } : null);
       if (!overview) this.failedSubject.next();
-    }, () => this.appliedResultsOverview.set(null));
+    }, () => this.appliedResultsOverviewState.set(null));
+  }
+
+  acceptCompletedJobs(completed: CodingJob[]): void {
+    this.completedJobsReadyForApplyState.set(completed);
+    this.completedJobsBlockedForReviewState.set(completed.filter(job => job.hasIssues === true));
   }
 
   loadCompletedJobsReadyForApply(): void {
@@ -274,9 +331,8 @@ export class ManualCodingStatisticsFacade {
           catchError(() => of(jobs))
         );
       })
-    ), value => this.isLoadingCompletedJobsReadyForApply.set(value), completed => {
-      this.completedJobsReadyForApply.set(completed);
-      this.completedJobsBlockedForReview.set(completed.filter(job => job.hasIssues === true));
-    }, () => { this.completedJobsReadyForApply.set([]); this.completedJobsBlockedForReview.set([]); });
+    ), value => this.isLoadingCompletedJobsReadyForApplyState.set(value), completed => {
+      this.acceptCompletedJobs(completed);
+    }, () => { this.acceptCompletedJobs([]); });
   }
 }

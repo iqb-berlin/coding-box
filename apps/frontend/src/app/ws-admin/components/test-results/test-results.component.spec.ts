@@ -13,6 +13,7 @@ import {
 } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
+import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
 import { environment } from '../../../../environments/environment';
 import { TestResultsComponent } from './test-results.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
@@ -36,6 +37,7 @@ import { WorkspaceSettingsService } from '../../../shared/services/workspace/wor
 import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 
 describe('TestResultsComponent', () => {
+  const statisticsFacade = () => fixture.debugElement.injector.get(TestResultsStatisticsFacade);
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
   let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
@@ -786,7 +788,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show clearer overview labels and formatted counts without translating technical statuses', () => {
-    component.overview.set({
+    statisticsFacade().acceptWorkspaceOverview({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -817,7 +819,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should open the flat table filtered by the selected technical response status', () => {
-    component.overview.set({
+    statisticsFacade().acceptWorkspaceOverview({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -845,7 +847,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show log quality when enabled by workspace setting', () => {
-    component.showTestResultsLogAnomalies.set(true);
+    statisticsFacade().setShowTestResultsLogAnomalies(true);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Log-Qualität');
@@ -1075,7 +1077,7 @@ describe('TestResultsComponent', () => {
       sessionScreenCounts: {}
     };
 
-    component.overview.set(previousOverview);
+    statisticsFacade().acceptWorkspaceOverview(previousOverview);
     testResultService.getWorkspaceOverview.mockReturnValue(of(null));
 
     (component as unknown as { loadWorkspaceOverview: () => void })
@@ -1090,8 +1092,8 @@ describe('TestResultsComponent', () => {
       getLogAnomalySummary: jest.Mock;
     };
 
-    component.showTestResultsLogAnomalies.set(true);
-    component.logAnomalySummary.set({
+    statisticsFacade().setShowTestResultsLogAnomalies(true);
+    statisticsFacade().acceptLogAnomalySummary({
       totalBooklets: 10,
       affectedBooklets: 1,
       criticalBooklets: 1,
@@ -1115,7 +1117,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should force the log anomaly table column for the dashboard table action', () => {
-    component.showTestResultsLogAnomalies.set(true);
+    statisticsFacade().setShowTestResultsLogAnomalies(true);
     component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
@@ -1126,7 +1128,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should not force the log anomaly table column when workspace setting is disabled', () => {
-    component.showTestResultsLogAnomalies.set(false);
+    statisticsFacade().setShowTestResultsLogAnomalies(false);
     component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
@@ -1355,7 +1357,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should ignore zero-count coding freshness rows in the overview banner', () => {
-    component.codingFreshnessSummary.set({
+    statisticsFacade().acceptImportedFreshness({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -1410,7 +1412,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show second auto-coding as waiting while manual coding results are still open', () => {
-    component.codingFreshnessSummary.set({
+    statisticsFacade().acceptImportedFreshness({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -1422,17 +1424,20 @@ describe('TestResultsComponent', () => {
         }
       ]
     });
-    component.manualAppliedResultsOverview.set({
-      totalIncompleteResponses: 671,
-      appliedResponses: 210,
-      remainingResponses: 461,
-      completionPercentage: 31,
-      rawTotalIncompleteResponses: 5098,
-      rawAppliedResponses: 4637,
-      rawCompletionPercentage: 91,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
+    statisticsFacade().acceptImportedManualOverview({
+      overview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 4637,
+        rawCompletionPercentage: 91,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      },
+      loadFailed: statisticsFacade().manualAppliedResultsOverviewLoadFailed()
     });
 
     expect(component.hasCodingFreshnessWarning()).toBe(true);
@@ -1448,7 +1453,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should hide second auto-coding while the manual coding status is still loading', () => {
-    component.codingFreshnessSummary.set({
+    statisticsFacade().acceptImportedFreshness({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -1460,20 +1465,24 @@ describe('TestResultsComponent', () => {
         }
       ]
     });
-    component.manualAppliedResultsOverview.set({
-      totalIncompleteResponses: 671,
-      appliedResponses: 671,
-      remainingResponses: 0,
-      completionPercentage: 100,
-      rawTotalIncompleteResponses: 5098,
-      rawAppliedResponses: 5098,
-      rawCompletionPercentage: 100,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
+    statisticsFacade().acceptImportedManualOverview({
+      overview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 671,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 5098,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      },
+      loadFailed: statisticsFacade().manualAppliedResultsOverviewLoadFailed()
     });
-    component.manualAppliedResultsOverviewLoadFailed.set(false);
-    component.isLoadingManualAppliedResultsOverview.set(true);
+    statisticsFacade().acceptImportedManualOverview({ overview: statisticsFacade().manualAppliedResultsOverview(), loadFailed: false });
+    jest.spyOn(TestBed.inject(TestPersonCodingService), 'getAppliedResultsOverview').mockReturnValueOnce(new Subject<never>());
+    statisticsFacade().loadCodingFreshnessStatus();
 
     expect(component.hasCodingFreshnessWarning()).toBe(false);
     expect(component.codingFreshnessWarnings()).toEqual([]);
@@ -1481,7 +1490,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show second auto-coding as actionable once manual coding is complete', () => {
-    component.codingFreshnessSummary.set({
+    statisticsFacade().acceptImportedFreshness({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -1493,17 +1502,20 @@ describe('TestResultsComponent', () => {
         }
       ]
     });
-    component.manualAppliedResultsOverview.set({
-      totalIncompleteResponses: 671,
-      appliedResponses: 671,
-      remainingResponses: 0,
-      completionPercentage: 100,
-      rawTotalIncompleteResponses: 5098,
-      rawAppliedResponses: 5098,
-      rawCompletionPercentage: 100,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
+    statisticsFacade().acceptImportedManualOverview({
+      overview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 671,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 5098,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      },
+      loadFailed: statisticsFacade().manualAppliedResultsOverviewLoadFailed()
     });
 
     expect(component.codingFreshnessWarnings()).toHaveLength(1);
@@ -1516,7 +1528,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should keep earlier auto-coding warnings actionable while second auto-coding waits', () => {
-    component.codingFreshnessSummary.set({
+    statisticsFacade().acceptImportedFreshness({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -1534,17 +1546,20 @@ describe('TestResultsComponent', () => {
         }
       ]
     });
-    component.manualAppliedResultsOverview.set({
-      totalIncompleteResponses: 671,
-      appliedResponses: 210,
-      remainingResponses: 461,
-      completionPercentage: 31,
-      rawTotalIncompleteResponses: 5098,
-      rawAppliedResponses: 4637,
-      rawCompletionPercentage: 91,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
+    statisticsFacade().acceptImportedManualOverview({
+      overview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 4637,
+        rawCompletionPercentage: 91,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      },
+      loadFailed: statisticsFacade().manualAppliedResultsOverviewLoadFailed()
     });
 
     expect(component.codingFreshnessWarnings()).toEqual([

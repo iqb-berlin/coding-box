@@ -253,7 +253,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   protected readonly isLoadingCaseCoverage = this.statistics.isLoadingCaseCoverage;
   readonly isLoadingCodingProgress = this.statistics.isLoadingCodingProgress;
   readonly isLoadingManualCodeAvailability = this.statistics.isLoadingManualCodeAvailability;
-  private get isLoadingManualCodingScopeSummary(): boolean { return this.statistics.isLoadingManualCodingScopeSummary; }
+  private get isLoadingManualCodingScopeSummary(): boolean { return this.statistics.isLoadingManualCodingScopeSummary(); }
   readonly isLoadingCodingIncompleteVariables = this.statistics.isLoadingCodingIncompleteVariables;
   readonly isLoadingAppliedResultsOverview = this.statistics.isLoadingAppliedResultsOverview;
   readonly isLoadingKappaSummary = this.statistics.isLoadingKappaSummary;
@@ -350,9 +350,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   readonly completedJobsBlockedForReview = this.statistics.completedJobsBlockedForReview;
   readonly codingFreshnessSummary = this.statistics.codingFreshnessSummary;
   private get manualFreshnessJobSummary(): ManualFreshnessJobSummary | null { return this.statistics.manualFreshnessJobSummary; }
-  private set manualFreshnessJobSummary(value: ManualFreshnessJobSummary | null) { this.statistics.manualFreshnessJobSummary = value; }
   private get openDoubleCodingConflictCount(): number { return this.statistics.openDoubleCodingConflictCount; }
-  private set openDoubleCodingConflictCount(value: number) { this.statistics.openDoubleCodingConflictCount = value; }
 
   protected readonly isLoadingCompletedJobsReadyForApply = this.statistics.isLoadingCompletedJobsReadyForApply;
   readonly isLoadingCodingFreshness = this.statistics.isLoadingCodingFreshness;
@@ -1823,7 +1821,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected toggleManualCodeAvailabilityWarnings(): void {
-    this.showAllManualCodeAvailabilityWarnings.set(!this.showAllManualCodeAvailabilityWarnings());
+    this.statistics.toggleManualCodeAvailabilityWarnings();
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -2245,21 +2243,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.statistics.cancelFreshness();
-      this.codingFreshnessSummary.set(null);
-      this.isLoadingCodingFreshness.set(false);
+      this.statistics.cancelFreshness(true);
       return;
     }
 
     if (!options.force && !this.hasLoadedManualCodingJobRefreshSetting) {
       this.statistics.cancelFreshness();
-      this.isLoadingCodingFreshness.set(false);
       return;
     }
 
     if (!options.force && !this.autoRefreshManualCodingJobs()) {
       this.statistics.cancelFreshness();
-      this.isLoadingCodingFreshness.set(false);
       return;
     }
 
@@ -2269,7 +2263,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
       }
       this.statistics.cancelFreshness();
-      this.isLoadingCodingFreshness.set(false);
       return;
     }
 
@@ -2590,14 +2583,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   onThresholdChanged(newValue: number | string | null): void { return this.aggregation.onThresholdChanged(newValue); }
 
   protected onEmptyPageChange(event: PageEvent): void {
-    this.emptyPageIndex.set(event.pageIndex);
-    this.emptyPageSize.set(event.pageSize);
+    this.analysis.changeEmptyPage(event.pageIndex, event.pageSize);
     this.loadResponseAnalysis();
   }
 
   protected onDuplicatePageChange(event: PageEvent): void {
-    this.duplicatePageIndex.set(event.pageIndex);
-    this.duplicatePageSize.set(event.pageSize);
+    this.analysis.changeDuplicatePage(event.pageIndex, event.pageSize);
     this.loadResponseAnalysis();
   }
 

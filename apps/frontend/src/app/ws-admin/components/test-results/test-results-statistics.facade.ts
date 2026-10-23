@@ -24,52 +24,84 @@ export class TestResultsStatisticsFacade {
   private overviewRequest?: Subscription;
   private anomalyRequest?: Subscription;
   private freshnessRequest?: Subscription;
-  readonly overview = signal<TestResultsOverviewResponse | null>(null);
+  private readonly overviewState = signal<TestResultsOverviewResponse | null>(null);
+  readonly overview = this.overviewState.asReadonly();
 
-  readonly isLoadingOverview = signal<boolean>(false);
+  private readonly isLoadingOverviewState = signal<boolean>(false);
+  readonly isLoadingOverview = this.isLoadingOverviewState.asReadonly();
 
-  readonly showTestResultsLogAnomalies = signal<boolean>(false);
+  private readonly showTestResultsLogAnomaliesState = signal<boolean>(false);
+  readonly showTestResultsLogAnomalies = this.showTestResultsLogAnomaliesState.asReadonly();
 
-  readonly enableRegexSearch = signal<boolean>(false);
+  private readonly enableRegexSearchState = signal<boolean>(false);
+  readonly enableRegexSearch = this.enableRegexSearchState.asReadonly();
 
-  readonly logAnomalySummary = signal<LogAnomalyDashboardSummary | null>(null);
+  private readonly logAnomalySummaryState = signal<LogAnomalyDashboardSummary | null>(null);
+  readonly logAnomalySummary = this.logAnomalySummaryState.asReadonly();
 
-  readonly isLoadingLogAnomalySummary = signal<boolean>(false);
+  private readonly isLoadingLogAnomalySummaryState = signal<boolean>(false);
+  readonly isLoadingLogAnomalySummary = this.isLoadingLogAnomalySummaryState.asReadonly();
 
-  readonly logAnomalySummaryLoadFailed = signal<boolean>(false);
+  private readonly logAnomalySummaryLoadFailedState = signal<boolean>(false);
+  readonly logAnomalySummaryLoadFailed = this.logAnomalySummaryLoadFailedState.asReadonly();
 
-  readonly logAnomalySummaryRequested = signal<boolean>(false);
+  private readonly logAnomalySummaryRequestedState = signal<boolean>(false);
+  readonly logAnomalySummaryRequested = this.logAnomalySummaryRequestedState.asReadonly();
 
-  readonly codingFreshnessSummary = signal<CodingFreshnessSummaryDto | null>(null);
+  private readonly codingFreshnessSummaryState = signal<CodingFreshnessSummaryDto | null>(null);
+  readonly codingFreshnessSummary = this.codingFreshnessSummaryState.asReadonly();
 
-  readonly manualAppliedResultsOverview = signal<AppliedResultsOverview | null>(null);
+  private readonly manualAppliedResultsOverviewState = signal<AppliedResultsOverview | null>(null);
+  readonly manualAppliedResultsOverview = this.manualAppliedResultsOverviewState.asReadonly();
 
-  readonly manualAppliedResultsOverviewLoadFailed = signal<boolean>(false);
+  private readonly manualAppliedResultsOverviewLoadFailedState = signal<boolean>(false);
+  readonly manualAppliedResultsOverviewLoadFailed = this.manualAppliedResultsOverviewLoadFailedState.asReadonly();
 
-  readonly isLoadingManualAppliedResultsOverview = signal<boolean>(false);
+  private readonly isLoadingManualAppliedResultsOverviewState = signal<boolean>(false);
+  readonly isLoadingManualAppliedResultsOverview = this.isLoadingManualAppliedResultsOverviewState.asReadonly();
 
-  readonly autoRefreshCodingStatus = signal<boolean>(true);
+  private readonly autoRefreshCodingStatusState = signal<boolean>(true);
+  readonly autoRefreshCodingStatus = this.autoRefreshCodingStatusState.asReadonly();
 
-  readonly codingFreshnessStatusChecked = signal<boolean>(false);
+  private readonly codingFreshnessStatusCheckedState = signal<boolean>(false);
+  readonly codingFreshnessStatusChecked = this.codingFreshnessStatusCheckedState.asReadonly();
 
-  readonly isLoadingCodingFreshnessStatus = signal<boolean>(false);
+  private readonly isLoadingCodingFreshnessStatusState = signal<boolean>(false);
+  readonly isLoadingCodingFreshnessStatus = this.isLoadingCodingFreshnessStatusState.asReadonly();
 
   codingFreshnessStatusRequestGeneration = 0;
 
+  acceptWorkspaceOverview(overview: TestResultsOverviewResponse): void {
+    this.overviewState.set(overview);
+  }
+
+  acceptLogAnomalySummary(summary: LogAnomalyDashboardSummary | null): void {
+    this.logAnomalySummaryState.set(summary);
+  }
+
+  acceptImportedFreshness(summary: CodingFreshnessSummaryDto): void {
+    this.codingFreshnessSummaryState.set(summary);
+  }
+
+  acceptImportedManualOverview(result: { overview: AppliedResultsOverview | null; loadFailed: boolean }): void {
+    this.manualAppliedResultsOverviewState.set(result.overview);
+    this.manualAppliedResultsOverviewLoadFailedState.set(result.loadFailed);
+  }
+
   loadWorkspaceOverview(): void {
     this.overviewRequest?.unsubscribe();
-    this.isLoadingOverview.set(true);
+    this.isLoadingOverviewState.set(true);
     this.overviewRequest = this.testResultService
-      .getWorkspaceOverview(this.appService.selectedWorkspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => this.isLoadingOverview.set(false)))
+      .getWorkspaceOverview(this.appService.selectedWorkspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => this.isLoadingOverviewState.set(false)))
       .subscribe({
         next: result => {
           if (result) {
-            this.overview.set(result);
+            this.acceptWorkspaceOverview(result);
           }
-          this.isLoadingOverview.set(false);
+          this.isLoadingOverviewState.set(false);
         },
         error: () => {
-          this.isLoadingOverview.set(false);
+          this.isLoadingOverviewState.set(false);
         }
       });
   }
@@ -91,14 +123,14 @@ export class TestResultsStatisticsFacade {
   loadRegexSearchSetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.enableRegexSearch.set(false);
+      this.enableRegexSearchState.set(false);
       return;
     }
 
     this.workspaceSettingsService
       .getEnableRegexSearch(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe(enabled => {
-        this.enableRegexSearch.set(enabled);
+        this.enableRegexSearchState.set(enabled);
       });
   }
 
@@ -117,7 +149,7 @@ export class TestResultsStatisticsFacade {
   }
 
   setAutoRefreshCodingStatus(enabled: boolean): void {
-    this.autoRefreshCodingStatus.set(enabled);
+    this.autoRefreshCodingStatusState.set(enabled);
 
     if (enabled) {
       this.loadCodingFreshnessStatus({ force: true });
@@ -130,22 +162,22 @@ export class TestResultsStatisticsFacade {
   clearCodingFreshnessStatus(): void {
     this.freshnessRequest?.unsubscribe();
     this.codingFreshnessStatusRequestGeneration += 1;
-    this.codingFreshnessSummary.set(null);
-    this.manualAppliedResultsOverview.set(null);
-    this.manualAppliedResultsOverviewLoadFailed.set(false);
-    this.isLoadingManualAppliedResultsOverview.set(false);
-    this.isLoadingCodingFreshnessStatus.set(false);
-    this.codingFreshnessStatusChecked.set(false);
+    this.codingFreshnessSummaryState.set(null);
+    this.manualAppliedResultsOverviewState.set(null);
+    this.manualAppliedResultsOverviewLoadFailedState.set(false);
+    this.isLoadingManualAppliedResultsOverviewState.set(false);
+    this.isLoadingCodingFreshnessStatusState.set(false);
+    this.codingFreshnessStatusCheckedState.set(false);
   }
 
   setShowTestResultsLogAnomalies(enabled: boolean): void {
-    this.showTestResultsLogAnomalies.set(enabled);
+    this.showTestResultsLogAnomaliesState.set(enabled);
 
     if (!enabled) {
-      this.logAnomalySummary.set(null);
-      this.logAnomalySummaryLoadFailed.set(false);
-      this.isLoadingLogAnomalySummary.set(false);
-      this.logAnomalySummaryRequested.set(false);
+      this.logAnomalySummaryState.set(null);
+      this.logAnomalySummaryLoadFailedState.set(false);
+      this.isLoadingLogAnomalySummaryState.set(false);
+      this.logAnomalySummaryRequestedState.set(false);
     }
   }
 
@@ -153,10 +185,10 @@ export class TestResultsStatisticsFacade {
     this.anomalyRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId || !this.showTestResultsLogAnomalies()) {
-      this.logAnomalySummary.set(null);
-      this.logAnomalySummaryLoadFailed.set(false);
-      this.isLoadingLogAnomalySummary.set(false);
-      this.logAnomalySummaryRequested.set(false);
+      this.logAnomalySummaryState.set(null);
+      this.logAnomalySummaryLoadFailedState.set(false);
+      this.isLoadingLogAnomalySummaryState.set(false);
+      this.logAnomalySummaryRequestedState.set(false);
       return;
     }
 
@@ -166,20 +198,20 @@ export class TestResultsStatisticsFacade {
       return;
     }
 
-    this.logAnomalySummaryRequested.set(true);
-    this.isLoadingLogAnomalySummary.set(true);
-    this.logAnomalySummaryLoadFailed.set(false);
+    this.logAnomalySummaryRequestedState.set(true);
+    this.isLoadingLogAnomalySummaryState.set(true);
+    this.logAnomalySummaryLoadFailedState.set(false);
     this.anomalyRequest = getLogAnomalySummary.call(this.testResultService, workspaceId)
       .pipe(finalize(() => {
-        this.isLoadingLogAnomalySummary.set(false);
+        this.isLoadingLogAnomalySummaryState.set(false);
       })).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: summary => {
-          this.logAnomalySummary.set(summary);
+          this.acceptLogAnomalySummary(summary);
         },
         error: () => {
-          this.logAnomalySummary.set(null);
-          this.logAnomalySummaryLoadFailed.set(true);
+          this.logAnomalySummaryState.set(null);
+          this.logAnomalySummaryLoadFailedState.set(true);
         }
       });
   }
@@ -218,10 +250,10 @@ export class TestResultsStatisticsFacade {
     const requestGeneration =
       this.codingFreshnessStatusRequestGeneration + 1;
     this.codingFreshnessStatusRequestGeneration = requestGeneration;
-    this.codingFreshnessStatusChecked.set(true);
-    this.isLoadingCodingFreshnessStatus.set(true);
-    this.isLoadingManualAppliedResultsOverview.set(true);
-    this.manualAppliedResultsOverviewLoadFailed.set(false);
+    this.codingFreshnessStatusCheckedState.set(true);
+    this.isLoadingCodingFreshnessStatusState.set(true);
+    this.isLoadingManualAppliedResultsOverviewState.set(true);
+    this.manualAppliedResultsOverviewLoadFailedState.set(false);
 
     this.freshnessRequest = forkJoin([
       codingFreshness$,
@@ -230,8 +262,8 @@ export class TestResultsStatisticsFacade {
     ])
       .pipe(finalize(() => {
         if (this.codingFreshnessStatusRequestGeneration === requestGeneration) {
-          this.isLoadingCodingFreshnessStatus.set(false);
-          this.isLoadingManualAppliedResultsOverview.set(false);
+          this.isLoadingCodingFreshnessStatusState.set(false);
+          this.isLoadingManualAppliedResultsOverviewState.set(false);
         }
       })).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -240,9 +272,9 @@ export class TestResultsStatisticsFacade {
             return;
           }
 
-          this.codingFreshnessSummary.set(summary);
-          this.manualAppliedResultsOverview.set(overview);
-          this.manualAppliedResultsOverviewLoadFailed.set(overview === null);
+          this.codingFreshnessSummaryState.set(summary);
+          this.manualAppliedResultsOverviewState.set(overview);
+          this.manualAppliedResultsOverviewLoadFailedState.set(overview === null);
         }
       });
   }
