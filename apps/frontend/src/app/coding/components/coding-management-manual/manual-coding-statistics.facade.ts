@@ -3,19 +3,23 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
-  Observable, Subject, Subscription, finalize, map, switchMap, of, catchError
+  Observable, Subject, Subscription,
+  catchError,
+  finalize, map,
+  of,
+  switchMap
 } from 'rxjs';
 import { CodingFreshnessSummaryDto } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import type { ManualCodeAvailabilityWarningDto } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { AppService } from '../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
-import { TestPersonCodingService, CodingProgressOverview, CaseCoverageOverview } from '../../services/test-person-coding.service';
+import { CodingJob } from '../../models/coding-job.model';
 import { CodingJobBackendService, ManualCodingScopeSummary } from '../../services/coding-job-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
-import { CodingJob } from '../../models/coding-job.model';
-import type { ManualCodeAvailabilityWarningDto } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import type { ManualCodingPlanningSnapshot, ManualCodingFreshnessJobSummary as ManualFreshnessJobSummary } from '../../services/manual-coding-planning-snapshot.model';
-import { buildManualFreshnessJobSummary, isCodingJobReadyForApply, hasCodingIssuesForCompletedJob } from './manual-coding-job-summary';
+import { CaseCoverageOverview, CodingProgressOverview, TestPersonCodingService } from '../../services/test-person-coding.service';
+import { buildManualFreshnessJobSummary, hasCodingIssuesForCompletedJob, isCodingJobReadyForApply } from './manual-coding-job-summary';
 
 /** Statistics for one mounted manual-coding view. Each query replaces its predecessor. */
 @Injectable()
@@ -27,8 +31,10 @@ export class ManualCodingStatisticsFacade {
   private readonly statisticsService = inject(CodingStatisticsService);
   private readonly doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private readonly requests = new Map<string, Subscription>();
-  readonly settled$ = new Subject<void>();
-  readonly failed$ = new Subject<void>();
+  private readonly settledSubject = new Subject<void>();
+  readonly settled$ = this.settledSubject.asObservable();
+  private readonly failedSubject = new Subject<void>();
+  readonly failed$ = this.failedSubject.asObservable();
   private readonly freshnessJobs = signal<ManualFreshnessJobSummary | null>(null);
   get manualFreshnessJobSummary(): ManualFreshnessJobSummary | null { return this.freshnessJobs(); }
   set manualFreshnessJobSummary(value: ManualFreshnessJobSummary | null) { this.freshnessJobs.set(value); }
@@ -127,8 +133,8 @@ export class ManualCodingStatisticsFacade {
   constructor() {
     this.destroyRef.onDestroy(() => {
       this.requests.forEach(request => request.unsubscribe());
-      this.settled$.complete();
-      this.failed$.complete();
+      this.settledSubject.complete();
+      this.failedSubject.complete();
     });
   }
 
@@ -156,7 +162,7 @@ export class ManualCodingStatisticsFacade {
         loading(false);
         if (this.destroyRef.destroyed || this.appService.selectedWorkspaceId !== workspaceId) return;
         if (received) after();
-        this.settled$.next();
+        this.settledSubject.next();
       })
     ).subscribe({
       next: value => {
@@ -168,7 +174,7 @@ export class ManualCodingStatisticsFacade {
         if (this.appService.selectedWorkspaceId !== workspaceId) return;
         received = true;
         fail();
-        if (['progress', 'variables', 'cases', 'jobs', 'conflicts', 'incomplete', 'scope', 'availability', 'applied'].includes(key)) this.failed$.next();
+        if (['progress', 'variables', 'cases', 'jobs', 'conflicts', 'incomplete', 'scope', 'availability', 'applied'].includes(key)) this.failedSubject.next();
       }
     });
     requestSlot.add(request);
@@ -177,7 +183,7 @@ export class ManualCodingStatisticsFacade {
   loadCodingProgressOverview(): void {
     this.load('progress', id => this.testPersonCodingService.getCodingProgressOverview(id), value => this.isLoadingCodingProgress.set(value), overview => {
       this.codingProgressOverview.set(overview);
-      if (!overview) this.failed$.next();
+      if (!overview) this.failedSubject.next();
     }, () => this.codingProgressOverview.set(null));
   }
 
@@ -254,7 +260,7 @@ export class ManualCodingStatisticsFacade {
           other: 0
         }
       } : null);
-      if (!overview) this.failed$.next();
+      if (!overview) this.failedSubject.next();
     }, () => this.appliedResultsOverview.set(null));
   }
 

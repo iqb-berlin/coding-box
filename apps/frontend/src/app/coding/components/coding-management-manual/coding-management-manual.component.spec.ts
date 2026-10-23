@@ -1,36 +1,40 @@
-import { signal, WritableSignal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { signal, WritableSignal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   Observable, of, Subject, throwError
 } from 'rxjs';
-import { ManualCodingExportScopeFacade } from './manual-coding-export-scope.facade';
-import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
-import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
-import { AggregationSettingsResponse, TestPersonCodingService } from '../../services/test-person-coding.service';
-import { CodingManagementManualComponent } from './coding-management-manual.component';
-import { SERVER_URL } from '../../../injection-tokens';
-import { AppService } from '../../../core/services/app.service';
+import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
+import type {
+  ManualCodeAvailabilityWarningDto
+} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { environment } from '../../../../environments/environment';
-import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
-import { CoderService } from '../../services/coder.service';
+import { AppService } from '../../../core/services/app.service';
+import { SERVER_URL } from '../../../injection-tokens';
 import {
   createReplayAuthTokenError,
   ExportJobService
 } from '../../../shared/services/file/export-job.service';
-import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
-import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
-import type {
-  ManualCodeAvailabilityWarningDto
-} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
-import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
+import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
+import { CoderService } from '../../services/coder.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import type { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
+import { AggregationSettingsResponse, TestPersonCodingService } from '../../services/test-person-coding.service';
+import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
+import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
+import { CodingManagementManualComponent } from './coding-management-manual.component';
+import { ManualCodingAggregationFacade } from './manual-coding-aggregation.facade';
+import { ManualCodingExportScopeFacade } from './manual-coding-export-scope.facade';
+import { ManualCodingPlanningFacade } from './manual-coding-planning.facade';
+import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
+import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
 type VariableCoverageOverview = NonNullable<
   ReturnType<CodingManagementManualComponent['variableCoverageOverview']>
@@ -62,6 +66,14 @@ const createManualCodeAvailabilityWarning = (
 });
 
 describe('CodingManagementManualComponent', () => {
+  const settingsFacade = () => fixture.debugElement.injector.get(ManualCodingSettingsFacade);
+  const planningFacade = () => fixture.debugElement.injector.get(ManualCodingPlanningFacade);
+  const aggregationFacade = () => fixture.debugElement.injector.get(ManualCodingAggregationFacade);
+  const setPersistedMatchingFlags = (flags: ResponseMatchingFlag[]): void => {
+    const settings = settingsFacade();
+    const localFlags = [...settings.responseMatchingFlags()];
+    settings.restoreSettings({ threshold: settings.duplicateAggregationThreshold(), flags }, localFlags);
+  };
   let component: CodingManagementManualComponent;
   let fixture: ComponentFixture<CodingManagementManualComponent>;
 
@@ -290,11 +302,8 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     component.selectedManualTabIndex.set(1);
-    componentInternals.hasLoadedPlanningDataBundle = true;
-    componentInternals.isPlanningDataBundleLoadPending = true;
-    componentInternals.planningDataBundleCacheGeneration =
-      componentInternals.testPersonCodingService
-        .beginManualCodingPlanningSnapshot();
+    planningFacade().markPlanningDataAvailable();
+    planningFacade().beginPlanningDataRefresh();
     let responseAnalysisUnsubscribed = false;
     const saveSnapshotSpy = jest
       .spyOn(
@@ -322,7 +331,7 @@ describe('CodingManagementManualComponent', () => {
     expect(responseAnalysisUnsubscribed).toBe(true);
     expect(component.isLoadingResponseAnalysis()).toBe(false);
     expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
-    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
+    expect(planningFacade().isRefreshPending).toBe(false);
     expect(saveSnapshotSpy).not.toHaveBeenCalled();
   });
 
@@ -339,11 +348,8 @@ describe('CodingManagementManualComponent', () => {
       trySavePlanningDataBundleSnapshot(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.hasLoadedPlanningDataBundle = true;
-    componentInternals.isPlanningDataBundleLoadPending = true;
-    componentInternals.planningDataBundleCacheGeneration =
-      componentInternals.testPersonCodingService
-        .beginManualCodingPlanningSnapshot();
+    planningFacade().markPlanningDataAvailable();
+    planningFacade().beginPlanningDataRefresh();
     const saveSnapshotSpy = jest
       .spyOn(
         componentInternals.testPersonCodingService,
@@ -351,11 +357,12 @@ describe('CodingManagementManualComponent', () => {
       )
       .mockImplementation();
 
+    const planning = planningFacade();
     fixture.destroy();
     componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
-    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
+    expect(planning.isRefreshPending).toBe(false);
     expect(saveSnapshotSpy).not.toHaveBeenCalled();
   });
 
@@ -491,7 +498,7 @@ describe('CodingManagementManualComponent', () => {
     const codingJobBackendService = componentInternals.codingJobBackendService;
 
     appService.selectedWorkspaceId = 5;
-    component.responseMatchingFlags.set([ResponseMatchingFlag.NO_AGGREGATION]);
+    settingsFacade().updateLocalMatchingFlags([ResponseMatchingFlag.NO_AGGREGATION]);
 
     const saveSpy = jest
       .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -530,15 +537,15 @@ describe('CodingManagementManualComponent', () => {
       const testPersonCodingService = componentInternals.testPersonCodingService;
 
       appService.selectedWorkspaceId = 5;
-      component.duplicateAggregationThreshold.set(2);
-      component.responseMatchingFlags.set([
+      settingsFacade().updateThreshold(2);
+      settingsFacade().updateLocalMatchingFlags([
         ResponseMatchingFlag.NO_AGGREGATION,
         ResponseMatchingFlag.IGNORE_CASE,
         ResponseMatchingFlag.IGNORE_WHITESPACE
       ]);
-      componentInternals.persistedResponseMatchingFlags = [
+      setPersistedMatchingFlags([
         ResponseMatchingFlag.NO_AGGREGATION
-      ];
+      ]);
 
       const saveSpy = jest
         .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -584,7 +591,7 @@ describe('CodingManagementManualComponent', () => {
       jest.useFakeTimers();
       requests = [];
       TestBed.inject(AppService).selectedWorkspaceId = 5;
-      component.responseMatchingFlags.set([ResponseMatchingFlag.NO_AGGREGATION]);
+      settingsFacade().updateLocalMatchingFlags([ResponseMatchingFlag.NO_AGGREGATION]);
       jest.spyOn(TestBed.inject(TestPersonCodingService), 'saveAggregationSettings')
         .mockImplementation((_workspaceId, threshold) => {
           const reply = new Subject<AggregationSettingsResponse>();
@@ -681,8 +688,7 @@ describe('CodingManagementManualComponent', () => {
     });
 
     it('does not start a threshold write while matching mode is being saved', () => {
-      (component as unknown as { isSavingMatchingMode: WritableSignal<boolean> })
-        .isSavingMatchingMode.set(true);
+      jest.spyOn(settingsFacade(), 'isSavingMatchingMode').mockReturnValue(true);
       component.onThresholdChanged(3);
       jest.advanceTimersByTime(1000);
 
@@ -693,7 +699,7 @@ describe('CodingManagementManualComponent', () => {
 
     it('uses matching options available when the queued write starts', () => {
       component.onThresholdChanged(3);
-      component.responseMatchingFlags.set([
+      settingsFacade().updateLocalMatchingFlags([
         ResponseMatchingFlag.NO_AGGREGATION, ResponseMatchingFlag.IGNORE_CASE
       ]);
       jest.advanceTimersByTime(1000);
@@ -766,11 +772,11 @@ describe('CodingManagementManualComponent', () => {
     };
 
     componentInternals.appService.selectedWorkspaceId = 5;
-    component.responseMatchingFlags.set([
+    settingsFacade().updateLocalMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION,
       ResponseMatchingFlag.IGNORE_CASE
     ]);
-    component.isApplyingDuplicateAggregation.set(true);
+    jest.spyOn(aggregationFacade(), 'isApplyingDuplicateAggregation').mockReturnValue(true);
 
     component.toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE);
     component.onAggregationModeChanged(true);
@@ -800,15 +806,15 @@ describe('CodingManagementManualComponent', () => {
     const codingJobBackendService = componentInternals.codingJobBackendService;
 
     appService.selectedWorkspaceId = 5;
-    component.duplicateAggregationThreshold.set(2);
-    component.responseMatchingFlags.set([
+    settingsFacade().updateThreshold(2);
+    settingsFacade().updateLocalMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION,
       ResponseMatchingFlag.IGNORE_CASE,
       ResponseMatchingFlag.IGNORE_WHITESPACE
     ]);
-    componentInternals.persistedResponseMatchingFlags = [
+    setPersistedMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION
-    ];
+    ]);
 
     const saveSpy = jest
       .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -832,7 +838,7 @@ describe('CodingManagementManualComponent', () => {
       .spyOn(componentInternals, 'refreshAggregationDependentViews')
       .mockImplementation(() => undefined);
     const loadSpy = jest
-      .spyOn(component, 'loadResponseAnalysis')
+      .spyOn(fixture.debugElement.injector.get(ManualCodingAnalysisFacade), 'loadResponseAnalysis')
       .mockImplementation(() => undefined);
 
     component.onAggregationModeChanged(true);
@@ -872,13 +878,13 @@ describe('CodingManagementManualComponent', () => {
     const codingJobBackendService = componentInternals.codingJobBackendService;
 
     appService.selectedWorkspaceId = 5;
-    component.responseMatchingFlags.set([
+    settingsFacade().updateLocalMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION,
       ResponseMatchingFlag.IGNORE_CASE
     ]);
-    componentInternals.persistedResponseMatchingFlags = [
+    setPersistedMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION
-    ];
+    ]);
 
     jest
       .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -915,14 +921,14 @@ describe('CodingManagementManualComponent', () => {
     const codingJobBackendService = componentInternals.codingJobBackendService;
 
     appService.selectedWorkspaceId = 5;
-    component.duplicateAggregationThreshold.set(2);
-    component.responseMatchingFlags.set([
+    settingsFacade().updateThreshold(2);
+    settingsFacade().updateLocalMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION,
       ResponseMatchingFlag.IGNORE_CASE
     ]);
-    componentInternals.persistedResponseMatchingFlags = [
+    setPersistedMatchingFlags([
       ResponseMatchingFlag.NO_AGGREGATION
-    ];
+    ]);
 
     const saveSpy = jest
       .spyOn(testPersonCodingService, 'saveAggregationSettings')
@@ -944,7 +950,7 @@ describe('CodingManagementManualComponent', () => {
       .spyOn(componentInternals, 'refreshAggregationDependentViews')
       .mockImplementation(() => undefined);
     jest
-      .spyOn(component, 'loadResponseAnalysis')
+      .spyOn(fixture.debugElement.injector.get(ManualCodingAnalysisFacade), 'loadResponseAnalysis')
       .mockImplementation(() => undefined);
 
     component.onAggregationModeChanged(true);
@@ -1370,7 +1376,7 @@ describe('CodingManagementManualComponent', () => {
 
   it('shows a neutral status before planning data has been checked', () => {
     component.selectedManualTabIndex.set(0);
-    component.isLoadingMatchingMode.set(true);
+    jest.spyOn(settingsFacade(), 'isLoadingMatchingMode').mockReturnValue(true);
     component.isLoadingResponseAnalysis.set(true);
     component.responseAnalysis.set(null);
 
@@ -1973,10 +1979,7 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.responseAnalysisError.set('Analyse fehlgeschlagen');
-    componentInternals.isPlanningDataBundleLoadPending = true;
-    componentInternals.planningDataBundleCacheGeneration =
-      componentInternals.testPersonCodingService
-        .beginManualCodingPlanningSnapshot();
+    planningFacade().beginPlanningDataRefresh();
     const saveSnapshotSpy = jest
       .spyOn(
         componentInternals.testPersonCodingService,
@@ -1987,8 +1990,7 @@ describe('CodingManagementManualComponent', () => {
     componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(saveSnapshotSpy).not.toHaveBeenCalled();
-    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
-    expect(componentInternals.planningDataBundleCacheGeneration).toBeNull();
+    expect(planningFacade().isRefreshPending).toBe(false);
   });
 
   it('should not cache a planning bundle after another bundle request failed', () => {
@@ -2004,11 +2006,7 @@ describe('CodingManagementManualComponent', () => {
       trySavePlanningDataBundleSnapshot(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.planningDataBundleLoadFailed = true;
-    componentInternals.isPlanningDataBundleLoadPending = true;
-    componentInternals.planningDataBundleCacheGeneration =
-      componentInternals.testPersonCodingService
-        .beginManualCodingPlanningSnapshot();
+    planningFacade().beginPlanningDataRefresh();
     const saveSnapshotSpy = jest
       .spyOn(
         componentInternals.testPersonCodingService,
@@ -2016,11 +2014,11 @@ describe('CodingManagementManualComponent', () => {
       )
       .mockImplementation();
 
+    planningFacade().markPlanningDataBundleLoadFailed();
     componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(saveSnapshotSpy).not.toHaveBeenCalled();
-    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
-    expect(componentInternals.planningDataBundleCacheGeneration).toBeNull();
+    expect(planningFacade().isRefreshPending).toBe(false);
   });
 
   it('should restore planning data without requests after navigation', () => {
@@ -2050,7 +2048,7 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
-    componentInternals.hasLoadedPlanningDataBundle = false;
+    planningFacade().resetPlanningDataBundleState();
     const responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
@@ -2252,7 +2250,7 @@ describe('CodingManagementManualComponent', () => {
       loadJobDefinitionsForExport(): void;
     };
     componentInternals.hasLoadedManualCodingJobRefreshSetting = false;
-    componentInternals.hasLoadedPlanningDataBundle = true;
+    planningFacade().markPlanningDataAvailable();
     const refreshAllStatisticsSpy = jest
       .spyOn(componentInternals, 'refreshAllStatistics')
       .mockImplementation();
@@ -4061,8 +4059,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   function setCompletePlanningState(): void {
-    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
-      .hasLoadedPlanningDataBundle = true;
+    planningFacade().markPlanningDataAvailable();
     component.variableCoverageOverview.set({
       totalVariables: 2,
       coveredVariables: 2,
@@ -4130,8 +4127,7 @@ describe('CodingManagementManualComponent', () => {
   }
 
   function setEmptyPlanningSnapshots(): void {
-    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
-      .hasLoadedPlanningDataBundle = true;
+    planningFacade().markPlanningDataAvailable();
     component.variableCoverageOverview.set({
       totalVariables: 0,
       coveredVariables: 0,

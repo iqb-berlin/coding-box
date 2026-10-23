@@ -127,4 +127,17 @@ describe('ResponseService', () => {
       req.flush(mockResponse);
     });
   });
+  describe('deleteTestPersons', () => {
+    it.each([200, 400, 403, 500, 0])('invalidates caches only after successful deletion (HTTP %s)', status => {
+      const received: boolean[] = [];
+      service.deleteTestPersons(mockWorkspaceId, [7, 8]).subscribe(result => received.push(result));
+      const request = httpMock.expectOne(req => req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results`);
+      expect(request.request.params.get('testPersons')).toBe('7,8');
+      if (status === 0) request.error(new ProgressEvent('error'));
+      else request.flush(null, { status, statusText: status === 200 ? 'OK' : 'Failed' });
+      expect(received).toEqual([status === 200]);
+      expect(testResultServiceMock.invalidateCache).toHaveBeenCalledTimes(status === 200 ? 1 : 0);
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledTimes(status === 200 ? 1 : 0);
+    });
+  });
 });
