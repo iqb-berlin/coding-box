@@ -22,6 +22,12 @@ class User {
 
   @Column({ type: 'varchar' })
   username: string;
+
+  @Column({ name: 'first_name', type: 'varchar', nullable: true })
+  firstName?: string | null;
+
+  @Column({ name: 'last_name', type: 'varchar', nullable: true })
+  lastName?: string | null;
 }
 
 export default User;

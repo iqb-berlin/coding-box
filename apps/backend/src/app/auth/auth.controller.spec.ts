@@ -191,7 +191,7 @@ describe('AuthController', () => {
 
   it('keeps the existing user id when a renamed OIDC user logs in through the callback and JWT guard', async () => {
     const existingUser = {
-      id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false
+      id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false, firstName: 'Ada', lastName: 'Lovelace'
     };
     const usersRepository = {
       findOne: jest.fn().mockImplementation(async ({ where }) => (
@@ -221,7 +221,9 @@ describe('AuthController', () => {
 
     expect(authService.storeOidcProviderUser).toHaveBeenCalledWith(expect.objectContaining({ issuer }));
     expect(requestUser.id).toBe(7);
-    expect(existingUser).toMatchObject({ id: 7, issuer, username: 'new-name' });
+    expect(existingUser).toMatchObject({
+      id: 7, issuer, username: 'new-name', firstName: 'Ada', lastName: 'Lovelace'
+    });
     expect(usersRepository.save).not.toHaveBeenCalled();
   });
 

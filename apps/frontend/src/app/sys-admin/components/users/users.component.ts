@@ -62,7 +62,7 @@ export class UsersComponent implements OnInit {
     this.userObjectsDatasource = new MatTableDataSource(users);
     this.userObjectsDatasource
       .filterPredicate = (userList: UserFullDto, filter) => [
-        'name', 'firstName', 'lastName'
+        'username', 'displayName'
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
