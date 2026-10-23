@@ -2079,12 +2079,23 @@
                       @if (showCoderTraining()) {
                         <div class="coder-training-overlay">
                           <div class="coder-training-modal">
-                            <coding-box-coder-training
-                              [editTraining]="editTrainingValue"
-                              (trainingClosed)="closeCoderTraining()"
-                              (startTraining)="onTrainingStart($event)"
-                              >
-                            </coding-box-coder-training>
+                            @defer (on immediate) {
+                              <coding-box-coder-training
+                                [editTraining]="editTrainingValue"
+                                (trainingClosed)="closeCoderTraining()"
+                                (startTraining)="onTrainingStart($event)"
+                              />
+                            } @loading (after 100ms) {
+                              <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+                              <button mat-button type="button" (click)="closeCoderTraining()">
+                                {{ 'deferred-view.close' | translate }}
+                              </button>
+                            } @error {
+                              <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+                              <button mat-button type="button" (click)="closeCoderTraining()">
+                                {{ 'deferred-view.close' | translate }}
+                              </button>
+                            }
                           </div>
                         </div>
                       }

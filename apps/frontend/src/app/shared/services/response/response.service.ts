@@ -51,8 +51,8 @@ export class ResponseService {
         `${this.serverUrl}admin/workspace/${workspace_id}/test-results`,
         { headers: this.authHeader, params })
       .pipe(
-        catchError(() => of(false)),
         map(() => true),
+        catchError(() => of(false)),
         tap(success => {
           // Invalidate cache if deletion was successful
           if (success) {

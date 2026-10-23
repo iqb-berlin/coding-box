@@ -1,4 +1,9 @@
 {
+  "deferred-view": {
+    "loading": "Ansicht wird geladen…",
+    "close": "Schließen",
+    "error": "Die Ansicht konnte nicht geladen werden. Bitte laden Sie die Seite erneut."
+  },
   "charts": {
     "show-data-table": "Daten als Tabelle anzeigen"
   },

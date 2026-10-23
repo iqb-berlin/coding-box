@@ -1,111 +1,118 @@
 import {
-  MatTable,
-  MatHeaderCellDef,
-  MatCellDef,
-  MatHeaderRowDef,
-  MatRowDef,
-  MatTableDataSource,
+  ChangeDetectionStrategy,
+  Component, DestroyRef,
+  effect,
+  ElementRef, inject, OnDestroy, OnInit, signal,
+  viewChild
+} from '@angular/core';
+import {
   MatCell,
+  MatCellDef,
   MatColumnDef,
   MatHeaderCell,
+  MatHeaderCellDef,
   MatHeaderRow,
-  MatRow
+  MatHeaderRowDef,
+  MatRow,
+  MatRowDef,
+  MatTable,
+  MatTableDataSource
 } from '@angular/material/table';
-import {
-  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, signal, computed, viewChild, effect, ChangeDetectionStrategy
-} from '@angular/core';
 
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import {
-  MatPaginator,
-  MatPaginatorModule,
-  MatPaginatorIntl,
-  PageEvent
-} from '@angular/material/paginator';
-import {
-  Subject, Subscription, debounceTime, distinctUntilChanged, finalize, takeUntil
-} from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
+import { CommonModule, DatePipe } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormsModule } from '@angular/forms';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import { MatCheckbox } from '@angular/material/checkbox';
+import { MatDialog } from '@angular/material/dialog';
+import { MatDivider } from '@angular/material/divider';
 import {
   MatAccordion,
   MatExpansionPanel,
   MatExpansionPanelHeader,
   MatExpansionPanelTitle
 } from '@angular/material/expansion';
-import { MatList, MatListItem } from '@angular/material/list';
-import { MatInput } from '@angular/material/input';
-import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
-import { Router } from '@angular/router';
-import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatInput } from '@angular/material/input';
+import { MatList, MatListItem } from '@angular/material/list';
+import {
+  MatPaginator,
+  MatPaginatorIntl,
+  MatPaginatorModule,
+  PageEvent
+} from '@angular/material/paginator';
 import { MatProgressBar } from '@angular/material/progress-bar';
-import { MatCheckbox } from '@angular/material/checkbox';
-import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDivider } from '@angular/material/divider';
+import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { RESPONSE_STATUS_INFO } from './test-results-response-status';
-import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
-import { TestResultsImportFacade } from './test-results-import.facade';
-import { TestResultsExportFacade } from './test-results-export.facade';
+import { Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import {
+  debounceTime, distinctUntilChanged, finalize,
+  Subject, Subscription,
+  takeUntil
+} from 'rxjs';
 import { TestResultsDeletionFacade } from './test-results-deletion.facade';
-import { TestResultsOverviewComponent } from './test-results-overview.component';
+import { TestResultsExportFacade } from './test-results-export.facade';
 import { TestResultsImportDialogComponent } from './test-results-import-dialog.component';
+import { TestResultsImportFacade } from './test-results-import.facade';
+import { TestResultsOverviewComponent } from './test-results-overview.component';
+import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
+import { TestResultsSummaryFacade } from './test-results-summary.facade';
 
-import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 import { FileService } from '../../../shared/services/file/file.service';
+import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 
-import { ValidationService } from '../../../shared/services/validation/validation.service';
-import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
-import { ResponseService } from '../../../shared/services/response/response.service';
-import { UnitService } from '../../../shared/services/unit/unit.service';
-import { getResponseStatusTooltipKey } from '../../../shared/utils/response-status-metadata.util';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import {
   AppliedResultsOverview,
   TestPersonCodingService
 } from '../../../coding/services/test-person-coding.service';
-import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import {
-  TestResultService, PersonTestResult, QuickSearchResultItem, LogAnomalyDetailRow
+  LogAnomalyDetailRow,
+  PersonTestResult, QuickSearchResultItem,
+  TestResultService
 } from '../../../shared/services/test-result/test-result.service';
+import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
 
-import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
-import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
-import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
-import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
-import {
-  QuickSearchDialogResult,
-  TestResultsSearchComponent
-} from '../test-results-search/test-results-search.component';
-import {
-  ConfirmDialogComponent,
-  ConfirmDialogData
-} from '../../../shared/dialogs/confirm-dialog.component';
-import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
-import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
-import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
-import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
-import {
-  ValidationTaskStateService,
-  ValidationType
-} from '../../../shared/services/validation/validation-task-state.service';
+import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import {
   UnitsReplay,
   UnitsReplayService
 } from '../../../replay/services/units-replay.service';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData
+} from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  ValidationTaskStateService,
+  ValidationType
+} from '../../../shared/services/validation/validation-task-state.service';
+import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
+import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
+import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
+import {
+  QuickSearchDialogResult,
+  TestResultsSearchComponent
+} from '../test-results-search/test-results-search.component';
+import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
+import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
+import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
-import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
-import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
+import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 
 import {
   TestResultsLogAnomalyDetailsDialogComponent,
@@ -115,35 +122,14 @@ import {
 import {
   CodingFreshnessState, CodingFreshnessSummaryItemDto, CodingFreshnessVersion
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
-import {
-  CODING_FRESHNESS_TASK_RESULT_HELP,
-  getCodingFreshnessAffectedResponseCount,
-  getCodingFreshnessAffectedTaskResultCount,
-  getCodingFreshnessAttentionTitle,
-  getCodingFreshnessAutoCodingWarnings,
-  getCodingFreshnessChipLabel,
-  getCodingFreshnessManualReviewGuidanceText,
-  getCodingFreshnessManualReviewWarnings,
-  getCodingFreshnessStateLabel,
-  getCodingFreshnessSummaryText,
-  getCodingFreshnessVersionLabel,
-  formatCodingFreshnessTaskResultCount,
-  getSecondAutocodingFreshnessWarnings,
-  hasOnlyManualCodingFreshnessWarnings,
-  isCodingFreshnessOpenWarning,
-  isSecondAutocodingWaitingForManualCoding,
-  SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
-} from '../../../shared/utils/coding-freshness-text.util';
 
-import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
 import {
   PendingUploadBatch,
   TestResultsUploadStateService
 } from '../../services/test-results-upload-state.service';
-import {
-  FlatResponseFilters,
-  TestResultsFlatTableComponent
-} from './test-results-flat-table.component';
+import type { FlatResponseFilters } from './test-results-flat-table.component';
+import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
 
 import { TestResultsDeleteRequestDto, TestResultsResponseCleanupRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
@@ -234,7 +220,7 @@ interface P {
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],
   standalone: true,
-  providers: [TestResultsDeletionFacade, TestResultsStatisticsFacade, TestResultsImportFacade, TestResultsExportFacade,
+  providers: [TestResultsSummaryFacade, TestResultsDeletionFacade, TestResultsStatisticsFacade, TestResultsImportFacade, TestResultsExportFacade,
     DatePipe,
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ],
@@ -277,6 +263,7 @@ interface P {
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
   private readonly statistics = inject(TestResultsStatisticsFacade);
+  private readonly summary = inject(TestResultsSummaryFacade);
   private readonly deletion = inject(TestResultsDeletionFacade);
   private readonly imports = inject(TestResultsImportFacade);
   private readonly exports = inject(TestResultsExportFacade);
@@ -1234,51 +1221,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private reloadLogAnomalySummaryIfRequested(): void { return this.statistics.reloadLogAnomalySummaryIfRequested(); }
 
-  readonly hasLogAnomalySummary = computed<boolean>(() => !!this.logAnomalySummary());
+  readonly hasLogAnomalySummary = this.summary.hasLogAnomalySummary;
 
-  protected readonly logAnomalyAffectedPercent = computed<number>(() => {
-    const total = Number(this.logAnomalySummary()?.totalBooklets || 0);
-    if (total <= 0) {
-      return 0;
-    }
-    return Math.round(
-      (Number(this.logAnomalySummary()?.affectedBooklets || 0) / total) * 1000
-    ) / 10;
-  });
+  protected readonly logAnomalyAffectedPercent = this.summary.logAnomalyAffectedPercent;
 
-  protected get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> {
-    const byCode = this.logAnomalySummary()?.byCode || {};
-    return Object.entries(byCode)
-      .map(([code, count]) => ({
-        code,
-        label: this.getLogAnomalyCodeLabel(code),
-        count: Number(count) || 0
-      }))
-      .filter(item => item.count > 0)
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-      .slice(0, 6);
-  }
+  protected get logAnomalyTopCodes(): Array<{ code: string; label: string; count: number }> { return this.summary.logAnomalyTopCodes(); }
 
-  getLogAnomalyCodeLabel(code: string): string {
-    const labels: Record<string, string> = {
-      controller_error: 'Controller-Fehler',
-      missing_termination: 'Kein Abschluss',
-      connection_lost: 'Verbindung verloren',
-      timestamp_zero: 'Timestamp 0',
-      player_stuck_loading: 'Player hängt',
-      repeated_start: 'Mehrfach gestartet',
-      long_loading: 'Lange Ladezeit',
-      timer_left_on_exit: 'Restzeit am Ende',
-      timer_never_finished: 'Timer nicht beendet',
-      focus_lost_long: 'Langer Fokusverlust',
-      unit_progress_incomplete: 'Units fehlen',
-      progress_incomplete: 'Progress unvollständig',
-      debug_command: 'Debug-Befehl',
-      session_span_long: 'Lange Zeitspanne',
-      orphan_logs: 'Logs ohne Start'
-    };
-    return labels[code] || code;
-  }
+  getLogAnomalyCodeLabel(code: string): string { return this.summary.getLogAnomalyCodeLabel(code); }
 
   showLogAnomaliesInTable(): void {
     this.quickSearchTableFilters.set({ logAnomalies: 'any' });
@@ -1365,171 +1314,43 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     workspaceId: number
   ): Promise<{ overview: AppliedResultsOverview | null; loadFailed: boolean }> { return this.statistics.fetchManualAppliedResultsOverview(workspaceId); }
 
-  readonly overviewResponseStatusTotal = computed<number>(() => Object.values(this.overview()?.responseStatusCounts || {})
-    .reduce((sum, count) => sum + (Number(count) || 0), 0));
+  readonly overviewResponseStatusTotal = this.summary.overviewResponseStatusTotal;
 
-  protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> {
-    const map = (this.overview()?.responseStatusCounts || {}) as Record<
-      string,
-      number
-    >;
-    const total = this.overviewResponseStatusTotal();
-    return Object.entries(map)
-      .map(([status, count]) => {
-        const normalizedCount = Number(count) || 0;
-        return {
-          status,
-          count: normalizedCount,
-          percent: this.getPercent(normalizedCount, total)
-        };
-      })
-      .sort((a, b) => b.count - a.count);
-  }
+  protected get overviewStatusCounts(): Array<{ status: string; count: number; percent: number }> { return this.summary.overviewStatusCounts(); }
 
-  private readonly allCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => (this.codingFreshnessSummary()?.items || [])
-    .filter(isCodingFreshnessOpenWarning)
-    .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state)));
+  readonly codingFreshnessWarnings = this.summary.codingFreshnessWarnings;
 
-  readonly codingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => this.allCodingFreshnessWarnings()
-    .filter(item => !(item.version === 'v3' && (
-      this.isSecondAutocodingManualStatusPending() ||
-        this.isSecondAutocodingWaitingForManualCoding()
-    ))));
+  readonly hasCodingFreshnessWarning = this.summary.hasCodingFreshnessWarning;
 
-  readonly hasCodingFreshnessWarning = computed<boolean>(() => this.codingFreshnessWarnings().length > 0 ||
-      this.shouldShowSecondAutocodingWaitingState());
+  readonly codingFreshnessDisplayWarnings = this.summary.codingFreshnessDisplayWarnings;
 
-  readonly codingFreshnessDisplayWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => {
-    if (this.codingFreshnessWarnings().length > 0) {
-      return this.codingFreshnessWarnings();
-    }
+  readonly autoCodingFreshnessWarnings = this.summary.autoCodingFreshnessWarnings;
 
-    if (this.shouldShowSecondAutocodingWaitingState()) {
-      return this.secondAutocodingFreshnessWarnings();
-    }
+  readonly manualCodingFreshnessWarnings = this.summary.manualCodingFreshnessWarnings;
 
-    return [];
-  });
+  readonly hasOnlyManualCodingFreshnessWarnings = this.summary.hasOnlyManualCodingFreshnessWarnings;
 
-  readonly autoCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings()));
+  readonly codingFreshnessAffectedUnitVersions = this.summary.codingFreshnessAffectedUnitVersions;
 
-  readonly manualCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings()));
+  readonly codingFreshnessAffectedResponses = this.summary.codingFreshnessAffectedResponses;
 
-  readonly hasOnlyManualCodingFreshnessWarnings = computed<boolean>(() => hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings()));
+  get codingFreshnessSummaryText(): string { return this.summary.codingFreshnessSummaryText; }
 
-  readonly codingFreshnessAffectedUnitVersions = computed<number>(() => getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings()));
+  protected get codingFreshnessExplanationText(): string { return this.summary.codingFreshnessExplanationText; }
 
-  readonly codingFreshnessAffectedResponses = computed<number>(() => getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings()));
+  get codingFreshnessBannerTitle(): string { return this.summary.codingFreshnessBannerTitle; }
 
-  get codingFreshnessSummaryText(): string {
-    if (this.shouldShowSecondAutocodingWaitingState()) {
-      return this.getSecondAutocodingWaitingSummaryText();
-    }
+  readonly codingFreshnessActionLabel = this.summary.codingFreshnessActionLabel;
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
-  }
+  protected readonly codingFreshnessActionIcon = this.summary.codingFreshnessActionIcon;
 
-  protected get codingFreshnessExplanationText(): string {
-    if (this.shouldShowSecondAutocodingWaitingState()) {
-      return this.translateService.instant(
-        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
-        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
-      );
-    }
+  getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string { return this.summary.getCodingFreshnessVersionLabel(version); }
 
-    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
-      this.codingFreshnessWarnings()
-    );
-    if (guidanceText) {
-      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
-    }
+  getCodingFreshnessStateLabel(state: CodingFreshnessState): string { return this.summary.getCodingFreshnessStateLabel(state); }
 
-    return CODING_FRESHNESS_TASK_RESULT_HELP;
-  }
+  getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string { return this.summary.getCodingFreshnessChipLabel(item); }
 
-  get codingFreshnessBannerTitle(): string {
-    if (this.shouldShowSecondAutocodingWaitingState()) {
-      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
-    }
-
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings());
-  }
-
-  readonly codingFreshnessActionLabel = computed<string>(() => {
-    if (this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) {
-      return 'Manuelle Kodierung öffnen';
-    }
-
-    return this.autoCodingFreshnessWarnings().length > 0 ?
-      'Auto-Coding öffnen' :
-      'Kodierung öffnen';
-  });
-
-  protected readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
-    'keyboard' :
-    'rule'));
-
-  getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
-    return getCodingFreshnessVersionLabel(version);
-  }
-
-  getCodingFreshnessStateLabel(state: CodingFreshnessState): string {
-    return getCodingFreshnessStateLabel(state);
-  }
-
-  getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
-    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding()) {
-      return this.translateService.instant(
-        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
-        {
-          version: getCodingFreshnessVersionLabel(item.version),
-          count: formatCodingFreshnessTaskResultCount(item.unitCount)
-        }
-      );
-    }
-
-    return getCodingFreshnessChipLabel(item);
-  }
-
-  private readonly secondAutocodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings()));
-
-  private readonly isSecondAutocodingWaitingForManualCoding = computed<boolean>(() => isSecondAutocodingWaitingForManualCoding(
-    this.allCodingFreshnessWarnings(),
-    this.manualAppliedResultsOverview(),
-    this.manualAppliedResultsOverviewLoadFailed()
-  ));
-
-  private readonly isSecondAutocodingManualStatusPending = computed<boolean>(() => this.secondAutocodingFreshnessWarnings().length > 0 &&
-      this.isLoadingManualAppliedResultsOverview() &&
-      !this.manualAppliedResultsOverviewLoadFailed());
-
-  private readonly shouldShowSecondAutocodingWaitingState = computed<boolean>(() => {
-    if (this.isSecondAutocodingManualStatusPending()) {
-      return false;
-    }
-
-    return this.isSecondAutocodingWaitingForManualCoding() &&
-      this.codingFreshnessWarnings().length === 0;
-  });
-
-  private getSecondAutocodingWaitingSummaryText(): string {
-    if (this.manualAppliedResultsOverviewLoadFailed()) {
-      return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
-    }
-
-    const remaining = this.manualAppliedResultsOverview()?.remainingResponses || 0;
-    const remainingText = remaining > 0 ?
-      this.translateService.instant(
-        SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,
-        { count: remaining }
-      ) :
-      '';
-
-    return this.translateService.instant(
-      SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.summary,
-      { remaining: remainingText }
-    );
-  }
+  private readonly shouldShowSecondAutocodingWaitingState = this.summary.shouldShowSecondAutocodingWaitingState;
 
   protected openCodingFreshnessTarget(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -1551,51 +1372,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.testPersonCodingService.notifyTestResultsChanged();
   }
 
-  private toSortedCountList(
-    map?: Record<string, number>
-  ): Array<{ key: string; count: number }> {
-    const m = (map || {}) as Record<string, number>;
-    return Object.entries(m)
-      .map(([key, count]) => ({ key, count: Number(count) }))
-      .filter(e => e.count > 0)
-      .sort((a, b) => b.count - a.count);
-  }
+  get overviewBrowserCounts(): Array<{ key: string; count: number }> { return this.summary.overviewBrowserCounts(); }
 
-  private totalCount(list: Array<{ count: number }>): number {
-    return list.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
-  }
+  get overviewOsCounts(): Array<{ key: string; count: number }> { return this.summary.overviewOsCounts(); }
 
-  get overviewBrowserCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview()?.sessionBrowserCounts);
-  }
+  get overviewScreenCounts(): Array<{ key: string; count: number }> { return this.summary.overviewScreenCounts(); }
 
-  get overviewOsCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview()?.sessionOsCounts);
-  }
+  getBrowserTotal(): number { return this.summary.getBrowserTotal(); }
 
-  get overviewScreenCounts(): Array<{ key: string; count: number }> {
-    return this.toSortedCountList(this.overview()?.sessionScreenCounts);
-  }
+  getOsTotal(): number { return this.summary.getOsTotal(); }
 
-  getBrowserTotal(): number {
-    return this.totalCount(this.overviewBrowserCounts);
-  }
+  getScreenTotal(): number { return this.summary.getScreenTotal(); }
 
-  getOsTotal(): number {
-    return this.totalCount(this.overviewOsCounts);
-  }
-
-  getScreenTotal(): number {
-    return this.totalCount(this.overviewScreenCounts);
-  }
-
-  getPercent(count: number, total: number): number {
-    const t = Number(total) || 0;
-    if (t <= 0) {
-      return 0;
-    }
-    return Math.round((Number(count) / t) * 1000) / 10;
-  }
+  getPercent(count: number, total: number): number { return this.summary.getPercent(count, total); }
 
   protected openSessionDistributionsDialog(): void {
     const overviewValue = this.overview();
@@ -1623,20 +1412,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.isUploadingResults.set(false);
   }
 
-  getResponseStatusTooltip(status: string): string {
-    const sharedTooltipKey = getResponseStatusTooltipKey(status);
-    if (sharedTooltipKey) {
-      return this.translateService.instant(sharedTooltipKey);
-    }
-
-    const info = RESPONSE_STATUS_INFO[status];
-    if (!info) {
-      return status;
-    }
-
-    const descriptionPart = info.description ? `: ${info.description}` : '';
-    return `${status}${descriptionPart}`;
-  }
+  getResponseStatusTooltip(status: string): string { return this.summary.getResponseStatusTooltip(status); }
 
   protected isAllSelected(): boolean {
     const numSelected = this.selection.selected.length;

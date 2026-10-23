@@ -4,11 +4,11 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
+import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { AppService } from '../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
-import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 
 /** Response-analysis polling and the background guard have distinct lifetimes. */
@@ -21,10 +21,14 @@ export class ManualCodingAnalysisFacade {
   private readonly settings = inject(ManualCodingSettingsFacade);
   private readonly snackBar = inject(MatSnackBar);
   // Snapshot settlement follows the final data/error state, independently of navigation.
-  readonly viewUpdated$ = new Subject<void>();
-  readonly settled$ = new Subject<void>();
-  readonly failed$ = new Subject<void>();
-  readonly reloadRequested$ = new Subject<void>();
+  private readonly viewUpdatedSubject = new Subject<void>();
+  readonly viewUpdated$ = this.viewUpdatedSubject.asObservable();
+  private readonly settledSubject = new Subject<void>();
+  readonly settled$ = this.settledSubject.asObservable();
+  private readonly failedSubject = new Subject<void>();
+  readonly failed$ = this.failedSubject.asObservable();
+  private readonly reloadRequestedSubject = new Subject<void>();
+  readonly reloadRequested$ = this.reloadRequestedSubject.asObservable();
   isViewActive: () => boolean = () => false;
   readonly responseAnalysis = signal<ResponseAnalysisDto | null>(null);
 
@@ -32,7 +36,8 @@ export class ManualCodingAnalysisFacade {
 
   readonly isLoadingResponseAnalysis = signal(false);
 
-  readonly responseAnalysisRequestCancel$ = new Subject<void>();
+  private readonly responseAnalysisRequestCancelSubject = new Subject<void>();
+  readonly responseAnalysisRequestCancel$ = this.responseAnalysisRequestCancelSubject.asObservable();
 
   responseAnalysisRequestId = 0;
 
@@ -60,8 +65,8 @@ export class ManualCodingAnalysisFacade {
     this.destroyRef.onDestroy(() => {
       this.cancelResponseAnalysisRequest();
       this.finalizeResponseAnalysisGuardOnDestroy();
-      this.responseAnalysisRequestCancel$.complete();
-      this.viewUpdated$.complete(); this.settled$.complete(); this.failed$.complete(); this.reloadRequested$.complete();
+      this.responseAnalysisRequestCancelSubject.complete();
+      this.viewUpdatedSubject.complete(); this.settledSubject.complete(); this.failedSubject.complete(); this.reloadRequestedSubject.complete();
     });
   }
 
@@ -78,7 +83,7 @@ export class ManualCodingAnalysisFacade {
       clearTimeout(this.analysisPollingTimer);
       this.analysisPollingTimer = undefined;
     }
-    this.responseAnalysisRequestCancel$.next();
+    this.responseAnalysisRequestCancelSubject.next();
     if (options.markNotLoading !== false) {
       this.isLoadingResponseAnalysis.set(false);
     }
@@ -211,7 +216,7 @@ export class ManualCodingAnalysisFacade {
     this.analysisPollingTimer = setTimeout(() => {
       this.analysisPollingTimer = undefined;
       if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
-        this.reloadRequested$.next();
+        this.reloadRequestedSubject.next();
       }
     }, 5000);
   }
@@ -262,7 +267,7 @@ export class ManualCodingAnalysisFacade {
           this.isLoadingResponseAnalysis.set(false);
           this.hasShownResponseAnalysisPollingError = false;
           this.setResponseAnalysisGuardActive(analysis.isCalculating === true);
-          this.viewUpdated$.next();
+          this.viewUpdatedSubject.next();
 
           if (analysis.isCalculating) {
             // Poll every 5 seconds if calculating
@@ -270,11 +275,11 @@ export class ManualCodingAnalysisFacade {
               this.analysisPollingTimer = undefined;
               if (this.responseAnalysis()?.isCalculating &&
                 this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
-                this.reloadRequested$.next();
+                this.reloadRequestedSubject.next();
               }
             }, 5000);
           }
-          this.settled$.next();
+          this.settledSubject.next();
         },
         error: error => {
           if (!this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
@@ -282,7 +287,7 @@ export class ManualCodingAnalysisFacade {
           }
 
           this.isLoadingResponseAnalysis.set(false);
-          this.viewUpdated$.next();
+          this.viewUpdatedSubject.next();
           const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
           if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
             if (!this.hasShownResponseAnalysisPollingError) {
@@ -300,8 +305,8 @@ export class ManualCodingAnalysisFacade {
           this.setResponseAnalysisGuardActive(false);
           this.responseAnalysis.set(null);
           this.responseAnalysisError.set(responseAnalysisError);
-          this.failed$.next();
-          this.settled$.next();
+          this.failedSubject.next();
+          this.settledSubject.next();
           this.snackBar.open(
             responseAnalysisError,
             'OK',

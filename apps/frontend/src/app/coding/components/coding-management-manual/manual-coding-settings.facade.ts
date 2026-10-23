@@ -1,16 +1,24 @@
 import {
-  DestroyRef, Injectable, inject, signal
+  DestroyRef, Injectable, computed, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import {
-  Observable, Subject, EMPTY, of, map, tap, finalize, debounceTime, concatMap, catchError
+  EMPTY,
+  Observable, Subject,
+  catchError,
+  concatMap,
+  debounceTime,
+  finalize,
+  map,
+  of,
+  tap
 } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
+import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 
 interface AggregationThresholdChange {
   threshold: number;
@@ -27,29 +35,62 @@ export class ManualCodingSettingsFacade {
   private readonly testPersonCodingService = inject(TestPersonCodingService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly translateService = inject(TranslateService);
-  readonly initialSettingsLoaded$ = new Subject<void>();
-  readonly settled$ = new Subject<void>();
+  private readonly initialSettingsLoadedSubject = new Subject<void>();
+  private readonly settledSubject = new Subject<void>();
 
-  readonly thresholdSaved$ = new Subject<void>();
-  readonly thresholdSaving$ = new Subject<boolean>();
+  private readonly thresholdSavedSubject = new Subject<void>();
+  private readonly thresholdSavingSubject = new Subject<boolean>();
   private workspaceGeneration = 0;
   private thresholdIntent = 0;
-  readonly isSavingThreshold = signal(false);
+  private readonly isSavingThresholdState = signal(false);
   private readonly thresholdChanges = new Subject<AggregationThresholdChange>();
-  readonly responseMatchingFlags = signal<ResponseMatchingFlag[]>([]);
+  private readonly responseMatchingFlagsState = signal<readonly ResponseMatchingFlag[]>([]);
 
-  persistedResponseMatchingFlags: ResponseMatchingFlag[] = [];
+  private readonly persistedFlags = signal<readonly ResponseMatchingFlag[]>([]);
+  get persistedResponseMatchingFlags(): readonly ResponseMatchingFlag[] { return this.persistedFlags(); }
 
-  readonly aggregationOptionFlags = [
+  readonly aggregationOptionFlags: readonly ResponseMatchingFlag[] = [
     ResponseMatchingFlag.IGNORE_CASE,
     ResponseMatchingFlag.IGNORE_WHITESPACE
   ];
 
-  readonly isLoadingMatchingMode = signal(false);
+  private readonly isLoadingMatchingModeState = signal(false);
 
-  readonly isSavingMatchingMode = signal(false);
+  private readonly isSavingMatchingModeState = signal(false);
 
-  readonly duplicateAggregationThreshold = signal(2);
+  private readonly duplicateAggregationThresholdState = signal(2);
+
+  readonly initialSettingsLoaded$ = this.initialSettingsLoadedSubject.asObservable();
+  readonly settled$ = this.settledSubject.asObservable();
+  readonly thresholdSaved$ = this.thresholdSavedSubject.asObservable();
+  readonly thresholdSaving$ = this.thresholdSavingSubject.asObservable();
+  readonly isSavingThreshold = this.isSavingThresholdState.asReadonly();
+  readonly responseMatchingFlags = this.responseMatchingFlagsState.asReadonly();
+  readonly isLoadingMatchingMode = this.isLoadingMatchingModeState.asReadonly();
+  readonly isSavingMatchingMode = this.isSavingMatchingModeState.asReadonly();
+  readonly duplicateAggregationThreshold = this.duplicateAggregationThresholdState.asReadonly();
+  readonly hasUnsavedChanges = computed(() => !this.areMatchingFlagsEqual(
+    this.getPersistableResponseMatchingFlags(), this.persistedResponseMatchingFlags
+  ));
+
+  restoreSettings(
+    settings: { flags: readonly ResponseMatchingFlag[]; threshold: number },
+    localFlags: readonly ResponseMatchingFlag[] = settings.flags
+  ): void {
+    this.persistedFlags.set([...settings.flags]);
+    this.responseMatchingFlagsState.set([...localFlags]);
+    this.updateThreshold(settings.threshold);
+  }
+
+  updateLocalMatchingFlags(flags: readonly ResponseMatchingFlag[]): void {
+    this.responseMatchingFlagsState.set([...flags]);
+  }
+
+  updateThreshold(value: number | string | null | undefined): number {
+    const threshold = this.normalizeAggregationThreshold(value);
+    this.duplicateAggregationThresholdState.set(threshold);
+    return threshold;
+  }
 
   constructor() {
     let observedWorkspaceId = this.appService.selectedWorkspaceId;
@@ -73,10 +114,10 @@ export class ManualCodingSettingsFacade {
           tap(result => {
             if (!this.isCurrentThresholdChange(change)) return;
             if (!result.success) { this.showError(result.message); return; }
-            this.persistedResponseMatchingFlags = [...result.flags];
-            this.responseMatchingFlags.set(this.buildResponseMatchingFlagsAfterSettingsSave(result.flags, localFlags));
-            this.duplicateAggregationThreshold.set(this.normalizeAggregationThreshold(result.threshold));
-            this.thresholdSaved$.next();
+            this.persistedFlags.set([...result.flags]);
+            this.responseMatchingFlagsState.set(this.buildResponseMatchingFlagsAfterSettingsSave(result.flags, localFlags));
+            this.duplicateAggregationThresholdState.set(this.normalizeAggregationThreshold(result.threshold));
+            this.thresholdSavedSubject.next();
           }),
           catchError(() => {
             if (this.isCurrentThresholdChange(change)) this.showError('Fehler beim Speichern der Aggregationseinstellungen');
@@ -92,10 +133,10 @@ export class ManualCodingSettingsFacade {
     ).subscribe();
     this.destroyRef.onDestroy(() => {
       this.thresholdChanges.complete();
-      this.thresholdSaved$.complete();
-      this.thresholdSaving$.complete();
-      this.initialSettingsLoaded$.complete();
-      this.settled$.complete();
+      this.thresholdSavedSubject.complete();
+      this.thresholdSavingSubject.complete();
+      this.initialSettingsLoadedSubject.complete();
+      this.settledSubject.complete();
     });
   }
 
@@ -116,47 +157,45 @@ export class ManualCodingSettingsFacade {
   }
 
   private setThresholdSaving(saving: boolean): void {
-    this.isSavingThreshold.set(saving);
-    this.thresholdSaving$.next(saving);
+    this.isSavingThresholdState.set(saving);
+    this.thresholdSavingSubject.next(saving);
   }
 
   loadInitialSettings(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.initialSettingsLoaded$.next();
+      this.initialSettingsLoadedSubject.next();
       return;
     }
 
-    this.isLoadingMatchingMode.set(true);
+    this.isLoadingMatchingModeState.set(true);
 
     this.testPersonCodingService
       .getAggregationSettings(workspaceId)
       .pipe(
         finalize(() => {
-          this.isLoadingMatchingMode.set(false);
-          this.settled$.next();
+          this.isLoadingMatchingModeState.set(false);
+          this.settledSubject.next();
         }),
         takeUntilWorkspaceChanged(this.appService, workspaceId),
         takeUntilDestroyed(this.destroyRef)
       )
       .subscribe({
         next: settings => {
-          this.responseMatchingFlags.set(settings.flags);
-          this.persistedResponseMatchingFlags = [...settings.flags];
-          this.duplicateAggregationThreshold.set(this.normalizeAggregationThreshold(settings.threshold));
-          this.initialSettingsLoaded$.next();
+          this.restoreSettings(settings);
+          this.initialSettingsLoadedSubject.next();
         },
         error: () => {
-          this.responseMatchingFlags.set([]);
-          this.persistedResponseMatchingFlags = [];
-          this.duplicateAggregationThreshold.set(2);
-          this.initialSettingsLoaded$.next();
+          this.responseMatchingFlagsState.set([]);
+          this.persistedFlags.set([]);
+          this.duplicateAggregationThresholdState.set(2);
+          this.initialSettingsLoadedSubject.next();
         }
       });
   }
 
   getSelectedAggregationOptionFlags(
-    flags: ResponseMatchingFlag[] = this.responseMatchingFlags()
+    flags: readonly ResponseMatchingFlag[] = this.responseMatchingFlags()
   ): ResponseMatchingFlag[] {
     return this.aggregationOptionFlags.filter(flag => flags.includes(flag));
   }
@@ -172,7 +211,7 @@ export class ManualCodingSettingsFacade {
   }
 
   getPersistableResponseMatchingFlags(
-    flags: ResponseMatchingFlag[] = this.responseMatchingFlags()
+    flags: readonly ResponseMatchingFlag[] = this.responseMatchingFlags()
   ): ResponseMatchingFlag[] {
     const selectedOptionFlags = this.getSelectedAggregationOptionFlags(flags);
     return flags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
@@ -211,7 +250,7 @@ export class ManualCodingSettingsFacade {
       undefined;
     const showSuccessMessage = options.showSuccessMessage ?? true;
 
-    this.isSavingMatchingMode.set(true);
+    this.isSavingMatchingModeState.set(true);
     return this.testPersonCodingService
       .saveAggregationSettings(
         workspaceId,
@@ -229,9 +268,7 @@ export class ManualCodingSettingsFacade {
         }),
         tap({
           next: result => {
-            this.persistedResponseMatchingFlags = [...result.flags];
-            this.responseMatchingFlags.set(localFlagsAfterSave ?? result.flags);
-            this.duplicateAggregationThreshold.set(this.normalizeAggregationThreshold(result.threshold));
+            this.restoreSettings(result, localFlagsAfterSave);
             if (showSuccessMessage) {
               this.showSuccess(
                 this.translateService.instant(
@@ -241,8 +278,8 @@ export class ManualCodingSettingsFacade {
             }
           },
           error: () => {
-            this.responseMatchingFlags.set(rollbackFlags);
-            this.isSavingMatchingMode.set(false);
+            this.responseMatchingFlagsState.set(rollbackFlags);
+            this.isSavingMatchingModeState.set(false);
             this.showError(
               this.translateService.instant(
                 'coding-management-manual.response-matching.save-error'
@@ -251,15 +288,15 @@ export class ManualCodingSettingsFacade {
           }
         }),
         finalize(() => {
-          this.isSavingMatchingMode.set(false);
+          this.isSavingMatchingModeState.set(false);
         }),
         map(() => undefined)
       );
   }
 
   areMatchingFlagsEqual(
-    previous: ResponseMatchingFlag[],
-    current: ResponseMatchingFlag[]
+    previous: readonly ResponseMatchingFlag[],
+    current: readonly ResponseMatchingFlag[]
   ): boolean {
     if (previous.length !== current.length) {
       return false;

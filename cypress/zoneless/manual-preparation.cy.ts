@@ -143,6 +143,39 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@training').find('.start-training-button').should('be.enabled');
   }
 
+  it('can dismiss the training editor while its deferred JavaScript download is pending', () => {
+    setup();
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    const download = gate();
+    cy.intercept('GET', '**/chunk-*.js', request => download.wait.then(() => { request.continue(); }))
+      .as('trainingChunk');
+    cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
+    cy.get('.coder-training-modal [role="status"]').should('contain.text', 'Ansicht wird geladen');
+    cy.get('.coder-training-modal').then(modal => settleFiniteAncestorAnimations(modal[0]));
+    cy.contains('.coder-training-modal button', 'Schließen').click({ scrollBehavior: false });
+    cy.get('.coder-training-overlay').should('not.exist');
+    cy.then(() => download.release());
+    cy.wait('@trainingChunk');
+    cy.get('coding-box-coder-training').should('not.exist');
+  });
+
+  it('can dismiss the training editor when its deferred JavaScript download fails', () => {
+    setup();
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.intercept('GET', '**/chunk-*.js', {
+      statusCode: 503, body: 'Deferred download unavailable'
+    }).as('trainingChunk');
+    cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
+    cy.wait('@trainingChunk');
+    cy.get('.coder-training-modal [role="alert"]').should('contain.text', 'Die Ansicht konnte nicht geladen werden.');
+    cy.get('coding-box-coder-training').should('not.exist');
+    cy.get('.coder-training-modal').then(modal => settleFiniteAncestorAnimations(modal[0]));
+    cy.contains('.coder-training-modal button', 'Schließen').click({ scrollBehavior: false });
+    cy.get('.coder-training-overlay').should('not.exist');
+  });
+
   it('keeps the latest variable filter and scope after earlier responses arrive last', () => {
     setup();
     const old = gate();
