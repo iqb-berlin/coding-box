@@ -1,4 +1,5 @@
 import {
+  JoinColumn, ManyToOne,
   Entity,
   Column,
   PrimaryGeneratedColumn,
@@ -6,10 +7,15 @@ import {
   UpdateDateColumn,
   Index
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 @Entity({ name: 'coder_training_discussion_result' })
 @Index(['training_id', 'response_id'], { unique: true })
 export class CoderTrainingDiscussionResult {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

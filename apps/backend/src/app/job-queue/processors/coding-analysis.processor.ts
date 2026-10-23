@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets } from 'typeorm';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
@@ -34,7 +35,7 @@ import {
 const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
 
 @Processor('response-analysis', { concurrency: 1 })
-export class CodingAnalysisProcessor extends WorkerHost {
+export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(CodingAnalysisProcessor.name);
 
   constructor(
@@ -49,7 +50,7 @@ export class CodingAnalysisProcessor extends WorkerHost {
     super();
   }
 
-  process(job: Job<CodingAnalysisJobData>) {
+  async processWorkspaceJob(job: Job<CodingAnalysisJobData>) {
     return this.handleResponseAnalysis(job);
   }
 

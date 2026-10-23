@@ -55,6 +55,12 @@ export class CacheService {
    * @param key The cache key
    * @returns The cached value or null if not found
    */
+  /** Read ownership/cleanup metadata without treating Redis failures as cache misses. */
+  async getStrict<T>(key: string): Promise<T | null> {
+    const value = await this.redis.get(key);
+    return value ? JSON.parse(value) as T : null;
+  }
+
   async get<T>(key: string): Promise<T | null> {
     try {
       const cachedValue = await this.redis.get(key);

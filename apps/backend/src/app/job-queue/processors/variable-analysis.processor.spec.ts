@@ -399,7 +399,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     const variableCombos = findCacheSetPayload<Array<Record<string, unknown>>>(
       cacheService,
@@ -609,7 +609,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    const metadata = await processor.process(createJob());
+    const metadata = await processor.processWorkspaceJob(createJob());
 
     expect(metadata).toEqual(expect.objectContaining({
       cacheKey: 'variable-analysis:1:job-1',
@@ -729,7 +729,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob({
+    await processor.processWorkspaceJob(createJob({
       unitId: 1,
       variableId: 'MISSING'
     }));
@@ -851,7 +851,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     const variableCombos = findCacheSetPayload<unknown[]>(
       cacheService,
@@ -958,7 +958,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     expect(baseQuery.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('REGEXP_REPLACE'),
@@ -1048,7 +1048,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     const variableCombos = findCacheSetPayload<unknown[]>(
       cacheService,
@@ -1143,7 +1143,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     const variableCombos = findCacheSetPayload<unknown[]>(
       cacheService,
@@ -1235,7 +1235,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    await processor.process(createJob());
+    await processor.processWorkspaceJob(createJob());
 
     expect(responseRepository.query.mock.calls[2][1]).toEqual([
       ['UNIT\u001FMULTI'],

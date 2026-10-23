@@ -1,4 +1,5 @@
 import {
+  JoinColumn, ManyToOne,
   Entity,
   Column,
   PrimaryGeneratedColumn,
@@ -6,6 +7,7 @@ import {
   UpdateDateColumn,
   TableInheritance
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 /**
  * Base entity for all job types
@@ -13,6 +15,10 @@ import {
 @Entity()
 @TableInheritance({ column: { type: 'varchar', name: 'type' } })
 export class Job {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 
