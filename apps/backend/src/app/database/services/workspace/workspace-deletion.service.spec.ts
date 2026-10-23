@@ -3,6 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { WorkspaceDeletionService } from './workspace-deletion.service';
 
+// PostgreSQL integration tests exercise the actual cross-process package lease.
+jest.mock('../shared/resource-package-lock.util', () => ({
+  withResourcePackageLock: jest.fn((_connection, _name, callback: () => Promise<unknown>) => callback())
+}));
+
 const createJob = (state = 'completed') => ({
   workspaceId: 7,
   id: '17',

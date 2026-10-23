@@ -7,6 +7,7 @@ import { JobQueueService, WorkspaceDeletionJob } from '../../../job-queue/job-qu
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { CacheService } from '../../../cache/cache.service';
 import ResourcePackage from '../../entities/resource-package.entity';
+import { withResourcePackageLock } from '../shared/resource-package-lock.util';
 
 interface CleanupManifest {
   jobs: { queueName: string; id: string }[];
@@ -108,11 +109,13 @@ export class WorkspaceDeletionService {
     const deleted = await Promise.all(resources.cacheKeys.map(key => this.cacheService.delete(key)));
     if (deleted.some(success => !success)) throw new Error('Workspace cleanup could not delete cached export metadata.');
     for (const name of resources.packageNames) {
-      const remaining = await this.connection.getRepository(ResourcePackage)
-        .createQueryBuilder('p').where('LOWER(p.name) = LOWER(:name)', { name }).getCount();
-      if (remaining === 0 && name === path.basename(name) && name !== '.' && name !== '..') {
-        await fs.rm(path.join(process.cwd(), 'packages', name), { recursive: true, force: true });
-      }
+      await withResourcePackageLock(this.connection, name, async () => {
+        const remaining = await this.connection.getRepository(ResourcePackage)
+          .createQueryBuilder('p').where('LOWER(p.name) = LOWER(:name)', { name }).getCount();
+        if (remaining === 0 && name === path.basename(name) && name !== '.' && name !== '..') {
+          await fs.rm(path.join(process.cwd(), 'packages', name), { recursive: true, force: true });
+        }
+      });
     }
     for (const id of resources.workspaceIds) await fs.rm(this.manifestPath(id), { force: true });
   }
