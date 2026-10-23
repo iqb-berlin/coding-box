@@ -551,10 +551,9 @@ Rollen werden aus Keycloak `realm_access.roles` gelesen:
 - Administrator kann Account in Keycloak entsperren
 
 **Browser-Probleme:**
-- Löschen Sie Browser-Cookies und Cache
-- Deaktivieren Sie Browser-Extensions
-- Versuchen Sie einen anderen Browser
-- Überprüfen Sie, ob JavaScript aktiviert ist
+- Lassen Sie bei Authentifizierungsfehlern den Kodier-Tab mit seinem Entwurf geöffnet.
+- Notieren Sie die Fehler-/Request-ID und folgen Sie der [Betriebsdiagnose](#55-authentifizierungsfehler-im-betrieb-unterscheiden-f06), bevor Sie Speicher löschen, sich abmelden oder einen ungespeicherten Entwurf neu laden.
+- Prüfen Sie JavaScript und die Browser-Verbindung. Bei vorübergehenden Ausfällen verwenden Sie nach Wiederherstellung die Wiederholen-Aktion der Anwendung.
 
 **Verbindungsprobleme:**
 - Überprüfen Sie Ihre Internetverbindung
@@ -731,53 +730,62 @@ Lösung:
 - Überprüfen Sie Firewall-Konfiguration
 - Prüfen Sie Load Balancer-Settings
 
-### 5.5 Debugging
+### 5.5 Authentifizierungsfehler im Betrieb unterscheiden (F06)
 
-**Backend Logs**
+Bezug: [#1018](https://github.com/iqb-berlin/coding-box/issues/1018) und [#571](https://github.com/iqb-berlin/coding-box/issues/571). Dieses Verfahren beschreibt die implementierte Fehlerklassifikation und die im [Abnahmeprotokoll](qa/auth-acceptance-2026-10-23.md) belegten Live-Prüfungen. Die getrennte Konsolidierung von Installation und Upgrade in #571 wird dadurch nicht vollständig abgeschlossen.
 
-```bash
-# Docker Logs
-docker-compose logs backend | grep oidc
+**Zuerst die Fehlerklasse bestimmen**
 
-# Filter für Authentifizierung
-docker-compose logs backend | grep -i "auth\|oidc\|keycloak"
-```
+| Ergebnis der Anwendung | Bedeutung | Wiederherstellung |
+| --- | --- | --- |
+| 503, `provider-unavailable` | Transportfehler, Timeout oder Serverausfall bei Provider/JWKS; daraus folgt kein nachgewiesenes Sitzungsende | Sitzung und Entwurf erhalten. Verbindung aus dem Backend-Netz prüfen, Erreichbarkeit wiederherstellen, Anmeldung erneut prüfen und erfolgreiches Speichern bestätigen |
+| 503, `configuration-error` | Fehlende/ungültige Endpunkt- oder Clientkonfiguration oder als Konfigurationsfehler eingeordnete Provider-/JWKS-Antwort 400/401/403/404 | Request-ID an den Betrieb geben. Ausgelieferten Issuer, Client-ID und betroffenen Endpunkt prüfen, vorgesehene Konfiguration wiederherstellen und im bestehenden Tab erneut versuchen |
+| 401, `session-invalid` | Zum Beispiel Refresh-Antwort 400 mit `invalid_grant` oder Userinfo-Antwort 401 | Dieselbe Person erneut anmelden und den wiederhergestellten Entwurf im selben Kodierkontext vor dem Fortsetzen prüfen |
+| 401 ohne diesen Code | Fehlender, abgelaufener oder zurückgewiesener JWT; auch Signatur, Subject, Issuer und Client/Audience können die Ursache sein | Tatsächlich fehlschlagende Route und erwarteten Issuer/Client prüfen. Aus 401 allein weder Provider-Ausfall noch Sitzungsablauf ableiten |
+| 403 beim Arbeitsbereichs-/Jobzugriff | Authentifizierte Anfrage ohne erforderliche Berechtigung | Sitzung erhalten. Mitgliedschaft sowie Lese-/Schreib-/Jobzuweisungsregeln der Route prüfen; wiederholte Anmeldung erteilt keine Rechte |
+| Auth-Daten-Abfrage mit Netzwerkfehler/5xx | Die Arbeitsbereichsliste wurde nicht erfolgreich geladen | Sichtbare Wiederholen-Aktion nutzen; richtige Liste und Verschwinden des bisherigen Fehlers prüfen |
 
-Wichtige Log-Meldungen:
-- "Initiating OpenID Connect Provider login"
-- "Processing OpenID Connect Provider callback"
-- "Successfully obtained access token"
-- "OIDC Provider User with id 'X' stored in database"
+`invalid_grant` ist eine Ausnahme von der allgemeinen Provider-400-Regel oben. Unbekanntes `kid`, falsche Signatur, falscher Issuer/Client und abgelaufene JWTs bleiben Authentifizierungsfehler; ein nicht erreichbarer oder falsch konfigurierter JWKS-Endpunkt wird davon unterschieden. Einzelne Zugriffslevel-Guards verwenden weiterhin ältere 401-Antworten: Meldung und Route prüfen, statt für sämtliche Berechtigungsfehler bereits 403 vorauszusetzen.
 
-**Frontend Console**
+**Browser, HTTP und Betriebslog zuordnen**
 
-Öffnen Sie Browser Developer Tools (F12) und prüfen Sie:
-- Console für JavaScript-Fehler
-- Network Tab für Failed Requests
-- Application Tab für Token-Storage
-- LocalStorage/SessionStorage für Session-Daten
+1. Zielumgebung, ausgeliefertes Artefakt/Version, UTC-Zeit, Aktion, HTTP-Status der Anwendung und sichtbare Fehler-ID erfassen. In DevTools Network ausschließlich Antwortheader `X-Request-Id`, Fehlerfelder `requestId`/`code` und den Pfad ohne Querywerte prüfen. UI-ID, Header und Fehlerkörper müssen für dieselbe Anfrage übereinstimmen.
+2. Die Request-ID-Middleware akzeptiert getrimmte IDs mit 1–128 Zeichen aus `[A-Za-z0-9._:-]+`; andernfalls erzeugt sie eine neue ID. Maßgeblich ist die zurückgegebene ID, nicht ein unbestätigter vom Client gesetzter Wert. Das Provider-Diagnoseereignis übernimmt diese ID, soweit sie verfügbar ist.
+3. Zugehöriges Backend-Ereignis suchen: `oidc-refresh-failed`, `oidc-code-exchange-failed`, `oidc-userinfo-failed`, `oidc-jwks-failed` oder `oidc-logout-failed`. Aus diesem strukturierten Ereignis ausschließlich `event`, `errorClass`, `endpoint`, `httpStatus` und `requestId` weitergeben.
+4. `httpStatus` ist der Status des **Providers**, nicht der Anwendungsantwort. Ohne Provider-Antwort kann er `null` sein. Beim Endpunkt werden nur Origin und Pfad protokolliert; URL-Zugangsdaten, Query und Fragment werden entfernt. Eine Konfigurationsprüfung vor dem Provider-Aufruf muss kein Provider-Antwortereignis erzeugen; dann auch den korrelierten Backend-Fehlereintrag prüfen.
 
-**Keycloak Logs**
+Für die interne Diagnose ein begrenztes Log-Zeitfenster einmalig sichern. Compose-Projekt, Umgebungsdateien und vollständige Override-Liste der aktiven Installation verwenden; bei vorhandenem `compose.sh`-Wrapper diesen anstelle von `docker compose` einsetzen.
 
 ```bash
-# Keycloak Container Logs
-docker-compose logs keycloak
-
-# Admin Console für detaillierte Logs
-# Navigieren Sie zu: Keycloak Admin > Realm > Events
+umask 077
+auth_diag_dir="$(mktemp -d)"
+docker compose logs --no-color --since 15m backend > "$auth_diag_dir/backend.log" 2>&1
+auth_request_id='example-request-123'
+grep -nF -- "$auth_request_id" "$auth_diag_dir/backend.log"
 ```
 
-**Network Inspection**
+Rohdatei und benachbarte Logzeilen dienen der internen Prüfung. Für Ticket oder Supportnachricht nur die fünf erlaubten Felder aus dem strukturierten Auth-Ereignis übertragen; eine allgemeine HTTP-Logzeile oder ein Stacktrace ist kein bereinigter Auszug. Ursprüngliche Aufnahme und Zeitfenster erhalten. Einen vorhandenen Vorfallsnachweis nicht durch eine spätere leere Abfrage eines rollierenden Fensters überschreiben.
 
-Verwenden Sie Browser DevTools oder Tools wie:
-- curl für API-Testing
-- Postman für komplexere Requests
-- Wireshark für Network-Analysis
+Dieses Dokumentationsbeispiel hat Anwendungsstatus **503** und Providerstatus **404**:
 
-Beispiel curl:
-```bash
-curl -X GET "https://keycloak.example.com/auth/realms/coding-box/.well-known/openid-configuration"
+```json
+{
+  "event": "oidc-jwks-failed",
+  "errorClass": "configuration-error",
+  "endpoint": "https://keycloak.example.com/realms/coding-box/protocol/openid-connect/certs",
+  "httpStatus": 404,
+  "requestId": "example-request-123"
+}
 ```
+
+Keine Authorization-/Cookie-Header, Access-/Refresh-/ID-Tokens, Client-Secrets, Callback-/Exchange-Codes, PKCE-Werte, vollständigen HAR-Dateien, Provider-Antwortkörper oder Personen-/Antwortdaten übernehmen. Dieses Verfahren benötigt weder das Auslesen von Tokenwerten noch einen Dump von Umgebungs- oder Konfigurationsdateien.
+
+**Betriebsmaßnahme auswählen und Erfolg prüfen**
+
+- Bei `provider-unavailable` DNS, Routing/VPN, TLS und Erreichbarkeit des betroffenen Endpunkts **aus dem Backend** prüfen. Ein erfolgreicher Browser-Login beweist keine Backend-Verbindung zum Provider oder JWKS. Verbindung wiederherstellen und erneut versuchen; der Entwurf muss erhalten bleiben und danach gespeichert werden können.
+- Bei `configuration-error` `OIDC_ISSUER`, `OAUTH2_CLIENT_ID` und betroffenen Endpunkt mit dem vorgesehenen Provider/Realm vergleichen. Der Issuer muss exakt dem Token-Issuer des Providers entsprechen. Absichtlich interne `OIDC_JWKS_URI`-/Token-Adressen dürfen abweichen, müssen aber aus dem Backend erreichbar sein. Ein syntaktisch gültiger, inhaltlich falscher Issuer kann JWT-401 statt `configuration-error` erzeugen. Betroffene ausgelieferte Einstellung nach dem Änderungs-/Rücknahmeverfahren des Deployments korrigieren, erneut versuchen und das Verschwinden des alten Hinweises bestätigen.
+- Bei `session-invalid` dieselbe Person neu anmelden und Kodierkontext sowie Entwurf prüfen. Bei 403 die vorgesehene Berechtigung prüfen; Zugriffe nicht als Diagnoseabkürzung erweitern.
+- Anwendungsstatus vorher/nachher, übereinstimmende Request-ID, bereinigtes Ereignis und Recovery-Ergebnis festhalten. Der Live-F05/F06-Nachweis im Abnahmeprotokoll ordnet Anwendungs-503 dem JWKS-Providerstatus 404 zu, stellt die Konfiguration zurück und bestätigt den erhaltenen Entwurf nach Speichern/Neuladen. F02 belegt getrennt Refresh-`invalid_grant` mit Anwendungs-401 und Providerstatus 400. Dafür gelten unterschiedliche Wiederherstellungswege.
 
 ## 6. Sicherheitsüberlegungen
 
