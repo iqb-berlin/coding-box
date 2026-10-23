@@ -15,9 +15,7 @@ import {
 import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
-  ReactiveFormsModule,
-  NonNullableFormBuilder,
-  Validators
+  ReactiveFormsModule
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
@@ -63,6 +61,10 @@ import {
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 import { TestResultsOverwriteMode } from '../../../../../../../api-dto/files/import-options.dto';
+import {
+  clearTestCenterImportOptions, createTestCenterImportForm, createTestCenterLoginForm,
+  selectTestCenterImportOptions, updateIndividualTestCenterControl
+} from './test-center-import-form';
 
 export interface ImportFormValues {
   testCenter: number;
@@ -119,7 +121,6 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }>(MAT_DIALOG_DATA);
 
   private workspaceAdminService = inject(WorkspaceAdminService);
-  private fb = inject(NonNullableFormBuilder);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
   private translate = inject(TranslateService);
@@ -165,26 +166,8 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   selectedRows: TestGroupsInfoDto[] = [];
   readonly testGroups = signal<TestGroupsInfoDto[]>([]);
   readonly workspaces = signal<WorkspaceAdmin[]>([]);
-  readonly loginForm = this.fb.group({
-    name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-    pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-    testCenter: this.fb.control<number | ''>('', [Validators.required]),
-    testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
-  });
-
-  readonly importFilesForm = this.fb.group({
-    workspace: this.fb.control('', [Validators.required]),
-    responses: this.fb.control(false),
-    definitions: this.fb.control(false),
-    units: this.fb.control(false),
-    player: this.fb.control(false),
-    codings: this.fb.control(false),
-    logs: this.fb.control(false),
-    responseOverwriteMode: this.fb.control<TestResultsOverwriteMode>('skip'),
-    testTakers: this.fb.control(false),
-    booklets: this.fb.control(false),
-    metadata: this.fb.control(false)
-  });
+  readonly loginForm = createTestCenterLoginForm();
+  readonly importFilesForm = createTestCenterImportForm();
 
   readonly authenticationError = signal<boolean>(false);
   protected readonly filesSelectionError = signal<boolean>(false);
@@ -234,47 +217,12 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   };
 
   protected selectAllImportOptions(): void {
-    let optionControls: (keyof ImportOptions)[];
-
-    if (this.data.importType === 'testResults') {
-      // For results import, only responses and logs are relevant
-      optionControls = ['responses', 'logs'];
-    } else {
-      // For test files import, only file-related options are relevant
-      optionControls = [
-        'definitions',
-        'units',
-        'player',
-        'codings',
-        'booklets',
-        'testTakers',
-        'metadata'
-      ];
-    }
-
-    optionControls.forEach(name => {
-      this.importFilesForm.controls[name].setValue(true);
-    });
-
+    selectTestCenterImportOptions(this.importFilesForm, this.data.importType);
     this.filesSelectionError.set(false);
   }
 
   protected clearAllImportOptions(): void {
-    const optionControls: (keyof ImportOptions)[] = [
-      'responses',
-      'definitions',
-      'units',
-      'player',
-      'codings',
-      'logs',
-      'testTakers',
-      'booklets',
-      'metadata'
-    ];
-
-    optionControls.forEach(name => {
-      this.importFilesForm.controls[name].setValue(false);
-    });
+    clearTestCenterImportOptions(this.importFilesForm);
   }
 
   ngOnInit(): void {
@@ -402,11 +350,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   isIndividualTcSelected(value: number): void {
-    if (value !== 6) {
-      this.loginForm.controls.testCenterIndividual.disable();
-    } else {
-      this.loginForm.controls.testCenterIndividual.enable();
-    }
+    updateIndividualTestCenterControl(this.loginForm, value);
   }
 
   getTestGroups(): void {
