@@ -1,5 +1,5 @@
 import {
-  Controller, Get, INestApplication, Logger, UseGuards
+  Controller, Get, INestApplication, Logger, Req, UseGuards
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -21,12 +21,12 @@ import { WORKSPACE_TOKEN_AUDIENCE, WORKSPACE_TOKEN_ISSUER, WORKSPACE_TOKEN_USE }
 class ProtectedController {
   @Get('jwt')
   @UseGuards(JwtAuthGuard)
-  jwt() { return { authenticated: true }; }
+  jwt(@Req() request: { user: unknown }) { return { authenticated: true, user: request.user }; }
 
   @Get('combined')
   @UseGuards(JwtOrWorkspaceTokenAuthGuard)
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
-  combined() { return { authenticated: true }; }
+  combined(@Req() request: { user: unknown }) { return { authenticated: true, user: request.user }; }
 
   @Get('unscoped')
   @UseGuards(JwtOrWorkspaceTokenAuthGuard)
@@ -119,14 +119,96 @@ describe('OIDC JWT verification over HTTP', () => {
   });
 
   it.each([
+    ['authorized party', { azp: 'coding-box', aud: 'other-service' }],
+    ['single audience', { azp: 'other-client', aud: 'coding-box' }],
+    ['audience list', { azp: undefined, aud: ['other-service', 'coding-box'] }]
+  ])('maps a verified token with a matching %s to the local user through both guards', async (_label, clientClaims) => {
+    const signedToken = token({
+      ...clientClaims,
+      preferred_username: 'oidc-test-user',
+      given_name: 'Test',
+      family_name: 'User',
+      email: 'oidc-test-user@example.test',
+      realm_access: { roles: ['admin'] }
+    });
+    for (const path of ['jwt', 'combined']) {
+      const response = await request(path, signedToken);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        authenticated: true,
+        user: {
+          id: 42,
+          userId: 42,
+          name: 'oidc-test-user',
+          firstName: 'Test',
+          lastName: 'User',
+          email: 'oidc-test-user@example.test',
+          isAdmin: true,
+          sub: 'private-subject',
+          identity: 'private-subject',
+          issuer
+        }
+      });
+      expect(users.createOidcProviderUser).toHaveBeenLastCalledWith({
+        identity: 'private-subject',
+        issuer,
+        username: 'oidc-test-user',
+        email: 'oidc-test-user@example.test',
+        firstName: 'Test',
+        lastName: 'User',
+        isAdmin: true
+      });
+    }
+    expect(users.createOidcProviderUser).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
     ['expired', () => token({}, { expiresIn: -1 })],
     ['wrong signature', () => token({}, {}, wrongKey.privateKey)],
     ['unknown key', () => token({}, { keyid: 'unknown' })],
     ['wrong issuer', () => token({}, { issuer: 'https://other.example.test' })],
     ['wrong client', () => token({ azp: 'other-client' })],
+    ['wrong audience', () => token({ azp: undefined, aud: 'other-client' })],
+    ['wrong audience list', () => token({ azp: 'other-client', aud: ['other-service', 'another-service'] })],
+    ['missing client claims', () => token({ azp: undefined })],
+    ['missing subject', () => token({ sub: undefined })],
+    ['blank subject', () => token({ sub: '   ' })],
+    ['disallowed RSA algorithm', () => token({}, { algorithm: 'RS512' })],
+    ['HMAC signed with the public RSA key', () => jwtService.sign({ sub: 'private-subject', azp: 'coding-box' }, {
+      secret: signingKey.publicKey.export({ format: 'pem', type: 'spki' }),
+      algorithm: 'HS256',
+      keyid: 'known',
+      issuer,
+      expiresIn: 300
+    })],
+    ['unsigned', () => jwtService.sign({ sub: 'private-subject', azp: 'coding-box' }, {
+      algorithm: 'none', keyid: 'known', issuer, expiresIn: 300
+    })],
     ['malformed', () => 'not-a-jwt']
   ])('keeps %s tokens unauthorized', async (_label, makeToken) => {
     for (const path of ['jwt', 'combined']) expect((await request(path, makeToken())).status).toBe(401);
+    expect(users.createOidcProviderUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['modern', {
+      token_use: WORKSPACE_TOKEN_USE, scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+    }, { issuer: WORKSPACE_TOKEN_ISSUER, audience: WORKSPACE_TOKEN_AUDIENCE }],
+    ['legacy replay', { username: 'workspace-test-user' }, {}]
+  ])('restricts %s workspace tokens to explicitly scoped routes without provisioning an OIDC user', async (_label, claims, options) => {
+    const workspaceToken = jwtService.sign({ userId: 42, workspace: 1, ...claims }, {
+      secret: 'workspace-test-secret', algorithm: 'HS256', expiresIn: 300, ...options
+    });
+    expect((await request('jwt', workspaceToken)).status).toBe(401);
+    const scopedResponse = await request('combined', workspaceToken);
+    expect(scopedResponse.status).toBe(200);
+    expect(await scopedResponse.json()).toMatchObject({
+      authenticated: true,
+      user: {
+        id: 42, userId: 42, workspace: 1, isWorkspaceToken: true, scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+      }
+    });
+    expect((await request('unscoped', workspaceToken)).status).toBe(401);
     expect(users.createOidcProviderUser).not.toHaveBeenCalled();
   });
 

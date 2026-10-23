@@ -49,8 +49,10 @@ die entfernte CI ist separat am jeweiligen PR-Head zu prüfen.
 ## Fachliche Aufteilung der vier priorisierten Ansichten
 
 Die Folgeimplementierung basiert auf dem gepushten Formularstand
-`5cd02a0bccb0c52e5b7cddb573cdcb9a2210cfa0` von PR #1090. Der PR war bei der
-Ausgangsprüfung am 22.10.2026 offen. Die vier Ansichten haben folgende lokale
+`962be95cd1762e0c56ad51bea1bc5076ea573d1b` von PR #1090, aktualisiert am
+23.10.2026 auf `develop` bei `474dd5125f9962e4b4d8b60b3f23c0f5637bda9d`.
+Der ursprüngliche Stand war `5cd02a0bccb0c52e5b7cddb573cdcb9a2210cfa0`;
+PR #1090 ist weiterhin offen. Die vier Ansichten haben folgende lokale
 Teilansichten; die anderen 13 Komponenten wurden nicht umgebaut:
 
 | Ablaufbesitzer | Neue fachliche Teilansichten | Erhaltener Vertrag |
@@ -114,6 +116,16 @@ Während der Browserprüfung ergänzt der statische Server den SPA-Fallback
 `404.html` (inhaltlich identisch zu `index.html`); damit lautet der Hash
 `ec7ea3ab135e75a089d08cd0f76e8b3157bddfd53cb79ef472a9ab5d910becb9`.
 Beim Beenden des Servers wird dieser Fallback wieder entfernt.
+
+Nach Integration der aktualisierten Formularbasis und des aktuellen `develop` am
+23.10.2026 bestanden erneut alle 160 E2E-Fälle in 29 Specs, ohne Retries oder
+übersprungene Fälle. Zusätzlich bestanden 13 Tests der E2E-Helfer, 27
+OIDC-HTTP-Tests und die Zoneless-Prüfung. Die Frontend-Quelldateien und das
+Produktionsartefakt sind gegenüber dem geprüften Stand `18ddf2a8` unverändert.
+Die übernommenen Tests sichern den Schließen-Button der festen Schulungsmaske
+gegen äußeres Scrollen ab; der Kappa-Test wartet vor der Workspace-Navigation
+auf die gerenderte Home-Ansicht. Die Remote-CI bleibt am neuen PR-Head separat
+zu prüfen.
 
 ## Bestandsaufnahme und weitere Schnitte
 

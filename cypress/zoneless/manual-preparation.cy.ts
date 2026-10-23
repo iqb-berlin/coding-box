@@ -36,6 +36,7 @@ describe('Zoneless manual preparation workflows', () => {
 
   afterEach(() => {
     releases.splice(0).forEach(release => release());
+    cy.task('deferred:reset');
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests, 'explicit API fixtures').to.deep.equal([]); });
   });
@@ -53,6 +54,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/reset-version/active', { body: { hasActiveJob: false } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/readiness?*', { body: null });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/statistics?*', { body: { totalResponses: 0, statusCounts: {} } });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/aggregation-settings', { body: { flags: [], threshold: 2 } });
     cy.intercept('GET', '**/api/admin/workspace/5/missings-profiles/IQB-Standard', { body: null });
     cy.intercept('GET', '**/api/admin/workspace/5/coders', { delay: 300, body: { data: coders, total: 2 } });
@@ -90,10 +92,40 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('coding-box-coding-management-manual').should('be.visible');
   }
 
-  function openTraining(): void {
+  function openTraining(options: { holdEntrance?: boolean } = {}): void {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
-    cy.get('coding-box-coder-training').as('training');
+    cy.get('coding-box-coder-training').as('training').then(training => {
+      if (options.holdEntrance) {
+        const modal = training[0].closest('.coder-training-modal')!;
+        const held = modal.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+        held.pause();
+        held.currentTime = 0;
+        expect(modal.ownerDocument.defaultView!.getComputedStyle(modal).opacity,
+          'entrance was held at its invisible first frame').to.equal('0');
+      }
+      settleTrainingEntrance(training[0]);
+    });
+  }
+
+  function settleTrainingEntrance(training: HTMLElement): void {
+    // These cases test behavior after opening, independently of the compositor's motion clock.
+    for (const selector of ['.coder-training-overlay', '.coder-training-modal']) {
+      training.closest(selector)?.getAnimations().forEach(animation => animation.finish());
+    }
+  }
+
+  function closeTraining(): void {
+    cy.get('@training').find<HTMLButtonElement>('.close-button')
+      .should('be.visible')
+      .should(buttons => {
+        const button = buttons[0];
+        const { left, top, width, height } = button.getBoundingClientRect();
+        const target = button.ownerDocument.elementFromPoint(left + width / 2, top + height / 2);
+        expect(button.contains(target), 'close button is reachable at its center').to.equal(true);
+      })
+      // The fixed modal is already in view; scrolling its ancestors moves the background.
+      .click({ scrollBehavior: false });
   }
 
   function selectTrainingInputs(): void {
@@ -340,29 +372,40 @@ describe('Zoneless manual preparation workflows', () => {
     setup();
     let reads = 0;
     let referenceAborts = 0;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
-      reads += 1;
-      if (reads === 1) {
-        // Keep the server response pending without a route callback Promise whose
-        // four-second budget also includes unrelated Cypress UI commands.
-        request.reply({ delay: 30000, body: [{ ...training, label: 'Old reference' }] });
-      } else request.reply({ body: [{ ...training, id: 8, label: 'Fresh reference' }] });
+    let referenceRequest: XMLHttpRequest | undefined;
+    cy.task<{ id: string; url: string }>('deferred:create', { body: [{ ...training, label: 'Old reference' }] }).then(gate => {
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', request => {
+        reads += 1;
+        if (reads === 1) {
+          request.url = gate.url;
+          request.continue();
+        } else request.reply({ body: [{ ...training, id: 8, label: 'Fresh reference' }] });
+      });
     });
     openManual();
     cy.window().then(win => {
-      cy.spy(win.XMLHttpRequest.prototype, 'open').as('openRequest');
+      const prototype = win.XMLHttpRequest.prototype;
+      const originalOpen = prototype.open;
+      prototype.open = new Proxy(originalOpen, {
+        apply(target, request: XMLHttpRequest, args: unknown[]) {
+          if (!referenceRequest && String(args[1]).endsWith('/coding/coder-trainings')) {
+            referenceRequest = request;
+            request.addEventListener('abort', () => { referenceAborts += 1; });
+          }
+          return Reflect.apply(target, request, args);
+        }
+      });
+      releases.push(() => { prototype.open = originalOpen; });
     });
-    openTraining();
+    openTraining({ holdEntrance: true });
     cy.wrap(null).should(() => { expect(reads).to.equal(1); });
-    cy.get<Cypress.Agent<sinon.SinonSpy>>('@openRequest').then(openRequest => {
-      const referenceCall = openRequest.getCalls().find(call =>
-        String(call.args[1]).endsWith('/coding/coder-trainings'));
-      expect(Boolean(referenceCall), 'reference request started').to.equal(true);
-      const request = referenceCall!.thisValue as XMLHttpRequest;
-      expect(request.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
-      request.addEventListener('abort', () => { referenceAborts += 1; });
+    cy.then(() => {
+      // Inspect scalars only: native getters such as responseXML can throw during object formatting.
+      expect(Boolean(referenceRequest), 'reference request started').to.equal(true);
+      expect(referenceRequest!.readyState, 'reference response still pending').not.to.equal(XMLHttpRequest.DONE);
     });
-    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
+    cy.get('.router-panel').scrollTo('bottom', { ensureScrollable: false });
+    closeTraining();
     cy.get('coding-box-coder-training').should('not.exist');
     cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
@@ -370,7 +413,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');
-    cy.get('@training').find('.close-button').click({ scrollBehavior: 'center' });
+    closeTraining();
   });
 
   for (const role of [{ name: 'coding manager', level: 2 }, { name: 'study manager', level: 3 }]) {
