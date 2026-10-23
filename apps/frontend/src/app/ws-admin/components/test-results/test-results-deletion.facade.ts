@@ -32,13 +32,17 @@ export class TestResultsDeletionFacade {
   readonly resetDetails$ = new Subject<void>();
   readonly selectionCleared$ = new Subject<void>();
   readonly changed$ = new Subject<void>();
-  readonly activeDeleteTask = signal<ValidationTaskDto | null>(null);
+  private readonly activeDeleteTaskState = signal<ValidationTaskDto | null>(null);
+  readonly activeDeleteTask = this.activeDeleteTaskState.asReadonly();
 
-  readonly isDeletingTestPersons = signal<boolean>(false);
+  private readonly isDeletingTestPersonsState = signal<boolean>(false);
+  readonly isDeletingTestPersons = this.isDeletingTestPersonsState.asReadonly();
 
-  readonly deleteProgress = signal<number>(0);
+  private readonly deleteProgressState = signal<number>(0);
+  readonly deleteProgress = this.deleteProgressState.asReadonly();
 
-  readonly deleteProgressMessage = signal<string>('');
+  private readonly deleteProgressMessageState = signal<string>('');
+  readonly deleteProgressMessage = this.deleteProgressMessageState.asReadonly();
 
   deleteTaskSubscription: Subscription | null = null;
 
@@ -47,7 +51,7 @@ export class TestResultsDeletionFacade {
     this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
       if (id !== workspaceId) {
         this.deleteTaskSubscription?.unsubscribe();
-        this.isDeletingTestPersons.set(false); this.activeDeleteTask.set(null);
+        this.isDeletingTestPersonsState.set(false); this.activeDeleteTaskState.set(null);
         workspaceId = id;
       }
     });
@@ -68,13 +72,13 @@ export class TestResultsDeletionFacade {
       return;
     }
 
-    this.isDeletingTestPersons.set(true);
+    this.isDeletingTestPersonsState.set(true);
 
     this.testResultService
       .previewDeleteTestResults(this.appService.selectedWorkspaceId, request).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
-          this.isDeletingTestPersons.set(false);
+          this.isDeletingTestPersonsState.set(false);
           if (!preview) {
             this.snackBar.open(
               'Die Löschvorschau konnte nicht berechnet werden.',
@@ -87,7 +91,7 @@ export class TestResultsDeletionFacade {
           this.openDeletePreviewDialog(request, preview);
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
+          this.isDeletingTestPersonsState.set(false);
           this.snackBar.open(
             'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
@@ -104,7 +108,7 @@ export class TestResultsDeletionFacade {
       return;
     }
 
-    this.isDeletingTestPersons.set(true);
+    this.isDeletingTestPersonsState.set(true);
 
     this.testResultService
       .previewDeleteTestResultResponses(
@@ -113,7 +117,7 @@ export class TestResultsDeletionFacade {
       ).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: preview => {
-          this.isDeletingTestPersons.set(false);
+          this.isDeletingTestPersonsState.set(false);
           if (!preview) {
             this.snackBar.open(
               'Die Löschvorschau konnte nicht berechnet werden.',
@@ -126,7 +130,7 @@ export class TestResultsDeletionFacade {
           this.openResponseCleanupPreviewDialog(request, preview);
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
+          this.isDeletingTestPersonsState.set(false);
           this.snackBar.open(
             'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
@@ -176,20 +180,20 @@ export class TestResultsDeletionFacade {
 
   startDeleteJob(request: TestResultsDeleteRequestDto): void {
     this.resetDetails$.next();
-    this.isDeletingTestPersons.set(true);
-    this.deleteProgress.set(0);
-    this.deleteProgressMessage.set('Löschung wird gestartet...');
+    this.isDeletingTestPersonsState.set(true);
+    this.deleteProgressState.set(0);
+    this.deleteProgressMessageState.set('Löschung wird gestartet...');
 
     this.testResultService
       .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
-          this.activeDeleteTask.set(task);
+          this.activeDeleteTaskState.set(task);
           this.pollDeleteTask(task.id);
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
-          this.activeDeleteTask.set(null);
+          this.isDeletingTestPersonsState.set(false);
+          this.activeDeleteTaskState.set(null);
           this.snackBar.open(
             'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
@@ -203,9 +207,9 @@ export class TestResultsDeletionFacade {
     request: TestResultsResponseCleanupRequestDto
   ): void {
     this.resetDetails$.next();
-    this.isDeletingTestPersons.set(true);
-    this.deleteProgress.set(0);
-    this.deleteProgressMessage.set('Antwort-Löschung wird gestartet...');
+    this.isDeletingTestPersonsState.set(true);
+    this.deleteProgressState.set(0);
+    this.deleteProgressMessageState.set('Antwort-Löschung wird gestartet...');
 
     this.testResultService
       .createDeleteTestResultResponsesJob(
@@ -214,12 +218,12 @@ export class TestResultsDeletionFacade {
       ).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: task => {
-          this.activeDeleteTask.set(task);
+          this.activeDeleteTaskState.set(task);
           this.pollDeleteTask(task.id);
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
-          this.activeDeleteTask.set(null);
+          this.isDeletingTestPersonsState.set(false);
+          this.activeDeleteTaskState.set(null);
           this.snackBar.open(
             'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
@@ -250,15 +254,15 @@ export class TestResultsDeletionFacade {
       )
       .subscribe({
         next: task => {
-          this.activeDeleteTask.set(task);
-          this.deleteProgress.set(task.progress || 0);
-          this.deleteProgressMessage.set(task.progress_message || 'Löschung läuft...');
+          this.activeDeleteTaskState.set(task);
+          this.deleteProgressState.set(task.progress || 0);
+          this.deleteProgressMessageState.set(task.progress_message || 'Löschung läuft...');
 
           if (task.status === 'completed') {
             this.finishDeleteTask(task.id);
           } else if (task.status === 'failed') {
-            this.isDeletingTestPersons.set(false);
-            this.activeDeleteTask.set(null);
+            this.isDeletingTestPersonsState.set(false);
+            this.activeDeleteTaskState.set(null);
             this.snackBar.open(
               task.error || 'Die Löschung ist fehlgeschlagen.',
               'Fehler',
@@ -267,8 +271,8 @@ export class TestResultsDeletionFacade {
           }
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
-          this.activeDeleteTask.set(null);
+          this.isDeletingTestPersonsState.set(false);
+          this.activeDeleteTaskState.set(null);
           this.snackBar.open(
             'Der Fortschritt der Löschung konnte nicht gelesen werden.',
             'Fehler',
@@ -284,9 +288,9 @@ export class TestResultsDeletionFacade {
       .subscribe({
         next: result => {
           const deleteResult = result as TestResultsDeleteResultDto;
-          this.isDeletingTestPersons.set(false);
-          this.activeDeleteTask.set(null);
-          this.deleteProgress.set(100);
+          this.isDeletingTestPersonsState.set(false);
+          this.activeDeleteTaskState.set(null);
+          this.deleteProgressState.set(100);
           this.selectionCleared$.next();
           this.testResultService.invalidateCache(
             this.appService.selectedWorkspaceId
@@ -304,8 +308,8 @@ export class TestResultsDeletionFacade {
           );
         },
         error: () => {
-          this.isDeletingTestPersons.set(false);
-          this.activeDeleteTask.set(null);
+          this.isDeletingTestPersonsState.set(false);
+          this.activeDeleteTaskState.set(null);
           this.snackBar.open(
             'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
             'Info',
