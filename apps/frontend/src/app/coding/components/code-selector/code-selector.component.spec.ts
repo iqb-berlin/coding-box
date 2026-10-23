@@ -1,4 +1,4 @@
-import { SimpleChange } from '@angular/core';
+import { signal, SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -1494,5 +1494,81 @@ describe('CodeSelectorComponent', () => {
     component.jumpToNavigationItem('bundle:9');
 
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
+  });
+  it('memoizes navigation lists while reacting to new units and translations', () => {
+    fixture.componentRef.setInput('unitsData', {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 1, name: 'UNIT', alias: null, bookletId: 0, variableId: 'V1', variableBundleId: 9
+      }]
+    });
+    const first = component.navigationItems;
+    const variables = component.availableVariables;
+    expect(component.navigationItems).toBe(first);
+    expect(component.availableVariables).toBe(variables);
+    fixture.componentRef.setInput('coderNotes', 'unrelated view state');
+    expect(component.navigationItems).toBe(first);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { 'code-selector': { 'variable-bundle': 'Variablenbündel' } });
+    translate.use('de');
+    expect(component.navigationItems[0].label).toBe('Variablenbündel 9');
+    fixture.componentRef.setInput('unitsData', {
+      id: 2,
+      name: 'Other job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 2, name: 'OTHER', alias: null, bookletId: 0, variableId: 'V2'
+      }]
+    });
+    expect(component.navigationItems[0].label).toBe('OTHER / V2');
+    expect(component.availableVariables[0].variableId).toBe('V2');
+  });
+
+  it('keeps cached bundle navigation current after progress and disabled-state changes', () => {
+    const coded = signal(false);
+    fixture.componentRef.setInput('codingService', { isUnitCoded: () => coded() });
+    fixture.componentRef.setInput('unitsData', {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 1,
+        name: 'UNIT',
+        alias: null,
+        bookletId: 0,
+        variableId: 'V1',
+        variableBundleId: 9,
+        bundleContext: {
+          bundleId: 9,
+          bundleName: 'Bundle',
+          caseKey: 'case',
+          caseOrderingMode: 'continuous',
+          variables: [{
+            responseId: 1,
+            unitName: 'UNIT',
+            variableId: 'V1',
+            variableAnchor: '',
+            variablePage: '0',
+            status: 'manual-open',
+            code: null,
+            score: null,
+            source: 'manual'
+          }]
+        }
+      }]
+    });
+    const initial = component.bundleVariableNavigationItems;
+    expect(initial[0].progress).toEqual({ coded: 0, total: 1, percentage: 0 });
+    expect(component.bundleVariableNavigationItems).toBe(initial);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { 'code-selector': { 'bundle-open-tooltip': 'Offene Variable' } });
+    translate.use('de');
+    expect(component.bundleVariableNavigationItems[0].tooltip).toBe('Offene Variable');
+    coded.set(true);
+    expect(component.bundleVariableNavigationItems[0].progress).toEqual({ coded: 1, total: 1, percentage: 100 });
+    fixture.componentRef.setInput('isNavigationDisabled', true);
+    expect(component.bundleVariableNavigationItems[0].disabled).toBe(true);
   });
 });

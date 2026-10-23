@@ -410,11 +410,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
         );
         if (myBatch) {
-          this.isUploadingResults.set(true);
-          this.uploadingMessage.set(`Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`);
+          this.imports.updateUploadProgress(true, `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`);
           this.isLoading.set(true);
         } else {
-          this.isUploadingResults.set(false);
+          this.imports.updateUploadProgress(false);
         }
       }
     );
@@ -430,7 +429,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.getCurrentSearchText()
         );
         this.isLoading.set(false);
-        this.isUploadingResults.set(false);
+        this.imports.updateUploadProgress(false);
       }
     });
 
@@ -443,7 +442,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies() && !!request.forceShowLogAnomalies);
         this.isTableView.set(true);
         this.isLoading.set(false);
-        this.isUploadingResults.set(false);
+        this.imports.updateUploadProgress(false);
       });
 
     this.loadTestResultsLogAnomalySetting();
@@ -1234,7 +1233,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies());
     this.isTableView.set(true);
     this.isLoading.set(false);
-    this.isUploadingResults.set(false);
+    this.imports.updateUploadProgress(false);
   }
 
   protected openLogAnomalyDetailsDialog(): void {
@@ -1409,7 +1408,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.forceShowLogAnomalyTableColumn.set(false);
     this.isTableView.set(true);
     this.isLoading.set(false);
-    this.isUploadingResults.set(false);
+    this.imports.updateUploadProgress(false);
   }
 
   getResponseStatusTooltip(status: string): string { return this.summary.getResponseStatusTooltip(status); }

@@ -2,6 +2,8 @@ import {
   afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, Injector, input, OnChanges, output, SecurityContext, signal, SimpleChanges, viewChild, linkedSignal
 } from '@angular/core';
 
+import { toSignal } from '@angular/core/rxjs-interop';
+import { EMPTY, merge } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatButtonModule } from '@angular/material/button';
@@ -79,6 +81,12 @@ export class CodeSelectorComponent implements OnChanges {
 
   private readonly sanitizer = inject(DomSanitizer);
   private readonly translateService = inject(TranslateService);
+  private readonly translations = toSignal(merge(
+    this.translateService.onLangChange ?? EMPTY,
+    this.translateService.onTranslationChange ?? EMPTY,
+    this.translateService.onDefaultLangChange ?? EMPTY
+  ), { initialValue: null });
+
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly codingScheme = input<string | CodingScheme>('');
@@ -769,7 +777,8 @@ export class CodeSelectorComponent implements OnChanges {
     return { coded, total, percentage };
   }
 
-  get navigationItems(): NavigationItem[] {
+  private readonly navigationItemsState = computed<NavigationItem[]>(() => {
+    this.translations();
     const unitsData = this.unitsData();
     if (!unitsData?.units) return [];
     const seen = new Set<string>();
@@ -808,10 +817,12 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     return result;
-  }
+  });
+
+  get navigationItems(): NavigationItem[] { return this.navigationItemsState(); }
 
   /** Unique unit+variable combinations available in the current coding job, preserving order of first appearance. */
-  get availableVariables(): { key: string; variableId: string; unitName: string }[] {
+  private readonly availableVariablesState = computed<{ key: string; variableId: string; unitName: string }[]>(() => {
     const unitsData = this.unitsData();
     if (!unitsData?.units) return [];
     const seen = new Set<string>();
@@ -826,7 +837,9 @@ export class CodeSelectorComponent implements OnChanges {
       }
     }
     return result;
-  }
+  });
+
+  get availableVariables(): { key: string; variableId: string; unitName: string }[] { return this.availableVariablesState(); }
 
   get shouldShowBundleVariableChips(): boolean {
     const context = this.currentBundleContext;
@@ -849,7 +862,8 @@ export class CodeSelectorComponent implements OnChanges {
     return this.bundleVariableNavigationItems;
   }
 
-  get bundleVariableNavigationItems(): BundleVariableNavigationItem[] {
+  private readonly bundleVariableNavigationItemsState = computed<BundleVariableNavigationItem[]>(() => {
+    this.translations();
     const context = this.currentBundleContext;
     if (!context) return [];
 
@@ -877,7 +891,9 @@ export class CodeSelectorComponent implements OnChanges {
         progress
       };
     });
-  }
+  });
+
+  get bundleVariableNavigationItems(): BundleVariableNavigationItem[] { return this.bundleVariableNavigationItemsState(); }
 
   private getCurrentBundleVariableUnit(
     context: BundleContext,
