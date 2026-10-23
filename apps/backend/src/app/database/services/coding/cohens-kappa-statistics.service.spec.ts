@@ -115,6 +115,22 @@ describe('CohensKappaStatisticsService with the production calculator', () => {
     expect(result.variables[0].coderPairs[0]).not.toHaveProperty('brennanPredigerKappa');
   });
 
+  it.each([true, false])('averages unrounded pair results before rounding the workspace mean (weighted=%s)', async weightedMean => {
+    const ratings = [
+      { unitName: 'FIRST', values: [[0, 0], [0, 1], [1, 0], [1, 1], [1, 1], [1, 1]] },
+      { unitName: 'SECOND', values: [[0, 0], [0, 0], [0, 1], [1, 1], [1, 1], [1, 1]] }
+    ];
+    query.getCodedVariablesForKappa.mockResolvedValue(ratings.flatMap((group, groupIndex) => (
+      group.values.map((codes, index) => makeItem(groupIndex * 10 + index, codes, group.unitName))
+    )));
+
+    const result = await service.buildStatistics(5, { ...options, weightedMean });
+
+    expect(result.variables.map(variable => variable.coderPairs[0].kappa)).toEqual([0.25, 0.667]);
+    // Averaging the rounded public values would incorrectly produce 0.459.
+    expect(result.workspaceSummary.averageKappa).toBe(0.458);
+  });
+
   it('uses score availability including zero scores when codes are missing', async () => {
     query.getCodedVariablesForKappa.mockResolvedValue([
       makeItem(1, [null, null], 'UNIT', 'VAR', [0, 0]),

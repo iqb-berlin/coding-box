@@ -11,6 +11,11 @@ import {
   KappaStatisticsResponse
 } from './cohens-kappa.types';
 
+type KappaDetailsExportOptions = Pick<
+  KappaStatisticsOptions,
+  'weightedMean' | 'excludeTrainings' | 'unitName' | 'variableId'
+>;
+
 const COHENS_KAPPA_EXPORT_HEADERS = [
   'Variable',
   'Unit',
@@ -67,7 +72,7 @@ export class CohensKappaExportService {
 
   async createDetailsCsv(
     statistics: KappaStatisticsResponse,
-    options: KappaStatisticsOptions
+    options: KappaDetailsExportOptions
   ): Promise<string> {
     const csvContent = await fastCsv.writeToString(this.createCohensKappaExportRows(statistics, options), {
       headers: [...COHENS_KAPPA_EXPORT_HEADERS],
@@ -137,7 +142,7 @@ export class CohensKappaExportService {
 
   private createCohensKappaExportRows(
     statistics: KappaStatisticsResponse,
-    options: Pick<KappaStatisticsOptions, 'weightedMean' | 'excludeTrainings' | 'unitName' | 'variableId'>
+    options: KappaDetailsExportOptions
   ): Record<string, string | number>[] {
     const exportedAt = new Date().toISOString();
     const weightingMethod = options.weightedMean ?

@@ -1,6 +1,6 @@
 import * as ExcelJS from 'exceljs';
 import { CohensKappaExportService } from './cohens-kappa-export.service';
-import { KappaSourceItem, KappaStatisticsOptions, KappaStatisticsResponse } from './cohens-kappa.types';
+import { KappaSourceItem, KappaStatisticsResponse } from './cohens-kappa.types';
 
 const statistics: KappaStatisticsResponse = {
   variables: [],
@@ -16,14 +16,7 @@ const statistics: KappaStatisticsResponse = {
     calculationLevel: 'code'
   }
 };
-const options: KappaStatisticsOptions = {
-  weightedMean: true,
-  excludeTrainings: true,
-  jobDefinitionIds: [],
-  coderTrainingIds: [],
-  coderIds: [],
-  calculationLevel: 'code'
-};
+const options = { weightedMean: true, excludeTrainings: true };
 const makeItem = (responseId: number, unitName = 'UNIT', variableId = 'VAR'): KappaSourceItem => ({
   responseId,
   unitName,
