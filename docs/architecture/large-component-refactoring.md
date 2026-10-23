@@ -127,6 +127,18 @@ gegen äußeres Scrollen ab; der Kappa-Test wartet vor der Workspace-Navigation
 auf die gerenderte Home-Ansicht. Die Remote-CI bleibt am neuen PR-Head separat
 zu prüfen.
 
+Pipeline [#105094](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/105094)
+bestand alle übrigen Jobs und 37 Komponentenfälle; im E2E-Lauf scheiterte einer
+von 160 Fällen, weil die Workspace-Animation beim Schließen der Schulung noch
+`opacity: 0` meldete. Der Browserhelfer beendet jetzt endliche Animationen entlang
+der gesamten DOM-Vorfahrenkette des Dialogs. Endlose Animationen bleiben erhalten.
+Der Regressionstest hält Workspace, Overlay und Modal am unsichtbaren Startbild
+fest: Vor der Korrektur entstand derselbe Fehler wie in CI, danach bestanden alle
+18 Fälle der manuellen Vorbereitung mit regulärer Sichtbarkeits-/Hit-Prüfung und
+Klick. Die Anfragenabbruch- und Wiederöffnungsprüfungen bleiben unverändert.
+Auch der anschließende vollständige Lauf bestand 160/160 E2E-Fälle in 29 Specs
+ohne Retries oder übersprungene Fälle (6:45 Minuten).
+
 ## Bestandsaufnahme und weitere Schnitte
 
 Die Tabelle behält die ursprüngliche Priorisierung bei und zeigt die aktuellen
