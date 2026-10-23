@@ -97,7 +97,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
     cy.get('coding-box-coder-training').as('training').then(training => {
       if (options.holdEntrance) {
-        for (const selector of ['.coding-container', '.coder-training-modal']) {
+        for (const selector of ['.coding-container', '.coder-training-overlay', '.coder-training-modal']) {
           const ancestor = training[0].closest(selector)!;
           const held = ancestor.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
           held.pause();
@@ -106,15 +106,18 @@ describe('Zoneless manual preparation workflows', () => {
             `${selector} entrance was held at its invisible first frame`).to.equal('0');
         }
       }
-      settleTrainingEntrance(training[0]);
+      settleFiniteAncestorAnimations(training[0]);
     });
   }
 
-  function settleTrainingEntrance(training: HTMLElement): void {
-    // These cases test behavior after opening, independently of the compositor's motion clock.
-    // CI can also leave the page ancestor's fade-in at its invisible first frame.
-    for (const selector of ['.coding-container', '.coder-training-overlay', '.coder-training-modal']) {
-      training.closest(selector)?.getAnimations().forEach(animation => animation.finish());
+  function settleFiniteAncestorAnimations(element: HTMLElement): void {
+    // Electron can stall entrance motion on the workspace, modal and Material menu.
+    // Settle only finite animations along this ancestor chain; loading indicators keep running.
+    for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
+      ancestor.getAnimations().forEach(animation => {
+        const endTime = animation.effect?.getComputedTiming().endTime;
+        if (typeof endTime === 'number' && Number.isFinite(endTime)) animation.finish();
+      });
     }
   }
 
@@ -413,6 +416,15 @@ describe('Zoneless manual preparation workflows', () => {
     cy.wrap(null).should(() => { expect(referenceAborts, 'reference request aborted').to.equal(1); });
     openTraining();
     cy.get('@training').find('mat-select[formControlName="referenceTrainingIds"]').click();
+    cy.contains('mat-option', 'Fresh reference').then(options => {
+      const panel = options[0].closest('.mat-mdc-select-panel')!;
+      const held = panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+      held.pause();
+      held.currentTime = 0;
+      expect(panel.ownerDocument.defaultView!.getComputedStyle(panel).opacity,
+        'reference menu entrance was held at its invisible first frame').to.equal('0');
+      settleFiniteAncestorAnimations(options[0]);
+    });
     cy.contains('mat-option', 'Fresh reference').should('be.visible');
     cy.contains('mat-option', 'Old reference').should('not.exist');
     cy.get('mat-select[formControlName="referenceTrainingIds"]').type('{esc}');

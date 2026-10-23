@@ -1,0 +1,185 @@
+  <div class="import-section">
+    <form
+      class="import-form"
+      [formGroup]="form()"
+      (ngSubmit)="submitted.emit()"
+    >
+      <div class="form-content">
+        <div class="options-section">
+          <h3 class="section-title">
+            <mat-icon>settings</mat-icon>
+            Import-Optionen
+          </h3>
+
+          <p class="options-description">
+            Wählen Sie, welche Daten aus dem Testcenter übernommen werden
+            sollen. Sie können alle Optionen auswählen oder nur einzelne
+            Datenarten importieren.
+          </p>
+
+          <div class="options-toolbar">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="selectAll.emit()"
+            >
+              Alle auswählen
+            </button>
+            <button mat-button type="button" (click)="clearSelection.emit()">
+              Auswahl aufheben
+            </button>
+          </div>
+
+          <div class="checkbox-grid">
+            @if (importType() === 'testResults'){
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="responses">
+                <span class="checkbox-label">Antworten</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Importiert Testergebnisse der Teilnehmenden
+              </div>
+            </div>
+            @if (form().controls.responses.value) {
+            <mat-form-field appearance="outline">
+              <mat-label>Umgang mit vorhandenen Antworten</mat-label>
+              <mat-select formControlName="responseOverwriteMode">
+                <mat-option value="skip">Vorhandene Units überspringen</mat-option>
+                <mat-option value="merge">Fehlende Antwortwerte ergänzen</mat-option>
+                <mat-option value="replace">Vorhandene Antwortwerte ersetzen</mat-option>
+              </mat-select>
+              <mat-hint>
+                Gilt für Antworten aus dem Testcenter; Logs werden separat behandelt.
+              </mat-hint>
+            </mat-form-field>
+            }
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="logs">
+                <span class="checkbox-label">Logs</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Importiert Logdaten zu Bearbeitungsverläufen
+              </div>
+            </div>
+            } @if (importType() === 'testFiles'){
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="definitions">
+                <span class="checkbox-label">Aufgabendefinitionen</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Definitionen der Aufgaben (<code>.voud</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="units">
+                <span class="checkbox-label">Aufgaben (Units-XML)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">Aufgaben im XML-Format</div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="player">
+                <span class="checkbox-label">Player</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Player und zugehörige Dateien (<code>.html</code>-Dateien).
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="codings">
+                <span class="checkbox-label">Kodierschemata</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Kodierinformationen (<code>.vocs</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="booklets">
+                <span class="checkbox-label">Testhefte (Booklets)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Testhefte (<code>.xml</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="testTakers">
+                <span class="checkbox-label">Testteilnehmer (Test-takers)</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Testteilnehmende (<code>.xml</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="metadata">
+                <span class="checkbox-label">Metadaten</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Metadaten zu Aufgaben (<code>.vomd</code>-Dateien)
+              </div>
+            </div>
+            }
+          </div>
+        </div>
+
+        <div class="workspace-section">
+          <mat-form-field appearance="outline">
+            <mat-label>Studie auswählen</mat-label>
+            <mat-select formControlName="workspace">
+              @for (workspace of workspaces();track workspace){
+              <mat-option [value]="workspace.id">{{
+                workspace.label
+              }}</mat-option>
+              }
+            </mat-select>
+            <mat-icon matSuffix>folder</mat-icon>
+          </mat-form-field>
+        </div>
+      </div>
+
+      <ng-content />
+      @if (!isLoadingTestGroups() && !isUploadingTestResults() && !isUploadingTestFiles()) {
+      <div class="form-actions">
+        @if (importType() === 'testResults') {
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="form().invalid"
+          color="primary"
+        >
+          <mat-icon>arrow_forward</mat-icon>
+          Weiter
+        </button>
+        } @if (importType() === 'testFiles') {
+        <button
+          mat-raised-button
+          type="submit"
+          [disabled]="form().invalid"
+          color="primary"
+        >
+          <mat-icon>cloud_upload</mat-icon>
+          Dateien importieren
+        </button>
+        }
+      </div>
+      } @if(filesSelectionError()){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>Bitte mindestens eine Import Option auswählen</span>
+      </div>
+      } @if(testGroupsLoadError()){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ testGroupsLoadError() }}</span>
+      </div>
+      } @if (uploadError()) {
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ uploadError() }}</span>
+      </div>
+      } @if (authenticationError()){
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ 'login-error' | translate }}</span>
+      </div>
+      }
+    </form>
+  </div>

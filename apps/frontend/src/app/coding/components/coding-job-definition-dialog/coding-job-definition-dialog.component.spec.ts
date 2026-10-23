@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { MAT_TABS_CONFIG } from '@angular/material/tabs';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatTabGroupHarness } from '@angular/material/tabs/testing';
@@ -11,6 +12,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { JobDistributionPreviewComponent } from './job-distribution-preview.component';
+import { JobCoderCapacityComponent } from './job-coder-capacity.component';
 import { DistributionPreviewSummary } from './coding-workload';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -2059,5 +2062,25 @@ describe('CodingJobDefinitionDialogComponent', () => {
       true,
       undefined
     );
+  });
+
+  it('routes capacity changes through the owner and renders its shared workload snapshot', () => {
+    createComponent();
+    const capacity = fixture.debugElement.query(By.directive(JobCoderCapacityComponent)).componentInstance as JobCoderCapacityComponent;
+    const coder = component.availableCoders()[0];
+    capacity.coderToggled.emit(coder);
+    capacity.capacityChanged.emit({ coder, value: '150' });
+    component.selectedVariables().select(component.variables()[0]);
+    fixture.detectChanges();
+
+    const preview = fixture.debugElement.query(By.directive(JobDistributionPreviewComponent)).componentInstance as JobDistributionPreviewComponent;
+    expect(component.selectedCoders.isSelected(coder)).toBe(true);
+    expect(component.availableCoders()[0].capacityPercent).toBe(150);
+    expect(capacity.coders()[0].capacityPercent).toBe(150);
+    expect(component.getSelectedCoderConfigs()).toEqual([{ coderId: coder.id, capacityPercent: 150 }]);
+    expect(preview.variables()).toEqual(component.selectedVariableValues());
+    expect(preview.coderCount()).toBe(component.selectedCoders.selected.length);
+    expect(preview.summary().jobCount).toBe(component.getCodingJobCount());
+    expect(preview.summary()).toBe((component as unknown as { workloadSummary(): unknown }).workloadSummary());
   });
 });

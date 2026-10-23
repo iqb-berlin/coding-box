@@ -2,37 +2,30 @@ import {
   ChangeDetectorRef, Component, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
-import {
-  FormsModule, ReactiveFormsModule, FormControl
-} from '@angular/forms';
-import {
-  MatDialogRef, MAT_DIALOG_DATA, MatDialogModule, MatDialog
-} from '@angular/material/dialog';
+import { ReactiveFormsModule, FormControl } from '@angular/forms';
+import { MatDialogRef, MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatTableDataSource } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatPaginatorModule } from '@angular/material/paginator';
-import { MatSortModule } from '@angular/material/sort';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTabsModule } from '@angular/material/tabs';
-import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionChange, SelectionModel } from '@angular/cdk/collections';
-import { MatTooltip } from '@angular/material/tooltip';
 import {
   catchError, defer, EMPTY, finalize, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
   switchMap, takeUntil, tap, timer
 } from 'rxjs';
+import { JobCoderCapacityComponent } from './job-coder-capacity.component';
+import { JobVariableSelectionComponent, JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
+import { JobBundleSelectionComponent, JobBundleRow } from './job-bundle-selection.component';
+import { JobDistributionPreviewComponent } from './job-distribution-preview.component';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import {
   CodingWorkload, CodingWorkloadInput, DistributionPreviewSummary, WorkloadVariable
@@ -167,29 +160,22 @@ interface CreationResults {
   styleUrls: ['./coding-job-definition-dialog.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
-    FormsModule,
+    JobDistributionPreviewComponent,
+    JobBundleSelectionComponent,
+    JobVariableSelectionComponent,
+    JobCoderCapacityComponent,
     ReactiveFormsModule,
-    MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
     MatButtonModule,
     MatButtonToggleModule,
     MatSelectModule,
     MatIconModule,
-    MatChipsModule,
-    MatTableModule,
     MatCheckboxModule,
-    MatPaginatorModule,
-    MatSortModule,
-    MatProgressSpinnerModule,
     MatDividerModule,
     MatTabsModule,
-    MatExpansionModule,
     MatRadioModule,
-    TranslateModule,
-    MatTooltip
-  ]
+    TranslateModule]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   dialogRef = inject<MatDialogRef<CodingJobDefinitionDialogComponent>>(MatDialogRef);
@@ -323,6 +309,46 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly existingJobDefinitions = signal<JobDefinition[]>([]);
   protected readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
   readonly includeDeriveErrorInManualCoding = signal(false);
+
+  protected get variableSelectionFilters(): JobVariableFilters {
+    return {
+      unitName: this.unitNameFilter(),
+      variableId: this.variableIdFilter(),
+      trainingRequired: this.trainingRequiredFilter(),
+      availability: this.availabilityFilter()
+    };
+  }
+
+  protected updateVariableSelectionFilters(filters: Partial<JobVariableFilters>): void {
+    if (filters.unitName !== undefined) this.unitNameFilter.set(filters.unitName);
+    if (filters.variableId !== undefined) this.variableIdFilter.set(filters.variableId);
+    if (filters.trainingRequired !== undefined) this.trainingRequiredFilter.set(filters.trainingRequired);
+  }
+
+  protected get variableSelectionRows(): JobVariableRow[] {
+    return this.dataSource.data.map(variable => ({
+      variable,
+      selected: this.isVariableSelected(variable),
+      disabled: this.isVariableDisabled(variable),
+      disabledReason: this.getVariableDisabledReason(variable),
+      availabilityClass: this.getAvailabilityClass(variable),
+      availabilityText: this.getAvailabilityText(variable),
+      hasDeriveError: this.hasDeriveErrorResponses(variable),
+      includeDeriveError: this.isDeriveErrorIncluded(variable)
+    }));
+  }
+
+  protected get bundleSelectionRows(): JobBundleRow[] {
+    return this.bundlesDataSource.filteredData.map(bundle => ({
+      bundle,
+      selected: this.selectedVariableBundles.isSelected(bundle),
+      variables: this.getBundlePreviewVariables(bundle).map(variable => ({
+        variable,
+        hasDeriveError: this.hasDeriveErrorResponses(variable),
+        includeDeriveError: this.isBundleVariableDeriveErrorIncluded(variable)
+      }))
+    }));
+  }
 
   constructor() {
     // A new filter replaces both queries, including an outstanding scope summary.

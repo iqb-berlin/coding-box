@@ -45,7 +45,11 @@ describe('Zoneless Cohen kappa statistics', () => {
   function openDialog(): void {
     cy.visit('/');
     cy.wait('@authData');
+    // The auth response precedes the startup redirect. Navigate only after home
+    // has rendered so that redirect cannot replace the manual workspace route.
+    cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
+    cy.get('coding-box-coding-management-manual').should('be.visible');
     cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
     // The first attempt loads the execution scope before allowing the dialog.
     cy.contains('#manual-execution button', 'Interrater-Reliabilität').click();
