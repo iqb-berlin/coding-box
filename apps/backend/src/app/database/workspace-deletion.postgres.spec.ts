@@ -1,13 +1,18 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import * as AdmZip from 'adm-zip';
 import { Test } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Job, UnrecoverableError } from 'bullmq';
 import Workspace from './entities/workspace.entity';
+import ResourcePackage from './entities/resource-package.entity';
 import { WorkspaceCoreService } from './services/workspace/workspace-core.service';
+import { ResourcePackageService } from './services/workspace/resource-package.service';
+import { WorkspaceDeletionService } from './services/workspace/workspace-deletion.service';
 import { WorkspaceWorkerHost } from '../job-queue/workspace-worker-host';
 import { withWorkspaceDeletionLocks, withWorkspaceJobLock } from './services/shared/workspace-lifecycle-lock.util';
 
@@ -191,6 +196,79 @@ describePostgres('Workspace deletion against the complete Liquibase SQL schema',
       if (metadata.tableName === 'logs') continue; // obsolete entity; table removed in 1.5.0
       const owner = metadata.parentEntityMetadata ?? metadata;
       expect({ entity: metadata.name, cascade: owner.foreignKeys.some(fk => fk.referencedTablePath === 'workspace' && fk.onDelete === 'CASCADE') }).toEqual({ entity: metadata.name, cascade: true });
+    }
+  });
+
+  it.each(['upload-first', 'cleanup-first'])('preserves shared package files during a concurrent upload (%s)', async order => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-package-race-'));
+    const cwd = jest.spyOn(process, 'cwd').mockReturnValue(directory);
+    const repository = db.getRepository(ResourcePackage);
+    const packages = new ResourcePackageService(repository, {} as never, {} as never);
+    (packages as unknown as { resourcePackagesPath: string }).resourcePackagesPath = path.join(directory, 'packages');
+    const deletion = new WorkspaceDeletionService(db, {
+      getJobsForWorkspaceDeletion: async () => []
+    } as never, {} as never);
+    const zip = new AdmZip();
+    zip.addFile('data.txt', Buffer.from('shared content'));
+    const upload = { originalname: 'SharedRace.itcr.zip', buffer: zip.toBuffer() } as Express.Multer.File;
+    let release = () => {};
+    let entered!: () => void;
+    const paused = new Promise<void>(resolve => { entered = resolve; });
+    const resume = new Promise<void>(resolve => { release = resolve; });
+    let first: Promise<unknown> | undefined;
+    let second: Promise<unknown> | undefined;
+    let boundary: jest.SpyInstance | undefined;
+    try {
+      await db.query("INSERT INTO public.workspace(id,name) VALUES(41,'old owner'),(42,'new owner')");
+      await packages.create(41, upload);
+      const resources = await deletion.prepare([41]);
+      if (order === 'upload-first') {
+        // Pause after the upload has found the original files, before publishing its reference.
+        boundary = jest.spyOn(repository, 'save').mockImplementationOnce(async entity => {
+          entered();
+          await resume;
+          return db.manager.save(ResourcePackage, entity);
+        });
+        first = packages.create(42, upload);
+        await paused;
+        await db.query('DELETE FROM public.workspace WHERE id=41');
+        second = deletion.cleanup(resources);
+      } else {
+        await db.query('DELETE FROM public.workspace WHERE id=41');
+        // Pause after cleanup sees zero references, before it removes the shared directory.
+        const builder = repository.createQueryBuilder('p');
+        const count = builder.getCount.bind(builder);
+        jest.spyOn(builder, 'getCount').mockImplementationOnce(async () => {
+          const result = await count();
+          entered();
+          await resume;
+          return result;
+        });
+        boundary = jest.spyOn(repository, 'createQueryBuilder').mockReturnValueOnce(builder);
+        first = deletion.cleanup(resources);
+        await paused;
+        // The database's case-insensitive package-name lookup must use the same lock.
+        second = packages.create(42, { ...upload, originalname: 'sharedrace.itcr.zip' });
+      }
+      let waiting = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const rows = await db.query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=774020255 AND NOT granted");
+        if (rows.length > 0) { waiting = true; break; }
+        await new Promise(resolve => { setTimeout(resolve, 10); });
+      }
+      expect(waiting).toBe(true);
+      release();
+      await Promise.all([first, second]);
+      const references = await repository.find({ where: { workspaceId: 42 } });
+      expect(references).toHaveLength(1);
+      expect(fs.readFileSync(path.join(directory, 'packages', references[0].name, 'data.txt'), 'utf8')).toBe('shared content');
+    } finally {
+      release();
+      await Promise.allSettled([first, second]);
+      boundary?.mockRestore();
+      await db.query('DELETE FROM public.workspace WHERE id IN (41,42)');
+      cwd.mockRestore();
+      fs.rmSync(directory, { recursive: true, force: true });
     }
   });
 

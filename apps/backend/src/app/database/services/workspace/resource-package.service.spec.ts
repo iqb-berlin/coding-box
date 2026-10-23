@@ -10,6 +10,11 @@ import { spawnSync } from 'child_process';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { ResourcePackageService } from './resource-package.service';
 
+// PostgreSQL integration tests exercise the actual cross-process package lease.
+jest.mock('../shared/resource-package-lock.util', () => ({
+  withResourcePackageLock: jest.fn((_connection, _name, callback: () => Promise<unknown>) => callback())
+}));
+
 describe('ResourcePackageService', () => {
   let packagesPath: string;
   let packages: ResourcePackage[];
@@ -259,6 +264,7 @@ describe('ResourcePackageService', () => {
 
   function createResourcePackageRepository(): Repository<ResourcePackage> {
     return {
+      manager: { connection: {} },
       create: jest.fn((resourcePackage: ResourcePackage) => resourcePackage),
       save: jest.fn(async (resourcePackage: ResourcePackage) => {
         if (!resourcePackage.id) {
