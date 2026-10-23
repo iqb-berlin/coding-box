@@ -17,10 +17,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatRadioModule } from '@angular/material/radio';
 import {
-  NonNullableFormBuilder,
-  FormGroup,
   ReactiveFormsModule,
-  Validators,
   FormArray,
   FormControl
 } from '@angular/forms';
@@ -38,7 +35,12 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
-import { CoderTraining, CaseSelectionMode, ReferenceMode } from '../../models/coder-training.model';
+import { CoderTraining, CaseSelectionMode } from '../../models/coder-training.model';
+import {
+  CoderTrainingForm, CoderTrainingFormValue, TrainingVariableForm, createCoderTrainingForm,
+  createTrainingVariableForm, getTrainingAvailableCaseCount, getTrainingVariableSampleLimit, hasCoderTrainingLabel,
+  hasValidTrainingCaseCounts, hasValidTrainingReferenceMode, updateTrainingReferenceModeValidation, updateTrainingVariableSampleLimit
+} from './coder-training-form';
 import {
   getDuplicateTrainingLabelMatches,
   getTrainingOptionMeta,
@@ -52,41 +54,12 @@ export interface VariableConfig {
   includeDeriveError?: boolean;
 }
 
-type TrainingVariableForm = FormGroup<{
-  variableId: FormControl<string>;
-  unitId: FormControl<string>;
-  sampleCount: FormControl<number>;
-  bundleId: FormControl<number | null>;
-  bundleName: FormControl<string>;
-  overlapWarning: FormControl<boolean>;
-  bundleCaseOrderingMode: FormControl<'continuous' | 'alternating' | null>;
-  includeDeriveError: FormControl<boolean>;
-}>;
-
-type CoderTrainingForm = FormGroup<{
-  [Key in keyof CoderTrainingRecoveryFormValue]: FormControl<CoderTrainingRecoveryFormValue[Key]>;
-} & {
-  variables: FormArray<TrainingVariableForm>;
-}>;
-
 export interface VariableGrouping {
   manual: { control: TrainingVariableForm; index: number }[];
   bundles: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] }[];
 }
 
 export const CODER_TRAINING_RECOVERY_KEY = 'coder-training-active-state';
-
-interface CoderTrainingRecoveryFormValue {
-  trainingLabel: string;
-  caseOrderingMode: 'continuous' | 'alternating';
-  caseSelectionMode: CaseSelectionMode;
-  showScore: boolean;
-  allowComments: boolean;
-  suppressGeneralInstructions: boolean;
-  includeDerivedVariables: boolean;
-  referenceTrainingIds: number[];
-  referenceMode: ReferenceMode | null;
-}
 
 interface CoderTrainingRecoveryVariable {
   variableId: string;
@@ -102,7 +75,7 @@ export interface CoderTrainingRecoveryDraft {
   workspaceId?: number;
   mode: 'create' | 'edit';
   editTraining?: CoderTraining | null;
-  formValue: CoderTrainingRecoveryFormValue;
+  formValue: CoderTrainingFormValue;
   selectedCoderIds: number[];
   selectedBundleIds: number[];
   manualVariableKeys: string[];
@@ -165,7 +138,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private readonly codingTrainingBackendService = inject(CodingTrainingBackendService);
   private readonly appService = inject(AppService);
   private readonly sessionRecoveryService = inject(SessionRecoveryService);
-  private readonly fb = inject(NonNullableFormBuilder);
   private readonly backendMessageTranslator = inject(BackendMessageTranslatorService);
   private unregisterRecoveryProvider?: () => void;
   private hasRestoredRecoveryDraft = false;
@@ -199,8 +171,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return training ? this.permissions.canEdit(training) : this.permissions.canCreate;
   }
 
-  readonly variableFilterCtrl = this.fb.control('');
-  readonly bundleFilterCtrl = this.fb.control('');
+  readonly variableFilterCtrl = new FormControl('', { nonNullable: true });
+  readonly bundleFilterCtrl = new FormControl('', { nonNullable: true });
   private readonly variableFilter = toSignal(this.variableFilterCtrl.valueChanges, { initialValue: '' });
   private readonly bundleFilter = toSignal(this.bundleFilterCtrl.valueChanges, { initialValue: '' });
   private readonly includeDerivedVariablesValue: Signal<boolean>;
@@ -224,18 +196,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
-    this.trainingForm = this.fb.group({
-      trainingLabel: ['', [Validators.required]],
-      caseOrderingMode: ['continuous' as 'continuous' | 'alternating'],
-      caseSelectionMode: ['oldest_first' as CaseSelectionMode],
-      showScore: [false],
-      allowComments: [true],
-      suppressGeneralInstructions: [false],
-      includeDerivedVariables: [true],
-      referenceTrainingIds: [[] as number[]],
-      referenceMode: [null as ReferenceMode | null],
-      variables: this.fb.array<TrainingVariableForm>([])
-    });
+    this.trainingForm = createCoderTrainingForm();
 
     // Initialize grouped variables
     this.updateGroupedVariables();
@@ -273,21 +234,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private setupReferenceModeValidation(): void {
     const referenceTrainingIdsControl = this.trainingForm.get('referenceTrainingIds');
-    const referenceModeControl = this.trainingForm.get('referenceMode');
 
     referenceTrainingIdsControl?.valueChanges
       .pipe(
         startWith(referenceTrainingIdsControl.value),
         takeUntilDestroyed(this.destroyRef)
       )
-      .subscribe((referenceTrainingIds: number[]) => {
-        const hasReferenceTrainings = (referenceTrainingIds || []).length > 0;
-        referenceModeControl?.setValidators(hasReferenceTrainings ? [Validators.required] : []);
-        if (!hasReferenceTrainings && referenceModeControl?.value) {
-          referenceModeControl.setValue(null, { emitEvent: false });
-        }
-        referenceModeControl?.updateValueAndValidity({ emitEvent: false });
-      });
+      .subscribe(() => updateTrainingReferenceModeValidation(this.trainingForm));
   }
 
   ngOnInit(): void {
@@ -460,7 +413,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     };
   }
 
-  private getTrainingRecoveryFormValue(): CoderTrainingRecoveryFormValue {
+  private getTrainingRecoveryFormValue(): CoderTrainingFormValue {
     const rawValue = this.trainingForm.getRawValue();
     return {
       trainingLabel: rawValue.trainingLabel || '',
@@ -899,18 +852,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     includeDeriveError = false
   ): void {
     const variableData = this.getAvailableVariable(unitId, variableId);
-    const maxAvailable = variableData ? this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError) : 1000;
-    const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
-
-    const variableGroup: TrainingVariableForm = this.fb.group({
-      variableId: [variableId, [Validators.required]],
-      unitId: [unitId, [Validators.required]],
-      sampleCount: [defaultSampleCount, [Validators.required, Validators.min(1), Validators.max(maxAvailable)]],
-      bundleId: [bundleId ?? null],
-      bundleName: [bundleName ?? ''],
-      overlapWarning: [false],
-      bundleCaseOrderingMode: [bundleCaseOrderingMode || null],
-      includeDeriveError: [includeDeriveError]
+    const maxAvailable = getTrainingVariableSampleLimit(variableData, includeDeriveError);
+    const variableGroup = createTrainingVariableForm({
+      variableId, unitId, sampleCount, maxAvailable, bundleId, bundleName, bundleCaseOrderingMode, includeDeriveError
     });
 
     if (!this.canEditTraining) variableGroup.disable({ emitEvent: false });
@@ -1183,8 +1127,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasTrainingLabel(): boolean {
-    const trainingLabel = this.trainingForm.controls.trainingLabel.value;
-    return typeof trainingLabel === 'string' && trainingLabel.trim().length > 0;
+    return hasCoderTrainingLabel(this.trainingForm);
   }
 
   hasSelectedCoders(): boolean {
@@ -1196,13 +1139,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   hasValidReferenceMode(): boolean {
-    const referenceTrainingIds = this.trainingForm.controls.referenceTrainingIds.value || [];
-    return referenceTrainingIds.length === 0 || !!this.trainingForm.controls.referenceMode.value;
+    return hasValidTrainingReferenceMode(this.trainingForm);
   }
 
   hasValidCaseCounts(): boolean {
-    return this.variablesFormArray.controls.every(control => control.get('sampleCount')?.valid !== false) &&
-      !this.hasAnyInsufficientCases();
+    return hasValidTrainingCaseCounts(this.trainingForm, this.availableVariables());
   }
 
   protected getValidationItems(): ValidationItem[] {
@@ -1218,21 +1159,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   getFirstValidationMessage(): string {
     const firstInvalidItem = this.getValidationItems().find(item => !item.valid);
     return firstInvalidItem ? firstInvalidItem.label : 'Bitte prüfen Sie die Schulungseinstellungen.';
-  }
-
-  private hasAnyInsufficientCases(): boolean {
-    return this.variablesFormArray.controls.some(control => {
-      const unitId = control.controls.unitId.value;
-      const variableId = control.controls.variableId.value;
-      const requestedCount = control.controls.sampleCount.value || 0;
-      const variableData = this.getAvailableVariable(unitId, variableId);
-      const effectiveCount = this.getEffectiveAvailableCount(
-        unitId,
-        variableId,
-        control.controls.includeDeriveError.value === true
-      );
-      return !!variableData && effectiveCount < requestedCount;
-    });
   }
 
   hasAtLeastOneVariableSelected(): boolean {
@@ -1445,14 +1371,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     variableId: string | undefined,
     includeDeriveError = false
   ): number {
-    const variableData = this.getAvailableVariable(unitId, variableId);
-    if (includeDeriveError) {
-      return variableData?.uniqueCasesAfterAggregationWithDeriveError ??
-        ((variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0) +
-          (variableData?.deriveErrorResponseCount ?? 0));
-    }
-
-    return variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+    return getTrainingAvailableCaseCount(this.getAvailableVariable(unitId, variableId), includeDeriveError);
   }
 
   private getAvailableVariable(unitId: string | undefined, variableId: string | undefined): Variable | undefined {
@@ -1481,15 +1400,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const unitId = control.controls.unitId.value;
     const variableId = control.controls.variableId.value;
     const maxAvailable = this.getEffectiveAvailableCount(unitId, variableId, includeDeriveError);
-    control.get('sampleCount')?.setValidators([
-      Validators.required,
-      Validators.min(1),
-      Validators.max(maxAvailable)
-    ]);
-    if (includeDeriveError && (Number(control.controls.sampleCount.value) || 0) < 1 && maxAvailable > 0) {
-      control.get('sampleCount')?.setValue(maxAvailable);
-    }
-    control.get('sampleCount')?.updateValueAndValidity();
+    updateTrainingVariableSampleLimit(control, maxAvailable);
     this.updateGroupedVariables();
   }
 
