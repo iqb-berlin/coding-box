@@ -93,7 +93,12 @@ describe('Zoneless manual preparation workflows', () => {
   function openTraining(): void {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Kodierschulung erstellen').click();
-    cy.get('coding-box-coder-training').as('training');
+    cy.get('coding-box-coder-training').as('training').then(training => {
+      // These workflows test the opened dialog independently of the compositor clock.
+      for (const selector of ['.coder-training-overlay', '.coder-training-modal']) {
+        training[0].closest(selector)?.getAnimations().forEach(animation => animation.finish());
+      }
+    });
   }
 
   function selectTrainingInputs(): void {

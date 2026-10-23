@@ -18,7 +18,7 @@ export function normalizeGitHub(run, jobs) {
   // Use a specific attempt. Never mix successful jobs from an earlier attempt.
   const attempt = run.run_attempt;
   const currentJobs = jobs.filter(job => job.run_attempt === undefined || job.run_attempt === attempt);
-  const measuredJobs = currentJobs.filter(job => job.name !== 'timings' && job.started_at);
+  const measuredJobs = currentJobs.filter(job => job.name !== 'timings' && job.conclusion !== 'skipped' && job.started_at);
   const finished = maximum(measuredJobs.map(job => job.completed_at));
   const start = minimum(measuredJobs.map(job => job.started_at));
   return {
