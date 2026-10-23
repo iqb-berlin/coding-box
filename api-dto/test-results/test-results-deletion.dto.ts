@@ -4,6 +4,7 @@ import { CodingFreshnessImpactDto } from '../coding/coding-freshness.dto';
 export type TestResultsDeleteScope =
   | 'persons'
   | 'filteredPersons'
+  | 'filteredGroups'
   | 'groups'
   | 'booklets'
   | 'units';

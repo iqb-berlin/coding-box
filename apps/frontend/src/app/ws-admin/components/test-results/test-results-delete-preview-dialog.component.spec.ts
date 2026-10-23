@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import {
@@ -35,7 +36,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     dialogRef = { close: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [TestResultsDeletePreviewDialogComponent],
+      imports: [TestResultsDeletePreviewDialogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data }
@@ -69,6 +70,28 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
 
     component.confirm();
     expect(dialogRef.close).toHaveBeenCalledWith(true);
+  });
+
+  it('shows complete group counts and requires acknowledgement for filtered groups', () => {
+    component.data.preview = {
+      scope: 'filteredGroups',
+      label: 'Alle gefilterten Gruppen',
+      persons: 130,
+      groups: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'],
+      booklets: 0,
+      units: 0,
+      responses: 0,
+      bookletNames: [],
+      unitNames: [],
+      warnings: []
+    };
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.detail-label').textContent).toContain('(7)');
+    expect(fixture.nativeElement.querySelector('.metric-value').textContent.trim()).toBe('130');
+    expect(component.requiresAcknowledgement).toBe(true);
+    expect(component.canConfirm).toBe(false);
+    component.data.preview.persons = 1;
+    expect(component.requiresAcknowledgement).toBe(true);
   });
 
   it('shows log-specific metrics and confirmation text', () => {
