@@ -852,7 +852,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.isSearching.set(true);
+    this.selection.clear();
+    this.isSearching.set(filterValue.trim() !== this.testResultsRequest.searchText.trim());
     this.searchSubject.next(filterValue);
   }
 
@@ -1172,6 +1173,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.testResultsRequestGeneration += 1;
     const requestGeneration = this.testResultsRequestGeneration;
     const workspaceId = this.appService.selectedWorkspaceId;
+    this.selection.clear();
+    this.pageIndex.set(page);
+    this.pageSize.set(limit);
     this.testResultsRequest = { page, limit, searchText };
     this.isLoading.set(true);
     this.testResultsLoadFailed.set(false);
@@ -1414,9 +1418,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   getResponseStatusTooltip(status: string): string { return this.summary.getResponseStatusTooltip(status); }
 
   protected isAllSelected(): boolean {
-    const numSelected = this.selection.selected.length;
-    const numRows = this.dataSource?.data.length ?? 0;
-    return numSelected === numRows;
+    const rows = this.dataSource?.data ?? [];
+    return rows.length > 0 && rows.every(row => this.selection.isSelected(row));
   }
 
   protected masterToggle(): void {
@@ -1432,6 +1435,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private updateTable(data: Record<string, unknown>[], total: number): void {
+    this.selection.clear();
     this.data = data as unknown as P[];
     const mappedResults = data.map((result: Record<string, unknown>) => ({
       id: result.id as number,
@@ -1491,7 +1495,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   protected deleteFilteredPersons(): void {
     this.confirmAndStartDelete({
       scope: 'filteredPersons',
-      searchText: this.getCurrentSearchText()
+      searchText: this.testResultsRequest.searchText
+    });
+  }
+
+  protected get hasPersonFilter(): boolean {
+    return this.testResultsRequest.searchText.trim().length > 0;
+  }
+
+  protected deleteFilteredGroups(): void {
+    this.confirmAndStartDelete({
+      scope: 'filteredGroups',
+      searchText: this.testResultsRequest.searchText
     });
   }
 

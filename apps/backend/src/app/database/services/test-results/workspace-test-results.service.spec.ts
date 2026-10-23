@@ -55,6 +55,9 @@ const mockQueryBuilder = () => ({
     []
   ]),
   setParameter: jest.fn().mockReturnThis(),
+  setParameters: jest.fn().mockReturnThis(),
+  getParameters: jest.fn().mockReturnValue({ workspaceId: 1, consider: true, searchText: '%needle%' }),
+  getQuery: jest.fn().mockReturnValue('SELECT "matchingPerson"."group" FROM persons "matchingPerson"'),
   addGroupBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
   offset: jest.fn().mockReturnThis(),
@@ -239,6 +242,40 @@ describe('WorkspaceTestResultsService', () => {
       workspaceExclusionService,
       undefined,
       codingStatisticsService
+    );
+  });
+
+  describe('page-independent deletion targets', () => {
+    it.each(['filteredPersons', 'filteredGroups', 'groups'] as const)(
+      'resolves all 130 targets for %s without pagination', async scope => {
+        const matching = mockQueryBuilder();
+        const target = mockQueryBuilder();
+        const ids = Array.from({ length: 130 }, (_, index) => index + 1);
+        (personsRepository.createQueryBuilder as jest.Mock)
+          .mockReturnValueOnce(scope === 'filteredGroups' ? matching : target)
+          .mockReturnValue(target);
+        target.getMany.mockResolvedValue(ids.map(id => ({ id })));
+        const result = await service.previewDeleteTestResults(1, {
+          scope, searchText: 'needle', groups: ['G1']
+        });
+        expect(target.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 1 });
+        expect(target.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+        expect(target.skip).not.toHaveBeenCalled();
+        expect(target.take).not.toHaveBeenCalled();
+        expect(target.limit).not.toHaveBeenCalled();
+        expect(result.scope).toBe(scope);
+        const countQueries = (dataSource.createQueryBuilder as jest.Mock).mock.results;
+        expect(countQueries[0].value.where).toHaveBeenCalledWith('person.id IN (:...ids)', { ids });
+        if (scope === 'filteredGroups') {
+          expect(matching.andWhere).toHaveBeenCalledWith(
+            expect.stringContaining('matchingPerson.code ILIKE :searchText'), { searchText: '%needle%' }
+          );
+          expect(target.andWhere).toHaveBeenCalledWith(expect.stringContaining('person.group IN (SELECT'));
+          expect(target.setParameters).toHaveBeenCalledWith(matching.getParameters());
+          expect(matching.skip).not.toHaveBeenCalled();
+          expect(matching.take).not.toHaveBeenCalled();
+        }
+      }
     );
   });
 
