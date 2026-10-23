@@ -21,7 +21,7 @@ Every registered workspace worker, including workspace SQLite exports and valida
 
 Lifecycle leases use dedicated one-connection DataSources rather than occupying the application pool while services acquire their own mutation connections. Concurrent worker tasks therefore each require one additional PostgreSQL connection. System-wide database exports are system data and retain their existing behavior.
 
-Queue ownership and package names are captured before deleting database rows, including validation-task ownership. After commit, completed/waiting queue entries, cached result files and staged imports under the application's temp directory are removed. An entry activated during cleanup is left for the guarded worker to fail. Existing diagnostics archives are deleted while the exclusive lock is held. Queue workers cannot recreate artifacts after a successful deletion. API and export workers must share the configured temp/packages volumes, as in the supplied Compose files.
+Queue histories are read in bounded pages (one upload payload or 25 other jobs), with batched validation-task ownership lookups; retained snapshots contain only cleanup pointers. Queue ownership and package names are captured before deleting database rows, including validation-task ownership. After commit, completed/waiting queue entries, cached result files and staged imports under the application's temp directory are removed. An entry activated during cleanup is left for the guarded worker to fail. Existing diagnostics archives are deleted while the exclusive lock is held. Queue workers cannot recreate artifacts after a successful deletion. API and export workers must share the configured temp/packages volumes, as in the supplied Compose files.
 
 ## Migration and rollout
 

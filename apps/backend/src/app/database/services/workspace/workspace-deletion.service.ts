@@ -3,7 +3,7 @@ import { DataSource, In } from 'typeorm';
 import { Job } from 'bullmq';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobQueueService } from '../../../job-queue/job-queue.service';
+import { JobQueueService, WorkspaceDeletionJob } from '../../../job-queue/job-queue.service';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { CacheService } from '../../../cache/cache.service';
 import ResourcePackage from '../../entities/resource-package.entity';
@@ -31,10 +31,14 @@ export class WorkspaceDeletionService {
     const combined: WorkspaceDeletionResources = {
       workspaceIds: ids, jobs: [], packageNames: [], filePaths: [], cacheKeys: []
     };
+    const jobs = await this.jobQueueService.getJobsForWorkspaceDeletion(ids);
+    const packages = await this.connection.getRepository(ResourcePackage).find({
+      select: ['name', 'workspaceId'], where: { workspaceId: In(ids), scope: 'workspace' }
+    });
     // Keep each durable manifest scoped to one workspace, even when a failed
     // multi-workspace request is later retried for only a subset of its IDs.
     for (const id of ids) {
-      const resources = await this.prepareOne([id]);
+      const resources = await this.prepareOne(id, jobs.filter(job => job.workspaceId === id), packages.filter(p => p.workspaceId === id).map(p => p.name));
       combined.jobs.push(...resources.jobs);
       combined.packageNames.push(...resources.packageNames);
       combined.filePaths.push(...resources.filePaths);
@@ -43,24 +47,18 @@ export class WorkspaceDeletionService {
     return combined;
   }
 
-  private async prepareOne(ids: number[]): Promise<WorkspaceDeletionResources> {
-    const jobs = await this.jobQueueService.getJobsForWorkspaceDeletion(ids);
-    const packages = await this.connection.getRepository(ResourcePackage).find({
-      select: ['name'], where: { workspaceId: In(ids), scope: 'workspace' }
-    });
+  private async prepareOne(id: number, jobs: WorkspaceDeletionJob[], packageNames: string[]): Promise<WorkspaceDeletionResources> {
     const resources: WorkspaceDeletionResources = {
-      workspaceIds: ids, jobs: [], packageNames: packages.map(p => p.name), filePaths: [], cacheKeys: []
+      workspaceIds: [id], jobs: [], packageNames, filePaths: [], cacheKeys: []
     };
-    for (const id of ids) {
-      try {
-        const previous = JSON.parse(await fs.readFile(this.manifestPath(id), 'utf8')) as CleanupManifest;
-        resources.jobs.push(...previous.jobs);
-        resources.packageNames.push(...previous.packageNames);
-        resources.filePaths.push(...previous.filePaths);
-        resources.cacheKeys.push(...previous.cacheKeys);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
+    try {
+      const previous = JSON.parse(await fs.readFile(this.manifestPath(id), 'utf8')) as CleanupManifest;
+      resources.jobs.push(...previous.jobs);
+      resources.packageNames.push(...previous.packageNames);
+      resources.filePaths.push(...previous.filePaths);
+      resources.cacheKeys.push(...previous.cacheKeys);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
     for (const job of jobs) {
       resources.jobs.push({ queueName: job.queueName, id: requireJobId(job) });
@@ -85,12 +83,10 @@ export class WorkspaceDeletionService {
     resources.cacheKeys = [...new Set(resources.cacheKeys)];
     // Persist before deleting ownership records. Retries can finish cleanup even after
     // a process crash, removed queue entries, or a filesystem/Redis failure after commit.
-    for (const id of ids) {
-      const file = this.manifestPath(id);
-      await fs.mkdir(path.dirname(file), { recursive: true });
-      await fs.writeFile(`${file}.tmp`, JSON.stringify(resources), { mode: 0o600 });
-      await fs.rename(`${file}.tmp`, file);
-    }
+    const file = this.manifestPath(id);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(`${file}.tmp`, JSON.stringify(resources), { mode: 0o600 });
+    await fs.rename(`${file}.tmp`, file);
     return resources;
   }
 
@@ -121,7 +117,7 @@ export class WorkspaceDeletionService {
     for (const id of resources.workspaceIds) await fs.rm(this.manifestPath(id), { force: true });
   }
 
-  private resultKeys(job: Job): string[] {
+  private resultKeys(job: Pick<Job, 'id' | 'queueName'>): string[] {
     if (job.queueName === 'data-export') {
       return [`export-result:${job.id}`, `item-matrix-incomplete-result:${job.id}`, `item-matrix-diagnostics:${job.id}`];
     }
