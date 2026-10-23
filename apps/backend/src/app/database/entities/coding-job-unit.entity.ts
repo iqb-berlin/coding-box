@@ -27,7 +27,7 @@ export class CodingJobUnit {
   coding_job_id: number;
 
   @Index()
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   workspace_id: number | null;
 
   @Index()
@@ -37,7 +37,7 @@ export class CodingJobUnit {
   @Column()
   unit_name: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   unit_alias: string | null;
 
   @Column()
@@ -46,7 +46,7 @@ export class CodingJobUnit {
   @Column()
   variable_anchor: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   variable_bundle_id: number | null;
 
   @Column()
@@ -61,10 +61,10 @@ export class CodingJobUnit {
   @Column()
   person_group: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   code: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   score: number | null;
 
   @Column({ default: false })
@@ -76,7 +76,7 @@ export class CodingJobUnit {
   @Column({ nullable: true, type: 'text' })
   supervisor_comment: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   coding_issue_option: number | null;
 
   @CreateDateColumn()

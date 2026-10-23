@@ -117,13 +117,13 @@ export class CodingJob {
   @Column({ name: 'aggregation_enabled', default: true })
   aggregation_enabled: boolean;
 
-  @Column({ name: 'aggregation_threshold', nullable: true })
+  @Column({ type: 'integer', name: 'aggregation_threshold', nullable: true })
   aggregation_threshold: number | null;
 
   @Column({ name: 'response_matching_flags', type: 'jsonb', nullable: true })
   response_matching_flags: string[] | null;
 
-  @Column({ name: 'aggregation_settings_version', nullable: true })
+  @Column({ type: 'integer', name: 'aggregation_settings_version', nullable: true })
   aggregation_settings_version: number | null;
 
   @Column({

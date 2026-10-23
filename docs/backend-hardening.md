@@ -126,6 +126,12 @@ the production dependency is used directly.
 
 ## Strict diagnostics
 
+`backend:typecheck` also validates all PostgreSQL entity metadata using the
+production TypeScript configuration, without connecting to a database. Nullable
+union properties need explicit `@Column` types: with strict null checks their
+reflected JavaScript type is `Object`, which PostgreSQL cannot map automatically.
+
+
 `npx nx run backend:typecheck` checks the production TypeScript program in strict
 mode and requires zero diagnostics. Strict checking is also enabled in the normal
 backend build. Property initialization remains exempted for Nest/TypeORM entity

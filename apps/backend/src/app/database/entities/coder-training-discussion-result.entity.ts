@@ -22,19 +22,19 @@ export class CoderTrainingDiscussionResult {
   @Column()
   response_id: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   code: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   score: number | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   manager_user_id: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   manager_name: string | null;
 
   @CreateDateColumn()

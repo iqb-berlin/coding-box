@@ -119,7 +119,8 @@
       "options": {
         "commands": [
           "node --test scripts/quality/check-backend-strict.test.mjs",
-          "node scripts/quality/check-backend-strict.mjs"
+          "node scripts/quality/check-backend-strict.mjs",
+          "node scripts/quality/check-entity-metadata.cjs"
         ],
         "parallel": false
       }
