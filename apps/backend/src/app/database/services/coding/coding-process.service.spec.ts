@@ -600,13 +600,10 @@ describe('CodingProcessService', () => {
 
       let cancellationChecks = 0;
       mockJobQueueService.getTestPersonCodingJob = jest.fn().mockImplementation(
-        async () => ({
-          data: { isPaused: false },
-          getState: jest.fn().mockImplementation(async () => {
-            cancellationChecks += 1;
-            return cancellationChecks >= pauseOnCheck ? 'paused' : 'active';
-          })
-        })
+        async () => {
+          cancellationChecks += 1;
+          return { data: { isPaused: cancellationChecks >= pauseOnCheck } };
+        }
       );
 
       await service.processTestPersonsBatch(

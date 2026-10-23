@@ -6,6 +6,7 @@ import {
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
@@ -745,8 +746,8 @@ export class CodingResultsExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting aggregated coding results (most-frequent): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated coding results: ${error.message}`);
+      this.logger.error(`Error exporting aggregated coding results (most-frequent): ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export aggregated coding results: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1073,8 +1074,8 @@ export class CodingResultsExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting aggregated (new-row-per-variable): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated results: ${error.message}`);
+      this.logger.error(`Error exporting aggregated (new-row-per-variable): ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export aggregated results: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1396,8 +1397,8 @@ export class CodingResultsExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting aggregated (new-column-per-coder): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated results: ${error.message}`);
+      this.logger.error(`Error exporting aggregated (new-column-per-coder): ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export aggregated results: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1475,8 +1476,8 @@ export class CodingResultsExportService {
         // Collect all variables and testpersons for this coder
         const variableSet = new Set<string>();
         const testPersonMap = new Map<string, Map<string, {
-          code: number | null;
-          score: number | null;
+          code?: number | null;
+          score?: number | null;
           codingIssueOption: number | null;
         }>>();
         const testPersonComments = new Map<string, Map<string, string | null>>();
@@ -1641,7 +1642,7 @@ export class CodingResultsExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting coding results by coder: ${error.message}`, error.stack);
+      this.logger.error(`Error exporting coding results by coder: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error('Could not export coding results by coder. Please check the database connection or query.');
     }
   }
@@ -1881,7 +1882,7 @@ export class CodingResultsExportService {
               }
 
               // Add coding values for each coder
-              const codeValues: (number | null)[] = [];
+              const codeValues: number[] = [];
               for (let coderIndex = 0; coderIndex < coderList.length; coderIndex++) {
                 const coder = coderList[coderIndex];
                 const displayCoder = displayCoderList[coderIndex];
@@ -1951,7 +1952,7 @@ export class CodingResultsExportService {
             };
             processedCombinations += 1;
           } catch (error) {
-            this.logger.error(`Error processing combination ${unitName}_${variableId}: ${error.message}`);
+            this.logger.error(`Error processing combination ${unitName}_${variableId}: ${getErrorMessage(error)}`);
             // Continue with next combination instead of failing entirely
           }
         }
@@ -1967,8 +1968,8 @@ export class CodingResultsExportService {
       const buffer = await workbook.xlsx.writeBuffer();
       resultBuffer = Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting coding results by variable: ${error.message}`, error.stack);
-      throw new Error(`Could not export coding results by variable: ${error.message}. This may be due to memory constraints with large datasets.`);
+      this.logger.error(`Error exporting coding results by variable: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export coding results by variable: ${getErrorMessage(error)}. This may be due to memory constraints with large datasets.`);
     }
 
     // Check after try-catch to avoid 'throw of exception caught locally'
@@ -2175,8 +2176,8 @@ export class CodingResultsExportService {
 
       return Buffer.concat(chunks);
     } catch (error) {
-      this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
-      throw new Error(`Could not export detailed coding results: ${error.message}`);
+      this.logger.error(`Error exporting detailed coding results: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Could not export detailed coding results: ${getErrorMessage(error)}`);
     }
   }
 }

@@ -7,6 +7,7 @@ import {
 import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -2067,8 +2068,8 @@ export class WorkspaceCodingStatisticsController {
         throw error;
       }
       this.logger.error(
-        `Error calculating Cohen's Kappa: ${error.message}`,
-        error.stack
+        `Error calculating Cohen's Kappa: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -2182,8 +2183,8 @@ export class WorkspaceCodingStatisticsController {
         throw error;
       }
       this.logger.error(
-        `Error exporting Cohen's Kappa CSV: ${error.message}`,
-        error.stack
+        `Error exporting Cohen's Kappa CSV: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -2299,8 +2300,8 @@ export class WorkspaceCodingStatisticsController {
         throw error;
       }
       this.logger.error(
-        `Error exporting Cohen's Kappa summary CSV: ${error.message}`,
-        error.stack
+        `Error exporting Cohen's Kappa summary CSV: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -2426,8 +2427,8 @@ export class WorkspaceCodingStatisticsController {
         throw error;
       }
       this.logger.error(
-        `Error exporting Cohen's Kappa XLSX: ${error.message}`,
-        error.stack
+        `Error exporting Cohen's Kappa XLSX: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

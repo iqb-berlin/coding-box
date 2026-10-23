@@ -7,6 +7,8 @@ import {
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import { requireJobId } from '../../job-queue/job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { rethrowDownloadError } from '../../http/download-error';
@@ -524,8 +526,8 @@ export class WorkspaceCodingExportController {
       );
     } catch (error) {
       this.logger.error(
-        `Error preparing coding results export for workspace ${workspace_id}, version ${version}: ${error.message}`,
-        error.stack
+        `Error preparing coding results export for workspace ${workspace_id}, version ${version}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
 
       if (!res.headersSent) {
@@ -1258,13 +1260,13 @@ export class WorkspaceCodingExportController {
       );
 
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: `Export job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
       this.logger.error(
-        `Error creating export job: ${error.message}`,
-        error.stack
+        `Error creating export job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -1375,7 +1377,7 @@ export class WorkspaceCodingExportController {
       }
 
       const state = await job.getState();
-      const progress = this.toPublicExportProgress(await job.progress());
+      const progress = this.toPublicExportProgress(job.progress);
       const failedReason = job.failedReason;
       const status = this.mapExportJobState(state, job);
 
@@ -1401,8 +1403,8 @@ export class WorkspaceCodingExportController {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting export job status: ${error.message}`,
-        error.stack
+        `Error getting export job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -1492,8 +1494,8 @@ export class WorkspaceCodingExportController {
       );
     } catch (error) {
       this.logger.error(
-        `Error downloading export: ${error.message}`,
-        error.stack
+        `Error downloading export: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       rethrowDownloadError(error, res);
     }
@@ -1694,10 +1696,10 @@ export class WorkspaceCodingExportController {
       return await Promise.all(
         jobs.map(async job => {
           const state = await job.getState();
-          const progress = this.toPublicExportProgress(await job.progress());
+          const progress = this.toPublicExportProgress(job.progress);
 
           return {
-            jobId: job.id.toString(),
+            jobId: requireJobId(job),
             status: this.mapExportJobState(state, job),
             ...progress,
             exportType: job.data.exportType,
@@ -1707,8 +1709,8 @@ export class WorkspaceCodingExportController {
       );
     } catch (error) {
       this.logger.error(
-        `Error getting export jobs: ${error.message}`,
-        error.stack
+        `Error getting export jobs: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -1767,8 +1769,8 @@ export class WorkspaceCodingExportController {
       };
     } catch (error) {
       this.logger.error(
-        `Error deleting export job: ${error.message}`,
-        error.stack
+        `Error deleting export job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -1882,8 +1884,8 @@ export class WorkspaceCodingExportController {
       };
     } catch (error) {
       this.logger.error(
-        `Error cancelling export job: ${error.message}`,
-        error.stack
+        `Error cancelling export job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

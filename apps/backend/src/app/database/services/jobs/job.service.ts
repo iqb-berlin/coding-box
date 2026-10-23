@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { Job } from '../../entities/job.entity';
 
 @Injectable()
@@ -66,8 +67,8 @@ export class JobService {
 
       return { success: true, message: `Job ${jobId} has been cancelled successfully` };
     } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
-      return { success: false, message: `Error cancelling job: ${error.message}` };
+      this.logger.error(`Error cancelling job: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Error cancelling job: ${getErrorMessage(error)}` };
     }
   }
 
@@ -85,8 +86,8 @@ export class JobService {
 
       return { success: true, message: `Job ${jobId} has been deleted successfully` };
     } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
-      return { success: false, message: `Error deleting job: ${error.message}` };
+      this.logger.error(`Error deleting job: ${getErrorMessage(error)}`, getErrorStack(error));
+      return { success: false, message: `Error deleting job: ${getErrorMessage(error)}` };
     }
   }
 
@@ -95,7 +96,7 @@ export class JobService {
       const job = await this.getJob(jobId);
       return job.status === 'cancelled';
     } catch (error) {
-      this.logger.error(`Error checking job cancellation: ${error.message}`, error.stack);
+      this.logger.error(`Error checking job cancellation: ${getErrorMessage(error)}`, getErrorStack(error));
       return false; // Assume not cancelled on error
     }
   }

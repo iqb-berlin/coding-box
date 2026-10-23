@@ -1,8 +1,20 @@
+interface CollectedVariable {
+  id: string;
+  markingPanels?: string[];
+  connectedTo?: string[];
+  alwaysVisible: boolean | null;
+  path: Record<string, number>;
+}
+
+function stringReferences(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : undefined;
+}
+
 function collectIdsWithKeyedPaths(
-  node,
-  path = {},
-  collected = [],
-  visibility = null,
+  node: unknown,
+  path: Record<string, number> = {},
+  collected: CollectedVariable[] = [],
+  visibility: boolean | null = null,
   skipCollect = false
 ) {
   if (Array.isArray(node)) {
@@ -15,24 +27,25 @@ function collectIdsWithKeyedPaths(
   if (typeof node === 'object' && node !== null) {
     // If at a 'page' level object, update visibility
     let currentVisibility = visibility;
-    if ('alwaysVisible' in node && 'sections' in node) {
+    if ('alwaysVisible' in node && 'sections' in node && typeof node.alwaysVisible === 'boolean') {
       currentVisibility = node.alwaysVisible;
     }
 
     // Only collect if not under a skipped key
     if ('id' in node && !skipCollect) {
-      collected.push({
-        id: node.alias || node.id,
-        markingPanels: node.markingPanels,
-        connectedTo: node.connectedTo,
-        alwaysVisible: currentVisibility,
-        path: { ...path }
-      });
+      const id = ('alias' in node && node.alias) || node.id;
+      if (typeof id === 'string') {
+        collected.push({
+          id,
+          markingPanels: stringReferences('markingPanels' in node ? node.markingPanels : undefined),
+          connectedTo: stringReferences('connectedTo' in node ? node.connectedTo : undefined),
+          alwaysVisible: currentVisibility,
+          path: { ...path }
+        });
+      }
     }
 
-    // eslint-disable-next-line guard-for-in
-    for (const key in node) {
-      const value = node[key];
+    for (const [key, value] of Object.entries(node)) {
       const shouldSkip =
         skipCollect || ['value', 'visibilityRules'].includes(key);
 
@@ -63,7 +76,7 @@ function collectIdsWithKeyedPaths(
   return collected;
 }
 
-function findDependencies(data) {
+function findDependencies(data: CollectedVariable[]): VariablePage[] {
   return data.map((currentObj, _, arr) => {
     const connectedIds =
       currentObj.connectedTo || currentObj.markingPanels || [];
@@ -86,7 +99,7 @@ function findDependencies(data) {
 }
 
 interface UnitWithDefinition {
-  definition: string;
+  definition?: string;
   variable_pages?: VariablePage[];
   [key: string]: unknown;
 }
@@ -106,7 +119,8 @@ interface VariableDependency {
 
 export const extractVariableLocation = function extractVariableLocations(definitions: UnitWithDefinition[]): UnitWithDefinition[] {
   return definitions.map((unit: UnitWithDefinition) => {
-    const definitionParsed = JSON.parse(unit.definition);
+    if (typeof unit.definition !== 'string') throw new TypeError('Unit definition must be a JSON string');
+    const definitionParsed: unknown = JSON.parse(unit.definition);
 
     const data = collectIdsWithKeyedPaths(definitionParsed);
     unit.variable_pages = findDependencies(data);

@@ -5,6 +5,7 @@ import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
+import { getErrorMessage } from '../../../utils/error.util';
 import { Person, Response, Log } from '../shared';
 
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
@@ -119,7 +120,7 @@ export class TestcenterService {
       return data;
     } catch (error) {
       throw new Error(
-        `Authentication error: ${error.message || 'Unknown error'}`
+        `Authentication error: ${getErrorMessage(error) || 'Unknown error'}`
       );
     }
   }
@@ -209,7 +210,7 @@ export class TestcenterService {
 
       return annotatedGroups;
     } catch (error) {
-      this.logger.error(`Error fetching test groups: ${error.message}`);
+      this.logger.error(`Error fetching test groups: ${getErrorMessage(error)}`);
       await this.updateTestGroupsLoadProgress(workspace_id, importRunId, {
         status: 'failed',
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -217,7 +218,7 @@ export class TestcenterService {
       });
       throw new Error(
         `Failed to retrieve test groups from Testcenter: ${
-          error?.message || 'Unknown error'
+          getErrorMessage(error) || 'Unknown error'
         }`
       );
     }
@@ -396,7 +397,7 @@ export class TestcenterService {
             } catch (error) {
               this.logger.error(
                 `Error fetching response chunk from "${endpoint}": ${
-                  error?.message || error
+                  getErrorMessage(error) || error
                 }`
               );
               throw error;
@@ -519,7 +520,7 @@ export class TestcenterService {
         if (!Array.isArray(logData)) throw new Error('Das Testcenter hat keine gültige Logliste geliefert.');
         allLogData.push(...logData);
       } catch (error) {
-        this.logger.error(`Error fetching log chunk: ${error.message}`);
+        this.logger.error(`Error fetching log chunk: ${getErrorMessage(error)}`);
         throw error;
       }
     }
@@ -561,7 +562,7 @@ export class TestcenterService {
       this.logger.log(`Logs import result: ${JSON.stringify(result)}`);
     } catch (error) {
       this.logger.error(
-        `Error processing consolidated log data: ${error.message}`
+        `Error processing consolidated log data: ${getErrorMessage(error)}`
       );
       throw error;
     }
@@ -1078,7 +1079,7 @@ export class TestcenterService {
             workspace_id: Number(workspace_id), import_run_id: importRunId, progress
           });
         } catch (error) {
-          this.logger.error(`Could not register Testcenter import ${importRunId}: ${error.message}`);
+          this.logger.error(`Could not register Testcenter import ${importRunId}: ${getErrorMessage(error)}`);
           throw new ServiceUnavailableException({
             importNotStarted: true,
             message: 'Der Importstatus kann nicht gespeichert werden. Es wurden keine Testdaten importiert.'
@@ -1108,7 +1109,7 @@ export class TestcenterService {
       await this.cacheResultImportProgress(workspaceId, importRunId, progress);
       this.logger.log(`Testcenter import ${importRunId}, workspace ${workspaceId}: ${phase}`);
     } catch (error) {
-      this.logger.warn(`Could not update Testcenter import ${importRunId} phase: ${error.message}`);
+      this.logger.warn(`Could not update Testcenter import ${importRunId} phase: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1177,7 +1178,7 @@ export class TestcenterService {
         if (result.issues?.some(issue => issue.level === 'error')) {
           throw new Error('Antworten wurden nicht vollständig importiert. Die betroffene Gruppe kann bereits Teildaten enthalten.');
         }
-        result.completedSteps.push('responses');
+        result.completedSteps?.push('responses');
 
         try {
           const stats = await this.personService.getImportStatistics(
@@ -1187,7 +1188,7 @@ export class TestcenterService {
           result.booklets = stats.booklets || 0;
           result.units = stats.units || 0;
         } catch (statsError) {
-          this.logger.warn(`Could not get import statistics: ${statsError.message}`);
+          this.logger.warn(`Could not get import statistics: ${getErrorMessage(statsError)}`);
         }
       }
 
@@ -1208,7 +1209,7 @@ export class TestcenterService {
         if (logsIssues.some(issue => issue.level === 'error')) {
           throw new Error('Logs wurden nicht vollständig importiert. Bereits gespeicherte Antworten bleiben erhalten.');
         }
-        result.completedSteps.push('logs');
+        result.completedSteps?.push('logs');
 
         // Calculate log coverage statistics
         try {
@@ -1220,7 +1221,7 @@ export class TestcenterService {
           result.bookletDetails = logStats.bookletDetails;
           result.unitDetails = logStats.unitDetails;
         } catch (statsError) {
-          this.logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
+          this.logger.warn(`Could not get log coverage statistics: ${getErrorMessage(statsError)}`);
         }
       }
 
@@ -1263,10 +1264,10 @@ export class TestcenterService {
     } catch (error) {
       this.logger.error(
         `Error during importWorkspaceFiles for workspace ${workspace_id}, tc_workspace ${tc_workspace}: ${
-          error?.message || error
+          getErrorMessage(error) || error
         }`
       );
-      appendIssues([{ level: 'error', category: 'other', message: error?.message || 'Testcenter-Import fehlgeschlagen.' }]);
+      appendIssues([{ level: 'error', category: 'other', message: getErrorMessage(error) || 'Testcenter-Import fehlgeschlagen.' }]);
       result.success = false;
       if (responses === 'true' || logs === 'true') {
         await this.invalidateWorkspaceOverviewCache(workspace_id, result);
@@ -1276,7 +1277,7 @@ export class TestcenterService {
         const progress = await this.loadProgress(workspace_id, importRunId);
         if (progress) {
           progress.status = 'failed';
-          progress.error = error?.message || 'Unknown error';
+          progress.error = getErrorMessage(error) || 'Unknown error';
           progress.currentFile = undefined;
           progress.currentOption = undefined;
           await this.saveProgress(workspace_id, importRunId, progress);
@@ -1300,7 +1301,7 @@ export class TestcenterService {
             details: { source: audit.source, phase: 'summary', issueCount: result.issues?.length || 0 }
           }));
         } catch (error) {
-          this.logger.warn(`Could not record Testcenter import summary: ${error.message}`);
+          this.logger.warn(`Could not record Testcenter import summary: ${getErrorMessage(error)}`);
           appendIssues([{ level: 'warning', category: 'other', message: 'Import summary could not be recorded in the audit journal.' }]);
         }
       }
@@ -1312,7 +1313,7 @@ export class TestcenterService {
     try {
       progress = await this.loadProgress(workspaceId, importRunId) || initialProgress;
     } catch (error) {
-      this.logger.warn(`Could not read Testcenter import ${importRunId} before finalizing: ${error.message}`);
+      this.logger.warn(`Could not read Testcenter import ${importRunId} before finalizing: ${getErrorMessage(error)}`);
     }
     progress.status = result.success ? 'completed' : 'failed';
     progress.totalProcessed = 1;
@@ -1327,7 +1328,7 @@ export class TestcenterService {
         await this.saveResultImportProgress(workspaceId, importRunId, progress);
         persisted = true;
       } catch (error) {
-        this.logger.error(`Could not store Testcenter import ${importRunId} outcome (attempt ${attempt + 1}): ${error.message}`);
+        this.logger.error(`Could not store Testcenter import ${importRunId} outcome (attempt ${attempt + 1}): ${getErrorMessage(error)}`);
         if (attempt < 2) await new Promise(resolve => { setTimeout(resolve, 100); });
       }
     }

@@ -8,6 +8,7 @@ import {
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JournalService } from '../shared/journal.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -515,8 +516,8 @@ export class CodingResultsService {
             await queryRunner.commitTransaction();
           } catch (error) {
             await queryRunner.rollbackTransaction();
-            this.logger.error(`Error finalizing coding results: ${error.message}`, error.stack);
-            throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
+            this.logger.error(`Error finalizing coding results: ${getErrorMessage(error)}`, getErrorStack(error));
+            throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${getErrorMessage(error)}`);
           } finally {
             await queryRunner.release();
           }
@@ -642,14 +643,14 @@ export class CodingResultsService {
         };
       } catch (error) {
         await queryRunner.rollbackTransaction();
-        this.logger.error(`Error updating responses: ${error.message}`, error.stack);
-        throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
+        this.logger.error(`Error updating responses: ${getErrorMessage(error)}`, getErrorStack(error));
+        throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${getErrorMessage(error)}`);
       } finally {
         await queryRunner.release();
       }
     } catch (error) {
-      this.logger.error(`Error applying coding results: ${error.message}`, error.stack);
-      throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
+      this.logger.error(`Error applying coding results: ${getErrorMessage(error)}`, getErrorStack(error));
+      throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${getErrorMessage(error)}`);
     }
   }
 
@@ -762,7 +763,7 @@ export class CodingResultsService {
       [responseIds]
     );
 
-    return new Map(rows.map(row => [
+    return new Map(rows.map((row: Record<string, unknown>) => [
       Number(row.id),
       {
         status: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
@@ -823,7 +824,7 @@ export class CodingResultsService {
       params
     );
 
-    return rows.map(row => ({
+    return rows.map((row: Record<string, unknown>) => ({
       responseId: Number(row.responseId),
       statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
     }));
@@ -860,13 +861,13 @@ export class CodingResultsService {
       return result;
     } catch (error) {
       this.logger.error(
-        `Error applying empty response coding: ${error.message}`,
-        error.stack
+        `Error applying empty response coding: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return {
         success: false,
         updatedCount: 0,
-        message: `Fehler: ${error.message}`
+        message: `Fehler: ${getErrorMessage(error)}`
       };
     }
   }
@@ -999,11 +1000,11 @@ export class CodingResultsService {
         await queryRunner.rollbackTransaction();
       }
       this.logger.error(
-        `Error updating empty responses: ${error.message}`,
-        error.stack
+        `Error updating empty responses: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
-        `Fehler beim Kodieren der leeren Antworten: ${error.message}`
+        `Fehler beim Kodieren der leeren Antworten: ${getErrorMessage(error)}`
       );
     }
   }

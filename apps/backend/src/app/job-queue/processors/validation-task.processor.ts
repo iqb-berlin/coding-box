@@ -1,27 +1,29 @@
 import {
-  Process,
+  WorkerHost,
   Processor
-} from '@nestjs/bull';
+} from '@nestjs/bullmq';
 import {
   Injectable,
   Logger
 } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
   ValidationTaskJobData
 } from '../job-queue.service';
 import { ValidationTaskService } from '../../database/services/validation';
 
 @Injectable()
-@Processor('validation-task')
-export class ValidationTaskProcessor {
+@Processor('validation-task', { concurrency: 1 })
+export class ValidationTaskProcessor extends WorkerHost {
   private readonly logger = new Logger(ValidationTaskProcessor.name);
 
   constructor(
     private readonly validationTaskService: ValidationTaskService
-  ) { }
+  ) {
+    super();
+  }
 
-  @Process()
   async process(job: Job<ValidationTaskJobData>): Promise<void> {
     this.logger.log(`Processing validation task job ${job.id} for task ${job.data.taskId}`);
 
@@ -30,8 +32,8 @@ export class ValidationTaskProcessor {
       this.logger.log(`Validation task job ${job.id} completed successfully`);
     } catch (error) {
       this.logger.error(
-        `Error processing validation task job ${job.id}: ${error.message}`,
-        error.stack
+        `Error processing validation task job ${job.id}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }

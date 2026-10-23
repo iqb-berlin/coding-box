@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -755,8 +756,8 @@ export class DoubleCodingReviewQueryService {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting double-coded variables for review: ${error.message}`,
-        error.stack
+        `Error getting double-coded variables for review: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not get double-coded variables for review. Please check the database connection.'
@@ -1672,8 +1673,8 @@ export class DoubleCodingReviewQueryService {
       };
     } catch (error) {
       this.logger.error(
-        `Error calculating workspace-wide Cohen's Kappa: ${error.message}`,
-        error.stack
+        `Error calculating workspace-wide Cohen's Kappa: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         "Could not calculate workspace-wide Cohen's Kappa. Please check the database connection."

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import * as ExcelJS from 'exceljs';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   CacheService,
   VALIDATION_CACHE_KEY_PREFIX
@@ -160,7 +161,7 @@ export class ExportValidationResultsService {
       const buffer = await workbook.xlsx.writeBuffer();
       return Buffer.from(buffer);
     } catch (error) {
-      this.logger.error(`Error exporting validation results as Excel: ${error.message}`, error.stack);
+      this.logger.error(`Error exporting validation results as Excel: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error('Could not export validation results as Excel. Please check the database connection or query.');
     }
   }

@@ -20,7 +20,7 @@ describe('BullJobManagementService workspace isolation', () => {
       isPaused: true
     } as TestPersonCodingJobData,
     getState: jest.fn().mockResolvedValue(state),
-    update: jest.fn().mockResolvedValue(undefined)
+    updateData: jest.fn().mockResolvedValue(undefined)
   });
 
   const createService = (job: ReturnType<typeof createJob>) => {
@@ -61,7 +61,7 @@ describe('BullJobManagementService workspace isolation', () => {
       await expect(service[operation]('17', 1)).resolves.toMatchObject({ success: false });
       expect(queue.getWorkspaceJob).toHaveBeenCalledWith(1, 'test-person-coding', '17');
       expect(job.getState).not.toHaveBeenCalled();
-      expect(job.update).not.toHaveBeenCalled();
+      expect(job.updateData).not.toHaveBeenCalled();
       expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
       expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
       expect(freshness.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
@@ -75,10 +75,10 @@ describe('BullJobManagementService workspace isolation', () => {
     const { service } = createService(job);
 
     await expect(service.pauseJob('17', 1)).resolves.toMatchObject({ success: true });
-    expect(job.update).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 1, isPaused: true }));
+    expect(job.updateData).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 1, isPaused: true }));
     await expect(service.resumeJob('17', 1)).resolves.toMatchObject({ success: true });
-    expect(job.update).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: 1, unitIds: [8] }));
-    expect(job.update.mock.calls[1][0]).not.toHaveProperty('isPaused');
+    expect(job.updateData).toHaveBeenLastCalledWith(expect.objectContaining({ workspaceId: 1, unitIds: [8] }));
+    expect(job.updateData.mock.calls[1][0]).not.toHaveProperty('isPaused');
   });
 
   it('restarts an owned failed job while retaining its original coding scope and revision', async () => {
@@ -97,7 +97,7 @@ describe('BullJobManagementService workspace isolation', () => {
       autoCoderRun: 2
     });
     expect(freshness.isRevisionCurrent).toHaveBeenCalledWith(1, 9);
-    expect(job.update).not.toHaveBeenCalled();
+    expect(job.updateData).not.toHaveBeenCalled();
   });
 
   it('rejects restarting run 2 when the regular freshness prerequisites are blocked', async () => {
@@ -119,7 +119,7 @@ describe('BullJobManagementService workspace isolation', () => {
     expect(readiness.assertAutoCodingCanProcess).not.toHaveBeenCalled();
     expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
     expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
+    expect(job.updateData).not.toHaveBeenCalled();
     expect(job.data).toEqual(originalData);
   });
 
@@ -139,7 +139,7 @@ describe('BullJobManagementService workspace isolation', () => {
     });
     expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
     expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
+    expect(job.updateData).not.toHaveBeenCalled();
     expect(job.data).toEqual(originalData);
   });
 
@@ -156,7 +156,7 @@ describe('BullJobManagementService workspace isolation', () => {
     expect(freshness.isRevisionCurrent).toHaveBeenCalledWith(1, 9);
     expect(queue.addTestPersonCodingJob).not.toHaveBeenCalled();
     expect(queue.deleteTestPersonCodingJob).not.toHaveBeenCalled();
-    expect(job.update).not.toHaveBeenCalled();
+    expect(job.updateData).not.toHaveBeenCalled();
     expect(job.data).toEqual(originalData);
   });
 

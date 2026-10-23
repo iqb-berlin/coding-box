@@ -660,7 +660,7 @@ export class ContentPoolIntegrationService {
           String(replacement.snapshot.id) :
           undefined;
         result.versionNumber = Number.isFinite(replacement.snapshot?.versionNumber) ?
-          Number(replacement.snapshot.versionNumber) :
+          Number(replacement.snapshot?.versionNumber) :
           undefined;
         result.changelog = changelog;
 
@@ -1027,9 +1027,10 @@ export class ContentPoolIntegrationService {
     const grantedScopes = new Set(
       payload.scopes.filter((scope): scope is string => typeof scope === 'string')
     );
+    const capabilities = payload.capabilities;
     const missingScopes = this.requiredCodingBoxScopes.filter(
       scope => !grantedScopes.has(scope) ||
-        payload.capabilities[scope] !== true
+        capabilities[scope] !== true
     );
     if (missingScopes.length > 0) {
       throw new ForbiddenException(

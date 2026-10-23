@@ -14,7 +14,9 @@ describe('Database export audit outcomes', () => {
   function fixture(scope: 'workspace' | 'system' = 'workspace') {
     const exportService = { exportWorkspaceToSqliteFile: jest.fn(), exportToSqliteFile: jest.fn() };
     const journalService = { recordEvent: jest.fn().mockResolvedValue({}) };
-    const job = { id: '123', data: { scope, workspaceId: 3, requestedByUserId: 7 }, progress: jest.fn() };
+    const job = {
+      id: '123', data: { scope, workspaceId: 3, requestedByUserId: 7 }, progress: 0, updateProgress: jest.fn()
+    };
     const processor = new DatabaseExportProcessor(exportService as never, journalService as never);
     return {
       exportService, journalService, job, processor

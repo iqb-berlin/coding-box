@@ -20,6 +20,8 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { requireJobId } from '../../job-queue/job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -244,13 +246,13 @@ export class WorkspaceCodingCodebookController {
       );
 
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: `Codebook generation job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
       this.logger.error(
-        `Error creating codebook generation job: ${error.message}`,
-        error.stack
+        `Error creating codebook generation job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -289,7 +291,7 @@ export class WorkspaceCodingCodebookController {
       }
 
       const state = await job.getState();
-      const progress = await job.progress();
+      const progress = job.progress;
       const failedReason = job.failedReason;
 
       let status: string;
@@ -336,8 +338,8 @@ export class WorkspaceCodingCodebookController {
         throw error;
       }
       this.logger.error(
-        `Error getting codebook job status: ${error.message}`,
-        error.stack
+        `Error getting codebook job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -397,8 +399,8 @@ export class WorkspaceCodingCodebookController {
       await this.cleanupCodebookResult(filePath, cacheKey);
     } catch (error) {
       this.logger.error(
-        `Error downloading codebook: ${error.message}`,
-        error.stack
+        `Error downloading codebook: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       rethrowDownloadError(error, res);
     }
@@ -456,14 +458,14 @@ export class WorkspaceCodingCodebookController {
     return {
       exportFormat,
       missingsProfile: `${missingsProfile}`,
-      hasOnlyManualCoding: contentOptions.hasOnlyManualCoding,
-      hasGeneralInstructions: contentOptions.hasGeneralInstructions,
-      hasDerivedVars: contentOptions.hasDerivedVars,
-      hasOnlyVarsWithCodes: contentOptions.hasOnlyVarsWithCodes,
-      hasClosedVars: contentOptions.hasClosedVars,
-      codeLabelToUpper: contentOptions.codeLabelToUpper,
-      showScore: contentOptions.showScore,
-      hideItemVarRelation: contentOptions.hideItemVarRelation,
+      hasOnlyManualCoding: contentOptions.hasOnlyManualCoding === true,
+      hasGeneralInstructions: contentOptions.hasGeneralInstructions === true,
+      hasDerivedVars: contentOptions.hasDerivedVars === true,
+      hasOnlyVarsWithCodes: contentOptions.hasOnlyVarsWithCodes === true,
+      hasClosedVars: contentOptions.hasClosedVars === true,
+      codeLabelToUpper: contentOptions.codeLabelToUpper === true,
+      showScore: contentOptions.showScore === true,
+      hideItemVarRelation: contentOptions.hideItemVarRelation === true,
       trainingRequirement: this.normalizeTrainingRequirement(
         contentOptions.trainingRequirement
       ),
@@ -668,7 +670,7 @@ export class WorkspaceCodingCodebookController {
       }
       await this.cacheService.delete(cacheKey);
     } catch (error) {
-      this.logger.warn(`Failed to clean up codebook result: ${error.message}`);
+      this.logger.warn(`Failed to clean up codebook result: ${getErrorMessage(error)}`);
     }
   }
 }

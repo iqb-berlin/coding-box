@@ -2,6 +2,7 @@ import { array, boolean, either, number, object, string, values, InferRequest } 
 import { ResponseMatchingFlag } from './coding/response-matching-flag';
 
 const trainingDiscussionApplySource = values('manual', 'auto_agreement');
+const nonEmptyString = { type: 'string', minLength: 1 } as const;
 
 const exportTransport = {
   authToken: string,
@@ -12,6 +13,25 @@ const exportTransport = {
 // Runtime contracts for bodies whose TypeScript types are erased (interfaces,
 // inline objects and arrays) or whose shared DTOs only carry Swagger metadata.
 export const requestBodySchemas = {
+  ClientCredentialsRequest: {
+    ...object({ client_id: nonEmptyString, client_secret: nonEmptyString, scope: string }, ['client_id', 'client_secret']),
+    additionalProperties: false
+  },
+  AuthTokenValidationRequest: {
+    ...object({ access_token: nonEmptyString }, ['access_token']),
+    additionalProperties: false
+  },
+  AuthLoginCodeExchangeRequest: {
+    ...object({
+      code: nonEmptyString,
+      browser_verifier: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' }
+    }, ['code', 'browser_verifier']),
+    additionalProperties: false
+  },
+  AuthRefreshRequest: {
+    ...object({ refresh_token: nonEmptyString }, ['refresh_token']),
+    additionalProperties: false
+  },
   ExternalCodingImportDto: object({
     file: string,
     fileName: string,

@@ -1,4 +1,4 @@
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { AutocoderRunService } from '../autocoder-run.service';
 import { TestPersonCodingJobData } from '../job-queue.service';
 import { TestPersonCodingProcessor } from './test-person-coding.processor';

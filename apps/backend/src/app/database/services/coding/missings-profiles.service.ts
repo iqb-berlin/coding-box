@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, IsNull, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -84,7 +85,7 @@ export class MissingsProfilesService {
 
       return profiles.map(profile => ({ label: profile.label, id: profile.id }));
     } catch (error) {
-      this.logger.error(`Error getting missings profiles for workspace ${workspaceId}: ${error.message}`, error.stack);
+      this.logger.error(`Error getting missings profiles for workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
       return [];
     }
   }
@@ -115,7 +116,7 @@ export class MissingsProfilesService {
 
       return await this.enrichIqbStandardEntityIfNeeded(profileEntity);
     } catch (error) {
-      this.logger.error(`Error getting missings profile by label: ${error.message}`, error.stack);
+      this.logger.error(`Error getting missings profile by label: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }
@@ -159,7 +160,7 @@ export class MissingsProfilesService {
 
       return await this.enrichIqbStandardEntityIfNeeded(profileEntity, manager);
     } catch (error) {
-      this.logger.error(`Error getting missings profile by id: ${error.message}`, error.stack);
+      this.logger.error(`Error getting missings profile by id: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }
@@ -581,7 +582,7 @@ export class MissingsProfilesService {
         );
       }
     } catch (error) {
-      this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${error.message}`, error.stack);
+      this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -753,7 +754,7 @@ export class MissingsProfilesService {
 
       return this.toDto(savedProfile);
     } catch (error) {
-      this.logger.error(`Error creating missings profile: ${error.message}`, error.stack);
+      this.logger.error(`Error creating missings profile: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -792,7 +793,7 @@ export class MissingsProfilesService {
 
       return this.toDto(savedProfile);
     } catch (error) {
-      this.logger.error(`Error updating missings profile: ${error.message}`, error.stack);
+      this.logger.error(`Error updating missings profile: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -818,7 +819,7 @@ export class MissingsProfilesService {
 
       return deleted;
     } catch (error) {
-      this.logger.error(`Error deleting missings profile: ${error.message}`, error.stack);
+      this.logger.error(`Error deleting missings profile: ${getErrorMessage(error)}`, getErrorStack(error));
       if (error instanceof BadRequestException) {
         throw error;
       }
@@ -831,7 +832,7 @@ export class MissingsProfilesService {
       this.logger.log(`Getting missings profile details for '${id}' in workspace ${workspaceId}`);
       return await this.getMissingsProfileById(workspaceId, id);
     } catch (error) {
-      this.logger.error(`Error getting missings profile details: ${error.message}`, error.stack);
+      this.logger.error(`Error getting missings profile details: ${getErrorMessage(error)}`, getErrorStack(error));
       return null;
     }
   }

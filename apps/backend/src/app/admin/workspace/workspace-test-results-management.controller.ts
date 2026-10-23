@@ -52,7 +52,7 @@ export class WorkspaceTestResultsManagementController {
       workspaceId,
       60000,
       {
-        jobId: `flat-response-filter-options:${workspaceId}:v${nextVersion}:thr60000`,
+        jobId: `flat-response-filter-options-${workspaceId}-v${nextVersion}-thr60000`,
         removeOnComplete: true,
         removeOnFail: true
       }
@@ -173,7 +173,7 @@ export class WorkspaceTestResultsManagementController {
   ): Promise<{
       success: boolean;
       report: {
-        deletedPersons: string[];
+        deletedPersons: number[];
         warnings: string[];
       };
     }> {

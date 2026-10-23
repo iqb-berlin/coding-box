@@ -22,7 +22,8 @@ describe('WorkspaceCodingVersionController', () => {
   it('returns the owned reset job status', async () => {
     const job = {
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockReturnValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockReturnValue(100),
       returnvalue: { affectedResponseCount: 12 }
     };
     const controller = new WorkspaceCodingVersionController(

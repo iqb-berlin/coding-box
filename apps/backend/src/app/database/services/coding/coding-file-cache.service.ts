@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
 import { LRUCache } from '../shared';
@@ -92,7 +93,7 @@ export class CodingFileCacheService {
         variablePageMap = resolveVariablePageMap(voudFile.data as string);
       } catch (error) {
         this.logger.debug(
-          `Error parsing VOUD file for unit ${unitName}: ${error.message}`
+          `Error parsing VOUD file for unit ${unitName}: ${getErrorMessage(error)}`
         );
       }
     }
@@ -148,7 +149,7 @@ export class CodingFileCacheService {
       }
     } catch (error) {
       this.logger.debug(
-        `Error parsing VOCS page overrides for unit ${unitName}: ${error.message}`
+        `Error parsing VOCS page overrides for unit ${unitName}: ${getErrorMessage(error)}`
       );
     }
 
@@ -257,7 +258,7 @@ export class CodingFileCacheService {
         }
       } catch (error) {
         this.logger.debug(
-          `Error parsing VOCS file for unit ${unitName}: ${error.message}`
+          `Error parsing VOCS file for unit ${unitName}: ${getErrorMessage(error)}`
         );
       }
     }

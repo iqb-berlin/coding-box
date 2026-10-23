@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Repository } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import {
   JobDefinition,
@@ -114,8 +115,8 @@ export class CodebookGenerationService {
             }
           } catch (parseError) {
             this.logger.error(
-              `Error parsing missings from profile: ${parseError.message}`,
-              parseError.stack
+              `Error parsing missings from profile: ${getErrorMessage(parseError)}`,
+              getErrorStack(parseError)
             );
           }
         }
@@ -131,8 +132,8 @@ export class CodebookGenerationService {
         throw error;
       }
       this.logger.error(
-        `Error generating codebook for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error generating codebook for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -406,7 +407,7 @@ export class CodebookGenerationService {
       };
     } catch (error) {
       this.logger.warn(
-        `Could not apply variable scope to codebook unit ${unit.key}: ${error.message}`
+        `Could not apply variable scope to codebook unit ${unit.key}: ${getErrorMessage(error)}`
       );
       return null;
     }

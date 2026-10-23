@@ -6,6 +6,8 @@ import {
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
+import { requireJobId } from '../../../job-queue/job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 
 import {
   STATISTICS_IGNORED_STATUSES,
@@ -272,13 +274,13 @@ export class CodingProcessService {
         }
       } catch (error) {
         this.logger.error(
-          `Error fetching persons for groups: ${error.message}`,
-          error.stack
+          `Error fetching persons for groups: ${getErrorMessage(error)}`,
+          getErrorStack(error)
         );
         return {
           totalResponses: 0,
           statusCounts: {},
-          message: `Error fetching persons for groups: ${error.message}`
+          message: `Error fetching persons for groups: ${getErrorMessage(error)}`
         };
       }
     }
@@ -307,7 +309,7 @@ export class CodingProcessService {
     return {
       totalResponses: 0,
       statusCounts: {},
-      jobId: bullJob.id.toString(),
+      jobId: requireJobId(bullJob),
       message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${bullJob.id}`
     };
   }
@@ -381,7 +383,7 @@ export class CodingProcessService {
     return {
       totalResponses: 0,
       statusCounts: {},
-      jobId: bullJob.id.toString(),
+      jobId: requireJobId(bullJob),
       message: `Processing ${includedUnitIds.length} affected coding units in the background. Check job status with jobId: ${bullJob.id}`
     };
   }
@@ -843,7 +845,7 @@ export class CodingProcessService {
       }
 
       this.logger.error(
-        `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
+        `Error while processing test persons in batch: ${getErrorMessage(error)} \n ${getErrorStack(error)}`
       );
       throw error;
     } finally {
@@ -1218,7 +1220,7 @@ export class CodingProcessService {
         );
       } catch (error) {
         this.logger.error(
-          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
+          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${getErrorMessage(error)}`
         );
         result.set(file.file_id, emptyScheme);
       }
@@ -1279,14 +1281,13 @@ export class CodingProcessService {
         if (bullJob.data.isPaused) {
           return true;
         }
-        const state = await bullJob.getState();
-        return state === 'paused';
+        return false;
       }
       return false;
     } catch (error) {
       this.logger.error(
-        `Error checking job cancellation or pause: ${error.message}`,
-        error.stack
+        `Error checking job cancellation or pause: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -1345,7 +1346,7 @@ export class CodingProcessService {
             validation = this.validateCodingSchemeForUnit(
               workspaceId,
               codingSchemeRef,
-              unitFileId,
+              unitFileId ?? undefined,
               unit,
               scheme,
               preflightManager
@@ -1427,8 +1428,8 @@ export class CodingProcessService {
             }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
-          const isArrayString = /^\[.*]$/.test(response.value);
-          if (isArrayString) {
+          const isArrayString = typeof response.value === 'string' && /^\[.*]$/.test(response.value);
+          if (isArrayString && response.value !== null) {
             try {
               responseValue = JSON.parse(response.value);
             } catch (e) {
@@ -1439,7 +1440,7 @@ export class CodingProcessService {
             id: String(response.variableid),
             value: responseValue,
             status: statusNumberToString(inputStatus) as AutocoderResponse['status'],
-            subform: response.subform,
+            subform: response.subform ?? undefined,
             code: inputCode,
             score: inputScore
           };
@@ -2601,8 +2602,8 @@ export class CodingProcessService {
         nextStatesByInput.set(inputKey, shouldRestoreTuple ? {
           ...currentInput,
           status: 'CODING_COMPLETE',
-          code: target.tuple.code ?? undefined,
-          score: target.tuple.score ?? undefined
+          code: target.tuple?.code ?? undefined,
+          score: target.tuple?.score ?? undefined
         } : {
           ...currentInput,
           value: recalculatedResult.value,
@@ -2844,7 +2845,7 @@ export class CodingProcessService {
           }
         } catch (error) {
           this.logger.error(
-            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`
+            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${getErrorMessage(error)}`
           );
         }
       }
@@ -2866,7 +2867,7 @@ export class CodingProcessService {
   }
 
   private normalizeAutocoderStatus(status: string): string {
-    const nonCodingStatuses = [];
+    const nonCodingStatuses: string[] = [];
     if (nonCodingStatuses.includes(status)) {
       return 'NO_CODING';
     }

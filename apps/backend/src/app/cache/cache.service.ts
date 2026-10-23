@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { ValidationResultDto } from '../../../../../api-dto/coding/validation-result.dto';
 
 export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
@@ -18,8 +19,8 @@ export class CacheService {
       return Number.isFinite(parsed) ? parsed : fallback;
     } catch (error) {
       this.logger.error(
-        `Error getting number from cache: ${error.message}`,
-        error.stack
+        `Error getting number from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return fallback;
     }
@@ -30,8 +31,8 @@ export class CacheService {
       return await this.redis.incr(key);
     } catch (error) {
       this.logger.error(
-        `Error incrementing cache key: ${error.message}`,
-        error.stack
+        `Error incrementing cache key: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return 0;
     }
@@ -63,8 +64,8 @@ export class CacheService {
       return JSON.parse(cachedValue) as T;
     } catch (error) {
       this.logger.error(
-        `Error getting value from cache: ${error.message}`,
-        error.stack
+        `Error getting value from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -83,8 +84,8 @@ export class CacheService {
       return JSON.parse(cachedValue) as T;
     } catch (error) {
       this.logger.error(
-        `Error getting and deleting value from cache: ${error.message}`,
-        error.stack
+        `Error getting and deleting value from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -109,8 +110,8 @@ export class CacheService {
       return JSON.parse(cachedValue) as T;
     } catch (error) {
       this.logger.error(
-        `Error getting and conditionally deleting value from cache: ${error.message}`,
-        error.stack
+        `Error getting and conditionally deleting value from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -138,8 +139,8 @@ export class CacheService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error setting value in cache: ${error.message}`,
-        error.stack
+        `Error setting value in cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -156,8 +157,8 @@ export class CacheService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error deleting value from cache: ${error.message}`,
-        error.stack
+        `Error deleting value from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -174,8 +175,8 @@ export class CacheService {
       return exists === 1;
     } catch (error) {
       this.logger.error(
-        `Error checking if key exists in cache: ${error.message}`,
-        error.stack
+        `Error checking if key exists in cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -243,8 +244,8 @@ export class CacheService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error storing validation results in cache: ${error.message}`,
-        error.stack
+        `Error storing validation results in cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }
@@ -310,8 +311,8 @@ export class CacheService {
       };
     } catch (error) {
       this.logger.error(
-        `Error retrieving paginated validation results from cache: ${error.message}`,
-        error.stack
+        `Error retrieving paginated validation results from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -366,8 +367,8 @@ export class CacheService {
       };
     } catch (error) {
       this.logger.error(
-        `Error retrieving complete validation results from cache: ${error.message}`,
-        error.stack
+        `Error retrieving complete validation results from cache: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -393,8 +394,8 @@ export class CacheService {
       return true;
     } catch (error) {
       this.logger.error(
-        `Error deleting by pattern: ${error.message}`,
-        error.stack
+        `Error deleting by pattern: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return false;
     }

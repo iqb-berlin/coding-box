@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as sqlite3 from 'sqlite3';
 import { promisify } from 'util';
+import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 
 type ExportProgressCallback = (
@@ -50,14 +51,16 @@ export class DatabaseExportService {
     }
 
     const db = new sqlite3.Database(outputFilePath);
-    const dbRun = promisify(db.run.bind(db));
+    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
+      db.run(sql, values, error => (error ? reject(error) : resolve()));
+    });
     const dbClose = promisify(db.close.bind(db));
 
     try {
       await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
       await this.throwIfCancelled(isCancelled);
 
-      const tables = await this.dataSource.query(`
+      const tables: { table_name: string }[] = await this.dataSource.query(`
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
@@ -65,7 +68,7 @@ export class DatabaseExportService {
       `);
 
       const exportableTables = tables
-        .map(table => table.table_name as string)
+        .map(table => table.table_name)
         .filter(tableName => !tableName.startsWith('typeorm_') && tableName !== 'migrations');
 
       await this.throwIfCancelled(isCancelled);
@@ -99,7 +102,7 @@ export class DatabaseExportService {
         await this.throwIfCancelled(isCancelled);
         this.logger.log(`Processing table: ${tableName}`);
 
-        const columns = await this.dataSource.query(`
+        const columns: ExportTableColumn[] = await this.dataSource.query(`
           SELECT column_name, data_type, is_nullable
           FROM information_schema.columns
           WHERE table_name = $1 AND table_schema = 'public'
@@ -193,8 +196,8 @@ export class DatabaseExportService {
         await dbClose();
       } catch (closeError) {
         this.logger.error(
-          `Error closing SQLite file: ${closeError?.message || closeError}`,
-          closeError?.stack
+          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
+          getErrorStack(closeError)
         );
       }
 
@@ -203,8 +206,8 @@ export class DatabaseExportService {
           fs.unlinkSync(outputFilePath);
         } catch (cleanupError) {
           this.logger.error(
-            `Error deleting failed export file: ${cleanupError?.message || cleanupError}`,
-            cleanupError?.stack
+            `Error deleting failed export file: ${getErrorMessage(cleanupError) || cleanupError}`,
+            getErrorStack(cleanupError)
           );
         }
       }
@@ -226,7 +229,9 @@ export class DatabaseExportService {
     }
 
     const db = new sqlite3.Database(outputFilePath);
-    const dbRun = promisify(db.run.bind(db));
+    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
+      db.run(sql, values, error => (error ? reject(error) : resolve()));
+    });
     const dbClose = promisify(db.close.bind(db));
     const queryRunner = this.dataSource.createQueryRunner();
 
@@ -371,8 +376,8 @@ export class DatabaseExportService {
           await queryRunner.rollbackTransaction();
         } catch (rollbackError) {
           this.logger.error(
-            `Error rolling back workspace export transaction: ${rollbackError?.message || rollbackError}`,
-            rollbackError?.stack
+            `Error rolling back workspace export transaction: ${getErrorMessage(rollbackError) || rollbackError}`,
+            getErrorStack(rollbackError)
           );
         }
       }
@@ -381,8 +386,8 @@ export class DatabaseExportService {
         await dbClose();
       } catch (closeError) {
         this.logger.error(
-          `Error closing SQLite file: ${closeError?.message || closeError}`,
-          closeError?.stack
+          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
+          getErrorStack(closeError)
         );
       }
 
@@ -391,8 +396,8 @@ export class DatabaseExportService {
           fs.unlinkSync(outputFilePath);
         } catch (cleanupError) {
           this.logger.error(
-            `Error deleting failed workspace export file: ${cleanupError?.message || cleanupError}`,
-            cleanupError?.stack
+            `Error deleting failed workspace export file: ${getErrorMessage(cleanupError) || cleanupError}`,
+            getErrorStack(cleanupError)
           );
         }
       }
@@ -404,8 +409,8 @@ export class DatabaseExportService {
           await queryRunner.release();
         } catch (releaseError) {
           this.logger.error(
-            `Error releasing workspace export query runner: ${releaseError?.message || releaseError}`,
-            releaseError?.stack
+            `Error releasing workspace export query runner: ${getErrorMessage(releaseError) || releaseError}`,
+            getErrorStack(releaseError)
           );
         }
       }
@@ -491,7 +496,7 @@ export class DatabaseExportService {
     tableName: string,
     queryRunner?: QueryRunner
   ): Promise<string[]> {
-    const rows = await (queryRunner || this.dataSource).query(`
+    const rows: { column_name: string }[] = await (queryRunner || this.dataSource).query(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
       INNER JOIN information_schema.key_column_usage kcu

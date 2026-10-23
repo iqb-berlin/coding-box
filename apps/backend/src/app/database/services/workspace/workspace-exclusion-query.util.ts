@@ -1,4 +1,4 @@
-import { SelectQueryBuilder } from 'typeorm';
+import { SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 
 export type ResolvedWorkspaceExclusions = {
   globalIgnoredUnits: string[];
@@ -60,7 +60,7 @@ export function isExcludedByResolvedExclusions(
   return false;
 }
 
-export function applyResolvedExclusionsToQuery<T>(
+export function applyResolvedExclusionsToQuery<T extends ObjectLiteral>(
   qb: SelectQueryBuilder<T>,
   exclusions: ResolvedWorkspaceExclusions,
   options: ExclusionQueryOptions = {}

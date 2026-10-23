@@ -3,6 +3,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { requireJobId } from '../../../job-queue/job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatistics } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
@@ -82,7 +84,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       await this.preloadStatisticsForWorkspaces(workspaceIds);
       this.logger.log('Finished preloading coding statistics for all workspaces');
     } catch (error) {
-      this.logger.error(`Error during application bootstrap: ${error.message}`);
+      this.logger.error(`Error during application bootstrap: ${getErrorMessage(error)}`);
     }
   }
 
@@ -101,7 +103,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           await this.getCodingStatistics(workspaceId);
         } catch (error) {
           this.logger.error(
-            `Failed to preload statistics for workspace ${workspaceId}: ${error.message}`
+            `Failed to preload statistics for workspace ${workspaceId}: ${getErrorMessage(error)}`
           );
         }
       }
@@ -112,7 +114,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
     const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
-    const result = await this.responseRepository.query(`
+    const result: { workspace_id: number | string }[] = await this.responseRepository.query(`
       SELECT DISTINCT person.workspace_id
       FROM response
       INNER JOIN unit ON response.unitid = unit.id
@@ -122,7 +124,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         AND person.consider = $2
     `, [codedStatuses, true]);
 
-    return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
+    return result.map(row => Number(row.workspace_id)).filter(id => !Number.isNaN(id));
   }
 
   async getCodingStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
@@ -137,7 +139,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
     }
 
-    const statistics: CodingStatistics = {
+    const statistics: CodingStatistics & Required<Pick<CodingStatistics, 'baseResponseCount' | 'derivedResponseCount' | 'derivedStatusCounts'>> = {
       totalResponses: 0,
       baseResponseCount: 0,
       derivedResponseCount: 0,
@@ -222,7 +224,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         whereCondition += ` AND (${conditions})`;
       }
 
-      const statusCountResults = await this.responseRepository.query(`
+      const statusCountResults: { statusValue: string | number; isDerived: boolean | string; count: string }[] = await this.responseRepository.query(`
         SELECT
           ${statusColumn} as "statusValue",
           ${derivedExpression} as "isDerived",
@@ -269,7 +271,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       return statistics;
     } catch (error) {
-      this.logger.error(`Error getting coding statistics: ${error.message}`);
+      this.logger.error(`Error getting coding statistics: ${getErrorMessage(error)}`);
       return statistics;
     }
   }
@@ -369,7 +371,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       if (bullJob) {
         const state = await bullJob.getState();
-        const progress = (await bullJob.progress()) || 0;
+        const progress = (bullJob.progress) || 0;
 
         const status = this.bullJobManagementService.mapJobStateToStatus(state);
         const { result, error } =
@@ -386,8 +388,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       return null;
     } catch (error) {
       this.logger.error(
-        `Error getting job status: ${error.message}`,
-        error.stack
+        `Error getting job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -415,7 +417,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
 
       const state = await bullJob.getState();
-      const progress = (await bullJob.progress()) || 0;
+      const progress = (bullJob.progress) || 0;
       const status = this.bullJobManagementService.mapJobStateToStatus(state);
       const { result, error } =
         this.bullJobManagementService.extractJobResult(bullJob, state);
@@ -428,8 +430,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting coding statistics job status: ${error.message}`,
-        error.stack
+        `Error getting coding statistics job status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       return null;
     }
@@ -482,7 +484,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           `Reusing active coding statistics job ${activeJob.id} for workspace ${workspaceId} (version: ${version})`
         );
         return {
-          jobId: activeJob.id.toString(),
+          jobId: requireJobId(activeJob),
           message: 'Using active coding statistics job'
         };
       }
@@ -501,13 +503,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         `Created coding statistics job ${job.id} for workspace ${workspaceId}`
       );
       return {
-        jobId: job.id.toString(),
+        jobId: requireJobId(job),
         message: 'Created coding statistics job - no cache available'
       };
     } catch (error) {
       this.logger.error(
-        `Error creating coding statistics job: ${error.message}`,
-        error.stack
+        `Error creating coding statistics job: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw error;
     }
@@ -550,10 +552,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
       return { success: false, message: `Failed to cancel job ${jobId}` };
     } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
+      this.logger.error(`Error cancelling job: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
-        message: `Error cancelling job: ${error.message}`
+        message: `Error cancelling job: ${getErrorMessage(error)}`
       };
     }
   }
@@ -580,10 +582,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
       return { success: false, message: `Failed to delete job ${jobId}` };
     } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      this.logger.error(`Error deleting job: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
-        message: `Error deleting job: ${error.message}`
+        message: `Error deleting job: ${getErrorMessage(error)}`
       };
     }
   }

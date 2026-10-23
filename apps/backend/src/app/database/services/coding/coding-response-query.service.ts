@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   STATISTICS_IGNORED_STATUSES,
   statusStringToNumber
@@ -139,8 +140,8 @@ export class CodingResponseQueryService {
       };
     } catch (error) {
       this.logger.error(
-        `Error getting responses by status: ${error.message}`,
-        error.stack
+        `Error getting responses by status: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not retrieve responses. Please check the database connection or query.'
@@ -283,8 +284,8 @@ export class CodingResponseQueryService {
       return enrichedResponses;
     } catch (error) {
       this.logger.error(
-        `Failed to fetch responses: ${error.message}`,
-        error.stack
+        `Failed to fetch responses: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
       throw new Error(
         'Could not retrieve responses. Please check the database connection or query.'

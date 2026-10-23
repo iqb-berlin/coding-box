@@ -166,7 +166,8 @@ describe('WorkspaceCodingCodebookController', () => {
     jobQueueService.getCodebookGenerationJob.mockResolvedValue({
       data: { workspaceId: 12 },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       failedReason: undefined,
       returnvalue: codebookResult
     });
@@ -192,7 +193,8 @@ describe('WorkspaceCodingCodebookController', () => {
     jobQueueService.getCodebookGenerationJob.mockResolvedValue({
       data: { workspaceId: 12 },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       failedReason: undefined,
       returnvalue: codebookResult
     });
@@ -212,7 +214,8 @@ describe('WorkspaceCodingCodebookController', () => {
     jobQueueService.getCodebookGenerationJob.mockResolvedValue({
       data: { workspaceId: 12 },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       failedReason: undefined,
       returnvalue: codebookResult
     });
@@ -235,7 +238,8 @@ describe('WorkspaceCodingCodebookController', () => {
     jobQueueService.getCodebookGenerationJob.mockResolvedValue({
       data: { workspaceId: 12 },
       getState: jest.fn().mockResolvedValue('completed'),
-      progress: jest.fn().mockResolvedValue(100),
+      progress: 100,
+      updateProgress: jest.fn().mockResolvedValue(100),
       failedReason: undefined,
       returnvalue: codebookResult
     });

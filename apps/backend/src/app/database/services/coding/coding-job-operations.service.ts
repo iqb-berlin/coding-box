@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import { CodingJob } from '../../entities/coding-job.entity';
 import {
   ApplyCodingResultsOptions,
@@ -163,7 +164,7 @@ export class CodingJobOperationsService {
         }
       } catch (error) {
         this.logger.error(
-          `Error applying results for job ${job.id}: ${error.message}`
+          `Error applying results for job ${job.id}: ${getErrorMessage(error)}`
         );
         results.push({
           jobId: job.id,
@@ -176,7 +177,7 @@ export class CodingJobOperationsService {
             skippedReviewCount: 0,
             skippedAlreadyCodedCount: 0,
             overwrittenExistingCount: 0,
-            message: `Error: ${error.message}`
+            message: `Error: ${getErrorMessage(error)}`
           }
         });
       }

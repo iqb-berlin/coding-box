@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
+import { numericJobProgress } from '../../../job-queue/job-queue.util';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -97,7 +99,7 @@ export class CodingAnalysisService {
       const isCalculating = !!activeJob;
       let progress = 0;
       if (activeJob) {
-        progress = await activeJob.progress();
+        progress = numericJobProgress(activeJob);
       }
 
       if (fullAnalysis && !fullAnalysis.aggregationSummary) {
@@ -162,10 +164,10 @@ export class CodingAnalysisService {
       };
     } catch (error) {
       this.logger.error(
-        `Error analyzing responses for workspace ${workspaceId}: ${error.message}`,
-        error.stack
+        `Error analyzing responses for workspace ${workspaceId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
-      throw new Error(`Failed to analyze responses: ${error.message}`);
+      throw new Error(`Failed to analyze responses: ${getErrorMessage(error)}`);
     }
   }
 
@@ -384,8 +386,8 @@ export class CodingAnalysisService {
       };
     } catch (error) {
       this.logger.error(
-        `Error saving aggregation settings: ${error.message}`,
-        error.stack
+        `Error saving aggregation settings: ${getErrorMessage(error)}`,
+        getErrorStack(error)
       );
 
       return {
@@ -394,7 +396,7 @@ export class CodingAnalysisService {
         flags: normalizedFlags,
         aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
         revertedResponses: 0,
-        message: `Error saving aggregation settings: ${error.message}`
+        message: `Error saving aggregation settings: ${getErrorMessage(error)}`
       };
     }
   }

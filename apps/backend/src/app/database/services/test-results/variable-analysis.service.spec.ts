@@ -24,7 +24,8 @@ const createJob = (
     cacheKey: 'variable-analysis:1:job-1'
   },
   getState: jest.fn().mockResolvedValue(overrides.state || 'completed'),
-  progress: jest.fn().mockResolvedValue(overrides.progress ?? 100),
+  progress: overrides.progress ?? 100,
+  updateProgress: jest.fn().mockResolvedValue(overrides.progress ?? 100),
   failedReason: undefined,
   timestamp: 1000,
   finishedOn: 2000,

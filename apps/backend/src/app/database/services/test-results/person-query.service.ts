@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  Brackets, Repository, SelectQueryBuilder, ObjectLiteral
+} from 'typeorm';
+import { getErrorMessage } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -34,7 +37,7 @@ export class PersonQueryService {
   ) {}
 
   private applyIgnoredBookletsToQuery(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     ignoredBooklets: string[],
     bookletInfoAlias = 'bookletinfo'
   ): void {
@@ -46,14 +49,14 @@ export class PersonQueryService {
   }
 
   private applyExclusionsToQuery(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     exclusions: ResolvedWorkspaceExclusions
   ): void {
     applyResolvedExclusionsToQuery(qb, exclusions);
   }
 
   private excludeAutocoderGeneratedResponses(
-    qb: SelectQueryBuilder<unknown>,
+    qb: SelectQueryBuilder<ObjectLiteral>,
     responseAlias = 'response'
   ): void {
     qb.andWhere(`${responseAlias}.is_autocoder_generated IS NOT TRUE`);
@@ -70,7 +73,7 @@ export class PersonQueryService {
 
       return result.map(item => item.group);
     } catch (error) {
-      this.logger.error(`Error fetching groups for workspace ${workspaceId}: ${error.message}`);
+      this.logger.error(`Error fetching groups for workspace ${workspaceId}: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -150,7 +153,7 @@ export class PersonQueryService {
         uniqueResponses
       };
     } catch (error) {
-      this.logger.error(`Error fetching workspace upload stats: ${error.message}`);
+      this.logger.error(`Error fetching workspace upload stats: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -186,7 +189,7 @@ export class PersonQueryService {
         responsesToCode: Number(item.responsesToCode) || 0
       }));
     } catch (error) {
-      this.logger.error(`Error fetching workspace group coding stats: ${error.message}`);
+      this.logger.error(`Error fetching workspace group coding stats: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -204,7 +207,7 @@ export class PersonQueryService {
 
       return count > 0;
     } catch (error) {
-      this.logger.error(`Error checking booklet logs for group ${groupName}: ${error.message}`);
+      this.logger.error(`Error checking booklet logs for group ${groupName}: ${getErrorMessage(error)}`);
       return false;
     }
   }
@@ -240,7 +243,7 @@ export class PersonQueryService {
         ])
       );
     } catch (error) {
-      this.logger.error(`Error getting groups with booklet logs: ${error.message}`);
+      this.logger.error(`Error getting groups with booklet logs: ${getErrorMessage(error)}`);
       return new Map<string, boolean>();
     }
   }
@@ -276,7 +279,7 @@ export class PersonQueryService {
         units: unitsCount
       };
     } catch (error) {
-      this.logger.error(`Error fetching import statistics: ${error.message}`);
+      this.logger.error(`Error fetching import statistics: ${getErrorMessage(error)}`);
       return {
         persons: 0,
         booklets: 0,
@@ -353,7 +356,7 @@ export class PersonQueryService {
         unitDetails
       };
     } catch (error) {
-      this.logger.error(`Error fetching log coverage statistics: ${error.message}`);
+      this.logger.error(`Error fetching log coverage statistics: ${getErrorMessage(error)}`);
       return {
         bookletsWithLogs: 0,
         totalBooklets: 0,

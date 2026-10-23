@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 import { Module } from '@nestjs/common';
 import { MODULE_METADATA } from '@nestjs/common/constants';
-import { getQueueToken } from '@nestjs/bull';
+import { getQueueToken } from '@nestjs/bullmq';
 import { getRedisConnectionToken } from '@nestjs-modules/ioredis';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';

@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -33,7 +33,8 @@ describe('ExternalCodingImportProcessor authorization context', () => {
       data: {
         workspaceId: 17, requestedByUserId, tempFilePath: input, fileName: 'input.csv'
       },
-      progress: jest.fn().mockResolvedValue(undefined)
+      progress: 0,
+      updateProgress: jest.fn().mockResolvedValue(undefined)
     } as unknown as Job<ExternalCodingImportJobData>;
   }
 

@@ -1,17 +1,23 @@
-import { Process, Processor } from '@nestjs/bull';
+import { WorkerHost, Processor } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
+import { rethrowJobError } from '../job-queue.util';
 import { CodingStatistics } from '../../database/services/shared';
 import { TestPersonCodingJobData } from '../job-queue.service';
 import { AutocoderRunService } from '../autocoder-run.service';
 
 @Injectable()
-@Processor('test-person-coding')
-export class TestPersonCodingProcessor {
-  constructor(private readonly autocoderRunService: AutocoderRunService) {}
+@Processor('test-person-coding', { concurrency: 1 })
+export class TestPersonCodingProcessor extends WorkerHost {
+  constructor(private readonly autocoderRunService: AutocoderRunService) {
+    super();
+  }
 
-  @Process()
-  process(job: Job<TestPersonCodingJobData>): Promise<CodingStatistics> {
-    return this.autocoderRunService.run(job);
+  async process(job: Job<TestPersonCodingJobData>): Promise<CodingStatistics> {
+    try {
+      return await this.autocoderRunService.run(job);
+    } catch (error) {
+      return rethrowJobError(error, job, () => this.worker);
+    }
   }
 }

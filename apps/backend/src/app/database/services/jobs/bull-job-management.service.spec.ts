@@ -1,4 +1,4 @@
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import {
   JobQueueService,
   TestPersonCodingJobData
@@ -116,31 +116,31 @@ describe('BullJobManagementService', () => {
     };
     const job = createFailedJob(data);
     job.getState = jest.fn().mockResolvedValue('active');
-    job.update = jest.fn().mockResolvedValue(undefined);
+    job.updateData = jest.fn().mockResolvedValue(undefined);
     const { service } = createService(job);
 
     await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
       success: true, message: 'Job old-job has been paused successfully'
     });
-    expect(job.update).toHaveBeenCalledWith({ ...data, isPaused: true });
+    expect(job.updateData).toHaveBeenCalledWith({ ...data, isPaused: true });
 
     job.data = { ...data, isPaused: true };
     await expect(service.resumeJob('old-job', 7)).resolves.toEqual({
       success: true, message: 'Job old-job has been resumed successfully'
     });
-    expect(job.update).toHaveBeenLastCalledWith(data);
+    expect(job.updateData).toHaveBeenLastCalledWith(data);
   });
 
   it('refuses to pause a completed job without mutating its data', async () => {
     const job = createFailedJob({ workspaceId: 7, personIds: ['11'], autoCoderRun: 1 });
     job.getState = jest.fn().mockResolvedValue('completed');
-    job.update = jest.fn();
+    job.updateData = jest.fn();
     const { service } = createService(job);
 
     await expect(service.pauseJob('old-job', 7)).resolves.toEqual({
       success: false, message: 'Job with ID old-job cannot be paused because it is completed'
     });
-    expect(job.update).not.toHaveBeenCalled();
+    expect(job.updateData).not.toHaveBeenCalled();
   });
 
   it('keeps the failed job when a conflicting dependency prevents its restart', async () => {
@@ -174,7 +174,8 @@ describe('BullJobManagementService', () => {
         finishedOn: 400,
         returnvalue: statistics,
         getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockResolvedValue(100)
+        progress: 100,
+        updateProgress: jest.fn().mockResolvedValue(100)
       },
       {
         id: 12,
@@ -183,14 +184,16 @@ describe('BullJobManagementService', () => {
         failedReason: 'coding failed',
         returnvalue: statistics,
         getState: jest.fn().mockResolvedValue('failed'),
-        progress: jest.fn().mockResolvedValue({ rows: 5 })
+        progress: { rows: 5 },
+        updateProgress: jest.fn().mockResolvedValue({ rows: 5 })
       },
       {
         id: 13,
         data: job.data,
         timestamp: 200,
         getState: jest.fn().mockResolvedValue('waiting'),
-        progress: jest.fn().mockResolvedValue(undefined)
+        progress: 0,
+        updateProgress: jest.fn().mockResolvedValue(undefined)
       }
     ]);
 

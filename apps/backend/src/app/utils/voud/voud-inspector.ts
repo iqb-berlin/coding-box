@@ -1,9 +1,10 @@
+import * as fs from 'fs';
+import { getErrorMessage, getErrorStack } from '../error.util';
 /* eslint-disable no-console */
 
-import * as fs from 'fs';
 import { extractVariableLocation } from './extractVariableLocation';
 
-function inspectVoudFile(filePathOrContent) {
+function inspectVoudFile(filePathOrContent: string) {
   try {
     let content;
 
@@ -51,9 +52,9 @@ function inspectVoudFile(filePathOrContent) {
 
     console.log('=== Inspection Complete ===');
   } catch (error) {
-    console.error('Error processing VOUD file:', error.message);
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
+    console.error('Error processing VOUD file:', getErrorMessage(error));
+    if (getErrorStack(error)) {
+      console.error('Stack trace:', getErrorStack(error));
     }
   }
 }

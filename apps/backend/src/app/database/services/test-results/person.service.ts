@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
   Log,
@@ -113,7 +114,7 @@ export class PersonService {
           });
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`);
+        this.logger.error(`Error processing row at index ${index}: ${getErrorMessage(error)}`);
       }
     });
 
@@ -159,7 +160,7 @@ export class PersonService {
           }
         }
       } catch (error) {
-        const msg = `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${error.message}`;
+        const msg = `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${getErrorMessage(error)}`;
         logger.error(msg);
         issues.push({ level: 'error', message: msg, category: 'other' });
       }
@@ -257,7 +258,7 @@ export class PersonService {
         this.logger.error(
           `Error processing log row at index ${index} for person: ${person.login}. Data: ${JSON.stringify(
             row
-          )}. Error: ${error.message}`
+          )}. Error: ${getErrorMessage(error)}`
         );
       }
     });
@@ -386,7 +387,7 @@ export class PersonService {
         loadTime: Number(parsedResult.loadTime) || 0
       };
     } catch (error) {
-      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
+      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${getErrorMessage(error)}`);
       return null;
     }
   }
@@ -415,8 +416,8 @@ export class PersonService {
           b)
         );
       } catch (error) {
-        const msg = `Error processing row for person ${person.login}: ${error.message}`;
-        this.logger.error(msg, error.stack);
+        const msg = `Error processing row for person ${person.login}: ${getErrorMessage(error)}`;
+        this.logger.error(msg, getErrorStack(error));
         issues.push({ level: 'error', message: msg, category: 'other' });
       }
     }
@@ -435,7 +436,7 @@ export class PersonService {
     try {
       return JSON.parse(responses);
     } catch (error) {
-      this.logger.error(`Error parsing responses: ${error.message}`);
+      this.logger.error(`Error parsing responses: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -447,7 +448,7 @@ export class PersonService {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
           return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
         } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
+          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
           return { id: chunk.subForm || chunk.id || '', responses: [] };
         }
       });
@@ -495,7 +496,7 @@ export class PersonService {
         value: String(value)
       }));
     } catch (error) {
-      const msg = `Error parsing last state: ${error.message} for person: ${row.groupname}-${row.loginname}-${row.code}, unit: ${row.unitname}, booklet: ${row.bookletname}`;
+      const msg = `Error parsing last state: ${getErrorMessage(error)} for person: ${row.groupname}-${row.loginname}-${row.code}, unit: ${row.unitname}, booklet: ${row.bookletname}`;
       this.logger.error(msg);
       issues.push({
         level: 'warning',
@@ -530,7 +531,7 @@ export class PersonService {
             ));
           }
         } catch (error) {
-          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${error.message}`);
+          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
         }
 
         // Keep backward compatibility: if there is only one chunk, keep the old
@@ -633,7 +634,7 @@ export class PersonService {
           unitMap.set(row.unitname, newUnit);
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`, row);
+        this.logger.error(`Error processing row at index ${index}: ${getErrorMessage(error)}`, row);
       }
     });
 

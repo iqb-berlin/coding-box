@@ -6,8 +6,10 @@ import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import * as fs from 'fs';
 import { unlink } from 'fs/promises';
-import { Job } from 'bull';
+import { Job } from 'bullmq';
 import { DataSource } from 'typeorm';
+import { requireJobId } from '../../../job-queue/job-queue.util';
+import { getErrorMessage, toError } from '../../../utils/error.util';
 import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
@@ -21,7 +23,7 @@ import {
   TestResultsUploadStatsDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
-import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
+import { JobQueueService, QueuedUploadFile, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
@@ -537,7 +539,7 @@ export class UploadResultsService {
               const progress = Math.round((bytesRead / file.size) * 100);
               if (progress > lastProgress) {
                 lastProgress = progress;
-                job.progress(progress).catch(err => {
+                job.updateProgress(progress).catch(err => {
                   this.logger.warn(`Failed to update job progress: ${err.message}`);
                 });
               }
@@ -726,7 +728,7 @@ export class UploadResultsService {
                 })
               );
 
-              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
+              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope ?? 'workspace', scopeFilters);
               await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
                 const mutationSummary = await this.personService.processPersonBooklets(
                   filteredPersons,
@@ -786,14 +788,14 @@ export class UploadResultsService {
             await unlink(file.path);
           }
         } catch (e) {
-          this.logger.warn(`Failed to delete temp file ${file.path}: ${e.message}`);
+          this.logger.warn(`Failed to delete temp file ${file.path}: ${getErrorMessage(e)}`);
         }
       } else {
         issues.push({ level: 'error', message: `Invalid mime type: ${file.mimetype}`, fileName: file.originalname });
       }
     } catch (e) {
-      this.logger.error(`Error processing file ${file.originalname}: ${e.message}`);
-      issues.push({ level: 'error', message: `Processing error: ${e.message}`, fileName: file.originalname });
+      this.logger.error(`Error processing file ${file.originalname}: ${getErrorMessage(e)}`);
+      issues.push({ level: 'error', message: `Processing error: ${getErrorMessage(e)}`, fileName: file.originalname });
     }
 
     try {
@@ -821,7 +823,7 @@ export class UploadResultsService {
         }
       }));
     } catch (error) {
-      this.logger.error(`Could not record upload import summary: ${error.message}`);
+      this.logger.error(`Could not record upload import summary: ${getErrorMessage(error)}`);
       issues.push({
         level: 'warning',
         category: 'other',
@@ -931,10 +933,8 @@ export class UploadResultsService {
 
     const jobPromises = originalFiles.map(file => {
       // Create lightweight job payload - prevent passing buffer to Redis
-      const jobFile = { ...file };
-      if (jobFile.buffer) {
-        delete jobFile.buffer;
-      }
+      const jobFile: QueuedUploadFile = { ...file };
+      delete jobFile.buffer;
 
       return this.jobQueueService.addUploadJob({
         workspaceId: workspace_id,
@@ -950,7 +950,7 @@ export class UploadResultsService {
     });
 
     const jobs = await Promise.all(jobPromises);
-    const jobDtos = jobs.map(job => ({ jobId: job.id.toString() }));
+    const jobDtos = jobs.map(job => ({ jobId: requireJobId(job) }));
 
     return jobDtos;
   }
@@ -966,7 +966,7 @@ export class UploadResultsService {
     return key === 'logentry' ? normalizedValue : normalizedValue.trim();
   }
 
-  private handleCsvStream<T>(
+  private handleCsvStream<T extends object>(
     bufferStream: Readable,
     resultType: 'logs' | 'responses',
     issues: TestResultsUploadIssueDto[],
@@ -984,7 +984,7 @@ export class UploadResultsService {
           `Processing CSV stream for ${resultType} in a single file pass`
       );
 
-      const stream = csv.parseStream(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
+      const stream = csv.parseStream<T, T>(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
         .on('headers', (headers: string[]) => {
           headersValid = this.validateCsvHeaders(headers, resultType, fileName, issues);
           if (!headersValid) {
@@ -1017,7 +1017,7 @@ export class UploadResultsService {
               await onDataProcessed(batch);
               batch = [];
             } catch (processError) {
-              stream.destroy(processError);
+              stream.destroy(toError(processError));
               reject(processError);
             }
             stream.resume();
