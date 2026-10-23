@@ -143,7 +143,7 @@ describe.each(['tag', 'note'] as const)('Unit %s workspace ownership', kind => {
 
   it('rejects a URL for a workspace without access', async () => {
     const response = await fetch(`${url.replace('/47/', '/88/')}/5002`);
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
     expect(repository.findOne).not.toHaveBeenCalled();
   });
 

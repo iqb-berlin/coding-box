@@ -1,5 +1,5 @@
 import {
-  CanActivate, ExecutionContext, Injectable, UnauthorizedException
+  CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException
 } from '@nestjs/common';
 import { AuthService } from '../../auth/service/auth.service';
 import { UsersService } from '../../database/services/users';
@@ -44,7 +44,7 @@ export class WorkspaceGuard implements CanActivate {
 
       const canAccess = await this.authService.canAccessWorkSpace(userId, workspaceId);
       if (!canAccess) {
-        throw new UnauthorizedException();
+        throw new ForbiddenException('Workspace access denied');
       }
       return true;
     }
@@ -74,7 +74,7 @@ export class WorkspaceGuard implements CanActivate {
 
     const canAccess = await this.authService.canAccessWorkSpace(userId, workspaceId);
     if (!canAccess) {
-      throw new UnauthorizedException();
+      throw new ForbiddenException('Workspace access denied');
     }
     return true;
   }
