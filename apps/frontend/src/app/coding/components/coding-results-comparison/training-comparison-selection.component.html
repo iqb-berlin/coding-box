@@ -1,0 +1,162 @@
+          @if (mode() === 'between-trainings') {
+            <div
+              class="training-selection"
+              >
+              <h3>Schulungen auswählen</h3>
+              <div class="training-options">
+                <mat-form-field>
+                  <mat-label>Suche</mat-label>
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input
+                    matInput
+                    (keyup)="filterChanged.emit($any($event.target).value)"
+                    placeholder="Schulungen filtern..."
+                    />
+                </mat-form-field>
+              </div>
+              @for (training of filteredTrainings(); track training) {
+                <mat-checkbox
+                  class="training-checkbox"
+                  [checked]="selectedTrainings().includes(training.id)"
+        (change)="
+          trainingToggled.emit(training.id)
+        "
+                  >
+                  <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+                  <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
+                </mat-checkbox>
+              }
+              @if (betweenCoders().length > 0) {
+                <div
+                  class="coder-selection"
+                  >
+                  <mat-form-field class="full-width-select">
+                    <mat-label>Kodierer filtern</mat-label>
+                    <mat-select
+                      [formControl]="betweenControl()"
+                      multiple
+                      (selectionChange)="betweenCodersChanged.emit()"
+                      >
+                      <mat-select-trigger>
+                        {{ betweenControl().value?.length || 0 }} Kodierer
+                        ausgewählt
+                        @if (
+                          (betweenControl().value?.length || 0) ===
+                          betweenCoders().length
+                          ) {
+                          <span
+                            class="all-selected-hint"
+                            >(Alle)</span
+                            >
+                          }
+                        </mat-select-trigger>
+                        @for (coder of betweenCoders(); track coder) {
+                          <mat-option
+                            [value]="coder.trainingId + '_' + coder.coderId"
+                            >
+                            {{ coder.trainingLabel + ' · ID ' + coder.trainingId + ': ' + coder.coderName }}
+                          </mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (mode() === 'within-training') {
+              <div
+                class="training-selection"
+                >
+                <h3>Schulung auswählen</h3>
+                <mat-form-field class="full-width-select">
+                  <mat-label>Schulung</mat-label>
+                  <mat-select
+                    [ngModel]="selectedWithin()"
+                    (selectionChange)="withinChanged.emit($event.value)"
+                    >
+                    <mat-select-trigger>
+                      @if (selectedTraining(); as training) {
+                        <span class="selected-training-trigger">
+                          <span class="selected-training-title">{{ getTrainingOptionTitle(training) }}</span>
+                          <span class="selected-training-meta">{{ getTrainingOptionMeta(training) }}</span>
+                        </span>
+                      }
+                    </mat-select-trigger>
+                    @for (training of trainings(); track training) {
+                      <mat-option
+                        [value]="training.id"
+                        >
+                        <div class="training-option">
+                          <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+                          <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
+                        </div>
+                      </mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                @if (withinCoders().length > 0) {
+                  <div class="coder-selection">
+                    <mat-form-field class="full-width-select">
+                      <mat-label>Kodierer vergleichen</mat-label>
+                      <mat-select
+                        [formControl]="withinControl()"
+                        multiple
+                        (selectionChange)="withinCodersChanged.emit()"
+                        >
+                        <mat-select-trigger>
+                          {{ withinControl().value?.length || 0 }} Kodierer ausgewählt
+                          @if (
+                            (withinControl().value?.length || 0) ===
+                            withinCoders().length
+                            ) {
+                            <span
+                              class="all-selected-hint"
+                              >(Alle)</span
+                              >
+                            }
+                          </mat-select-trigger>
+                          @for (coder of withinCoders(); track coder) {
+                            <mat-option
+                              [value]="coder.jobId"
+                              >{{ coder.coderName }}</mat-option
+                              >
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                    }
+                    @if (selectedWithin()) {
+                      <div class="training-apply-actions">
+                        @if (canApply()) {
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          color="primary"
+                          [disabled]="loading() || applying()"
+                          (click)="applyRequested.emit('auto_agreement')"
+                          >
+                          <mat-icon>verified</mat-icon>
+                          Schulungsergebnisse ohne Abweichungen anwenden
+                        </button>
+                        <button
+                          mat-raised-button
+                          type="button"
+                          color="primary"
+                          [disabled]="loading() || applying()"
+                          (click)="applyRequested.emit('manual')"
+                          >
+                          <mat-icon>rule</mat-icon>
+                          Diskussionsergebnisse anwenden
+                        </button>
+                        }
+                        @if (applying()) {
+                          <mat-progress-spinner
+                            mode="indeterminate"
+                            diameter="24"
+                          ></mat-progress-spinner>
+                        }
+                      </div>
+                    }
+                  </div>
+                }

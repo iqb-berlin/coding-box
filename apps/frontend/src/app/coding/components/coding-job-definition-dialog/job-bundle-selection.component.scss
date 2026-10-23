@@ -1,0 +1,125 @@
+@use './job-selection-styles' as selection;
+@include selection.common;
+:host { display: block; }
+
+.bundles-grid-container {
+  margin-bottom: 20px;
+
+  .bundles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+
+    .bundle-card {
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 4px;
+      padding: 16px;
+      background-color: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s ease;
+      cursor: pointer;
+
+      &:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+
+      &.selected {
+        border-color: #1976d2;
+        background-color: #e3f2fd;
+      }
+
+      &.read-only {
+        cursor: default;
+
+        &:hover {
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          transform: none;
+        }
+      }
+
+      .bundle-card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+
+        .bundle-name {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .assigned-indicator {
+            color: #4caf50;
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+          }
+        }
+      }
+
+      .bundle-card-content {
+        .bundle-description {
+          color: rgba(0, 0, 0, 0.6);
+          margin-bottom: 12px;
+          font-size: 0.9rem;
+          min-height: 40px;
+        }
+
+        .bundle-stats {
+          margin-bottom: 12px;
+
+          .variable-count {
+            background-color: #e0e0e0;
+            border-radius: 16px;
+            padding: 4px 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+          }
+        }
+
+        .bundle-variables-preview {
+          background-color: #f5f5f5;
+          border-radius: 4px;
+          padding: 8px;
+
+          .variables-preview-header {
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+          }
+
+          .variables-preview-list {
+            .variable-preview-item {
+              font-size: 0.85rem;
+              padding: 4px 0;
+              border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+            }
+
+            .variable-preview-more {
+              font-size: 0.85rem;
+              color: #1976d2;
+              padding: 4px 0;
+              font-weight: 500;
+            }
+          }
+
+          .variables-preview-empty {
+            font-size: 0.85rem;
+            color: rgba(0, 0, 0, 0.5);
+            font-style: italic;
+          }
+        }
+      }
+    }
+  }
+}
+
+.selection-summary {
+  margin-top: 16px;
+  font-weight: 500;
+}
+
+.full-width { width: 100%; }

@@ -10,11 +10,10 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { MatSelect, MatOption } from '@angular/material/select';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTooltip } from '@angular/material/tooltip';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
 import { MatRadioModule } from '@angular/material/radio';
 import {
   ReactiveFormsModule,
@@ -24,6 +23,8 @@ import {
 import {
   map, startWith, catchError, of
 } from 'rxjs';
+import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
+import { TrainingSampleEditorComponent, TrainingSampleView, TrainingSampleRow } from './training-sample-editor.component';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
@@ -100,6 +101,8 @@ interface BundleOrderingOverride {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    TrainingSampleEditorComponent,
+    TrainingParticipantSelectionComponent,
     TranslateModule,
     MatButton,
     MatIcon,
@@ -110,13 +113,11 @@ interface BundleOrderingOverride {
     MatInput,
     MatSelect,
     MatOption,
-    MatChipsModule,
     MatProgressSpinner,
     ReactiveFormsModule,
     MatIconButton,
     MatTooltip,
     MatHint,
-    MatDialogModule,
     MatRadioModule
   ],
   templateUrl: './coder-training.component.html',
@@ -194,6 +195,43 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.availableBundles().filter(bundle => bundle.name.toLowerCase().includes(search) ||
       bundle.description?.toLowerCase().includes(search));
   });
+
+  protected get sampleEditorView(): TrainingSampleView {
+    const row = (item: { control: TrainingVariableForm; index: number }): TrainingSampleRow => ({
+      ...item,
+      derived: this.isControlDerived(item.control),
+      insufficient: this.isManualVariableInsufficient(item),
+      availableCount: this.getAvailableCount(item),
+      hasDeriveError: this.hasDeriveErrorResponsesForControl(item.control),
+      deriveErrorCount: this.getDeriveErrorResponseCountForControl(item.control)
+    });
+    return {
+      derivedCount: this.getDerivedVariablesCount(),
+      bundleCount: this.availableBundles().length,
+      variableCount: this.availableVariables().length,
+      selectedBundleIds: this.selectedBundleArray,
+      manualKeys: this.manualVariableKeys(),
+      hasSelectableVariables: this.hasSelectableManualVariables(),
+      hasManualVariables: this.hasManualVariablesSelected(),
+      bundles: this.filteredBundles().map(bundle => ({
+        bundle, derivedCount: this.getBundleDerivedVariablesCount(bundle), effectiveCount: this.getBundleEffectiveVariableCount(bundle)
+      })),
+      variables: this.filteredVariables().map(variable => ({ variable, derived: this.isVariableDerived(variable) })),
+      manual: this.groupedVariables.manual.map(row),
+      groups: this.groupedVariables.bundles.map(group => {
+        const variables = group.variables.map(row);
+        return {
+          bundle: group.bundle,
+          variables,
+          deriveErrorRows: variables.filter(item => item.hasDeriveError),
+          sampleCount: this.getBundleSampleCount(group.bundle.id),
+          derivedCount: this.getBundleDerivedVariablesCount(group.bundle),
+          insufficient: this.hasInsufficientCases(group),
+          orderingLabel: this.getCaseOrderingModeLabel(group.bundle.caseOrderingMode || this.trainingForm.controls.caseOrderingMode.value)
+        };
+      })
+    };
+  }
 
   constructor() {
     this.trainingForm = createCoderTrainingForm();

@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import {
@@ -10,6 +11,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { ReactiveFormsModule } from '@angular/forms';
 import { of, Subject, throwError } from 'rxjs';
+import { TestCenterGroupsStepComponent } from './test-center-groups-step.component';
+import { TestCenterOptionsStepComponent } from './test-center-options-step.component';
+import { TestCenterLoginStepComponent } from './test-center-login-step.component';
 import { TestCenterImportComponent } from './test-center-import.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -864,5 +868,43 @@ describe('TestCenterImportComponent', () => {
     expect(values.logs).toBe(false);
     expect(values.responseOverwriteMode).toBe('skip');
     expect(component.importFilesForm.invalid).toBe(true);
+  });
+
+  it('uses the owner login form in the login step and performs authentication at the owner', () => {
+    const login = fixture.debugElement.query(By.directive(TestCenterLoginStepComponent)).componentInstance as TestCenterLoginStepComponent;
+    expect(login.form()).toBe(component.loginForm);
+    component.loginForm.patchValue({
+      name: 'user', pw: 'password', testCenter: 6, testCenterIndividual: 'https://example.test'
+    });
+    login.serverSelected.emit(6);
+    userBackendService.authenticate.mockReturnValue(of({ token: 'token', claims: { workspaceAdmin: [] } } as unknown as ServerResponse));
+    login.submitted.emit();
+    expect(userBackendService.authenticate).toHaveBeenCalledWith('user', 'password', '', 'https://example.test');
+  });
+
+  it('uses the same options form when returning from groups and locks the group step for an uncertain result', () => {
+    component.authenticated.set(true);
+    fixture.detectChanges();
+    const options = fixture.debugElement.query(By.directive(TestCenterOptionsStepComponent)).componentInstance as TestCenterOptionsStepComponent;
+    expect(options.form()).toBe(component.importFilesForm);
+    options.selectAll.emit();
+    expect(component.importFilesForm.controls.responses.value).toBe(true);
+    expect(component.importFilesForm.controls.logs.value).toBe(true);
+    component.showTestGroups.set(true);
+    component.resultStatusUncertain.set(true);
+    fixture.detectChanges();
+    const groups = fixture.debugElement.query(By.directive(TestCenterGroupsStepComponent)).componentInstance as TestCenterGroupsStepComponent;
+    expect(groups.resultStatusUncertain()).toBe(true);
+    const back = fixture.nativeElement.querySelector('.back-button') as HTMLButtonElement;
+    expect(back.disabled).toBe(true);
+    back.click();
+    expect(component.showTestGroups()).toBe(true);
+    component.resultStatusUncertain.set(false);
+    fixture.detectChanges();
+    back.click();
+    fixture.detectChanges();
+    const returned = fixture.debugElement.query(By.directive(TestCenterOptionsStepComponent)).componentInstance as TestCenterOptionsStepComponent;
+    expect(returned.form()).toBe(options.form());
+    expect(returned.form().controls.responses.value).toBe(true);
   });
 });

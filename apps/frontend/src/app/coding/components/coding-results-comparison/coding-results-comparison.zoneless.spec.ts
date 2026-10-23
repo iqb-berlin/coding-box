@@ -278,4 +278,37 @@ describe('Coding comparison without Zone', () => {
     expect(fixture.nativeElement.querySelector('.discussion-error')?.textContent)
       .toContain('Diskussionsergebnis konnte nicht gespeichert werden.');
   });
+
+  it('keeps the discussion input and focus while page projections change during typing', async () => {
+    const c = await prepareWithinTraining();
+    const input = fixture.nativeElement.querySelector('.discussion-input input') as HTMLInputElement;
+    input.focus();
+    input.value = '1';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.discussion-input input')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    input.value = '12';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.discussion-input input')).toBe(input);
+    expect(c.discussionCodeByResponseId()[1]).toBe('12');
+    expect(saveResponse.observed).toBe(false);
+  });
+
+  it('preserves the current page when delayed workspace settings leave the regex mode unchanged', async () => {
+    const c = await prepareWithinTraining();
+    const owner = c as unknown as { pageIndex: number };
+    owner.pageIndex = 2;
+    const reload = jest.spyOn(c, 'loadComparison').mockImplementation(() => undefined);
+    regexResponse.next(false);
+    await fixture.whenStable();
+    expect(owner.pageIndex).toBe(2);
+    expect(reload).not.toHaveBeenCalled();
+
+    regexResponse.next(true);
+    await fixture.whenStable();
+    expect(owner.pageIndex).toBe(0);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
 });
