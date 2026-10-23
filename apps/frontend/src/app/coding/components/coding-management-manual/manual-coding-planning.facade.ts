@@ -58,7 +58,7 @@ export class ManualCodingPlanningFacade {
   }
 
   private isLoading(): boolean {
-    return this.analysis.isLoadingResponseAnalysis() || this.settings.isLoadingMatchingMode() || this.statistics.isLoadingManualCodingScopeSummary ||
+    return this.analysis.isLoadingResponseAnalysis() || this.settings.isLoadingMatchingMode() || this.statistics.isLoadingManualCodingScopeSummary() ||
       this.statistics.isLoadingVariableCoverage() || this.statistics.isLoadingCaseCoverage() || this.statistics.isLoadingCodingProgress() || this.statistics.isLoadingManualCodeAvailability() || this.statistics.isLoadingCodingIncompleteVariables() || this.statistics.isLoadingAppliedResultsOverview() || this.statistics.isLoadingManualFreshnessJobSummary() || this.statistics.isLoadingDoubleCodingConflictSummary();
   }
 
@@ -129,23 +129,8 @@ export class ManualCodingPlanningFacade {
   applyPlanningDataBundleSnapshot(
     snapshot: ManualCodingPlanningSnapshot
   ): void {
-    this.responseAnalysis.set(snapshot.responseAnalysis);
-    this.responseAnalysisError.set(null);
-    this.codingProgressOverview.set(snapshot.codingProgressOverview);
-    this.variableCoverageOverview.set(snapshot.variableCoverageOverview);
-    this.caseCoverageOverview.set(snapshot.caseCoverageOverview);
-    this.codingIncompleteVariables.set([...snapshot.codingIncompleteVariables]);
-    this.manualCodingScopeSummary.set(snapshot.manualCodingScopeSummary);
-    this.statistics.setManualCodeAvailabilityWarnings([
-      ...snapshot.manualCodeAvailabilityWarnings
-    ]);
-    this.appliedResultsOverview.set(snapshot.appliedResultsOverview);
-    this.statistics.manualFreshnessJobSummary = snapshot.manualFreshnessJobSummary;
-    this.statistics.openDoubleCodingConflictCount =
-      snapshot.openDoubleCodingConflictCount;
-    this.codingFreshnessSummary.set(snapshot.codingFreshnessSummary);
-    this.statistics.lastCodingFreshnessRefreshAt = snapshot.codingFreshnessSummary ?
-      Date.now() : 0;
+    this.analysis.restoreAnalysis(snapshot.responseAnalysis);
+    this.statistics.restorePlanningSnapshot(snapshot);
   }
 
   trySavePlanningDataBundleSnapshot(): void {

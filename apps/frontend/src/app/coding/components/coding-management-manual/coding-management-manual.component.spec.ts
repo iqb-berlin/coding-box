@@ -7,7 +7,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Observable, of, Subject, throwError
+  EMPTY, Observable, of, Subject, throwError
 } from 'rxjs';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import type {
@@ -66,6 +66,39 @@ const createManualCodeAvailabilityWarning = (
 });
 
 describe('CodingManagementManualComponent', () => {
+  const statisticsFacade = () => fixture.debugElement.injector.get(ManualCodingStatisticsFacade);
+  const analysisFacade = () => fixture.debugElement.injector.get(ManualCodingAnalysisFacade);
+  const pendingStatistics = new Map<string, () => void>();
+  const setStatisticLoading = (name: string, loading: boolean): void => {
+    if (!loading) { pendingStatistics.get(name)?.(); return; }
+    const reply = new Subject<never>();
+    pendingStatistics.set(name, () => reply.complete());
+    const api = TestBed.inject(TestPersonCodingService);
+    const backend = TestBed.inject(CodingJobBackendService);
+    const statistics = statisticsFacade();
+    if (name === 'isLoadingCodingProgress') {
+      jest.spyOn(api, 'getCodingProgressOverview').mockReturnValueOnce(reply);
+      statistics.loadCodingProgressOverview();
+    } else if (name === 'isLoadingAppliedResultsOverview') {
+      jest.spyOn(api, 'getAppliedResultsOverview').mockReturnValueOnce(reply);
+      statistics.loadAppliedResultsOverview();
+    } else if (name === 'isLoadingCodingIncompleteVariables') {
+      const variables = new Subject<ReturnType<CodingManagementManualComponent['codingIncompleteVariables']>>();
+      pendingStatistics.set(name, () => { variables.next([]); variables.complete(); });
+      // The overview follows the variable request; keep that next stage pending too.
+      jest.spyOn(api, 'getAppliedResultsOverview').mockReturnValueOnce(new Subject<never>());
+      jest.spyOn(backend, 'getManualCodingScopeSummary').mockReturnValueOnce(EMPTY);
+      jest.spyOn(backend, 'getManualCodeAvailabilityWarnings').mockReturnValueOnce(EMPTY);
+      jest.spyOn(backend, 'getCodingIncompleteVariables').mockReturnValueOnce(variables);
+      statistics.loadCodingIncompleteVariables();
+    } else if (name === 'isLoadingManualFreshnessJobSummary') {
+      jest.spyOn(backend, 'getCodingJobs').mockReturnValueOnce(reply);
+      statistics.loadManualFreshnessJobSummary();
+    } else if (name === 'isLoadingDoubleCodingConflictSummary') {
+      jest.spyOn(TestBed.inject(DoubleCodedReviewApiService), 'getDoubleCodedVariablesForReview').mockReturnValueOnce(reply);
+      statistics.loadOpenDoubleCodingConflictSummary();
+    }
+  };
   const settingsFacade = () => fixture.debugElement.injector.get(ManualCodingSettingsFacade);
   const planningFacade = () => fixture.debugElement.injector.get(ManualCodingPlanningFacade);
   const aggregationFacade = () => fixture.debugElement.injector.get(ManualCodingAggregationFacade);
@@ -82,6 +115,7 @@ describe('CodingManagementManualComponent', () => {
   } as ActivatedRoute;
 
   beforeEach(async () => {
+    pendingStatistics.clear();
     await TestBed.configureTestingModule({
       providers: [
         {
@@ -458,7 +492,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should flag duplicate findings as diagnostic when aggregation is disabled', () => {
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 2,
@@ -975,7 +1009,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should not block preparation for duplicates when aggregation is active', () => {
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 2,
@@ -1002,7 +1036,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should flag response analysis as outdated when the analysis candidate count changed', () => {
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 16,
@@ -1034,7 +1068,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should not require preparation refresh when only the applied result rest scope is smaller', () => {
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 840,
@@ -1079,7 +1113,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should describe completed coding jobs as ready to apply', () => {
-    component.completedJobsReadyForApply.set([
+    statisticsFacade().acceptCompletedJobs([
       {
         id: 1,
         workspace_id: 1,
@@ -1103,7 +1137,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should hide completed job apply actions without study-manager permission', () => {
-    component.completedJobsReadyForApply.set([
+    statisticsFacade().acceptCompletedJobs([
       {
         id: 1,
         workspace_id: 1,
@@ -1143,7 +1177,7 @@ describe('CodingManagementManualComponent', () => {
     ].join(' ');
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.dialog = { open: dialogOpen };
-    component.completedJobsReadyForApply.set([
+    statisticsFacade().acceptCompletedJobs([
       {
         id: 1,
         workspace_id: 1,
@@ -1238,7 +1272,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should use parent apply permission when the coding jobs table is not rendered', () => {
-    component.completedJobsReadyForApply.set([
+    statisticsFacade().acceptCompletedJobs([
       {
         id: 1,
         workspace_id: 1,
@@ -1264,7 +1298,7 @@ describe('CodingManagementManualComponent', () => {
     component.canApplyManualCodingResults.set(false);
     component.selectedManualTabIndex.set(4);
     setAppliedResults(5, 0, 5);
-    component.completedJobsReadyForApply.set([
+    statisticsFacade().acceptCompletedJobs([
       {
         id: 1,
         workspace_id: 1,
@@ -1377,8 +1411,8 @@ describe('CodingManagementManualComponent', () => {
   it('shows a neutral status before planning data has been checked', () => {
     component.selectedManualTabIndex.set(0);
     jest.spyOn(settingsFacade(), 'isLoadingMatchingMode').mockReturnValue(true);
-    component.isLoadingResponseAnalysis.set(true);
-    component.responseAnalysis.set(null);
+    analysisFacade().beginAnalysis();
+    analysisFacade().restoreAnalysis(null);
 
     expect(component.getPlanningStatusClass()).toBe('status-ready');
     expect(component.getPlanningStatusIcon()).toBe('help_outline');
@@ -1392,7 +1426,7 @@ describe('CodingManagementManualComponent', () => {
   it('should describe loading planning data as an updating status', () => {
     setCompletePlanningState();
     setCodingProgress(10, 4);
-    component.isLoadingCodingProgress.set(true);
+    setStatisticLoading('isLoadingCodingProgress', true);
 
     expect(component.getPlanningStatusClass()).toBe('status-ready');
     expect(component.getPlanningStatusIcon()).toBe('sync');
@@ -1404,11 +1438,13 @@ describe('CodingManagementManualComponent', () => {
 
   it('should keep the planning status stable while polling an existing response analysis', () => {
     setCompletePlanningState();
-    component.variableCoverageOverview.set({
-      ...component.variableCoverageOverview()!,
-      missingVariables: 1
+    statisticsFacade().restorePlanningSnapshot({
+      variableCoverageOverview: {
+        ...component.variableCoverageOverview()!,
+        missingVariables: 1
+      }
     });
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 0,
@@ -1429,7 +1465,7 @@ describe('CodingManagementManualComponent', () => {
       analysisTimestamp: new Date().toISOString(),
       isCalculating: true
     });
-    component.isLoadingResponseAnalysis.set(true);
+    analysisFacade().beginAnalysis();
 
     expect(component.getPlanningStatusTitle()).toBe('Planung noch unvollständig');
     expect(component.getPlanningStatusIcon()).toBe('assignment_late');
@@ -1437,8 +1473,8 @@ describe('CodingManagementManualComponent', () => {
 
   it('should show an updating status while the initial response analysis is loading', () => {
     component.selectedManualTabIndex.set(1);
-    component.responseAnalysis.set(null);
-    component.isLoadingResponseAnalysis.set(true);
+    analysisFacade().restoreAnalysis(null);
+    analysisFacade().beginAnalysis();
 
     expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
   });
@@ -1528,11 +1564,13 @@ describe('CodingManagementManualComponent', () => {
     );
     expect(component.getPlanningNextStepTargetTab()).toBe('planning');
 
-    component.appliedResultsOverview.set({
-      ...component.appliedResultsOverview()!,
-      completionPercentage: 100,
-      rawCompletionPercentage: 100
-    } satisfies ManualAppliedResultsOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      appliedResultsOverview: {
+        ...component.appliedResultsOverview()!,
+        completionPercentage: 100,
+        rawCompletionPercentage: 100
+      } satisfies ManualAppliedResultsOverview
+    });
 
     expect(component.getPlanningStatusTitle()).toBe('Bereit für die Planung');
     expect(component.getPlanningStatusDescription()).toBe(
@@ -1556,9 +1594,11 @@ describe('CodingManagementManualComponent', () => {
     setCompletePlanningState();
     setCodingProgress(10, 4);
     setAppliedResults(10, 0, 10);
-    component.manualCodeAvailabilityWarnings.set([
-      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
-    ]);
+    statisticsFacade().restorePlanningSnapshot({
+      manualCodeAvailabilityWarnings: [
+        createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
+      ]
+    });
 
     expect(component.hasManualCodeAvailabilityWarnings()).toBe(true);
     expect(component.hasPlanningWarnings()).toBe(true);
@@ -1592,15 +1632,17 @@ describe('CodingManagementManualComponent', () => {
 
   it('should expand all manual code availability warnings from the status banner', () => {
     setCompletePlanningState();
-    component.manualCodeAvailabilityWarnings.set([
-      createManualCodeAvailabilityWarning('UNIT1', 'VAR1'),
-      createManualCodeAvailabilityWarning('UNIT2', 'VAR2'),
-      createManualCodeAvailabilityWarning('UNIT3', 'VAR3'),
-      createManualCodeAvailabilityWarning('UNIT4', 'VAR4'),
-      createManualCodeAvailabilityWarning('UNIT5', 'VAR5'),
-      createManualCodeAvailabilityWarning('UNIT6', 'VAR6'),
-      createManualCodeAvailabilityWarning('UNIT7', 'VAR7')
-    ]);
+    statisticsFacade().restorePlanningSnapshot({
+      manualCodeAvailabilityWarnings: [
+        createManualCodeAvailabilityWarning('UNIT1', 'VAR1'),
+        createManualCodeAvailabilityWarning('UNIT2', 'VAR2'),
+        createManualCodeAvailabilityWarning('UNIT3', 'VAR3'),
+        createManualCodeAvailabilityWarning('UNIT4', 'VAR4'),
+        createManualCodeAvailabilityWarning('UNIT5', 'VAR5'),
+        createManualCodeAvailabilityWarning('UNIT6', 'VAR6'),
+        createManualCodeAvailabilityWarning('UNIT7', 'VAR7')
+      ]
+    });
 
     fixture.detectChanges();
 
@@ -1628,10 +1670,12 @@ describe('CodingManagementManualComponent', () => {
 
   it('should keep the affected variables scroll target while coverage is loading', () => {
     component.selectedManualTabIndex.set(component.manualCodingTabs.indexOf('planning'));
-    component.variableCoverageOverview.set(null);
-    component.manualCodeAvailabilityWarnings.set([
-      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
-    ]);
+    statisticsFacade().restorePlanningSnapshot({ variableCoverageOverview: null });
+    statisticsFacade().restorePlanningSnapshot({
+      manualCodeAvailabilityWarnings: [
+        createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
+      ]
+    });
 
     fixture.detectChanges();
 
@@ -1649,9 +1693,11 @@ describe('CodingManagementManualComponent', () => {
   it('should explain raw status responses versus effective manual cases', () => {
     setCompletePlanningState();
     setCodingProgress(145, 25);
-    component.codingProgressOverview.set({
-      ...component.codingProgressOverview()!,
-      statusTotalCasesToCode: 193
+    statisticsFacade().restorePlanningSnapshot({
+      codingProgressOverview: {
+        ...component.codingProgressOverview()!,
+        statusTotalCasesToCode: 193
+      }
     });
 
     expect(component.getManualCaseScopeSummaryText()).toContain(
@@ -1667,25 +1713,29 @@ describe('CodingManagementManualComponent', () => {
 
   it('should keep conflicts visually stronger than manual code availability warnings', () => {
     setCompletePlanningState();
-    component.variableCoverageOverview.set({
-      ...component.variableCoverageOverview()!,
-      conflictedVariables: 1,
-      coverageByStatus: {
-        ...component.variableCoverageOverview()!.coverageByStatus,
-        conflicted: [
-          {
-            variableKey: 'UNIT1:VAR1',
-            conflictingDefinitions: [
-              { id: 1, status: 'approved' },
-              { id: 2, status: 'approved' }
-            ]
-          }
-        ]
+    statisticsFacade().restorePlanningSnapshot({
+      variableCoverageOverview: {
+        ...component.variableCoverageOverview()!,
+        conflictedVariables: 1,
+        coverageByStatus: {
+          ...component.variableCoverageOverview()!.coverageByStatus,
+          conflicted: [
+            {
+              variableKey: 'UNIT1:VAR1',
+              conflictingDefinitions: [
+                { id: 1, status: 'approved' },
+                { id: 2, status: 'approved' }
+              ]
+            }
+          ]
+        }
       }
     });
-    component.manualCodeAvailabilityWarnings.set([
-      createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
-    ]);
+    statisticsFacade().restorePlanningSnapshot({
+      manualCodeAvailabilityWarnings: [
+        createManualCodeAvailabilityWarning('UNIT1', 'VAR1')
+      ]
+    });
 
     expect(component.getPlanningStatusClass()).toBe('status-warning');
     expect(component.getPlanningStatusTitle()).toBe('Konflikte prüfen');
@@ -1704,23 +1754,25 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should hide second auto-coding work while manual coding is still open', () => {
-    component.codingFreshnessSummary.set({
-      workspaceId: 1,
-      currentRevision: 2,
-      items: [
-        {
-          version: 'v1',
-          state: 'PENDING',
-          unitCount: 671,
-          affectedResponseCount: 5098
-        },
-        {
-          version: 'v3',
-          state: 'PENDING',
-          unitCount: 671,
-          affectedResponseCount: 5098
-        }
-      ]
+    statisticsFacade().restorePlanningSnapshot({
+      codingFreshnessSummary: {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          },
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      }
     });
 
     expect(component.hasCodingFreshnessWarnings).toBe(true);
@@ -1740,17 +1792,19 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should not show second auto-coding as a manual planning warning before completion', () => {
-    component.codingFreshnessSummary.set({
-      workspaceId: 1,
-      currentRevision: 2,
-      items: [
-        {
-          version: 'v3',
-          state: 'PENDING',
-          unitCount: 671,
-          affectedResponseCount: 5098
-        }
-      ]
+    statisticsFacade().restorePlanningSnapshot({
+      codingFreshnessSummary: {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      }
     });
 
     expect(component.hasCodingFreshnessWarnings).toBe(false);
@@ -1763,17 +1817,19 @@ describe('CodingManagementManualComponent', () => {
     setCompletePlanningState();
     setCodingProgress(671, 671);
     setAppliedResults(5098, 5098, 0);
-    component.codingFreshnessSummary.set({
-      workspaceId: 1,
-      currentRevision: 2,
-      items: [
-        {
-          version: 'v3',
-          state: 'PENDING',
-          unitCount: 671,
-          affectedResponseCount: 5098
-        }
-      ]
+    statisticsFacade().restorePlanningSnapshot({
+      codingFreshnessSummary: {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      }
     });
 
     expect(component.hasCodingFreshnessWarnings).toBe(true);
@@ -1796,17 +1852,19 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should ignore zero-count freshness warnings in the manual banner', () => {
-    component.codingFreshnessSummary.set({
-      workspaceId: 1,
-      currentRevision: 2,
-      items: [
-        {
-          version: 'v1',
-          state: 'PENDING',
-          unitCount: 0,
-          affectedResponseCount: 0
-        }
-      ]
+    statisticsFacade().restorePlanningSnapshot({
+      codingFreshnessSummary: {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 0,
+            affectedResponseCount: 0
+          }
+        ]
+      }
     });
 
     expect(component.hasCodingFreshnessWarnings).toBe(false);
@@ -1932,7 +1990,7 @@ describe('CodingManagementManualComponent', () => {
       loadResponseAnalysis(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.isLoadingCodingProgress.set(true);
+    setStatisticLoading('isLoadingCodingProgress', true);
     const statistics = fixture.debugElement.injector.get(ManualCodingStatisticsFacade);
     const variableCoverageSpy = jest
       .spyOn(statistics, 'loadVariableCoverageOverview')
@@ -1955,7 +2013,7 @@ describe('CodingManagementManualComponent', () => {
 
     expect(variableCoverageSpy).not.toHaveBeenCalled();
 
-    componentInternals.isLoadingCodingProgress.set(false);
+    setStatisticLoading('isLoadingCodingProgress', false);
     componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(variableCoverageSpy).toHaveBeenCalledTimes(1);
@@ -1978,7 +2036,7 @@ describe('CodingManagementManualComponent', () => {
       trySavePlanningDataBundleSnapshot(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.responseAnalysisError.set('Analyse fehlgeschlagen');
+    analysisFacade().restoreAnalysis(component.responseAnalysis(), 'Analyse fehlgeschlagen');
     planningFacade().beginPlanningDataRefresh();
     const saveSnapshotSpy = jest
       .spyOn(
@@ -3433,8 +3491,8 @@ describe('CodingManagementManualComponent', () => {
       component.canApplyManualCodingResults.set(true);
       setCompletePlanningState();
       setCodingProgress(10, 10);
-      component.appliedResultsOverview.set(null);
-      component.isLoadingAppliedResultsOverview.set(true);
+      statisticsFacade().restorePlanningSnapshot({ appliedResultsOverview: null });
+      setStatisticLoading('isLoadingAppliedResultsOverview', true);
       component.selectedManualTabIndex.set(0);
 
       const componentInternals = component as unknown as {
@@ -3461,7 +3519,7 @@ describe('CodingManagementManualComponent', () => {
       expect(scrollToSectionSpy).not.toHaveBeenCalled();
 
       setAppliedResults(10, 0, 10);
-      component.isLoadingAppliedResultsOverview.set(false);
+      setStatisticLoading('isLoadingAppliedResultsOverview', false);
       componentInternals.focusManualFreshnessTargetIfReady();
 
       expect(component.selectedManualTabIndex()).toBe(4);
@@ -3481,9 +3539,9 @@ describe('CodingManagementManualComponent', () => {
       component.canApplyManualCodingResults.set(true);
       setCompletePlanningState();
       setCodingProgress(10, 10);
-      component.appliedResultsOverview.set(null);
-      component.isLoadingCodingIncompleteVariables.set(true);
-      component.isLoadingAppliedResultsOverview.set(false);
+      statisticsFacade().restorePlanningSnapshot({ appliedResultsOverview: null });
+      setStatisticLoading('isLoadingCodingIncompleteVariables', true);
+      setStatisticLoading('isLoadingAppliedResultsOverview', false);
       component.selectedManualTabIndex.set(0);
 
       const componentInternals = component as unknown as {
@@ -3509,8 +3567,8 @@ describe('CodingManagementManualComponent', () => {
       expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
       expect(scrollToSectionSpy).not.toHaveBeenCalled();
 
-      component.isLoadingCodingIncompleteVariables.set(false);
-      component.isLoadingAppliedResultsOverview.set(true);
+      setStatisticLoading('isLoadingCodingIncompleteVariables', false);
+      setStatisticLoading('isLoadingAppliedResultsOverview', true);
       componentInternals.focusManualFreshnessTargetIfReady();
 
       expect(component.selectedManualTabIndex()).toBe(1);
@@ -3518,7 +3576,7 @@ describe('CodingManagementManualComponent', () => {
       expect(scrollToSectionSpy).not.toHaveBeenCalled();
 
       setAppliedResults(10, 0, 10);
-      component.isLoadingAppliedResultsOverview.set(false);
+      setStatisticLoading('isLoadingAppliedResultsOverview', false);
       componentInternals.focusManualFreshnessTargetIfReady();
 
       expect(component.selectedManualTabIndex()).toBe(4);
@@ -3543,7 +3601,7 @@ describe('CodingManagementManualComponent', () => {
       completedProductiveJobs: 1,
       staleSourceJobs: 1
     }, 3);
-    component.responseAnalysis.set({
+    analysisFacade().restoreAnalysis({
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
         total: 1,
@@ -3567,18 +3625,22 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningNextStepTargetTab()).toBe('preparation');
     expect(component.getPlanningNextStepTargetSection()).toBe('manual-preparation');
 
-    component.responseAnalysis.set(null);
-    component.caseCoverageOverview.set({
-      ...component.caseCoverageOverview()!,
-      effectiveUnassignedCases: 2
+    analysisFacade().restoreAnalysis(null);
+    statisticsFacade().restorePlanningSnapshot({
+      caseCoverageOverview: {
+        ...component.caseCoverageOverview()!,
+        effectiveUnassignedCases: 2
+      }
     });
 
     expect(component.getPlanningNextStepTargetTab()).toBe('planning');
     expect(component.getPlanningNextStepTargetSection()).toBe('manual-planning');
 
-    component.caseCoverageOverview.set({
-      ...component.caseCoverageOverview()!,
-      effectiveUnassignedCases: 0
+    statisticsFacade().restorePlanningSnapshot({
+      caseCoverageOverview: {
+        ...component.caseCoverageOverview()!,
+        effectiveUnassignedCases: 0
+      }
     });
 
     expect(component.getPlanningNextStepTargetTab()).toBe('training');
@@ -3679,7 +3741,7 @@ describe('CodingManagementManualComponent', () => {
       setCodingProgress(10, 10);
       setAppliedResults(10, 0, 10);
       component.selectedManualTabIndex.set(0);
-      component.isLoadingManualFreshnessJobSummary.set(true);
+      setStatisticLoading('isLoadingManualFreshnessJobSummary', true);
 
       const componentInternals = component as unknown as {
         pendingManualFreshnessFocus: boolean;
@@ -3709,7 +3771,7 @@ describe('CodingManagementManualComponent', () => {
         completedProductiveJobs: 0,
         staleSourceJobs: 0
       }, 0);
-      component.isLoadingManualFreshnessJobSummary.set(false);
+      setStatisticLoading('isLoadingManualFreshnessJobSummary', false);
       componentInternals.focusManualFreshnessTargetIfReady();
 
       expect(component.selectedManualTabIndex()).toBe(2);
@@ -3759,8 +3821,9 @@ describe('CodingManagementManualComponent', () => {
     Object.assign(TestBed.inject(DoubleCodedReviewApiService), {
       getDoubleCodedVariablesForReview
     });
-    component.isLoadingDoubleCodingConflictSummary.set(true);
-    componentInternals.openDoubleCodingConflictCount = 4;
+    setStatisticLoading('isLoadingDoubleCodingConflictSummary', true);
+    getDoubleCodedVariablesForReview.mockClear();
+    statisticsFacade().restorePlanningSnapshot({ openDoubleCodingConflictCount: 4 });
 
     componentInternals.loadManualFreshnessDecisionData();
 
@@ -3788,7 +3851,7 @@ describe('CodingManagementManualComponent', () => {
     });
     jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
 
-    component.isLoadingResponseAnalysis.set(false);
+    analysisFacade().analysisStartFailed();
     componentInternals.loadInitialManualCodingState();
 
     expect(component.isLoadingMatchingMode()).toBe(false);
@@ -3935,22 +3998,24 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should calculate cases available for new job definitions separately from effective open cases', () => {
-    component.codingIncompleteVariables.set([
-      {
-        unitName: 'Unit 1',
-        variableId: 'Var 1',
-        responseCount: 100,
-        uniqueCasesAfterAggregation: 80,
-        availableCases: 78
-      },
-      {
-        unitName: 'Unit 2',
-        variableId: 'Var 2',
-        responseCount: 5,
-        uniqueCasesAfterAggregation: 5,
-        availableCases: 0
-      }
-    ]);
+    statisticsFacade().restorePlanningSnapshot({
+      codingIncompleteVariables: [
+        {
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          responseCount: 100,
+          uniqueCasesAfterAggregation: 80,
+          availableCases: 78
+        },
+        {
+          unitName: 'Unit 2',
+          variableId: 'Var 2',
+          responseCount: 5,
+          uniqueCasesAfterAggregation: 5,
+          availableCases: 0
+        }
+      ]
+    });
 
     expect(component.getAvailableCasesForNewJobs()).toBe(78);
     expect(component.getUnavailableCasesForNewJobs()).toBe(7);
@@ -3958,15 +4023,17 @@ describe('CodingManagementManualComponent', () => {
 
   it('should not show cached available cases when all effective cases are already assigned', () => {
     setCompletePlanningState();
-    component.codingIncompleteVariables.set([
-      {
-        unitName: 'Unit 1',
-        variableId: 'Var 1',
-        responseCount: 1215,
-        uniqueCasesAfterAggregation: 1106,
-        availableCases: 511
-      }
-    ]);
+    statisticsFacade().restorePlanningSnapshot({
+      codingIncompleteVariables: [
+        {
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          responseCount: 1215,
+          uniqueCasesAfterAggregation: 1106,
+          availableCases: 511
+        }
+      ]
+    });
 
     expect(component.caseCoverageOverview()?.effectiveUnassignedCases).toBe(0);
     expect(component.getAvailableCasesForNewJobs()).toBe(0);
@@ -3976,12 +4043,14 @@ describe('CodingManagementManualComponent', () => {
     component.selectedManualTabIndex.set(3);
     setCompletePlanningState();
     setCodingProgress(16606, 12000);
-    component.codingProgressOverview.set({
-      ...component.codingProgressOverview()!,
-      rawTotalCasesToCode: 21606,
-      aggregationActive: true,
-      aggregationThreshold: 2,
-      aggregatedDuplicateCases: 5000
+    statisticsFacade().restorePlanningSnapshot({
+      codingProgressOverview: {
+        ...component.codingProgressOverview()!,
+        rawTotalCasesToCode: 21606,
+        aggregationActive: true,
+        aggregationThreshold: 2,
+        aggregatedDuplicateCases: 5000
+      }
     });
     component.showProgressInfo.set(true);
 
@@ -4005,12 +4074,14 @@ describe('CodingManagementManualComponent', () => {
     component.selectedManualTabIndex.set(4);
     setCompletePlanningState();
     setAppliedResults(543, 415, 128);
-    component.appliedResultsOverview.set({
-      ...component.appliedResultsOverview()!,
-      rawTotalIncompleteResponses: 546,
-      aggregationActive: true,
-      aggregationThreshold: 4,
-      aggregatedDuplicateCases: 3
+    statisticsFacade().restorePlanningSnapshot({
+      appliedResultsOverview: {
+        ...component.appliedResultsOverview()!,
+        rawTotalIncompleteResponses: 546,
+        aggregationActive: true,
+        aggregationThreshold: 4,
+        aggregatedDuplicateCases: 3
+      }
     });
 
     fixture.detectChanges();
@@ -4022,21 +4093,25 @@ describe('CodingManagementManualComponent', () => {
 
   it('should guide users from incomplete planning to job definitions with available-case context', () => {
     setCompletePlanningState();
-    component.caseCoverageOverview.set({
-      ...component.caseCoverageOverview()!,
-      effectiveCasesInJobs: 7,
-      effectiveUnassignedCases: 3,
-      coveragePercentage: 70
-    });
-    component.codingIncompleteVariables.set([
-      {
-        unitName: 'Unit 1',
-        variableId: 'Var 1',
-        responseCount: 10,
-        uniqueCasesAfterAggregation: 10,
-        availableCases: 8
+    statisticsFacade().restorePlanningSnapshot({
+      caseCoverageOverview: {
+        ...component.caseCoverageOverview()!,
+        effectiveCasesInJobs: 7,
+        effectiveUnassignedCases: 3,
+        coveragePercentage: 70
       }
-    ]);
+    });
+    statisticsFacade().restorePlanningSnapshot({
+      codingIncompleteVariables: [
+        {
+          unitName: 'Unit 1',
+          variableId: 'Var 1',
+          responseCount: 10,
+          uniqueCasesAfterAggregation: 10,
+          availableCases: 8
+        }
+      ]
+    });
 
     expect(component.getPlanningNextStepTitle()).toBe(
       'Kodierfälle in Jobs verteilen'
@@ -4059,42 +4134,47 @@ describe('CodingManagementManualComponent', () => {
   });
 
   function setCompletePlanningState(): void {
+    TestBed.inject(AppService).selectedWorkspaceId = 5;
     planningFacade().markPlanningDataAvailable();
-    component.variableCoverageOverview.set({
-      totalVariables: 2,
-      coveredVariables: 2,
-      coveredByDraft: 0,
-      coveredByPendingReview: 0,
-      coveredByApproved: 2,
-      conflictedVariables: 0,
-      missingVariables: 0,
-      partiallyAbgedeckteVariablen: 0,
-      fullyAbgedeckteVariablen: 2,
-      coveragePercentage: 100,
-      variableCaseCounts: [],
-      coverageByStatus: {
-        draft: [],
-        pending_review: [],
-        approved: ['unit:variable'],
-        conflicted: []
-      }
-    } satisfies VariableCoverageOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      variableCoverageOverview: {
+        totalVariables: 2,
+        coveredVariables: 2,
+        coveredByDraft: 0,
+        coveredByPendingReview: 0,
+        coveredByApproved: 2,
+        conflictedVariables: 0,
+        missingVariables: 0,
+        partiallyAbgedeckteVariablen: 0,
+        fullyAbgedeckteVariablen: 2,
+        coveragePercentage: 100,
+        variableCaseCounts: [],
+        coverageByStatus: {
+          draft: [],
+          pending_review: [],
+          approved: ['unit:variable'],
+          conflicted: []
+        }
+      } satisfies VariableCoverageOverview
+    });
 
-    component.caseCoverageOverview.set({
-      totalCasesToCode: 10,
-      effectiveTotalCasesToCode: 10,
-      casesInJobs: 10,
-      effectiveCasesInJobs: 10,
-      doubleCodedCases: 0,
-      singleCodedCases: 10,
-      unassignedCases: 0,
-      effectiveUnassignedCases: 0,
-      coveragePercentage: 100,
-      rawCoveragePercentage: 100,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
-    } satisfies CaseCoverageOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      caseCoverageOverview: {
+        totalCasesToCode: 10,
+        effectiveTotalCasesToCode: 10,
+        casesInJobs: 10,
+        effectiveCasesInJobs: 10,
+        doubleCodedCases: 0,
+        singleCodedCases: 10,
+        unassignedCases: 0,
+        effectiveUnassignedCases: 0,
+        coveragePercentage: 100,
+        rawCoveragePercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      } satisfies CaseCoverageOverview
+    });
   }
 
   function setManualFreshnessJobSummary(
@@ -4106,112 +4186,113 @@ describe('CodingManagementManualComponent', () => {
     },
     openDoubleCodingConflictCount = 0
   ): void {
-    const componentInternals = component as unknown as {
+    statisticsFacade().restorePlanningSnapshot({
       manualFreshnessJobSummary: {
-        activeTrainingJobs: number;
-        openProductiveJobs: number;
-        completedProductiveJobs: number;
-        staleSourceJobs: number;
-      };
-      openDoubleCodingConflictCount: number;
-    };
-
-    componentInternals.manualFreshnessJobSummary = {
-      activeTrainingJobs: summary.activeTrainingJobs ?? 0,
-      openProductiveJobs: summary.openProductiveJobs ?? 0,
-      completedProductiveJobs: summary.completedProductiveJobs ?? 0,
-      staleSourceJobs: summary.staleSourceJobs ?? 0
-    };
-    componentInternals.openDoubleCodingConflictCount =
-      openDoubleCodingConflictCount;
+        activeTrainingJobs: summary.activeTrainingJobs ?? 0,
+        openProductiveJobs: summary.openProductiveJobs ?? 0,
+        completedProductiveJobs: summary.completedProductiveJobs ?? 0,
+        staleSourceJobs: summary.staleSourceJobs ?? 0
+      }
+    });
+    statisticsFacade().restorePlanningSnapshot({ openDoubleCodingConflictCount });
   }
 
   function setEmptyPlanningSnapshots(): void {
     planningFacade().markPlanningDataAvailable();
-    component.variableCoverageOverview.set({
-      totalVariables: 0,
-      coveredVariables: 0,
-      coveredByDraft: 0,
-      coveredByPendingReview: 0,
-      coveredByApproved: 0,
-      conflictedVariables: 0,
-      missingVariables: 0,
-      partiallyAbgedeckteVariablen: 0,
-      fullyAbgedeckteVariablen: 0,
-      coveragePercentage: 0,
-      variableCaseCounts: [],
-      coverageByStatus: {
-        draft: [],
-        pending_review: [],
-        approved: [],
-        conflicted: []
-      }
-    } satisfies VariableCoverageOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      variableCoverageOverview: {
+        totalVariables: 0,
+        coveredVariables: 0,
+        coveredByDraft: 0,
+        coveredByPendingReview: 0,
+        coveredByApproved: 0,
+        conflictedVariables: 0,
+        missingVariables: 0,
+        partiallyAbgedeckteVariablen: 0,
+        fullyAbgedeckteVariablen: 0,
+        coveragePercentage: 0,
+        variableCaseCounts: [],
+        coverageByStatus: {
+          draft: [],
+          pending_review: [],
+          approved: [],
+          conflicted: []
+        }
+      } satisfies VariableCoverageOverview
+    });
 
-    component.caseCoverageOverview.set({
-      totalCasesToCode: 0,
-      effectiveTotalCasesToCode: 0,
-      casesInJobs: 0,
-      effectiveCasesInJobs: 0,
-      doubleCodedCases: 0,
-      singleCodedCases: 0,
-      unassignedCases: 0,
-      effectiveUnassignedCases: 0,
-      coveragePercentage: 0,
-      rawCoveragePercentage: 0,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
-    } satisfies CaseCoverageOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      caseCoverageOverview: {
+        totalCasesToCode: 0,
+        effectiveTotalCasesToCode: 0,
+        casesInJobs: 0,
+        effectiveCasesInJobs: 0,
+        doubleCodedCases: 0,
+        singleCodedCases: 0,
+        unassignedCases: 0,
+        effectiveUnassignedCases: 0,
+        coveragePercentage: 0,
+        rawCoveragePercentage: 0,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      } satisfies CaseCoverageOverview
+    });
 
-    component.codingProgressOverview.set({
-      totalCasesToCode: 0,
-      completedCases: 0,
-      completionPercentage: 0,
-      rawTotalCasesToCode: 0,
-      rawCompletedCases: 0,
-      rawCompletionPercentage: 0,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
-    } satisfies CodingProgressOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      codingProgressOverview: {
+        totalCasesToCode: 0,
+        completedCases: 0,
+        completionPercentage: 0,
+        rawTotalCasesToCode: 0,
+        rawCompletedCases: 0,
+        rawCompletionPercentage: 0,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      } satisfies CodingProgressOverview
+    });
 
-    component.appliedResultsOverview.set({
-      totalIncompleteResponses: 0,
-      appliedResponses: 0,
-      remainingResponses: 0,
-      completionPercentage: 0,
-      rawTotalIncompleteResponses: 0,
-      rawAppliedResponses: 0,
-      rawCompletionPercentage: 0,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0,
-      totalIncompleteVariables: 0,
-      finalStatusBreakdown: {
-        codingComplete: 0,
-        invalid: 0,
-        codingError: 0,
-        other: 0
-      }
-    } satisfies ManualAppliedResultsOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      appliedResultsOverview: {
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 0,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 0,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0,
+        totalIncompleteVariables: 0,
+        finalStatusBreakdown: {
+          codingComplete: 0,
+          invalid: 0,
+          codingError: 0,
+          other: 0
+        }
+      } satisfies ManualAppliedResultsOverview
+    });
   }
 
   function setCodingProgress(totalCases: number, completedCases: number): void {
     const completionPercentage =
       totalCases > 0 ? (completedCases / totalCases) * 100 : 100;
 
-    component.codingProgressOverview.set({
-      totalCasesToCode: totalCases,
-      completedCases,
-      completionPercentage,
-      rawTotalCasesToCode: totalCases,
-      rawCompletedCases: completedCases,
-      rawCompletionPercentage: completionPercentage,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0
-    } satisfies CodingProgressOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      codingProgressOverview: {
+        totalCasesToCode: totalCases,
+        completedCases,
+        completionPercentage,
+        rawTotalCasesToCode: totalCases,
+        rawCompletedCases: completedCases,
+        rawCompletionPercentage: completionPercentage,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      } satisfies CodingProgressOverview
+    });
   }
 
   function setAppliedResults(
@@ -4227,30 +4308,32 @@ describe('CodingManagementManualComponent', () => {
     const completionPercentage =
       totalResponses > 0 ? (appliedResponses / totalResponses) * 100 : 100;
 
-    component.appliedResultsOverview.set({
-      totalIncompleteResponses: totalResponses,
-      appliedResponses,
-      remainingResponses,
-      completionPercentage,
-      rawTotalIncompleteResponses: totalResponses,
-      rawAppliedResponses: appliedResponses,
-      rawCompletionPercentage: completionPercentage,
-      aggregationActive: false,
-      aggregationThreshold: null,
-      aggregatedDuplicateCases: 0,
-      deriveErrorTotalResponses: deriveErrorResponses.total,
-      deriveErrorAppliedResponses: deriveErrorResponses.applied,
-      deriveErrorRemainingResponses: deriveErrorResponses.remaining,
-      deriveErrorRawTotalResponses: deriveErrorResponses.total,
-      deriveErrorRawAppliedResponses: deriveErrorResponses.applied,
-      totalIncompleteVariables: 1,
-      finalStatusBreakdown: {
-        codingComplete: appliedResponses,
-        invalid: 0,
-        codingError: 0,
-        other: 0
-      }
-    } satisfies ManualAppliedResultsOverview);
+    statisticsFacade().restorePlanningSnapshot({
+      appliedResultsOverview: {
+        totalIncompleteResponses: totalResponses,
+        appliedResponses,
+        remainingResponses,
+        completionPercentage,
+        rawTotalIncompleteResponses: totalResponses,
+        rawAppliedResponses: appliedResponses,
+        rawCompletionPercentage: completionPercentage,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0,
+        deriveErrorTotalResponses: deriveErrorResponses.total,
+        deriveErrorAppliedResponses: deriveErrorResponses.applied,
+        deriveErrorRemainingResponses: deriveErrorResponses.remaining,
+        deriveErrorRawTotalResponses: deriveErrorResponses.total,
+        deriveErrorRawAppliedResponses: deriveErrorResponses.applied,
+        totalIncompleteVariables: 1,
+        finalStatusBreakdown: {
+          codingComplete: appliedResponses,
+          invalid: 0,
+          codingError: 0,
+          other: 0
+        }
+      } satisfies ManualAppliedResultsOverview
+    });
   }
 
   it('should expose DERIVE_ERROR additional manual progress separately', () => {

@@ -23,15 +23,20 @@ export class TestResultsExportFacade {
   private pollSubscription?: Subscription;
   private recoveryRequest?: Subscription;
   private exportGeneration = 0;
-  readonly exportJobId = signal<string | null>(null);
+  private readonly exportJobIdState = signal<string | null>(null);
+  readonly exportJobId = this.exportJobIdState.asReadonly();
 
-  readonly isExporting = signal<boolean>(false);
+  private readonly isExportingState = signal<boolean>(false);
+  readonly isExporting = this.isExportingState.asReadonly();
 
-  readonly exportJobStatus = signal<string | null>(null);
+  private readonly exportJobStatusState = signal<string | null>(null);
+  readonly exportJobStatus = this.exportJobStatusState.asReadonly();
 
-  readonly exportJobProgress = signal<number>(0);
+  private readonly exportJobProgressState = signal<number>(0);
+  readonly exportJobProgress = this.exportJobProgressState.asReadonly();
 
-  readonly exportTypeInProgress = signal<'test-results' | 'test-logs' | null>(null);
+  private readonly exportTypeInProgressState = signal<'test-results' | 'test-logs' | null>(null);
+  readonly exportTypeInProgress = this.exportTypeInProgressState.asReadonly();
 
   constructor() {
     let workspaceId = this.appService.selectedWorkspaceId;
@@ -108,8 +113,8 @@ export class TestResultsExportFacade {
               undefined
         };
 
-        this.isExporting.set(true);
-        this.exportTypeInProgress.set(exportType === 'results' ? 'test-results' : 'test-logs');
+        this.isExportingState.set(true);
+        this.exportTypeInProgressState.set(exportType === 'results' ? 'test-results' : 'test-logs');
         const exportMethod =
           exportType === 'results' ?
             this.testResultBackendService.startExportTestResultsJob(
@@ -124,8 +129,8 @@ export class TestResultsExportFacade {
         exportMethod.pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe({
           next: response => {
             if (generation !== this.exportGeneration) return;
-            this.exportJobId.set(response.jobId);
-            this.exportJobStatus.set('active');
+            this.exportJobIdState.set(response.jobId);
+            this.exportJobStatusState.set('active');
             this.snackBar.open(
               'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
               'OK',
@@ -135,8 +140,8 @@ export class TestResultsExportFacade {
           },
           error: () => {
             if (generation !== this.exportGeneration) return;
-            this.isExporting.set(false);
-            this.exportTypeInProgress.set(null);
+            this.isExportingState.set(false);
+            this.exportTypeInProgressState.set(null);
             this.snackBar.open('Fehler beim Starten des Exports', 'Fehler', {
               duration: 3000
             });
@@ -168,9 +173,9 @@ export class TestResultsExportFacade {
               j.status === 'delayed'
           );
           if (activeJob) {
-            this.exportJobId.set(activeJob.jobId);
-            this.isExporting.set(true);
-            this.exportTypeInProgress.set(activeJob.exportType as 'test-results' | 'test-logs');
+            this.exportJobIdState.set(activeJob.jobId);
+            this.isExportingState.set(true);
+            this.exportTypeInProgressState.set(activeJob.exportType as 'test-results' | 'test-logs');
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -190,15 +195,15 @@ export class TestResultsExportFacade {
     ).subscribe({
       next: job => {
         if (!job) { this.resetExportState(); return; }
-        this.exportJobStatus.set(job.status);
-        this.exportJobProgress.set(job.progress);
+        this.exportJobStatusState.set(job.status);
+        this.exportJobProgressState.set(job.progress);
         if (job.status === 'completed') {
-          this.isExporting.set(false);
+          this.isExportingState.set(false);
           const ref = this.snackBar.open('Export abgeschlossen', 'Herunterladen', { duration: 10000 });
           ref.onAction().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
             .subscribe(() => this.downloadExportResult(jobId));
         } else if (job.status === 'failed') {
-          this.isExporting.set(false);
+          this.isExportingState.set(false);
           this.snackBar.open('Export fehlgeschlagen', 'Fehler', { duration: 5000 });
         } else if (job.status === 'cancelled') {
           this.resetExportState();
@@ -242,11 +247,11 @@ export class TestResultsExportFacade {
     this.exportGeneration += 1;
     this.recoveryRequest?.unsubscribe();
     this.stopExportStatusPolling();
-    this.isExporting.set(false);
-    this.exportJobStatus.set(null);
-    this.exportJobProgress.set(0);
-    this.exportJobId.set(null);
-    this.exportTypeInProgress.set(null);
+    this.isExportingState.set(false);
+    this.exportJobStatusState.set(null);
+    this.exportJobProgressState.set(0);
+    this.exportJobIdState.set(null);
+    this.exportTypeInProgressState.set(null);
   }
 
   stopExportStatusPolling(): void { this.pollSubscription?.unsubscribe(); this.pollSubscription = undefined; }

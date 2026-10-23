@@ -10,7 +10,9 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { Observable, of, Subject } from 'rxjs';
+import {
+  Observable, of, Subject, throwError
+} from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { JobDistributionPreviewComponent } from './job-distribution-preview.component';
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
@@ -1235,6 +1237,117 @@ describe('CodingJobDefinitionDialogComponent', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe.each([false, true])('job save feedback (edit: %s)', isEdit => {
+    const existingJob: CodingJob = {
+      id: 202,
+      workspace_id: 1,
+      name: 'Existing job',
+      status: 'pending',
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-02')
+    };
+
+    const prepareSave = () => {
+      createComponent({ mode: 'job', isEdit, codingJob: isEdit ? existingJob : undefined });
+      component.selectedVariables().select(mockVariables[0]);
+      component.selectedCoders.select(mockCoders[0]);
+      return (isEdit ? mockCodingJobBackendService.updateCodingJob : mockCodingJobBackendService.createCodingJob) as jest.Mock;
+    };
+
+    it('waits for assignments, prevents duplicate writes and retains success feedback', async () => {
+      const write = prepareSave();
+      const saved = new Subject<CodingJob>();
+      const assigned = new Subject<CodingJob>();
+      write.mockReturnValue(saved);
+      (mockCodingJobService.assignCoder as jest.Mock).mockReturnValue(assigned);
+
+      await component.onSubmit();
+      await component.onSubmit();
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(component.isSaving()).toBe(true);
+      expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
+      const payload = write.mock.calls[0][isEdit ? 2 : 1];
+      expect(payload).toEqual(expect.objectContaining({
+        id: isEdit ? 202 : 0,
+        assignedCoders: [1],
+        assignedVariables: [mockVariables[0]],
+        variables: [mockVariables[0]],
+        showScore: true,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      }));
+      if (isEdit) expect(payload.created_at).toBe(existingJob.created_at);
+
+      saved.next(existingJob);
+      saved.complete();
+      expect(component.isSaving()).toBe(true);
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      const result = { ...existingJob, assignedCoders: [1] };
+      assigned.next(result);
+      assigned.complete();
+      expect(component.isSaving()).toBe(false);
+      expect(mockDialogRef.close).toHaveBeenCalledTimes(1);
+      expect(mockDialogRef.close).toHaveBeenCalledWith(result);
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        `coding-job-definition-dialog.snackbars.job-${isEdit ? 'updated' : 'created'}-success`,
+        'common.close',
+        { duration: 3000 }
+      );
+    });
+
+    it('keeps a failed job write open for retry and retains the write-error feedback', async () => {
+      const write = prepareSave();
+      write.mockReturnValue(throwError(() => new Error('Write failed')));
+      await component.onSubmit();
+      expect(component.isSaving()).toBe(false);
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        `coding-job-definition-dialog.snackbars.error-${isEdit ? 'updating' : 'creating'}-job`,
+        'common.close',
+        { duration: 5000 }
+      );
+      expect(mockTranslateService.instant).toHaveBeenCalledWith(
+        `coding-job-definition-dialog.snackbars.error-${isEdit ? 'updating' : 'creating'}-job`,
+        { error: 'Write failed' }
+      );
+
+      write.mockReturnValue(of(existingJob));
+      await component.onSubmit();
+      expect(write).toHaveBeenCalledTimes(2);
+      expect(mockDialogRef.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('retains the saved job and partial-failure feedback if coder assignment fails', async () => {
+      prepareSave().mockReturnValue(of(existingJob));
+      (mockCodingJobService.assignCoder as jest.Mock).mockReturnValue(throwError(() => new Error('Assignment failed')));
+      await component.onSubmit();
+      expect(component.isSaving()).toBe(false);
+      expect(mockDialogRef.close).toHaveBeenCalledWith({ ...existingJob, assignedCoders: [1] });
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        `coding-job-definition-dialog.snackbars.job-${isEdit ? 'updated' : 'created'}-coder-failed`,
+        'common.close',
+        { duration: 5000 }
+      );
+    });
+
+    it.each(['write', 'assignment'])('cancels a pending %s when the dialog is destroyed', async phase => {
+      const write = prepareSave();
+      const pending = new Subject<CodingJob>();
+      write.mockReturnValue(phase === 'write' ? pending : of(existingJob));
+      (mockCodingJobService.assignCoder as jest.Mock).mockReturnValue(pending);
+      await component.onSubmit();
+      expect(pending.observed).toBe(true);
+      fixture.destroy();
+      expect(pending.observed).toBe(false);
+      pending.next(existingJob);
+      pending.complete();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+      if (phase === 'write') expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
     });
   });
 

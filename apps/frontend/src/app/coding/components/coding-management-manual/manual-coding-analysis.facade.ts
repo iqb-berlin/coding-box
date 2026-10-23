@@ -30,11 +30,14 @@ export class ManualCodingAnalysisFacade {
   private readonly reloadRequestedSubject = new Subject<void>();
   readonly reloadRequested$ = this.reloadRequestedSubject.asObservable();
   isViewActive: () => boolean = () => false;
-  readonly responseAnalysis = signal<ResponseAnalysisDto | null>(null);
+  private readonly responseAnalysisState = signal<ResponseAnalysisDto | null>(null);
+  readonly responseAnalysis = this.responseAnalysisState.asReadonly();
 
-  readonly responseAnalysisError = signal<string | null>(null);
+  private readonly responseAnalysisErrorState = signal<string | null>(null);
+  readonly responseAnalysisError = this.responseAnalysisErrorState.asReadonly();
 
-  readonly isLoadingResponseAnalysis = signal(false);
+  private readonly isLoadingResponseAnalysisState = signal(false);
+  readonly isLoadingResponseAnalysis = this.isLoadingResponseAnalysisState.asReadonly();
 
   private readonly responseAnalysisRequestCancelSubject = new Subject<void>();
   readonly responseAnalysisRequestCancel$ = this.responseAnalysisRequestCancelSubject.asObservable();
@@ -49,18 +52,49 @@ export class ManualCodingAnalysisFacade {
 
   hasShownResponseAnalysisPollingError = false;
 
-  readonly emptyPageIndex = signal(0);
+  private readonly emptyPageIndexState = signal(0);
+  readonly emptyPageIndex = this.emptyPageIndexState.asReadonly();
 
-  readonly emptyPageSize = signal(5);
+  private readonly emptyPageSizeState = signal(5);
+  readonly emptyPageSize = this.emptyPageSizeState.asReadonly();
 
-  readonly duplicatePageIndex = signal(0);
+  private readonly duplicatePageIndexState = signal(0);
+  readonly duplicatePageIndex = this.duplicatePageIndexState.asReadonly();
 
-  readonly duplicatePageSize = signal(50);
+  private readonly duplicatePageSizeState = signal(50);
+  readonly duplicatePageSize = this.duplicatePageSizeState.asReadonly();
+
+  restoreAnalysis(analysis: ResponseAnalysisDto | null, error: string | null = null): void {
+    this.responseAnalysisState.set(analysis);
+    this.responseAnalysisErrorState.set(error);
+  }
+
+  beginAnalysis(): void {
+    this.isLoadingResponseAnalysisState.set(true);
+    this.responseAnalysisErrorState.set(null);
+  }
+
+  analysisStartFailed(): void { this.isLoadingResponseAnalysisState.set(false); }
+
+  resetPages(): void {
+    this.emptyPageIndexState.set(0);
+    this.duplicatePageIndexState.set(0);
+  }
+
+  changeEmptyPage(index: number, size: number): void {
+    this.emptyPageIndexState.set(index);
+    this.emptyPageSizeState.set(size);
+  }
+
+  changeDuplicatePage(index: number, size: number): void {
+    this.duplicatePageIndexState.set(index);
+    this.duplicatePageSizeState.set(size);
+  }
 
   constructor() {
     let workspaceId = this.appService.selectedWorkspaceId;
     this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
-      if (id !== workspaceId) { this.stop(); this.responseAnalysis.set(null); this.responseAnalysisError.set(null); workspaceId = id; }
+      if (id !== workspaceId) { this.stop(); this.responseAnalysisState.set(null); this.responseAnalysisErrorState.set(null); workspaceId = id; }
     });
     this.destroyRef.onDestroy(() => {
       this.cancelResponseAnalysisRequest();
@@ -85,7 +119,7 @@ export class ManualCodingAnalysisFacade {
     }
     this.responseAnalysisRequestCancelSubject.next();
     if (options.markNotLoading !== false) {
-      this.isLoadingResponseAnalysis.set(false);
+      this.isLoadingResponseAnalysisState.set(false);
     }
   }
 
@@ -226,7 +260,7 @@ export class ManualCodingAnalysisFacade {
     if (!workspaceId) {
       this.cancelResponseAnalysisRequest();
       this.setResponseAnalysisGuardActive(false);
-      this.isLoadingResponseAnalysis.set(false);
+      this.isLoadingResponseAnalysisState.set(false);
       return;
     }
 
@@ -240,8 +274,8 @@ export class ManualCodingAnalysisFacade {
     });
     const requestId = this.responseAnalysisRequestId + 1;
     this.responseAnalysisRequestId = requestId;
-    this.isLoadingResponseAnalysis.set(true);
-    this.responseAnalysisError.set(null);
+    this.isLoadingResponseAnalysisState.set(true);
+    this.responseAnalysisErrorState.set(null);
     this.testPersonCodingService
       .getResponseAnalysis(
         workspaceId,
@@ -262,9 +296,9 @@ export class ManualCodingAnalysisFacade {
             return;
           }
 
-          this.responseAnalysis.set(analysis);
-          this.responseAnalysisError.set(null);
-          this.isLoadingResponseAnalysis.set(false);
+          this.responseAnalysisState.set(analysis);
+          this.responseAnalysisErrorState.set(null);
+          this.isLoadingResponseAnalysisState.set(false);
           this.hasShownResponseAnalysisPollingError = false;
           this.setResponseAnalysisGuardActive(analysis.isCalculating === true);
           this.viewUpdatedSubject.next();
@@ -286,7 +320,7 @@ export class ManualCodingAnalysisFacade {
             return;
           }
 
-          this.isLoadingResponseAnalysis.set(false);
+          this.isLoadingResponseAnalysisState.set(false);
           this.viewUpdatedSubject.next();
           const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
           if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
@@ -303,8 +337,8 @@ export class ManualCodingAnalysisFacade {
           }
 
           this.setResponseAnalysisGuardActive(false);
-          this.responseAnalysis.set(null);
-          this.responseAnalysisError.set(responseAnalysisError);
+          this.responseAnalysisState.set(null);
+          this.responseAnalysisErrorState.set(responseAnalysisError);
           this.failedSubject.next();
           this.settledSubject.next();
           this.snackBar.open(
