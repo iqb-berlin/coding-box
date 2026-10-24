@@ -2,11 +2,14 @@ import { computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import { of, Subject, throwError } from 'rxjs';
+import { AuthRequestCancelledError } from '../../core/interceptors/auth-request-cancelled.error';
+import { AuthRefreshUnavailableError } from '../../core/interceptors/auth-refresh-unavailable.error';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
-import { CodingScheme } from '../../models/coding-interfaces';
+import { CodeSelectedEvent, CodingScheme } from '../../models/coding-interfaces';
 
 // A macrotask boundary lets the complete native Promise queue settle before inspecting
 // the next queued request, without relying on Zone.js microtask scheduling.
@@ -429,6 +432,54 @@ describe('ReplayCodingService', () => {
   });
 
   describe('saveCodingProgress', () => {
+    it.each([
+      new HttpErrorResponse({ status: 403 }),
+      new HttpErrorResponse({ status: 401 }),
+      new AuthRequestCancelledError(),
+      new AuthRefreshUnavailableError()
+    ])('keeps the pending selection recoverable without replacing auth diagnostics for %s', async error => {
+      service.codingJobId = 100;
+      const event: CodeSelectedEvent = {
+        variableId: 'v1',
+        code: {
+          id: 7,
+          type: 'FULL_CREDIT',
+          label: 'Code 7',
+          score: 1,
+          ruleSetOperatorAnd: false,
+          ruleSets: [],
+          manualInstruction: ''
+        },
+        codingIssueOption: null
+      };
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(throwError(() => error));
+
+      await expect(service.handleCodeSelected(event, 'p1', 'u1', 1, null)).rejects.toBe(error);
+
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      expect(service.createRecoverySnapshot()?.pendingSelections).toEqual([
+        [key, expect.objectContaining({ id: 7, label: 'Code 7' })]
+      ]);
+      expect(service.hasSaveError).toBe(true);
+      expect(snackBarMock.open).not.toHaveBeenCalled();
+
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      await service.handleCodeSelected(event, 'p1', 'u1', 1, null);
+      expect(service.getPreSelectedCodeId('p1', 'u1', 'v1')).toBe(7);
+      expect(service.hasSaveError).toBe(false);
+    });
+
+    it('keeps a coding save failure hint for other errors', async () => {
+      const error = new HttpErrorResponse({ status: 500 });
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(throwError(() => error));
+
+      await expect(service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 7, label: 'Code 7' }))
+        .rejects.toBe(error);
+
+      expect(service.hasSaveError).toBe(true);
+      expect(snackBarMock.open).toHaveBeenCalled();
+    });
+
     it('should save progress via backend', async () => {
       codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
       await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
@@ -991,6 +1042,33 @@ describe('ReplayCodingService', () => {
   });
 
   describe('saveNotes', () => {
+    it.each([
+      new HttpErrorResponse({ status: 403 }),
+      new HttpErrorResponse({ status: 401 }),
+      new AuthRequestCancelledError(),
+      new AuthRefreshUnavailableError()
+    ])('preserves auth diagnostics and the pending draft for %s', async error => {
+      service.codingJobId = 100;
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(throwError(() => error));
+
+      await expect(service.saveNotes(1, 'person', 'UNIT', 'VAR', 'pending draft')).rejects.toBe(error);
+
+      expect(service.getNotes('person', 'UNIT', 'VAR')).toBe('pending draft');
+      expect(service.lastSaveError).not.toBeNull();
+      expect(snackBarMock.open).not.toHaveBeenCalled();
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      await service.saveNotes(1, 'person', 'UNIT', 'VAR', 'pending draft');
+      expect(service.lastSaveError).toBeNull();
+    });
+
+    it('keeps a save failure hint for non-authentication errors', async () => {
+      service.codingJobId = 100;
+      const error = new HttpErrorResponse({ status: 500 });
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(throwError(() => error));
+      await expect(service.saveNotes(1, 'person', 'UNIT', 'VAR', 'pending draft')).rejects.toBe(error);
+      expect(snackBarMock.open).toHaveBeenCalled();
+    });
+
     it('saves notes without sending a dummy selected code', async () => {
       codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
       service.codingJobId = 100;

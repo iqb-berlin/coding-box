@@ -340,11 +340,11 @@ describe('WorkspaceUsersController', () => {
     });
 
     it.each([
-      { userId: 1, workspaceId: 3 },
-      { userId: 2, workspaceId: 3 },
-      { userId: 3, workspaceId: 4 },
-      { userId: 5, workspaceId: 3 }
-    ])('denies user $userId changing membership in workspace $workspaceId', async ({ userId, workspaceId }) => {
+      { userId: 1, workspaceId: 3, expectedStatus: 401 },
+      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 3, workspaceId: 4, expectedStatus: 403 },
+      { userId: 5, workspaceId: 3, expectedStatus: 403 }
+    ])('denies user $userId changing membership in workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {
       const app = await createTestApp(true);
       try {
         const response = await fetch(`${await app.getUrl()}/admin/workspace/${workspaceId}/users`, {
@@ -353,7 +353,7 @@ describe('WorkspaceUsersController', () => {
           body: JSON.stringify([userId, 7])
         });
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(expectedStatus);
         expect(workspaceUsersService.setWorkspaceUsers).not.toHaveBeenCalled();
       } finally {
         await app.close();

@@ -1,0 +1,64 @@
+{
+  "environment": "https://kodierbox-test.iqb.hu-berlin.de",
+  "date": "2026-10-23",
+  "cases": [
+    {
+      "kind": "account-change",
+      "oldUser": "coder2",
+      "newUser": "coder3",
+      "oldRefreshPendingObservedAt": "2026-10-23T13:56:28.531Z",
+      "newSessionConfirmedAt": "2026-10-23T13:58:28.360Z",
+      "oldRefreshStillPendingAfterLoginAt": "2026-10-23T13:59:07.981Z",
+      "oldRefresh200ObservedAt": "2026-10-23T13:59:39.517Z",
+      "endpoint": "/api/auth/refresh",
+      "realProviderResponse": true,
+      "releasedByRestoringNoThrottling": true
+    },
+    {
+      "kind": "same-account",
+      "oldUser": "coder3",
+      "newUser": "coder3",
+      "oldRefreshPendingObservedAt": "2026-10-23T14:03:46.050Z",
+      "newSessionConfirmedAt": "2026-10-23T14:06:10.967Z",
+      "oldRefreshStillPendingAfterLoginAt": "2026-10-23T14:07:16.106Z",
+      "oldRefresh200ObservedAt": "2026-10-23T14:07:48.820Z",
+      "endpoint": "/api/auth/refresh",
+      "realProviderResponse": true,
+      "releasedByRestoringNoThrottling": true
+    }
+  ],
+  "draftIsolation": {
+    "workspaceId": 3,
+    "codingJobId": 2777,
+    "oldUnsavedDraftMarker": "AUTH1018-F07-CODER3-ALT-20261023",
+    "oldDraftAbsentInNewUserView": true,
+    "storedSyntheticNoteUnchanged": true,
+    "codesAndScoresStillNull": true,
+    "coder2AssignmentUnchanged": true,
+    "databaseVerifiedAt": "2026-10-23T14:16:19.222236+00:00"
+  },
+  "finalSession": {
+    "visibleIdentity": "coder3",
+    "verifiedAfterReloadAt": "2026-10-23T14:12:24.756Z",
+    "additionalFreshRefreshProven": false
+  },
+  "originalDataComparison": {
+    "unchanged": true,
+    "checkedAt": "2026-10-23T14:11:18.358751+00:00",
+    "scope": "Pre-existing fingerprint scopes from original-data-fingerprints.json; not every table in the installation"
+  },
+  "localRegression": {
+    "project": "frontend",
+    "suites": 3,
+    "testsPassed": 78,
+    "log": "/tmp/auth1018-f07-regression-20261023.log"
+  },
+  "restored": {
+    "networkThrottling": "Disabled: No throttling",
+    "delayedTabsClosed": true,
+    "backendConfigurationChanged": false,
+    "permissionsChanged": false
+  },
+  "ticketStatesChanged": false,
+  "formalAcceptanceGranted": false
+}
