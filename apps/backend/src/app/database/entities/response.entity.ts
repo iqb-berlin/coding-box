@@ -13,6 +13,7 @@ import { Unit } from './unit.entity';
 @Index(['status_v2']) // Index for filtering by second coding status
 @Index(['status_v3']) // Index for filtering by third coding status
 @Index(['is_autocoder_generated'])
+@Index('idx_response_geogebra_unit', { synchronize: false }) // Partial index managed by Liquibase
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
   id: number;

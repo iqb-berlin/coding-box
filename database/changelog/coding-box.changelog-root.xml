@@ -46,4 +46,5 @@
   <include file="coding-box.changelog-1.17.0.sql"/>
   <include file="coding-box.changelog-833-ownership.sql"/>
   <include file="coding-box.changelog-testcenter-import-runs.sql"/>
+  <include file="coding-box.changelog-965-geogebra-existence.sql"/>
 </databaseChangeLog>

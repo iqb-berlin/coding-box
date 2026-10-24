@@ -41,6 +41,7 @@ const mockQueryBuilder = () => ({
   leftJoinAndSelect: jest.fn().mockReturnThis(),
   getRawMany: jest.fn().mockResolvedValue([]),
   getCount: jest.fn().mockResolvedValue(0),
+  getExists: jest.fn().mockResolvedValue(false),
   getMany: jest.fn().mockResolvedValue([]),
   getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   orderBy: jest.fn().mockReturnThis(),
@@ -240,6 +241,42 @@ describe('WorkspaceTestResultsService', () => {
       undefined,
       codingStatisticsService
     );
+  });
+
+  describe('hasGeogebraResponses', () => {
+    it.each([true, false])('returns %s from an existence query without counting matches', async exists => {
+      const qb = mockQueryBuilder();
+      qb.getExists.mockResolvedValue(exists);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      await expect(service.hasGeogebraResponses(42)).resolves.toBe(exists);
+
+      expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 42 });
+      expect(qb.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        "(response.value LIKE 'UEsD%' OR response.value ILIKE 'data:%;base64,UEsD%')"
+      );
+      expect(qb.getCount).not.toHaveBeenCalled();
+    });
+
+    it('keeps unit, booklet and testlet exclusions on the existence query', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['ignored.xml'],
+        ignoredBooklets: ['ignored-booklet'],
+        testletIgnoredUnits: [{ bookletId: 'testlet', unitId: 'unit.xml' }]
+      });
+
+      await service.hasGeogebraResponses(42);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), { workspaceExclusionIgnoredUnits: ['IGNORED'] });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), { workspaceExclusionIgnoredBooklets: ['IGNORED-BOOKLET'] });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+        workspaceExclusionBooklet0: 'TESTLET', workspaceExclusionUnit0: 'UNIT'
+      });
+      expect(qb.getExists).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('previewDeleteTestResults', () => {
@@ -986,11 +1023,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('response.value LIKE :ggRawPrefix OR response.value ILIKE :ggDataUriPrefix'),
-        {
-          ggRawPrefix: 'UEsD%',
-          ggDataUriPrefix: 'data:%;base64,UEsD%'
-        }
+        "(response.value LIKE 'UEsD%' OR response.value ILIKE 'data:%;base64,UEsD%')"
       );
     });
 
