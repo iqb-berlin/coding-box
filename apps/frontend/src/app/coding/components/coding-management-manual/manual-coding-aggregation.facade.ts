@@ -43,9 +43,6 @@ export class ManualCodingAggregationFacade {
   private readonly isSavingMatchingMode = () => this.settings.isSavingMatchingMode();
   private readonly responseAnalysis = this.analysis.responseAnalysis;
   private readonly isLoadingResponseAnalysis = this.analysis.isLoadingResponseAnalysis;
-  private readonly responseAnalysisError = this.analysis.responseAnalysisError;
-  private readonly emptyPageIndex = this.analysis.emptyPageIndex;
-  private readonly duplicatePageIndex = this.analysis.duplicatePageIndex;
   private get persistedResponseMatchingFlags(): readonly ResponseMatchingFlag[] { return this.settings.persistedResponseMatchingFlags; }
   private get isDuplicateAggregationActive(): boolean { return !this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION); }
 
@@ -101,8 +98,7 @@ export class ManualCodingAggregationFacade {
     const rollbackFlags = [...this.responseMatchingFlags()];
     const optionFlags = this.getSelectedAggregationOptionFlags();
     this.settings.updateLocalMatchingFlags(this.buildLocalResponseMatchingFlags(aggregateResponses, optionFlags));
-    this.emptyPageIndex.set(0);
-    this.duplicatePageIndex.set(0);
+    this.analysis.resetPages();
     this.restartAnalysis(rollbackFlags);
   }
 
@@ -128,8 +124,7 @@ export class ManualCodingAggregationFacade {
       [...selectedOptionFlags, flag];
 
     this.settings.updateLocalMatchingFlags(this.buildLocalResponseMatchingFlags(this.isDuplicateAggregationActive, nextOptionFlags));
-    this.emptyPageIndex.set(0);
-    this.duplicatePageIndex.set(0);
+    this.analysis.resetPages();
   }
 
   private getSelectedAggregationOptionFlags(
@@ -177,8 +172,7 @@ export class ManualCodingAggregationFacade {
     const shouldRefreshAggregationDependentViews = shouldSaveMatchingMode;
     let settingsReadyForAnalysis = !shouldSaveMatchingMode;
 
-    this.isLoadingResponseAnalysis.set(true);
-    this.responseAnalysisError.set(null);
+    this.analysis.beginAnalysis();
     const saveMatchingMode$ = shouldSaveMatchingMode ?
       this.saveResponseMatchingMode(
         targetMatchingFlags,
@@ -214,7 +208,7 @@ export class ManualCodingAggregationFacade {
         },
         error: error => {
           this.setResponseAnalysisGuardActive(false);
-          this.isLoadingResponseAnalysis.set(false);
+          this.analysis.analysisStartFailed();
           if (settingsReadyForAnalysis) {
             this.snackBar.open(
               `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
@@ -459,8 +453,7 @@ export class ManualCodingAggregationFacade {
     if (this.duplicateAggregationThreshold() !== normalizedValue) {
       this.settings.updateThreshold(normalizedValue);
     }
-    this.emptyPageIndex.set(0);
-    this.duplicatePageIndex.set(0);
+    this.analysis.resetPages();
     this.settings.saveThreshold(normalizedValue);
   }
 

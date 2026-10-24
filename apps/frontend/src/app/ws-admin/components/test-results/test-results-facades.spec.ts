@@ -80,6 +80,18 @@ describe('test-results feature request and polling lifetimes', () => {
     expect(fixture.nativeElement.querySelector('.persons').textContent).toBe('8');
   });
 
+  it('exposes feature state through read-only signals', () => {
+    for (const state of [
+      host.statistics.overview, host.statistics.isLoadingOverview,
+      host.statistics.codingFreshnessSummary, host.statistics.manualAppliedResultsOverview,
+      host.exports.isExporting, host.exports.exportJobProgress,
+      host.deletion.activeDeleteTask, host.deletion.deleteProgress
+    ]) {
+      expect('set' in state).toBe(false);
+      expect('update' in state).toBe(false);
+    }
+  });
+
   it('does not let delayed job recovery replace a newly started export', () => {
     const recovery = new Subject<unknown[]>();
     backend.getExportTestResultsJobs.mockReturnValue(recovery);
@@ -124,8 +136,11 @@ describe('test-results feature request and polling lifetimes', () => {
 
   it('releases failed export polling and permits an explicit retry', () => {
     jest.useFakeTimers(); const pending = new Subject<unknown[]>();
-    backend.getExportTestResultsJobs.mockReturnValueOnce(pending).mockReturnValue(of([{ jobId: 'retry', status: 'active', progress: 60 }]));
-    host.exports.isExporting.set(true); host.exports.pollExportJobStatus('old'); jest.advanceTimersByTime(2000);
+    backend.getExportTestResultsJobs.mockReturnValueOnce(of([{
+      jobId: 'old', status: 'active', exportType: 'test-results', progress: 0
+    }]))
+      .mockReturnValueOnce(pending).mockReturnValue(of([{ jobId: 'retry', status: 'active', progress: 60 }]));
+    host.exports.checkExistingExportJobs(); host.exports.pollExportJobStatus('old'); jest.advanceTimersByTime(2000);
     pending.error(new Error('offline')); expect(host.exports.isExporting()).toBe(false);
     host.exports.pollExportJobStatus('retry'); jest.advanceTimersByTime(2000);
     expect(host.exports.exportJobProgress()).toBe(60);
