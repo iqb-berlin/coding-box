@@ -20,6 +20,7 @@ Kodierbox_Tokens_*.txt
 docker.env
 .env.dev
 .env.coding-box
+.auth-upgrade-*/
 
 # compiled output
 /dist
