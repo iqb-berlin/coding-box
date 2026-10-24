@@ -5172,7 +5172,7 @@ export class WorkspaceTestResultsService {
       responseIds,
       unitIds
     );
-    const groups = WorkspaceTestResultsService.limitPreviewStrings(
+    const groups = WorkspaceTestResultsService.normalizeStringList(
       rows.map(row => row.personGroup)
     );
     const bookletNames = WorkspaceTestResultsService.limitPreviewStrings(
@@ -6362,8 +6362,8 @@ export class WorkspaceTestResultsService {
 
     return {
       groups: WorkspaceTestResultsService.toPreviewList(raw?.groups),
-      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames),
-      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames)
+      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames).slice(0, 30),
+      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames).slice(0, 30)
     };
   }
 
@@ -6458,14 +6458,13 @@ export class WorkspaceTestResultsService {
   private static toPreviewList(value?: string[] | string | null): string[] {
     if (!value) return [];
     if (Array.isArray(value)) {
-      return value.map(v => String(v)).filter(v => v.length > 0).slice(0, 30);
+      return value.map(v => String(v)).filter(v => v.length > 0);
     }
     return String(value)
       .replace(/^{|}$/g, '')
       .split(',')
       .map(v => v.replace(/^"|"$/g, '').trim())
-      .filter(v => v.length > 0)
-      .slice(0, 30);
+      .filter(v => v.length > 0);
   }
 
   private static limitPreviewStrings(values: string[]): string[] {
