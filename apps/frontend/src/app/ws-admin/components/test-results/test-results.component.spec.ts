@@ -383,6 +383,148 @@ describe('TestResultsComponent', () => {
     fixture.detectChanges();
   });
 
+  it('resets page selection across 130 persons and sends the complete filter for group deletion', () => {
+    const rows = Array.from({ length: 130 }, (_, index) => ({
+      id: index + 1,
+      code: `P${index + 1}`,
+      group: index % 2 ? 'G1' : 'G2',
+      login: 'login',
+      uploaded_at: new Date()
+    }));
+    const results = TestBed.inject(TestResultService);
+    results.getTestResults = jest.fn((_workspace, page, limit) => of({
+      data: rows.slice(page * limit, (page + 1) * limit), total: rows.length
+    })) as never;
+    const view = component as unknown as {
+      masterToggle(): void;
+      isAllSelected(): boolean;
+      deleteSelectedGroups(): void;
+      deleteFilteredGroups(): void;
+      deleteFilteredPersons(): void;
+      selection: { selected: unknown[] };
+    };
+    const preview = jest.mocked(results.previewDeleteTestResults);
+    component.createTestResultsList(0, 50, 'needle');
+    view.masterToggle();
+    expect(view.isAllSelected()).toBe(true);
+    expect(view.selection.selected).toHaveLength(50);
+    view.deleteSelectedGroups();
+    expect(preview).toHaveBeenLastCalledWith(1, { scope: 'groups', groups: ['G2', 'G1'] });
+    component.createTestResultsList(1, 50, 'needle');
+    expect(view.selection.selected).toHaveLength(0);
+    expect(view.isAllSelected()).toBe(false);
+    view.masterToggle();
+    expect(view.selection.selected).toHaveLength(50);
+    component.createTestResultsList(0, 100, 'needle');
+    expect(view.selection.selected).toHaveLength(0);
+    view.deleteFilteredGroups();
+    expect(preview).toHaveBeenLastCalledWith(1, { scope: 'filteredGroups', searchText: 'needle' });
+    view.deleteFilteredPersons();
+    expect(preview).toHaveBeenLastCalledWith(1, { scope: 'filteredPersons', searchText: 'needle' });
+    component.createTestResultsList(0, 500, 'different');
+    expect(view.isAllSelected()).toBe(false);
+    view.deleteFilteredGroups();
+    expect(preview).toHaveBeenLastCalledWith(1, { scope: 'filteredGroups', searchText: 'different' });
+    component.createTestResultsList(0, 50, '');
+    view.deleteFilteredGroups();
+    expect(preview).toHaveBeenLastCalledWith(1, { scope: 'filteredGroups', searchText: '' });
+  });
+
+  it('unblocks deletion when an edit returns to the active filter before debounce', () => {
+    component.createTestResultsList(0, 50, 'needle');
+    const view = component as unknown as { applyFilter(event: Event): void };
+    view.applyFilter({ target: { value: 'different' } } as unknown as Event);
+    expect(component.isSearching()).toBe(true);
+    view.applyFilter({ target: { value: 'needle' } } as unknown as Event);
+    expect(component.isSearching()).toBe(false);
+  });
+
+  it.each(['', 'G1'])('keeps deletion blocked when a response for "%s" arrives before the new filter is requested', searchText => {
+    const pending = new Subject<{ data: Array<Record<string, unknown>>; total: number }>();
+    const latest = new Subject<{ data: Array<Record<string, unknown>>; total: number }>();
+    const results = TestBed.inject(TestResultService);
+    jest.mocked(results.getTestResults).mockReturnValueOnce(pending as never).mockReturnValueOnce(latest as never);
+    component.createTestResultsList(0, 50, searchText);
+    const view = component as unknown as {
+      applyFilter(event: Event): void;
+      isPersonListCurrent(): boolean;
+      deleteFilteredGroups(): void;
+      deleteFilteredPersons(): void;
+    };
+    const input = fixture.nativeElement.querySelector('.search-input') as HTMLInputElement;
+    input.value = 'G2';
+    view.applyFilter({ target: input } as unknown as Event);
+    pending.next({
+      data: [{
+        id: 1, code: 'P1', group: 'G1', login: 'login'
+      }],
+      total: 130
+    });
+    pending.complete();
+    fixture.detectChanges();
+    expect(component.isLoading()).toBe(false);
+    expect(component.isSearching()).toBe(true);
+    expect(view.isPersonListCurrent()).toBe(false);
+    const buttons = fixture.nativeElement.querySelectorAll('.section-actions button') as NodeListOf<HTMLButtonElement>;
+    expect(Array.from(buttons).every(button => button.disabled)).toBe(true);
+    view.deleteFilteredGroups();
+    view.deleteFilteredPersons();
+    expect(results.previewDeleteTestResults).not.toHaveBeenCalled();
+
+    component.createTestResultsList(0, 50, 'G2');
+    expect(view.isPersonListCurrent()).toBe(false);
+    latest.next({
+      data: [{
+        id: 2, code: 'P2', group: 'G2', login: 'login'
+      }],
+      total: 65
+    });
+    latest.complete();
+    fixture.detectChanges();
+    expect(view.isPersonListCurrent()).toBe(true);
+    expect(component.isSearching()).toBe(false);
+    view.deleteFilteredGroups();
+    expect(results.previewDeleteTestResults).toHaveBeenLastCalledWith(1, { scope: 'filteredGroups', searchText: 'G2' });
+    view.deleteFilteredPersons();
+    expect(results.previewDeleteTestResults).toHaveBeenLastCalledWith(1, { scope: 'filteredPersons', searchText: 'G2' });
+  });
+
+  it('cancels a queued filter on clear and can reapply the previous filter', () => {
+    jest.useFakeTimers();
+    try {
+      const results = TestBed.inject(TestResultService);
+      jest.mocked(results.getTestResults).mockClear();
+      const view = component as unknown as {
+        applyFilter(event: Event): void;
+        clearSearch(): void;
+        isPersonListCurrent(): boolean;
+      };
+      const input = fixture.nativeElement.querySelector('.search-input') as HTMLInputElement;
+      const type = (value: string) => {
+        input.value = value;
+        view.applyFilter({ target: input } as unknown as Event);
+      };
+      type('G1');
+      jest.advanceTimersByTime(800);
+      type('G2');
+      view.clearSearch();
+      jest.advanceTimersByTime(800);
+      expect(results.getTestResults).toHaveBeenLastCalledWith(1, 0, 50, '');
+      type('G1');
+      jest.advanceTimersByTime(800);
+      expect(jest.mocked(results.getTestResults).mock.calls.map(call => call[3])).toEqual(['G1', '', 'G1']);
+      expect(view.isPersonListCurrent()).toBe(true);
+    } finally {
+      fixture.destroy();
+      jest.useRealTimers();
+    }
+  });
+
+  it('leaves an empty page unchecked', () => {
+    const view = component as unknown as { isAllSelected(): boolean };
+    expect(view.isAllSelected()).toBe(false);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

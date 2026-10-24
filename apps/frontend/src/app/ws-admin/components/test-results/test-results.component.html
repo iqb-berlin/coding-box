@@ -322,33 +322,43 @@
         <div class="section-actions">
           <button
             mat-stroked-button
-            [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
+            [disabled]="selection.selected.length === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteSelectedPersons()"
             class="delete-button"
           >
             <mat-icon>delete</mat-icon>
-            Ausgewählte löschen
+            {{ 'test-results-page.deletion.selected-persons' | translate }}
           </button>
           <button
             mat-stroked-button
-            [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
+            [disabled]="selection.selected.length === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteSelectedGroups()"
             class="delete-button"
           >
             <mat-icon>group_remove</mat-icon>
-            Testgruppe(n) löschen
+            {{ 'test-results-page.deletion.selected-groups' | translate }}
           </button>
           <button
             mat-stroked-button
-            [disabled]="totalRecords() === 0 || isDeleteJobRunning()"
+            [disabled]="totalRecords() === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteFilteredPersons()"
             class="delete-button"
           >
             <mat-icon>filter_alt_off</mat-icon>
-            Gefilterte löschen
+            {{ (hasPersonFilter ? 'test-results-page.deletion.filtered-persons' : 'test-results-page.deletion.all-persons') | translate }}
+          </button>
+          <button
+            mat-stroked-button
+            [disabled]="totalRecords() === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
+            (click)="deleteFilteredGroups()"
+            class="delete-button"
+          >
+            <mat-icon>group_remove</mat-icon>
+            {{ (hasPersonFilter ? 'test-results-page.deletion.filtered-groups' : 'test-results-page.deletion.all-groups') | translate }}
           </button>
         </div>
       </div>
+      <p class="section-description">{{ 'test-results-page.deletion.scope-hint' | translate }}</p>
       <mat-divider></mat-divider>
 
       @if (isDeleteJobRunning()) {
@@ -378,6 +388,7 @@
           <mat-icon class="search-icon">search</mat-icon>
           <input
             matInput
+            [value]="personSearchText()"
             (input)="applyFilter($event)"
             placeholder="Suchen..."
             class="search-input"
@@ -402,6 +413,7 @@
             <ng-container matColumnDef="select">
               <mat-header-cell *matHeaderCellDef>
                 <mat-checkbox
+                  [disabled]="!isPersonListCurrent()"
                   (change)="masterToggle()"
                   [checked]="isAllSelected()"
                   [indeterminate]="selection.hasValue() && !isAllSelected()"
@@ -411,6 +423,7 @@
               <mat-cell *matCellDef="let row">
                 <mat-checkbox
                   (click)="$event.stopPropagation()"
+                  [disabled]="!isPersonListCurrent()"
                   (change)="toggleRowSelection(row)"
                   [checked]="selection.isSelected(row)"
                 >
