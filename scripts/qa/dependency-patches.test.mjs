@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { readFileSync, realpathSync } from 'node:fs';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import './http-dependency-patches.test.mjs';
 
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const braces = require('braces');
