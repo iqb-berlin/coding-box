@@ -111,6 +111,27 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     expect('next' in host.planning.freshnessRefreshRequested$).toBe(false);
   });
 
+  it('exposes statistics, analysis and loading state without writable signal APIs', () => {
+    for (const state of [
+      host.statistics.variableCoverageOverview, host.statistics.codingProgressOverview,
+      host.statistics.isLoadingVariableCoverage, host.statistics.isLoadingManualCodingScopeSummary,
+      host.analysis.responseAnalysis, host.analysis.responseAnalysisError,
+      host.analysis.emptyPageIndex, host.analysis.isLoadingResponseAnalysis
+    ]) {
+      expect('set' in state).toBe(false);
+      expect('update' in state).toBe(false);
+    }
+    host.analysis.changeEmptyPage(2, 25);
+    host.analysis.changeDuplicatePage(3, 50);
+    expect(host.analysis.emptyPageIndex()).toBe(2);
+    host.analysis.resetPages();
+    expect(host.analysis.emptyPageIndex()).toBe(0);
+    expect(host.analysis.duplicatePageIndex()).toBe(0);
+    expect(host.analysis.emptyPageSize()).toBe(25);
+    host.statistics.restorePlanningSnapshot({ variableCoverageOverview: coverage(4) });
+    expect(host.statistics.variableCoverageOverview()?.totalVariables).toBe(4);
+  });
+
   it('renders a delayed statistic and cancels its superseded request', async () => {
     const old = new Subject<ManualCodingVariableCoverageOverview>();
     const latest = new Subject<ManualCodingVariableCoverageOverview>();

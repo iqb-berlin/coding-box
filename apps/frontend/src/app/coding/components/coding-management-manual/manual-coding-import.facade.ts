@@ -24,7 +24,8 @@ export class ManualCodingImportFacade {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly translateService = inject(TranslateService);
-  readonly isImporting = signal(false);
+  private readonly isImportingState = signal(false);
+  readonly isImporting = this.isImportingState.asReadonly();
   private controller?: AbortController;
   private ownsValidation = false;
 
@@ -43,7 +44,7 @@ export class ManualCodingImportFacade {
       this.ownsValidation = false;
     }
     this.controller = undefined;
-    this.isImporting.set(false);
+    this.isImportingState.set(false);
   }
 
   async importFile(file: File): Promise<void> {
@@ -53,7 +54,7 @@ export class ManualCodingImportFacade {
     const workspaceId = this.appService.selectedWorkspaceId;
     const isCurrent = (): boolean => !controller.signal.aborted && !this.destroyRef.destroyed &&
       workspaceId === this.appService.selectedWorkspaceId;
-    this.isImporting.set(true);
+    this.isImportingState.set(true);
 
     try {
       if (!workspaceId) {
@@ -61,7 +62,7 @@ export class ManualCodingImportFacade {
           'coding-management-manual.errors.no-workspace-selected'
         );
         this.showError(errorMsg);
-        this.isImporting.set(false);
+        this.isImportingState.set(false);
         return;
       }
 
@@ -75,7 +76,7 @@ export class ManualCodingImportFacade {
 
       if (!isCurrent()) return;
       if (!dialogResult) {
-        this.isImporting.set(false);
+        this.isImportingState.set(false);
         return;
       }
 
@@ -151,7 +152,7 @@ export class ManualCodingImportFacade {
             );
           }
 
-          this.isImporting.set(false);
+          this.isImportingState.set(false);
         },
         // onError callback
         (error: string) => {
@@ -165,7 +166,7 @@ export class ManualCodingImportFacade {
               'coding-management-manual.errors.import-failed'
             )
           );
-          this.isImporting.set(false);
+          this.isImportingState.set(false);
         },
         controller.signal
       );
@@ -182,9 +183,9 @@ export class ManualCodingImportFacade {
           'coding-management-manual.errors.import-failed'
         )
       );
-      this.isImporting.set(false);
+      this.isImportingState.set(false);
     } finally {
-      if (isCurrent()) { this.isImporting.set(false); this.controller = undefined; }
+      if (isCurrent()) { this.isImportingState.set(false); this.controller = undefined; }
     }
   }
 
