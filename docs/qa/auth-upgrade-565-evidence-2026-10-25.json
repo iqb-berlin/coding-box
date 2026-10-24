@@ -1,0 +1,292 @@
+{
+  "baseline": {
+    "checkedAt": "2026-10-24T21:51:56.048021+00:00",
+    "source": "unchanged migration 2.0.0 at b587a7e9",
+    "firstIssuerEntries": 2,
+    "secondIssuerEntries": 3,
+    "customIssuerOverwritten": true,
+    "customClientIdOverwritten": true,
+    "customInternalTokenEndpointOverwritten": true,
+    "customCallbackPreserved": true,
+    "repeatByteIdentical": false
+  },
+  "baseline-live": {
+    "checkedAt": "2026-10-24T22:08:05.589958+00:00",
+    "browserLogin": true,
+    "authorizationCodePkceProtocolLogin": true,
+    "guardedAuthData": 200,
+    "workspaceId": 1,
+    "keycloakUsers": 2,
+    "fingerprints": {
+      "keycloakConfig": "e14e3e647c5e4ae7734b56ce4cb9035e6880902c866b16b12451836a9cab7c57",
+      "applicationAssignments": "46ffa151765d6a39ed2a12c9c91298bac15b87cae126b2988a09ef1989f2ef26",
+      "asset": "2d79de4529670596e2ffb8f95ad0b67cabf760e39b75a37837ecb962e916b401"
+    },
+    "protectedContainersUnchanged": 33
+  },
+  "backup": {
+    "createdAt": "2026-10-24T22:06:05.080505+00:00",
+    "directory": "/home/user/auth-upgrade-565-20261024/backup-before-upgrade-20261024T220538Z",
+    "servicesQuiesced": [
+      "backend",
+      "frontend",
+      "keycloak"
+    ],
+    "applicationDumpVerified": true,
+    "keycloakDumpVerified": true,
+    "assetArchive": true,
+    "manifest": {
+      "isolation.override.yaml": {
+        "bytes": 1814,
+        "sha256": "8fb43a76d0c459aabd81912bf6a16016231d060fe686c5312a3edc135d2ddeb1"
+      },
+      "effective-compose.private.json": {
+        "bytes": 17212,
+        "sha256": "b62adc34009ce5204bbded7694138545822832be849510f797c94ca51e64bb2e"
+      },
+      "keycloak.dump": {
+        "bytes": 208011,
+        "sha256": "49c880504c5fbecc740d098aba91a750e0cd8ce46f9dfeaa1be9e202c002cc3d"
+      },
+      "application.dump.list": {
+        "bytes": 27300,
+        "sha256": "b9cfaa5840541b1fa1dd8ef9ad04818c5dcebea14e3a1216d48756e73888baaf"
+      },
+      ".env.coding-box": {
+        "bytes": 2100,
+        "sha256": "87c36349ea700be0025e3ca0ccf930b76d4221ffae9001f709e40bfa4d7baf9c"
+      },
+      "assets.tar": {
+        "bytes": 10240,
+        "sha256": "ab39837c94c263644b71485c0e8e47734f2a32d7d61db45c6e90d06f1818857c"
+      },
+      "development.env": {
+        "bytes": 2100,
+        "sha256": "87c36349ea700be0025e3ca0ccf930b76d4221ffae9001f709e40bfa4d7baf9c"
+      },
+      "realm-before.json": {
+        "bytes": 69037,
+        "sha256": "4c867a51acf2213536c8ac8dd03d55b5a4246571aeb4ad046b433b0dbaa2bb14"
+      },
+      "realm-before.config": {
+        "bytes": 133,
+        "sha256": "3bd5297b2090f06337253a9651818cd7b359b87aae232e1ec3f0418a987e1fed"
+      },
+      "keycloak.dump.list": {
+        "bytes": 31860,
+        "sha256": "3ec5bba4327e41157bbb0be4dc707298c6bca1b5848f6f12d34a4ce90fc59a5c"
+      },
+      "application.dump": {
+        "bytes": 157762,
+        "sha256": "6129b3a25d0e9766aa9bd51ee6d29f0657b69fcde0fcbbc776f9ae1ed50722b3"
+      }
+    },
+    "protectedContainersUnchanged": 33
+  },
+  "upgrade": {
+    "checkedAt": "2026-10-24T22:08:37.627994+00:00",
+    "configurationByteIdenticalAfterBothRuns": true,
+    "alreadyConfiguredProviderPreserved": true,
+    "apiRecreated": true,
+    "sameImages": true,
+    "keycloakNotRestartedByUpgrade": true,
+    "before": {
+      "oidcAccessToken": 200,
+      "workspaceTokenAuthenticatedResourceNotFound": 404
+    },
+    "after": {
+      "oidcAccessToken": 200,
+      "workspaceTokenAuthenticatedResourceNotFound": 404
+    },
+    "preUpgradeRefreshTokenStatus": 200,
+    "fingerprintsUnchanged": true,
+    "fingerprints": {
+      "keycloakConfig": "e14e3e647c5e4ae7734b56ce4cb9035e6880902c866b16b12451836a9cab7c57",
+      "applicationAssignments": "46ffa151765d6a39ed2a12c9c91298bac15b87cae126b2988a09ef1989f2ef26",
+      "asset": "2d79de4529670596e2ffb8f95ad0b67cabf760e39b75a37837ecb962e916b401"
+    },
+    "protectedContainersUnchanged": 33
+  },
+  "restore": {
+    "checkedAt": "2026-10-24T22:11:41.244359+00:00",
+    "backupDirectory": "/home/user/auth-upgrade-565-20261024/backup-before-upgrade-20261024T220538Z",
+    "applicationDatabaseRestored": true,
+    "keycloakDatabaseRestored": true,
+    "assetRestoredIntoNewOwnVolume": true,
+    "freshOwnRedisVolume": true,
+    "previousOwnVolumesRetained": true,
+    "failedMigrationLeftCandidateAndActiveConfigUnchanged": true,
+    "oldTokensAfterSigningKeyChange": {
+      "oidcAccessToken": 200,
+      "workspaceToken": 401
+    },
+    "oldTokensAfterFullRestore": {
+      "oidcAccessToken": 200,
+      "workspaceToken": 404
+    },
+    "preRestoreRefreshTokenStatus": 400,
+    "preRestoreRefreshTokenError": "invalid_grant",
+    "fingerprintsRestoredExactly": true,
+    "backupManifestUnchanged": true,
+    "protectedContainersUnchanged": 33,
+    "containerIps": {
+      "backend": "10.0.4.5",
+      "frontend": "10.0.4.7",
+      "keycloak": "10.0.4.6"
+    }
+  },
+  "source": {
+    "baseCommit": "b587a7e9a9e3ba5c6dc438cc66cbf5ff378699bc",
+    "files": {
+      "scripts/migration/2.0.0.sh": "acda39c4509acbececc785ebb13923e96d1291284cd4b35e7665f45b8925517c",
+      "scripts/tests/install-migration-regression.sh": "e9561dafaf50995e87eba835d5f69c46775fedbfa8dd58063d144b46c162ca01",
+      "scripts/update.sh": "1dcd3b1fe5d5d7f9b669a9035a39a890e243b02e4a480a35bc2a1e66e6764c40",
+      "docs/auth-upgrade-and-restore.md": "3becaccf9f8cdd3090b275dd5b4b3675d25c4b3b2f49fdac18f2aa2ec6a7ffd6"
+    }
+  },
+  "localRegression": {
+    "command": "NX_DAEMON=false NX_NO_CLOUD=true npx --no-install nx exec -- bash <worktree>/scripts/tests/install-migration-regression.sh",
+    "passed": true,
+    "shellSyntaxPassed": true,
+    "gitDiffCheckPassed": true,
+    "logSha256": "088e3ac2ddcb0f2328a87c22021b17e36d4f9ff7416176bd165273ffb1d9b441"
+  },
+  "browserAfterRestore": {
+    "checkedAt": "2026-10-24T22:13:49.647422+00:00",
+    "fullBrowserLoginAfterRestore": true,
+    "successfulCodeExchange": true,
+    "guardedAuthData": 200,
+    "pathStatuses": [
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/login",
+        "status": 302
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/exchange",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth-data",
+        "status": 304
+      }
+    ],
+    "fingerprintsStillMatchAfterLogin": true,
+    "protectedContainersUnchanged": 33,
+    "migrationSha256": "de6ce2b2cb11fa6b4b6c95fc5cfc51e646b5a8a39ae0c04ac13b9a5e1f702c95"
+  },
+  "cleanup": {
+    "checkedAt": "2026-10-24T22:14:40.335481+00:00",
+    "ownProjectStopped": true,
+    "ownVolumesRetained": [
+      "auth-upgrade-565-20261024_backend_restore_vol",
+      "auth-upgrade-565-20261024_backend_vol",
+      "auth-upgrade-565-20261024_db_vol",
+      "auth-upgrade-565-20261024_export_temp_vol",
+      "auth-upgrade-565-20261024_keycloak_db_vol",
+      "auth-upgrade-565-20261024_redis_data",
+      "auth-upgrade-565-20261024_redis_restore_vol"
+    ],
+    "ownBackupManifestUnchanged": true,
+    "protectedContainersUnchanged": 33,
+    "regularTestInstanceHealth": 200,
+    "originalDataPreservation": {
+      "originalDataUnchanged": true,
+      "tables": {
+        "persons": 19,
+        "booklet": 19,
+        "unit": 307,
+        "response": 1784,
+        "coding_job": 8,
+        "coding_job_unit": 84,
+        "coding_job_coder": 8,
+        "job_definitions": 1,
+        "bookletinfo": 1185,
+        "chunk": 307,
+        "unitlaststate": 969
+      },
+      "checkedAt": "2026-10-24T22:14:24.688024+00:00"
+    },
+    "freeGiB": 3.2
+  },
+  "finalRegression": {
+    "checkedAt": "2026-10-24T22:18:58.846694+00:00",
+    "linuxRegressionPassed": true,
+    "linuxRegressionOnHost": true,
+    "dockerAndDownloadCallsStubbed": true,
+    "fixtureMigrationNetworkDisabled": true,
+    "finalMigrationSha256": "acda39c4509acbececc785ebb13923e96d1291284cd4b35e7665f45b8925517c",
+    "finalFixtureConfigByteIdenticalAfterTwoRuns": true,
+    "fixtureNotRestarted": true,
+    "protectedContainersUnchanged": 33
+  },
+  "status": {
+    "issue564": "accepted and closed",
+    "issue565": "open; separate acceptance required",
+    "deploymentToRegularTestInstance": false,
+    "deliveryAndRemoteCi": "tracked in the associated pull request"
+  },
+  "reviewValidation": {
+    "checkedAt": "2026-10-24T22:28:31.815976+00:00",
+    "exportedJwtRegressionFailedBeforeCorrection": true,
+    "fullMigrationRegressionPassedAfterCorrection": true,
+    "ciRuleRegressionPassed": true,
+    "requiredCiJob": "test-backend",
+    "serverServicesChanged": false,
+    "fullLiveRestoreRepeated": false,
+    "files": {
+      "scripts/migration/2.0.0.sh": "8ab16874d37a5a98d11c0c7c85f71e18d0774df8fd918a87d6da1a06a6d300e6",
+      "scripts/tests/install-migration-regression.sh": "c4a60d20f6cc764c1c75b2b9ca75a624e8a8b396c236226e38ce6eb28462cb98",
+      "scripts/update.sh": "1dcd3b1fe5d5d7f9b669a9035a39a890e243b02e4a480a35bc2a1e66e6764c40",
+      ".gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml": "12b0d4b84589f3fa730136a16f22ddaac03c8609ce17de566748befb741d8fbd",
+      "docs/auth-upgrade-and-restore.md": "ce093f7429bf171f7cdfed13fc00a9e53450b741fa73912bbac8438d398a2deb"
+    }
+  }
+}
