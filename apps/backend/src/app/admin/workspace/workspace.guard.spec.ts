@@ -1,7 +1,7 @@
 import {
   Test, TestingModule
 } from '@nestjs/testing';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -111,8 +111,17 @@ describe('WorkspaceGuard (Backend)', () => {
     usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as never);
     authService.canAccessWorkSpace.mockResolvedValue(false);
 
-    await expect(guard.canActivate(createContext({ id: 'oidc-1' }))).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(createContext({ id: 'oidc-1' }))).rejects.toThrow(ForbiddenException);
     expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(1, 123);
+  });
+
+  it('returns forbidden for a verified local user without workspace access', async () => {
+    authService.canAccessWorkSpace.mockResolvedValue(false);
+
+    await expect(guard.canActivate(createContext({ id: 42, userId: 42 })))
+      .rejects.toThrow(ForbiddenException);
+    expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(42, 123);
   });
 
   it('denies an OIDC user that is unknown locally', async () => {
@@ -146,6 +155,18 @@ describe('WorkspaceGuard (Backend)', () => {
     }))).rejects.toThrow(UnauthorizedException);
 
     expect(authService.canAccessWorkSpace).not.toHaveBeenCalled();
+  });
+
+  it('returns forbidden when workspace membership was revoked for a valid scoped token', async () => {
+    authService.canAccessWorkSpace.mockResolvedValue(false);
+
+    await expect(guard.canActivate(createContext({
+      id: 12,
+      workspace: 123,
+      tokenUse: 'workspace',
+      isWorkspaceToken: true
+    }))).rejects.toThrow(ForbiddenException);
+    expect(authService.canAccessWorkSpace).toHaveBeenCalledWith(12, 123);
   });
 
   it('denies malformed requests', async () => {
