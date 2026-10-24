@@ -1,5 +1,4 @@
 import {
-  WorkerHost,
   Processor
 } from '@nestjs/bullmq';
 import {
@@ -7,6 +6,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
   ValidationTaskJobData
@@ -15,7 +15,7 @@ import { ValidationTaskService } from '../../database/services/validation';
 
 @Injectable()
 @Processor('validation-task', { concurrency: 1 })
-export class ValidationTaskProcessor extends WorkerHost {
+export class ValidationTaskProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(ValidationTaskProcessor.name);
 
   constructor(
@@ -24,7 +24,7 @@ export class ValidationTaskProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<ValidationTaskJobData>): Promise<void> {
+  async processWorkspaceJob(job: Job<ValidationTaskJobData>): Promise<void> {
     this.logger.log(`Processing validation task job ${job.id} for task ${job.data.taskId}`);
 
     try {

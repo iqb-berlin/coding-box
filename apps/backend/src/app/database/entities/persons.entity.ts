@@ -1,6 +1,8 @@
 import {
+  JoinColumn, ManyToOne,
   Column, Entity, Index, PrimaryGeneratedColumn, Unique, OneToMany
 } from 'typeorm';
+import Workspace from './workspace.entity';
 import { TcMergeBooklet } from '../services/shared';
 // eslint-disable-next-line import/no-cycle
 import { Booklet } from './booklet.entity';
@@ -13,6 +15,10 @@ import { Booklet } from './booklet.entity';
 @Index(['workspace_id', 'consider']) // Composite index for counts and basic filtering
 
 class Persons {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id!: number;
 

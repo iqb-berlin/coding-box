@@ -1,4 +1,5 @@
 import {
+  JoinColumn, ManyToOne,
   Check,
   Column,
   CreateDateColumn,
@@ -7,12 +8,17 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm';
+import Workspace from './workspace.entity';
 import { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding/double-coded-review.dto';
 
 @Entity({ name: 'double_coding_review_decision' })
 @Check('double_coding_review_decision_state_check', '"state" IN (\'draft\', \'applied\', \'superseded\')')
 @Index(['workspace_id', 'response_id'])
 export class DoubleCodingReviewDecision {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

@@ -40,7 +40,7 @@ describe('ExternalCodingImportProcessor authorization context', () => {
 
   it('passes the server-recorded requester to the import service', async () => {
     const processor = new ExternalCodingImportProcessor(service as unknown as ExternalCodingImportService, cache as unknown as CacheService);
-    await expect(processor.process(job(7))).resolves.toMatchObject({ updatedRows: 1 });
+    await expect(processor.processWorkspaceJob(job(7))).resolves.toMatchObject({ updatedRows: 1 });
     expect(service.importExternalCoding).toHaveBeenCalledWith(17, expect.objectContaining({ previewOnly: false }), expect.any(Function), 7);
     expect(fs.existsSync(input)).toBe(false);
     expect(cache.set).toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('ExternalCodingImportProcessor authorization context', () => {
   it.each([7, undefined])('fails and cleans up when current authorization rejects requester %s', async actor => {
     service.importExternalCoding.mockRejectedValue(new ForbiddenException('Apply access revoked or missing'));
     const processor = new ExternalCodingImportProcessor(service as unknown as ExternalCodingImportService, cache as unknown as CacheService);
-    await expect(processor.process(job(actor))).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(processor.processWorkspaceJob(job(actor))).rejects.toBeInstanceOf(ForbiddenException);
     expect(service.importExternalCoding).toHaveBeenCalledWith(17, expect.any(Object), expect.any(Function), actor);
     expect(cache.set).not.toHaveBeenCalled();
     expect(fs.existsSync(input)).toBe(false);

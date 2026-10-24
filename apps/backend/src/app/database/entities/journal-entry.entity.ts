@@ -1,15 +1,21 @@
 import {
+  JoinColumn, ManyToOne,
   Column,
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 /**
  * Entity representing a journal entry for tracking actions on test results data
  */
 @Entity('journal_entries')
 export class JournalEntry {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

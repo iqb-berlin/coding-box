@@ -1,9 +1,11 @@
 import {
+  JoinColumn, ManyToOne,
   Column,
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 export type ReplayStatisticsSource = 'internal' | 'external';
 
@@ -16,6 +18,10 @@ export const REPLAY_STATISTICS_SOURCE_EXTERNAL: ReplayStatisticsSource = 'extern
  */
 @Entity()
 export class ReplayStatistics {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

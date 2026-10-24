@@ -1,9 +1,10 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import {
   Inject, Injectable, Logger, forwardRef
 } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as fs from 'fs';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ExternalCodingImportService } from '../../database/services/coding';
 import { CacheService } from '../../cache/cache.service';
@@ -11,7 +12,7 @@ import { ExternalCodingImportJobData } from '../job-queue.service';
 
 @Injectable()
 @Processor('external-coding-import', { concurrency: 1 })
-export class ExternalCodingImportProcessor extends WorkerHost {
+export class ExternalCodingImportProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(ExternalCodingImportProcessor.name);
 
   constructor(
@@ -22,7 +23,7 @@ export class ExternalCodingImportProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<ExternalCodingImportJobData>): Promise<{
+  async processWorkspaceJob(job: Job<ExternalCodingImportJobData>): Promise<{
     message: string;
     processedRows: number;
     updatedRows: number;

@@ -12,7 +12,7 @@ describe('TestPersonCodingProcessor', () => {
     );
     const job = { id: 'job-1' } as Job<TestPersonCodingJobData>;
 
-    await expect(processor.process(job)).resolves.toBe(statistics);
+    await expect(processor.processWorkspaceJob(job)).resolves.toBe(statistics);
     expect(runService.run).toHaveBeenCalledWith(job);
   });
 });

@@ -1,7 +1,26 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn
+} from 'typeorm';
+import Workspace from './workspace.entity';
 
 @Entity()
 class ResourcePackage {
+  @Column({
+    name: 'owner_workspace_id',
+    type: 'integer',
+    nullable: true,
+    asExpression: 'CASE WHEN scope = \'workspace\' THEN "workspaceId" ELSE NULL END',
+    generatedType: 'STORED',
+    select: false,
+    insert: false,
+    update: false
+  })
+  ownerWorkspaceId: number | null;
+
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'owner_workspace_id' })
+  workspace: Workspace | null;
+
   @PrimaryGeneratedColumn()
   id: number;
 

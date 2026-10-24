@@ -1,4 +1,5 @@
 import {
+  JoinColumn, ManyToOne,
   Entity,
   Column,
   PrimaryGeneratedColumn,
@@ -7,6 +8,7 @@ import {
   OneToMany,
   Index
 } from 'typeorm';
+import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
 
@@ -17,6 +19,10 @@ import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
 @Entity({ name: 'variable_bundle' })
 @Index(['workspace_id', 'creatorUserId'])
 export class VariableBundle {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

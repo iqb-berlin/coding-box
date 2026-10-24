@@ -6,7 +6,9 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Queue, JobsOptions, Job } from 'bullmq';
+import {
+  Queue, JobsOptions, Job, JobType
+} from 'bullmq';
 import { requireJobId, withQueueJobId } from './job-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -18,6 +20,19 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+
+/** Retain only cleanup pointers, never uploaded buffers or analysis result payloads. */
+export interface WorkspaceDeletionJob {
+  workspaceId: number;
+  id: string;
+  queueName: string;
+  data: {
+    tempFilePath?: string;
+    file?: { path: string };
+    workspaceArtifactPaths?: string[];
+  };
+  returnvalue?: { filePath: string };
+}
 
 type ProcessOverviewValidationTask = Pick<
   ValidationTask,
@@ -153,6 +168,7 @@ export interface ExternalCodingImportJobData {
 }
 
 export interface DatabaseExportJobData {
+  workspaceArtifactPaths?: string[];
   requestedByUserId: number;
   scope?: 'system' | 'workspace';
   workspaceId?: number;
@@ -303,6 +319,61 @@ export class JobQueueService {
     const job = await queue.getJob(jobId);
     if (!job || !await this.jobBelongsToWorkspace(queueName, job, workspaceId)) return null;
     return job as Job<T>;
+  }
+
+  async getJobForWorkspaceDeletionCleanup(queueName: string, jobId: string): Promise<Job | undefined> {
+    return this.getQueue(queueName)?.getJob(jobId);
+  }
+
+  /** Snapshot before deleting validation-task rows, so legacy task-only payloads remain attributable. */
+  async getJobsForWorkspaceDeletion(workspaceIds: number[]): Promise<WorkspaceDeletionJob[]> {
+    const result: WorkspaceDeletionJob[] = [];
+    const requestedIds = new Set(workspaceIds);
+    const states: JobType[] = ['active', 'waiting', 'prioritized', 'delayed', 'waiting-children', 'completed', 'failed'];
+    for (const [name, queue] of this.getAllQueues()) {
+      const seen = new Set<string>();
+      // Upload jobs can contain entire files; keep at most one such payload in a page.
+      const pageSize = name === 'test-results-upload' ? 1 : 25;
+      for (const state of states) {
+        for (let start = 0; ; start += pageSize) {
+          const page = await queue.getJobs([state], start, start + pageSize - 1);
+          if (page.length === 0) break;
+          const jobs = page.filter(job => job && !seen.has(requireJobId(job)));
+          let taskOwners = new Map<number, number>();
+          if (name === 'validation-task') {
+            const taskIds = [...new Set(jobs.map(job => Number(job.data?.taskId)).filter(id => Number.isSafeInteger(id) && id > 0))];
+            if (taskIds.length > 0) {
+              const tasks = await this.validationTaskRepository.find({ where: { id: In(taskIds) }, select: ['id', 'workspace_id'] });
+              taskOwners = new Map(tasks.map(task => [Number(task.id), Number(task.workspace_id)]));
+            }
+          }
+          for (const job of jobs) {
+            if (name === 'database-export' && job.data?.scope !== 'workspace') continue;
+            const owner = name === 'validation-task' ? taskOwners.get(Number(job.data?.taskId)) : Number(job.data?.workspaceId);
+            if (owner !== undefined && requestedIds.has(owner)) {
+              seen.add(requireJobId(job));
+              result.push(this.snapshotForWorkspaceDeletion(name, job, owner));
+            }
+          }
+        }
+      }
+    }
+    return result;
+  }
+
+  private snapshotForWorkspaceDeletion(queueName: string, job: Job, workspaceId: number): WorkspaceDeletionJob {
+    return {
+      workspaceId,
+      id: requireJobId(job),
+      queueName,
+      data: {
+        tempFilePath: typeof job.data.tempFilePath === 'string' ? job.data.tempFilePath : undefined,
+        file: typeof job.data.file?.path === 'string' ? { path: job.data.file.path } : undefined,
+        workspaceArtifactPaths: Array.isArray(job.data.workspaceArtifactPaths) ?
+          job.data.workspaceArtifactPaths.filter((file: unknown): file is string => typeof file === 'string') : undefined
+      },
+      returnvalue: typeof job.returnvalue?.filePath === 'string' ? { filePath: job.returnvalue.filePath } : undefined
+    };
   }
 
   private normalizeCodingStatisticsVersion(

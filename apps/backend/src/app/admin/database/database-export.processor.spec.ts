@@ -15,7 +15,7 @@ describe('Database export audit outcomes', () => {
     const exportService = { exportWorkspaceToSqliteFile: jest.fn(), exportToSqliteFile: jest.fn() };
     const journalService = { recordEvent: jest.fn().mockResolvedValue({}) };
     const job = {
-      id: '123', data: { scope, workspaceId: 3, requestedByUserId: 7 }, progress: 0, updateProgress: jest.fn()
+      id: '123', data: { scope, workspaceId: 3, requestedByUserId: 7 }, progress: 0, updateProgress: jest.fn(), updateData: jest.fn()
     };
     const processor = new DatabaseExportProcessor(exportService as never, journalService as never);
     return {
@@ -27,7 +27,7 @@ describe('Database export audit outcomes', () => {
 
   it('records completion before returning a downloadable workspace export', async () => {
     const f = fixture();
-    await expect(f.processor.process(f.job as never)).resolves.toMatchObject({ scope: 'workspace', workspaceId: 3 });
+    await expect(f.processor.processWorkspaceJob(f.job as never)).resolves.toMatchObject({ scope: 'workspace', workspaceId: 3 });
     expect(f.journalService.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       workspaceId: 3,
       actorUserId: 7,
@@ -37,13 +37,14 @@ describe('Database export audit outcomes', () => {
       result: 'success',
       details: { fileSize: 42 }
     }));
+    expect(f.job.updateData).toHaveBeenCalledWith(expect.objectContaining({ workspaceArtifactPaths: [expect.stringContaining('workspace-3-database-export')] }));
     expect(fs.unlinkSync).not.toHaveBeenCalled();
   });
 
   it.each([new Error('export failed'), new DatabaseExportCancelledError()])('cleans up and records failure for %s', async error => {
     const f = fixture();
     f.exportService.exportWorkspaceToSqliteFile.mockRejectedValueOnce(error);
-    await expect(f.processor.process(f.job as never)).rejects.toThrow(error);
+    await expect(f.processor.processWorkspaceJob(f.job as never)).rejects.toThrow(error);
     expect(fs.unlinkSync).toHaveBeenCalled();
     expect(f.journalService.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'DATABASE_EXPORT_FAILED', result: 'failure', details: { cancelled: error instanceof DatabaseExportCancelledError }
@@ -53,13 +54,13 @@ describe('Database export audit outcomes', () => {
   it('does not expose an export whose completion could not be audited', async () => {
     const f = fixture();
     f.journalService.recordEvent.mockRejectedValue(new Error('audit unavailable'));
-    await expect(f.processor.process(f.job as never)).rejects.toThrow('audit unavailable');
+    await expect(f.processor.processWorkspaceJob(f.job as never)).rejects.toThrow('audit unavailable');
     expect(fs.unlinkSync).toHaveBeenCalled();
   });
 
   it('does not misattribute a system export to a workspace', async () => {
     const f = fixture('system');
-    await f.processor.process(f.job as never);
+    await f.processor.processWorkspaceJob(f.job as never);
     expect(f.journalService.recordEvent).not.toHaveBeenCalled();
   });
 });

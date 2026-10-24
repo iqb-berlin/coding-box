@@ -1,6 +1,8 @@
 import {
+  JoinColumn, ManyToOne,
   Column, Entity, Index, PrimaryColumn, Unique
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 export interface StructuredFileData {
   extractedInfo?: {
@@ -16,6 +18,10 @@ export const NO_CODING_SCHEME_REF_NORMALIZED = '__NO_CODING_SCHEME_REF__';
 @Entity()
 @Unique('file_upload_id', ['file_id', 'workspace_id'])
 class FileUpload {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryColumn({ type: 'integer' })
   id: number;
 

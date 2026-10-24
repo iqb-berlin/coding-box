@@ -26,6 +26,12 @@ describe('CacheService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
   });
 
+  it('distinguishes Redis failures from missing cleanup metadata in strict reads', async () => {
+    redis.get.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('redis unavailable'));
+    await expect(service.getStrict('absent')).resolves.toBeNull();
+    await expect(service.getStrict('artifact')).rejects.toThrow('redis unavailable');
+  });
+
   it('reads numbers and falls back on invalid values or redis errors', async () => {
     redis.get
       .mockResolvedValueOnce('42')

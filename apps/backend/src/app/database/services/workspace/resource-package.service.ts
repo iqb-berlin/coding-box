@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import ResourcePackage from '../../entities/resource-package.entity';
+import { withResourcePackageLock } from '../shared/resource-package-lock.util';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
 import { GeoGebraPackageStatus } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResourcePackageNotFoundException } from '../../../exceptions/resource-package-not-found.exception';
@@ -92,17 +93,19 @@ export class ResourcePackageService {
         ]
       });
     if (resourcePackage) {
-      if (resourcePackage.scope === 'global') {
-        await this.deleteGlobalPackageReferences(resourcePackage.name);
-        this.removePackageDirectory(resourcePackage.name);
-        return;
-      }
+      await withResourcePackageLock(this.resourcePackageRepository.manager.connection, resourcePackage.name, async () => {
+        if (resourcePackage.scope === 'global') {
+          await this.deleteGlobalPackageReferences(resourcePackage.name);
+          this.removePackageDirectory(resourcePackage.name);
+          return;
+        }
 
-      await this.resourcePackageRepository.delete(resourcePackage.id);
-      const remainingReferences = await this.countPackageReferences(resourcePackage.name);
-      if (remainingReferences === 0) {
-        this.removePackageDirectory(resourcePackage.name);
-      }
+        await this.resourcePackageRepository.delete(resourcePackage.id);
+        const remainingReferences = await this.countPackageReferences(resourcePackage.name);
+        if (remainingReferences === 0) {
+          this.removePackageDirectory(resourcePackage.name);
+        }
+      });
     } else {
       throw new ResourcePackageNotFoundException(id, 'DELETE');
     }
@@ -113,12 +116,37 @@ export class ResourcePackageService {
     this.ensurePackagesDirectoryExists();
     const preparedUpload = this.prepareResourcePackageUpload(zippedResourcePackage);
 
-    const existingPackages = await this.findPackagesByName(preparedUpload.packageName);
-    const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, preparedUpload.contentHash);
-    if (existingPackage) {
-      return this.createOrReturnExistingReference(
-        workspaceId,
-        existingPackage,
+    return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
+      const existingPackages = await this.findPackagesByName(preparedUpload.packageName);
+      const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, preparedUpload.contentHash);
+      if (existingPackage) {
+        return this.createOrReturnExistingReference(
+          workspaceId,
+          existingPackage,
+          preparedUpload.packageFiles,
+          zippedResourcePackage,
+          preparedUpload.contentHash,
+          preparedUpload.packageType,
+          preparedUpload.scope,
+          preparedUpload.detectedVersion
+        );
+      }
+
+      if (existingPackages.length > 0) {
+        throw new ConflictException(
+          `Ein Ressourcenpaket mit dem Namen "${preparedUpload.packageName}" existiert bereits mit anderem Inhalt. Bitte verwenden Sie einen anderen Paketnamen.`
+        );
+      }
+
+      await this.extractAndStorePackage(
+        preparedUpload.packageName,
+        zippedResourcePackage,
+        preparedUpload.safeZipEntries,
+        preparedUpload.geoGebraPackageLayout
+      );
+      const newResourcePackage = await this.saveResourcePackageReference(
+        preparedUpload.scope === 'global' ? 0 : workspaceId,
+        preparedUpload.packageName,
         preparedUpload.packageFiles,
         zippedResourcePackage,
         preparedUpload.contentHash,
@@ -126,31 +154,8 @@ export class ResourcePackageService {
         preparedUpload.scope,
         preparedUpload.detectedVersion
       );
-    }
-
-    if (existingPackages.length > 0) {
-      throw new ConflictException(
-        `Ein Ressourcenpaket mit dem Namen "${preparedUpload.packageName}" existiert bereits mit anderem Inhalt. Bitte verwenden Sie einen anderen Paketnamen.`
-      );
-    }
-
-    await this.extractAndStorePackage(
-      preparedUpload.packageName,
-      zippedResourcePackage,
-      preparedUpload.safeZipEntries,
-      preparedUpload.geoGebraPackageLayout
-    );
-    const newResourcePackage = await this.saveResourcePackageReference(
-      preparedUpload.scope === 'global' ? 0 : workspaceId,
-      preparedUpload.packageName,
-      preparedUpload.packageFiles,
-      zippedResourcePackage,
-      preparedUpload.contentHash,
-      preparedUpload.packageType,
-      preparedUpload.scope,
-      preparedUpload.detectedVersion
-    );
-    return newResourcePackage.id;
+      return newResourcePackage.id;
+    });
   }
 
   async getZippedResourcePackage(workspaceId: number, name: string): Promise<Buffer> {
@@ -393,27 +398,29 @@ export class ResourcePackageService {
       throw new BadRequestException('Das GeoGebra Math Apps Bundle muss als globales GeoGebra-Paket installiert werden.');
     }
 
-    await this.extractAndStorePackage(
-      preparedUpload.packageName,
-      zippedResourcePackage,
-      preparedUpload.safeZipEntries,
-      preparedUpload.geoGebraPackageLayout
-    );
-    const newResourcePackage = await this.saveResourcePackageReference(
-      0,
-      preparedUpload.packageName,
-      preparedUpload.packageFiles,
-      zippedResourcePackage,
-      preparedUpload.contentHash,
-      preparedUpload.packageType,
-      'global',
-      preparedUpload.detectedVersion
-    );
-    await this.deleteGlobalPackageReferencesExcept(
-      preparedUpload.packageName,
-      newResourcePackage.id
-    );
-    return newResourcePackage;
+    return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
+      await this.extractAndStorePackage(
+        preparedUpload.packageName,
+        zippedResourcePackage,
+        preparedUpload.safeZipEntries,
+        preparedUpload.geoGebraPackageLayout
+      );
+      const newResourcePackage = await this.saveResourcePackageReference(
+        0,
+        preparedUpload.packageName,
+        preparedUpload.packageFiles,
+        zippedResourcePackage,
+        preparedUpload.contentHash,
+        preparedUpload.packageType,
+        'global',
+        preparedUpload.detectedVersion
+      );
+      await this.deleteGlobalPackageReferencesExcept(
+        preparedUpload.packageName,
+        newResourcePackage.id
+      );
+      return newResourcePackage;
+    });
   }
 
   private async extractAndStorePackage(

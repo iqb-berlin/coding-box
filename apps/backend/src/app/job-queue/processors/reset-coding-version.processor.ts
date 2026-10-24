@@ -1,12 +1,12 @@
 import {
-  Processor,
-  WorkerHost
+  Processor
 } from '@nestjs/bullmq';
 import {
   Injectable,
   Logger
 } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResetCodingVersionJobData } from '../job-queue.service';
 import { CodingVersionService } from '../../database/services/coding/coding-version.service';
@@ -20,7 +20,7 @@ export interface ResetCodingVersionResult {
 
 @Injectable()
 @Processor('reset-coding-version', { concurrency: 1 })
-export class ResetCodingVersionProcessor extends WorkerHost {
+export class ResetCodingVersionProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(ResetCodingVersionProcessor.name);
 
   constructor(
@@ -29,7 +29,7 @@ export class ResetCodingVersionProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<ResetCodingVersionJobData>): Promise<ResetCodingVersionResult> {
+  async processWorkspaceJob(job: Job<ResetCodingVersionJobData>): Promise<ResetCodingVersionResult> {
     this.logger.log(
       `Processing reset coding version job ${job.id} for workspace ${job.data.workspaceId}, version ${job.data.version}`
     );

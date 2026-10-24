@@ -1,4 +1,5 @@
 import { WorkerHost } from '@nestjs/bullmq';
+import { WorkspaceWorkerHost } from './workspace-worker-host';
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { getEnabledJobQueueProcessors } from './job-queue.module';
@@ -8,7 +9,10 @@ describe('JobQueueModule processor selection', () => {
   it('registers every processor, including database exports, as a BullMQ worker host', () => {
     const processors = [...getEnabledJobQueueProcessors('all', undefined), DatabaseExportProcessor];
     expect(processors).toHaveLength(12);
-    processors.forEach(processor => expect(processor.prototype).toBeInstanceOf(WorkerHost));
+    processors.forEach(processor => {
+      expect(processor.prototype).toBeInstanceOf(WorkerHost);
+      expect(processor.prototype).toBeInstanceOf(WorkspaceWorkerHost);
+    });
   });
   it('enables all processors by default', () => {
     const processors = getEnabledJobQueueProcessors(undefined, undefined);

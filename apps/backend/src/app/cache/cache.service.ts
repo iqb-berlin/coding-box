@@ -50,6 +50,12 @@ export class CacheService {
     return `flat_response_filter_options:${workspaceId}:v${cacheVersion}:thr${processingDurationThresholdMs}`;
   }
 
+  /** Read ownership/cleanup metadata without treating Redis failures as cache misses. */
+  async getStrict<T>(key: string): Promise<T | null> {
+    const value = await this.redis.get(key);
+    return value ? JSON.parse(value) as T : null;
+  }
+
   /**
    * Get a value from the cache
    * @param key The cache key
