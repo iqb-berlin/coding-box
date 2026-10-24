@@ -47,6 +47,7 @@ export class UsersService {
       .map(user => ({
         id: user.id,
         username: user.username,
+        displayName: this.getDisplayName(user),
         isAdmin: user.isAdmin
       }));
   }
@@ -69,8 +70,9 @@ export class UsersService {
         const workspaceAccess = validUserMap.get(user.id);
         return {
           id: user.id,
-          name: user.username, // Assuming "name" is the same as "username"
+          name: user.username,
           username: user.username,
+          displayName: this.getDisplayName(user),
           accessLevel: workspaceAccess?.accessLevel || 0, // Default accessLevel is 0 if not found
           canCode: workspaceAccess?.canCode ?? (workspaceAccess?.accessLevel === 1),
           isAdmin: user.isAdmin
@@ -386,7 +388,8 @@ export class UsersService {
         username: user.username,
         isAdmin: user.isAdmin,
         issuer: user.issuer,
-        identity: user.identity
+        identity: user.identity,
+        ...this.getProfileNames(user)
       });
       const savedUser = await this.usersRepository.save(newUser);
 
@@ -415,7 +418,8 @@ export class UsersService {
       username: user.username,
       isAdmin: user.isAdmin,
       issuer: user.issuer,
-      identity: user.identity
+      identity: user.identity,
+      ...this.getProfileNames(user)
     });
 
     await this.usersRepository.save(newUser);
@@ -502,12 +506,19 @@ export class UsersService {
         { username }
       ],
       select: {
-        id: true, username: true, identity: true, issuer: true, isAdmin: true
+        id: true, username: true, identity: true, issuer: true, isAdmin: true, firstName: true, lastName: true
       }
     });
 
     if (existingUser) {
       const updatedFields: Partial<User> = {};
+      const profileNames = this.getProfileNames(oidcPdUser);
+      if (profileNames.firstName !== undefined && existingUser.firstName !== profileNames.firstName) {
+        updatedFields.firstName = profileNames.firstName;
+      }
+      if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
+        updatedFields.lastName = profileNames.lastName;
+      }
       const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
@@ -522,7 +533,9 @@ export class UsersService {
       return existingUser.id;
     }
     this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
-    const newUser = this.usersRepository.create(oidcPdUser);
+    const newUser = this.usersRepository.create({
+      username, identity, issuer, isAdmin, ...this.getProfileNames(oidcPdUser)
+    });
     await this.usersRepository.save(newUser);
 
     return newUser.id;
@@ -543,12 +556,19 @@ export class UsersService {
         { username }
       ],
       select: {
-        id: true, username: true, identity: true, issuer: true, isAdmin: true
+        id: true, username: true, identity: true, issuer: true, isAdmin: true, firstName: true, lastName: true
       }
     });
 
     if (existingUser) {
       const updatedFields: Partial<User> = {};
+      const profileNames = this.getProfileNames(keycloakUser);
+      if (profileNames.firstName !== undefined && existingUser.firstName !== profileNames.firstName) {
+        updatedFields.firstName = profileNames.firstName;
+      }
+      if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
+        updatedFields.lastName = profileNames.lastName;
+      }
       const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
@@ -567,11 +587,23 @@ export class UsersService {
       username,
       identity,
       issuer,
-      isAdmin: !!isAdmin
+      isAdmin: !!isAdmin,
+      ...this.getProfileNames(keycloakUser)
     });
     await this.usersRepository.save(newUser);
 
     return newUser.id;
+  }
+
+  private getProfileNames(user: CreateUserDto): Pick<User, 'firstName' | 'lastName'> {
+    return {
+      ...(typeof user.firstName === 'string' ? { firstName: user.firstName.trim() } : {}),
+      ...(typeof user.lastName === 'string' ? { lastName: user.lastName.trim() } : {})
+    };
+  }
+
+  private getDisplayName(user: User): string {
+    return [user.firstName?.trim(), user.lastName?.trim()].filter(Boolean).join(' ');
   }
 
   async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
