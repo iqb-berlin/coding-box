@@ -34,10 +34,11 @@ describe('test-result group deletion over multiple pages', () => {
     cy.intercept('GET', /\/api\/admin\/workspace\/5\/test-results\/\?/, request => {
       const url = new URL(request.url);
       const page = Number(url.searchParams.get('page'));
+      expect(page).to.be.at.least(1);
       const limit = Number(url.searchParams.get('limit'));
       const search = url.searchParams.get('searchText') || '';
       const matches = rows.filter(row => [row.code, row.group, row.login].some(value => value.includes(search)));
-      request.reply({ data: matches.slice(page * limit, (page + 1) * limit), total: matches.length });
+      request.reply({ data: matches.slice((page - 1) * limit, page * limit), total: matches.length });
     }).as('persons');
     cy.intercept('POST', '**/api/admin/workspace/5/test-results/delete-preview', request => {
       previewRequest = request.body;
@@ -59,7 +60,8 @@ describe('test-result group deletion over multiple pages', () => {
     cy.visit('/');
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-results'; });
-    cy.wait(['@overview', '@persons']);
+    cy.wait('@overview');
+    cy.wait('@persons').its('request.query.page').should('equal', '1');
     cy.get('.persons-table mat-row').should('have.length', 50);
     cy.get('.persons-table mat-header-cell input[type=checkbox]').check({ force: true }).should('be.checked');
     cy.contains('button', 'Gruppen der Auswahl löschen').click();
@@ -68,13 +70,19 @@ describe('test-result group deletion over multiple pages', () => {
     cy.contains('button', 'Abbrechen').click();
 
     cy.get('.mat-mdc-paginator-navigation-next').click();
-    cy.wait('@persons');
+    cy.wait('@persons').its('request.query.page').should('equal', '2');
     cy.get('.persons-table mat-row').first().should('contain.text', 'P51');
     cy.get('.persons-table mat-header-cell input[type=checkbox]').should('not.be.checked');
     cy.get('.persons-table mat-cell input[type=checkbox]:checked').should('have.length', 0);
+    cy.get('.search-input').type('G1');
+    cy.wait('@persons').its('request.query').should('include', { page: '1', searchText: 'G1' });
+    cy.get('.mat-mdc-paginator-navigation-next').click();
+    cy.wait('@persons').its('request.query').should('include', { page: '2', searchText: 'G1' });
+    cy.get('.persons-table mat-row').should('have.length', 15);
+    cy.get('.search-input').should('have.value', 'G1');
     cy.get('.persons-table mat-header-cell input[type=checkbox]').check({ force: true });
-    cy.get('.search-input').type('needle');
-    cy.wait('@persons');
+    cy.get('.search-input').clear().type('needle');
+    cy.wait('@persons').its('request.query').should('include', { page: '1', searchText: 'needle' });
     cy.get('.persons-table mat-row').should('have.length', 2);
     cy.get('.persons-table mat-header-cell input[type=checkbox]').should('not.be.checked');
     cy.contains('button', 'Gruppen der Auswahl löschen').should('be.disabled');

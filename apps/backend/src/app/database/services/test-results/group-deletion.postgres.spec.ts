@@ -38,7 +38,8 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
     await db.query(`CREATE SCHEMA "${schema}"`);
     await db.query(`CREATE TABLE "${schema}".persons (
       id SERIAL PRIMARY KEY, code VARCHAR NOT NULL, login VARCHAR NOT NULL,
-      "group" VARCHAR NOT NULL, workspace_id INTEGER NOT NULL, consider BOOLEAN NOT NULL)`);
+      "group" VARCHAR NOT NULL, workspace_id INTEGER NOT NULL, consider BOOLEAN NOT NULL,
+      uploaded_at TIMESTAMP NOT NULL DEFAULT now())`);
     await db.query(`CREATE TABLE "${schema}".booklet (id INTEGER, personid INTEGER, infoid INTEGER)`);
     await db.query(`CREATE TABLE "${schema}".bookletinfo (id INTEGER, name VARCHAR)`);
     await db.query(`CREATE TABLE "${schema}".unit (id INTEGER, bookletid INTEGER, name VARCHAR, alias VARCHAR)`);
@@ -54,6 +55,8 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
       ('foreign', 'login', 'G1', 2, true), ('foreign-only', 'login', 'G3', 2, true),
       ('excluded', 'login', 'G1', 1, false), ('needle', 'login', '', 1, true),
       ('no-group', 'login', '   ', 1, true)`);
+    await db.query(`INSERT INTO "${schema}".persons (code, login, "group", workspace_id, consider)
+      SELECT 'review-' || n, 'login', 'Batch-' || n, 3, true FROM generate_series(1, 40) n`);
     persons = db.getRepository(Persons);
     service = new WorkspaceTestResultsService(
       persons, db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(ResponseEntity), db.getRepository(BookletInfo), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), db.getRepository(ChunkEntity), db, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, { resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }) } as never
@@ -77,6 +80,22 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
     expect(preview.persons).toBe(130);
     expect(preview.groups.sort()).toEqual(['G1', 'G2']);
     expect(preview.label).toContain('einschließlich aller Gruppenmitglieder');
+  });
+
+  it('retains the complete group count beyond thirty groups', async () => {
+    const preview = await service.previewDeleteTestResults(3, { scope: 'filteredGroups' });
+    expect(preview.persons).toBe(40);
+    expect(preview.groups).toHaveLength(40);
+    expect(new Set(preview.groups)).toEqual(new Set(Array.from({ length: 40 }, (_, index) => `Batch-${index + 1}`)));
+  });
+
+  it('returns different persons for the first two one-based API pages', async () => {
+    const [first, total] = await service.findTestResults(3, { page: 1, limit: 20 });
+    const [second] = await service.findTestResults(3, { page: 2, limit: 20 });
+    expect(total).toBe(40);
+    expect(first).toHaveLength(20);
+    expect(second).toHaveLength(20);
+    expect(new Set([...first, ...second].map(person => person.id)).size).toBe(40);
   });
 
   it('matches login and group fields and never expands into a foreign workspace', async () => {
