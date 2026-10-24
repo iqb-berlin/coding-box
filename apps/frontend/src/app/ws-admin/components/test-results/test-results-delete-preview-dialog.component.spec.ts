@@ -77,7 +77,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
       scope: 'filteredGroups',
       label: 'Alle gefilterten Gruppen',
       persons: 130,
-      groups: ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7'],
+      groups: Array.from({ length: 40 }, (_, index) => `G${index + 1}`),
       booklets: 0,
       units: 0,
       responses: 0,
@@ -86,7 +86,8 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
       warnings: []
     };
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.detail-label').textContent).toContain('(7)');
+    expect(fixture.nativeElement.querySelector('.detail-label').textContent).toContain('(40)');
+    expect(fixture.nativeElement.querySelector('.chip.muted').textContent.trim()).toBe('+34');
     expect(fixture.nativeElement.querySelector('.metric-value').textContent.trim()).toBe('130');
     expect(component.requiresAcknowledgement).toBe(true);
     expect(component.canConfirm).toBe(false);

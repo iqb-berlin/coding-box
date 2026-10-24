@@ -322,7 +322,7 @@
         <div class="section-actions">
           <button
             mat-stroked-button
-            [disabled]="selection.selected.length === 0 || isLoading() || isSearching() || testResultsLoadFailed() || isDeleteJobRunning()"
+            [disabled]="selection.selected.length === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteSelectedPersons()"
             class="delete-button"
           >
@@ -331,7 +331,7 @@
           </button>
           <button
             mat-stroked-button
-            [disabled]="selection.selected.length === 0 || isLoading() || isSearching() || testResultsLoadFailed() || isDeleteJobRunning()"
+            [disabled]="selection.selected.length === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteSelectedGroups()"
             class="delete-button"
           >
@@ -340,7 +340,7 @@
           </button>
           <button
             mat-stroked-button
-            [disabled]="totalRecords() === 0 || isLoading() || isSearching() || testResultsLoadFailed() || isDeleteJobRunning()"
+            [disabled]="totalRecords() === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteFilteredPersons()"
             class="delete-button"
           >
@@ -349,7 +349,7 @@
           </button>
           <button
             mat-stroked-button
-            [disabled]="totalRecords() === 0 || isLoading() || isSearching() || testResultsLoadFailed() || isDeleteJobRunning()"
+            [disabled]="totalRecords() === 0 || !isPersonListCurrent() || isDeleteJobRunning()"
             (click)="deleteFilteredGroups()"
             class="delete-button"
           >
@@ -388,6 +388,7 @@
           <mat-icon class="search-icon">search</mat-icon>
           <input
             matInput
+            [value]="personSearchText()"
             (input)="applyFilter($event)"
             placeholder="Suchen..."
             class="search-input"
@@ -412,7 +413,7 @@
             <ng-container matColumnDef="select">
               <mat-header-cell *matHeaderCellDef>
                 <mat-checkbox
-                  [disabled]="isLoading() || isSearching() || testResultsLoadFailed()"
+                  [disabled]="!isPersonListCurrent()"
                   (change)="masterToggle()"
                   [checked]="isAllSelected()"
                   [indeterminate]="selection.hasValue() && !isAllSelected()"
@@ -422,7 +423,7 @@
               <mat-cell *matCellDef="let row">
                 <mat-checkbox
                   (click)="$event.stopPropagation()"
-                  [disabled]="isLoading() || isSearching() || testResultsLoadFailed()"
+                  [disabled]="!isPersonListCurrent()"
                   (change)="toggleRowSelection(row)"
                   [checked]="selection.isSelected(row)"
                 >
