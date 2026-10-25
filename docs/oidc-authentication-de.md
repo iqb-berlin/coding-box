@@ -3,9 +3,9 @@
 [English](oidc-authentication.md)
 
 Betriebs- und Entwicklerhandbuch zum integrierten Auth-Ablauf. Bezug: [#571](https://github.com/iqb-berlin/coding-box/issues/571).
-Geprüfte Basis: `develop` bei `0f08d70d2cc1f9bebc852d9996ac01657368ca4a` (25.10.2026).
+Geprüfte Basis: `develop` bei `edb09663f7b096128f4386bbd65c46888ad9ad70` (25.10.2026).
 Die Konsolidierung aus #571 wurde im dokumentierten Umfang abgenommen. Die
-Ergänzung der Token-Rechte für #569 benötigt eine eigene Abnahme; die bestätigten
+Ergänzungen für #569 und #570 benötigen jeweils eine eigene Abnahme; die bestätigten
 Prüfumfänge aus #564, #565 und #1018 bleiben bestehen.
 
 ## 1. Einführung
@@ -484,6 +484,81 @@ Belegt ist Keycloak; ein weiterer Provider wurde nicht live abgenommen. Ein neue
 Provider erfordert einen eigenen Anwendungsfall und passende Prüfungen, nicht
 bloß den Austausch einer Basis-URL.
 
+#### Konkreter Claim- und Providervertrag (#570)
+
+Die drei aktiven Verbraucher lesen Claims aus unterschiedlichen Antworten:
+
+| Verbraucher | Quelle und benötigte Zuordnung |
+| --- | --- |
+| Backend-Callback | Userinfo mit nichtleerem `sub`; `preferred_username` wird an die lokale Benutzeranlage weitergegeben, optionale Namen/E-Mail ebenfalls. `realm_access.roles` mit `admin` setzt die Admininformation dieses Aufrufs. Der konfigurierte Issuer wird als Herkunft gespeichert. |
+| Backend-Bearer | RS256-Access-JWT über konfigurierte JWKS; exakter Issuer und passendes `azp` oder `aud`. `sub` ist erforderlich, ein fehlender/leerer `preferred_username` fällt hier auf `sub` zurück. Namen/E-Mail und `realm_access.roles` werden aus dem Access-Token gelesen. |
+| Frontend | Profilfelder und `realm_access.roles` werden aus dem gespeicherten Access-Token dekodiert. Claims ausschließlich im ID-Token oder in Userinfo füllen diesen Pfad nicht. Das Frontend ersetzt keine serverseitige Berechtigungsprüfung. |
+
+Für einen anderen Provider deshalb Rollen und Profilfelder gezielt in **Userinfo
+und Access-Token** konfigurieren beziehungsweise die jeweiligen Verbraucher
+anpassen. Für den vorgesehenen Callback einen stabilen, nichtleeren
+`preferred_username` bereitstellen; dort gibt es den oben genannten
+Bearer-Fallback auf `sub` nicht. `realm_access.roles` muss ein Array von
+Rollenbezeichnungen sein, die Adminrolle heißt exakt `admin`.
+Es gibt keinen allgemeinen konfigurierbaren Claim-Mapper; Claims wie
+`groups`, ein oberstes `roles` oder `resource_access` werden nicht automatisch in
+`realm_access.roles` übersetzt. Eine neue Provideranbindung muss die lokale
+Identität und die erwarteten Rollen über alle drei Pfade konsistent halten.
+
+Die [lokale Benutzerzuordnung](../apps/backend/src/app/database/services/users/users.service.ts)
+sucht sowohl nach Issuer/Subject als auch nach dem Benutzernamen. Ein Treffer
+über denselben Benutzernamen kann die gespeicherte Issuer-/Subject-Zuordnung
+aktualisieren. Ein Providerwechsel schafft daher keine getrennten Benutzer allein
+durch eine andere Issuer-URL. Bestehendes lokales `isAdmin` bleibt bei der
+Benutzersynchronisierung erhalten (`bisheriges isAdmin` oder neuer Admin-Claim);
+ein fehlender Admin-Claim entzieht dieses lokale Recht nicht automatisch.
+Benutzerzuordnung, lokale Adminrechte, Workspace-Mitgliedschaft und Jobzuweisungen
+bei einer geplanten Umstellung gesondert prüfen; keine bestehenden Konten oder
+Rechte als Testabkürzung ändern.
+
+Weitere konkrete Protokollgrenzen des aktiven
+[OIDC-Dienstes](../apps/backend/src/app/auth/service/oidc-auth.service.ts):
+
+- Authorization Code mit PKCE S256 und fest angefordertem Scope
+  `openid profile email`; keine automatische Provider-Discovery oder Auswahl
+  weiterer Authorization-Parameter durch eine allgemeine Adapterkonfiguration.
+  Für erneuerbare Sitzungen muss der Provider einen verwendbaren Refresh-Token
+  liefern. Falls er dafür etwa `offline_access` verlangt, ist eine gezielte
+  Anpassung nötig; dieser Scope wird derzeit nicht angefordert.
+- Code-Austausch und Refresh senden Formular-POSTs mit `client_id` und bei
+  gesetztem Geheimnis `client_secret` im Body. Ein öffentlicher Client lässt das
+  Geheimnis weg. Eine Auswahl von `client_secret_basic`, `private_key_jwt` oder
+  anderen Token-Endpunkt-Authentifizierungen ist nicht implementiert.
+- Userinfo wird per GET mit Bearer-Access-Token angefordert. Der API-Bearer-Pfad
+  benötigt weiterhin ein signiertes RS256-JWT; ein ausschließlich über
+  Introspection verwendbares Token ersetzt diesen Vertrag nicht.
+- Der aktive Logout verwendet einen Formular-POST an `OIDC_END_SESSION_ENDPOINT`
+  mit `client_id`, `refresh_token` und optionalem `client_secret`. Das ist für
+  Keycloak belegt. Ein bloßer RP-Initiated-Logout-Endpunkt mit `id_token_hint`
+  genügt nicht als Nachweis derselben Funktion. Die vorhandene Hilfsmethode
+  `getLogoutUrl()` wird vom aktiven Logout-Controller nicht verwendet.
+- Accountmanagement ist ein gesonderter Browser-Redirect an
+  `OIDC_ACCOUNT_ENDPOINT`, mit Keycloak-Parametern `referrer`/`referrer_uri` beim
+  erlaubten Rückkehrziel. Eine Discovery- oder Userinfo-Adresse ersetzt diesen
+  Profilverwaltungsvertrag nicht.
+
+[AuthModule](../apps/backend/src/app/auth/auth.module.ts) registriert
+`OidcAuthService` und `JwtStrategy`. Die verbleibenden Dateien
+[KeycloakAuthService](../apps/backend/src/app/auth/service/keycloak-auth.service.ts)
+und [KeycloakJwksService](../apps/backend/src/app/auth/keycloak-jwks.service.ts)
+sind dort nicht registriert und werden vom aktiven Login-/Bearer-Pfad nicht
+aufgerufen. Dagegen sind Realm-/Client-Exporte, Theme, Installer und die begrenzte
+Legacy-Konfigurationsmigration bewusst Keycloak-spezifische Deploymentdetails.
+Diese Dateien als Betreiber nicht auf Verdacht entfernen oder austauschen.
+
+Vor einer weiteren Provideranbindung einen eigenen Prüfumfang festlegen:
+Endpunkte und Client-Authentifizierung abgleichen; ein synthetisches Profil mit
+passenden Claims und bewusst unterschiedlichen Issuer-/Client-Werten prüfen;
+dann Login, Callback, Exchange, geschützte API, Profil, Refresh und Provider-Logout
+in isolierter Umgebung nachweisen. Ein erfolgreicher synthetischer JWKS-Test
+belegt keinen zweiten realen Provider. Die vorhandenen Keycloak-Nachweise bleiben
+auf ihre dokumentierten Entwicklungs-/Testumgebungen begrenzt.
+
 ### Secret Management und HTTPS-Anforderungen
 
 Provider-Zugangsdaten, `JWT_SECRET`, Admin- und Datenbankpasswörter getrennt schützen.
@@ -532,4 +607,4 @@ Vorgänge; nicht durch erneute Realm-/Nutzerimporte vermischen.
   und [Prüfnachweis](qa/auth-documentation-571-2026-10-25.md).
 
 Die bestätigten Teilabnahmen bleiben auf ihren jeweiligen Prüfumfang begrenzt.
-#569 bleibt bis zur eigenen ausdrücklich bestätigten Abnahme offen.
+#569 und #570 bleiben bis zur jeweils ausdrücklich bestätigten Abnahme offen.
