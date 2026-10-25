@@ -2752,8 +2752,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v3:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v3:${workspaceId}:*`);
     });
 
     it('deleteUnit should invalidate cache', async () => {
@@ -2779,8 +2779,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v3:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v3:${workspaceId}:*`);
     });
 
     it('deleteResponse should invalidate cache', async () => {
@@ -2819,8 +2819,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v3:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v3:${workspaceId}:*`);
     });
   });
 

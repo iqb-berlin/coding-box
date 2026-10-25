@@ -1677,6 +1677,12 @@ export class CodingProcessService {
     scheme: CodingScheme,
     manager?: EntityManager
   ): Promise<void> {
+    if (unitFileId) {
+      const errors = await this.workspaceFilesService.getCodingSchemeCompatibilityErrors(
+        workspaceId, unitFileId, codingSchemeRef, scheme.variableCodings || [], manager
+      );
+      if (errors.length > 0) throw new Error(errors.join(' '));
+    }
     const baseVariables = unitFileId ?
       await this.workspaceFilesService.getVariableInfoForScheme(
         workspaceId,

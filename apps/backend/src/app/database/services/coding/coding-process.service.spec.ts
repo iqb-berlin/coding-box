@@ -18,6 +18,7 @@ import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { RuntimeConfigService } from '../../../config/runtime-config.service';
+import { validateUnitCodingSchemeCompatibility } from './unit-coding-scheme-compatibility.util';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -64,6 +65,7 @@ describe('CodingProcessService', () => {
 
   const mockWorkspaceFilesService = {
     getUnitVariableMap: jest.fn(),
+    getCodingSchemeCompatibilityErrors: jest.fn().mockResolvedValue([]),
     getVariableInfoForScheme: jest.fn().mockResolvedValue([])
   };
 
@@ -467,6 +469,32 @@ describe('CodingProcessService', () => {
         }
         return Promise.resolve(null);
       });
+    });
+
+    it('rejects an alias mismatch in worker preflight before coding or writing', async () => {
+      const unitXml = '<Unit><BaseVariables><Variable id="technical-a" alias="var1" type="string"/></BaseVariables></Unit>';
+      mockWorkspaceFilesService.getCodingSchemeCompatibilityErrors.mockImplementationOnce(
+        (_workspaceId, unitId, schemeId, codings) => validateUnitCodingSchemeCompatibility(unitXml, codings, unitId, schemeId)
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([mockResponses[0]]);
+      (fileUploadRepository.find as jest.Mock).mockReset()
+        .mockResolvedValueOnce([createMockFileUpload('ALIAS_1', unitXml)])
+        .mockResolvedValueOnce([createMockFileUpload('TEST-SCHEME-REF', JSON.stringify({
+          version: '3.4',
+          variableCodings: [{
+            id: 'technical-a', alias: 'wrong', sourceType: 'BASE', codes: []
+          }]
+        }))]);
+
+      await expect(service.prepareAutocoderBatch(
+        1, ['1'], 1, undefined, 'alias-preflight', undefined, undefined, service.createAutocoderPreflightContext()
+      )).rejects.toThrow('"var1", im VOCS jedoch "wrong"');
+
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+      expect(responseRepository.manager.connection.createQueryRunner).not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase).not.toHaveBeenCalled();
     });
 
     const configureDerivedSecondRun = (

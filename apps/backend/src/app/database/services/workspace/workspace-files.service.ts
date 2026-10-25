@@ -16,7 +16,9 @@ import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
+import { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import { validateUnitCodingSchemeCompatibility } from '../coding/unit-coding-scheme-compatibility.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload, {
   NO_CODING_SCHEME_REF_NORMALIZED,
@@ -2467,6 +2469,30 @@ ${bookletRefs}
     }
   }
 
+  async getCodingSchemeCompatibilityErrors(
+    workspaceId: number,
+    unitFileId: string,
+    schemeId: string,
+    variableCodings: VariableCodingData[],
+    manager?: EntityManager
+  ): Promise<string[]> {
+    const repository = manager?.getRepository(FileUpload) || this.fileUploadRepository;
+    const files = await repository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Unit',
+        file_id_normalized: this.normalizeFileUnitId(unitFileId)
+      },
+      select: ['file_id', 'data']
+    });
+    if (files.length !== 1) {
+      return [`Das Kodierschema "${schemeId}" kann nicht mit der Unit "${unitFileId}" abgeglichen werden: Die Unit-Datei fehlt oder ist mehrdeutig.`];
+    }
+    return validateUnitCodingSchemeCompatibility(
+      files[0].data.toString(), variableCodings, unitFileId, schemeId
+    );
+  }
+
   async getVariableInfoForScheme(
     workspaceId: number,
     schemeFileId: string,
@@ -2523,10 +2549,10 @@ ${bookletRefs}
               [parsedXml.Unit.BaseVariables.Variable];
 
             for (const variable of baseVariables) {
-              if (variable.$ && variable.$.alias && variable.$.type) {
+              if (variable.$ && variable.$.id && variable.$.type) {
                 const variableInfo: VariableInfo = {
                   id: variable.$.id,
-                  alias: variable.$.alias,
+                  alias: variable.$.alias || variable.$.id,
                   type: variable.$.type,
                   multiple:
                     variable.$.multiple === 'true' ||
