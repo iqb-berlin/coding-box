@@ -1172,8 +1172,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       messageKey = error.message as keyof ErrorMessages;
     }
 
-    const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
-    this.openErrorSnackBar(message, 'Schließen');
+    const message = error.status === 403 ? this.translateService.instant('error-forbidden') :
+      this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
+    // The interceptor owns session and permission feedback for these responses.
+    if (error.status !== 401 && error.status !== 403) {
+      this.openErrorSnackBar(message, 'Schließen');
+    }
     this.storeErrorInStatistics(message);
     this.resetUnitData();
   }

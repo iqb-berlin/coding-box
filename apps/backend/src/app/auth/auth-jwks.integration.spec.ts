@@ -16,9 +16,20 @@ import { GlobalHttpExceptionFilter } from '../http/global-http-exception.filter'
 import { requestIdMiddleware } from '../http/request-id.middleware';
 import { AllowWorkspaceTokenScopes, WORKSPACE_TOKEN_SCOPE_REPLAY_READ } from './workspace-token';
 import { WORKSPACE_TOKEN_AUDIENCE, WORKSPACE_TOKEN_ISSUER, WORKSPACE_TOKEN_USE } from './workspace-token.constants';
+import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
+import { AuthService } from './service/auth.service';
 
 @Controller()
 class ProtectedController {
+  @Get('workspace/:workspace_id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  workspace() { return { authorized: true }; }
+
+  @Get('scoped-workspace/:workspace_id')
+  @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
+  scopedWorkspace() { return { authorized: true }; }
+
   @Get('jwt')
   @UseGuards(JwtAuthGuard)
   jwt(@Req() request: { user: unknown }) { return { authenticated: true, user: request.user }; }
@@ -42,6 +53,7 @@ describe('OIDC JWT verification over HTTP', () => {
   };
   const jwtService = new JwtService();
   const users = { createOidcProviderUser: jest.fn().mockResolvedValue(42) };
+  const access = { canAccessWorkSpace: jest.fn() };
   let app: INestApplication;
   let jwks: Server;
   let jwksUrl: string;
@@ -73,7 +85,8 @@ describe('OIDC JWT verification over HTTP', () => {
     const module = await Test.createTestingModule({
       controllers: [ProtectedController],
       providers: [
-        JwtStrategy, WorkspaceTokenStrategy, JwtAuthGuard, JwtOrWorkspaceTokenAuthGuard,
+        JwtStrategy, WorkspaceTokenStrategy, JwtAuthGuard, JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard,
+        { provide: AuthService, useValue: access },
         { provide: ConfigService, useValue: { get: (key: string) => config[key] } },
         { provide: UsersService, useValue: users }
       ]
@@ -92,6 +105,7 @@ describe('OIDC JWT verification over HTTP', () => {
   beforeEach(async () => {
     warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     users.createOidcProviderUser.mockClear();
+    access.canAccessWorkSpace.mockReset().mockResolvedValue(true);
     providerStatus = 200;
     pauseProvider = false;
     jwks = createServer((_req, response) => {
@@ -116,6 +130,46 @@ describe('OIDC JWT verification over HTTP', () => {
     providerStatus = 503;
     expect((await request('combined')).status).toBe(200);
     expect(users.createOidcProviderUser).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['workspace', 'scoped-workspace'])(
+    'returns 403 for missing workspace access on %s while the same verified session remains usable', async path => {
+      const signedToken = token();
+      access.canAccessWorkSpace.mockResolvedValue(false);
+      const denied = await request(`${path}/123`, signedToken);
+
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ statusCode: 403, requestId: 'jwks-request-123' });
+      expect(access.canAccessWorkSpace).toHaveBeenLastCalledWith(42, 123);
+      expect((await request('jwt', signedToken)).status).toBe(200);
+
+      access.canAccessWorkSpace.mockResolvedValue(true);
+      expect((await request(`${path}/123`, signedToken)).status).toBe(200);
+    }
+  );
+
+  it('keeps missing and expired authentication at 401 before checking workspace permissions', async () => {
+    for (const signedToken of ['', token({}, { expiresIn: -1 })]) {
+      expect((await request('workspace/123', signedToken)).status).toBe(401);
+    }
+    expect(access.canAccessWorkSpace).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for revoked workspace membership with a valid scoped token', async () => {
+    const signedToken = jwtService.sign({
+      token_use: WORKSPACE_TOKEN_USE, userId: 42, workspace: 123, scopes: [WORKSPACE_TOKEN_SCOPE_REPLAY_READ]
+    }, {
+      secret: 'workspace-test-secret',
+      algorithm: 'HS256',
+      issuer: WORKSPACE_TOKEN_ISSUER,
+      audience: WORKSPACE_TOKEN_AUDIENCE,
+      expiresIn: 300
+    });
+    access.canAccessWorkSpace.mockResolvedValue(false);
+    expect((await request('scoped-workspace/123', signedToken)).status).toBe(403);
+    expect((await request('scoped-workspace/456', signedToken)).status).toBe(401);
+    expect(access.canAccessWorkSpace).toHaveBeenCalledTimes(1);
+    expect(users.createOidcProviderUser).not.toHaveBeenCalled();
   });
 
   it.each([
