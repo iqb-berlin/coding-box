@@ -820,6 +820,8 @@ describe('real Keycloak coding session', () => {
       let releaseRegex: (() => void) | undefined;
       let releaseConfig: (() => void) | undefined;
       const allowed = role.isAdmin || role.accessLevel >= 3;
+      // Missing membership is 403; insufficient access levels retain the legacy 401.
+      const deniedStatus = !role.isAdmin && role.accessLevel === 0 ? 403 : 401;
       const api = (method: 'GET' | 'POST' | 'PUT', route: string, body?: Record<string, unknown>) => (
         cy.then(() => cy.request({
           method, url: `${setup.apiUrl}/api${route}`,
@@ -854,11 +856,11 @@ describe('real Keycloak coding session', () => {
 
       // These calls go directly to the real backend; browser intercepts below only hold real responses.
       api('GET', `/admin/workspace/${setup.workspaceId}/files?page=1&limit=100`).then(({ status, body }) => {
-        expect(status).to.equal(allowed ? 200 : 401);
+        expect(status).to.equal(allowed ? 200 : deniedStatus);
         if (allowed) expect(body.data.some((file: { filename: string }) => file.filename === 'UNIT-REPLAY.xml')).to.equal(true);
       });
       api('GET', `/admin/workspace/${setup.workspaceId}/content-pool/config`).then(({ status, body }) => {
-        expect(status).to.equal(allowed ? 200 : 401);
+        expect(status).to.equal(allowed ? 200 : deniedStatus);
         if (allowed) {
           expect(body).to.include({ enabled: true, hasApplicationToken: true, baseUrl: 'https://synthetic.example.invalid' });
           expect(body).not.to.have.property('applicationToken');
@@ -866,9 +868,9 @@ describe('real Keycloak coding session', () => {
       });
       api('POST', `/workspace/${setup.workspaceId}/settings`, {
         key: 'enable-regex-search', value: JSON.stringify({ enabled: false })
-      }).then(({ status }) => { expect(status).to.equal(allowed ? 201 : 401); });
+      }).then(({ status }) => { expect(status).to.equal(allowed ? 201 : deniedStatus); });
       api('GET', `/workspace/${setup.workspaceId}/settings/enable-regex-search`).then(({ status, body }) => {
-        expect(status).to.equal(role.isAdmin || role.accessLevel > 0 ? 200 : 401);
+        expect(status).to.equal(role.isAdmin || role.accessLevel > 0 ? 200 : 403);
         if (status === 200) expect(JSON.parse(body.value).enabled).to.equal(!allowed);
       });
       if (allowed) {

@@ -78,7 +78,16 @@ describe('zoneless test-results view', () => {
         }
       }).as('uploadStatus');
 
-      cy.visit('/');
+      cy.visit('/', {
+        onBeforeLoad(window) {
+          // Reduced motion keeps upload ownership checks independent of animation
+          // scheduling. Material reads this preference before its first dialog.
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion)');
+          Object.defineProperty(reducedMotion, 'matches', { value: true });
+          cy.stub(window, 'matchMedia').callThrough()
+            .withArgs('(prefers-reduced-motion)').returns(reducedMotion);
+        }
+      });
       cy.wait('@authData');
       cy.window().then((window) => {
         window.location.hash = '/workspace-admin/5/test-results';

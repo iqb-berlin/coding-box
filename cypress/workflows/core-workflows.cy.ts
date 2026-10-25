@@ -95,7 +95,11 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
       });
     apiRequest(`/admin/workspace/${setup.workspaceId}/test-results/overview`, {
       failOnStatusCode: false
-    }).its('status').should('eq', 401);
+    }).its('status').should('eq', 403);
+    apiRequest('/auth-data').then(({ status, body }) => {
+      expect(status).to.equal(200);
+      expect(body.isAdmin).to.equal(false);
+    });
     cy.window().then(win => {
       win.location.hash = `/workspace-admin/${setup.workspaceId}/test-results`;
     });
