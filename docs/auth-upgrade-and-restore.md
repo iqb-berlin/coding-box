@@ -1,5 +1,7 @@
 # Bestehende Auth-Konfiguration aktualisieren und zurücknehmen
 
+[English](auth-upgrade-and-restore.en.md)
+
 Bezug: #565, Grundlage für #571. Die fachliche Abnahme erfolgt separat.
 
 ## Unterstützter Umfang
