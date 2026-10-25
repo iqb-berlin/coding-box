@@ -3,9 +3,10 @@
 [English](oidc-authentication.md)
 
 Betriebs- und Entwicklerhandbuch zum integrierten Auth-Ablauf. Bezug: [#571](https://github.com/iqb-berlin/coding-box/issues/571).
-Geprüfte Basis: `develop` bei `b38ca4c3e9f4ebb796ddb74f41003a6fc412ed72` (25.10.2026).
-Die Dokumentationskonsolidierung benötigt eine eigene Abnahme; die bestätigten
-Prüfumfänge aus #564, #565 und #1018 werden dadurch nicht erweitert.
+Geprüfte Basis: `develop` bei `0f08d70d2cc1f9bebc852d9996ac01657368ca4a` (25.10.2026).
+Die Konsolidierung aus #571 wurde im dokumentierten Umfang abgenommen. Die
+Ergänzung der Token-Rechte für #569 benötigt eine eigene Abnahme; die bestätigten
+Prüfumfänge aus #564, #565 und #1018 bleiben bestehen.
 
 ## 1. Einführung
 
@@ -416,17 +417,18 @@ Keine Authorization-/Cookie-Header, Access-/Refresh-/ID-Tokens, Client-Secrets, 
 
 ### Token-Typen und Rechte
 
-Die folgende Übersicht beschreibt den integrierten Stand. Die verbindliche externe
-Allow-/Deny-Matrix und der sichere Legacy-Übergang bleiben in
-[#569](https://github.com/iqb-berlin/coding-box/issues/569) separat nachzuverfolgen;
-dieses Kapitel nimmt dessen Abnahme nicht vorweg.
+Die folgende Übersicht beschreibt den integrierten Stand. Die
+[verbindliche Rechte-Matrix mit allen 25 Routen](workspace-api-token-rights-de.md)
+legt Freigaben, Ausschlüsse, Zusatzprüfungen, Ausstellung und Legacy-Übergang fest.
+Die separate Abnahme von [#569](https://github.com/iqb-berlin/coding-box/issues/569)
+steht noch aus.
 
 | Typ/Scope | Geltung und Grenze |
 | --- | --- |
 | OIDC-Benutzer-Access-Token | Provider-signiertes RS256-JWT für den konfigurierten Client; Anwendungsrollen, Workspace-Mitgliedschaft und Route entscheiden über Aktionen. Laufzeit nach Provider/Client und `exp`. |
 | Workspace `replay:read` | Ausdrücklich freigegebene Replay-/Player-/Metadatenrouten sowie kompatibles Statistik-POST im gebundenen Workspace. Standardmaximum 90 Tage, über `WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS` konfigurierbar. |
 | Workspace `replay-statistics:write` | Ausdrücklich freigegebene Statistikaktion; kein allgemeines Schreibrecht. Maximum 1 Tag. |
-| Workspace `coding-job:operate` | Derzeit ausdrücklich freigegebenes Lesen von Job-Notizen; kein allgemeines Job-Schreib- oder Admin-Recht. Maximum 1 Tag. |
+| Workspace `coding-job:operate` | Freigegebene Kodierjob-Lese- und Schreibaktionen, unter anderem Fortschritt/Notizen, Status, Pause/Fortsetzen und Abgabe; zusätzliche Workspace-/Rollen-/Jobprüfungen bleiben erforderlich. Maximum 1 Tag. |
 | Client-Credentials-Provider-Token | Die Ausgabe über `/api/auth/token` definiert keinen eigenständigen Maschinenzugang. Akzeptanz und Rechte müssen für einen konkreten Verbraucher gesondert festgelegt werden. |
 
 Der Statistik-POST akzeptiert bewusst **auch `replay:read`**, damit der vorhandene
@@ -445,7 +447,8 @@ verwenden; Ausgabe und Authorization-Header nicht in Supportnachrichten kopieren
 
 `ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS` ist derzeit standardmäßig `true`. Die Option
 erlaubt das geprüfte alte Format ohne moderne Typ-/Issuer-/Audience-Claims;
-fehlende Scopes erhalten nur `replay:read`. Signatur, Ablauf und Workspace-Bindung
+vorhandene Scope-Arrays bleiben erhalten, auch für `coding-job:operate`; nur
+fehlende Scopes erhalten `replay:read`. Signatur, Ablauf und Workspace-Bindung
 bleiben erforderlich. Vor Deaktivierung betroffene Verbraucher inventarisieren,
 moderne Tokens mit minimalen Scopes ausstellen und Replay/Frontend gegen die
 Guard-Tests prüfen. Neue Integrationen sollen nicht auf dem Legacy-Format aufbauen.
@@ -525,7 +528,8 @@ Vorgänge; nicht durch erneute Realm-/Nutzerimporte vermischen.
   [Diagnose-/Browserprotokoll](qa/auth-acceptance-2026-10-23.md).
 - [#569: externe Token-Rechte](https://github.com/iqb-berlin/coding-box/issues/569),
   [#570: Providergrenzen](https://github.com/iqb-berlin/coding-box/issues/570).
-- [Dokumentationsprüfung zu #571](qa/auth-documentation-571-2026-10-25.md).
+- [Bestätigte Dokumentationsabnahme zu #571](https://github.com/iqb-berlin/coding-box/issues/571#issuecomment-6396878100)
+  und [Prüfnachweis](qa/auth-documentation-571-2026-10-25.md).
 
 Die bestätigten Teilabnahmen bleiben auf ihren jeweiligen Prüfumfang begrenzt.
-#571 bleibt bis zur eigenen ausdrücklich bestätigten Abnahme offen.
+#569 bleibt bis zur eigenen ausdrücklich bestätigten Abnahme offen.
