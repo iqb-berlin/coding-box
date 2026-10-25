@@ -3,9 +3,9 @@
 [Deutsch](oidc-authentication-de.md)
 
 Operations and developer guide for the integrated Auth flow. Related to [#571](https://github.com/iqb-berlin/coding-box/issues/571).
-Verified baseline: `develop` at `0f08d70d2cc1f9bebc852d9996ac01657368ca4a` (25 October 2026).
-The consolidation in #571 was accepted within its documented scope. The token
-permissions addition for #569 requires separate acceptance; the accepted
+Verified baseline: `develop` at `edb09663f7b096128f4386bbd65c46888ad9ad70` (25 October 2026).
+The consolidation in #571 was accepted within its documented scope. The
+additions for #569 and #570 each require separate acceptance; the accepted
 verification scopes of #564, #565 and #1018 remain unchanged.
 
 ## 1. Introduction
@@ -475,6 +475,76 @@ provider boundaries. The current backend bearer path requires:
 Keycloak is evidenced; no additional provider has been accepted live. A new
 provider needs a concrete use case and matching checks, not only a base-URL change.
 
+#### Concrete Claim and Provider Contract (#570)
+
+The three active consumers read claims from different responses:
+
+| Consumer | Source and required mapping |
+| --- | --- |
+| Backend callback | Userinfo with a nonempty `sub`; `preferred_username` is passed to local user creation, along with optional names/email. `admin` in `realm_access.roles` sets this call's admin information. The configured issuer is stored as the identity source. |
+| Backend bearer | RS256 access JWT using configured JWKS; exact issuer and matching `azp` or `aud`. `sub` is required; a missing/empty `preferred_username` falls back to `sub` here. Names/email and `realm_access.roles` are read from the access token. |
+| Frontend | Profile fields and `realm_access.roles` are decoded from the stored access token. Claims present only in the ID token or userinfo do not populate this path. The frontend does not replace server-side authorization. |
+
+For another provider, explicitly configure roles and profile fields in **userinfo
+and access tokens**, or adapt the respective consumers. Supply a stable, nonempty
+`preferred_username` for the intended callback; that path does not have the bearer
+fallback to `sub` described above. `realm_access.roles` must be an array of role
+names; the administrator role is exactly `admin`.
+There is no general configurable claim mapper: `groups`, top-level `roles` or
+`resource_access` are not automatically translated to `realm_access.roles`.
+A new provider integration must keep local identity and expected roles consistent
+across all three paths.
+
+[Local user mapping](../apps/backend/src/app/database/services/users/users.service.ts)
+looks up both issuer/subject and username. A matching username can update the
+stored issuer/subject mapping. Changing the issuer URL therefore does not create
+separate users by itself. User synchronization retains existing local `isAdmin`
+(`previous isAdmin` or new admin claim); an absent admin claim does not
+automatically revoke that local permission. Separately check user mapping, local
+admin rights, workspace membership and job assignments before a planned switch;
+do not change existing accounts or permissions as a testing shortcut.
+
+Further concrete protocol limits of the active
+[OIDC service](../apps/backend/src/app/auth/service/oidc-auth.service.ts):
+
+- Authorization Code with PKCE S256 and the fixed requested scope
+  `openid profile email`; no automatic discovery or general adapter configuration
+  for choosing additional authorization parameters.
+  Renewable sessions require a usable refresh token from the provider. If it
+  requires a scope such as `offline_access`, a specific adaptation is needed;
+  that scope is not currently requested.
+- Code exchange and refresh use form POSTs with `client_id` and, when configured,
+  `client_secret` in the body. Public clients omit the secret. Selection of
+  `client_secret_basic`, `private_key_jwt` or other token-endpoint authentication
+  methods is not implemented.
+- Userinfo uses GET with a bearer access token. The API bearer path still requires
+  a signed RS256 JWT; an introspection-only token does not satisfy that contract.
+- Active logout sends a form POST to `OIDC_END_SESSION_ENDPOINT` with `client_id`,
+  `refresh_token` and optional `client_secret`. This is evidenced for Keycloak.
+  An RP-Initiated Logout endpoint accepting `id_token_hint` alone does not prove
+  the same behavior. The existing `getLogoutUrl()` helper is not used by the
+  active logout controller.
+- Account management is a separate browser redirect to `OIDC_ACCOUNT_ENDPOINT`,
+  with Keycloak `referrer`/`referrer_uri` parameters for an allowed return target.
+  A discovery or userinfo endpoint does not replace this profile-management contract.
+
+[AuthModule](../apps/backend/src/app/auth/auth.module.ts) registers
+`OidcAuthService` and `JwtStrategy`. The remaining
+[KeycloakAuthService](../apps/backend/src/app/auth/service/keycloak-auth.service.ts)
+and [KeycloakJwksService](../apps/backend/src/app/auth/keycloak-jwks.service.ts) files
+are not registered there or called by the active login/bearer path. Realm/client
+exports, theme, installer and the bounded legacy-configuration migration remain
+deliberate Keycloak-specific deployment details. Operators should not remove or
+replace those files speculatively.
+
+Define a separate verification scope before integrating another provider: align
+endpoints and client authentication; test a synthetic profile with suitable claims
+and deliberately different issuer/client values; then demonstrate login, callback,
+exchange, protected API, profile, refresh and provider logout in isolation. A
+successful synthetic JWKS test is not evidence for a second real provider.
+Existing Keycloak evidence remains bounded to its documented development/test
+environments.
+
 ### Secret Management and HTTPS Requirements
 
 Protect provider credentials, `JWT_SECRET`, admin and database passwords separately.
@@ -521,4 +591,4 @@ do not conflate them through repeated realm/user imports.
   and [verification evidence](qa/auth-documentation-571-2026-10-25.md).
 
 Accepted subtasks remain limited to their own verified scope.
-#569 remains open until its own explicitly confirmed acceptance.
+#569 and #570 remain open until their respective explicitly confirmed acceptance.
