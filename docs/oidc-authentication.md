@@ -3,9 +3,10 @@
 [Deutsch](oidc-authentication-de.md)
 
 Operations and developer guide for the integrated Auth flow. Related to [#571](https://github.com/iqb-berlin/coding-box/issues/571).
-Verified baseline: `develop` at `b38ca4c3e9f4ebb796ddb74f41003a6fc412ed72` (25 October 2026).
-This documentation consolidation requires separate acceptance. It does not extend
-the accepted verification scopes of #564, #565 or #1018.
+Verified baseline: `develop` at `0f08d70d2cc1f9bebc852d9996ac01657368ca4a` (25 October 2026).
+The consolidation in #571 was accepted within its documented scope. The token
+permissions addition for #569 requires separate acceptance; the accepted
+verification scopes of #564, #565 and #1018 remain unchanged.
 
 ## 1. Introduction
 
@@ -409,17 +410,18 @@ Do not include Authorization/Cookie headers, access/refresh/ID tokens, client se
 
 ### Token Types and Permissions
 
-This overview describes the integrated state. The binding external allow/deny
-matrix and safe legacy transition are tracked separately in
-[#569](https://github.com/iqb-berlin/coding-box/issues/569); this chapter does not
-preempt its acceptance.
+This overview describes the integrated state. The
+[binding permissions matrix covering all 25 routes](workspace-api-token-rights.md)
+defines allowances, exclusions, additional checks, issuance and legacy transition.
+Separate acceptance of [#569](https://github.com/iqb-berlin/coding-box/issues/569)
+remains outstanding.
 
 | Type/scope | Reach and limits |
 | --- | --- |
 | OIDC user access token | Provider-signed RS256 JWT for the configured client; application roles, workspace membership and route determine actions. Lifetime follows provider/client and `exp`. |
 | Workspace `replay:read` | Explicitly enabled replay/player/metadata routes and compatible statistics POST in the bound workspace. Default maximum 90 days, configurable through `WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS`. |
 | Workspace `replay-statistics:write` | Explicitly enabled statistics action, not general write access. Maximum 1 day. |
-| Workspace `coding-job:operate` | Currently explicitly enabled job-note reading, not general job write or admin access. Maximum 1 day. |
+| Workspace `coding-job:operate` | Explicitly enabled coding-job reads and writes, including progress/notes, status, pause/resume and submission; additional workspace/role/job checks remain required. Maximum 1 day. |
 | Provider client-credentials token | Issuance through `/api/auth/token` does not define standalone machine access. Acceptance and permissions must be specified for a concrete consumer separately. |
 
 The statistics POST intentionally **also accepts `replay:read`** so the existing
@@ -436,8 +438,9 @@ issuance. Use tokens only in the intended protected application/integration; do
 not paste output or Authorization headers into support messages.
 
 `ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS` currently defaults to `true`. It accepts the
-checked old format without modern type/issuer/audience claims; absent scopes gain
-only `replay:read`. Signature, expiration and workspace binding remain required.
+checked old format without modern type/issuer/audience claims; existing scope
+arrays are preserved, including `coding-job:operate`. Only absent scopes default to
+`replay:read`. Signature, expiration and workspace binding remain required.
 Before disabling it, inventory consumers, issue modern tokens with minimum scopes
 and check replay/frontend behavior against guard tests. New integrations should
 not rely on the legacy format. A workspace token does not replace an OIDC user
@@ -514,7 +517,8 @@ do not conflate them through repeated realm/user imports.
   [diagnostic/browser protocol](qa/auth-acceptance-2026-10-23.md).
 - [#569: external token permissions](https://github.com/iqb-berlin/coding-box/issues/569),
   [#570: provider limits](https://github.com/iqb-berlin/coding-box/issues/570).
-- [#571 documentation verification](qa/auth-documentation-571-2026-10-25.md).
+- [#571 confirmed documentation acceptance](https://github.com/iqb-berlin/coding-box/issues/571#issuecomment-6396878100)
+  and [verification evidence](qa/auth-documentation-571-2026-10-25.md).
 
 Accepted subtasks remain limited to their own verified scope.
-#571 remains open until its own explicitly confirmed acceptance.
+#569 remains open until its own explicitly confirmed acceptance.
