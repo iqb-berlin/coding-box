@@ -861,6 +861,8 @@ Redirect URIs werden validiert, um Open Redirect Angriffe zu verhindern:
 
 ## 7. Migrationsleitfaden
 
+Für bestehende Realms gilt der [geprüfte Upgrade- und Restore-Pfad](auth-upgrade-and-restore.md). Bestehende Nutzer und Clients werden beim Anwendungsupgrade nicht erneut importiert. Die folgenden allgemeinen Importhinweise gelten nur für eine ausdrücklich geplante neue Provider-Einrichtung.
+
 ### Von Legacy-Authentifizierung
 
 Wenn Sie von einer Legacy-Authentifizierung migrieren:

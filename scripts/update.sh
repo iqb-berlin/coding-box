@@ -349,9 +349,9 @@ run_complementary_migration_scripts() {
           declare proceed
 
           printf "  '%s' executed with errors.\n\n" "${migration_script}"
-          read -p "  Do you want to proceed? [Y/n] " -er -n 1 proceed
+          read -p "  Do you want to proceed despite the failed migration? [y/N] " -er -n 1 proceed
 
-          if [[ ${proceed} =~ ^[nN]$ ]]; then
+          if [[ ! ${proceed} =~ ^[yY]$ ]]; then
             printf "\n  The update has failed!\n\n"
             printf "  Up to this point, only migration scripts have been executed.\n"
             printf "  If you want to examine the failed script, you can view it under "
