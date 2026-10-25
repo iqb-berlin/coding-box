@@ -7,6 +7,9 @@ export class UserFullDto {
   @ApiProperty()
     username?: string;
 
+  @ApiProperty({ required: false, description: 'Given name followed by family name from the OIDC profile' })
+    displayName?: string;
+
   @ApiProperty()
     isAdmin?: boolean;
 
