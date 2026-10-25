@@ -859,6 +859,8 @@ Redirect URIs are validated to prevent open redirect attacks:
 
 ## 7. Migration Guide
 
+For existing realms, follow the [upgrade and restore procedure](auth-upgrade-and-restore.md). Application upgrades do not reimport existing users or clients. The general import guidance below applies only to an explicitly planned new provider setup.
+
 ### From Legacy Authentication
 
 If migrating from legacy authentication:
