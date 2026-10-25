@@ -106,7 +106,7 @@ describe('WorkspaceTestFilesValidationService', () => {
 
     const expectedHash = crypto.createHash('sha256');
     expectedHash.update(JSON.stringify({
-      cacheVersion: 5,
+      cacheVersion: 6,
       exclusions: {
         ignoredUnits: [],
         ignoredBooklets: [],
@@ -116,7 +116,7 @@ describe('WorkspaceTestFilesValidationService', () => {
     }));
     expectedHash.update('\n');
 
-    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(5);
+    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(6);
     expect(fingerprint).toBe(expectedHash.digest('hex'));
   });
 
@@ -397,6 +397,49 @@ describe('WorkspaceTestFilesValidationService', () => {
     expect(schemerFileEntry?.schemaErrors).toEqual(expect.arrayContaining([
       expect.stringContaining('IQB-SCHEMER-1.1 ist veraltet')
     ]));
+  });
+
+  it('reports MMV032 compatibility errors on both the Unit and its shared VOCS', async () => {
+    const scheme = {
+      version: '3.4',
+      variableCodings: [{
+        id: 'technical-a', alias: 'wrong', sourceType: 'BASE', codes: []
+      }]
+    };
+    const xml = '<Unit><CodingSchemeRef>SHARED.VOCS</CodingSchemeRef><BaseVariables><Variable id="technical-a" alias="01a"/></BaseVariables></Unit>';
+    const files = [
+      { file_id: 'BOOKLET', file_type: 'Booklet', data: '<Booklet><Units><Unit id="MMV032"/><Unit id="OTHER"/></Units></Booklet>' },
+      { file_id: 'MMV032', file_type: 'Unit', data: xml },
+      { file_id: 'OTHER', file_type: 'Unit', data: xml.replace('alias="01a"', 'alias="01b"') },
+      {
+        file_id: 'SHARED.VOCS', filename: 'SHARED.VOCS', file_type: 'Resource', data: JSON.stringify(scheme)
+      },
+      { file_id: 'TESTTAKER', file_type: 'TestTakers', data: '<TestTakers><Group id="G"><Login mode="run-hot-return" name="synthetic"><Booklet>BOOKLET</Booklet></Login></Group></TestTakers>' }
+    ];
+    fileUploadRepository.find.mockImplementation(async args => {
+      if (args.skip > 0) return [];
+      const type = args.where?.file_type;
+      if (typeof type !== 'string') return files.filter(file => file.file_type === 'TestTakers');
+      return files.filter(file => file.file_type === type);
+    });
+    fileUploadRepository.count.mockResolvedValue(1);
+    fileUploadRepository.createQueryBuilder().getRawMany.mockResolvedValue([]);
+
+    const result = await service.validateTestFiles(7);
+    const data = result.validationResults[0];
+    expect(data.schemes.files[0]).toEqual(expect.objectContaining({
+      filename: 'SHARED.VOCS',
+      schemaValid: false,
+      schemaErrors: expect.arrayContaining([
+        expect.stringContaining('Unit "MMV032"'), expect.stringContaining('Unit "OTHER"')
+      ])
+    }));
+    expect(data.units.files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ filename: 'MMV032', schemaValid: false, schemaErrors: [expect.stringContaining('"01a", im VOCS jedoch "wrong"')] }),
+      expect.objectContaining({ filename: 'OTHER', schemaValid: false, schemaErrors: [expect.stringContaining('"01b", im VOCS jedoch "wrong"')] })
+    ]));
+    expect(files[1].data).toBe(xml);
+    expect(JSON.parse(files[3].data)).toEqual(scheme);
   });
 
   it('should validate coding schemes with current IQB processing properties', async () => {

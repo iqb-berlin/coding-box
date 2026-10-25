@@ -5,6 +5,8 @@ import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
 import Ajv, { ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
+import { CodingScheme } from '@iqbspecs/coding-scheme';
+import { getUnitCodingSchemeCompatibilityErrors, UnitCodingSchemeVariable } from '../coding/unit-coding-scheme-compatibility.util';
 
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
@@ -61,6 +63,7 @@ type DataValidation = {
 };
 
 type UnitRefs = {
+  baseVariables?: UnitCodingSchemeVariable[];
   schemerRefs: string[];
   codingSchemeRefs: string[];
   definitionRefs: string[];
@@ -89,7 +92,7 @@ type ValidationProgressReporter = (
 ) => void | Promise<void>;
 
 // Bump this whenever test-file validation semantics or result shape changes.
-export const TEST_FILES_VALIDATION_CACHE_VERSION = 5;
+export const TEST_FILES_VALIDATION_CACHE_VERSION = 6;
 
 type ParsedPlayerVersion = {
   id: string;
@@ -345,7 +348,7 @@ export class WorkspaceTestFilesValidationService {
         'Kodierschemata werden validiert...'
       );
       const codingSchemeResults = await this.validateAllCodingSchemes(
-        workspaceId
+        workspaceId, unitMap, xmlSchemaResults
       );
 
       await this.reportProgress(
@@ -939,6 +942,9 @@ export class WorkspaceTestFilesValidationService {
         try {
           const $ = cheerio.load(unit.data, { xmlMode: true });
           const refs: UnitRefs = {
+            baseVariables: $('Unit > BaseVariables > Variable').map((_, variable) => ({
+              id: $(variable).attr('id'), alias: $(variable).attr('alias')
+            })).get(),
             schemerRefs: [],
             codingSchemeRefs: [],
             definitionRefs: [],
@@ -1986,7 +1992,9 @@ export class WorkspaceTestFilesValidationService {
   }
 
   private async validateAllCodingSchemes(
-    workspaceId: number
+    workspaceId: number,
+    unitMap: Map<string, UnitRefs> = new Map(),
+    xmlSchemaResults: Map<string, SchemaValidationResult> = new Map()
   ): Promise<Map<string, SchemaValidationResult>> {
     const results = new Map<string, SchemaValidationResult>();
 
@@ -2065,6 +2073,41 @@ export class WorkspaceTestFilesValidationService {
       }
     }
 
+    const schemesById = new Map(codingSchemeFiles.map(file => [
+      (file.file_id || file.filename).toUpperCase(), file
+    ]));
+    for (const [unitId, refs] of unitMap) {
+      for (const schemeId of refs.codingSchemeRefs) {
+        const key = schemeId.trim().toUpperCase();
+        const file = schemesById.get(key);
+        const schemaResult = results.get(key);
+        if (!file || !schemaResult || !refs.baseVariables) continue;
+        // A preceding Unit may already have added compatibility errors to a
+        // shared VOCS. Check each Unit independently of that aggregate result.
+        let scheme: CodingScheme;
+        try {
+          scheme = new CodingScheme(JSON.parse(file.data));
+        } catch {
+          continue; // JSON/schema errors are reported above.
+        }
+        const errors = getUnitCodingSchemeCompatibilityErrors(
+          refs.baseVariables, scheme.variableCodings, { unitId, schemeId: key }
+        );
+        if (errors.length === 0) continue;
+        results.set(key, {
+          ...schemaResult,
+          schemaValid: false,
+          errors: [...schemaResult.errors, ...errors]
+        });
+        const unitKey = `Unit:${unitId}`;
+        const unitResult = xmlSchemaResults.get(unitKey);
+        xmlSchemaResults.set(unitKey, {
+          ...unitResult,
+          schemaValid: false,
+          errors: [...(unitResult?.errors || []), ...errors]
+        });
+      }
+    }
     return results;
   }
 }

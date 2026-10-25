@@ -330,6 +330,37 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     })]);
   });
 
+  it('checks the raw Unit aliases with the supplied transaction repository', async () => {
+    const service = makeService();
+    const find = jest.fn().mockResolvedValue([{
+      file_id: 'UNIT_A', data: '<Unit><BaseVariables><Variable id="technical-a" alias="01a"/></BaseVariables></Unit>'
+    }]);
+    const getRepository = jest.fn().mockReturnValue({ find });
+    const errors = await service.getCodingSchemeCompatibilityErrors(
+      7, 'unit_a.xml', 'SHARED.VOCS', [{ id: 'technical-a', alias: 'wrong', sourceType: 'BASE' }], { getRepository } as never
+    );
+    expect(find).toHaveBeenCalledWith({
+      where: { workspace_id: 7, file_type: 'Unit', file_id_normalized: 'UNIT_A' },
+      select: ['file_id', 'data']
+    });
+    expect(mockFileUploadRepository.find).not.toHaveBeenCalled();
+    expect(errors).toEqual([expect.stringContaining('"01a", im VOCS jedoch "wrong"')]);
+  });
+
+  it('retains Unit variables with the permitted implicit alias equal to their technical ID', async () => {
+    mockFileUploadRepository.find.mockResolvedValueOnce([{
+      file_id: 'UNIT_A', data: '<Unit><BaseVariables><Variable id="v1" type="string"/></BaseVariables></Unit>'
+    }]);
+    expect(await makeService().getVariableInfoForScheme(7, 'UNIT_A'))
+      .toEqual([expect.objectContaining({ id: 'v1', alias: 'v1' })]);
+  });
+
+  it.each([{ files: [] }, { files: [{ data: '<Unit/>' }, { data: '<Unit/>' }] }])('fails closed for missing or ambiguous Unit files: $files', async ({ files }) => {
+    mockFileUploadRepository.find.mockResolvedValueOnce(files);
+    expect(await makeService().getCodingSchemeCompatibilityErrors(7, 'UNIT_A', 'A.VOCS', []))
+      .toEqual([expect.stringContaining('fehlt oder ist mehrdeutig')]);
+  });
+
   it('marks auto-coding and manual coding stale after coding scheme rule changes', async () => {
     const service = makeService();
     const oldData = createCodingScheme({ processing: [] });
