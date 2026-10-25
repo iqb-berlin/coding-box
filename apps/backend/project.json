@@ -67,6 +67,8 @@
         "^production",
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/docs/workspace-api-token-rights-de.md",
+        "{workspaceRoot}/docs/workspace-api-token-rights.md",
         "{workspaceRoot}/scripts/qa/**/*",
         "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*",
         { "env": "BULLMQ_TEST_REDIS_HOST" },
