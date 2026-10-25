@@ -126,4 +126,32 @@ describe('UsersSelectionComponent delayed lists', () => {
     expect(fixture.nativeElement.textContent).toContain('after-refresh');
     expect(fixture.nativeElement.textContent).not.toContain('before-refresh');
   });
+
+  it('renders, filters and sorts by the full name returned by the user directory', async () => {
+    response.next([
+      { id: 7, username: 'z-login', displayName: 'Ada Lovelace' },
+      { id: 8, username: 'a-login', displayName: 'Grace Hopper' },
+      { id: 9, username: 'legacy-login' }
+    ]);
+    await fixture.whenStable();
+
+    const cells = (): string[] => Array.from(fixture.nativeElement.querySelectorAll('mat-row .mat-column-displayName'))
+      .map(cell => (cell as HTMLElement).textContent?.trim() || '');
+    expect(cells()).toEqual(['Ada Lovelace', 'Grace Hopper', '']);
+    const header: HTMLElement = fixture.nativeElement.querySelector('mat-header-cell.mat-column-displayName');
+    header.click();
+    await fixture.whenStable();
+    expect(cells()).toEqual(['', 'Ada Lovelace', 'Grace Hopper']);
+    header.click();
+    await fixture.whenStable();
+    expect(cells()).toEqual(['Grace Hopper', 'Ada Lovelace', '']);
+
+    const filter: HTMLInputElement = fixture.nativeElement.querySelector('coding-box-search-filter input');
+    filter.value = 'lovelace';
+    filter.dispatchEvent(new Event('input'));
+    await new Promise(resolve => { setTimeout(resolve, 350); });
+    await fixture.whenStable();
+    expect(cells()).toEqual(['Ada Lovelace']);
+    expect(fixture.nativeElement.querySelector('mat-row').textContent).toContain('z-login');
+  });
 });

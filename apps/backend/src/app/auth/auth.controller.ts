@@ -341,8 +341,8 @@ export class AuthController {
       const userData: CreateUserDto = {
         identity: userInfo.sub,
         username: userInfo.preferred_username,
-        firstName: userInfo.given_name || '',
-        lastName: userInfo.family_name || '',
+        firstName: userInfo.given_name,
+        lastName: userInfo.family_name,
         email: userInfo.email || '',
         issuer: this.oidcAuthService.getIssuer(),
         isAdmin: userInfo.realm_access?.roles?.includes('admin') || false

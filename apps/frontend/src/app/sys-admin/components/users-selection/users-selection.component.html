@@ -37,12 +37,12 @@
 
     <ng-container matColumnDef="displayName">
       <mat-header-cell *matHeaderCellDef
-                       mat-sort-header="lastName">
+                       mat-sort-header="displayName">
         {{'user.full-name' | translate}}
       </mat-header-cell>
       <mat-cell *matCellDef="let row"
                 class="secondary-cell">
-        {{row.lastName ? row.lastName : row.name}}{{row.firstName ? (', ' + row.firstName) : ''}}
+        {{row.displayName}}
       </mat-cell>
     </ng-container>
 

@@ -46,5 +46,6 @@
   <include file="coding-box.changelog-1.17.0.sql"/>
   <include file="coding-box.changelog-833-ownership.sql"/>
   <include file="coding-box.changelog-testcenter-import-runs.sql"/>
+  <include file="coding-box.changelog-827-user-profile-names.sql"/>
   <include file="coding-box.changelog-workspace-deletion.sql"/>
 </databaseChangeLog>
