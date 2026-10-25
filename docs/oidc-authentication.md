@@ -1,732 +1,352 @@
 # OIDC Authentication
 
-This document describes the OpenID Connect (OIDC) authentication in Kodierbox, including the generic OIDC implementation and Keycloak-specific integration.
+[Deutsch](oidc-authentication-de.md)
+
+Operations and developer guide for the integrated Auth flow. Related to [#571](https://github.com/iqb-berlin/coding-box/issues/571).
+Verified baseline: `develop` at `b38ca4c3e9f4ebb796ddb74f41003a6fc412ed72` (25 October 2026).
+This documentation consolidation requires separate acceptance. It does not extend
+the accepted verification scopes of #564, #565 or #1018.
 
 ## 1. Introduction
 
-### What is OIDC/OpenID Connect?
+Kodierbox uses Authorization Code with PKCE. The browser authenticates at the
+provider; the backend exchanges the provider's authorization code and requests
+userinfo. The redirect back to the application contains only a short-lived,
+browser-bound one-time `auth_code`, never an access or refresh token.
+The initiating browser redeems it through `POST /api/auth/exchange`.
 
-OpenID Connect (OIDC) is an authentication layer built on top of OAuth 2.0. It allows clients to verify the identity of a user based on the authentication performed by an authorization server.
-
-### Why does Kodierbox use OIDC?
-
-Kodierbox uses OIDC for:
-- Centralized user management
-- Single Sign-On (SSO) across multiple applications
-- Secure authentication with PKCE (Proof Key for Code Exchange)
-- Support for standard identity providers like Keycloak
-- Flexibility for different OIDC providers
-
-### Authentication Flow Overview
-
-The authentication flow in Kodierbox uses the Authorization Code Flow with PKCE:
-
-1. User initiates login
-2. Backend generates PKCE code verifier and challenge
-3. Redirect to OIDC provider (e.g., Keycloak)
-4. User authenticates with provider
-5. Provider redirects with authorization code
-6. Backend exchanges code for access token
-7. Backend retrieves user information
-8. User is stored in Kodierbox database
-9. Access token is returned to frontend
+Keycloak is the currently evidenced provider integration. Configurable OIDC
+endpoints do not establish compatibility with every OIDC provider; section 6
+lists the requirements and remaining Keycloak assumptions.
 
 ## 2. For System Administrators
 
 ### 2.1 Environment Configuration
 
-#### Required Environment Variables (Generic OIDC)
+Use the [development template](../.env.dev.template),
+[production template](../.env.coding-box.template) and the corresponding Compose
+files. The examples supplement a complete template; database, Redis, registry and
+infrastructure settings are also required. Shipped values such as `change_me` and
+`random_string` are placeholders, not operational credentials.
 
-The following variables must be configured for the generic OIDC implementation:
+| Variable | Purpose |
+| --- | --- |
+| `OIDC_PROVIDER_URL` | Public provider base address; does not replace the exact issuer or individual endpoints. |
+| `OIDC_ISSUER` | Exact provider access-token `iss`, including realm and any context path actually used by that deployment. |
+| `OIDC_AUTHORIZATION_ENDPOINT` | Login endpoint reachable by the browser. |
+| `OIDC_TOKEN_ENDPOINT` | Code/refresh token endpoint reachable by the backend. |
+| `OIDC_USERINFO_ENDPOINT` | Userinfo endpoint reachable by the backend. |
+| `OIDC_JWKS_URI` | JWKS endpoint reachable by the backend for RS256 verification. |
+| `OIDC_END_SESSION_ENDPOINT` | Logout endpoint reachable by the backend. |
+| `OIDC_ACCOUNT_ENDPOINT` | Separately configured account/profile management; currently called with Keycloak parameters. |
+| `OAUTH2_CLIENT_ID` | Client for login, token exchange and client/audience checks. |
+| `OAUTH2_CLIENT_SECRET` | Confidential-client secret; may explicitly be empty for a suitably configured public client. Never publish a real secret. |
+| `OAUTH2_REDIRECT_URL` | Scheme-relative backend callback, normally `//HOST/api/auth/callback`; see below. |
+| `JWT_SECRET` | Separate strong HS256 workspace-token signing key, not the OIDC provider's signing key. |
 
-```bash
-# OIDC Provider Endpoints
-OIDC_PROVIDER_URL=https://keycloak.example.com
-OIDC_ISSUER=https://keycloak.example.com/auth/realms/coding-box
-OIDC_ACCOUNT_ENDPOINT=https://keycloak.example.com/auth/realms/iqb/account
-OIDC_AUTHORIZATION_ENDPOINT=https://keycloak.example.com/auth/realms/iqb/protocol/openid-connect/auth
-OIDC_TOKEN_ENDPOINT=https://keycloak.example.com/auth/realms/iqb/protocol/openid-connect/token
-OIDC_USERINFO_ENDPOINT=https://keycloak.example.com/auth/realms/iqb/protocol/openid-connect/userinfo
-OIDC_END_SESSION_ENDPOINT=https://keycloak.example.com/auth/realms/iqb/protocol/openid-connect/logout
-OIDC_JWKS_URI=https://keycloak.example.com/auth/realms/iqb/protocol/openid-connect/certs
+**Production example** using an external Keycloak and realm `coding-box`:
 
-# OAuth2 Client Configuration
+```dotenv
+SERVER_NAME=coding-box.example.org
+OIDC_PROVIDER_URL=https://keycloak.${SERVER_NAME}
+OIDC_ISSUER=https://keycloak.${SERVER_NAME}/realms/coding-box
+OIDC_ACCOUNT_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/account
+OIDC_AUTHORIZATION_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/auth
+OIDC_TOKEN_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/token
+OIDC_USERINFO_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/userinfo
+OIDC_END_SESSION_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/logout
+OIDC_JWKS_URI=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/certs
 OAUTH2_CLIENT_ID=coding-box
-OAUTH2_CLIENT_SECRET=your_secret_here
-OAUTH2_REDIRECT_URL=//example.com/auth/callback
+OAUTH2_CLIENT_SECRET=
+OAUTH2_REDIRECT_URL=//${SERVER_NAME}/api/auth/callback
 ```
 
-#### Keycloak-Specific Variables
+The empty secret applies only to the matching public example client. Supply the
+actual protected secret for a confidential client. `AuthController` prepends
+`https:` to the callback variable when `NODE_ENV=production`, otherwise `http:`.
+Do not put a full `https://...` URL into this scheme-relative setting.
+The provider's allowed redirect URI in this example is exactly
+`https://coding-box.example.org/api/auth/callback`.
+The login query parameter `redirect_uri` is different: it is an allowed return
+location inside the application, such as the home page or coding job.
 
-For the Keycloak-specific implementation, these variables can be used:
+**Development example** for the Compose network:
 
-```bash
-KEYCLOAK_URL=https://keycloak.example.com/auth/
-KEYCLOAK_REALM=coding-box
-KEYCLOAK_CLIENT_ID=coding-box
-KEYCLOAK_CLIENT_SECRET=your_secret_here
+```dotenv
+SERVER_NAME=localhost
+API_PORT=3333
+OIDC_PROVIDER_URL=http://${SERVER_NAME}:8080
+OIDC_ISSUER=http://${SERVER_NAME}:8080/realms/coding-box
+OIDC_ACCOUNT_ENDPOINT=http://${SERVER_NAME}:8080/realms/coding-box/account
+OIDC_AUTHORIZATION_ENDPOINT=http://${SERVER_NAME}:8080/realms/coding-box/protocol/openid-connect/auth
+OIDC_TOKEN_ENDPOINT=http://keycloak:8080/realms/coding-box/protocol/openid-connect/token
+OIDC_USERINFO_ENDPOINT=http://keycloak:8080/realms/coding-box/protocol/openid-connect/userinfo
+OIDC_END_SESSION_ENDPOINT=http://keycloak:8080/realms/coding-box/protocol/openid-connect/logout
+OIDC_JWKS_URI=http://keycloak:8080/realms/coding-box/protocol/openid-connect/certs
+OAUTH2_CLIENT_ID=coding-box
+OAUTH2_CLIENT_SECRET=
+OAUTH2_REDIRECT_URL=//${SERVER_NAME}:${API_PORT}/api/auth/callback
 ```
 
-#### Configuration Templates
+The public issuer, authorization and account endpoints must work in the browser.
+`keycloak:8080` is the internal Docker service for backend requests. Internal
+JWKS/token addresses may therefore differ from the public address, while the
+expected issuer must still exactly match the token.
+For a backend running directly on the host, explicitly replace these internal
+addresses with host-reachable endpoints. The backend reads `.env.dev`; suitable
+exported process variables can provide the host-specific settings.
 
-The main configuration template is in `.env.coding-box.template`. Copy this file and adjust values for your environment:
-
-```bash
-cp .env.coding-box.template .env.coding-box
-# Edit .env.coding-box with your values
-```
-
-#### Docker Compose Setup
-
-The OIDC environment variables are defined in `docker-compose.yaml` and passed to backend and frontend via the `x-env-oidc` anchor:
-
-```yaml
-x-env-oidc: &env-oidc
-  OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL}
-  OIDC_ISSUER: ${OIDC_ISSUER}
-  OIDC_ACCOUNT_ENDPOINT: ${OIDC_ACCOUNT_ENDPOINT}
-  OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT}
-  OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT}
-  OIDC_USERINFO_ENDPOINT: ${OIDC_USERINFO_ENDPOINT}
-  OIDC_END_SESSION_ENDPOINT: ${OIDC_END_SESSION_ENDPOINT}
-  OIDC_JWKS_URI: ${OIDC_JWKS_URI}
-  OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
-  OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
-  OAUTH2_REDIRECT_URL: ${OAUTH2_REDIRECT_URL}
-```
+The application uses explicit endpoints, not automatic discovery configuration.
+Compare values with the particular provider's discovery metadata.
+`/auth/realms/...` applies only if the provider is actually deployed with that
+context path. The shipped Keycloak 22 examples use `/realms/coding-box` without
+an extra `/auth` prefix. `KEYCLOAK_*` concerns remaining helper/installation paths
+and the explicitly supported legacy migration; it does not replace active
+`OIDC_*` configuration.
 
 ### 2.2 Keycloak Setup
 
-#### Realm Configuration
+The complete [realm file](../config/keycloak/realm/coding-box-realm.json) consumes
+variables from the [realm configuration](../config/keycloak/realm/coding-box-realm.config).
+The separate [client export](../config/keycloak/clients/coding-box.json) is not
+an instruction to reimport an existing realm.
 
-The Keycloak realm configuration is in `config/keycloak/realm/coding-box-realm.json`. Important settings:
-
-- **Realm Name**: `coding-box`
-- **Access Token Lifespan**: 300 seconds (5 minutes)
-- **SSO Session Idle Timeout**: 1800 seconds (30 minutes)
-- **SSO Session Max Lifespan**: 36000 seconds (10 hours)
-- **Registration Allowed**: `true` (can be disabled)
-- **Reset Password Allowed**: `false`
-
-#### Client Setup
-
-The client configuration is in `config/keycloak/clients/coding-box.json`:
-
-- **Client ID**: `coding-box`
-- **Name**: IQB Kodierbox
-- **Standard Flow Enabled**: `true` (Authorization Code Flow)
-- **Implicit Flow Enabled**: `false`
-- **Public Client**: `true`
-- **Redirect URIs**: `*` (restrict in production)
-- **Web Origins**: `*` (restrict in production)
-- **Access Token Lifespan**: 4579200 seconds (53 days)
-
-#### User Roles and Permissions
-
-Kodierbox uses the following role structure in Keycloak:
-
-- **admin**: System administrator with full permissions
-- **default-roles-coding-box**: Default role for all users
-
-Admin status is read from the user's `realm_access.roles` array. Users with the `admin` role receive administrator privileges in Kodierbox.
-
-#### Admin Account Setup
-
-The admin account is configured via environment variables:
-
-```bash
-CODING_BOX_ADMIN_NAME=coding-box-admin
-CODING_BOX_ADMIN_EMAIL=coding-box-admin@localhost
-CODING_BOX_ADMIN_PASSWORD=change_me
-CODING_BOX_ADMIN_CREATED_TIMESTAMP=1234567890
-```
-
-These variables are used in the realm configuration to create the initial admin user.
-
-**Default Credentials for Local Development:**
-
-- **Keycloak Admin Console** (http://localhost:8080/admin):
-  - Username: `admin`
-  - Password: `change_me`
-
-- **Kodierbox Realm User** (http://localhost:8080/realms/coding-box):
-  - Username: `coding-box-admin`
-  - Password: `change_me`
-
-**Important:** Change these passwords after the first login for security.
-
-#### Theme Customization
-
-Kodierbox uses a custom IQB theme for Keycloak. The theme is located in `config/keycloak/themes/iqb/`. The theme is activated via the client attribute `login_theme: iqb`.
+- Realm `coding-box`; `CODING_BOX_CLIENT_ID` and `OAUTH2_CLIENT_ID` must match the
+  client actually configured in the provider.
+- Standard Authorization Code flow enabled; Implicit Flow and Direct Access
+  Grants disabled. The backend uses PKCE S256.
+- The shipped client is public (`publicClient: true`); service accounts are
+  disabled. A confidential client needs matching client authentication and
+  `OAUTH2_CLIENT_SECRET`; a client-credentials service does not expand API rights.
+- The export contains wildcard redirect URIs and origins. Restrict these to the
+  actual callback and browser origins before operation. The backend allows the
+  callback origin and an explicitly configured
+  `FRONTEND_URL` origin. Development also allows the derived `HTTP_PORT` origin
+  and localhost/127.0.0.1 on that port. Align those runtime settings and the
+  provider allowlist with the actual frontend.
+- `admin` in `realm_access.roles` controls administrator status. Workspace
+  membership, access levels and job assignments remain separate application checks.
+- The realm's access-token default is 300 seconds. The shipped client overrides
+  it with `access.token.lifespan=4579200` (53 days). Check effective client settings
+  and `exp`; five minutes is not a guaranteed lifetime.
+- The export enables registration and disables password reset. Operators must
+  choose these rules and session/token lifetimes deliberately.
+- Before first start, set strong private admin/database credentials in `.env.dev`
+  or the private installation and `CODING_BOX_ADMIN_*` in the realm configuration.
+  Do not retain fixed example passwords as operational defaults.
+- The IQB theme is in [themes/iqb](../config/keycloak/themes/iqb), selected through
+  the client's `login_theme` attribute.
 
 ### 2.3 Deployment
 
-#### Docker Compose Deployment
+#### Local Docker development
 
-Start the complete environment with:
+Use a separate fresh checkout and an unused Compose project name. Change the
+example name to an available identifier before use. Do not overwrite existing
+configuration with the following copy command.
 
 ```bash
-make dev-up
+umask 077
+export COMPOSE_PROJECT_NAME=auth-dev-example
+cp -n .env.dev.template .env.dev
 ```
 
-This starts:
-- PostgreSQL database
-- Redis for PKCE verifier storage
-- Backend with OIDC configuration
-- Frontend
-- Keycloak (if configured in compose file)
+Replace placeholders, including `JWT_SECRET` and both admin credentials, align the
+realm configuration and resolve registry access before starting. The following
+command only checks Compose configuration; it starts no services:
 
-#### Traefik Integration
+```bash
+docker compose --env-file .env.dev -f docker-compose.yaml -f docker-compose.override.yaml config --quiet
+```
 
-Traefik is used as a reverse proxy and configures SSL/TLS. Ensure that:
-- `SERVER_NAME` is set correctly
-- `TLS_CERTIFICATE_RESOLVER` is configured (or empty for custom certificates)
-- OIDC endpoints are accessible via HTTPS
+The shipped files use the external network with the fixed name `app-net` and
+fixed/configured host ports. A different project name separates Compose resources,
+but not this network or host ports. Existing stacks on the target host must not be
+affected. For parallel stacks, first define separate networks and nonconflicting
+ports in a fully checked override combination, or use a separate development
+machine. Without further configuration, the Make commands below use the default stack.
 
-#### SSL/TLS Configuration
+For a local development stack prepared accordingly, subsequently use `make dev-build` and
+`make dev-up`. These commands build/pull images and start services. The development
+override exposes Keycloak on port 8080, the backend on `API_PORT` and the frontend
+on `HTTP_PORT`. `make dev-up` is not the production deployment command.
+For host-based development, also start DB/Redis and adjust internal provider
+addresses as described in section 2.1. Start frontend and backend separately; the
+[project guide](../AGENTS.md) lists the corresponding Nx/npm commands.
 
-For production environments:
-- Use HTTPS for all OIDC endpoints
-- Configure valid SSL certificates
-- Set `sslRequired: external` in Keycloak realm configuration
-- Update all redirect URIs to HTTPS
+#### Production fresh installation
 
-#### Network Configuration
+1. Select a reviewed release tag, new target directories, registry access, DNS/TLS,
+   Traefik and an external provider installation. Production Compose does not
+   supply a Keycloak service.
+   Before invoking the installer, decide whether to create a new realm or retain
+   an existing provider unchanged. For an existing provider, explicitly answer
+   `n` to `Do you want to use the Keycloak identity provider included in the
+   infrastructure? [Y/n]` and supply its existing endpoints/client settings.
+   The default branch can replace realm files, stop Keycloak and run an import;
+   it is not a safe attachment path for a provider that must remain unchanged.
+2. Read the [installation script](../scripts/install.sh) belonging to that release
+   and run `bash scripts/install.sh "$AUTH_RELEASE_TAG"`. Explicitly set
+   `AUTH_RELEASE_TAG` to the reviewed tag first. This interactive script can
+   download files, install infrastructure, import a realm and start services;
+   use it only for the planned fresh installation. Linux/Bash utilities including
+   `readarray` are required, not the Bash 3.2 shipped with macOS.
+3. The installer downloads the base as `docker-compose.coding-box.yaml` and
+   creates `.env.coding-box`. Privately compare configuration with approved values.
+   Initially answer `n` to the final `Do you want to start coding-box now? [Y/n]`
+   prompt, then render in the installed directory:
 
-Kodierbox uses a Docker network `app-net` for communication between services. Ensure that:
-- Backend can reach OIDC provider
-- Frontend can reach backend
-- OIDC provider can reach callback URL
+   ```bash
+   docker compose --env-file .env.coding-box -f docker-compose.coding-box.yaml -f docker-compose.coding-box.prod.yaml config --quiet
+   ```
+
+   In a source checkout the same base is named `docker-compose.yaml`. Include
+   any generated `compose.sh` wrapper and the complete operator override list
+   actually used by the deployment.
+   This is not a preflight check for the entire installer: earlier steps may
+   already have changed files, infrastructure and, if the import branch was
+   selected, the provider. Review those decisions before step 2.
+4. Verify restricted callback/origin allowlists, client and credentials. Only then
+   start the new application deliberately. `make coding-box-up` pulls images and
+   starts the installed configuration. Existing installations belong to the
+   upgrade path and must not be overwritten with the fresh installer.
+5. Before approval, verify health, login, callback, exchange, protected
+   `GET /api/auth-data`, role, workspace, refresh and logout.
+
+**Evidence boundary:** [#564 was accepted within its documented scope](https://github.com/iqb-berlin/coding-box/issues/564#issuecomment-6389951706):
+live login using shipped templates/realm/theme in isolated development Auth
+configuration; production template checked at Compose/configuration level.
+This does not constitute acceptance of a complete interactive production installer
+or a separate TLS production deployment. This guide does not extend that evidence.
 
 ## 3. For Developers
 
 ### 3.1 Backend Implementation
 
-#### OidcAuthService - Generic OIDC Service
+Active components are [AuthController](../apps/backend/src/app/auth/auth.controller.ts),
+[OidcAuthService](../apps/backend/src/app/auth/service/oidc-auth.service.ts),
+[JwtStrategy](../apps/backend/src/app/auth/jwt.strategy.ts) and the separate
+[WorkspaceTokenStrategy](../apps/backend/src/app/auth/workspace-token.strategy.ts).
+[AuthModule](../apps/backend/src/app/auth/auth.module.ts) registers the generic
+OIDC service; replacing `KeycloakAuthService` is not an operator upgrade step.
 
-The `OidcAuthService` (`apps/backend/src/app/auth/service/oidc-auth.service.ts`) implements a generic OIDC solution that works with any OIDC-compliant provider.
+All routes below include the global backend prefix `/api`:
 
-**Main Methods:**
+| Route | Contract |
+| --- | --- |
+| `GET /api/auth/login` | Requires `browser_challenge` (43-character base64url SHA256), optional allowed application return `redirect_uri`; creates server-side PKCE and redirects. |
+| `GET /api/auth/callback` | Provider `code`/`state`; consumes PKCE, exchanges code, requests userinfo, stores identity; redirects with `auth_code`. |
+| `POST /api/auth/exchange` | JSON `{ "code": "<one-time-code>", "browser_verifier": "<browser-verifier>" }`; returns tokens once to the matching initiating browser. |
+| `POST /api/auth/refresh` | JSON `{ "refresh_token": "<refresh-token>" }`; refreshes provider tokens, returns 401 for an invalid session or 503 for provider/configuration failures. |
+| `POST /api/auth/logout` | Refresh token in body; attempts provider logout. Local logout remains possible if the provider call fails. |
+| `GET /api/auth/profile` | Redirects to separately configured account management. |
+| `POST /api/auth/token` | Relays client credentials to the provider; does not define additional machine API rights. |
+| `POST /api/auth/validate` | Requests userinfo with an access token; does not replace route/workspace authorization. |
 
-- `getAuthorizationUrl(state, redirectUri, codeChallenge)`: Generates authorization URL for OIDC provider
-- `exchangeCodeForToken(code, redirectUri, codeVerifier)`: Exchanges authorization code for access token
-- `getUserInfo(accessToken)`: Retrieves user information from provider
-- `getLogoutUrl(idToken, redirectUri)`: Generates logout URL
-- `logoutWithRefreshToken(refreshToken)`: Performs POST logout
-- `getProfileUrl(redirectUri)`: Generates profile management URL
-- `generatePkcePair()`: Generates PKCE code verifier and challenge
-- `storePkceVerifier(state, codeVerifier)`: Stores PKCE verifier (5 minute TTL)
-- `consumePkceVerifier(state)`: Consumes and deletes PKCE verifier
-
-**Interfaces:**
-
-```typescript
-export interface OidcConfiguration {
-  issuer: string;
-  account_endpoint: string;
-  authorization_endpoint: string;
-  token_endpoint: string;
-  userinfo_endpoint: string;
-  end_session_endpoint: string;
-  jwks_uri: string;
-}
-
-export interface OidcTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token: string;
-  scope?: string;
-  id_token?: string;
-}
-
-export interface OidcUserInfo {
-  sub: string;
-  preferred_username: string;
-  given_name?: string;
-  family_name?: string;
-  email?: string;
-  realm_access?: {
-    roles: string[];
-  };
-}
-```
-
-#### KeycloakAuthService - Keycloak-Specific Service
-
-The `KeycloakAuthService` (`apps/backend/src/app/auth/service/keycloak-auth.service.ts`) provides a Keycloak-specific implementation with simplified configuration.
-
-**Differences from generic service:**
-- Only requires `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`
-- Constructs endpoints automatically from base URL
-- Identical method signatures to `OidcAuthService`
-
-#### AuthController - REST API Endpoints
-
-The `AuthController` (`apps/backend/src/app/auth/auth.controller.ts`) provides the following endpoints:
-
-**GET /auth/login**
-- Initiates OIDC login
-- Generates PKCE pair
-- Stores code verifier
-- Redirects to OIDC provider
-- Query parameter: `redirect_uri` (optional)
-
-**GET /auth/callback**
-- Processes OIDC callback
-- Validates state parameter
-- Consumes PKCE verifier
-- Exchanges code for token
-- Retrieves user info
-- Stores user in database
-- Redirects with token or JSON response
-- Query parameters: `code`, `state`
-
-**POST /auth/logout**
-- Performs SSO logout
-- Invalidates refresh token
-- Body: `{ refresh_token: string }`
-
-**GET /auth/profile**
-- Redirects to OIDC provider profile management
-- Query parameter: `redirect_uri` (optional)
-
-**POST /auth/token**
-- OAuth2 Client Credentials Flow
-- Body: `{ client_id, client_secret, scope? }`
-- Returns access token
-
-**POST /auth/validate**
-- Validates access token against OIDC provider
-- Body: `{ access_token: string }`
-- Returns user info
-
-#### AuthService - User Management
-
-The `AuthService` (`apps/backend/src/app/auth/service/auth.service.ts`) manages users in the Kodierbox database:
-
-**Main Methods:**
-
-- `storeOidcProviderUser(user)`: Stores OIDC user in database
-- `loginOidcProviderUser(user)`: Logs in OIDC user and creates JWT
-- `createToken(identity, workspaceId, duration)`: Creates workspace-specific token
-- `isAdminUser(userId)`: Checks admin status
-- `canAccessWorkSpace(userId, workspaceId)`: Checks workspace access
+Body values in this table are placeholders, not executable test credentials.
+See [request contracts](../api-dto/request-contracts.ts).
 
 ### 3.2 Frontend Implementation
 
-#### Authentication Service
+The current [AuthService](../apps/frontend/src/app/core/services/auth.service.ts)
+manages OIDC login. `AuthenticationService` is a separate Testcenter integration,
+not the owner of this OIDC session.
 
-The `AuthenticationService` (`apps/frontend/src/app/core/services/authentication.service.ts`) manages authentication in the frontend.
-
-**Main functions:**
-- Token storage (localStorage/sessionStorage)
-- Token refresh
-- User session management
-
-#### Route Guards
-
-Kodierbox uses multiple guards for route protection:
-
-- **AuthGuard** (`apps/frontend/src/app/core/guards/auth.guard.ts`): Protects authenticated routes
-- **AdminGuard** (`apps/frontend/src/app/core/guards/admin.guard.ts`): Protects admin routes
-- **TokenGuard** (`apps/frontend/src/app/core/guards/token.guard.ts`): Validates tokens
-- **AccessLevelGuard** (`apps/frontend/src/app/core/guards/access-level.guard.ts`): Checks access level
-
-#### Token Storage and Refresh
-
-Tokens are stored in the frontend and automatically refreshed:
-- Access token is used for API calls
-- Refresh token is used for token refresh
-- Token storage follows security best practices
-
-#### Interceptors for API Calls
-
-The `AuthInterceptor` (`apps/frontend/src/app/core/interceptors/auth.interceptor.ts`) automatically adds authorization headers to API calls.
-
-#### User Session Management
-
-Session management includes:
-- Login status tracking
-- User information caching
-- Automatic logout on token expiration
-- Session timeout handling
+- Browser verifier in `sessionStorage` under `oidc_login_verifier`, removed after
+  successful exchange. The binding therefore belongs to the initiating browser tab.
+- Access, ID and refresh tokens in `localStorage` under `auth_token`, `id_token`,
+  `refresh_token`. This is the implementation, not HttpOnly-cookie storage.
+  Logout removes these values. Do not export token values in tickets or HAR files.
+- `getValidToken()` refreshes absent or soon-expiring access tokens and coalesces
+  concurrent refreshes for the same session. Old responses must not overwrite a
+  new session or another person's session.
+- Genuine session failures require reauthentication. Temporary provider or
+  configuration failures preserve the session and recovery draft.
 
 ### 3.3 Authentication Flow
 
-#### PKCE (Proof Key for Code Exchange) Flow
+1. Frontend creates a random browser verifier and SHA256 challenge.
+2. Backend stores its own PKCE verifier plus browser challenge in Redis for
+   300 seconds and redirects to the provider (S256, `openid profile email`).
+3. Provider authenticates the user and calls the backend callback.
+4. Backend consumes PKCE state once and sends the PKCE verifier in the protected
+   token request to the provider; it is not in the frontend redirect.
+5. Backend caches the resulting token set with the browser challenge in Redis for
+   60 seconds. Only a random `auth_code` is returned to the application.
+6. Frontend posts code and browser verifier to `/api/auth/exchange`. The cache
+   entry is atomically consumed only if the challenge matches. Wrong browser,
+   expired code or reuse results in 401.
+7. Frontend stores tokens and uses the access token as bearer. Backend checks
+   RS256/JWKS, expiration, exact issuer, client (`azp` or `aud`) and `sub`, then
+   maps the local identity by provider issuer and subject.
 
-The PKCE flow is used for public clients and increases security:
-
-**Step 1: Generate Code Verifier and Challenge**
-```typescript
-const { codeVerifier, codeChallenge } = this.oidcAuthService.generatePkcePair();
-```
-- Code verifier: 32 bytes random data, base64url-encoded
-- Code challenge: SHA256 hash of verifier, base64url-encoded
-
-**Step 2: Store Verifier**
-```typescript
-await this.oidcAuthService.storePkceVerifier(state, codeVerifier);
-```
-- Storage with state as key
-- TTL: 5 minutes
-- Storage location: In-memory map (development), Redis (production)
-
-**Step 3: Redirect to OIDC Provider**
-```typescript
-const authUrl = this.oidcAuthService.getAuthorizationUrl(state, redirectUri, codeChallenge);
-res.redirect(authUrl);
-```
-- Parameters: `response_type=code`, `client_id`, `redirect_uri`, `state`, `scope`, `code_challenge`, `code_challenge_method=S256`
-
-**Step 4: Exchange Code for Token**
-```typescript
-const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, redirectUri, codeVerifier);
-```
-- POST request to token endpoint
-- Parameters: `grant_type=authorization_code`, `client_id`, `code`, `redirect_uri`, `code_verifier`, optional `client_secret`
-
-**Step 5: Retrieve User Info**
-```typescript
-const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
-```
-- GET request to userinfo endpoint
-- Header: `Authorization: Bearer {access_token}`
-
-**Step 6: Store User**
-```typescript
-const userData: CreateUserDto = {
-  identity: userInfo.sub,
-  username: userInfo.preferred_username,
-  firstName: userInfo.given_name || '',
-  lastName: userInfo.family_name || '',
-  email: userInfo.email || '',
-  issuer: 'coding-box',
-  isAdmin: userInfo.realm_access?.roles?.includes('admin') || false
-};
-await this.authService.storeOidcProviderUser(userData);
-```
-
-#### Token Lifecycle
-
-1. **Access Token**: Short-lived (default 5 minutes), used for API calls
-2. **Refresh Token**: Long-lived (default 53 days), used for token refresh
-3. **ID Token**: Contains user claims, used for identity verification
-4. **Token Refresh**: Automatic by frontend on expiration
-5. **Token Invalidation**: On logout or SSO logout
-
-#### Refresh Token Handling
-
-- Refresh tokens are stored securely
-- Automatic refresh on expired access token
-- Refresh token is invalidated on logout
-- SSO logout invalidates refresh token at provider
-
-#### Session Management
-
-- Session timeout based on SSO session (30 minutes idle, 10 hours max)
-- Activity tracking for idle timeout
-- Automatic redirect on session expiration
-- Manual logout option
+The application backend has no persistent refresh-token table. Redis holds
+short-lived PKCE/exchange state, including the temporary token set; provider
+sessions and browser token storage are separate.
 
 ### 3.4 Integration with Other Services
 
-#### Database Integration
-
-Users are stored in the PostgreSQL database:
-
-- Table: `users`
-- Fields: `id`, `identity`, `username`, `email`, `first_name`, `last_name`, `issuer`, `is_admin`
-- Index on `identity` and `issuer` for fast lookup
-- Upsert logic: User is updated if already exists
-
-#### Redis Integration
-
-Redis is used for PKCE verifier storage:
-
-- Key format: `oidc:pkce:{sha256(state)}`
-- TTL: 5 minutes
-- Storage location: In-memory map in development, Redis in production
-- Automatic cleanup of expired entries
-
-#### Workspace Access Control
-
-Access to workspaces is checked via `AuthService.canAccessWorkSpace()`:
-
-- User must have workspace access
-- Admin users have access to all workspaces
-- Workspace admins have access to their workspace
-
-#### Role-Based Authorization
-
-Roles are read from Keycloak `realm_access.roles`:
-
-- `admin`: Full access to all features
-- Other roles can be added as needed
-- Roles are synchronized in Kodierbox database
+Roles and authenticated identity do not replace workspace/job authorization.
+The [scope guard](../apps/backend/src/app/auth/jwt-or-workspace-token-auth.guard.ts)
+and [workspace rules](../apps/backend/src/app/admin/workspace/workspace.guard.ts)
+check the particular route. Section 6 lists token/role boundaries; successful token
+issuance does not grant unrestricted API access.
 
 ## 4. For End Users
 
 ### 4.1 Login Process
 
-**How to log in:**
-
-1. Click "Login" on the login page
-2. You will be redirected to Keycloak login
-3. Enter your username and password
-4. After successful authentication, you will be redirected back to Kodierbox
-5. You are now logged in
-
-**Password Management:**
-- Passwords are managed in Keycloak
-- Password reset depends on Keycloak configuration
-- In default configuration, password reset is disabled
-
-**Account Creation:**
-- If registration is enabled in Keycloak, new users can register
-- Click "Register" on the login page
-- Fill out the registration form
-- After confirmation, you can log in
+Use the application's login action to initiate the bound flow. Enter credentials
+only at the intended provider. After returning, check identity and expected
+workspaces. Reauthentication alone does not grant missing assignments.
 
 ### 4.2 Profile Management
 
-**Accessing Profile Settings:**
-
-1. Click on your username in the header
-2. Select "Profile" from the menu
-3. You will be redirected to Keycloak profile management
-
-**Changing Password:**
-- Go to profile management
-- Navigate to "Password"
-- Enter your current and new password
-- Confirm the new password
-- Save changes
-
-**Managing Personal Information:**
-- Profile management allows changes to:
-  - First name
-  - Last name
-  - Email address
-  - Other attributes (depending on configuration)
-
-**Email Verification:**
-- Depends on Keycloak configuration
-- In default configuration, email verification is disabled
-- If enabled, you must verify your email after registration
+Profile management uses the provider's separately configured account endpoint.
+Its concrete behavior is evidenced for Keycloak; another provider needs a suitable
+account/claim contract.
 
 ### 4.3 Logout
 
-**Single Logout (application only):**
-- Click "Logout" in the user menu
-- You will be logged out of Kodierbox
-- Other applications remain logged in
+Explicit logout removes local tokens and attempts to end the provider session
+using the refresh token. A failed provider call does not establish global
+server-side session revocation. Other tabs/sessions and already signed access
+tokens remain subject to their own state.
 
-**SSO Logout (all sessions):**
-- Kodierbox automatically performs SSO logout
-- Refresh token is invalidated at provider
-- You will be logged out of all applications using SSO
-- Session is terminated at Keycloak
+### 4.4 User Troubleshooting
 
-**Session Timeout:**
-- Idle timeout: 30 minutes of inactivity
-- Max session: 10 hours
-- After timeout, you are automatically logged out
-- You must log in again
-
-### 4.4 Troubleshooting for Users
-
-**Login Errors:**
-
-**Incorrect credentials:**
-- Verify username and password
-- Check for case sensitivity
-- Try resetting your password (if enabled)
-
-**Account locked:**
-- Contact your administrator
-- Administrator can unlock account in Keycloak
-
-**Browser issues:**
-- Keep the coding tab and its draft open while diagnosing an authentication error.
-- Record the error/request ID and follow [operational authentication diagnosis](#55-operational-authentication-diagnosis-f06) before clearing storage, signing out, or reloading an unsaved draft.
-- Check JavaScript and browser connectivity. For a temporary outage, use the application's retry action after connectivity is restored.
-
-**Connection issues:**
-- Check your internet connection
-- Verify server is reachable
-- Try again later
+Reauthenticate as the same person to recover an own draft in the original coding
+context. For provider/network failures, retry while preserving the draft. Give
+operations the error ID, time and action; do not send tokens, passwords or response data.
 
 ## 5. Troubleshooting (Common Issues)
 
 ### 5.1 Configuration Issues
 
-**Missing Environment Variables**
+Check startup validation, effective `OIDC_*`/`OAUTH2_*` settings and the actual
+error class. Compare exact issuer and callback with the provider. A public client
+does not need an invented secret; a confidential client needs its matching protected
+secret. Correct the specific configuration using the
+[upgrade/rollback procedure](auth-upgrade-and-restore.en.md).
 
-Symptom: Backend fails to start with error "OpenID Connect configuration is missing"
+### 5.2 Authentication Errors
 
-Solution:
-- Check `.env.coding-box` file
-- Ensure all OIDC_* variables are set
-- Check Docker Compose environment variables
-- Restart backend
-
-**Incorrect Endpoint URLs**
-
-Symptom: "Failed to exchange authorization code for token" or "Failed to get user information"
-
-Solution:
-- Verify OIDC_ENDPOINT_* variables
-- Ensure URLs are correct and reachable
-- Test endpoints with curl or Postman
-- Check TLS/SSL configuration
-
-**Client Secret Mismatch**
-
-Symptom: "Invalid client credentials" on token exchange
-
-Solution:
-- Verify OAUTH2_CLIENT_SECRET in environment variables
-- Ensure secret matches Keycloak client configuration
-- Regenerate secret in Keycloak if needed
-- Restart backend
-
-**Redirect URI Problems**
-
-Symptom: "Invalid redirect_uri" or redirect not working
-
-Solution:
-- Verify OAUTH2_REDIRECT_URL
-- Ensure redirect URI is included in Keycloak client configuration
-- Use HTTPS in production
-- Check CORS configuration
-
-### 5.2 Authentication Failures
-
-**PKCE Verifier Expired**
-
-Symptom: "PKCE verifier missing or expired"
-
-Solution:
-- PKCE verifier has 5 minute TTL
-- Restart login process
-- Check system time on server and client
-- Ensure Redis is running (in production)
-
-**Invalid State Parameter**
-
-Symptom: "State parameter is required for PKCE flow"
-
-Solution:
-- State is automatically generated
-- Verify state is returned correctly in callback
-- Ensure no state manipulation by middleware
-- Check browser console for errors
-
-**Token Exchange Failure**
-
-Symptom: "Failed to exchange authorization code for token"
-
-Solution:
-- Verify authorization code hasn't expired (60 seconds)
-- Ensure PKCE verifier is correct
-- Check client ID and secret
-- Check Keycloak logs for errors
-
-**User Info Retrieval Error**
-
-Symptom: "Failed to get user information"
-
-Solution:
-- Verify access token is valid
-- Ensure userinfo endpoint is reachable
-- Check token scopes include `profile` and `email`
-- Check Keycloak user configuration
+For missing/consumed browser verifier or expired one-time code, start login again
+from the application. Do not manually copy codes between tabs. `invalid_grant`,
+401, 403 and 503 have different causes; see section 5.5.
 
 ### 5.3 Keycloak Issues
 
-**Realm Not Found**
-
-Symptom: "Realm not found" in Keycloak logs
-
-Solution:
-- Verify KEYCLOAK_REALM variable
-- Ensure realm exists in Keycloak
-- Import realm configuration if needed
-- Check Keycloak Admin Console
-
-**Client Not Found**
-
-Symptom: "Client not found" or "Invalid client"
-
-Solution:
-- Verify OAUTH2_CLIENT_ID variable
-- Ensure client exists in realm
-- Check client is enabled
-- Import client configuration if needed
-
-**Invalid Credentials**
-
-Symptom: "Invalid credentials" on login
-
-Solution:
-- Check user login in Keycloak Admin Console
-- Ensure user is enabled
-- Reset password if needed
-- Check user roles
-
-**Role Assignment Problems**
-
-Symptom: User doesn't have admin rights despite role
-
-Solution:
-- Verify user has `admin` role in Keycloak
-- Ensure role is in `realm_access.roles`
-- Sync user in Kodierbox database
-- Check backend logs for role mapping
+Check realm, client, allowed callback, roles and effective token lifetimes.
+Do not use a blanket JSON reimport to troubleshoot an existing realm; compare
+with the secured operator configuration.
 
 ### 5.4 Network Issues
 
-**CORS Errors**
-
-Symptom: CORS errors in browser
-
-Solution:
-- Check CORS configuration in backend
-- Ensure origin is allowed
-- Configure CORS in Keycloak if needed
-- Use CORS plugin for browser testing
-
-**Proxy Configuration**
-
-Symptom: Connection errors through proxy
-
-Solution:
-- Check Traefik configuration
-- Ensure OIDC endpoints are routed correctly
-- Configure proxy headers (X-Forwarded-*, etc.)
-- Test endpoints without proxy
-
-**SSL Certificate Problems**
-
-Symptom: SSL errors or certificate warnings
-
-Solution:
-- Use valid SSL certificates in production
-- Ensure certificate is valid for all endpoints
-- Check certificate chain
-- Configure `sslRequired: external` in Keycloak
-
-**Timeout Issues**
-
-Symptom: Request timeouts
-
-Solution:
-- Check network connection
-- Increase timeout values in HTTP client
-- Check firewall configuration
-- Check load balancer settings
+Check DNS, VPN/routing, TLS trust, proxy and reachability separately from browser
+**and** backend. Correct CORS/origin allowlists at the intended service; do not
+bypass browser protections with CORS plugins. Browser login does not establish
+backend access to internal token/JWKS endpoints.
 
 ### 5.5 Operational authentication diagnosis (F06)
 
@@ -787,170 +407,114 @@ Do not include Authorization/Cookie headers, access/refresh/ID tokens, client se
 
 ## 6. Security Considerations
 
-### PKCE for Public Clients
+### Token Types and Permissions
 
-PKCE (Proof Key for Code Exchange) is used to prevent authorization code interception attacks:
+This overview describes the integrated state. The binding external allow/deny
+matrix and safe legacy transition are tracked separately in
+[#569](https://github.com/iqb-berlin/coding-box/issues/569); this chapter does not
+preempt its acceptance.
 
-- Code verifier is randomly generated (32 bytes)
-- Code challenge is SHA256 hash of verifier
-- Verifier is not transmitted over the network
-- Server can validate challenge
-- Protects against code interception and replay attacks
+| Type/scope | Reach and limits |
+| --- | --- |
+| OIDC user access token | Provider-signed RS256 JWT for the configured client; application roles, workspace membership and route determine actions. Lifetime follows provider/client and `exp`. |
+| Workspace `replay:read` | Explicitly enabled replay/player/metadata routes and compatible statistics POST in the bound workspace. Default maximum 90 days, configurable through `WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS`. |
+| Workspace `replay-statistics:write` | Explicitly enabled statistics action, not general write access. Maximum 1 day. |
+| Workspace `coding-job:operate` | Currently explicitly enabled job-note reading, not general job write or admin access. Maximum 1 day. |
+| Provider client-credentials token | Issuance through `/api/auth/token` does not define standalone machine access. Acceptance and permissions must be specified for a concrete consumer separately. |
 
-### State Parameter Validation
+The statistics POST intentionally **also accepts `replay:read`** so the existing
+replay can record its statistics. This historical scope is therefore not universally
+read-only. `replay-statistics:write` is an additional explicit alternative; retain
+this compatibility exception during the legacy transition.
+[Implementation](../apps/backend/src/app/admin/replay-statistics/replay-statistics.controller.ts).
 
-State parameter is used for CSRF protection:
+Workspace tokens are HS256 tokens with `token_use=workspace`, `iss=coding-box`,
+`aud=coding-box-workspace-token`, a bound workspace ID and scopes. Combined scopes
+use the shortest applicable maximum lifetime. Issuance uses user/workspace-guarded
+token routes, not another workspace token. The server limits duration and audits
+issuance. Use tokens only in the intended protected application/integration; do
+not paste output or Authorization headers into support messages.
 
-- Random string is generated
-- State is validated in authorization request and callback
-- Redirect URI can optionally be encoded in state
-- Prevents CSRF attacks on callback endpoint
+`ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS` currently defaults to `true`. It accepts the
+checked old format without modern type/issuer/audience claims; absent scopes gain
+only `replay:read`. Signature, expiration and workspace binding remain required.
+Before disabling it, inventory consumers, issue modern tokens with minimum scopes
+and check replay/frontend behavior against guard tests. New integrations should
+not rely on the legacy format. A workspace token does not replace an OIDC user
+session and cannot access a route without explicit allowance; scope checks may
+also return 401.
 
-### Redirect URI Validation
+Sources: [token rules](../apps/backend/src/app/auth/workspace-token.ts),
+[strategy](../apps/backend/src/app/auth/workspace-token.strategy.ts),
+[issuance](../apps/backend/src/app/admin/workspace/workspace-users.controller.ts),
+[guard tests](../apps/backend/src/app/auth/jwt-or-workspace-token-auth.guard.spec.ts)
+and [strategy tests](../apps/backend/src/app/auth/workspace-token.strategy.spec.ts).
 
-Redirect URIs are validated to prevent open redirect attacks:
+### Provider Requirements and Limits
 
-- Only allowed URIs are accepted
-- Relative URIs are allowed
-- Same-origin URIs are allowed
-- OIDC provider origin is explicitly blocked
-- Validation in `isAllowedRedirect()` method
+[#570](https://github.com/iqb-berlin/coding-box/issues/570) separately tracks full
+provider boundaries. The current backend bearer path requires:
 
-### Token Storage Best Practices
+- JWT access tokens, RS256 and reachable JWKS with a matching key. Opaque tokens
+  or other signature algorithms are not supported by this path.
+- Exact `iss`, nonempty `sub`, and matching `azp` **or** `aud` containing
+  `OAUTH2_CLIENT_ID`. It uses `preferred_username`, falling back to `sub`.
+- Callback/userinfo uses `sub`, `preferred_username` and optional `given_name`,
+  `family_name`, `email`; align these claims deliberately for another provider.
+  Admin status/frontend roles expect `realm_access.roles`.
+- Account management uses `referrer`/`referrer_uri`, a remaining Keycloak assumption.
+  Other providers need suitable profile-management and claim mapping configuration
+  or a concrete adaptation.
+- Distinguish the active OIDC service, Keycloak deployment/theme and remaining
+  `KeycloakAuthService` helper files. The latter are not registered as an
+  alternative login implementation in the active Auth module.
 
-**Backend:**
-- Access tokens are not persistently stored
-- Refresh tokens are stored securely in database
-- PKCE verifiers have short TTL (5 minutes)
-- Tokens are transmitted over HTTPS
+Keycloak is evidenced; no additional provider has been accepted live. A new
+provider needs a concrete use case and matching checks, not only a base-URL change.
 
-**Frontend:**
-- Tokens are stored in sessionStorage or localStorage
-- Use HttpOnly cookies when possible
-- Implement token refresh mechanism
-- Clear tokens on logout
+### Secret Management and HTTPS Requirements
 
-### Secret Management
-
-**Environment Variables:**
-- Never store secrets in code
-- Use `.env` files for development
-- Use secret management in production (Vault, Kubernetes Secrets)
-- Rotate secrets regularly
-
-**Keycloak:**
-- Use strong client secrets
-- Rotate secrets regularly
-- Use separate secrets for development/production
-- Enable client secret rotation if available
-
-### HTTPS Requirements
-
-**Production:**
-- All OIDC endpoints must use HTTPS
-- SSL/TLS must be properly configured
-- Use current TLS versions (TLS 1.2+)
-- Disable deprecated cipher suites
-
-**Development:**
-- HTTP is acceptable for local development
-- Use HTTPS for testing with production configuration
-- Note browser security warnings
+Protect provider credentials, `JWT_SECRET`, admin and database passwords separately.
+Use only trusted private operator files; migrations read them as Bash. Never put
+real secrets or tokens in documentation, tickets, screenshots or logs. Operational
+public browser endpoints/callbacks require valid HTTPS. Explicitly define internal
+backend addresses and their trust/network boundaries. HTTP examples refer to the
+isolated local development network.
 
 ## 7. Migration Guide
 
-For existing realms, follow the [upgrade and restore procedure](auth-upgrade-and-restore.md). Application upgrades do not reimport existing users or clients. The general import guidance below applies only to an explicitly planned new provider setup.
+Existing installations must follow the
+[verified upgrade and restore procedure](auth-upgrade-and-restore.en.md).
+It covers consistent application/provider/asset backups, private file backups,
+legacy additions, rejection of duplicate/partial configuration and safe repetition
+without realm reimport. For queue/application version changes also consult
+[backend operations boundaries](backend-hardening.md).
 
-### From Legacy Authentication
+Migration retains a complete operator configuration. It changes only explicitly
+supported legacy configuration or a missing/unsafe workspace signing key; plan
+existing-token effects beforehand. On failure the updater stops by default.
+A full restore can lose provider sessions and does not globally revoke tokens.
 
-If migrating from legacy authentication:
+[#565 was accepted within its documented scope](https://github.com/iqb-berlin/coding-box/issues/565#issuecomment-6395469691):
+[live protocol](qa/auth-upgrade-565-2026-10-25.md) and
+[sanitized evidence](qa/auth-upgrade-565-evidence-2026-10-25.json).
+A complete interactive updater, Keycloak major upgrade, production TLS operation
+and production queue restore were outside that evidence. Final script additions
+were checked by file regressions; no repeated complete live restore is claimed.
 
-1. **Create backup:**
-   - Backup user database
-   - Backup configuration files
-   - Document existing authentication flows
+For fresh installations use section 2.3. Fresh installation, provider change,
+Auth configuration migration and DB schema rollback are different operations;
+do not conflate them through repeated realm/user imports.
 
-2. **Configure OIDC:**
-   - Set up Keycloak or other OIDC provider
-   - Configure environment variables
-   - Import realm and client configuration
+## Verification and Acceptance
 
-3. **Migrate users:**
-   - Export existing users
-   - Import users to Keycloak
-   - Set initial passwords
-   - Assign roles
+- [#564: accepted fresh-install scope](https://github.com/iqb-berlin/coding-box/issues/564#issuecomment-6389951706).
+- [#565: accepted upgrade/restore scope](https://github.com/iqb-berlin/coding-box/issues/565#issuecomment-6395469691).
+- [#1018: session/error handling](https://github.com/iqb-berlin/coding-box/issues/1018),
+  [diagnostic/browser protocol](qa/auth-acceptance-2026-10-23.md).
+- [#569: external token permissions](https://github.com/iqb-berlin/coding-box/issues/569),
+  [#570: provider limits](https://github.com/iqb-berlin/coding-box/issues/570).
+- [#571 documentation verification](qa/auth-documentation-571-2026-10-25.md).
 
-4. **Testing:**
-   - Test login flow
-   - Test token refresh
-   - Test logout
-   - Test roles and permissions
-
-5. **Deployment:**
-   - Deploy new version
-   - Monitor logs
-   - Be ready for rollback
-
-### From Keycloak-Only to Generic OIDC
-
-If switching from Keycloak-specific to generic OIDC implementation:
-
-1. **Change environment variables:**
-   - Remove KEYCLOAK_* variables
-   - Add OIDC_* variables
-   - Configure all endpoints explicitly
-
-2. **Adapt code:**
-   - Replace `KeycloakAuthService` with `OidcAuthService`
-   - Update imports
-   - Test all authentication flows
-
-3. **Test configuration:**
-   - Verify all endpoints
-   - Test with different OIDC providers
-   - Check compatibility
-
-### Environment Variable Changes
-
-When changing environment variables:
-
-1. **Document changes:**
-   - Note old and new values
-   - Document reason for change
-
-2. **Test changes:**
-   - Test in development environment
-   - Verify all flows
-   - Check compatibility
-
-3. **Deploy changes:**
-   - Update `.env` files
-   - Restart services
-   - Monitor logs
-
-### Database Migration
-
-When changing user schema:
-
-1. **Create migration script:**
-   - Use Liquibase for schema changes
-   - Create rollback script
-   - Test migration in test environment
-
-2. **Migrate data:**
-   - Backup existing data
-   - Run migration
-   - Verify data integrity
-
-3. **Deployment:**
-   - Run migration during deployment
-   - Monitor for errors
-   - Be ready for rollback
-
-## Additional Resources
-
-- [OpenID Connect Specification](https://openid.net/connect/)
-- [Keycloak Documentation](https://www.keycloak.org/documentation)
-- [OAuth 2.0 Security Best Current Practice](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics)
-- [PKCE RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)
+Accepted subtasks remain limited to their own verified scope.
+#571 remains open until its own explicitly confirmed acceptance.
