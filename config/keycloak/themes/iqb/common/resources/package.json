@@ -7,5 +7,9 @@
   "dependencies": {
     "jquery": "3.7.1",
     "patternfly": "3.59.5"
+  },
+  "overrides": {
+    "moment": "2.31.0",
+    "bootstrap-select": "1.13.18"
   }
 }
