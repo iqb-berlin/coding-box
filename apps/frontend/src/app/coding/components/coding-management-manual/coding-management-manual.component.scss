@@ -1,5 +1,8 @@
+// Shared across the manual-coding views, scoped to this feature host.
+// Keep one stylesheet so extracted views retain the existing nested layout.
+.kb-manual {
 // Main container styles
-:host {
+& {
   display: block;
   width: 100%;
   min-width: 0;
@@ -12,7 +15,7 @@
   height: auto;
   min-height: 60vh;
   box-sizing: border-box;
-  animation: fadeIn 0.3s ease-in-out;
+  animation: manualCodingFadeIn 0.3s ease-in-out;
   min-width: 0;
   overflow-x: clip;
 }
@@ -36,7 +39,7 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
-:host ::ng-deep .manual-coding-tabs {
+.manual-coding-tabs {
   .mat-mdc-tab-header {
     background-color: white;
   }
@@ -63,7 +66,7 @@
   }
 }
 
-@keyframes fadeIn {
+@keyframes manualCodingFadeIn {
   from {
     opacity: 0;
   }
@@ -877,7 +880,7 @@
     color: #455a64;
     text-align: left;
 
-    ::ng-deep .mdc-button__label {
+    .mdc-button__label {
       display: grid;
       grid-template-columns: auto 1fr;
       column-gap: 8px;
@@ -934,7 +937,7 @@
       min-height: 44px;
       scroll-snap-align: start;
 
-      ::ng-deep .mdc-button__label {
+      .mdc-button__label {
         display: flex;
         gap: 6px;
         align-items: center;
@@ -1361,7 +1364,7 @@
   justify-content: center;
   padding: 20px;
   box-sizing: border-box;
-  animation: fadeInOverlay 0.3s ease-in-out;
+  animation: manualCodingFadeInOverlay 0.3s ease-in-out;
   pointer-events: auto;
 
   .coder-training-modal {
@@ -1376,12 +1379,12 @@
     box-shadow: 0 11px 15px -7px rgba(0, 0, 0, 0.2), 0 24px 38px 3px rgba(0, 0, 0, 0.14), 0 9px 46px 8px rgba(0, 0, 0, 0.12);
     display: flex;
     flex-direction: column;
-    animation: slideInModal 0.3s ease-out;
+    animation: manualCodingSlideInModal 0.3s ease-out;
     pointer-events: auto;
   }
 }
 
-@keyframes fadeInOverlay {
+@keyframes manualCodingFadeInOverlay {
   from {
     opacity: 0;
   }
@@ -1391,7 +1394,7 @@
   }
 }
 
-@keyframes slideInModal {
+@keyframes manualCodingSlideInModal {
   from {
     transform: scale(0.8) translateY(-20px);
     opacity: 0;
@@ -1447,7 +1450,7 @@
     justify-content: center;
     z-index: 1000;
     border-radius: 12px;
-    animation: fadeInOverlay 0.3s ease-in-out;
+    animation: manualCodingFadeInOverlay 0.3s ease-in-out;
 
     .loading-content {
       display: flex;
@@ -1965,7 +1968,7 @@
     .analysis-details {
       padding: 0 16px 16px;
       border-top: 1px solid rgba(0, 0, 0, 0.08);
-      animation: slideDown 0.2s ease-out;
+      animation: manualCodingSlideDown 0.2s ease-out;
       max-height: 400px;
       overflow-y: auto;
       overflow-x: hidden;
@@ -2191,7 +2194,7 @@
   }
 }
 
-@keyframes slideDown {
+@keyframes manualCodingSlideDown {
   from {
     opacity: 0;
     transform: translateY(-10px);
@@ -2238,5 +2241,7 @@
       }
     }
   }
+
+}
 
 }
