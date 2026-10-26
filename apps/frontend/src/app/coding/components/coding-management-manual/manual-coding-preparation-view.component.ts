@@ -21,6 +21,7 @@ import { ManualCodingViewState } from './manual-coding-view-state.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, TranslateModule, MatIcon, MatIconButton, MatButton, MatProgressBarModule, MatProgressSpinnerModule, MatTooltipModule, MatPaginatorModule, ManualCodingAggregationSettingsComponent],
   templateUrl: './manual-coding-preparation-view.component.html',
+  styleUrl: './manual-coding-preparation-view.component.scss',
   host: { style: 'display: contents' }
 })
 export class ManualCodingPreparationViewComponent {
