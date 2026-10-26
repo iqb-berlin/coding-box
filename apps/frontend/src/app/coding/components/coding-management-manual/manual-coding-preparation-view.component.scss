@@ -1,0 +1,16 @@
+@use './manual-coding-views' as views;
+
+:host {
+  display: contents;
+}
+
+@include views.card;
+@include views.responsive;
+@include views.loading;
+@include views.animations;
+
+:host-context(.statistics-card) {
+  @include views.information;
+}
+
+@include views.preparation;
