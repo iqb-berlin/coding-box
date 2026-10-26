@@ -1,7 +1,7 @@
 <div class="coder-training-container">
   <div class="header">
     <h2 class="title">{{ getDialogTitle() }}</h2>
-    <button mat-icon-button (click)="onClose()" class="close-button">
+    <button mat-icon-button (click)="onClose()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
       <mat-icon>close</mat-icon>
     </button>
   </div>

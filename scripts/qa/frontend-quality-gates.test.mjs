@@ -595,3 +595,61 @@ test('the actual coverage thresholds reject passing tests with uncovered code', 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('Material icon buttons in external and inline templates have accessible names', async () => {
+  const { parseTemplate } = await import('@angular/compiler');
+  const ts = require('typescript');
+  const sourceRoot = join(workspace, 'apps/frontend/src/app');
+  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? walk(file) : [file];
+  });
+  const missing = [];
+  function check(template, file) {
+    const parsed = parseTemplate(template, file);
+    assert.ok(!parsed.errors?.length, file);
+    const seen = new Set();
+    function visit(node) {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+      function hasReadableContent(nodes) {
+        return (nodes || []).some(child => {
+          if (['mat-icon', 'coding-box-wrapped-icon'].includes(child.name)) return false;
+          if (typeof child.value === 'string' && child.value.trim()) return true;
+          if (child.value?.source?.trim()) return true;
+          return ['children', 'branches', 'cases'].some(key => hasReadableContent(child[key]));
+        });
+      }
+      const materialButton = ['button', 'a'].includes(node.name) && node.attributes?.some(attribute =>
+        /^(mat-(icon-button|fab|mini-fab|button|raised-button|stroked-button|flat-button)|matIconButton|matFab|matMiniFab|matButton)$/.test(attribute.name));
+      const iconButton = materialButton && (node.attributes.some(attribute =>
+        ['mat-icon-button', 'mat-fab', 'mat-mini-fab', 'matIconButton', 'matFab', 'matMiniFab'].includes(attribute.name)) ||
+        (/<(?:mat-icon|coding-box-wrapped-icon)\b/.test(node.sourceSpan.toString()) && !hasReadableContent(node.children)));
+      if (iconButton) {
+        const named = [...node.attributes, ...node.inputs].some(attribute =>
+          ['aria-label', 'aria-labelledby'].includes(attribute.name) &&
+          (typeof attribute.value === 'string' ? attribute.value.trim() : attribute.value.source?.trim()));
+        if (!named) missing.push(`${file}:${node.sourceSpan.start.line + 1}`);
+      }
+      for (const key of ['children', 'branches', 'cases', 'empty', 'placeholder', 'loading', 'error']) {
+        const child = node[key];
+        if (Array.isArray(child)) child.forEach(visit);
+        else visit(child);
+      }
+    }
+    parsed.nodes.forEach(visit);
+  }
+  for (const file of walk(sourceRoot)) {
+    const source = readFileSync(file, 'utf8');
+    if (file.endsWith('.html')) check(source, file);
+    if (!file.endsWith('.ts') || /\.(spec|mock)\.ts$/.test(file)) continue;
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    function visit(node) {
+      if (ts.isPropertyAssignment(node) && node.name.getText(tree) === 'template' &&
+        (ts.isNoSubstitutionTemplateLiteral(node.initializer) || ts.isStringLiteral(node.initializer))) check(node.initializer.text, file);
+      ts.forEachChild(node, visit);
+    }
+    visit(tree);
+  }
+  assert.deepEqual(missing, [], 'Icon buttons need aria-label or aria-labelledby; a tooltip is a description.');
+});

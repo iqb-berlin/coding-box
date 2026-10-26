@@ -634,7 +634,7 @@
                   (click)="$event.stopPropagation(); deleteUnit(unit, booklet)"
                   class="delete-unit-button"
                   matTooltip="Unit löschen"
-                >
+                 [attr.aria-label]="'test-results-search.buttons.delete-unit' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
                 <button
@@ -644,7 +644,7 @@
                   (click)="$event.stopPropagation(); deleteUnitsByName(unit)"
                   class="delete-unit-button bulk-delete-unit-button"
                   matTooltip="Alle Aufgaben dieses Namens löschen"
-                >
+                 [attr.aria-label]="'accessibility.actions.delete-units-by-name' | translate">
                   <mat-icon>delete_sweep</mat-icon>
                 </button>
                 }
@@ -825,14 +825,15 @@
                   (click)="$event.stopPropagation(); deleteResponse(response)"
                   class="delete-response-button"
                   matTooltip="Antwort löschen"
-                >
+                 [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
                 <button
                   mat-icon-button
                   (click)="toggleResponseExpansion(response.id)"
+                  [attr.aria-expanded]="response.expanded"
                   class="expand-button"
-                >
+                 [attr.aria-label]="'accessibility.actions.toggle-response-expansion' | translate">
                   <mat-icon>{{
                     response.expanded ? 'expand_less' : 'expand_more'
                   }}</mat-icon>

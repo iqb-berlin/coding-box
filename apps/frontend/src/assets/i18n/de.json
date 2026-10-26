@@ -3144,5 +3144,40 @@
         "bulk": "Kodierungsergebnisse erfolgreich auf {{count}} Antworten angewendet ({{skipped}} für manuelle Überprüfung übersprungen)."
       }
     }
+  },
+  "accessibility": {
+    "actions": {
+      "previous-unit": "Vorherige Aufgabe",
+      "next-unit": "Nächste Aufgabe",
+      "remove-bundle": "Variablenbündel entfernen",
+      "remove-variable": "Variable entfernen",
+      "restart-analysis": "Antwortanalyse neu berechnen",
+      "toggle-kappa-statistics": "Interrater-Reliabilität ein- oder ausblenden",
+      "open-replay": "Replay inkl. Kodieranweisungen öffnen",
+      "reset-codebook-job": "Kodierbuch-Export zurücksetzen",
+      "save-replay-anchor": "Replay-Anchor speichern",
+      "clear-replay-anchor": "Replay-Anchor zurücksetzen",
+      "open-unit-info": "Unit-Definition anzeigen",
+      "open-coding-scheme": "Kodierungsschema öffnen",
+      "dismiss-backend-unavailable": "Meldung schließen",
+      "dismiss-error": "Fehlermeldung schließen",
+      "toggle-booklet-expand": "Aufgaben des Testhefts ein- oder ausblenden",
+      "delete-note": "Notiz löschen",
+      "delete-tag": "Tag löschen",
+      "show-file-content": "Dateiinhalt anzeigen",
+      "open-flat-settings": "Tabelleneinstellungen öffnen",
+      "open-notes-from-flat-row": "Notizen anzeigen",
+      "delete-units-by-name": "Alle Aufgaben dieses Namens löschen",
+      "toggle-response-expansion": "Antwortdetails ein- oder ausblenden",
+      "restore-booklet": "Testheft wiederherstellen",
+      "ignore-booklet": "Testheft ignorieren",
+      "restore-testlet-everywhere": "Dieses Testlet in allen Testheften wiederherstellen",
+      "ignore-testlet-everywhere": "Dieses Testlet in allen Testheften ignorieren",
+      "restore-testlet": "Testlet wiederherstellen",
+      "ignore-testlet": "Testlet ignorieren",
+      "restore-unit": "Aufgabe wiederherstellen",
+      "ignore-unit": "Aufgabe ignorieren",
+      "show-error-details": "Fehlerdetails anzeigen"
+    }
   }
 }

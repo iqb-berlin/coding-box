@@ -65,12 +65,12 @@
                     <div class="action-buttons-container">
                         <button mat-icon-button color="primary" (click)="onReplayClick(element)"
                             [matTooltip]="'coding-management.tooltips.view-in-replay' | translate"
-                            class="action-button">
+                            class="action-button" [attr.aria-label]="'coding-management.tooltips.view-in-replay' | translate">
                             <mat-icon>play_circle_filled</mat-icon>
                         </button>
                         <button mat-icon-button color="primary" (click)="onShowCodingScheme(element.unit.name)"
                             [matTooltip]="'coding-management.tooltips.show-coding-schema' | translate"
-                            class="action-button">
+                            class="action-button" [attr.aria-label]="'coding-management.tooltips.show-coding-schema' | translate">
                             <mat-icon>code</mat-icon>
                         </button>
                     </div>
