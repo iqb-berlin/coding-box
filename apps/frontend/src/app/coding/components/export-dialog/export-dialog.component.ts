@@ -171,7 +171,7 @@ export class ExportDialogComponent implements OnInit {
     reader.onload = async (e: ProgressEvent<FileReader>) => {
       if (!this.isCurrentFile(runId)) return;
       try {
-        const ExcelJS = await import('exceljs');
+        const { default: ExcelJS } = await import('exceljs');
         if (!this.isCurrentFile(runId)) return;
         const workbook = new ExcelJS.Workbook();
         const buffer = e.target?.result as ArrayBuffer;

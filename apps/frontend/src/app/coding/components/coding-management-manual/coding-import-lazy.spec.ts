@@ -4,14 +4,17 @@ const mockExcelLoad = jest.fn();
 jest.mock('exceljs', () => {
   mockExcelLoad();
   return {
-    Workbook: jest.fn(() => ({
-      xlsx: { load: async () => undefined },
-      getWorksheet: () => ({ getRow: () => ({ eachCell: (visit: (cell: { text: string }) => void) => visit({ text: 'Variable-ID' }) }) })
-    }))
+    __esModule: true,
+    default: {
+      Workbook: jest.fn(() => ({
+        xlsx: { load: async () => undefined },
+        getWorksheet: () => ({ getRow: () => ({ eachCell: (visit: (cell: { text: string }) => void) => visit({ text: 'Variable-ID' }) }) })
+      }))
+    }
   };
 });
 
-it('loads ExcelJS only when an Excel workbook is actually read', async () => {
+it('loads a default-only ExcelJS module only when an Excel workbook is actually read', async () => {
   const csv = { name: 'coding.csv', slice: () => ({ text: async () => 'unit;variable_id;code' }) } as unknown as File;
   expect(await readImportHeaders(csv)).toEqual(['unit', 'variable_id', 'code']);
   expect(mockExcelLoad).not.toHaveBeenCalled();
