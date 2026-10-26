@@ -85,12 +85,14 @@ const collectStream = async (
   return Buffer.concat(chunks).toString('utf8');
 };
 
+let fixtureDirectory: string;
+
 const tempCsvFile = (content: string, prefix: string): FileIo => {
   const filePath = path.join(
-    os.tmpdir(),
+    fixtureDirectory,
     `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}.csv`
   );
-  fs.writeFileSync(filePath, content);
+  fs.writeFileSync(filePath, content, { flag: 'wx', mode: 0o600 });
   return {
     buffer: Buffer.from(content),
     originalname: path.basename(filePath),
@@ -103,6 +105,10 @@ const tempCsvFile = (content: string, prefix: string): FileIo => {
 };
 
 describe('test results export/import roundtrip', () => {
+  beforeEach(() => {
+    fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'roundtrip-test-'));
+  });
+  afterEach(() => fs.rmSync(fixtureDirectory, { recursive: true, force: true }));
   const workspaceId = 1;
   let capturedResponsePersons: Person[] = [];
   let capturedLogPersons: Person[] = [];

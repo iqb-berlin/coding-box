@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import pg from 'pg';
 import { Queue } from 'bullmq';
@@ -9,11 +9,13 @@ import { load } from 'cheerio';
 import { CodingSchemeFactory as Reference } from '@iqb/responses-legacy-reference';
 import { hashFrontendArtifact } from '../../qa/hash-frontend-artifact.mjs';
 import { loadStudioReference, normalizedDocx } from './studio-reference.mjs';
+import { prepareProofDirectory } from './proof-directory.mjs';
 
 // This fixture only supports the dedicated local Compose database and queue.
 // Data is synthetic; seeding is direct SQL, all jobs and downloads use HTTP.
 const api = 'http://127.0.0.1:3333/api';
-const output = process.env.CODEBOOK_PROOF_DIR || '/tmp/codebook-1041-evidence/live';
+const output = await prepareProofDirectory(process.env.CODEBOOK_PROOF_DIR);
+console.log(`Codebook proof evidence directory: ${output}`);
 const db = new pg.Client({ host: '127.0.0.1', port: 15441, user: 'codebook_test', password: 'disposable_test_only', database: 'codebook_test' });
 const queues = new Map();
 const report = { createdAt: new Date().toISOString(), sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), seeding: 'synthetic direct SQL in dedicated Compose database', exports: [], autocoder: [] };
@@ -65,7 +67,6 @@ async function finishJob(name, id, statusPath, expected = 'completed') {
 const baseCoding = (id, alias) => ({ id, alias, label: alias, sourceType: 'BASE', sourceParameters: {}, deriveSources: [], processing: [], manualInstruction: `<p>GENERAL-${id}</p>`, codes: [{ id: 0, type: 'FULL_CREDIT', label: 'Richtig', score: 0, manualInstruction: `<p>Bewerten ${id}</p>`, ruleSets: [], ruleSetOperatorAnd: true }] });
 const options = { exportFormat: 'json', missingsProfile: '', hasOnlyManualCoding: true, hasGeneralInstructions: true, hasDerivedVars: true, hasOnlyVarsWithCodes: true, hasClosedVars: false, codeLabelToUpper: false, showScore: true, hideItemVarRelation: false, trainingRequirement: 'all' };
 const statuses = ['UNSET','NOT_REACHED','DISPLAYED','VALUE_CHANGED','DERIVE_ERROR','CODING_COMPLETE','NO_CODING','INVALID','CODING_INCOMPLETE','CODING_ERROR','PARTLY_DISPLAYED','DERIVE_PENDING','INTENDED_INCOMPLETE','CODE_SELECTION_PENDING'];
-await mkdir(output, { recursive: true });
 await db.connect();
 try {
   const schema = await db.query('SELECT count(*)::int AS n FROM databasechangelog');
