@@ -1,9 +1,12 @@
 describe('zoneless Testcenter import with delayed responses', () => {
   for (const testcenter of [
     { label: 'Testcenter 1', id: '1', server: '1', url: '' },
-    { label: 'individuelle Testcenter URL', id: '6', server: '', url: 'https://custom-testcenter.example.org' }
+    { label: 'individuelle Testcenter URL', id: '6', server: '', url: 'https://custom-testcenter.example.org/tci' },
+    ...Array.from({ length: 10 }, (_, index) => ({
+      label: 'individuelle Testcenter URL', id: '6', server: '', url: `https://iqb-testcenter${index + 1}.de`
+    }))
   ]) {
-    it(`renders login, progress, upload failure and retry for ${testcenter.label}`, () => {
+    it(`renders login, progress, upload failure and retry for ${testcenter.url || testcenter.label}`, () => {
       cy.viewport(1280, 900);
       cy.mockKeycloakAuthentication();
       cy.stubWorkspace({ workspaceId: 5 });

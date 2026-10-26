@@ -62,8 +62,8 @@ describe('ExternalCodingImportProcessor authorization context', () => {
     if (!success) service.importExternalCoding.mockRejectedValue(new Error('Import failed'));
     const processor = new ExternalCodingImportProcessor(service as unknown as ExternalCodingImportService, cache as unknown as CacheService);
     try {
-      if (success) await expect(processor.process(job(7))).resolves.toMatchObject({ updatedRows: 1 });
-      else await expect(processor.process(job(7))).rejects.toThrow('Import failed');
+      if (success) await expect(processor.processWorkspaceJob(job(7))).resolves.toMatchObject({ updatedRows: 1 });
+      else await expect(processor.processWorkspaceJob(job(7))).rejects.toThrow('Import failed');
       expect(fs.existsSync(stagedDirectory)).toBe(false);
     } finally {
       fs.rmSync(stagedDirectory, { recursive: true, force: true });
