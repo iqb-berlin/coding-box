@@ -24,7 +24,7 @@ export async function detectCodingImportFormat(file: File): Promise<CodingImport
 
 export async function readImportHeaders(file: File): Promise<string[]> {
   if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-    const ExcelJS = await import('exceljs');
+    const { default: ExcelJS } = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
     const buffer = await file.arrayBuffer();
     await workbook.xlsx.load(buffer);

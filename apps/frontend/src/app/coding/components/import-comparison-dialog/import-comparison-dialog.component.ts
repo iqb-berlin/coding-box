@@ -551,7 +551,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
 
     try {
-      const ExcelJS = await import('exceljs');
+      const { default: ExcelJS } = await import('exceljs');
       if (this.destroyRef.destroyed) return;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Import Vergleich');
