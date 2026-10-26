@@ -8,6 +8,7 @@ import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResolvedWorkspaceExclusions } from '../workspace/workspace-exclusion-query.util';
 import Persons from '../../entities/persons.entity';
+import Workspace from '../../entities/workspace.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { BookletInfo } from '../../entities/bookletInfo.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -50,7 +51,7 @@ describePostgres('GeoGebra availability and partial index', () => {
       password: process.env.POSTGRES_PASSWORD || 'root-password',
       database: process.env.POSTGRES_DB || 'coding-box',
       schema,
-      entities: [Persons, Booklet, BookletInfo, Unit, ResponseEntity, Session,
+      entities: [Workspace, Persons, Booklet, BookletInfo, Unit, ResponseEntity, Session,
         BookletLog, UnitLog, UnitLastState, ChunkEntity, UnitTag, UnitNote],
       synchronize: false
     });
