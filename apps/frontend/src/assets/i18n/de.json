@@ -1067,6 +1067,10 @@
       "title": "Kodierer-Schulungen",
       "job-name-prefix": "Schulung-",
       "compare": {
+        "status-match": "Alle ausgewählten Kodierer stimmen überein.",
+        "status-differ": "Mindestens zwei ausgewählte Kodierer weichen ab.",
+        "status-incomplete": "Mindestens ein ausgewählter Kodierer hat für diesen Fall noch keinen Code.",
+        "status-not_comparable": "Für einen Vergleich müssen mindestens zwei Kodierer ausgewählt sein.",
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt.",
         "dialog-title-between": "Kodierergebnisse vergleichen",
