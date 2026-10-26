@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { WorkspaceCodingImportController } from './workspace-coding-import.controller';
+import { removeExternalCodingImportFile } from '../../job-queue/external-coding-import-file.util';
 
 describe('WorkspaceCodingImportController', () => {
   const createController = () => {
@@ -13,7 +16,8 @@ describe('WorkspaceCodingImportController', () => {
       })
     };
     const jobQueueService = {
-      assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined)
+      assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined),
+      addExternalCodingImportJob: jest.fn().mockResolvedValue({ id: 'import-test' })
     };
     const cacheService = { get: jest.fn() };
 
@@ -27,6 +31,44 @@ describe('WorkspaceCodingImportController', () => {
       jobQueueService
     };
   };
+
+  it.each(['coding.csv', '../../../outside.xlsx', '..\\..\\outside.csv', '/absolute/coding.xls'])(
+    'stages imports privately without using filename %s as a disk path', async fileName => {
+      const { controller, jobQueueService } = createController();
+      let filePath: string | undefined;
+      try {
+        await expect(controller.applyExternalCodingImport(17, {
+          file: Buffer.from('private coding').toString('base64'),
+          fileName
+        }, { user: { id: 7 } })).resolves.toEqual({ jobId: 'import-test' });
+        filePath = jobQueueService.addExternalCodingImportJob.mock.calls[0][0].tempFilePath;
+        expect(path.basename(filePath!)).toBe('import');
+        expect(fs.readFileSync(filePath!, 'utf8')).toBe('private coding');
+        expect(fs.statSync(path.dirname(filePath!)).mode % 0o1000).toBe(0o700);
+        expect(fs.statSync(filePath!).mode % 0o1000).toBe(0o600);
+        expect(jobQueueService.addExternalCodingImportJob).toHaveBeenCalledWith(expect.objectContaining({
+          fileName, requestedByUserId: 7
+        }));
+      } finally {
+        if (filePath) removeExternalCodingImportFile(filePath);
+      }
+    }
+  );
+
+  it('removes staged data if queue insertion fails', async () => {
+    const { controller, jobQueueService } = createController();
+    let filePath = '';
+    jobQueueService.addExternalCodingImportJob.mockImplementationOnce(async data => {
+      filePath = data.tempFilePath;
+      throw new Error('Queue unavailable');
+    });
+    await expect(controller.applyExternalCodingImport(17, {
+      file: Buffer.from('private coding').toString('base64'), fileName: 'coding.csv'
+    }, { user: { id: 7 } })).rejects.toThrow('Queue unavailable');
+    expect(filePath).not.toBe('');
+    expect(fs.existsSync(filePath)).toBe(false);
+    expect(fs.existsSync(path.dirname(filePath))).toBe(false);
+  });
 
   it('rejects direct external coding imports that would apply changes synchronously', async () => {
     const { controller, externalCodingImportService, jobQueueService } = createController();

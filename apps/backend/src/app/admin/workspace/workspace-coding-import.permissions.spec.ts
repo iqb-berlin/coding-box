@@ -1,6 +1,7 @@
 import { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as fs from 'fs';
+import { removeExternalCodingImportFile } from '../../job-queue/external-coding-import-file.util';
 import { WorkspaceCodingImportController } from './workspace-coding-import.controller';
 import { ExternalCodingImportService } from '../../database/services/coding/external-coding-import.service';
 import { JobQueueService, ExternalCodingImportJobData } from '../../job-queue/job-queue.service';
@@ -58,7 +59,7 @@ describe('External coding import HTTP permissions', () => {
   });
 
   afterEach(() => {
-    for (const file of queuedFiles.splice(0)) fs.unlinkSync(file);
+    for (const file of queuedFiles.splice(0)) removeExternalCodingImportFile(file);
     jest.clearAllMocks();
   });
 
