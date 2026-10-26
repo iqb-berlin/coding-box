@@ -216,7 +216,7 @@
           </mat-tab>
 
           <mat-tab label="Einzelne Variablen">
-            <coding-box-job-variable-selection [rows]="variableSelectionRows" [filters]="variableSelectionFilters"
+            <coding-box-job-variable-selection [rows]="variableSelectionRows()" [filters]="variableSelectionFilters()"
               [totalVariables]="variables().length" [selectedCount]="selectedVariableValues().length"
               [allSelected]="isAllSelected()" [loading]="isLoadingVariableAnalysis()" [readOnly]="isReadOnly"
               [mode]="data.mode" [scopeSummary]="manualCodingScopeSummary()"
@@ -226,7 +226,7 @@
               (deriveErrorChanged)="setDeriveErrorIncluded($event.variable, $event.included)" />
           </mat-tab>
           <mat-tab label="Variablenbündel">
-            <coding-box-job-bundle-selection [rows]="bundleSelectionRows" [filter]="bundleNameFilter()"
+            <coding-box-job-bundle-selection [rows]="bundleSelectionRows()" [filter]="bundleNameFilter()"
               [totalBundles]="variableBundles().length" [selectedCount]="selectedVariableBundles.selected.length"
               [loading]="isLoadingBundles()" [readOnly]="isReadOnly" [mode]="data.mode"
               (filterChanged)="bundleNameFilter.set($event)" (applyFilter)="applyBundleFilter()"
