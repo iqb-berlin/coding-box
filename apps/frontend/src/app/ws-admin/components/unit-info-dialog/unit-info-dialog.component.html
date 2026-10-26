@@ -1,6 +1,6 @@
 <h2 mat-dialog-title>
   <span>Aufgaben-Informationen: {{ data.unitId }}</span>
-  <button mat-icon-button (click)="close()" class="close-button">
+  <button mat-icon-button (click)="close()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
     <mat-icon>close</mat-icon>
   </button>
 </h2>

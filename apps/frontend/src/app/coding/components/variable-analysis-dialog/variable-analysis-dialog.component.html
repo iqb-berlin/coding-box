@@ -68,7 +68,7 @@
           <ng-container matColumnDef="replayUrl">
             <th mat-header-cell *matHeaderCellDef mat-sort-header>Replay</th>
             <td mat-cell *matCellDef="let element">
-              <a mat-icon-button color="primary" [href]="element.replayUrl" target="_blank" matTooltip="Im Replay anzeigen">
+              <a mat-icon-button color="primary" [href]="element.replayUrl" target="_blank" matTooltip="Im Replay anzeigen" [attr.aria-label]="'coding-management.tooltips.view-in-replay' | translate">
                 <mat-icon>play_circle_filled</mat-icon>
               </a>
             </td>

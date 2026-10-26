@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -19,7 +20,7 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   templateUrl: './booklet-info-dialog.component.html',
   styleUrls: ['./booklet-info-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

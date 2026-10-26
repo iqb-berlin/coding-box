@@ -215,10 +215,10 @@
             <ng-container matColumnDef="actions">
               <th mat-header-cell *matHeaderCellDef>Aktionen</th>
               <td mat-cell *matCellDef="let unit">
-                <button mat-icon-button color="primary" (click)="replayUnit(unit)" matTooltip="Replay Unit">
+                <button mat-icon-button color="primary" (click)="replayUnit(unit)" matTooltip="Replay Unit" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteUnit(unit)" matTooltip="Unit löschen">
+                <button mat-icon-button color="warn" (click)="deleteUnit(unit)" matTooltip="Unit löschen" [attr.aria-label]="'test-results-search.buttons.delete-unit' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -307,10 +307,10 @@
             <ng-container matColumnDef="actions">
               <th mat-header-cell *matHeaderCellDef>Aktionen</th>
               <td mat-cell *matCellDef="let response">
-                <button mat-icon-button color="primary" (click)="replayUnit(response)" matTooltip="Replay Unit">
+                <button mat-icon-button color="primary" (click)="replayUnit(response)" matTooltip="Replay Unit" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteResponse(response)" matTooltip="Antwort löschen">
+                <button mat-icon-button color="warn" (click)="deleteResponse(response)" matTooltip="Antwort löschen" [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -367,10 +367,10 @@
             <ng-container matColumnDef="actions">
               <th mat-header-cell *matHeaderCellDef>Aktionen</th>
               <td mat-cell *matCellDef="let booklet">
-                <button mat-icon-button color="primary" (click)="viewBookletInfo(booklet)" matTooltip="Booklet Info anzeigen">
+                <button mat-icon-button color="primary" (click)="viewBookletInfo(booklet)" matTooltip="Booklet Info anzeigen" [attr.aria-label]="'test-results-search.booklet-info' | translate">
                   <mat-icon>info</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteBooklet(booklet)" matTooltip="Booklet löschen">
+                <button mat-icon-button color="warn" (click)="deleteBooklet(booklet)" matTooltip="Booklet löschen" [attr.aria-label]="'test-results-search.confirm-dialogs.delete-booklet.title' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>

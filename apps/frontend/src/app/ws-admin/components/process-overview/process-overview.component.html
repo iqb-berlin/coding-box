@@ -166,7 +166,7 @@
                 <button mat-icon-button
                   color="warn"
                   (click)="deleteProcess(element)"
-                  [disabled]="!canRemoveProcess(element)">
+                  [disabled]="!canRemoveProcess(element)" [attr.aria-label]="'process-overview.actions.remove.confirm-title' | translate">
                   <mat-icon>{{ getActionIcon(element) }}</mat-icon>
                 </button>
               </span>

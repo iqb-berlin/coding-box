@@ -137,7 +137,7 @@
       @if (unitsData()) {
         <div class="nav-controls">
           <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
-            class="nav-button prev-button">
+            class="nav-button prev-button" [attr.aria-label]="'accessibility.actions.previous-unit' | translate">
             <mat-icon>chevron_left</mat-icon>
           </button>
 
@@ -148,7 +148,7 @@
           </div>
 
           <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe"
-            class="nav-button next-button">
+            class="nav-button next-button" [attr.aria-label]="'accessibility.actions.next-unit' | translate">
             <mat-icon>chevron_right</mat-icon>
           </button>
         </div>
@@ -161,16 +161,16 @@
           <mat-icon>home</mat-icon>
         </button>
         <button mat-icon-button (click)="onNavigateClick()" [disabled]="isNavigationDisabled()" class="navigate-button"
-          matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+          matTooltip="{{ 'replay.navigate-dialog.title' | translate }}" aria-label="{{ 'replay.navigate-dialog.title' | translate }}">
           <mat-icon>directions</mat-icon>
         </button>
         <button mat-icon-button (click)="onCommentClick()" [disabled]="isReadOnly()" class="comment-button"
-          matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+          matTooltip="{{ 'coding.comment-dialog.title' | translate }}" aria-label="{{ 'coding.comment-dialog.title' | translate }}">
           <mat-icon>comment</mat-icon>
         </button>
         @if (hasCodingJob() && !isCodingJobCompleted() && !isCompletedJobReview()) {
           <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob() || isReadOnly()" class="pause-button"
-            matTooltip="{{ isPausingJob() ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
+            matTooltip="{{ isPausingJob() ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}" aria-label="{{ isPausingJob() ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
             <mat-icon>pause</mat-icon>
           </button>
         }

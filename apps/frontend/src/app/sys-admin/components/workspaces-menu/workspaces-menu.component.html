@@ -1,25 +1,25 @@
 <div class="fx-row-start-stretch container">
   <button mat-button
           [matTooltip]="'admin.add-workspace' | translate"
-          (click)="addWorkspace()">
+          (click)="addWorkspace()" [attr.aria-label]="'admin.add-workspace' | translate">
     <coding-box-wrapped-icon icon="add"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="selectedWorkspaces() && selectedWorkspaces().length < 1"
           [matTooltip]="'admin.delete-selected-workspaces' | translate"
-          (click)="deleteWorkspace()">
+          (click)="deleteWorkspace()" [attr.aria-label]="'admin.delete-selected-workspaces' | translate">
     <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="selectedWorkspaces() && selectedWorkspaces().length !== 1"
           [matTooltip]="'admin.edit-selected-workspace' | translate"
-          (click)="editWorkspace()">
+          (click)="editWorkspace()" [attr.aria-label]="'admin.edit-selected-workspace' | translate">
     <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="selectedWorkspaces() && selectedWorkspaces().length !== 1"
           [matTooltip]="'admin.edit-user-workspace-access-rights' | translate"
-          (click)="editUserAccessRightsToWorkspace()">
+          (click)="editUserAccessRightsToWorkspace()" [attr.aria-label]="'admin.edit-user-workspace-access-rights' | translate">
     <coding-box-wrapped-icon icon="group"></coding-box-wrapped-icon>
   </button>
 </div>

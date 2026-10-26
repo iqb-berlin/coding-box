@@ -154,33 +154,33 @@
                 <div class="job-actions">
                   @if (job.status === 'pending' || job.status === 'processing') {
                     <button mat-icon-button color="warn"
-                      (click)="cancelJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.cancel-job' | translate">
+                      (click)="cancelJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.cancel-job' | translate" [attr.aria-label]="'test-person-coding.jobs.actions.cancel-job' | translate">
                       <mat-icon>cancel</mat-icon>
                     </button>
                   }
                   @if (job.status === 'completed') {
                     <button mat-icon-button color="primary"
-                      (click)="showJobResult(job)" [matTooltip]="'test-person-coding.jobs.actions.show-result' | translate">
+                      (click)="showJobResult(job)" [matTooltip]="'test-person-coding.jobs.actions.show-result' | translate" [attr.aria-label]="'test-person-coding.jobs.actions.show-result' | translate">
                       <mat-icon>visibility</mat-icon>
                     </button>
                   }
                   @if (job.status === 'completed' || job.status === 'failed') {
                     <button mat-icon-button color="warn"
-                      (click)="deleteJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.delete-job' | translate">
+                      (click)="deleteJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.delete-job' | translate" [attr.aria-label]="'test-person-coding.jobs.actions.delete-job' | translate">
                       <mat-icon>delete</mat-icon>
                     </button>
                   }
                   <!-- Error indicator for failed jobs -->
                   @if (job.status === 'failed') {
                     <button mat-icon-button color="accent"
-                      [matTooltip]="'test-person-coding.jobs.actions.error-tooltip' | translate:{error: job.error}">
+                      [matTooltip]="'test-person-coding.jobs.actions.error-tooltip' | translate:{error: job.error}" [attr.aria-label]="'test-person-coding.jobs.actions.error-tooltip' | translate:{error: job.error}">
                       <mat-icon>error</mat-icon>
                     </button>
                   }
                   <!-- Restart button for failed jobs -->
                   @if (job.status === 'failed') {
                     <button mat-icon-button color="primary"
-                      (click)="restartJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.restart-job' | translate">
+                      (click)="restartJob(job.jobId)" [matTooltip]="'test-person-coding.jobs.actions.restart-job' | translate" [attr.aria-label]="'test-person-coding.jobs.actions.restart-job' | translate">
                       <mat-icon>replay</mat-icon>
                     </button>
                   }

@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -30,7 +31,7 @@ describe('OnPush analysis jobs without Zone.js', () => {
     getAllJobs = jest.fn(() => response);
     cancelJob = jest.fn(() => cancellation);
     await TestBed.configureTestingModule({
-      imports: [VariableAnalysisJobsDialogComponent],
+      imports: [TranslateModule.forRoot(), VariableAnalysisJobsDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: data },

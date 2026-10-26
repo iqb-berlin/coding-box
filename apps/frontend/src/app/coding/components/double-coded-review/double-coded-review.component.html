@@ -311,7 +311,10 @@
                                 | translate
                             "
                               (click)="openReplay(element.responseId)"
-                              >
+                               [attr.aria-label]="
+                              'coding-management.tooltips.view-in-replay'
+                                | translate
+                            ">
                               <mat-icon>{{
                                 replayLoadingByResponseId()[element.responseId]
                                 ? 'hourglass_top'
@@ -825,7 +828,10 @@
                               | translate
                           "
                                         (click)="openReplay(element.responseId)"
-                                        >
+                                         [attr.aria-label]="
+                            'coding-management.tooltips.view-in-replay'
+                              | translate
+                          ">
                                         <mat-icon>{{
                                           replayLoadingByResponseId()[element.responseId]
                                           ? 'hourglass_top'
