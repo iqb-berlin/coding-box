@@ -43,9 +43,9 @@ describe('WorkspaceCodingImportController', () => {
         }, { user: { id: 7 } })).resolves.toEqual({ jobId: 'import-test' });
         filePath = jobQueueService.addExternalCodingImportJob.mock.calls[0][0].tempFilePath;
         expect(path.basename(filePath!)).toBe('import');
+        expect(fs.readFileSync(filePath!, 'utf8')).toBe('private coding');
         expect(fs.statSync(path.dirname(filePath!)).mode % 0o1000).toBe(0o700);
         expect(fs.statSync(filePath!).mode % 0o1000).toBe(0o600);
-        expect(fs.readFileSync(filePath!, 'utf8')).toBe('private coding');
         expect(jobQueueService.addExternalCodingImportJob).toHaveBeenCalledWith(expect.objectContaining({
           fileName, requestedByUserId: 7
         }));
