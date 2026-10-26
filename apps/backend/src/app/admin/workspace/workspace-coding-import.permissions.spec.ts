@@ -75,7 +75,7 @@ describe('External coding import HTTP permissions', () => {
 
   it.each([1, 2])('rejects apply at Level %s before creating a file or job', async userId => {
     const response = await post(userId, '/apply', { ...body, requestedByUserId: 4 });
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
     expect(queue.assertNoDependencyConflicts).not.toHaveBeenCalled();
     expect(queue.addExternalCodingImportJob).not.toHaveBeenCalled();
     expect(queuedFiles).toHaveLength(0);

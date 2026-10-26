@@ -126,9 +126,9 @@ Workspace-Bearer ist auch kein OIDC-Refresh-Token und kann nicht als solcher an
 `/api/auth/refresh` eingesetzt werden.
 
 Fehlender/falscher Scope, Token-Typ, Signatur oder Ablauf sowie ein anderer
-Token-Workspace führen typischerweise zu 401. Entzogener Workspace-Zugriff oder
-fehlende Jobberechtigung liefern 403; ein fehlender Job kann 404 ergeben.
-Der bestehende AccessLevelGuard liefert bei unzureichendem Level weiterhin 401.
+Token-Workspace führen typischerweise zu 401. Fehlender oder entzogener
+Workspace-Zugriff, ein unzureichendes Zugriffslevel oder fehlende Jobberechtigung
+liefern 403; ein fehlender Job kann 404 ergeben.
 Diese Unterschiede dürfen nicht durch pauschales erneutes Anmelden verschleiert werden.
 
 ## Ausstellung und Verwendung
