@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm';
+import Workspace from './workspace.entity';
 import { Unit } from './unit.entity';
 import {
   CodingFreshnessReason,
@@ -20,6 +21,10 @@ import {
 @Index(['workspace_id', 'state'])
 @Index(['workspace_id', 'version', 'state'])
 export class CodingUnitFreshness {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

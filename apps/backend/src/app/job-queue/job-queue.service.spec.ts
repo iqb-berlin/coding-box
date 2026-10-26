@@ -57,6 +57,39 @@ describe('JobQueueService', () => {
     );
   });
 
+  it('snapshots jobs from every state and resolves legacy validation-task ownership before deletion', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    const owned = createJob({ workspaceId: 1 });
+    const foreign = createJob({ workspaceId: 2 });
+    const validation = createJob({ taskId: 7 });
+    const global = createJob({ scope: 'system' });
+    queues[2].getJobs.mockImplementation(async (states, start) => (states[0] === 'completed' && start === 0 ? [owned, foreign] : []));
+    queues[7].getJobs.mockImplementation(async (states, start) => (states[0] === 'completed' && start === 0 ? [validation] : []));
+    queues[11].getJobs.mockImplementation(async (states, start) => (states[0] === 'completed' && start === 0 ? [global] : []));
+    await expect(service.getJobsForWorkspaceDeletion([1])).resolves.toEqual([expect.objectContaining({ id: 'job-1', queueName: 'data-export' }), expect.objectContaining({ id: 'job-1', queueName: 'validation-task' })]);
+    expect(queues[2].getJobs.mock.calls.map(([states]) => states[0])).toEqual(expect.arrayContaining(['active', 'waiting-children', 'completed', 'failed']));
+    expect(owned.remove).not.toHaveBeenCalled();
+  });
+
+  it('pages large histories, batches validation ownership and retains only cleanup pointers', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    const history = Array.from({ length: 60 }, (_, i) => ({
+      ...createJob({ taskId: i + 1 }), id: `validation-${i + 1}`
+    }));
+    queues[7].getJobs.mockImplementation(async (states, start: number, end: number) => (states[0] === 'completed' ? history.slice(start, end + 1) : []));
+    validationTaskRepository.find.mockResolvedValue([1, 26, 51].map(id => ({ id, workspace_id: 1 })));
+    const upload = createJob({ workspaceId: 1, file: { path: '/tmp/chunked-uploads/a.csv', buffer: Buffer.alloc(1024) } });
+    queues[4].getJobs.mockImplementation(async (states, start: number) => (states[0] === 'waiting' && start === 0 ? [upload] : []));
+    const result = await service.getJobsForWorkspaceDeletion([1]);
+    expect(result).toHaveLength(4);
+    expect(validationTaskRepository.find).toHaveBeenCalledTimes(3);
+    expect(queues[7].getJobs).toHaveBeenCalledWith(['completed'], 25, 49);
+    expect(queues[7].getJobs).toHaveBeenCalledWith(['completed'], 50, 74);
+    expect(queues[4].getJobs).toHaveBeenCalledWith(['waiting'], 0, 0);
+    expect(result[0].data.file).toEqual({ path: '/tmp/chunked-uploads/a.csv' });
+    expect(JSON.stringify(result)).not.toContain('buffer');
+  });
+
   it('adds and retrieves queue jobs', async () => {
     queues[0].getJobs.mockResolvedValue([]);
     queues[6].getJobs.mockResolvedValue([]);

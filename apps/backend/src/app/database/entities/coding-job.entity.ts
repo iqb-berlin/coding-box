@@ -9,6 +9,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
 import { MissingsProfile } from './missings-profile.entity';
@@ -36,6 +37,10 @@ export type CodingJobType = 'regular' | 'coding_issue_review';
 @Entity({ name: 'coding_job' })
 @Index(['workspace_id', 'creatorUserId'])
 export class CodingJob {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

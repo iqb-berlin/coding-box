@@ -1,9 +1,11 @@
 import {
+  JoinColumn, ManyToOne,
   Column,
   Entity,
   Index,
   PrimaryGeneratedColumn
 } from 'typeorm';
+import Workspace from './workspace.entity';
 
 /**
  * Entity for storing missings profiles dedicated table
@@ -14,6 +16,10 @@ import {
 @Entity('missings_profile')
 @Index(['workspace_id', 'label'], { unique: true })
 export class MissingsProfile {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

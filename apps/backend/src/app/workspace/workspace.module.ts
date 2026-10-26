@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { WorkspaceDeletionService } from '../database/services/workspace/workspace-deletion.service';
 import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import Workspace from '../database/entities/workspace.entity';
 import WorkspaceAdmin from '../database/entities/workspace-admin.entity';
@@ -138,6 +139,7 @@ import { CodingModule } from '../coding/coding.module';
     forwardRef(() => CodingModule)
   ],
   providers: [
+    WorkspaceDeletionService,
     { provide: DERIVED_VARIABLE_READER, useExisting: WorkspaceFilesService },
     WorkspaceCoreService,
     WorkspaceFilesService,
