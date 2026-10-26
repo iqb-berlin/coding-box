@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 // eslint-disable-next-line import/no-cycle
@@ -20,6 +21,10 @@ import { ResponseEntity } from './response.entity';
 @Index(['workspace_id', 'response_id'])
 @Index(['response_id', 'code'])
 export class CodingJobUnit {
+  @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'workspace_id' })
+  workspace?: Workspace;
+
   @PrimaryGeneratedColumn()
   id: number;
 

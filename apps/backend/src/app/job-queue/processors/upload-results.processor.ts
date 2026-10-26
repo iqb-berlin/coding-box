@@ -1,12 +1,13 @@
-import { WorkerHost, Processor } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { UploadResultsService } from '../../database/services/test-results';
 import { TestResultsUploadJobData } from '../job-queue.service';
 
 @Processor('test-results-upload', { concurrency: 1 })
-export class UploadResultsProcessor extends WorkerHost {
+export class UploadResultsProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(UploadResultsProcessor.name);
 
   constructor(
@@ -15,7 +16,7 @@ export class UploadResultsProcessor extends WorkerHost {
     super();
   }
 
-  process(job: Job<TestResultsUploadJobData>) {
+  async processWorkspaceJob(job: Job<TestResultsUploadJobData>) {
     return this.handleUpload(job);
   }
 

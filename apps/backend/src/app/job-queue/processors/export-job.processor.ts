@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import {
   Injectable,
   Logger,
@@ -11,6 +11,7 @@ import { Job } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
 import { pipeline } from 'stream/promises';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { requireJobId, rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import {
@@ -40,7 +41,7 @@ import { ItemMatrixDiagnosticsWriter } from '../../database/services/coding/item
 
 @Injectable()
 @Processor('data-export', { concurrency: 1 })
-export class ExportJobProcessor extends WorkerHost implements OnModuleInit, OnModuleDestroy {
+export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ExportJobProcessor.name);
   private static readonly expiredFileCleanupIntervalMs = 5 * 60 * 1000;
   private static readonly workingDirectoryHeartbeatIntervalMs = 60 * 1000;
@@ -361,7 +362,7 @@ export class ExportJobProcessor extends WorkerHost implements OnModuleInit, OnMo
     }
   }
 
-  async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
+  async processWorkspaceJob(job: Job<ExportJobData>): Promise<ExportJobResult> {
     this.logger.log(
       `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
     );

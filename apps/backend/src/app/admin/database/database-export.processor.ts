@@ -1,8 +1,9 @@
-import { WorkerHost, Processor } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as fs from 'fs';
 import * as path from 'path';
+import { WorkspaceWorkerHost } from '../../job-queue/workspace-worker-host';
 import { requireJobId, rethrowJobError } from '../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
@@ -14,6 +15,7 @@ export interface DatabaseExportJobData {
   scope?: 'system' | 'workspace';
   workspaceId?: number;
   isCancelled?: boolean;
+  workspaceArtifactPaths?: string[];
 }
 
 export interface DatabaseExportJobResult {
@@ -28,7 +30,7 @@ export interface DatabaseExportJobResult {
 
 @Injectable()
 @Processor('database-export', { concurrency: 1 })
-export class DatabaseExportProcessor extends WorkerHost {
+export class DatabaseExportProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(DatabaseExportProcessor.name);
 
   constructor(private readonly databaseExportService: DatabaseExportService,
@@ -41,7 +43,7 @@ export class DatabaseExportProcessor extends WorkerHost {
     return latestJob?.data?.isCancelled === true;
   }
 
-  async process(job: Job<DatabaseExportJobData>): Promise<DatabaseExportJobResult> {
+  async processWorkspaceJob(job: Job<DatabaseExportJobData>): Promise<DatabaseExportJobResult> {
     this.logger.log(`Starting database export job ${job.id}`);
 
     let outputFilePath: string | null = null;
@@ -95,6 +97,11 @@ export class DatabaseExportProcessor extends WorkerHost {
         workspaceId: job.data.workspaceId
       };
 
+      if (job.data.scope === 'workspace') {
+        // Publish the path before releasing the lifecycle lock. BullMQ writes
+        // returnvalue only after process() returns, which would leave a deletion race.
+        await job.updateData({ ...job.data, workspaceArtifactPaths: [outputFilePath] });
+      }
       await job.updateProgress(100);
       await this.recordOutcome(job, 'success', { fileSize: stats.size });
       this.logger.log(`Database export job ${job.id} completed successfully`);

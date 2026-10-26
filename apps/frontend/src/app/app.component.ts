@@ -129,7 +129,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.handleAuthenticationRestored().catch(() => undefined);
       });
     this.systemNotifications.startPolling();
-    const postLoginReturnUrl = await this.handleAuthCallback();
+    await this.handleAuthCallback();
     let refreshUnavailable = false;
     const activeToken = await this.authService.getValidToken(0).catch(error => {
       if (!(error instanceof AuthRefreshUnavailableError)) throw error;
@@ -141,12 +141,13 @@ export class AppComponent implements OnInit, OnDestroy {
     if (activeToken) {
       this.setAuthState();
       await this.loadAuthData(this.appService.loggedUser?.sub || '');
-      if (postLoginReturnUrl) {
-        this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
-      }
     } else if (!refreshUnavailable) {
       this.appService.setAuthBootstrapStatus('ready');
     }
+
+    // The callback has already replaced the URL with the validated return
+    // route. Starting earlier races replay requests against the token exchange.
+    this.router.initialNavigation();
 
     window.addEventListener('message', event => {
       this.appService.processMessagePost(event);

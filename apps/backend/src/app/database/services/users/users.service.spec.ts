@@ -96,11 +96,14 @@ describe('UsersService', () => {
       { id: 2, username: 'bob', isAdmin: false }
     ]);
 
-    await expect(service.getAllUsers(10)).resolves.toEqual([{ id: 2, username: 'bob', isAdmin: false }]);
+    await expect(service.getAllUsers(10)).resolves.toEqual([{
+      id: 2, username: 'bob', displayName: '', isAdmin: false
+    }]);
     await expect(service.getUsersWithWorkspaceAccess(10)).resolves.toEqual([{
       id: 2,
       name: 'bob',
       username: 'bob',
+      displayName: '',
       accessLevel: 3,
       canCode: true,
       isAdmin: false
@@ -669,5 +672,67 @@ describe('UsersService', () => {
     } as never)).resolves.toBe(10);
 
     expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new' });
+  });
+
+  describe.each(['createOidcProviderUser', 'syncKeycloakUser'] as const)('%s profile names', method => {
+    const profile = {
+      username: 'profile-user', identity: 'subject', issuer: 'https://issuer.example', isAdmin: false
+    };
+
+    it('persists trimmed given and family names for new users', async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+      await service[method]({ ...profile, firstName: ' Ada ', lastName: ' Lovelace ' });
+      expect(usersRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        firstName: 'Ada', lastName: 'Lovelace'
+      }));
+    });
+
+    it('fills and refreshes names of existing users without changing their ID or admin rights', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...profile, id: 7, isAdmin: true, firstName: null, lastName: 'Old name'
+      });
+      await expect(service[method]({ ...profile, firstName: 'Ada', lastName: 'Lovelace' })).resolves.toBe(7);
+      expect(usersRepository.update).toHaveBeenCalledWith({ id: 7 }, { firstName: 'Ada', lastName: 'Lovelace' });
+    });
+
+    it('retains names when claims are omitted and skips unchanged profiles', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...profile, id: 7, firstName: 'Ada', lastName: 'Lovelace'
+      });
+      await service[method](profile);
+      await service[method]({ ...profile, firstName: null, lastName: null } as never);
+      await service[method]({ ...profile, firstName: 'Ada', lastName: 'Lovelace' });
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('clears an explicitly empty name without clearing an omitted name', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...profile, id: 7, firstName: 'Ada', lastName: 'Lovelace'
+      });
+      await service[method]({ ...profile, firstName: '  ' });
+      expect(usersRepository.update).toHaveBeenCalledWith({ id: 7 }, { firstName: '' });
+    });
+  });
+
+  it.each([
+    [' Ada ', ' Lovelace ', 'Ada Lovelace'],
+    ['Ada', null, 'Ada'],
+    [undefined, 'Lovelace', 'Lovelace'],
+    [null, null, '']
+  ])('returns display names for full and workspace lists (%s, %s)', async (firstName, lastName, displayName) => {
+    usersRepository.find.mockResolvedValue([{
+      id: 7, username: 'ada-login', isAdmin: false, firstName, lastName
+    }]);
+    workspaceUserRepository.find.mockResolvedValue([{ userId: 7, accessLevel: 3 }]);
+    await expect(service.getAllUsers()).resolves.toEqual([
+      {
+        id: 7, username: 'ada-login', isAdmin: false, displayName
+      }
+    ]);
+    await expect(service.getUsersWithWorkspaceAccess(1)).resolves.toEqual([
+      expect.objectContaining({
+        id: 7, name: 'ada-login', username: 'ada-login', displayName
+      })
+    ]);
   });
 });
