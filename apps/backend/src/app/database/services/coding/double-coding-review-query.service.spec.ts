@@ -1376,6 +1376,38 @@ describe('DoubleCodingReviewQueryService', () => {
     });
   });
 
+  it.each([
+    { unitName: 'UNIT', variableId: "VAR'%_" },
+    { unitName: 'UNIT' },
+    { variableId: 'VAR' },
+    { unitName: '', variableId: '' }
+  ])('binds exact optional Kappa predicates before paging: %j', async filters => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([]);
+    await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'code', filters);
+    if (filters.unitName) {
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.unit_name = :kappaUnitName', { kappaUnitName: filters.unitName });
+    } else {
+      expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.unit_name = :kappaUnitName', expect.anything());
+    }
+    if (filters.variableId) {
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.variable_id = :kappaVariableId', { kappaVariableId: filters.variableId });
+    } else {
+      expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.variable_id = :kappaVariableId', expect.anything());
+    }
+    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5000);
+  });
+
+  it.each([{ unitName: 'UNIT\0' }, { variableId: ['VAR'] as unknown as string }])(
+    'does not bind filters that could never match a stored text value: %j', async filters => {
+      queryBuilder.getRawMany.mockResolvedValueOnce([]);
+      await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'code', filters);
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('1 = 0');
+      expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.unit_name = :kappaUnitName', expect.anything());
+      expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.variable_id = :kappaVariableId', expect.anything());
+    }
+  );
+
   it('loads coded variables for kappa with exclusions, training filter and coder deduplication', async () => {
     queryBuilder.getRawMany.mockResolvedValueOnce([
       {

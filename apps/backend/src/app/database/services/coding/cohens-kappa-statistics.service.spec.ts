@@ -141,7 +141,7 @@ describe('CohensKappaStatisticsService with the production calculator', () => {
 
     const result = await service.buildStatistics(5, { ...options, calculationLevel: 'score' });
 
-    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, true, [], [], [], 'score');
+    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, true, [], [], [], 'score', { unitName: undefined, variableId: undefined });
     expect(result.variables[0]).toMatchObject({
       meanKappa: 0.4,
       meanAgreement: 0.667,
@@ -155,24 +155,18 @@ describe('CohensKappaStatisticsService with the production calculator', () => {
   });
 
   it.each([
-    { unitName: 'UNIT', variableId: 'VAR', responses: [1] },
-    { unitName: 'UNIT', variableId: undefined, responses: [1, 3] },
-    { unitName: undefined, variableId: 'VAR', responses: [1, 2] },
-    { unitName: '', variableId: '', responses: [1, 2, 3] },
-    { unitName: 'unit', variableId: 'VAR', responses: [] },
-    { unitName: ' UNIT ', variableId: 'VAR', responses: [] }
-  ])('retains exact in-memory text filtering for $unitName / $variableId', async filter => {
-    query.getCodedVariablesForKappa.mockResolvedValue([
-      makeItem(1, [0, 1], 'UNIT', 'VAR'),
-      makeItem(2, [0, 1], 'OTHER', 'VAR'),
-      makeItem(3, [0, 1], 'UNIT', 'OTHER')
-    ]);
-    const result = await service.buildStatistics(5, { ...options, ...filter });
+    { unitName: 'UNIT', variableId: 'VAR' },
+    { unitName: 'UNIT', variableId: undefined },
+    { unitName: undefined, variableId: 'VAR' },
+    { unitName: '', variableId: '' },
+    { unitName: 'unit', variableId: 'VAR' },
+    { unitName: ' UNIT ', variableId: 'VAR' }
+  ])('passes text filters unchanged to the query for $unitName / $variableId', async filters => {
+    query.getCodedVariablesForKappa.mockResolvedValue([]);
 
-    expect(result.sourceItems.map(item => item.responseId)).toEqual(filter.responses);
-    expect(result.workspaceSummary.totalCodedResponses).toBe(filter.responses.length);
-    // Query filtering is deliberately left to the next change.
-    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, true, [], [], [], 'code');
+    await service.buildStatistics(5, { ...options, ...filters });
+
+    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, true, [], [], [], 'code', filters);
   });
 
   it('keeps unit/variable pairs distinct when their display labels collide', async () => {
