@@ -349,7 +349,7 @@ test('the actual backend job checks its complete suite and rejects test failures
   const directory = mkdtempSync(join(tmpdir(), 'backend-commit-gate-'));
   const env = {
     ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true', NX_TUI: 'false',
-    NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
+    CI_PROJECT_DIR: directory, NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
   };
   const run = (command, args) => spawnSync(command, args, {
     cwd: directory, env, encoding: 'utf8', timeout: 30000
@@ -371,6 +371,9 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync(project + '.tested', 'checked');
       if (project === 'frontend' || fs.existsSync('fail-backend')) process.exitCode = 1;
     `);
+    mkdirSync(join(directory, 'scripts/tests'), { recursive: true });
+    writeFileSync(join(directory, 'scripts/tests/install-migration-regression.sh'),
+      'set -eu\nprintf checked > migration.tested\n');
     writeFileSync(join(directory, 'typecheck.cjs'), `
       const fs = require('node:fs');
       fs.writeFileSync('typecheck.tested', 'checked');
@@ -407,6 +410,7 @@ test('the actual backend job checks its complete suite and rejects test failures
 
     const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
+    assert.equal(readFileSync(join(directory, 'migration.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
