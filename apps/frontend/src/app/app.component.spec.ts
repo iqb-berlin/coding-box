@@ -10,6 +10,7 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
+import { AuthSessionState } from './core/services/auth-session-state.service';
 import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
 import { SystemNotificationService } from './core/services/system-notification.service';
@@ -127,6 +128,17 @@ describe('AppComponent', () => {
 
   afterEach(() => {
     window.history.replaceState(null, '', '/');
+  });
+
+  it('reads the shared session and reflects clearing it without maintaining a second login flag', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    await fixture.componentInstance.ngOnInit();
+    const session = TestBed.inject(AuthSessionState);
+    expect(fixture.componentInstance.isLoggedIn).toBe(session.isLoggedIn);
+    expect(fixture.componentInstance.isLoggedIn()).toBe(true);
+    session.clear();
+    expect(fixture.componentInstance.isLoggedIn()).toBe(false);
+    expect(Reflect.get(fixture.componentInstance.isLoggedIn, 'set')).toBeUndefined();
   });
 
   it('exchanges auth_code callbacks and restores the protected return URL without duplicating the hash', async () => {

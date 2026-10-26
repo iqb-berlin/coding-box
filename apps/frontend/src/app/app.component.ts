@@ -1,7 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, DestroyRef, effect, inject, signal, untracked, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, DestroyRef, computed, effect, inject, signal, untracked, ChangeDetectionStrategy
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   Router, RouterLink, RouterOutlet, NavigationEnd
 } from '@angular/router';
@@ -17,7 +17,7 @@ import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
-import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
+import { AuthSessionState } from './core/services/auth-session-state.service';
 
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
@@ -56,12 +56,19 @@ export class AppComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private authSessionActivity = inject(AuthSessionActivityService);
   private systemNotifications = inject(SystemNotificationService);
+  private readonly session = inject(AuthSessionState);
 
   title = 'IQB-Kodierbox';
-  readonly isLoggedIn = signal(false);
+  readonly isLoggedIn = this.session.isLoggedIn;
   readonly errorMessage = signal('');
-  readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
-  protected readonly currentWorkspaceName = signal('');
+  readonly authData = toSignal(this.appService.authData$, { initialValue: AppService.defaultAuthData });
+  private readonly navigationEnd = toSignal(this.router.events.pipe(filter(event => event instanceof NavigationEnd)));
+  protected readonly currentWorkspaceName = computed(() => {
+    this.navigationEnd();
+    const workspaceId = this.getWorkspaceIdFromUrl();
+    return workspaceId > 0 ? this.authData().workspaces?.find(workspace => workspace.id === workspaceId)?.name || '' : '';
+  });
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly snackBar = inject(MatSnackBar);
   private authDataFailureSnackBar?: MatSnackBarRef<TextOnlySnackBar>;
@@ -84,17 +91,6 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       });
     });
-
-    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
-      this.authData.set(authData);
-      this.updateCurrentWorkspaceName();
-    });
-
-    this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        this.updateCurrentWorkspaceName();
-      });
   }
 
   async loadAuthData(identity: string): Promise<boolean> {
@@ -140,7 +136,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
     if (activeToken) {
       this.setAuthState();
-      await this.loadAuthData(this.appService.loggedUser?.sub || '');
+      await this.loadAuthData(this.session.loggedUser()?.sub || '');
     } else if (!refreshUnavailable) {
       this.appService.setAuthBootstrapStatus('ready');
     }
@@ -170,17 +166,7 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     this.setAuthState();
-    await this.loadAuthData(this.appService.loggedUser?.sub || '');
-  }
-
-  private updateCurrentWorkspaceName(): void {
-    const workspaceId = this.getWorkspaceIdFromUrl();
-    if (workspaceId > 0 && this.authData().workspaces) {
-      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
-      this.currentWorkspaceName.set(workspace?.name || '');
-    } else {
-      this.currentWorkspaceName.set('');
-    }
+    await this.loadAuthData(this.session.loggedUser()?.sub || '');
   }
 
   private getWorkspaceIdFromUrl(): number {
@@ -190,15 +176,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private setAuthState(): void {
-    this.isLoggedIn.set(true);
-    this.appService.isLoggedIn = true;
-    this.appService.loggedUser = this.authService.getLoggedUser();
-    this.appService.userProfile = {
-      username: this.appService.loggedUser?.preferred_username,
-      firstName: this.appService.loggedUser?.given_name || '',
-      lastName: this.appService.loggedUser?.family_name || '',
-      email: this.appService.loggedUser?.email
-    };
+    this.session.establish(this.authService.getLoggedUser());
   }
 
   private async handleAuthCallback(): Promise<string | undefined> {
