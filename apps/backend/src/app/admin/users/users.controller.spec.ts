@@ -259,10 +259,10 @@ describe('UsersController', () => {
     });
 
     it.each([
-      { userId: 1, workspaceId: 3 },
-      { userId: 2, workspaceId: 3 },
-      { userId: 3, workspaceId: 4 }
-    ])('denies user $userId changing access in workspace $workspaceId', async ({ userId, workspaceId }) => {
+      { userId: 1, workspaceId: 3, expectedStatus: 403 },
+      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 3, workspaceId: 4, expectedStatus: 403 }
+    ])('denies user $userId changing access in workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {
       const app = await createTestApp();
       try {
         const response = await fetch(`${await app.getUrl()}/admin/users/access/${workspaceId}`, {
@@ -271,7 +271,7 @@ describe('UsersController', () => {
           body: JSON.stringify([{ id: userId, accessLevel: 3, canCode: true }])
         });
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(expectedStatus);
         expect(usersService.updateUsersAccess).not.toHaveBeenCalled();
       } finally {
         await app.close();
@@ -313,17 +313,17 @@ describe('UsersController', () => {
     });
 
     it.each([
-      { userId: 1, workspaceId: 3 },
-      { userId: 2, workspaceId: 3 },
-      { userId: 3, workspaceId: 4 }
-    ])('denies user $userId the directory of workspace $workspaceId', async ({ userId, workspaceId }) => {
+      { userId: 1, workspaceId: 3, expectedStatus: 403 },
+      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 3, workspaceId: 4, expectedStatus: 403 }
+    ])('denies user $userId the directory of workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {
       const app = await createTestApp();
       try {
         const response = await fetch(`${await app.getUrl()}/admin/users/directory/${workspaceId}`, {
           headers: { 'x-test-user-id': String(userId) }
         });
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(expectedStatus);
         expect(usersService.getAllUsers).not.toHaveBeenCalled();
       } finally {
         await app.close();

@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import { withWorkspaceDeletionLocks } from '../shared/workspace-lifecycle-lock.util';
+import { WorkspaceDeletionService } from './workspace-deletion.service';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ItemMatrixDiagnosticsArchive } from '../coding/item-matrix-diagnostics-archive';
 import { JournalService } from '../shared/journal.service';
@@ -18,8 +20,6 @@ import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/work
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
-import FileUpload from '../../entities/file_upload.entity';
-import Persons from '../../entities/persons.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
@@ -50,7 +50,8 @@ export class WorkspaceCoreService {
     private connection: Connection,
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly workspaceDeletionService: WorkspaceDeletionService
   ) { }
 
   async findAll(options?: { page: number; limit: number }): Promise<[WorkspaceInListDto[], number]> {
@@ -171,16 +172,11 @@ export class WorkspaceCoreService {
     const lockAttempt = await tryWithWorkspaceAutocoderInputMutationLocks(
       this.connection,
       ids,
-      async queryRunner => {
+      async queryRunner => withWorkspaceDeletionLocks(queryRunner, ids, async () => {
+        const resources = await this.workspaceDeletionService.prepare(ids);
         await queryRunner.startTransaction();
 
         try {
-          await queryRunner.manager.delete(FileUpload, { workspace_id: In(ids) });
-          this.logger.log(`Deleted file uploads for workspaces with IDs: ${ids.join(', ')}`);
-
-          await queryRunner.manager.delete(Persons, { workspace_id: In(ids) });
-          this.logger.log(`Deleted persons for workspaces with IDs: ${ids.join(', ')}`);
-
           const result = await queryRunner.manager.delete(Workspace, { id: In(ids) });
           this.logger.log(`Deleted workspaces with IDs: ${ids.join(', ')}`);
 
@@ -196,15 +192,16 @@ export class WorkspaceCoreService {
           this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${getErrorMessage(error)}`, getErrorStack(error));
           throw error;
         }
-      }
+        await this.workspaceDeletionService.cleanup(resources);
+        const diagnosticsArchive = new ItemMatrixDiagnosticsArchive();
+        for (const id of ids) await diagnosticsArchive.removeWorkspace(id);
+      })
     );
     if (!lockAttempt.acquired) {
       throw new ConflictException(
         'Workspaces cannot be deleted while an Autocoder or workspace mutation is running.'
       );
     }
-    const diagnosticsArchive = new ItemMatrixDiagnosticsArchive();
-    for (const id of ids) await diagnosticsArchive.removeWorkspace(id);
   }
 
   async getIgnoredUnits(workspaceId: number): Promise<string[]> {

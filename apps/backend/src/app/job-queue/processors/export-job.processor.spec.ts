@@ -216,7 +216,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(createJob({ format: 'excel' }));
+      const result = await processor.processWorkspaceJob(createJob({ format: 'excel' }));
       filePath = result.filePath;
       const leaseSetCall = cacheService.set.mock.calls.find(
         ([key]) => String(key).startsWith('export-working-lease:')
@@ -239,7 +239,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           format: 'excel',
           trainingRequired: true,
@@ -282,7 +282,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'results-by-version',
           version: 'v3',
@@ -360,7 +360,7 @@ describe('ExportJobProcessor', () => {
     );
 
     try {
-      const result = await processor.process(job);
+      const result = await processor.processWorkspaceJob(job);
       filePath = result.filePath;
 
       expect(job.updateProgress).toHaveBeenCalledWith(
@@ -401,7 +401,7 @@ describe('ExportJobProcessor', () => {
 
     try {
       await expect(
-        processor.process(
+        processor.processWorkspaceJob(
           createJob({
             exportType: 'aggregated'
           })
@@ -428,7 +428,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           format: 'json',
           trainingRequired: false
@@ -460,7 +460,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'results-by-version',
           missingsProfileId: 7,
@@ -513,7 +513,7 @@ describe('ExportJobProcessor', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
 
-    const processPromise = processor.process(
+    const processPromise = processor.processWorkspaceJob(
       createJob({
         exportType: 'results-by-version',
         version: 'v2',
@@ -568,7 +568,7 @@ describe('ExportJobProcessor', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
 
-    const processPromise = processor.process(
+    const processPromise = processor.processWorkspaceJob(
       createJob({
         exportType: 'results-by-version',
         version: 'v2',
@@ -613,7 +613,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'results-by-version',
           version: 'v2',
@@ -659,7 +659,7 @@ describe('ExportJobProcessor', () => {
     let workingFilePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           version: 'v2',
@@ -745,7 +745,7 @@ describe('ExportJobProcessor', () => {
     );
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           version: 'v2',
@@ -842,7 +842,7 @@ describe('ExportJobProcessor', () => {
     );
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           format: 'csv',
@@ -897,7 +897,7 @@ describe('ExportJobProcessor', () => {
     );
 
     await expect(
-      processor.process(createJob({
+      processor.processWorkspaceJob(createJob({
         exportType: 'item-matrix',
         format: 'csv',
         matrixValue: 'score',
@@ -949,7 +949,7 @@ describe('ExportJobProcessor', () => {
       }
     );
 
-    await expect(processor.process(job)).resolves.toMatchObject({
+    await expect(processor.processWorkspaceJob(job)).resolves.toMatchObject({
       fileName: '',
       filePath: ''
     });
@@ -994,7 +994,7 @@ describe('ExportJobProcessor', () => {
     });
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           format: 'csv',
@@ -1023,7 +1023,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           version: 'v3',
@@ -1067,7 +1067,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'psychometrics',
           version: 'v3',
@@ -1115,7 +1115,7 @@ describe('ExportJobProcessor', () => {
     const { processor, codingPsychometricExportService } = createProcessor();
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'psychometrics',
           partWholeCorrection: 'false' as never
@@ -1135,7 +1135,7 @@ describe('ExportJobProcessor', () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'item-matrix',
           version: 'v4' as never,
@@ -1162,7 +1162,7 @@ describe('ExportJobProcessor', () => {
     const { processor, codingExportOrchestratorService } = createProcessor();
 
     await expect(
-      processor.process(
+      processor.processWorkspaceJob(
         createJob({
           exportType: 'results-by-version',
           format: 'excel',
@@ -1186,7 +1186,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'detailed',
           outputCommentsInsteadOfCodes: true,
@@ -1236,7 +1236,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'aggregated',
           outputCommentsInsteadOfCodes: true,
@@ -1293,7 +1293,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'by-coder',
           outputCommentsInsteadOfCodes: true,
@@ -1342,7 +1342,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'by-variable',
           includeModalValue: true,
@@ -1397,7 +1397,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'coding-times',
           anonymizeCoders: true,
@@ -1440,7 +1440,7 @@ describe('ExportJobProcessor', () => {
     let filePath: string | undefined;
 
     try {
-      const result = await processor.process(
+      const result = await processor.processWorkspaceJob(
         createJob({
           exportType: 'by-variable-compact',
           includeModalValue: true,
@@ -1495,7 +1495,7 @@ describe('ExportJobProcessor', () => {
       const { processor, codingExportOrchestratorService } = createProcessor();
 
       await expect(
-        processor.process(
+        processor.processWorkspaceJob(
           createJob({
             exportType: 'results-by-version',
             format: format as never,

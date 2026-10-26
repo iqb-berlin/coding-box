@@ -2,7 +2,7 @@ import {
   ApplicationConfig, importProvidersFrom, LOCALE_ID,
   provideAppInitializer
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
 import {
   HttpClient,
@@ -39,7 +39,9 @@ export const appConfig: ApplicationConfig = {
         deps: [HttpClient]
       }
     })),
-    provideRouter(routes),
+    // AppComponent starts routing after the browser-bound login exchange and
+    // auth-data bootstrap, before protected views can issue their own requests.
+    provideRouter(routes, withDisabledInitialNavigation()),
     {
       provide: SERVER_URL,
       useValue: environment.backendUrl

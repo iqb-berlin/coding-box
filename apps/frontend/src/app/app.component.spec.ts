@@ -47,6 +47,7 @@ describe('AppComponent', () => {
     events: Subject<NavigationEnd>;
     url: string;
     navigateByUrl: jest.Mock;
+    initialNavigation: jest.Mock;
   };
   let authSessionActivity: {
     start: jest.Mock;
@@ -97,7 +98,8 @@ describe('AppComponent', () => {
     router = {
       events: new Subject<NavigationEnd>(),
       url: '/home?auth=session-expired&returnUrl=%2Fworkspace-admin%2F1%2Ftest-results',
-      navigateByUrl: jest.fn().mockResolvedValue(true)
+      navigateByUrl: jest.fn().mockResolvedValue(true),
+      initialNavigation: jest.fn()
     };
     authSessionActivity = {
       start: jest.fn(),
@@ -145,10 +147,32 @@ describe('AppComponent', () => {
     await fixture.whenStable();
     expect(authSessionActivity.start).toHaveBeenCalled();
     expect(TestBed.inject(SystemNotificationService).startPolling).toHaveBeenCalled();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace-admin/1/test-results');
+    expect(router.initialNavigation).toHaveBeenCalled();
     expect(window.location.href).toBe('http://localhost/#/workspace-admin/1/test-results');
     expect(window.location.href).not.toContain('auth_code=');
     expect(window.location.href).not.toContain('#/#');
+  });
+
+  it('starts the direct replay route only after a delayed callback and auth-data bootstrap', async () => {
+    window.history.replaceState(null, '', '/?auth_code=delayed#/replay/person/UNIT?workspaceId=1&codingJobId=100&mode=coding');
+    const exchange = new Subject<unknown>();
+    const authData = new Subject<boolean>();
+    authService.exchangeLoginCode.mockReturnValue(exchange);
+    appService.loadAuthenticatedUser.mockReturnValue(authData);
+    const component = TestBed.runInInjectionContext(() => new AppComponent());
+    const startup = component.ngOnInit();
+
+    expect(router.initialNavigation).not.toHaveBeenCalled();
+    exchange.next({ access_token: 'new-token', refresh_token: 'new-refresh' });
+    await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
+    expect(router.initialNavigation).not.toHaveBeenCalled();
+    authData.next(true);
+    await startup;
+
+    expect(router.initialNavigation).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toContain('/replay/person/UNIT?workspaceId=1&codingJobId=100&mode=coding');
   });
 
   it('stops auth session activity on destroy', async () => {

@@ -3,9 +3,11 @@ import {
 } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   firstValueFrom, forkJoin, Subject, takeUntil
 } from 'rxjs';
+import { AuthRequestCancelledError } from '../../core/interceptors/auth-request-cancelled.error';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import {
   Code, CodingScheme, CodeSelectedEvent
@@ -644,14 +646,7 @@ export class ReplayCodingService implements OnDestroy {
         if (this.isCurrentCodingContext(contextSnapshot)) {
           const saveErrorMessage = this.translate.instant('replay.failed-to-save-coding-progress');
           this.markSaveFailure(saveFailureKey, saveErrorMessage);
-          this.snackBar.open(
-            saveErrorMessage,
-            this.translate.instant('replay.close'),
-            {
-              duration: 5000,
-              panelClass: ['snackbar-error']
-            }
-          );
+          this.showSaveError(saveErrorMessage, error);
         }
         throw error;
       }
@@ -956,14 +951,7 @@ export class ReplayCodingService implements OnDestroy {
         if (this.isCurrentCodingContext(contextSnapshot)) {
           const saveErrorMessage = this.translate.instant('replay.failed-to-save-coding-notes');
           this.markSaveFailure(saveFailureKey, saveErrorMessage);
-          this.snackBar.open(
-            saveErrorMessage,
-            this.translate.instant('replay.close'),
-            {
-              duration: 5000,
-              panelClass: ['snackbar-error']
-            }
-          );
+          this.showSaveError(saveErrorMessage, error);
         }
         throw error;
       }
@@ -1310,6 +1298,17 @@ export class ReplayCodingService implements OnDestroy {
     if (!this.hasSaveError) {
       this.lastSaveError = null;
     }
+  }
+
+  private showSaveError(message: string, error: unknown): void {
+    // The interceptor owns session/permission diagnostics. Preserve its hint
+    // while retaining the local draft and failed-save state for a later retry.
+    if (error instanceof AuthRequestCancelledError ||
+      (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403))) return;
+    this.snackBar.open(message, this.translate.instant('replay.close'), {
+      duration: 5000,
+      panelClass: ['snackbar-error']
+    });
   }
 
   private markSaveFailure(saveFailureKey: string, message: string): void {

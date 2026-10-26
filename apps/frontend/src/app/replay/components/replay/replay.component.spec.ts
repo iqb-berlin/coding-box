@@ -2866,6 +2866,37 @@ describe('ReplayComponent', () => {
     expect(component.player()).toBe('');
   });
 
+  it.each([401, 403])('preserves central auth diagnostics and clears stale replay state for HTTP %s', status => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    snackBar.open.mockClear();
+    component.unitId.set('stale-unit');
+    component.player.set('stale-player');
+    component.unitDef.set('stale-unit-definition');
+    component.responses.set([{ id: 'chunk', content: 'stale-response' }]);
+
+    const privateComponent = component as unknown as {
+      catchError: (error: HttpErrorResponse) => void;
+    };
+    privateComponent.catchError(new HttpErrorResponse({ status }));
+    component.onResponseVisible();
+
+    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(component.unitId()).toBe('');
+    expect(component.player()).toBe('');
+    expect(component.unitDef()).toBe('');
+    expect(component.responses()).toBeUndefined();
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        success: false,
+        ...(status === 403 ? { errorMessage: 'error-forbidden' } : {})
+      }),
+      'valid-token',
+      expect.any(String)
+    );
+  });
+
   it('should clear stale replay state and finalize statistics once for a 404', () => {
     replayBackendService.storeReplayStatistics.mockClear();
     component.unitId.set('stale-unit');

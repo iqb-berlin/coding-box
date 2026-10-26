@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { WorkspaceDeletionService } from '../database/services/workspace/workspace-deletion.service';
 import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import Workspace from '../database/entities/workspace.entity';
 import WorkspaceAdmin from '../database/entities/workspace-admin.entity';
@@ -75,6 +76,8 @@ import { CodingListExportService } from '../database/services/coding/coding-list
 import { CodingExportOrchestratorService } from '../database/services/coding/coding-export-orchestrator.service';
 import { DoubleCodingReviewDecisionService } from '../database/services/coding/double-coding-review-decision.service';
 import { DoubleCodingReviewQueryService } from '../database/services/coding/double-coding-review-query.service';
+import { CohensKappaStatisticsService } from '../database/services/coding/cohens-kappa-statistics.service';
+import { CohensKappaExportService } from '../database/services/coding/cohens-kappa-export.service';
 import { CodingProgressService } from '../database/services/coding/coding-progress.service';
 import { CodingReplayService } from '../database/services/coding/coding-replay.service';
 import { CodingVersionService } from '../database/services/coding/coding-version.service';
@@ -136,6 +139,7 @@ import { CodingModule } from '../coding/coding.module';
     forwardRef(() => CodingModule)
   ],
   providers: [
+    WorkspaceDeletionService,
     { provide: DERIVED_VARIABLE_READER, useExisting: WorkspaceFilesService },
     WorkspaceCoreService,
     WorkspaceFilesService,
@@ -172,6 +176,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
+    CohensKappaStatisticsService,
+    CohensKappaExportService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,
@@ -215,6 +221,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
+    CohensKappaStatisticsService,
+    CohensKappaExportService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,

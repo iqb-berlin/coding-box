@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 
@@ -13,7 +14,7 @@ export interface FlatResponseFilterOptionsJobData {
 
 @Injectable()
 @Processor('flat-response-filter-options', { concurrency: 1 })
-export class FlatResponseFilterOptionsProcessor extends WorkerHost {
+export class FlatResponseFilterOptionsProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(FlatResponseFilterOptionsProcessor.name);
 
   constructor(
@@ -24,7 +25,7 @@ export class FlatResponseFilterOptionsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<FlatResponseFilterOptionsJobData>): Promise<void> {
+  async processWorkspaceJob(job: Job<FlatResponseFilterOptionsJobData>): Promise<void> {
     const workspaceId = Number(job.data.workspaceId);
     const threshold = Number(job.data.processingDurationThresholdMs || 60000);
 
