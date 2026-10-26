@@ -236,6 +236,127 @@ describe('CodingResultsComparisonComponent', () => {
     sessionStorage.clear();
   });
 
+  it('rejects unsolicited replay messages before starting a discussion save', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [{
+      responseId: 77, unitName: 'UNIT', variableId: 'VAR', coders: []
+    }];
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: 'https://foreign.example',
+      data: {
+        type: 'replayCodeSelected',
+        responseId: 77,
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        testPerson: 'login@code@booklet',
+        code: '2',
+        score: 2,
+        notes: 'Unsolicited'
+      }
+    }));
+    expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+    expect(component.discussionCodeByResponseId()).toEqual({});
+  });
+
+  describe('registered replay messages', () => {
+    let frame: HTMLIFrameElement;
+    let open: jest.SpyInstance;
+    const row = {
+      responseId: 77, unitName: 'UNIT', variableId: 'VAR', testperson: 'person', coders: []
+    };
+    const message = {
+      type: 'replayCodeSelected',
+      responseId: 77,
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      testPerson: 'person',
+      code: '2',
+      score: 2,
+      notes: 'Replay note'
+    };
+    const send = (data: unknown = message, origin = window.location.origin, source: MessageEventSource | null = frame.contentWindow) => {
+      window.dispatchEvent(new MessageEvent('message', { data, origin, source }));
+    };
+    const setContext = () => {
+      component.comparisonMode = 'within-training';
+      component.selectedTrainingForWithin = 5;
+      component.withinTrainingData = [{ ...row }];
+    };
+
+    beforeEach(() => {
+      frame = document.createElement('iframe');
+      document.body.appendChild(frame);
+      open = jest.spyOn(window, 'open').mockReturnValue(frame.contentWindow);
+      codingStatisticsService.getReplayUrl.mockReturnValue(of({ replayUrl: 'http://backend.test/#/replay/person/UNIT/0/VAR?workspaceId=1' }));
+      setContext();
+    });
+
+    afterEach(() => frame.remove());
+
+    it('accepts the opened replay after malformed, foreign and unrelated messages', () => {
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+      component.openReplay(row);
+      expect(open.mock.calls[0][0]).toContain(`${window.location.origin}/#/replay/`);
+      send(null);
+      send(message, 'https://foreign.example');
+      send(message, window.location.origin, window);
+      send({ ...message, responseId: 78 });
+      send({ ...message, variableId: 'OTHER' });
+      send({ ...message, notes: [] });
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(1);
+      expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 77, 2, 2, 'Replay note');
+    });
+
+    it('never falls back to another row sharing the same person, unit and variable', () => {
+      component.openReplay(row);
+      component.withinTrainingData = [{ ...row, responseId: 78 }];
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+      expect(component.discussionCodeByResponseId()).toEqual({});
+    });
+
+    it('revokes replay access through a context change even after returning to the old training', () => {
+      component.openReplay(row);
+      component.onModeChange();
+      setContext();
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+      component.openReplay(row);
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not open or register a replay URL arriving after the editing context changed', () => {
+      const reply = new Subject<{ replayUrl: string }>();
+      codingStatisticsService.getReplayUrl.mockReturnValue(reply);
+      component.openReplay(row);
+      component.onModeChange();
+      setContext();
+      reply.next({ replayUrl: `${window.location.origin}/#/replay/person/UNIT/0/VAR` });
+      expect(open).not.toHaveBeenCalled();
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+    });
+
+    it('requires a new replay registration after closing and reopening the dialog', () => {
+      component.openReplay(row);
+      fixture.destroy();
+      fixture = TestBed.createComponent(CodingResultsComparisonComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      setContext();
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+      component.openReplay(row);
+      send();
+      expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('caches warning code scans while keeping training selections, labels and reloaded results current', () => {
     const codeReads = jest.fn((): string | null => null);
     const trainings = [{ id: 1, label: 'Training A' }, { id: 2, label: 'Training B' }] as CoderTraining[];
@@ -789,7 +910,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(appService.createOwnToken).not.toHaveBeenCalled();
     expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77);
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=true&originResponseId=77',
+      `${window.location.origin}/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=true&originResponseId=77`,
       '_blank'
     );
   });
@@ -874,7 +995,7 @@ describe('CodingResultsComparisonComponent', () => {
     } as never);
 
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=false&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true',
+      `${window.location.origin}/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=false&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true`,
       '_blank'
     );
   });

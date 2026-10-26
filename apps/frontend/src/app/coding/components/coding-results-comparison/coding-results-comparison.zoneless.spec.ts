@@ -68,7 +68,7 @@ describe('Coding comparison without Zone', () => {
           }
         },
         { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => regexResponse } },
-        { provide: PostMessageService, useValue: { getMessages: () => new Subject<void>() } },
+        { provide: PostMessageService, useValue: { messages$: new Subject() } },
         {
           provide: SessionRecoveryService,
           useValue: { restore$: new Subject<void>(), registerProvider: () => () => undefined, peekDraft: () => undefined }

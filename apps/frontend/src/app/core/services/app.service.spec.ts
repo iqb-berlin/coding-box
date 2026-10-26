@@ -62,6 +62,19 @@ describe('AppService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('ignores malformed player messages and forwards the next valid message', () => {
+    const received = jest.fn();
+    const subscription = service.postMessage$.subscribe(received);
+    [null, undefined, [], 'message', {}, { type: null }, { type: 1 }].forEach(data => {
+      expect(() => service.processMessagePost(new MessageEvent('message', { data }))).not.toThrow();
+    });
+    const message = new MessageEvent('message', { data: { type: 'vopReadyNotification' } });
+    service.processMessagePost(message);
+    expect(received).toHaveBeenCalledTimes(1);
+    expect(received).toHaveBeenCalledWith(message);
+    subscription.unsubscribe();
+  });
+
   it('tracks shared authentication and grouped errors in derived signal state', () => {
     const userId = computed(() => service.authData.userId);
     const status = computed(() => service.authBootstrapStatus);

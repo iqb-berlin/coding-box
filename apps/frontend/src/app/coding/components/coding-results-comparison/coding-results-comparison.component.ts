@@ -42,8 +42,8 @@ import { VariableKappaSummary } from './training-reliability';
 import { TrainingReliabilityFacade, TrainingReliabilityContext } from './training-reliability.facade';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
-import { normalizeTestperson } from '../../../replay/utils/token-utils';
-import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
+import { normalizeReplayUrlToCurrentOrigin } from '../../utils/replay-url.util';
+import { ReplayCodeSelectedMessage, ReplayNotesCommittedMessage, TrainingReplayBridge } from './training-replay-bridge.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import type {
   TrainingKappaVariableDto as KappaVariable
@@ -76,24 +76,6 @@ import {
   TrainingComparisonSortBy,
   TrainingComparisonSortDirection
 } from '../../../../../../../api-dto/coding/training-comparison.dto';
-
-interface ReplayCodeSelectedMessage extends PostMessage {
-  testPerson: string;
-  unitId: string;
-  variableId: string;
-  code: string;
-  score?: number | null;
-  notes?: string | null;
-  responseId?: number;
-}
-
-interface ReplayNotesCommittedMessage extends PostMessage {
-  testPerson: string;
-  unitId: string;
-  variableId: string;
-  notes?: string | null;
-  responseId?: number;
-}
 
 export type CodingResultsComparisonMode = 'between-trainings' | 'within-training';
 
@@ -173,7 +155,7 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],
   standalone: true,
-  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade],
+  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingReplayBridge],
   imports: [
     TrainingComparisonTableComponent,
     TrainingComparisonSelectionComponent,
@@ -213,7 +195,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private codingStatisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
-  private postMessageService = inject(PostMessageService);
+  private readonly replayBridge = inject(TrainingReplayBridge);
   private sessionRecoveryService = inject(SessionRecoveryService);
   private dialog = inject(MatDialog);
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -514,16 +496,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
       // Loading errors are already reported by loadCoderTrainings.
     });
 
-    this.postMessageService.getMessages<ReplayCodeSelectedMessage>('replayCodeSelected')
+    this.replayBridge.messages$
       .pipe(takeUntil(this.ngUnsubscribe))
-      .subscribe(msg => {
-        this.handleReplayCodeSelected(msg.message);
-      });
-
-    this.postMessageService.getMessages<ReplayNotesCommittedMessage>('replayNotesCommitted')
-      .pipe(takeUntil(this.ngUnsubscribe))
-      .subscribe(msg => {
-        this.handleReplayNotesCommitted(msg.message);
+      .subscribe(({ message }) => {
+        if (message.type === 'replayCodeSelected') this.handleReplayCodeSelected(message);
+        else this.handleReplayNotesCommitted(message);
       });
   }
 
@@ -1437,17 +1414,25 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     }
 
     const workspaceId = this.data.workspaceId;
+    const contextId = this.discussionContextId;
+    const trainingId = this.selectedTrainingForWithin;
+    const mode = this.comparisonMode;
 
     this.codingStatisticsService.getReplayUrl(workspaceId, responseId)
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe({
         next: result => {
+          if (!this.contextActive || contextId !== this.discussionContextId ||
+            trainingId !== this.selectedTrainingForWithin || mode !== this.comparisonMode) return;
           if (result.replayUrl) {
-            window.open(this.buildReplayUrl(
+            const replayWindow = window.open(this.buildReplayUrl(
               result.replayUrl,
               responseId,
               this.getReplayDisplayOptions(comparison)
             ), '_blank');
+            if (replayWindow && mode === 'within-training' && this.canEditDiscussion) {
+              this.replayBridge.register(responseId, comparison.variableId, replayWindow);
+            }
           } else {
             this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
           }
@@ -1536,7 +1521,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     responseId: number,
     displayOptions: ReplayDisplayOptions = {}
   ): string {
-    const [baseUrl, fragment = ''] = replayUrl.split('#', 2);
+    const [baseUrl, fragment = ''] = normalizeReplayUrlToCurrentOrigin(replayUrl).split('#', 2);
     const appendParams = (value: string): string => {
       const [path, query = ''] = value.split('?', 2);
       const params = new URLSearchParams(query);
@@ -1616,6 +1601,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     // A -> B -> A is a different editing session. Accepted server writes may
     // finish, but their responses cannot replace drafts in the new cohort.
     this.discussionContextId += 1;
+    this.replayBridge.reset();
     this.isSavingDiscussionByResponseId.set({});
     this.pendingDiscussionNotesByResponseId = {};
   }
@@ -2128,26 +2114,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private findWithinTrainingReplayRow(
     data: Pick<ReplayCodeSelectedMessage, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
   ): WithinTrainingComparison | null {
-    const targetVarId = (data.variableId || '').toLowerCase();
-    const targetUnitId = (data.unitId || '').toLowerCase();
-    const normalizedMsgTP = normalizeTestperson(data.testPerson || '').toLowerCase();
-
-    // 1. Primary match: responseId (most reliable)
-    let row = data.responseId ? this.withinTrainingData.find(d => d.responseId === data.responseId &&
-      (d.variableId || '').toLowerCase() === targetVarId
-    ) : null;
-
-    // 2. Fallback match: unitName + variableId + testperson
-    if (!row) {
-      row = this.withinTrainingData.find(d => {
-        const rowUnitId = (d.unitName || '').toLowerCase();
-        const rowVarId = (d.variableId || '').toLowerCase();
-        const rowTP = normalizeTestperson(d.testperson || '').toLowerCase();
-        return rowUnitId === targetUnitId && rowVarId === targetVarId && rowTP === normalizedMsgTP;
-      });
-    }
-
-    return row || null;
+    return this.withinTrainingData.find(row => row.responseId === data.responseId &&
+      row.variableId.toLowerCase() === data.variableId.toLowerCase()) || null;
   }
 
   private getDiscussionScoreOverride(responseId: number): number | null | undefined {

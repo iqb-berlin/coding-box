@@ -93,6 +93,67 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
+  it('accepts only registered replay messages and revokes old windows after reopening', () => {
+    const replayWindows: Window[] = [];
+    let saves = 0;
+    const selection = {
+      type: 'replayCodeSelected', responseId: 501, variableId: 'VAR', unitId: 'UNIT',
+      testPerson: 'synthetic-person@P001@GROUP', code: '2', score: 2, notes: 'Replay note'
+    };
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/responses/501/replay-url', {
+      body: { replayUrl: 'http://backend.test/#/replay/synthetic-person%40P001%40GROUP/UNIT/0/VAR?workspaceId=5' }
+    }).as('replayUrl');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', request => {
+      saves += 1;
+      request.reply({ body: {
+        success: true, ...request.body, managerUserId: 2, managerName: 'Replay manager', source: 'manual'
+      } });
+    }).as('saveReplay');
+    openComparison();
+    cy.window().then(win => Cypress.Promise.all([0, 1].map(() => new Cypress.Promise<void>(resolve => {
+      const frame = win.document.createElement('iframe');
+      frame.hidden = true;
+      frame.onload = () => { replayWindows.push(frame.contentWindow!); resolve(); };
+      frame.srcdoc = `<script>addEventListener('message', event => parent.postMessage(event.data, ${JSON.stringify(win.location.origin)}));</script>`;
+      win.document.body.appendChild(frame);
+    }))));
+    cy.window().then(win => {
+      cy.stub(win, 'open').onFirstCall().returns(replayWindows[0]).onSecondCall().returns(replayWindows[1]).as('openReplay');
+      win.postMessage(selection, win.location.origin);
+    });
+    cy.get('@dialog').find('.mat-column-replay button').click();
+    cy.wait('@replayUrl');
+    cy.get('@openReplay').should('have.been.calledOnce');
+    cy.window().then(win => {
+      win.dispatchEvent(new win.MessageEvent('message', {
+        data: selection, origin: 'https://foreign.example', source: replayWindows[0]
+      }));
+      replayWindows[0].postMessage(null, win.location.origin);
+      replayWindows[0].postMessage({ ...selection, notes: [] }, win.location.origin);
+      replayWindows[0].postMessage(selection, win.location.origin);
+    });
+    cy.wait('@saveReplay').its('request.body').should('deep.equal', { responseId: 501, code: 2, score: 2, notes: 'Replay note' });
+    cy.get('@dialog').find('.discussion-input input').should('have.value', '2');
+    cy.then(() => { expect(saves).to.equal(1); });
+
+    cy.get('@dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-coding-results-comparison').should('not.exist');
+    cy.get('#manual-support .more-actions-button').click();
+    cy.contains('[role="menuitem"]', 'Ergebnisse vergleichen').click();
+    cy.get('coding-box-coding-results-comparison').as('dialog');
+    cy.get('@dialog').find('.discussion-input input').should('exist');
+    cy.get('@dialog').find('.mat-column-replay button').click();
+    cy.wait('@replayUrl');
+    cy.get('@openReplay').should('have.been.calledTwice');
+    cy.window().then(win => {
+      replayWindows[0].postMessage({ ...selection, code: '4' }, win.location.origin);
+      replayWindows[1].postMessage({ ...selection, code: '3' }, win.location.origin);
+    });
+    cy.wait('@saveReplay').its('request.body.code').should('equal', 3);
+    cy.get('@dialog').find('.discussion-input input').should('have.value', '3');
+    cy.then(() => { expect(saves).to.equal(2); });
+  });
+
   it('finishes a pending reliability export after changing the comparison page', () => {
     let exportId: string;
     let exportsStarted = 0;

@@ -14,6 +14,11 @@ export interface PostMessage {
   data?: Record<string, unknown>;
 }
 
+export function isPostMessage(value: unknown): value is PostMessage {
+  return !!value && typeof value === 'object' && !Array.isArray(value) &&
+    'type' in value && typeof value.type === 'string' && value.type.trim().length > 0;
+}
+
 export type PostMessageEvent<T extends PostMessage = PostMessage> = {
   message: T;
   source: MessageEventSource | null;
@@ -27,8 +32,9 @@ export class PostMessageService implements OnDestroy {
   private readonly zone = inject(NgZone);
 
   private readonly messageListener = (event: MessageEvent): void => {
+    const message: unknown = event.data;
+    if (!isPostMessage(message)) return;
     this.zone.run(() => {
-      const message = event.data as PostMessage;
       this.messageSubject.next({ message, source: event.source, origin: event.origin });
     });
   };

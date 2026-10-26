@@ -30,6 +30,7 @@ import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-conte
 import { WorkspaceTokenScope } from './auth-session.config';
 import { SessionRecoveryService } from './session-recovery.service';
 import { AuthSessionState, DEFAULT_AUTH_DATA } from './auth-session-state.service';
+import { isPostMessage } from './post-message.service';
 
 export interface WorkspaceTokenPolicy {
   scopes: Record<WorkspaceTokenScope, {
@@ -403,9 +404,7 @@ export class AppService {
   }
 
   processMessagePost(postData: MessageEvent): void {
-    const msgData = postData.data;
-    const msgType = msgData.type;
-    if ((typeof msgType !== 'undefined') && (msgType !== null)) {
+    if (isPostMessage(postData.data)) {
       this.postMessage$.next(postData);
     }
   }

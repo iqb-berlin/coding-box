@@ -41,6 +41,18 @@ describe('PostMessageService', () => {
   });
 
   describe('getMessages', () => {
+    it('ignores malformed messages without terminating existing subscribers', () => {
+      const received = jest.fn();
+      const failed = jest.fn();
+      service.getMessages('test').subscribe({ next: received, error: failed });
+      for (const data of [null, undefined, [], 'test', 1, {}, { type: null }, { type: 1 }, { type: '' }]) {
+        window.dispatchEvent(new MessageEvent('message', { data }));
+      }
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'test' } }));
+      expect(failed).not.toHaveBeenCalled();
+      expect(received).toHaveBeenCalledTimes(1);
+    });
+
     it('should include the message origin', done => {
       service.getMessages('test').subscribe(event => {
         expect(event.message).toEqual({ type: 'test' });
