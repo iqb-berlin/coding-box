@@ -323,13 +323,10 @@ export class WorkspaceTestResultsService {
 
   private static readonly ignoredDerivedCodingStatuses = STATISTICS_IGNORED_STATUSES;
 
-  private static readonly geoGebraValueParams = {
-    ggRawPrefix: 'UEsD%',
-    ggDataUriPrefix: 'data:%;base64,UEsD%'
-  };
-
   private static createGeoGebraValueCondition(responseAlias: string): string {
-    return `(${responseAlias}.value LIKE :ggRawPrefix OR ${responseAlias}.value ILIKE :ggDataUriPrefix)`;
+    // Keep these fixed literals aligned with idx_response_geogebra_unit.
+    // Bound pattern parameters cannot imply the partial index predicate in a generic plan.
+    return `(${responseAlias}.value LIKE 'UEsD%' OR ${responseAlias}.value ILIKE 'data:%;base64,UEsD%')`;
   }
 
   private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
@@ -2970,8 +2967,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       qb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -3215,8 +3211,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       countQb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -3929,8 +3924,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       baseQb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -6916,8 +6910,7 @@ export class WorkspaceTestResultsService {
 
         if (searchParams.geogebra) {
           query.andWhere(
-            WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
-            WorkspaceTestResultsService.geoGebraValueParams
+            WorkspaceTestResultsService.createGeoGebraValueCondition('response')
           );
         }
 
@@ -8184,13 +8177,9 @@ export class WorkspaceTestResultsService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere(
-        WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraValueCondition('response')
       );
     this.applyExclusionsToQuery(query, exclusions);
-    const count = await query
-      .getCount();
-
-    return count > 0;
+    return query.getExists();
   }
 }
