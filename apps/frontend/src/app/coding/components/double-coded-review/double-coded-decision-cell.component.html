@@ -146,7 +146,7 @@
         [disabled]="!canApply() || !itemControl.value || isLoading()"
         (click)="applyDecision.emit()"
         [matTooltip]="'double-coded-review.apply-single-tooltip' | translate"
-      >
+       [attr.aria-label]="'double-coded-review.apply-single-tooltip' | translate">
         <mat-icon>check</mat-icon>
       </button>
     </div>

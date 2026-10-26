@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect, ChangeDetectionStrategy, OnChanges
+  Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal, viewChild, effect, untracked, ChangeDetectionStrategy, OnChanges
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -21,6 +21,8 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { UserDirectoryStatusComponent } from '../../../shared/components/user-directory-status/user-directory-status.component';
+import { UserDirectoryFacade } from '../../../shared/services/user/user-directory.facade';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
@@ -32,19 +34,33 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [UserDirectoryFacade],
   selector: 'coding-box-users-selection',
   templateUrl: './users-selection.component.html',
   styleUrls: ['./users-selection.component.scss'],
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
+  imports: [UserDirectoryStatusComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class UsersSelectionComponent implements OnInit, OnChanges {
+  private readonly directory = inject(UserDirectoryFacade);
+  protected readonly usersStatus = this.directory.status;
+  private readonly synchronizeUsers = effect(() => {
+    const users = this.directory.users();
+    const loaded = this.directory.status() === 'loaded';
+    untracked(() => {
+      this.setObjectsDatasource(users);
+      this.tableSelectionCheckboxes.clear();
+      this.tableSelectionRow.clear();
+      if (loaded) this.setCheckboxes();
+    });
+  });
+
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
 
   private destroyRef = inject(DestroyRef);
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  protected userObjectsDatasource = new MatTableDataSource<UserFullDto>();
+  private readonly datasourceState = signal(new MatTableDataSource<UserFullDto>());
+  protected get userObjectsDatasource() { return this.datasourceState(); }
   protected displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   protected tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
@@ -58,9 +74,11 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
 
   readonly userSelectionChanged = output<UserFullDto[]>();
   readonly selectedUserIds = input.required<number[]>();
+  readonly refreshVersion = input(0);
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes) {
+    if (changes.refreshVersion && !changes.refreshVersion.firstChange) this.updateUserList();
+    if (changes.selectedUserIds) {
       this.setCheckboxes();
     }
   }
@@ -71,7 +89,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   }
 
   private setObjectsDatasource(users: UserFullDto[]): void {
-    this.userObjectsDatasource = new MatTableDataSource(users);
+    this.datasourceState.set(new MatTableDataSource(users));
     this.userObjectsDatasource
       .filterPredicate = (userList: UserFullDto, filter) => [
         'username', 'displayName'
@@ -82,20 +100,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   }
 
   updateUserList(): void {
-    this.userBackendService.getUsersFull()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(
-        (users: UserFullDto[]) => {
-          if (users.length > 0) {
-            this.setObjectsDatasource(users);
-            this.setCheckboxes();
-          } else {
-            this.tableSelectionCheckboxes.clear();
-            this.tableSelectionRow.clear();
-          }
-          this.changeDetectorRef.markForCheck();
-        }
-      );
+    this.directory.load(() => this.userBackendService.getUsersFull());
   }
 
   createWorkspaceList(): void {

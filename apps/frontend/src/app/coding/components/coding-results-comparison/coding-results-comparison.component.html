@@ -180,7 +180,7 @@
                             }}</mat-icon>
                             Interrater-Reliabilität
                           </h4>
-                          <button mat-icon-button class="toggle-button">
+                          <button mat-icon-button class="toggle-button" [attr.aria-label]="'accessibility.actions.toggle-kappa-statistics' | translate">
                             <mat-icon>{{
                               showKappaStatistics() ? 'expand_less' : 'expand_more'
                             }}</mat-icon>

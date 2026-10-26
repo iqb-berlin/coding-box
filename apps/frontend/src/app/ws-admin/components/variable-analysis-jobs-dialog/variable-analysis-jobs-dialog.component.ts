@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
@@ -31,7 +32,7 @@ export interface VariableAnalysisJobsDialogData {
   templateUrl: './variable-analysis-jobs-dialog.component.html',
   styleUrls: ['./variable-analysis-jobs-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     CommonModule,
     FormsModule,
     MatButtonModule,
