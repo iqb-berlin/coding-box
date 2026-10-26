@@ -1,4 +1,3 @@
-import * as ExcelJS from 'exceljs';
 import type { CodingImportDetectedFormat, CodingImportFormatDialogData } from './coding-import-format-dialog.component';
 
 export async function detectCodingImportFormat(file: File): Promise<CodingImportFormatDialogData> {
@@ -25,6 +24,7 @@ export async function detectCodingImportFormat(file: File): Promise<CodingImport
 
 export async function readImportHeaders(file: File): Promise<string[]> {
   if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    const ExcelJS = await import('exceljs');
     const workbook = new ExcelJS.Workbook();
     const buffer = await file.arrayBuffer();
     await workbook.xlsx.load(buffer);
