@@ -546,7 +546,8 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.withinTrainingData;
-    component.isLoading.set(true);
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(new Subject());
+    component.loadComparison();
 
     fixture.detectChanges();
 
@@ -561,7 +562,8 @@ describe('CodingResultsComparisonComponent', () => {
     component.codersFormControl.setValue([1, 2]);
     component.tableFilters.unitName = 'MDV001';
     component.totalItems = 0;
-    component.isLoading.set(true);
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(new Subject());
+    component.loadComparison();
 
     fixture.detectChanges();
 
@@ -3138,5 +3140,36 @@ describe('CodingResultsComparisonComponent', () => {
     const requests = codingTrainingBackendService.getCachedWithinTrainingCodingResults.mock.calls.length;
     component.loadComparison();
     expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults.mock.calls).toHaveLength(requests);
+  });
+  it('memoizes row status across repeated rendering reads and refreshes it for selection and page changes', () => {
+    const readCode = jest.fn(() => '1');
+    const row = {
+      responseId: 1,
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      coders: [
+        {
+          jobId: 1, coderName: 'A', get code() { return readCode(); }, score: 1
+        },
+        {
+          jobId: 2, coderName: 'B', code: '1', score: 1
+        },
+        {
+          jobId: 3, coderName: 'C', code: '2', score: 2
+        }
+      ]
+    };
+    component.comparisonMode = 'within-training';
+    component.withinTrainingData = [row];
+    component.codersFormControl.setValue([1, 2]);
+    expect(component.getComparisonStatus(row)).toBe('match');
+    const initialReads = readCode.mock.calls.length;
+    for (let i = 0; i < 500; i++) expect(component.getComparisonStatus(row)).toBe('match');
+    expect(readCode).toHaveBeenCalledTimes(initialReads);
+    component.codersFormControl.setValue([1, 3]);
+    expect(component.getComparisonStatus(row)).toBe('differ');
+    const nextRow = { ...row, coders: row.coders.map(coder => ({ ...coder, code: '2' })) };
+    component.withinTrainingData = [nextRow];
+    expect(component.getComparisonStatus(nextRow)).toBe('match');
   });
 });

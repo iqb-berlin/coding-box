@@ -29,7 +29,7 @@ class ManualFacadeHost {
   readonly settings = inject(ManualCodingSettingsFacade);
   readonly analysis = inject(ManualCodingAnalysisFacade);
   constructor() {
-    this.analysis.isViewActive = () => true;
+    this.analysis.setViewActivity(() => true);
     this.analysis.reloadRequested$.pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => this.analysis.loadResponseAnalysis());
   }
 }
@@ -199,7 +199,7 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     jest.useFakeTimers();
     api.getResponseAnalysis.mockReturnValue(of(analysisValue(true)));
     host.analysis.loadResponseAnalysis();
-    host.analysis.isViewActive = () => false;
+    host.analysis.setViewActivity(() => false);
     host.analysis.stop();
     expect(api.trackResponseAnalysisGuardUntilComplete).toHaveBeenCalledWith(5, 2);
     jest.advanceTimersByTime(15000);

@@ -30,6 +30,7 @@ import {
   debounceTime, finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
+import { ManualCodingCompletionFacade } from './manual-coding-completion.facade';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CoderTraining } from '../../models/coder-training.model';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
@@ -60,22 +61,19 @@ import {
 import { ManualCodingPlanningFacade } from './manual-coding-planning.facade';
 import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
+import { ManualCodingSummaryFacade } from './manual-coding-summary.facade';
 
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import type { Coder } from '../../models/coder.model';
 import { CodingJob } from '../../models/coding-job.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import {
-  ApplyCodingResultsDialogComponent,
-  ApplyCodingResultsDialogResult
-} from '../coding-jobs/apply-coding-results-dialog.component';
 
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import {
-  ApplyCodingResultsResponse, BulkApplyCodingResultsResponse, CodingJobBackendService, JobDefinition
+  CodingJobBackendService, JobDefinition
 } from '../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 
@@ -132,7 +130,7 @@ interface ManualFreshnessJobSummary {
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
   standalone: true,
-  providers: [ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
+  providers: [ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
   imports: [
     ManualCodingAggregationSettingsComponent,
     TranslateModule,
@@ -164,6 +162,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly importFacade = inject(ManualCodingImportFacade);
   private readonly statistics = inject(ManualCodingStatisticsFacade);
+  private readonly summary = inject(ManualCodingSummaryFacade);
+  private readonly completion = inject(ManualCodingCompletionFacade);
   private readonly settings = inject(ManualCodingSettingsFacade);
   private readonly aggregation = inject(ManualCodingAggregationFacade);
   private readonly analysis = inject(ManualCodingAnalysisFacade);
@@ -291,9 +291,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private lastWindowFocusRefreshAt = 0;
 
-  private get responseAnalysisGuardActive(): boolean { return this.analysis.responseAnalysisGuardActive; }
-  private set responseAnalysisGuardActive(value: boolean) { this.analysis.responseAnalysisGuardActive = value; }
-
   private pendingManualStateRefreshAfterBackgroundJob = false;
   private pendingForcedManualStateRefreshAfterBackgroundJob = false;
   private pendingCodingFreshnessRefreshAfterBackgroundJob = false;
@@ -357,9 +354,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   readonly isLoadingManualFreshnessJobSummary = this.statistics.isLoadingManualFreshnessJobSummary;
   readonly isLoadingDoubleCodingConflictSummary = this.statistics.isLoadingDoubleCodingConflictSummary;
 
-  protected readonly isApplyingCodingResults = signal(false);
-
-  private applyingCodingResultJobIds = new Set<number>();
+  protected readonly isApplyingCodingResults = this.completion.isApplyingCodingResults;
   protected readonly emptyResponseMissing = signal<{
     code: number;
     score: number | null;
@@ -405,6 +400,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }));
 
   ngOnInit(): void {
+    this.completion.resultsApplied$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refreshAfterApplyingCodingResults());
     this.aggregation.refreshRequested$.pipe(takeUntil(this.destroy$)).subscribe(request => {
       if (request.scope === 'all') this.refreshAllStatistics();
       else this.refreshAggregationDependentViews(request.includeResponseAnalysis);
@@ -415,7 +411,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.loadedManualTabData.planning = true;
       this.focusManualFreshnessTargetIfReady();
     });
-    this.analysis.isViewActive = () => this.isResponseAnalysisTab(this.activeManualTab);
+    this.analysis.setViewActivity(() => this.isResponseAnalysisTab(this.activeManualTab));
     this.analysis.reloadRequested$.pipe(takeUntil(this.destroy$)).subscribe(() => this.loadResponseAnalysis());
     this.analysis.viewUpdated$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.focusManualFreshnessTargetIfReady();
@@ -1276,134 +1272,29 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.shouldWaitForPlanningDataBundle();
   }
 
-  protected getOpenCodingCases(): number {
-    const codingProgressOverviewValue = this.codingProgressOverview();
+  protected readonly getOpenCodingCases = this.summary.getOpenCodingCases;
 
-    if (codingProgressOverviewValue) {
-      return Math.max(
-        0,
-        codingProgressOverviewValue.totalCasesToCode -
-        codingProgressOverviewValue.completedCases
-      );
-    }
+  readonly getAvailableCasesForNewJobs = this.summary.getAvailableCasesForNewJobs;
 
-    return this.appliedResultsOverview()?.remainingResponses || 0;
-  }
+  readonly getUnavailableCasesForNewJobs = this.summary.getUnavailableCasesForNewJobs;
 
-  getAvailableCasesForNewJobs(): number {
-    const availableCases = this.codingIncompleteVariables().reduce(
-      (sum, variable) => sum + (
-        variable.availableCases ??
-        variable.uniqueCasesAfterAggregation ??
-        variable.responseCount ??
-        0
-      ),
-      0
-    );
+  protected readonly getVariableCoveragePercentage = this.summary.getVariableCoveragePercentage;
 
-    if (this.caseCoverageOverview()?.effectiveUnassignedCases === 0) {
-      return 0;
-    }
+  protected readonly getAppliedResultsPercentage = this.summary.getAppliedResultsPercentage;
 
-    return availableCases;
-  }
+  readonly getCurrentRawManualResponses = this.summary.getCurrentRawManualResponses;
 
-  getUnavailableCasesForNewJobs(): number {
-    const totalEffectiveCases = this.codingIncompleteVariables().reduce(
-      (sum, variable) => sum + this.getVariableEffectiveCaseCount(variable),
-      0
-    );
+  readonly getResponseAnalysisReferenceRawCases = this.summary.getResponseAnalysisReferenceRawCases;
 
-    return Math.max(0, totalEffectiveCases - this.getAvailableCasesForNewJobs());
-  }
+  readonly getManualStatusPoolCount = this.summary.getManualStatusPoolCount;
 
-  protected getVariableCoveragePercentage(): number {
-    return this.variableCoverageOverview()?.coveragePercentage || 0;
-  }
+  readonly getEffectiveManualCaseCount = this.summary.getEffectiveManualCaseCount;
 
-  protected getAppliedResultsPercentage(): number {
-    return this.appliedResultsOverview()?.completionPercentage || 0;
-  }
+  readonly getManualCaseScopeSummaryText = this.summary.getManualCaseScopeSummaryText;
 
-  getCurrentRawManualResponses(): number {
-    return this.appliedResultsOverview()?.rawTotalIncompleteResponses ??
-      this.codingProgressOverview()?.rawTotalCasesToCode ??
-      this.caseCoverageOverview()?.totalCasesToCode ??
-      0;
-  }
+  readonly isResponseAnalysisOutdated = this.summary.isResponseAnalysisOutdated;
 
-  getResponseAnalysisReferenceRawCases(): number {
-    return this.codingProgressOverview()?.responseAnalysisRawCases ??
-      this.caseCoverageOverview()?.responseAnalysisRawCases ??
-      this.appliedResultsOverview()?.responseAnalysisRawCases ??
-      this.getManualStatusPoolCount();
-  }
-
-  getManualStatusPoolCount(): number {
-    const manualCodingScopeSummaryValue = this.manualCodingScopeSummary();
-
-    return this.codingProgressOverview()?.statusTotalCasesToCode ??
-      this.caseCoverageOverview()?.statusTotalCasesToCode ??
-      this.appliedResultsOverview()?.statusTotalIncompleteResponses ??
-      (manualCodingScopeSummaryValue ?
-        manualCodingScopeSummaryValue.manualResponseCount +
-        manualCodingScopeSummaryValue.coveredSourceResponseCount :
-        0);
-  }
-
-  getEffectiveManualCaseCount(): number {
-    return this.codingProgressOverview()?.totalCasesToCode ??
-      this.caseCoverageOverview()?.effectiveTotalCasesToCode ??
-      this.appliedResultsOverview()?.totalIncompleteResponses ??
-      0;
-  }
-
-  getManualCaseScopeSummaryText(): string {
-    const statusPoolCount = this.getManualStatusPoolCount();
-    const effectiveCaseCount = this.getEffectiveManualCaseCount();
-    const openCaseCount = this.getOpenCodingCases();
-
-    if (
-      statusPoolCount <= 0 ||
-      effectiveCaseCount <= 0 ||
-      statusPoolCount === effectiveCaseCount
-    ) {
-      return '';
-    }
-
-    const difference = statusPoolCount - effectiveCaseCount;
-    const reason = difference > 0 ?
-      `${difference} Rohantworten werden durch abgeleitete Variablen, Vorverarbeitung oder Aggregation nicht separat verteilt.` :
-      'Die effektive Fallzahl kann durch Mehrfachkodierung oder manuelle Nacharbeit abweichen.';
-    const openCaseHint = openCaseCount !== effectiveCaseCount ?
-      `, davon ${openCaseCount} offen` :
-      '';
-
-    return `${statusPoolCount} Rohantworten im Statuspool -> ${effectiveCaseCount} effektive Arbeitsfälle${openCaseHint}. ${reason}`;
-  }
-
-  isResponseAnalysisOutdated(): boolean {
-    const responseAnalysisSnapshot = this.responseAnalysis();
-
-    const analysisRawCases = responseAnalysisSnapshot?.aggregationSummary?.rawCases ?? 0;
-    const referenceRawCases = this.getResponseAnalysisReferenceRawCases();
-    return !!responseAnalysisSnapshot &&
-      !responseAnalysisSnapshot.isCalculating &&
-      referenceRawCases > 0 &&
-      analysisRawCases !== referenceRawCases;
-  }
-
-  hasResponseAnalysisRestScopeDifference(): boolean {
-    const responseAnalysisSnapshot = this.responseAnalysis();
-
-    const analysisRawCases = responseAnalysisSnapshot?.aggregationSummary?.rawCases ?? 0;
-    const currentRawManualResponses = this.getCurrentRawManualResponses();
-    return !!responseAnalysisSnapshot &&
-      !responseAnalysisSnapshot.isCalculating &&
-      !this.isResponseAnalysisOutdated() &&
-      currentRawManualResponses > 0 &&
-      analysisRawCases !== currentRawManualResponses;
-  }
+  readonly hasResponseAnalysisRestScopeDifference = this.summary.hasResponseAnalysisRestScopeDifference;
 
   private shouldLoadResponseAnalysisForPlanning(): boolean {
     const responseAnalysisSnapshot = this.responseAnalysis();
@@ -1436,110 +1327,43 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  hasPreparationWarnings(): boolean {
-    return this.hasUncodedEmptyResponses() ||
-      this.hasDuplicateFindingsWithoutAggregation();
-  }
+  readonly hasPreparationWarnings = this.summary.hasPreparationWarnings;
 
-  isPreparationReady(): boolean {
-    const responseAnalysisSnapshot = this.responseAnalysis();
+  readonly isPreparationReady = this.summary.isPreparationReady;
 
-    return !!responseAnalysisSnapshot &&
-      !responseAnalysisSnapshot.isCalculating &&
-      !this.hasPreparationWarnings();
-  }
+  readonly hasPlanningWarnings = this.summary.hasPlanningWarnings;
 
-  hasPlanningWarnings(): boolean {
-    return this.hasManualCodeAvailabilityWarnings() ||
-      (this.variableCoverageOverview()?.conflictedVariables || 0) > 0 ||
-      (this.variableCoverageOverview()?.missingVariables || 0) > 0 ||
-      (this.caseCoverageOverview()?.effectiveUnassignedCases || 0) > 0;
-  }
+  readonly hasVariableCoverageConflicts = this.summary.hasVariableCoverageConflicts;
 
-  hasVariableCoverageConflicts(): boolean {
-    return (this.variableCoverageOverview()?.conflictedVariables || 0) > 0;
-  }
+  readonly isPlanningReady = this.summary.isPlanningReady;
 
-  isPlanningReady(): boolean {
-    return !!this.variableCoverageOverview() &&
-      !!this.caseCoverageOverview() &&
-      !this.hasPlanningWarnings();
-  }
+  readonly hasExecutionOpenWork = this.summary.hasExecutionOpenWork;
 
-  hasExecutionOpenWork(): boolean {
-    return this.getOpenCodingCases() > 0;
-  }
+  private readonly hasPreparationRefreshTarget = this.summary.hasPreparationRefreshTarget;
 
-  private hasPreparationRefreshTarget(): boolean {
-    return this.hasPreparationWarnings() ||
-      this.isResponseAnalysisOutdated();
-  }
+  private readonly hasActiveTrainingCodingJobs = this.summary.hasActiveTrainingCodingJobs;
 
-  private hasActiveTrainingCodingJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.activeTrainingJobs ?? 0) > 0;
-  }
+  private readonly hasOpenProductiveManualJobs = this.summary.hasOpenProductiveManualJobs;
 
-  private hasOpenProductiveManualJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.openProductiveJobs ?? 0) > 0;
-  }
+  private readonly hasCompletedProductiveManualJobs = this.summary.hasCompletedProductiveManualJobs;
 
-  private hasCompletedProductiveManualJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.completedProductiveJobs ?? 0) > 0;
-  }
+  private readonly hasStaleSourceManualJobs = this.summary.hasStaleSourceManualJobs;
 
-  private hasStaleSourceManualJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.staleSourceJobs ?? 0) > 0;
-  }
+  private readonly hasOpenDoubleCodingReviewConflicts = this.summary.hasOpenDoubleCodingReviewConflicts;
 
-  private hasOpenDoubleCodingReviewConflicts(): boolean {
-    return this.openDoubleCodingConflictCount > 0;
-  }
+  private readonly hasManualFreshnessJobSummary = this.summary.hasManualFreshnessJobSummary;
 
-  private hasManualFreshnessJobSummary(): boolean {
-    return this.manualFreshnessJobSummary !== null;
-  }
+  private readonly hasExecutionOpenWorkForFreshness = this.summary.hasExecutionOpenWorkForFreshness;
 
-  private hasExecutionOpenWorkForFreshness(): boolean {
-    if (this.hasManualFreshnessJobSummary()) {
-      return this.hasOpenProductiveManualJobs();
-    }
+  private readonly hasCompletionReadyWorkForFreshness = this.summary.hasCompletionReadyWorkForFreshness;
 
-    return this.hasExecutionOpenWork();
-  }
+  readonly isCompletionComplete = this.summary.isCompletionComplete;
 
-  private hasCompletionReadyWorkForFreshness(): boolean {
-    if (this.hasManualFreshnessJobSummary()) {
-      return this.hasCompletedProductiveManualJobs();
-    }
+  readonly hasManualCodingProgressScope = this.summary.hasManualCodingProgressScope;
 
-    return this.hasManualCodingProgressScope() &&
-      !!this.codingProgressOverview() &&
-      !!this.appliedResultsOverview() &&
-      !this.hasExecutionOpenWork();
-  }
+  readonly hasCompletedJobsReadyForApply = this.summary.hasCompletedJobsReadyForApply;
 
-  isCompletionComplete(): boolean {
-    return this.hasManualCodingProgressScope() &&
-      this.getAppliedResultsPercentage() >= 100 &&
-      this.getOpenCodingCases() === 0;
-  }
-
-  hasManualCodingProgressScope(): boolean {
-    return ((this.codingProgressOverview()?.totalCasesToCode ?? 0) > 0) ||
-      ((this.codingProgressOverview()?.rawTotalCasesToCode ?? 0) > 0) ||
-      ((this.appliedResultsOverview()?.totalIncompleteResponses ?? 0) > 0) ||
-      ((this.appliedResultsOverview()?.rawTotalIncompleteResponses ?? 0) > 0) ||
-      ((this.appliedResultsOverview()?.appliedResponses ?? 0) > 0) ||
-      ((this.appliedResultsOverview()?.remainingResponses ?? 0) > 0);
-  }
-
-  hasCompletedJobsReadyForApply(): boolean {
-    return this.completedJobsReadyForApply().length > 0;
-  }
-
-  protected hasCompletedJobsBlockedForReview(): boolean {
-    return this.completedJobsBlockedForReview().length > 0;
-  }
+  protected readonly hasCompletedJobsBlockedForReview = this.summary.hasCompletedJobsBlockedForReview;
 
   canApplyCompletedJobResults(): boolean {
     return this.getExecutionCodingJobsComponent()?.canApplyResults() ??
@@ -1626,117 +1450,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected isApplyingJobResults(jobId: number): boolean {
-    return this.applyingCodingResultJobIds.has(jobId);
+    return this.completion.isApplyingJobResults(jobId);
   }
 
   protected applyCompletedJobResults(job: CodingJob): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.showError('Kein Workspace ausgewählt');
-      return;
-    }
-
-    if (!this.canApplyCompletedJobResults()) {
-      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
-      width: '600px',
-      data: {
-        jobName: job.name,
-        totalResults: job.totalUnits,
-        codedResults: job.codedUnits,
-        hasReviewIssues: job.hasIssues
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
-      if (!dialogResult) {
-        return;
-      }
-
-      this.isApplyingCodingResults.set(true);
-      this.applyingCodingResultJobIds.add(job.id);
-      const loadingSnack = this.snackBar.open(
-        `Wende Ergebnisse für Kodierjob "${job.name}" an...`,
-        '',
-        { duration: 3000 }
-      );
-
-      this.codingJobBackendService
-        .applyCodingResults(workspaceId, job.id, {
-          overwriteExisting: dialogResult.overwriteExisting
-        })
-        .pipe(
-          finalize(() => {
-            this.applyingCodingResultJobIds.delete(job.id);
-            this.isApplyingCodingResults.set(this.applyingCodingResultJobIds.size > 0);
-            loadingSnack.dismiss();
-          }),
-          takeUntilWorkspaceChanged(this.appService),
-          takeUntil(this.destroy$)
-        )
-        .subscribe({
-          next: result => {
-            if (result.success) {
-              this.showSuccess(this.formatApplyCodingResultsMessage(result));
-              this.refreshAfterApplyingCodingResults();
-              return;
-            }
-
-            this.showError(
-              `Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(
-                result.messageKey,
-                result.messageParams || {}
-              )}`
-            );
-          },
-          error: error => {
-            this.showError(
-              `Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`
-            );
-          }
-        });
-    });
+    this.completion.applyCompletedJobResults(job, () => this.canApplyCompletedJobResults());
   }
 
   applyAllCompletedJobResults(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.showError('Kein Workspace ausgewählt');
-      return;
-    }
-
-    if (!this.canApplyCompletedJobResults()) {
-      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
-      return;
-    }
-
-    if (!this.hasCompletedJobsReadyForApply()) {
-      this.showError('Keine abgeschlossenen Kodierjobs zum Anwenden gefunden.');
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '500px',
-      data: {
-        title: 'Alle abgeschlossenen Ergebnisse anwenden',
-        message: [
-          `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) anwenden?`,
-          'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
-          'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
-        ].join(' '),
-        confirmButtonText: 'Anwenden',
-        cancelButtonText: 'Abbrechen'
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
-      if (confirmed) {
-        this.performBulkApplyCompletedJobResults(workspaceId);
-      }
-    });
+    this.completion.applyAllCompletedJobResults(() => this.canApplyCompletedJobResults());
   }
 
   getPlanningStatusClass(): string { return this.planning().getPlanningStatusClass(); }
@@ -2317,42 +2039,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private isCodingJobReadyForApply(job: CodingJob): boolean { return isCodingJobReadyForApply(job); }
 
-  private performBulkApplyCompletedJobResults(workspaceId: number): void {
-    this.isApplyingCodingResults.set(true);
-    const loadingSnack = this.snackBar.open(
-      'Wende Ergebnisse für alle abgeschlossenen Kodierjobs an...',
-      '',
-      { duration: 3000 }
-    );
-
-    this.codingJobBackendService
-      .bulkApplyCodingResults(workspaceId)
-      .pipe(
-        finalize(() => {
-          this.isApplyingCodingResults.set(false);
-          loadingSnack.dismiss();
-        }),
-        takeUntilWorkspaceChanged(this.appService),
-        takeUntil(this.destroy$)
-      )
-      .subscribe({
-        next: result => {
-          if (result.success) {
-            this.showSuccess(this.formatBulkApplyCodingResultsMessage(result));
-            this.refreshAfterApplyingCodingResults();
-            return;
-          }
-
-          this.showError(`Fehler bei der Massenanwendung: ${result.message}`);
-        },
-        error: error => {
-          this.showError(
-            `Fehler bei der Massenanwendung: ${error.message || 'Unbekannter Fehler'}`
-          );
-        }
-      });
-  }
-
   private refreshAfterApplyingCodingResults(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
@@ -2376,75 +2062,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private resetPlanningDataBundleState(): void { return this.planningData.resetPlanningDataBundleState(); }
-
-  private formatApplyCodingResultsMessage(
-    result: ApplyCodingResultsResponse
-  ): string {
-    const parts = [
-      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
-    ];
-
-    if (result.skippedAlreadyCodedCount > 0) {
-      parts.push(
-        `Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`
-      );
-    }
-
-    if (result.overwrittenExistingCount > 0) {
-      parts.push(
-        `Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`
-      );
-    }
-
-    if (result.skippedReviewCount > 0) {
-      parts.push(
-        `Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`
-      );
-    }
-
-    return parts.join('\n');
-  }
-
-  private formatBulkApplyCodingResultsMessage(
-    result: BulkApplyCodingResultsResponse
-  ): string {
-    const skippedCount = result.results.filter(item => item.skipped).length;
-    const failedCount = result.results.filter(
-      item => item.result && !item.result.success
-    ).length;
-    const parts = [
-      `Massenanwendung abgeschlossen: ${result.jobsProcessed} Jobs verarbeitet`,
-      `${result.totalUpdatedResponses} Antworten aktualisiert`
-    ];
-
-    if (result.totalSkippedAlreadyCoded > 0) {
-      parts.push(
-        `${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten`
-      );
-    }
-
-    if (result.totalOverwrittenExisting > 0) {
-      parts.push(
-        `${result.totalOverwrittenExisting} vorhandene Kodierungen überschrieben`
-      );
-    }
-
-    if (result.totalSkippedReview > 0) {
-      parts.push(
-        `${result.totalSkippedReview} Ergebnisse zur manuellen Prüfung übersprungen`
-      );
-    }
-
-    if (skippedCount > 0) {
-      parts.push(`${skippedCount} Jobs übersprungen`);
-    }
-
-    if (failedCount > 0) {
-      parts.push(`${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet`);
-    }
-
-    return parts.join(', ');
-  }
 
   protected onTrainingStart(data: {
     selectedCoders: Coder[];
@@ -2483,53 +2100,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * When aggregation is applied, each group only needs one coding case (the rest are auto-applied),
    * so the effective count is: totalIncompleteResponses - (totalResponsesInGroups - numberOfGroups)
    */
-  protected readonly effectiveCodingCases = computed<number>(() => this.appliedResultsOverview()?.totalIncompleteResponses ?? 0);
+  protected readonly effectiveCodingCases = this.summary.effectiveCodingCases;
 
-  protected readonly aggregationSavings = computed<number>(() => this.appliedResultsOverview()?.aggregatedDuplicateCases ?? 0);
+  protected readonly aggregationSavings = this.summary.aggregationSavings;
 
-  readonly hasDeriveErrorManualCases = computed<boolean>(() => (this.appliedResultsOverview()?.deriveErrorRawTotalResponses ?? 0) > 0 ||
-      (this.appliedResultsOverview()?.deriveErrorTotalResponses ?? 0) > 0);
+  readonly hasDeriveErrorManualCases = this.summary.hasDeriveErrorManualCases;
 
-  readonly deriveErrorManualCases = computed<number>(() => this.appliedResultsOverview()?.deriveErrorTotalResponses ?? 0);
+  readonly deriveErrorManualCases = this.summary.deriveErrorManualCases;
 
-  readonly deriveErrorAppliedCases = computed<number>(() => this.appliedResultsOverview()?.deriveErrorAppliedResponses ?? 0);
+  readonly deriveErrorAppliedCases = this.summary.deriveErrorAppliedCases;
 
-  readonly deriveErrorRemainingCases = computed<number>(() => this.appliedResultsOverview()?.deriveErrorRemainingResponses ?? 0);
+  readonly deriveErrorRemainingCases = this.summary.deriveErrorRemainingCases;
 
   protected get isDuplicateAggregationActive(): boolean {
     return !this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 
-  protected readonly responseAnalysisAggregationSavings = computed<number>(() => this.responseAnalysis()?.aggregationSummary?.collapsedCases ?? 0);
+  protected readonly responseAnalysisAggregationSavings = this.summary.responseAnalysisAggregationSavings;
 
-  readonly hasDuplicateFindingsWithoutAggregation = computed<boolean>(() => {
-    const responseAnalysisValue = this.responseAnalysis();
-
-    return !!responseAnalysisValue &&
-      !responseAnalysisValue.aggregationSummary.aggregationActive &&
-      responseAnalysisValue.duplicateValues.total > 0;
-  });
+  readonly hasDuplicateFindingsWithoutAggregation = this.summary.hasDuplicateFindingsWithoutAggregation;
 
   protected getVariableEffectiveCaseCount(variable: {
     responseCount: number;
     uniqueCasesAfterAggregation?: number;
-  }): number {
-    return variable.uniqueCasesAfterAggregation ?? variable.responseCount;
-  }
+  }): number { return this.summary.getVariableEffectiveCaseCount(variable); }
 
-  protected readonly effectiveSingleCodedCases = computed<number>(() => {
-    const caseCoverageOverviewValue = this.caseCoverageOverview();
-
-    if (!caseCoverageOverviewValue) {
-      return 0;
-    }
-
-    return Math.max(
-      0,
-      caseCoverageOverviewValue.effectiveCasesInJobs -
-      caseCoverageOverviewValue.doubleCodedCases
-    );
-  });
+  protected readonly effectiveSingleCodedCases = this.summary.effectiveSingleCodedCases;
 
   protected getStatusLabel(status: string): string {
     switch (status) {
@@ -2592,11 +2188,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadResponseAnalysis();
   }
 
-  protected hasUncodedEmptyResponses(): boolean {
-    return (this.responseAnalysis()?.emptyResponses?.totalUncoded || 0) > 0;
-  }
+  protected readonly hasUncodedEmptyResponses = this.summary.hasUncodedEmptyResponses;
 
-  protected getUncodedCount(): number {
-    return this.responseAnalysis()?.emptyResponses?.totalUncoded || 0;
-  }
+  protected readonly getUncodedCount = this.summary.getUncodedCount;
 }
