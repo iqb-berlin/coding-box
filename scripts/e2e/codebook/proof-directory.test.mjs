@@ -39,7 +39,8 @@ test('failed proof startup still identifies the retained private evidence direct
   delete environment.CODEBOOK_PROOF_DIR;
   const runner = new URL('./verify-live.mjs', import.meta.url).href;
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval',
-    `globalThis.fetch = async () => { throw new Error('intentional offline preflight'); }; await import(${JSON.stringify(runner)});`
+    "globalThis.fetch = async () => { throw new Error('intentional offline preflight'); }; await import(process.argv[1]);",
+    runner
   ], { cwd: fileURLToPath(new URL('../../../', import.meta.url)), env: environment, encoding: 'utf8' });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /intentional offline preflight/);
