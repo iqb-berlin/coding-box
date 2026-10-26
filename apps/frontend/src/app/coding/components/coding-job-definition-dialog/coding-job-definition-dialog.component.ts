@@ -158,6 +158,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
+  private readonly visibleVariables = toSignal(this.dataSource.connect(), { requireSync: true });
 
   // Coders
   readonly coders = signal<Coder[]>([]);
@@ -170,6 +171,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly variableBundles = signal<VariableBundle[]>([]);
   selectedVariableBundles = this.createBundleSelectionModel();
   protected bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
+  private readonly visibleBundles = toSignal(this.bundlesDataSource.connect(), { requireSync: true });
+  private readonly bundleSelectionRevision = signal(0);
   protected readonly isLoadingBundles = signal(false);
 
   // Variable analysis items
@@ -226,14 +229,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   protected readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
   readonly includeDeriveErrorInManualCoding = signal(false);
 
-  protected get variableSelectionFilters(): JobVariableFilters {
-    return {
-      unitName: this.unitNameFilter(),
-      variableId: this.variableIdFilter(),
-      trainingRequired: this.trainingRequiredFilter(),
-      availability: this.availabilityFilter()
-    };
-  }
+  protected readonly variableSelectionFilters = computed<JobVariableFilters>(() => ({
+    unitName: this.unitNameFilter(),
+    variableId: this.variableIdFilter(),
+    trainingRequired: this.trainingRequiredFilter(),
+    availability: this.availabilityFilter()
+  }));
 
   protected updateVariableSelectionFilters(filters: Partial<JobVariableFilters>): void {
     if (filters.unitName !== undefined) this.unitNameFilter.set(filters.unitName);
@@ -241,8 +242,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     if (filters.trainingRequired !== undefined) this.trainingRequiredFilter.set(filters.trainingRequired);
   }
 
-  protected get variableSelectionRows(): JobVariableRow[] {
-    return this.dataSource.data.map(variable => ({
+  protected readonly variableSelectionRows = computed<JobVariableRow[]>(() => (
+    this.visibleVariables().map(variable => ({
       variable,
       selected: this.isVariableSelected(variable),
       disabled: this.isVariableDisabled(variable),
@@ -251,11 +252,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       availabilityText: this.getAvailabilityText(variable),
       hasDeriveError: this.hasDeriveErrorResponses(variable),
       includeDeriveError: this.isDeriveErrorIncluded(variable)
-    }));
-  }
+    }))
+  ));
 
-  protected get bundleSelectionRows(): JobBundleRow[] {
-    return this.bundlesDataSource.filteredData.map(bundle => ({
+  protected readonly bundleSelectionRows = computed<JobBundleRow[]>(() => {
+    this.bundleSelectionRevision();
+    return this.visibleBundles().map(bundle => ({
       bundle,
       selected: this.selectedVariableBundles.isSelected(bundle),
       variables: this.getBundlePreviewVariables(bundle).map(variable => ({
@@ -264,7 +266,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         includeDeriveError: this.isBundleVariableDeriveErrorIncluded(variable)
       }))
     }));
-  }
+  });
 
   constructor() {
     // A new filter replaces both queries, including an outstanding scope summary.
@@ -399,6 +401,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.dataSource.disconnect();
+    this.bundlesDataSource.disconnect();
     this.unregisterRecoveryProvider?.();
     this.unregisterRecoveryProvider = undefined;
     this.selectionPreviewSubscription.unsubscribe();
@@ -625,6 +629,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private bindSelectionPreviewRefresh(): void {
     this.selectionPreviewSubscription.unsubscribe();
     this.selectionPreviewSubscription = new Subscription();
+    this.bundleSelectionRevision.update(revision => revision + 1);
 
     this.selectionPreviewSubscription.add(
       this.selectedVariables().changed.subscribe(change => {
@@ -633,7 +638,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       })
     );
     this.selectionPreviewSubscription.add(
-      this.selectedVariableBundles.changed.subscribe(() => this.queueDistributionPreviewRefresh())
+      this.selectedVariableBundles.changed.subscribe(() => {
+        this.bundleSelectionRevision.update(revision => revision + 1);
+        this.queueDistributionPreviewRefresh();
+      })
     );
     this.selectionPreviewSubscription.add(
       this.selectedCoders.changed.subscribe(() => this.queueDistributionPreviewRefresh())

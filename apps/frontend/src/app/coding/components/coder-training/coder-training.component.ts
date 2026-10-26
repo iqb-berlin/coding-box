@@ -21,7 +21,7 @@ import {
   FormControl
 } from '@angular/forms';
 import {
-  map, startWith, catchError, of
+  map, startWith, catchError, merge, of
 } from 'rxjs';
 import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
 import { TrainingSampleEditorComponent, TrainingSampleView, TrainingSampleRow } from './training-sample-editor.component';
@@ -139,7 +139,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   protected readonly isLoadingVariables = signal(false);
   protected readonly isLoadingBundles = signal(false);
 
-  trainingForm: CoderTrainingForm;
+  readonly trainingForm: CoderTrainingForm = createCoderTrainingForm();
+  // Form controls are mutable; their events explicitly invalidate the sample view.
+  private readonly sampleFormChanges = toSignal(merge(
+    this.variablesFormArray.valueChanges,
+    this.trainingForm.controls.caseOrderingMode.valueChanges
+  ).pipe(map(() => this.variablesFormArray.getRawValue())), { initialValue: [] });
+
   get canEditTraining(): boolean {
     const training = this.editTraining();
     return training ? this.permissions.canEdit(training) : this.permissions.canCreate;
@@ -169,7 +175,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       bundle.description?.toLowerCase().includes(search));
   });
 
-  protected get sampleEditorView(): TrainingSampleView {
+  protected readonly sampleEditorView = computed<TrainingSampleView>(() => {
+    this.sampleFormChanges();
     const row = (item: { control: TrainingVariableForm; index: number }): TrainingSampleRow => ({
       ...item,
       derived: this.isControlDerived(item.control),
@@ -204,11 +211,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         };
       })
     };
-  }
+  });
 
   constructor() {
-    this.trainingForm = createCoderTrainingForm();
-
     // Initialize grouped variables
     this.updateGroupedVariables();
     this.includeDerivedVariablesValue = toSignal(this.trainingForm.controls.includeDerivedVariables.valueChanges, {
