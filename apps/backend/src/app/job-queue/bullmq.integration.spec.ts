@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   BullModule, getQueueToken, Processor, WorkerHost
 } from '@nestjs/bullmq';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { Job, Queue, QueueEvents } from 'bullmq';
 import { JobQueueService, TestPersonCodingJobData } from './job-queue.service';
 import { AutocoderRunService } from './autocoder-run.service';
@@ -13,6 +13,11 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
 import { createJobQueueOptions, JOB_QUEUE_NAMES } from './job-queue.config';
 import { requireJobId } from './job-queue.util';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+
+// Redis integration isolates queue delivery; PostgreSQL lifecycle locks have their own real-DB suite.
+jest.mock('../database/services/shared/workspace-lifecycle-lock.util', () => ({
+  withWorkspaceJobLock: jest.fn(async (_source, _workspaceId, operation: () => Promise<unknown>) => operation())
+}));
 
 const redisPort = Number(process.env.BULLMQ_TEST_REDIS_PORT);
 const integration = redisPort ? describe : describe.skip;
@@ -39,6 +44,7 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
       ],
       providers: [
         JobQueueService, TestPersonCodingProcessor,
+        { provide: getDataSourceToken(), useValue: {} },
         { provide: AutocoderRunService, useValue: { run } },
         { provide: getRepositoryToken(ValidationTask), useValue: { find: jest.fn().mockResolvedValue([]) } }
       ]
@@ -109,6 +115,7 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     await queue.pause();
     const job = await service.addTestPersonCodingJob({ workspaceId: 3, personIds: ['1'], autoCoderRun: 1 }, { priority: 2 });
     expect(await job.getState()).toBe('prioritized');
+    expect(await service.getJobsForWorkspaceDeletion([3])).toEqual(expect.arrayContaining([expect.objectContaining({ id: job.id, workspaceId: 3 })]));
     await expect(service.addTestPersonCodingJob({ workspaceId: 3, personIds: ['2'], autoCoderRun: 1 }))
       .rejects.toThrow('already running');
     await expect(service.getWorkspaceJob(4, 'test-person-coding', requireJobId(job))).resolves.toBeNull();
@@ -120,6 +127,7 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     expect(await queue.getJob(requireJobId(job))).toBeUndefined();
     const waiting = await service.addTestPersonCodingJob({ workspaceId: 3, personIds: ['1'], autoCoderRun: 1 });
     expect(await waiting.getState()).toBe('waiting');
+    expect(await service.getJobsForWorkspaceDeletion([3])).toEqual(expect.arrayContaining([expect.objectContaining({ id: waiting.id, workspaceId: 3 })]));
     expect((await service.getAllWorkspaceJobs(3)).some(item => item.id === waiting.id)).toBe(true);
     await queue.resume();
     await waiting.waitUntilFinished(events, 5_000);

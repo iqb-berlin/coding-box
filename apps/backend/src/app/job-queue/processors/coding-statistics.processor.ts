@@ -1,12 +1,12 @@
 import {
-  Processor,
-  WorkerHost
+  Processor
 } from '@nestjs/bullmq';
 import {
   Injectable,
   Logger
 } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { CodingStatistics } from '../../database/services/shared';
 import { CodingStatisticsService } from '../../database/services/coding';
@@ -18,7 +18,7 @@ export interface CodingStatisticsJobData {
 
 @Injectable()
 @Processor('coding-statistics', { concurrency: 1 })
-export class CodingStatisticsProcessor extends WorkerHost {
+export class CodingStatisticsProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(CodingStatisticsProcessor.name);
 
   constructor(
@@ -27,7 +27,7 @@ export class CodingStatisticsProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<CodingStatisticsJobData>): Promise<CodingStatistics> {
+  async processWorkspaceJob(job: Job<CodingStatisticsJobData>): Promise<CodingStatistics> {
     this.logger.log(`Processing coding statistics job ${job.id} for workspace ${job.data.workspaceId}`);
     try {
       await job.updateProgress(0);

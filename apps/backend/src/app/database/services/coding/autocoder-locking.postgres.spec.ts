@@ -271,7 +271,8 @@ describePostgres('Autocoder PostgreSQL locking', () => {
         dataSource.getRepository(Workspace),
         dataSource,
         cacheService as never,
-        workspaceTestResultsService as never
+        workspaceTestResultsService as never,
+        {} as never
       );
 
       await expect(workspaceCoreService.setIgnoredUnits(

@@ -1,8 +1,9 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
@@ -99,7 +100,7 @@ interface MultipleResponseObservedCounts {
 }
 
 @Processor('variable-analysis', { concurrency: 1 })
-export class VariableAnalysisProcessor extends WorkerHost {
+export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(VariableAnalysisProcessor.name);
 
   private readonly MAX_VALUES_PER_VARIABLE = 20;
@@ -128,7 +129,7 @@ export class VariableAnalysisProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<VariableAnalysisJobData>): Promise<VariableAnalysisJobResult> {
+  async processWorkspaceJob(job: Job<VariableAnalysisJobData>): Promise<VariableAnalysisJobResult> {
     this.logger.log(`Processing variable analysis job ${job.id} for workspace ${job.data.workspaceId}`);
 
     try {
