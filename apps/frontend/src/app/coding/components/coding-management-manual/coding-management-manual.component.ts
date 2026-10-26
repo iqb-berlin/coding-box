@@ -7,7 +7,7 @@ import {
   inject,
   OnDestroy, OnInit,
   signal,
-  viewChild
+  viewChild, ViewEncapsulation
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -17,7 +17,6 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -30,6 +29,11 @@ import {
   debounceTime, finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
+import { ManualCodingPreparationViewComponent } from './manual-coding-preparation-view.component';
+import { ManualCodingPlanningViewComponent } from './manual-coding-planning-view.component';
+import { ManualCodingExecutionViewComponent } from './manual-coding-execution-view.component';
+import { ManualCodingCompletionViewComponent } from './manual-coding-completion-view.component';
+import { ManualCodingViewState } from './manual-coding-view-state.service';
 import { ManualCodingCompletionFacade } from './manual-coding-completion.facade';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CoderTraining } from '../../models/coder-training.model';
@@ -40,7 +44,6 @@ import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-train
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
-import { ManualCodingAggregationSettingsComponent } from './manual-coding-aggregation-settings.component';
 import { ManualCodingAggregationFacade } from './manual-coding-aggregation.facade';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { createManualCodingExportConfig } from './manual-coding-export-plan';
@@ -130,9 +133,15 @@ interface ManualFreshnessJobSummary {
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
   standalone: true,
-  providers: [ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
+  // The feature-scoped stylesheet is shared by its extracted presentation views.
+  encapsulation: ViewEncapsulation.None,
+  host: { class: 'kb-manual' },
+  providers: [ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
   imports: [
-    ManualCodingAggregationSettingsComponent,
+    ManualCodingPreparationViewComponent,
+    ManualCodingPlanningViewComponent,
+    ManualCodingExecutionViewComponent,
+    ManualCodingCompletionViewComponent,
     TranslateModule,
     MatAnchor,
     CodingJobsComponent,
@@ -153,7 +162,6 @@ interface ManualFreshnessJobSummary {
     MatSlideToggleModule,
     MatFormFieldModule,
     MatInputModule,
-    MatPaginatorModule,
     MatTabsModule
   ]
 })
@@ -162,6 +170,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly importFacade = inject(ManualCodingImportFacade);
   private readonly statistics = inject(ManualCodingStatisticsFacade);
+  private readonly viewState = inject(ManualCodingViewState);
   private readonly summary = inject(ManualCodingSummaryFacade);
   private readonly completion = inject(ManualCodingCompletionFacade);
   private readonly settings = inject(ManualCodingSettingsFacade);
@@ -271,14 +280,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   protected readonly responseAnalysisError = this.analysis.responseAnalysisError;
 
   readonly isLoadingResponseAnalysis = this.analysis.isLoadingResponseAnalysis;
-  protected readonly showEmptyResponsesDetails = signal(false);
-  protected readonly showDuplicateValuesDetails = signal(false);
+  protected readonly showEmptyResponsesDetails = this.viewState.showEmptyResponsesDetails;
+  protected readonly showDuplicateValuesDetails = this.viewState.showDuplicateValuesDetails;
   protected readonly isApplyingEmptyCoding = this.aggregation.isApplyingEmptyCoding;
-  readonly showProgressInfo = signal(false);
-  protected readonly showTotalDetails = signal(false);
-  protected readonly showVariableCoverageInfo = signal(false);
-  protected readonly showCaseCoverageInfo = signal(false);
-  protected readonly showAppliedResultsInfo = signal(false);
+  readonly showProgressInfo = this.viewState.showProgressInfo;
+  protected readonly showTotalDetails = this.viewState.showTotalDetails;
+  protected readonly showVariableCoverageInfo = this.viewState.showVariableCoverageInfo;
+  protected readonly showCaseCoverageInfo = this.viewState.showCaseCoverageInfo;
+  protected readonly showAppliedResultsInfo = this.viewState.showAppliedResultsInfo;
   protected readonly showVariableBundlesInfo = signal(false);
   protected readonly showCoderTrainingsInfo = signal(false);
   protected readonly showCodingJobsInfo = signal(false);
@@ -1398,46 +1407,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return 'Keine übernahmebereiten Kodierjobs gefunden';
   }
 
-  protected getCompletionActionDescription(): string {
-    if (this.isCompletionComplete()) {
-      return 'Die manuelle Kodierung ist abgeschlossen und die Ergebnisse sind final in den Datenbestand übernommen.';
-    }
-
-    if (this.hasCompletedJobsReadyForApply()) {
-      if (!this.canApplyCompletedJobResults()) {
-        return 'Für das Anwenden der Job-Ergebnisse ist eine höhere Berechtigung erforderlich.';
-      }
-
-      return 'Übernehmen Sie die abgeschlossenen Job-Ergebnisse hier direkt in die Antwortdaten.';
-    }
-
-    if (this.hasCompletedJobsBlockedForReview()) {
-      return 'Mindestens ein abgeschlossener Job enthält Markierungen wie "Code-Vergabe unsicher" oder "Neuer Code nötig". Prüfen Sie diese Jobs vor dem Anwenden.';
-    }
-
-    if (this.hasExecutionOpenWork()) {
-      return 'Schließen Sie die offenen Kodierfälle ab. Danach können die Ergebnisse hier übernommen werden.';
-    }
-
-    return 'Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs, falls Sie gerade einen Job abgeschlossen haben.';
-  }
-
-  protected getCompletionActionIcon(): string {
-    if (this.isCompletionComplete()) {
-      return 'task_alt';
-    }
-
-    if (this.hasCompletedJobsReadyForApply()) {
-      return 'pending_actions';
-    }
-
-    if (this.hasCompletedJobsBlockedForReview()) {
-      return 'rule';
-    }
-
-    return this.hasExecutionOpenWork() ? 'edit_note' : 'sync_problem';
-  }
-
   getCodingJobResultSummary(job: CodingJob): string {
     const totalUnits = job.totalUnits ?? 0;
     const codedUnits = job.codedUnits ?? 0;
@@ -1938,24 +1907,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return Number(score);
   }
 
-  protected getApplyEmptyResponseCodingTooltip(): string {
-    const emptyResponseMissingSnapshot = this.emptyResponseMissing();
-
-    if (!emptyResponseMissingSnapshot) {
-      return this.translateService.instant(
-        'coding-management-manual.response-analysis.apply-empty-coding-tooltip-loading'
-      );
-    }
-
-    return this.translateService.instant(
-      'coding-management-manual.response-analysis.apply-empty-coding-tooltip',
-      {
-        ...emptyResponseMissingSnapshot,
-        score: this.getScoreDisplay(emptyResponseMissingSnapshot.score)
-      }
-    );
-  }
-
   getScoreDisplay(score: number | null): string | number {
     return score === null ? 'NA' : score;
   }
@@ -2127,23 +2078,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   protected readonly effectiveSingleCodedCases = this.summary.effectiveSingleCodedCases;
 
-  protected getStatusLabel(status: string): string {
-    switch (status) {
-      case 'draft':
-        return 'Entwurf';
-      case 'pending_review':
-        return 'Warten auf Genehmigung';
-      case 'approved':
-        return 'Genehmigt';
-      default:
-        return status;
-    }
-  }
-
-  protected getJobDefinitionIdentityLabel(definition: { id: number; name?: string }): string {
-    return getJobDefinitionDisplayLabel(definition);
-  }
-
   protected hasMatchingFlag(flag: ResponseMatchingFlag): boolean { return this.aggregation.hasMatchingFlag(flag); }
 
   protected hasUnsavedResponseMatchingChanges(): boolean { return this.aggregation.hasUnsavedResponseMatchingChanges(); }
@@ -2162,14 +2096,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadResponseAnalysis();
   }
 
-  protected toggleEmptyResponsesDetails(): void {
-    this.showEmptyResponsesDetails.set(!this.showEmptyResponsesDetails());
-  }
-
-  protected toggleDuplicateValuesDetails(): void {
-    this.showDuplicateValuesDetails.set(!this.showDuplicateValuesDetails());
-  }
-
   protected onApplyEmptyResponseCoding(): void { return this.aggregation.onApplyEmptyResponseCoding(this.canApplyCompletedJobResults(), this.emptyResponseMissing()); }
 
   onApplyDuplicateAggregation(): void { return this.aggregation.onApplyDuplicateAggregation(); }
@@ -2177,16 +2103,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   onDeactivateDuplicateAggregation(): void { return this.aggregation.onDeactivateDuplicateAggregation(); }
 
   onThresholdChanged(newValue: number | string | null): void { return this.aggregation.onThresholdChanged(newValue); }
-
-  protected onEmptyPageChange(event: PageEvent): void {
-    this.analysis.changeEmptyPage(event.pageIndex, event.pageSize);
-    this.loadResponseAnalysis();
-  }
-
-  protected onDuplicatePageChange(event: PageEvent): void {
-    this.analysis.changeDuplicatePage(event.pageIndex, event.pageSize);
-    this.loadResponseAnalysis();
-  }
 
   protected readonly hasUncodedEmptyResponses = this.summary.hasUncodedEmptyResponses;
 
