@@ -352,6 +352,14 @@ Bitte beachten Sie die GeoGebra-Lizenzbedingungen unter
 <https://www.geogebra.org/license>; insbesondere ist die freie Nutzung auf
 nicht-kommerzielle Zwecke beschränkt.
 
+### HTTPS-Verbindungen zum Testcenter
+
+Die Kodierbox prüft Zertifikate und Hostnamen aller Testcenter-Verbindungen.
+Für individuelle HTTPS-Adressen mit privater Zertifizierungsstelle muss deren
+CA vor dem Upgrade im Backend hinterlegt werden. Die
+[Testcenter-TLS-Anleitung](docs/testcenter-tls-de.md) beschreibt die optionale
+Docker-Konfiguration, den Neustart und die Prüfung der Verbindung.
+
 ## Update/Anpassen
 Achtung: Sorgen Sie vor einem Update stets für ein Backup (z. B. Snapshot-Funktion des Servers).
 Sie sollten das Zurückspielen eines Backups (sog. Restore) zumindest einmal erprobt haben,
