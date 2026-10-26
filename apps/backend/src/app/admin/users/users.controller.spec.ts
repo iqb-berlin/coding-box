@@ -260,7 +260,7 @@ describe('UsersController', () => {
 
     it.each([
       { userId: 1, workspaceId: 3, expectedStatus: 403 },
-      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 2, workspaceId: 3, expectedStatus: 403 },
       { userId: 3, workspaceId: 4, expectedStatus: 403 }
     ])('denies user $userId changing access in workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {
       const app = await createTestApp();
@@ -314,7 +314,7 @@ describe('UsersController', () => {
 
     it.each([
       { userId: 1, workspaceId: 3, expectedStatus: 403 },
-      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 2, workspaceId: 3, expectedStatus: 403 },
       { userId: 3, workspaceId: 4, expectedStatus: 403 }
     ])('denies user $userId the directory of workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {
       const app = await createTestApp();
