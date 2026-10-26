@@ -96,7 +96,7 @@
       [coders]="coders()" [selected]="selectedCoders()" [editable]="canEditTraining"
       (coderToggled)="toggleCoderSelection($event)" (selectAll)="selectAllCoders()" (clearSelection)="deselectAllCoders()" />
 
-    <coding-box-training-sample-editor [form]="trainingForm" [view]="sampleEditorView" [editable]="canEditTraining"
+    <coding-box-training-sample-editor [form]="trainingForm" [view]="sampleEditorView()" [editable]="canEditTraining"
       [bundleFilterCtrl]="bundleFilterCtrl" [variableFilterCtrl]="variableFilterCtrl"
       [loadingBundles]="isLoadingBundles()" [loadingVariables]="isLoadingVariables()"
       (importRequested)="openImportDialog()" (bundlesChanged)="onBundleSelectionChange($event)"

@@ -11,7 +11,7 @@ import {
   finalize, of, Subject, throwError
 } from 'rxjs';
 import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
-import { TrainingSampleEditorComponent } from './training-sample-editor.component';
+import { TrainingSampleEditorComponent, TrainingSampleView } from './training-sample-editor.component';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
@@ -40,6 +40,24 @@ describe('CoderTrainingComponent', () => {
   let variableBundleService: Record<string, jest.Mock>;
   let codingJobBackendService: Record<string, jest.Mock>;
   let codingTrainingBackendService: Record<string, jest.Mock>;
+
+  it('memoizes the sample view and updates it for control edits, ordering and removals', () => {
+    component.addVariable('VAR', 'UNIT', 2);
+    const view = component as unknown as { sampleEditorView(): TrainingSampleView };
+    const initial = view.sampleEditorView();
+    component.isLoading.set(true);
+    component.trainingForm.controls.trainingLabel.setValue('Another label');
+    expect(view.sampleEditorView()).toBe(initial);
+
+    component.variablesFormArray.at(0).controls.sampleCount.setValue(100);
+    const edited = view.sampleEditorView();
+    expect(edited).not.toBe(initial);
+    expect(edited.manual[0].insufficient).toBe(true);
+    component.trainingForm.controls.caseOrderingMode.setValue('alternating');
+    expect(view.sampleEditorView()).not.toBe(edited);
+    component.removeVariable(0);
+    expect(view.sampleEditorView().manual).toEqual([]);
+  });
 
   beforeEach(async () => {
     coderService = createDependencyMock();

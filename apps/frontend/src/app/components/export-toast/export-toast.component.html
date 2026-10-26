@@ -23,7 +23,7 @@
       @if (!isCollapsed()) {
         <div class="toast-content">
           <div class="job-list">
-            @for (job of jobs(); track job) {
+            @for (job of jobs(); track job.jobId) {
               <div class="job-item" [class]="getStatusClass(job.status)">
                 <div class="job-info">
                   <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
