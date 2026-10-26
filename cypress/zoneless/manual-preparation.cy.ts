@@ -117,6 +117,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('coding-box-manual-coding-preparation-view .aggregation-config .subsection-title')
       .should('have.css', 'color', 'rgb(25, 118, 210)');
     cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
     cy.get('coding-box-coding-job-definitions .info-button').click();
     cy.get('coding-box-coding-job-definitions .info-alert')
       .should('be.visible').and('have.css', 'background-color', 'rgb(252, 228, 236)');
