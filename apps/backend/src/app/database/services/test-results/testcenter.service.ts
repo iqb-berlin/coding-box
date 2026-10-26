@@ -41,7 +41,7 @@ import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity
 export { Result };
 
 const agent = new https.Agent({
-  rejectUnauthorized: false
+  rejectUnauthorized: true
 });
 const TESTCENTER_REQUEST_TIMEOUT_MS = 120000;
 
@@ -94,7 +94,7 @@ export class TestcenterService {
     const endpoint =
       credentials.url && !credentials.server ?
         `${credentials.url}/api/session/admin` :
-        `http://iqb-testcenter${credentials.server}.de/api/session/admin`;
+        `https://iqb-testcenter${credentials.server}.de/api/session/admin`;
 
     try {
       const { data } = await firstValueFrom(
@@ -759,7 +759,7 @@ export class TestcenterService {
     const headersRequest = this.createHeaders(authToken);
     const filesEndpoint = url ?
       `${url}/api/workspace/${tc_workspace}/files` :
-      `http://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
+      `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
 
     try {
       const { data: files } =
@@ -1570,6 +1570,6 @@ export class TestcenterService {
   ): string {
     return url ?
       `${url}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}` :
-      `http://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
+      `https://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
   }
 }

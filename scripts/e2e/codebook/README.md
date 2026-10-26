@@ -43,9 +43,12 @@ node dist/apps/backend/main.js
 Once `/api/health` responds, run the acceptance target:
 
 ```sh
-CODEBOOK_PROOF_DIR=/tmp/codebook-1041-evidence/live \
 npx nx run backend:verify-codebook-autocoder-live
 ```
+
+By default each run retains its evidence in a fresh private temporary directory
+and prints that location. Set `CODEBOOK_PROOF_DIR` only for an operator-controlled
+output directory; the runner intentionally reuses an explicitly configured path.
 
 To also compare against a real installed Studio checkout, add
 `STUDIO_REFERENCE_ROOT=/absolute/path/to/studio-checkout`. It must contain the

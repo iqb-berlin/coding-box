@@ -31,12 +31,14 @@ import { JournalService } from '../shared/journal.service';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
+  let fixtureDirectory: string;
   let personService: PersonService;
   let workspaceTestResultsService: WorkspaceTestResultsService;
   let codingFreshnessService: CodingFreshnessService;
   let codingAnalysisService: CodingAnalysisService;
 
   beforeEach(async () => {
+    fixtureDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-results-test-'));
     jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -110,6 +112,8 @@ describe('UploadResultsService', () => {
     codingAnalysisService = module.get<CodingAnalysisService>(CodingAnalysisService);
   });
 
+  afterEach(() => fs.rmSync(fixtureDirectory, { recursive: true, force: true }));
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -163,8 +167,8 @@ describe('UploadResultsService', () => {
 test-group;test-user;code;booklet1;unit1;id1;123456789;KEY:VALUE
 test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
 
-      const filePath = path.join(os.tmpdir(), 'test-logs.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-logs.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -202,8 +206,8 @@ test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;timestamp
 test-group;test-user;code;booklet1;unit1;123456789`;
 
-      const filePath = path.join(os.tmpdir(), 'test-missing-log-columns.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-missing-log-columns.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -244,8 +248,8 @@ test-group;test-user;code;booklet1;unit1;123456789`;
 test-group;test-user;code2;;unit2;id2;;KEY=VALUE
 test-group;test-user;code3;booklet3;;id3;123456789;`;
 
-      const filePath = path.join(os.tmpdir(), 'test-log-warnings.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-log-warnings.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
         success: true,
@@ -307,8 +311,8 @@ test-group;test-user;code3;booklet3;;id3;123456789;`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
 test-group;test-user;;booklet1;;id1;123456789;KEY=VALUE`;
 
-      const filePath = path.join(os.tmpdir(), 'test-empty-code-log.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-empty-code-log.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
         success: true,
@@ -347,8 +351,8 @@ test-group;test-user;;booklet1;;id1;123456789;KEY=VALUE`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
 test-group;test-user;code;booklet1;;id1;123456789;KEY=VALUE`;
 
-      const filePath = path.join(os.tmpdir(), 'test-no-logs-saved.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-no-logs-saved.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
         success: true,
@@ -398,8 +402,8 @@ test-group;test-user;code;booklet1;;id1;123456789;KEY=VALUE`;
 test-group;test-user;code;booklet1;; ;123456788;BOOKLET : value
 test-group;test-user;code;booklet1;unit1;id1;123456789;KEY=VALUE`;
 
-      const filePath = path.join(os.tmpdir(), 'test-separated-logs.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-separated-logs.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const booklet = {
         id: 'booklet1',
@@ -460,8 +464,8 @@ test-group;test-user;code;booklet1;unit1;id1;123456789;KEY=VALUE`;
 group-a;login-a;code-a;booklet1;unit1;id1;111;KEY=A
 group-b;login-b;code-b;booklet1;unit1;id1;222;KEY=B`;
 
-      const filePath = path.join(os.tmpdir(), 'test-person-scoped-unit-logs.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-person-scoped-unit-logs.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const bookletA = {
         id: 'booklet1',
@@ -542,8 +546,8 @@ group-b;login-b;code-b;booklet1;unit1;id1;222;KEY=B`;
         ...rows
       ].join('\n');
 
-      const filePath = path.join(os.tmpdir(), 'test-large-logs.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-large-logs.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const booklet = {
         id: 'booklet1',
@@ -601,8 +605,8 @@ group-b;login-b;code-b;booklet1;unit1;id1;222;KEY=B`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
 "test-group";"test-user";"code";"booklet1";"";"";"123456788";TESTLETS_TIMELEFT : "{""BM"":40}"`;
 
-      const filePath = path.join(os.tmpdir(), 'test-quoted-logs.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-quoted-logs.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const person = {
         workspace_id: 1,
@@ -656,8 +660,8 @@ group-b;login-b;code-b;booklet1;unit1;id1;222;KEY=B`;
 test-group;test-user;code;booklet1;unit1;id1;[];""
 test-group;test-user;code;booklet1;unit1;id2;[];""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-responses.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-responses.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -690,8 +694,8 @@ test-group;test-user;code;booklet1;unit1;id2;[];""`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;"[{""content"":""[{\\""id\\"":\\""var1\\"",\\""status\\"":\\""UNKNOWN\\""}]""}]";""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-invalid.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-invalid.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -723,8 +727,8 @@ test-group;test-user;code;booklet1;unit1;"[{""content"":""[{\\""id\\"":\\""var1\
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-stats-failure.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-stats-failure.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'getWorkspaceUploadStats').mockRejectedValue(new Error('DB Error'));
 
@@ -756,8 +760,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content"":""[{\\""id\\"":\\""VAR_1\\"",\\""status\\"":\\""VALUE_CHANGED\\""}]""}]";""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-merge-new-person-existing-group.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-merge-new-person-existing-group.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'getWorkspaceUploadStats')
         .mockResolvedValueOnce({
@@ -883,8 +887,8 @@ existing-group;new-login;new-code;booklet1;unit1;"[{""subForm"":"""",""content""
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""",""content"":""[{\\""id\\"":\\""VAR_1\\"",\\""status\\"":\\""VALUE_CHANGED\\""}]""}]";""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-merge-new-unit-existing-person.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-merge-new-unit-existing-person.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       jest.spyOn(personService, 'getWorkspaceUploadStats')
         .mockResolvedValueOnce({
@@ -1158,8 +1162,8 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
           csvField(laststate)
         ].join(';')
       ].join('\n');
-      const filePath = path.join(os.tmpdir(), 'test-merge-new-unit-real-person-services.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-merge-new-unit-real-person-services.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -1234,8 +1238,8 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-response-cache-invalidation.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-response-cache-invalidation.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const person = {
         workspace_id: 1,
@@ -1381,8 +1385,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-response-skip-summary.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-response-skip-summary.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const person = {
         workspace_id: 1,
@@ -1483,8 +1487,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
-      const filePath = path.join(os.tmpdir(), 'test-response-cache-invalidation-after-error.csv');
-      fs.writeFileSync(filePath, fileContent);
+      const filePath = path.join(fixtureDirectory, 'test-response-cache-invalidation-after-error.csv');
+      fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
       const person = {
         workspace_id: 1,
