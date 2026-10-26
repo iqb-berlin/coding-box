@@ -653,3 +653,20 @@ test('Material icon buttons in external and inline templates have accessible nam
   }
   assert.deepEqual(missing, [], 'Icon buttons need aria-label or aria-labelledby; a tooltip is a description.');
 });
+
+test('production ExcelJS imports remain deferred', () => {
+  const ts = require('typescript');
+  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? walk(file) : [file];
+  });
+  const eager = [];
+  for (const file of walk(join(workspace, 'apps/frontend/src/app'))) {
+    if (!file.endsWith('.ts') || /\.(spec|mock)\.ts$/.test(file)) continue;
+    const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+    for (const node of tree.statements) {
+      if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === 'exceljs' && !node.importClause?.isTypeOnly) eager.push(file);
+    }
+  }
+  assert.deepEqual(eager, [], 'Load ExcelJS with import() inside the workbook action.');
+});

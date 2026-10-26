@@ -20,7 +20,6 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   Subscription, interval, switchMap, takeWhile
 } from 'rxjs';
-import * as ExcelJS from 'exceljs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
@@ -544,7 +543,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     // In a real implementation, you might want to slice the data manually
   }
 
-  protected downloadComparisonTable(): void {
+  protected async downloadComparisonTable(): Promise<void> {
     if (!this.data.affectedRows || this.data.affectedRows.length === 0) {
       return;
     }
@@ -552,6 +551,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
     this.isLoading.set(true);
 
     try {
+      const ExcelJS = await import('exceljs');
+      if (this.destroyRef.destroyed) return;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Import Vergleich');
 
@@ -616,20 +617,20 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         }
       });
 
-      workbook.xlsx.writeBuffer().then(buffer => {
-        const blob = new Blob([buffer], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const timestamp = new Date().toISOString().slice(0, 10);
-        link.download = `import-comparison-${timestamp}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+      const buffer = await workbook.xlsx.writeBuffer();
+      if (this.destroyRef.destroyed) return;
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      link.download = `import-comparison-${timestamp}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch {
       // Swallow error; UI state is reset in finally block
     } finally {
