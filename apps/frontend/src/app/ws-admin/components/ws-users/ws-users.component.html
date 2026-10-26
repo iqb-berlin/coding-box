@@ -1,3 +1,6 @@
+<coding-box-user-directory-status [status]="usersStatus()"
+  [empty]="userObjectsDatasource().data.length === 0"
+  (retry)="updateUserList()" />
 
   <div>
     <div class="fx-row-start-stretch container">

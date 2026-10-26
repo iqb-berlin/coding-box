@@ -452,6 +452,10 @@
     "admin": "System-Administrator:in"
   },
   "admin": {
+    "user-directory-loading": "Benutzer werden geladen …",
+    "user-directory-error": "Die Benutzer konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "user-directory-retry": "Erneut versuchen",
+    "user-directory-empty": "Keine Benutzer vorhanden.",
     "set-user-access-rights": "Nutzer Zugriffsrechte für Arbeitsbereich(e)",
     "users": "Nutzer:innen",
     "users-title": "Admin: Nutzer:innen",

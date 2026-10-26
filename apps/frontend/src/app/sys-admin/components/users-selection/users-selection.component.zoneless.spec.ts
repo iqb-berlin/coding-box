@@ -155,3 +155,34 @@ describe('UsersSelectionComponent delayed lists', () => {
     expect(fixture.nativeElement.querySelector('mat-row').textContent).toContain('z-login');
   });
 });
+
+describe('User directory error and empty states', () => {
+  it('renders an error, retries it, and distinguishes an empty success in the real template', async () => {
+    const first = new Subject<UserFullDto[]>();
+    const retry = new Subject<UserFullDto[]>();
+    const getUsersFull = jest.fn().mockReturnValueOnce(first).mockReturnValueOnce(retry);
+    await TestBed.configureTestingModule({
+      imports: [UsersSelectionComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: UserBackendService, useValue: { getUsersFull } },
+        { provide: WorkspaceBackendService, useValue: { getAllWorkspacesList: () => of({ data: [] }) } }
+      ]
+    }).compileComponents();
+    const fixture = TestBed.createComponent(UsersSelectionComponent);
+    fixture.componentRef.setInput('selectedUserIds', []);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('admin.user-directory-loading');
+    first.error(new Error('offline'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('admin.user-directory-empty');
+    fixture.nativeElement.querySelector('[role="alert"] button').click();
+    await fixture.whenStable();
+    expect(getUsersFull).toHaveBeenCalledTimes(2);
+    retry.next([]); retry.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('admin.user-directory-empty');
+    fixture.destroy();
+  });
+});
