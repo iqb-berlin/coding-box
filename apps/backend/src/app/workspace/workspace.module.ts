@@ -76,6 +76,8 @@ import { CodingListExportService } from '../database/services/coding/coding-list
 import { CodingExportOrchestratorService } from '../database/services/coding/coding-export-orchestrator.service';
 import { DoubleCodingReviewDecisionService } from '../database/services/coding/double-coding-review-decision.service';
 import { DoubleCodingReviewQueryService } from '../database/services/coding/double-coding-review-query.service';
+import { CohensKappaStatisticsService } from '../database/services/coding/cohens-kappa-statistics.service';
+import { CohensKappaExportService } from '../database/services/coding/cohens-kappa-export.service';
 import { CodingProgressService } from '../database/services/coding/coding-progress.service';
 import { CodingReplayService } from '../database/services/coding/coding-replay.service';
 import { CodingVersionService } from '../database/services/coding/coding-version.service';
@@ -174,6 +176,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
+    CohensKappaStatisticsService,
+    CohensKappaExportService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,
@@ -217,6 +221,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
+    CohensKappaStatisticsService,
+    CohensKappaExportService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,

@@ -1,12 +1,16 @@
 import 'reflect-metadata';
-import { BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import {
+  BadRequestException, ForbiddenException, Logger, RequestMethod
+} from '@nestjs/common';
+import { GUARDS_METADATA, PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import * as ExcelJS from 'exceljs';
 import { EventEmitter } from 'events';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingStatisticsController } from './workspace-coding-statistics.controller';
+import { CohensKappaStatisticsService } from '../../database/services/coding/cohens-kappa-statistics.service';
+import { CohensKappaExportService } from '../../database/services/coding/cohens-kappa-export.service';
 
 describe('WorkspaceCodingStatisticsController', () => {
   let codingStatisticsService: {
@@ -115,7 +119,8 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       {} as never,
       codingReadinessService as never,
-      codingReplayService as never,
+      new CohensKappaStatisticsService(codingReviewService as never, codingStatisticsService as never),
+      new CohensKappaExportService(codingReplayService as never),
       {} as never,
       distributionPreviewLimiterService as never
     );
@@ -138,6 +143,20 @@ describe('WorkspaceCodingStatisticsController', () => {
       }
     }
   );
+
+  it.each([
+    ['getCohensKappaStatistics', ':workspace_id/coding/cohens-kappa'],
+    ['exportCohensKappaStatisticsAsCsv', ':workspace_id/coding/cohens-kappa/export/csv'],
+    ['exportCohensKappaSummaryAsCsv', ':workspace_id/coding/cohens-kappa/export/summary/csv'],
+    ['exportCohensKappaStatisticsAsXlsx', ':workspace_id/coding/cohens-kappa/export/xlsx'],
+    ['getWorkspaceCohensKappaSummary', ':workspace_id/coding/cohens-kappa/workspace-summary']
+  ] as const)('preserves the GET route and workspace guards for %s', (name, route) => {
+    const handler = WorkspaceCodingStatisticsController.prototype[name];
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(route);
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.GET);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([JwtAuthGuard, WorkspaceGuard]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBeUndefined();
+  });
 
   it('requires coding-manager access for applied results overview', () => {
     const handler = WorkspaceCodingStatisticsController.prototype.getAppliedResultsOverview;
@@ -365,6 +384,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       ['31', '32']
     );
 
+    expect(Object.keys(result)).toEqual(['variables', 'workspaceSummary']);
+    expect(result).not.toHaveProperty('sourceItems');
+    expect(JSON.stringify(result)).not.toContain('personLogin');
     expect(result.variables[0].meanKappa).toBe(0.667);
     expect(result.variables[0].meanAgreement).toBe(0.833);
     expect(result.variables[0].caseCount).toBe(2);
