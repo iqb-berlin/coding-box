@@ -884,7 +884,8 @@ export class DoubleCodingReviewQueryService {
     jobDefinitionIds: number[] = [],
     coderTrainingIds: number[] = [],
     coderIds: number[] = [],
-    calculationLevel: KappaCalculationLevel = 'code'
+    calculationLevel: KappaCalculationLevel = 'code',
+    filters: { unitName?: string; variableId?: string } = {}
   ): Promise<Array<{
       responseId: number;
       unitName: string;
@@ -962,6 +963,22 @@ export class DoubleCodingReviewQueryService {
       .addOrderBy('cjc.user_id', 'ASC')
       .addOrderBy('cju.id', 'ASC')
       .addOrderBy('cjc.id', 'ASC');
+    // Keep the former strict JS comparison: non-scalar or NUL-containing values
+    // cannot match a PostgreSQL text value. Do not bind those values to PostgreSQL.
+    const cannotMatchText = [filters.unitName, filters.variableId].some(value => (
+      value && (typeof value !== 'string' || value.includes('\0'))
+    ));
+    if (cannotMatchText) {
+      query.andWhere('1 = 0');
+    } else {
+      if (filters.unitName) {
+        query.andWhere('cju.unit_name = :kappaUnitName', { kappaUnitName: filters.unitName });
+      }
+      if (filters.variableId) {
+        query.andWhere('cju.variable_id = :kappaVariableId', { kappaVariableId: filters.variableId });
+      }
+    }
+
     applyNonCodingIssueReviewJobFilter(
       query,
       'cj',

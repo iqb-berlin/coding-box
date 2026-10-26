@@ -463,18 +463,26 @@ test-backend:
   services:
     - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
       alias: bullmq-redis
+    - name: ${DOCKER_HUB_PROXY}postgres:14.22-alpine3.22@sha256:7161c8e7347ed8b4cdefc26087702336da5f467137cc964e611c85d745df6112
+      alias: kappa-postgres
+      variables:
+        POSTGRES_USER: "kappa_test"
+        POSTGRES_PASSWORD: "kappa_test"
+        POSTGRES_DB: "postgres"
   interruptible: true
   allow_failure: false
   extends: .distributed
   rules:
     - !reference [ .quality_gate_rules, rules ]
   script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
     - node --test scripts/qa/junit-reporter.test.cjs
     - npx nx exec -- bash "$CI_PROJECT_DIR/scripts/tests/install-migration-regression.sh"
     - npx nx run backend:typecheck
     - npx nx test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false
   variables:
     FORCE_COLOR: "0"
+    KAPPA_QUERY_TEST_DATABASE_URL: "postgresql://kappa_test:kappa_test@kappa-postgres:5432/postgres"
     BULLMQ_TEST_REDIS_HOST: "bullmq-redis"
     BULLMQ_TEST_REDIS_PORT: "6379"
   coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
