@@ -29,6 +29,7 @@ import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 import { WorkspaceTokenScope } from './auth-session.config';
 import { SessionRecoveryService } from './session-recovery.service';
+import { AuthSessionState, DEFAULT_AUTH_DATA } from './auth-session-state.service';
 
 export interface WorkspaceTokenPolicy {
   scopes: Record<WorkspaceTokenScope, {
@@ -61,35 +62,25 @@ export class AppService {
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
   private sessionRecoveryService = inject(SessionRecoveryService);
+  private readonly session = inject(AuthSessionState);
 
-  static defaultAuthData = <AuthDataDto>{
-    userId: 0,
-    userName: '',
-    email: '',
-    firstName: '',
-    lastName: '',
-    workspaces: []
-  };
+  static defaultAuthData = DEFAULT_AUTH_DATA;
 
   user?: CreateUserDto;
-  private readonly userProfileState = signal<Partial<CreateUserDto>>({});
-
   get userProfile(): Partial<CreateUserDto> {
-    return this.userProfileState();
+    return this.session.userProfile();
   }
 
   set userProfile(value: Partial<CreateUserDto>) {
-    this.userProfileState.set(value);
+    this.session.setProfile(value);
   }
 
-  private readonly isLoggedInState = signal<boolean>(false);
-
   get isLoggedIn(): boolean {
-    return this.isLoggedInState();
+    return this.session.isLoggedIn();
   }
 
   set isLoggedIn(value: boolean) {
-    this.isLoggedInState.set(value);
+    this.session.setLoggedIn(value);
   }
 
   private readonly errorMessagesDisabledState = signal<boolean>(false);
@@ -123,14 +114,12 @@ export class AppService {
   }
 
   postMessage$ = new Subject<MessageEvent>();
-  private readonly loggedUserState = signal<DecodedToken | undefined>(undefined);
-
   get loggedUser(): DecodedToken | undefined {
-    return this.loggedUserState();
+    return this.session.loggedUser();
   }
 
   set loggedUser(value: DecodedToken | undefined) {
-    this.loggedUserState.set(value);
+    this.session.setClaims(value);
   }
 
   private readonly errorMessagesState = signal<AppHttpError[]>([]);
@@ -385,11 +374,8 @@ export class AppService {
     });
   }
 
-  private readonly authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
-  private readonly authDataState = toSignal(this.authDataSubject, { requireSync: true });
-
   get authData$() {
-    return this.authDataSubject.asObservable();
+    return this.session.authData$;
   }
 
   get authBootstrapStatus$() {
@@ -397,7 +383,7 @@ export class AppService {
   }
 
   get authData(): AuthDataDto {
-    return this.authDataState();
+    return this.session.authData();
   }
 
   get authBootstrapStatus(): AuthBootstrapStatus {
@@ -405,7 +391,7 @@ export class AppService {
   }
 
   get userId(): number {
-    return this.authDataState().userId;
+    return this.session.authData().userId;
   }
 
   setAuthBootstrapStatus(status: AuthBootstrapStatus): void {
@@ -413,7 +399,7 @@ export class AppService {
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {
-    this.authDataSubject.next(newAuthData);
+    this.session.updateAuthData(newAuthData);
   }
 
   processMessagePost(postData: MessageEvent): void {
@@ -594,10 +580,7 @@ export class AppService {
     localStorage.removeItem('id_token');
     localStorage.removeItem('refresh_token');
     this.user = undefined;
-    this.userProfile = {};
-    this.isLoggedIn = false;
-    this.loggedUser = undefined;
-    this.updateAuthData(AppService.defaultAuthData);
+    this.session.clear();
     if (options.clearRecoveryDrafts ?? true) {
       this.sessionRecoveryService.clearAllDrafts();
       this.sessionRecoveryService.setOwnerId(undefined);

@@ -115,7 +115,8 @@
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
-        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts"
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts",
+        "apps/frontend/src/app/core/services/auth-session-state.service.spec.ts"
       ]
     },
     {
