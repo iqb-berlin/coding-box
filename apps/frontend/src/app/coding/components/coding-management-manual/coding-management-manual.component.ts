@@ -7,7 +7,7 @@ import {
   inject,
   OnDestroy, OnInit,
   signal,
-  viewChild, ViewEncapsulation
+  viewChild
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -133,9 +133,6 @@ interface ManualFreshnessJobSummary {
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
   standalone: true,
-  // The feature-scoped stylesheet is shared by its extracted presentation views.
-  encapsulation: ViewEncapsulation.None,
-  host: { class: 'kb-manual' },
   providers: [ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
   imports: [
     ManualCodingPreparationViewComponent,

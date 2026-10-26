@@ -110,6 +110,18 @@ describe('Zoneless manual preparation workflows', () => {
     });
   }
 
+  it('keeps extracted view styles scoped and preserves the job-definition notice styling', () => {
+    setup();
+    openManual();
+    cy.get('coding-box-manual-coding-preparation-view .aggregation-config').should('be.visible');
+    cy.get('coding-box-manual-coding-preparation-view .aggregation-config .subsection-title')
+      .should('have.css', 'color', 'rgb(25, 118, 210)');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.get('coding-box-coding-job-definitions .info-button').click();
+    cy.get('coding-box-coding-job-definitions .info-alert')
+      .should('be.visible').and('have.css', 'background-color', 'rgb(252, 228, 236)');
+  });
+
   function settleFiniteAncestorAnimations(element: HTMLElement): void {
     // Electron can stall entrance motion on the workspace, modal and Material menu.
     // Settle only finite animations along this ancestor chain; loading indicators keep running.

@@ -51,7 +51,8 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-summary.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-completion.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-data.facade.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-presentation.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-presentation.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-views.spec.ts"
       ]
     },
     {
