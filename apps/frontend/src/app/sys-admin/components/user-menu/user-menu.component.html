@@ -1,7 +1,7 @@
 <button mat-button [style]="{color:'lightgrey'}"
         [matMenuTriggerFor]="menuUser"
         [matTooltip]="'home.user-menu' | translate"
-        matTooltipPosition="above">
+        matTooltipPosition="above" [attr.aria-label]="'home.user-menu' | translate">
   <coding-box-wrapped-icon icon="account_box"></coding-box-wrapped-icon>
 </button>
 <mat-menu #menuUser="matMenu">

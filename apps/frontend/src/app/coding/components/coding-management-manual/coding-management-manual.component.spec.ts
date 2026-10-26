@@ -29,6 +29,7 @@ import { AggregationSettingsResponse, TestPersonCodingService } from '../../serv
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { ManualCodingExportDialogComponent } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
+import { ManualCodingCompletionFacade } from './manual-coding-completion.facade';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { ManualCodingAggregationFacade } from './manual-coding-aggregation.facade';
 import { ManualCodingExportScopeFacade } from './manual-coding-export-scope.facade';
@@ -1176,7 +1177,7 @@ describe('CodingManagementManualComponent', () => {
       'werden übersprungen'
     ].join(' ');
     componentInternals.appService.selectedWorkspaceId = 5;
-    componentInternals.dialog = { open: dialogOpen };
+    (fixture.debugElement.injector.get(ManualCodingCompletionFacade) as unknown as { dialog: { open: jest.Mock } }).dialog = { open: dialogOpen };
     statisticsFacade().acceptCompletedJobs([
       {
         id: 1,

@@ -54,7 +54,7 @@ describe('Workspace users without Zone.js', () => {
     }).overrideComponent(UsersComponent, { set: { template: '', imports: [] } }).compileComponents();
 
     if (previousRequest) {
-      const previousFixture = TestBed.createComponent(UsersComponent);
+      const previousFixture = TestBed.createComponent(WsUsersComponent);
       previousFixture.componentInstance.updateUserList();
       previousFixture.destroy();
     }

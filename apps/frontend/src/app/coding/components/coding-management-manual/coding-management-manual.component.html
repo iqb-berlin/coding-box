@@ -407,7 +407,7 @@
               [disabled]="
                 isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
               "
-                      >
+                       [attr.aria-label]="'accessibility.actions.restart-analysis' | translate">
                       <mat-icon>autorenew</mat-icon>
                     </button>
                     @if (

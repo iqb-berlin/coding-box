@@ -152,13 +152,13 @@
                   color="primary"
                   [disabled]="element.isSavingReplayAnchor() || !hasReplayAnchorChanges(element)"
                   (click)="saveReplayAnchor(element)"
-                  matTooltip="Replay-Anchor speichern">
+                  matTooltip="Replay-Anchor speichern" [attr.aria-label]="'accessibility.actions.save-replay-anchor' | translate">
                   <mat-icon>save</mat-icon>
                 </button>
                 <button mat-icon-button
                   [disabled]="element.isSavingReplayAnchor() || !element.savedReplayAnchor()"
                   (click)="clearReplayAnchor(element)"
-                  matTooltip="Replay-Anchor zurücksetzen">
+                  matTooltip="Replay-Anchor zurücksetzen" [attr.aria-label]="'accessibility.actions.clear-replay-anchor' | translate">
                   <mat-icon>restart_alt</mat-icon>
                 </button>
               </div>
@@ -173,14 +173,14 @@
                 <button mat-icon-button
                   (click)="openUnitInfo(element.unitId)"
                   matTooltip="Unit-Definition anzeigen"
-                  color="primary">
+                  color="primary" [attr.aria-label]="'accessibility.actions.open-unit-info' | translate">
                   <mat-icon>info</mat-icon>
                 </button>
                 @if (element.hasCodingScheme && element.codingSchemeRef) {
                   <button mat-icon-button
                     (click)="openCodingScheme(element.codingSchemeRef)"
                     matTooltip="Kodierungsschema öffnen"
-                    color="primary">
+                    color="primary" [attr.aria-label]="'accessibility.actions.open-coding-scheme' | translate">
                     <mat-icon>edit_note</mat-icon>
                   </button>
                 }

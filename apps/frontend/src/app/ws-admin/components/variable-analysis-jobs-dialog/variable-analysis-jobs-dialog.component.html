@@ -61,21 +61,21 @@
             <td mat-cell *matCellDef="let job">
               <!-- View results button for completed jobs -->
               @if (job.status === 'completed') {
-                <button mat-icon-button color="primary" (click)="viewResults(job.id)" matTooltip="Ergebnisse anzeigen">
+                <button mat-icon-button color="primary" (click)="viewResults(job.id)" matTooltip="Ergebnisse anzeigen" [attr.aria-label]="'variable-analysis.view-results' | translate">
                   <mat-icon>visibility</mat-icon>
                 </button>
               }
 
               <!-- Cancel button for pending or processing jobs -->
               @if (job.status === 'pending' || job.status === 'processing') {
-                <button mat-icon-button color="warn" (click)="cancelJob(job.id)" matTooltip="Auftrag abbrechen">
+                <button mat-icon-button color="warn" (click)="cancelJob(job.id)" matTooltip="Auftrag abbrechen" [attr.aria-label]="'variable-analysis.cancel-job' | translate">
                   <mat-icon>cancel</mat-icon>
                 </button>
               }
 
               <!-- Error indicator for failed jobs -->
               @if (job.status === 'failed') {
-                <button mat-icon-button color="accent" matTooltip="Fehler: {{ job.error || 'Unbekannter Fehler' }}">
+                <button mat-icon-button color="accent" matTooltip="Fehler: {{ job.error || 'Unbekannter Fehler' }}" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
                   <mat-icon>error</mat-icon>
                 </button>
               }

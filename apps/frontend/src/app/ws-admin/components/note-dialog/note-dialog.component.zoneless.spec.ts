@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, inject, provideZonelessChangeDetection
 } from '@angular/core';
@@ -46,7 +47,7 @@ describe('NoteDialogComponent zoneless mutations', () => {
     createUnitNote = jest.fn().mockReturnValue(createResponse);
     deleteUnitNote = jest.fn().mockReturnValue(deleteResponse);
     await TestBed.configureTestingModule({
-      imports: [NotesDialogHostComponent, MatDialogModule, MatSnackBarModule],
+      imports: [TranslateModule.forRoot(), NotesDialogHostComponent, MatDialogModule, MatSnackBarModule],
       providers: [
         provideZonelessChangeDetection(),
         { provide: UnitNoteService, useValue: { createUnitNote, deleteUnitNote } },
