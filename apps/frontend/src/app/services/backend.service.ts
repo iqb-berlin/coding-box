@@ -131,7 +131,7 @@ export class BackendService {
   getAuthData(): Observable<import('../../../../../api-dto/auth-data-dto').AuthDataDto> {
     return this.http.get<import('../../../../../api-dto/auth-data-dto').AuthDataDto>(
       `${this.serverUrl}auth-data`,
-    { headers: this.authHeader }
+      { headers: this.authHeader }
     );
   }
 
@@ -273,10 +273,10 @@ export class BackendService {
     unitFilters?: string[],
     variableFilters?: string[]
   ): Observable<{
-      affectedResponseCount: number;
-      cascadeResetVersions: ('v2' | 'v3')[];
-      message: string;
-    }> {
+    affectedResponseCount: number;
+    cascadeResetVersions: ('v2' | 'v3')[];
+    message: string;
+  }> {
     return this.codingService.resetCodingVersion(workspace_id, version, unitFilters, variableFilters);
   }
 
@@ -520,26 +520,26 @@ export class BackendService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
-        responseId: number;
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number;
-        score?: number;
-        codedStatus?: string;
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-      }[];
-      total: number;
-    }> {
+    data: {
+      responseId: number;
+      variableId: string;
+      value: string;
+      status: string;
+      code?: number;
+      score?: number;
+      codedStatus?: string;
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+    }[];
+    total: number;
+  }> {
     return this.responseService.searchResponses(workspaceId, searchParams, page, limit);
   }
 
@@ -549,21 +549,21 @@ export class BackendService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        units: {
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-        }[];
+    data: {
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      units: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
       }[];
-      total: number;
-    }> {
+    }[];
+    total: number;
+  }> {
     return this.testResultService.searchBookletsByName(workspaceId, bookletName, page, limit);
   }
 
@@ -573,21 +573,21 @@ export class BackendService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
-        responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
-      }[];
-      total: number;
-    }> {
+    data: {
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date }[];
+      responses: { variableId: string; value: string; status: string; code?: number; score?: number; codedStatus?: string }[];
+    }[];
+    total: number;
+  }> {
     return this.testResultService.searchUnitsByName(workspaceId, unitName, page, limit);
   }
 
@@ -699,22 +699,22 @@ export class BackendService {
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number
   ): Observable<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: string[];
-      jobs: {
-        coderId: number;
-        coderName: string;
-        variable: { unitName: string; variableId: string };
-        jobId: number;
-        jobName: string;
-        caseCount: number;
-      }[];
-    }> {
+    success: boolean;
+    jobsCreated: number;
+    message: string;
+    distribution: Record<string, Record<string, number>>;
+    doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+    matchingFlags: string[];
+    jobs: {
+      coderId: number;
+      coderName: string;
+      variable: { unitName: string; variableId: string };
+      jobId: number;
+      jobName: string;
+      caseCount: number;
+    }[];
+  }> {
     return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases);
   }
 
@@ -727,12 +727,12 @@ export class BackendService {
     selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
     maxCodingCases?: number
   ): Observable<{
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: string[];
-      warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
-    }> {
+    distribution: Record<string, Record<string, number>>;
+    doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+    matchingFlags: string[];
+    warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
+  }> {
     return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, maxCodingCases);
   }
 
@@ -847,12 +847,12 @@ export class BackendService {
     workspaceId: number,
     unitId?: string
   ): Observable<{
-      min: number;
-      max: number;
-      average: number;
-      distribution: Record<string, number>;
-      unitAverages?: Record<string, number>;
-    }> {
+    min: number;
+    max: number;
+    average: number;
+    distribution: Record<string, number>;
+    unitAverages?: Record<string, number>;
+  }> {
     let url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/duration`;
     if (unitId) {
       url += `?unitId=${encodeURIComponent(unitId)}`;
@@ -1071,15 +1071,15 @@ export class BackendService {
     workspaceId: number,
     trainingIds: string
   ): Observable<Array<{
-      unitName: string;
-      variableId: string;
-      trainings: Array<{
-        trainingId: number;
-        trainingLabel: string;
-        code: string | null;
-        score: number | null;
-      }>;
-    }>> {
+    unitName: string;
+    variableId: string;
+    trainings: Array<{
+      trainingId: number;
+      trainingLabel: string;
+      code: string | null;
+      score: number | null;
+    }>;
+  }>> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-training-results?trainingIds=${encodeURIComponent(trainingIds)}`;
     return this.http.get<Array<{
       unitName: string;
@@ -1097,18 +1097,18 @@ export class BackendService {
     workspaceId: number,
     trainingId: number
   ): Observable<Array<{
-      unitName: string;
-      variableId: string;
-      personCode: string;
-      testPerson: string;
-      givenAnswer: string;
-      coders: Array<{
-        jobId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-      }>;
-    }>> {
+    unitName: string;
+    variableId: string;
+    personCode: string;
+    testPerson: string;
+    givenAnswer: string;
+    coders: Array<{
+      jobId: number;
+      coderName: string;
+      code: string | null;
+      score: number | null;
+    }>;
+  }>> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
     return this.http.get<Array<{
       unitName: string;
@@ -1129,17 +1129,17 @@ export class BackendService {
     workspaceId: number,
     trainingId: number
   ): Observable<Array<{
-      id: number;
-      name: string;
-      description?: string;
-      status: string;
-      created_at: Date;
-      coder: {
-        userId: number;
-        username: string;
-      };
-      unitsCount: number;
-    }>> {
+    id: number;
+    name: string;
+    description?: string;
+    status: string;
+    created_at: Date;
+    coder: {
+      userId: number;
+      username: string;
+    };
+    unitsCount: number;
+  }>> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
     return this.http.get<Array<{
       id: number;
@@ -1219,12 +1219,12 @@ export class BackendService {
     workspaceId: number,
     codingJobId: number
   ): Observable<{
-      success: boolean;
-      updatedResponsesCount: number;
-      skippedReviewCount: number;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-    }> {
+    success: boolean;
+    updatedResponsesCount: number;
+    skippedReviewCount: number;
+    messageKey: string;
+    messageParams?: Record<string, unknown>;
+  }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
     return this.http.post<{
       success: boolean;
@@ -1238,24 +1238,24 @@ export class BackendService {
   bulkApplyCodingResults(
     workspaceId: number
   ): Observable<{
-      success: boolean;
-      jobsProcessed: number;
-      totalUpdatedResponses: number;
-      totalSkippedReview: number;
-      message: string;
-      results: Array<{
-        jobId: number;
-        jobName: string;
-        hasIssues: boolean;
-        skipped: boolean;
-        result?: {
-          success: boolean;
-          updatedResponsesCount: number;
-          skippedReviewCount: number;
-          message: string;
-        };
-      }>;
-    }> {
+    success: boolean;
+    jobsProcessed: number;
+    totalUpdatedResponses: number;
+    totalSkippedReview: number;
+    message: string;
+    results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      };
+    }>;
+  }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/bulk-apply-results`;
     return this.http.post<{
       success: boolean;

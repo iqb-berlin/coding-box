@@ -112,7 +112,7 @@ export class SessionRecoveryService {
   }
 
   private readDraft<T>(key: string): SessionRecoveryDraft<T> | null {
-    let raw: string | null = null;
+    let raw: string | null;
     try {
       raw = sessionStorage.getItem(this.getStorageKey(key));
     } catch {

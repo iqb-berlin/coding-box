@@ -189,29 +189,29 @@ export class WorkspaceCodingResultsController {
   })
   async bulkApplyCodingResults(@WorkspaceId() workspace_id: number,
     @Req() request?: { user: { id: number } }): Promise<{
-      success: boolean;
-      jobsProcessed: number;
-      totalUpdatedResponses: number;
-      totalSkippedReview: number;
-      totalSkippedAlreadyCoded: number;
-      totalOverwrittenExisting: number;
-      message: string;
-      results: Array<{
-        jobId: number;
-        jobName: string;
-        hasIssues: boolean;
-        skipped: boolean;
-        skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
-        result?: {
-          success: boolean;
-          updatedResponsesCount: number;
-          skippedReviewCount: number;
-          skippedAlreadyCodedCount: number;
-          overwrittenExistingCount: number;
-          message: string;
-        };
-      }>;
-    }> {
+    success: boolean;
+    jobsProcessed: number;
+    totalUpdatedResponses: number;
+    totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
+    message: string;
+    results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
+        message: string;
+      };
+    }>;
+  }> {
     return this.codingJobOperationsService.bulkApplyCodingResults(workspace_id, request?.user.id);
   }
 }

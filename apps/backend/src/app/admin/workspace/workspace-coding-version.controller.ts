@@ -152,16 +152,16 @@ export class WorkspaceCodingVersionController {
     @WorkspaceId() workspaceId: number,
     @Param('jobId') jobId: string
   ): Promise<{
-      status: string;
-      progress: number;
-      result?: {
-        affectedResponseCount: number;
-        deletedGeneratedResponseCount: number;
-        cascadeResetVersions: ('v2' | 'v3')[];
-        message: string;
-      };
-      error?: string;
-    }> {
+    status: string;
+    progress: number;
+    result?: {
+      affectedResponseCount: number;
+      deletedGeneratedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    };
+    error?: string;
+  }> {
     const job = await this.jobQueueService.getWorkspaceJob(workspaceId, 'reset-coding-version', jobId);
     if (!job) {
       return { status: 'not_found', progress: 0, error: `Job with ID ${jobId} not found` };
@@ -224,12 +224,12 @@ export class WorkspaceCodingVersionController {
   async getActiveResetJob(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-      hasActiveJob: boolean;
-      jobId?: string;
-      version?: string;
-      progress?: number;
-      status?: string;
-    }> {
+    hasActiveJob: boolean;
+    jobId?: string;
+    version?: string;
+    progress?: number;
+    status?: string;
+  }> {
     const job = await this.jobQueueService.getActiveResetCodingVersionJob(workspace_id);
     if (!job) {
       return { hasActiveJob: false };

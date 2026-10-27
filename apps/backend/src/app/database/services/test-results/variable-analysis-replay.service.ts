@@ -77,11 +77,11 @@ export class VariableAnalysisReplayService {
     derivationFilter?: string,
     regexSearch?: boolean
   ): Promise<{
-      data: VariableAnalysisItemDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: VariableAnalysisItemDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     try {
       const runAnalysis = async (
         queryRunner?: QueryRunner

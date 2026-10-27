@@ -710,21 +710,21 @@ export class TestResultService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        units: {
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-        }[];
+    data: {
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      units: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
       }[];
-      total: number;
-    }> {
+    }[];
+    total: number;
+  }> {
     let params = new HttpParams().set('bookletName', bookletName);
 
     if (page !== undefined) {
@@ -765,34 +765,34 @@ export class TestResultService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
+    data: {
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      tags: {
+        id: number;
         unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        tags: {
-          id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
-        }[];
-        responses: {
-          variableId: string;
-          value: string;
-          status: string;
-          code?: number;
-          score?: number;
-          codedStatus?: string;
-        }[];
+        tag: string;
+        color?: string;
+        createdAt: Date;
       }[];
-      total: number;
-    }> {
+      responses: {
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+      }[];
+    }[];
+    total: number;
+  }> {
     let params = new HttpParams().set('unitName', unitName);
 
     if (page !== undefined) {
@@ -844,12 +844,12 @@ export class TestResultService {
     workspaceId: number,
     unitId: number
   ): Observable<{
-      success: boolean;
-      report: {
-        deletedUnit: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedUnit: number | null;
+      warnings: string[];
+    };
+  }> {
     return this.http
       .delete<{
       success: boolean;
@@ -877,12 +877,12 @@ export class TestResultService {
     workspaceId: number,
     bookletId: number
   ): Observable<{
-      success: boolean;
-      report: {
-        deletedBooklet: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
     return this.http
       .delete<{
       success: boolean;

@@ -856,12 +856,12 @@ export class PersonPersistenceService {
     overwriteExistingLogs: boolean = true,
     audit?: TestResultsImportAuditContext
   ): Promise<{
-      success: boolean;
-      totalBooklets: number;
-      totalLogsSaved: number;
-      totalLogsSkipped: number;
-      issues?: TestResultsUploadIssueDto[];
-    }> {
+    success: boolean;
+    totalBooklets: number;
+    totalLogsSaved: number;
+    totalLogsSkipped: number;
+    issues?: TestResultsUploadIssueDto[];
+  }> {
     if (audit) {
       if (persons.some(person => person.workspace_id !== audit.workspaceId)) throw new Error('Import audit workspace does not match');
       return this.personsRepository.manager.transaction(async manager => {

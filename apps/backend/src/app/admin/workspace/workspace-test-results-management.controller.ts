@@ -44,9 +44,9 @@ export class WorkspaceTestResultsManagementController {
     workspaceId: number
   ): Promise<void> {
     const versionKey =
-            this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-              workspaceId
-            );
+      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+        workspaceId
+      );
     const nextVersion = await this.cacheService.incr(versionKey);
     await this.jobQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
@@ -109,11 +109,11 @@ export class WorkspaceTestResultsManagementController {
     @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] =
-            await this.workspaceTestResultsService.findTestResults(workspace_id, {
-              page,
-              limit,
-              searchText
-            });
+      await this.workspaceTestResultsService.findTestResults(workspace_id, {
+        page,
+        limit,
+        searchText
+      });
     return {
       data,
       total,
@@ -171,12 +171,12 @@ export class WorkspaceTestResultsManagementController {
     @Param('workspace_id') workspaceId: string,
     @Req() req: RequestWithUser
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedPersons: number[];
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedPersons: number[];
+      warnings: string[];
+    };
+  }> {
     return this.workspaceTestResultsService.deleteTestPersons(
       Number(workspaceId),
       testPersonIds,
@@ -368,12 +368,12 @@ export class WorkspaceTestResultsManagementController {
     @Param('unitId', ParseIntPipe) unitId: number,
     @Req() req: RequestWithUser
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedUnit: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedUnit: number | null;
+      warnings: string[];
+    };
+  }> {
     const result = await this.workspaceTestResultsService.deleteUnit(
       workspaceId,
       unitId,
@@ -453,12 +453,12 @@ export class WorkspaceTestResultsManagementController {
     @Param('bookletId', ParseIntPipe) bookletId: number,
     @Req() req: RequestWithUser
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedBooklet: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
     const result = await this.workspaceTestResultsService.deleteBooklet(
       workspaceId,
       bookletId,

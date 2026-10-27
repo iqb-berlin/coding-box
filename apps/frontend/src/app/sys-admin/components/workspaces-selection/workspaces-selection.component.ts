@@ -32,7 +32,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
   selector: 'coding-box-workspaces-selection',
   templateUrl: './workspaces-selection.component.html',
   styleUrls: ['./workspaces-selection.component.scss'],
-  // eslint-disable-next-line max-len
+
   imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit, OnChanges {
