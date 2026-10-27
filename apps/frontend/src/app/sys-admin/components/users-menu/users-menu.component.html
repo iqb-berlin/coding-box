@@ -2,20 +2,20 @@
   <button mat-button
           [disabled]="selectedUser() && selectedUser().length > 1"
           [matTooltip]="'admin.edit-user-data' | translate"
-          (click)="editUser()">
+          (click)="editUser()" [attr.aria-label]="'admin.edit-user-data' | translate">
     <coding-box-wrapped-icon icon="edit"></coding-box-wrapped-icon>
   </button>
   <button mat-button
           [disabled]="!selectedUser()"
           [matTooltip]="'admin.delete-selected-users' | translate"
-          (click)="deleteUsers()">
+          (click)="deleteUsers()" [attr.aria-label]="'admin.delete-selected-users' | translate">
     <coding-box-wrapped-icon icon="delete"></coding-box-wrapped-icon>
   </button>
 
   <button mat-button
           [disabled]="selectedUser() && selectedUser().length > 1"
           [matTooltip]="'admin.set-user-access-rights' | translate"
-          (click)="setUserWorkspaceAccessRight()">
+          (click)="setUserWorkspaceAccessRight()" [attr.aria-label]="'admin.set-user-access-rights' | translate">
     <coding-box-wrapped-icon icon="workspaces"></coding-box-wrapped-icon>
   </button>
 </div>

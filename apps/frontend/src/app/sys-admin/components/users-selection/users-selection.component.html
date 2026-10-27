@@ -1,3 +1,6 @@
+<coding-box-user-directory-status [status]="usersStatus()"
+  [empty]="userObjectsDatasource.data.length === 0"
+  (retry)="updateUserList()" />
 <div class="users-selection">
   @if (userObjectsDatasource.data.length) {
     <coding-box-search-filter

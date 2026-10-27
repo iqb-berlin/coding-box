@@ -351,7 +351,7 @@
                 <!-- View results button for completed jobs -->
                 @if (job.status === 'completed') {
                 <button mat-icon-button color="primary" (click)="viewJobResults(job.id)"
-                  matTooltip="{{ 'variable-analysis.view-results' | translate }}">
+                  matTooltip="{{ 'variable-analysis.view-results' | translate }}" aria-label="{{ 'variable-analysis.view-results' | translate }}">
                   <mat-icon>visibility</mat-icon>
                 </button>
                 }
@@ -359,7 +359,7 @@
                 <!-- Cancel button for pending or processing jobs -->
                 @if (job.status === 'pending' || job.status === 'waiting' || job.status === 'processing') {
                 <button mat-icon-button color="warn" (click)="cancelJob(job.id)"
-                  matTooltip="{{ 'variable-analysis.cancel-job' | translate }}">
+                  matTooltip="{{ 'variable-analysis.cancel-job' | translate }}" aria-label="{{ 'variable-analysis.cancel-job' | translate }}">
                   <mat-icon>cancel</mat-icon>
                 </button>
                 }
@@ -368,7 +368,7 @@
                 @if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled' || job.status
                 === 'waiting') {
                 <button mat-icon-button color="warn" (click)="deleteJob(job.id)"
-                  matTooltip="{{ 'variable-analysis.delete-job' | translate }}">
+                  matTooltip="{{ 'variable-analysis.delete-job' | translate }}" aria-label="{{ 'variable-analysis.delete-job' | translate }}">
                   <mat-icon>delete</mat-icon>
                 </button>
                 }
@@ -376,7 +376,7 @@
                 <!-- Error indicator for failed jobs -->
                 @if (job.status === 'failed') {
                 <button mat-icon-button color="accent"
-                  matTooltip="{{ 'error' | translate }}: {{ job.error || ('unknown' | translate) }}">
+                  matTooltip="{{ 'error' | translate }}: {{ job.error || ('unknown' | translate) }}" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
                   <mat-icon>error</mat-icon>
                 </button>
                 }

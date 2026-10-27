@@ -9,6 +9,7 @@ import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ExternalCodingImportService } from '../../database/services/coding';
 import { CacheService } from '../../cache/cache.service';
 import { ExternalCodingImportJobData } from '../job-queue.service';
+import { removeExternalCodingImportFile } from '../external-coding-import-file.util';
 
 @Injectable()
 @Processor('external-coding-import', { concurrency: 1 })
@@ -90,10 +91,8 @@ export class ExternalCodingImportProcessor extends WorkspaceWorkerHost {
     } finally {
       // Clean up temp file
       try {
-        if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-          this.logger.debug(`Cleaned up temp file: ${tempFilePath}`);
-        }
+        removeExternalCodingImportFile(tempFilePath);
+        this.logger.debug(`Cleaned up temp file: ${tempFilePath}`);
       } catch (cleanupError) {
         this.logger.warn(
           `Failed to clean up temp file ${tempFilePath}: ${getErrorMessage(cleanupError)}`

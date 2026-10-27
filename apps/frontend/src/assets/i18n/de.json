@@ -452,6 +452,10 @@
     "admin": "System-Administrator:in"
   },
   "admin": {
+    "user-directory-loading": "Benutzer werden geladen …",
+    "user-directory-error": "Die Benutzer konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "user-directory-retry": "Erneut versuchen",
+    "user-directory-empty": "Keine Benutzer vorhanden.",
     "set-user-access-rights": "Nutzer Zugriffsrechte für Arbeitsbereich(e)",
     "users": "Nutzer:innen",
     "users-title": "Admin: Nutzer:innen",
@@ -1067,6 +1071,10 @@
       "title": "Kodierer-Schulungen",
       "job-name-prefix": "Schulung-",
       "compare": {
+        "status-match": "Alle ausgewählten Kodierer stimmen überein.",
+        "status-differ": "Mindestens zwei ausgewählte Kodierer weichen ab.",
+        "status-incomplete": "Mindestens ein ausgewählter Kodierer hat für diesen Fall noch keinen Code.",
+        "status-not_comparable": "Für einen Vergleich müssen mindestens zwei Kodierer ausgewählt sein.",
         "button": "Ergebnisse vergleichen",
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt.",
         "dialog-title-between": "Kodierergebnisse vergleichen",
@@ -3139,6 +3147,41 @@
         "no-responses": "Keine Antworten zu aktualisieren.",
         "bulk": "Kodierungsergebnisse erfolgreich auf {{count}} Antworten angewendet ({{skipped}} für manuelle Überprüfung übersprungen)."
       }
+    }
+  },
+  "accessibility": {
+    "actions": {
+      "previous-unit": "Vorherige Aufgabe",
+      "next-unit": "Nächste Aufgabe",
+      "remove-bundle": "Variablenbündel entfernen",
+      "remove-variable": "Variable entfernen",
+      "restart-analysis": "Antwortanalyse neu berechnen",
+      "toggle-kappa-statistics": "Interrater-Reliabilität ein- oder ausblenden",
+      "open-replay": "Replay inkl. Kodieranweisungen öffnen",
+      "reset-codebook-job": "Kodierbuch-Export zurücksetzen",
+      "save-replay-anchor": "Replay-Anchor speichern",
+      "clear-replay-anchor": "Replay-Anchor zurücksetzen",
+      "open-unit-info": "Unit-Definition anzeigen",
+      "open-coding-scheme": "Kodierungsschema öffnen",
+      "dismiss-backend-unavailable": "Meldung schließen",
+      "dismiss-error": "Fehlermeldung schließen",
+      "toggle-booklet-expand": "Aufgaben des Testhefts ein- oder ausblenden",
+      "delete-note": "Notiz löschen",
+      "delete-tag": "Tag löschen",
+      "show-file-content": "Dateiinhalt anzeigen",
+      "open-flat-settings": "Tabelleneinstellungen öffnen",
+      "open-notes-from-flat-row": "Notizen anzeigen",
+      "delete-units-by-name": "Alle Aufgaben dieses Namens löschen",
+      "toggle-response-expansion": "Antwortdetails ein- oder ausblenden",
+      "restore-booklet": "Testheft wiederherstellen",
+      "ignore-booklet": "Testheft ignorieren",
+      "restore-testlet-everywhere": "Dieses Testlet in allen Testheften wiederherstellen",
+      "ignore-testlet-everywhere": "Dieses Testlet in allen Testheften ignorieren",
+      "restore-testlet": "Testlet wiederherstellen",
+      "ignore-testlet": "Testlet ignorieren",
+      "restore-unit": "Aufgabe wiederherstellen",
+      "ignore-unit": "Aufgabe ignorieren",
+      "show-error-details": "Fehlerdetails anzeigen"
     }
   }
 }

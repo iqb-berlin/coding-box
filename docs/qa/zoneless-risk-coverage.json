@@ -47,7 +47,12 @@
         "apps/frontend/src/app/coding/services/external-coding-import-abort.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export-scope.facade.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-summary.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-completion.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-data.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-presentation.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-views.spec.ts"
       ]
     },
     {
@@ -110,7 +115,8 @@
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
-        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts"
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts",
+        "apps/frontend/src/app/core/services/auth-session-state.service.spec.ts"
       ]
     },
     {
@@ -212,7 +218,8 @@
         "cypress/zoneless/export-start-failure.cy.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.spec.ts",
         "cypress/component/import-comparison-permissions.component.cy.ts",
-        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/coding-import-lazy.spec.ts"
       ]
     },
     {
@@ -261,7 +268,9 @@
         "apps/frontend/src/app/core/services/system-notification.service.spec.ts",
         "apps/frontend/src/app/shared/services/german-paginator-intl.service.spec.ts",
         "apps/frontend/src/app/shared/services/response/variable-analysis.service.spec.ts",
-        "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts"
+        "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts",
+        "apps/frontend/src/app/shared/services/user/user-directory.facade.spec.ts",
+        "cypress/zoneless/user-directory.cy.ts"
       ]
     }
   ],
@@ -343,7 +352,7 @@
   "unresolvedFindings": [],
   "residualLimits": [
     "Chart.js ist in JSDOM mit simulierter Canvas-API und im Electron-Browser mit echten gezeichneten Pixeln, Animationen und Beschriftungen geprüft. Ein vollständiges Screenreader-Gutachten, visuelle Identität zu ngx-charts und sämtliche Browser sind nicht nachgewiesen.",
-    "Alle 156 Anwendungskomponenten sind explizit OnPush. Die zusätzlich nativ geprüften UnitSearchDialog-, BookletSearchDialog- und VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im Anwendungscode; diese Fälle belegen ihre realen Templates, keinen erreichbaren Browser-Einstieg. Die vorhandene Browser-Suite prüft die aktive Schnellsuche und andere erreichbare Abläufe. Ein CPU- oder Laufzeitvergleich ist nicht Bestandteil der Funktionsprüfung.",
+    "Alle 173 Anwendungskomponenten sind explizit OnPush. Die zusätzlich nativ geprüften UnitSearchDialog-, BookletSearchDialog- und VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im Anwendungscode; diese Fälle belegen ihre realen Templates, keinen erreichbaren Browser-Einstieg. Die vorhandene Browser-Suite prüft die aktive Schnellsuche und andere erreichbare Abläufe. Ein CPU- oder Laufzeitvergleich ist nicht Bestandteil der Funktionsprüfung.",
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
     "Browsernachweise prüfen verzögerte Schulungslisten, Auswahl und Filter sowie den erreichbaren Bulk-Definitionsablauf mit fertiger Serververteilung. Die zusätzliche interne asynchrone Bulk-Berechnung (ZL-034) hat weiterhin keinen Template-Einstieg und bleibt nativ geprüft. Der Schulungsvergleich übernimmt am erreichbaren Einstieg die bereits gecachte Liste; sein separater verspäteter Listenabruf (ZL-035) bleibt nativ geprüft. Browser-Anmeldung und API-Antworten dieser zusätzlichen Fälle sind synthetisch und belegen keine reale Backend-Persistenz oder Autorisierung.",

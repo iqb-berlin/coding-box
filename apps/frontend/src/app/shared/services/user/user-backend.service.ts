@@ -36,16 +36,12 @@ export class UserBackendService {
     return this.http
       .get<UserFullDto[]>(
         `${this.serverUrl}admin/users/full`,
-        {})
-      .pipe(
-        catchError(() => of([]))
-      );
+        {});
   }
 
   getUsersForWorkspaceSelection(workspaceId: number): Observable<UserFullDto[]> {
     return this.http
-      .get<UserFullDto[]>(`${this.serverUrl}admin/users/directory/${workspaceId}`)
-      .pipe(catchError(() => of([])));
+      .get<UserFullDto[]>(`${this.serverUrl}admin/users/directory/${workspaceId}`);
   }
 
   addUser(newUser: RequestBody<'CreateUserDto'>): Observable<boolean> {

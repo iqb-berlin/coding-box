@@ -9,7 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { of } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -53,6 +53,7 @@ describe('WsUsersComponent', () => {
     mockAppService = {
       dataLoading: false,
       selectedWorkspaceId: 3,
+      selectedWorkspaceId$: new BehaviorSubject(3),
       authData: { ...AppService.defaultAuthData, isAdmin: true }
     };
 
@@ -100,48 +101,38 @@ describe('WsUsersComponent', () => {
   });
 
   it('should load users on init', async () => {
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
-    try {
-      component.ngOnInit();
-      await jest.advanceTimersByTimeAsync(0); // processes setTimeout
-      expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
-      expect(component.userObjectsDatasource().data.length).toBe(2);
-    } finally {
-      jest.useRealTimers();
-    }
+    let requestStarted!: () => void;
+    const started = new Promise<void>(resolve => { requestStarted = resolve; });
+    jest.mocked(mockUserBackendService.getUsersFull!).mockImplementationOnce(() => { requestStarted(); return of(mockUsers); });
+    fixture.detectChanges();
+    await started;
+    await fixture.whenStable();
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
+    expect(component.userObjectsDatasource().data.length).toBe(2);
   });
 
-  it('should load users when updateUserList is called', () => {
+  it('should load users when updateUserList is called', async () => {
     component.updateUserList();
+    await fixture.whenStable();
     expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
     expect(component.userObjectsDatasource().data.length).toBe(2);
   });
 
   it('should filter users correctly', async () => {
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
-    try {
-      component.ngOnInit();
-      await jest.advanceTimersByTimeAsync(0);
-      component.userObjectsDatasource().filter = 'user1';
-      expect(component.userObjectsDatasource().filteredData.length).toBe(1);
-      expect(component.userObjectsDatasource().filteredData[0].username).toBe('user1');
-    } finally {
-      jest.useRealTimers();
-    }
+    component.updateUserList();
+    await fixture.whenStable();
+    component.userObjectsDatasource().filter = 'user1';
+    expect(component.userObjectsDatasource().filteredData.length).toBe(1);
+    expect(component.userObjectsDatasource().filteredData[0].username).toBe('user1');
   });
 
   it('should toggle checkbox and emit selection', async () => {
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
-    try {
-      fixture.detectChanges();
-      await jest.advanceTimersByTimeAsync(0);
-      const emitSpy = jest.spyOn(component.userSelectionChanged, 'emit');
-      component.checkboxToggle(mockUsers[0]);
-      expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
-      expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
-    } finally {
-      jest.useRealTimers();
-    }
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const emitSpy = jest.spyOn(component.userSelectionChanged, 'emit');
+    component.checkboxToggle(mockUsers[0]);
+    expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
+    expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
   });
 
   it('keeps study-manager selection without requesting global user administration', () => {
@@ -163,18 +154,20 @@ describe('WsUsersComponent', () => {
     jest.useRealTimers();
   });
 
-  it('filters the minimal study-manager directory by username', () => {
+  it('filters the minimal study-manager directory by username', async () => {
     const users = [{ id: 7, username: 'selected-coder' }, { id: 8, username: 'other' }];
     mockAppService.authData = { ...AppService.defaultAuthData, isAdmin: false };
     (mockUserBackendService.getUsersForWorkspaceSelection as jest.Mock).mockReturnValue(of(users));
     component.updateUserList();
+    await fixture.whenStable();
     component.userObjectsDatasource().filter = 'selected';
 
     expect(component.userObjectsDatasource().filteredData).toEqual([users[0]]);
   });
 
-  it('retains the admin flag for the authorized global edit dialog', () => {
+  it('retains the admin flag for the authorized global edit dialog', async () => {
     component.updateUserList();
+    await fixture.whenStable();
     component.selectedRows = [component.userObjectsDatasource().data[1]];
     component.editUser();
 

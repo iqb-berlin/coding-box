@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, inject, provideZonelessChangeDetection
 } from '@angular/core';
@@ -45,7 +46,7 @@ describe('TagDialogComponent zoneless mutations', () => {
     createUnitTag = jest.fn().mockReturnValue(createResponse);
     deleteUnitTag = jest.fn().mockReturnValue(deleteResponse);
     await TestBed.configureTestingModule({
-      imports: [TagsDialogHostComponent, MatDialogModule, MatSnackBarModule],
+      imports: [TranslateModule.forRoot(), TagsDialogHostComponent, MatDialogModule, MatSnackBarModule],
       providers: [
         provideZonelessChangeDetection(),
         { provide: UnitTagService, useValue: { createUnitTag, deleteUnitTag } },

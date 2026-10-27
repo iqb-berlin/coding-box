@@ -26,10 +26,14 @@ describe('Export job signals without Zone', () => {
     fixture.autoDetectChanges();
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('mat-progress-bar').getAttribute('aria-valuenow')).toBe('25');
+    const jobElement = fixture.nativeElement.querySelector('.job-item');
+    const progressElement = fixture.nativeElement.querySelector('mat-progress-bar');
 
     jobs.next([{ ...job, progress: 64 }]);
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('mat-progress-bar').getAttribute('aria-valuenow')).toBe('64');
+    expect(fixture.nativeElement.querySelector('.job-item')).toBe(jobElement);
+    expect(fixture.nativeElement.querySelector('mat-progress-bar')).toBe(progressElement);
     fixture.componentInstance.removeJob(job);
     expect(removed.observed).toBe(true);
     fixture.destroy();

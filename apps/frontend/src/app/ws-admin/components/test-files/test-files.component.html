@@ -216,7 +216,7 @@
         <ng-container matColumnDef="actions">
           <mat-header-cell *matHeaderCellDef></mat-header-cell>
           <mat-cell *matCellDef="let element">
-            <button mat-icon-button (click)="showFileContent(element); $event.stopPropagation()">
+            <button mat-icon-button (click)="showFileContent(element); $event.stopPropagation()" [attr.aria-label]="'accessibility.actions.show-file-content' | translate">
               <mat-icon>visibility</mat-icon>
             </button>
           </mat-cell>

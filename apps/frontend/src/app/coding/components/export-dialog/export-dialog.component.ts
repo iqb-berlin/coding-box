@@ -12,7 +12,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import * as ExcelJS from 'exceljs';
+import type { Cell } from 'exceljs';
 import { finalize } from 'rxjs/operators';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -165,13 +165,15 @@ export class ExportDialogComponent implements OnInit {
   }
 
   private readExcelFile(file: File, runId: number): void {
-    const workbook = new ExcelJS.Workbook();
     const reader = new FileReader();
     this.fileReader = reader;
 
     reader.onload = async (e: ProgressEvent<FileReader>) => {
       if (!this.isCurrentFile(runId)) return;
       try {
+        const { default: ExcelJS } = await import('exceljs');
+        if (!this.isCurrentFile(runId)) return;
+        const workbook = new ExcelJS.Workbook();
         const buffer = e.target?.result as ArrayBuffer;
         this.validationStateService.updateProgress(10, this.translate.instant('export-dialog.validation.file-loading'));
         await workbook.xlsx.load(buffer);
@@ -307,7 +309,7 @@ export class ExportDialogComponent implements OnInit {
     return '';
   }
 
-  private getCellText(cell: ExcelJS.Cell): string {
+  private getCellText(cell: Cell): string {
     const value = cell.value;
     if (value === null || value === undefined) {
       return '';
