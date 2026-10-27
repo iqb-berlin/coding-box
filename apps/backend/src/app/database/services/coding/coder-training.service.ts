@@ -3415,25 +3415,25 @@ export class CoderTrainingService {
     workspaceId: number,
     trainingIds: number[]
   ): Promise<Array<{
-      responseId: number;
-      unitName: string;
-      variableId: string;
-      personCode: string;
-      personLogin: string;
-      personGroup: string;
-      bookletName: string;
-      testPerson: string;
-      coders: Array<{
-        trainingId: number;
-        trainingLabel: string;
-        coderId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-        notes: string | null;
-        codingIssueOption: number | null;
-      }>;
-    }>> {
+    responseId: number;
+    unitName: string;
+    variableId: string;
+    personCode: string;
+    personLogin: string;
+    personGroup: string;
+    bookletName: string;
+    testPerson: string;
+    coders: Array<{
+      trainingId: number;
+      trainingLabel: string;
+      coderId: number;
+      coderName: string;
+      code: string | null;
+      score: number | null;
+      notes: string | null;
+      codingIssueOption: number | null;
+    }>;
+  }>> {
     this.logger.log(`Getting coding comparison for trainings ${trainingIds.join(', ')} in workspace ${workspaceId}`);
 
     const trainings = await this.coderTrainingRepository.find({
@@ -3897,25 +3897,25 @@ export class CoderTrainingService {
     workspaceId: number,
     trainingId: number
   ): Promise<Array<{
-      responseId: number;
-      unitName: string;
-      variableId: string;
-      personCode: string;
-      personLogin: string;
-      personGroup: string;
-      bookletName: string;
-      testPerson: string;
-      givenAnswer: string;
-      replayCode: number | null;
-      replayScore: number | null;
-      discussionCode: number | null;
-      discussionScore: number | null;
-      discussionNotes: string | null;
-      discussionManagerUserId: number | null;
-      discussionManagerName: string | null;
-      discussionSource: DiscussionSource;
-      coders: WithinTrainingCoderResult[];
-    }>> {
+    responseId: number;
+    unitName: string;
+    variableId: string;
+    personCode: string;
+    personLogin: string;
+    personGroup: string;
+    bookletName: string;
+    testPerson: string;
+    givenAnswer: string;
+    replayCode: number | null;
+    replayScore: number | null;
+    discussionCode: number | null;
+    discussionScore: number | null;
+    discussionNotes: string | null;
+    discussionManagerUserId: number | null;
+    discussionManagerName: string | null;
+    discussionSource: DiscussionSource;
+    coders: WithinTrainingCoderResult[];
+  }>> {
     this.logger.log(`Getting within-training coding comparison for training ${trainingId} in workspace ${workspaceId}`);
 
     const training = await this.coderTrainingRepository.findOne({
@@ -4615,7 +4615,7 @@ export class CoderTrainingService {
         const missingsProfileChanged = hasConflictingCurrentMissingsProfiles ||
         resolvedCurrentMissingsProfileId !== resolvedMissingsProfileId;
         const shouldRecreateJobs =
-        codersChanged ||
+          codersChanged ||
         variablesChanged ||
         bundlesChanged ||
         caseOrderingChanged ||
@@ -5079,15 +5079,15 @@ export class CoderTrainingService {
       }>;
     }>
   ): Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      unitName: string;
-      variableId: string;
-      codes: Array<{ code1: number | null; code2: number | null }>;
-      scores: Array<{ score1: number | null; score2: number | null }>;
-    }> {
+    coder1Id: number;
+    coder1Name: string;
+    coder2Id: number;
+    coder2Name: string;
+    unitName: string;
+    variableId: string;
+    codes: Array<{ code1: number | null; code2: number | null }>;
+    scores: Array<{ score1: number | null; score2: number | null }>;
+  }> {
     this.logger.log(`Transforming ${comparisonData.length} comparison items to coder pairs format`);
 
     // Group by unit/variable to get all responses for each variable

@@ -111,19 +111,19 @@ export class CodingReplayService {
     }>,
     serverUrl: string
   ): Promise<
-      Array<{
-        responseId: number;
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        variableAnchor: string;
-        bookletName: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        replayUrl: string;
-      }>
-    > {
+    Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      replayUrl: string;
+    }>
+  > {
     return Promise.all(
       items.map(async item => {
         try {
@@ -166,19 +166,19 @@ export class CodingReplayService {
     serverUrl: string,
     authToken = ''
   ): Promise<
-      Array<{
-        responseId: number;
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        variableAnchor: string;
-        bookletName: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        replayUrl: string;
-      }>
-    > {
+    Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      replayUrl: string;
+    }>
+  > {
     const uniqueUnitNames = [...new Set(items.map(i => i.unitName))];
     const variablePageMaps = new Map<string, Map<string, string>>();
     let variableAnchorMaps = new Map<string, Map<string, string>>();

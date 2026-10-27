@@ -128,29 +128,29 @@ export class ExternalCodingImportService {
     progressCallback: (progress: number, message: string) => void,
     requestedByUserId?: number
   ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+    message: string;
+    processedRows: number;
+    updatedRows: number;
+    errors: string[];
+    affectedRows: Array<{
+      unitAlias: string;
+      variableId: string;
+      personCode?: string;
+      personLogin?: string;
+      personGroup?: string;
+      bookletName?: string;
+      originalCodedStatus: string;
+      originalCode: number | null;
+      originalScore: number | null;
+      updatedCodedStatus: string | null;
+      updatedCode: number | null;
+      updatedScore: number | null;
+      importAction?: ExternalCodingImportAction;
+      actionReason?: string;
+      hasExistingCoding?: boolean;
+      hasConflict?: boolean;
+    }>;
+  }> {
     return this.importExternalCoding(workspaceId, body, progressCallback, requestedByUserId);
   }
 
@@ -171,29 +171,29 @@ export class ExternalCodingImportService {
     progressCallback?: (progress: number, message: string) => void,
     requestedByUserId?: number
   ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+    message: string;
+    processedRows: number;
+    updatedRows: number;
+    errors: string[];
+    affectedRows: Array<{
+      unitAlias: string;
+      variableId: string;
+      personCode?: string;
+      personLogin?: string;
+      personGroup?: string;
+      bookletName?: string;
+      originalCodedStatus: string;
+      originalCode: number | null;
+      originalScore: number | null;
+      updatedCodedStatus: string | null;
+      updatedCode: number | null;
+      updatedScore: number | null;
+      importAction?: ExternalCodingImportAction;
+      actionReason?: string;
+      hasExistingCoding?: boolean;
+      hasConflict?: boolean;
+    }>;
+  }> {
     let queryRunner: QueryRunner | undefined;
     let transactionCommitted = false;
 
@@ -586,29 +586,29 @@ export class ExternalCodingImportService {
     progressCallback?: (progress: number, message: string) => void,
     requestedByUserId?: number
   ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+    message: string;
+    processedRows: number;
+    updatedRows: number;
+    errors: string[];
+    affectedRows: Array<{
+      unitAlias: string;
+      variableId: string;
+      personCode?: string;
+      personLogin?: string;
+      personGroup?: string;
+      bookletName?: string;
+      originalCodedStatus: string;
+      originalCode: number | null;
+      originalScore: number | null;
+      updatedCodedStatus: string | null;
+      updatedCode: number | null;
+      updatedScore: number | null;
+      importAction?: ExternalCodingImportAction;
+      actionReason?: string;
+      hasExistingCoding?: boolean;
+      hasConflict?: boolean;
+    }>;
+  }> {
     // Set previewOnly to false for actual application
     return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback, requestedByUserId);
   }

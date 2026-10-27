@@ -198,10 +198,10 @@ export class ReplayStatisticsController {
     @Query('to') to?: string,
     @Query('lastDays') lastDays?: string
   ): Promise<{
-      internal: number;
-      external: number;
-      total: number;
-    }> {
+    internal: number;
+    external: number;
+    total: number;
+  }> {
     return this.replayStatisticsService.getReplaySourceSummary(
       Number(workspaceId),
       {
@@ -303,12 +303,12 @@ export class ReplayStatisticsController {
     @Query('to') to?: string,
     @Query('lastDays') lastDays?: string
   ): Promise<{
-      min: number;
-      max: number;
-      average: number;
-      distribution: Record<string, number>;
-      unitAverages?: Record<string, number>;
-    }> {
+    min: number;
+    max: number;
+    average: number;
+    distribution: Record<string, number>;
+    unitAverages?: Record<string, number>;
+  }> {
     return this.replayStatisticsService.getReplayDurationStatistics(
       Number(workspaceId),
       unitId,
@@ -448,12 +448,12 @@ export class ReplayStatisticsController {
     @Query('lastDays') lastDays?: string,
     @Query('limit') limit?: string
   ): Promise<{
-      successRate: number;
-      totalReplays: number;
-      successfulReplays: number;
-      failedReplays: number;
-      commonErrors: Array<{ message: string; count: number }>;
-    }> {
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
     return this.replayStatisticsService.getReplayErrorStatistics(
       Number(workspaceId),
       {

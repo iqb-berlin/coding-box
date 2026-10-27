@@ -119,7 +119,8 @@
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/package-lock.json",
       "{workspaceRoot}/vendor/**/*",
-      "{workspaceRoot}/tsconfig.base.json"
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/eslint.config.cjs"
     ],
     "sharedApiDto": [
       "{workspaceRoot}/api-dto/**/*"

@@ -25,7 +25,7 @@
   },
   "private": true,
   "engines": {
-    "node": ">=22.12.0 <23"
+    "node": ">=22.13.0 <23"
   },
   "dependencies": {
     "@angular/animations": "21.2.25",
@@ -116,6 +116,8 @@
     "@angular/build": "21.2.24",
     "@angular/cli": "21.2.27",
     "@angular/compiler-cli": "21.2.25",
+    "@eslint/eslintrc": "3.3.7",
+    "@eslint/js": "10.0.1",
     "@golevelup/ts-jest": "^0.5.0",
     "@iqb/eslint-config": "file:vendor/eslint-config",
     "@iqb/responses-legacy-reference": "npm:@iqb/responses@5.2.0",
@@ -131,7 +133,7 @@
     "@nx/webpack": "22.7.12",
     "@nx/workspace": "22.7.12",
     "@schematics/angular": "21.2.24",
-    "@stylistic/eslint-plugin": "3.1.0",
+    "@stylistic/eslint-plugin": "5.10.0",
     "@types/jest": "30.0.0",
     "@types/multer": "^1.4.7",
     "@types/passport-jwt": "^4.0.1",
@@ -141,10 +143,11 @@
     "braces": "file:vendor/braces",
     "cypress": "^15.21.1",
     "esbuild": "0.28.1",
-    "eslint": "8.57.1",
+    "eslint": "10.13.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-html": "^8.1.1",
     "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-import-x": "4.17.1",
     "express": "4.22.3",
     "jest": "30.5.2",
     "jest-canvas-mock": "2.5.8",
@@ -215,7 +218,13 @@
     "follow-redirects": "1.16.1",
     "@modelcontextprotocol/sdk": "1.32.1",
     "launch-editor": "2.14.2",
-    "markdown-it": "14.3.3"
+    "markdown-it": "14.3.3",
+    "eslint-config-airbnb-base": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-import": {
+      "eslint": "$eslint"
+    }
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
