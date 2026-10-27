@@ -40,7 +40,7 @@
           </div>
           <div class="fx-row-center-center fx-gap-10">
             <label for="pageSize">{{ 'coding-validation-results.page-size' | translate }}:</label>
-            <select id="pageSize" [value]="pageSize" (change)="changePageSize(+$any($event.target).value)">
+            <select #pageSizeSelect id="pageSize" [value]="pageSize" (change)="changePageSize(+pageSizeSelect.value)">
               <option value="25">25</option>
               <option value="50">50</option>
               <option value="100">100</option>
@@ -66,7 +66,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (result of validationResults.results; track result) {
+              @for (result of validationResults.results; track validationResultKey(result)) {
                 <tr [class.missing]="result.status === 'MISSING'">
                   <td>{{result.combination.unit_key}}</td>
                   <td>{{result.combination.login_name}}</td>

@@ -3,7 +3,7 @@
     @if (authData().isAdmin || accessLevel() >= 3 || (accessLevel() < 2 && hasCodingJobsAccess())){
       <div class="flex-container">
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
-      @for (link of navLinks(); track link) {
+      @for (link of navLinks(); track link.path) {
         <a mat-tab-link
            [routerLink]="link.path"
            routerLinkActive="active-link"

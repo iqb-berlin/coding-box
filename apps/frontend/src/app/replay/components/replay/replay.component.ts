@@ -21,6 +21,7 @@ import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
 import {
   ReplayBackendService,
+  ReplayUnitResponse,
   ReplayServerTimings
 } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -48,7 +49,7 @@ import {
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
-import { CodingScheme } from '../../../models/coding-interfaces';
+import { CodeSelectedEvent, CodingScheme } from '../../../models/coding-interfaces';
 import {
   ReplaySessionLoadError,
   ReplaySessionLoadRequest,
@@ -142,8 +143,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isLoaded: Subject<boolean> = new Subject<boolean>();
   readonly page = signal<string | undefined>(undefined);
   readonly anchor = signal<string | undefined>(undefined);
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  readonly responses = signal<any | undefined>(undefined);
+  readonly responses = signal<ReplayUnitResponse | undefined>(undefined);
   protected readonly isPrintMode = signal<boolean>(false);
   readonly testPerson = signal<string>('');
   readonly unitId = signal<string>('');
@@ -1742,10 +1742,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     highlightBundleVariableMarkers(iframe, this.getCurrentBundleMarkers());
   }
 
-  async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
+  async onCodeSelected(event: CodeSelectedEvent): Promise<void> {
     if (this.isCodingReadOnly()) return;
 
-    let savedCode: { code?: string; score?: number } | null = null;
+    let savedCode: { code?: string; score?: number } | null;
     try {
       savedCode = await this.codingService.handleCodeSelected(event, this.testPerson(), this.unitId(), this.workspaceId(), this.unitsData());
     } catch (error) {

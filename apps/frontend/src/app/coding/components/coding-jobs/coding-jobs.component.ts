@@ -10,8 +10,11 @@ import {
   distinctUntilChanged,
   firstValueFrom,
   filter,
+  finalize,
+  Observable,
   Subject,
   Subscription,
+  take,
   takeUntil
 } from 'rxjs';
 import { MatSortModule, Sort } from '@angular/material/sort';
@@ -40,7 +43,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
@@ -49,6 +52,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -220,8 +224,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private jobNameFilterSubscription?: Subscription;
   private permissionsSubscription?: Subscription;
   private coderTrainingsSubscription?: Subscription;
+  private codersSubscription?: Subscription;
+  private workspaceGeneration = 0;
   private readonly destroy$ = new Subject<void>();
-  private readonly jobNameFilterChanges = new Subject<string>();
+  private readonly jobNameFilterChanges = new Subject<{ value: string; generation: number }>();
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
 
@@ -248,18 +254,20 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
-    this.coderService.getCoders()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(coders => {
-        this.allCoders.set(coders);
-        this.updateCoderNamesMap(this.dataSource.data);
-      });
+    let workspaceId = this.appService.selectedWorkspaceId;
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id === workspaceId) return;
+      workspaceId = id;
+      this.workspaceGeneration += 1;
+      this.resetWorkspaceState();
+      this.loadWorkspaceData();
+    });
 
     this.jobNameFilterSubscription = this.jobNameFilterChanges
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
+        filter(change => change.generation === this.workspaceGeneration),
+        distinctUntilChanged((previous, current) => previous.value === current.value && previous.generation === current.generation),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
@@ -267,10 +275,59 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.reloadFirstPage();
       });
 
-    this.updateCodingJobPermissions();
-    this.loadCoderTrainings();
-    this.loadCodingJobs();
+    this.loadWorkspaceData();
     window.addEventListener('focus', this.handleWindowFocus);
+  }
+
+  private resetWorkspaceState(): void {
+    this.selection.clear();
+    this.dataSource.data = [];
+    this.originalData.set([]);
+    this.jobsTotal.set(0);
+    this.hasLoadedJobs.set(false);
+    this.pageIndex.set(0);
+    this.selectedTrainingId.set(null);
+    this.selectedStatus.set(null);
+    this.selectedCoderId.set(null);
+    this.selectedJobName.set(null);
+    this.coderTrainings.set([]);
+    this.allCoders.set([]);
+    this.canApplyResults.set(false);
+    this.canReviewCodingJobs.set(false);
+    this.canManageCodingJobs.set(false);
+    this.jobDetailsCache.clear();
+    this.coderNamesByJobId.clear();
+    this.preloadedVariables = null;
+    this.lastWindowFocusReloadAt = 0;
+  }
+
+  private loadWorkspaceData(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) this.permissions.load(workspaceId);
+    this.codersSubscription?.unsubscribe();
+    this.codersSubscription = this.coderService.getCoders()
+      .pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
+      .subscribe(coders => {
+        this.allCoders.set(coders);
+        this.updateCoderNamesMap(this.dataSource.data);
+      });
+    this.loadCodingJobs();
+  }
+
+  private observeWorkspaceDialog<T, R>(dialogRef: MatDialogRef<T, R>): Observable<R | undefined> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const unregisterClose = this.destroyRef.onDestroy(() => dialogRef.close());
+    this.appService.selectedWorkspaceId$.pipe(
+      filter(id => id !== workspaceId),
+      take(1),
+      takeUntil(dialogRef.afterClosed()),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => dialogRef.close());
+    return dialogRef.afterClosed().pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(unregisterClose)
+    );
   }
 
   private updateCodingJobPermissions(): void {
@@ -285,7 +342,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
     this.permissionsSubscription?.unsubscribe();
     this.permissionsSubscription = this.userBackendService.getUsers(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntil(this.destroy$))
       .subscribe(users => {
         if (workspaceId !== this.appService.selectedWorkspaceId ||
           userId !== this.appService.authData.userId) {
@@ -309,10 +366,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     this.jobNameFilterSubscription?.unsubscribe();
     this.permissionsSubscription?.unsubscribe();
     this.coderTrainingsSubscription?.unsubscribe();
+    this.codersSubscription?.unsubscribe();
     this.jobNameFilterChanges.complete();
   }
 
   loadCodingJobs(): void {
+    this.loadJobsSubscription?.unsubscribe();
     this.isLoading.set(true);
     this.updateCodingJobPermissions();
     this.loadCoderTrainings();
@@ -324,7 +383,6 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.loadJobsSubscription?.unsubscribe();
     this.loadJobsSubscription = this.codingJobBackendService
       .getCodingJobs(
         workspaceId,
@@ -332,7 +390,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.pageSize(),
         this.getListOptions()
       )
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntil(this.destroy$))
       .subscribe({
         next: response => {
           const processedData = this.normalizeCodingJobs(response.data);
@@ -446,7 +504,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   onJobNameFilterChange(): void {
-    this.jobNameFilterChanges.next(this.selectedJobName() ?? '');
+    this.jobNameFilterChanges.next({ value: this.selectedJobName() ?? '', generation: this.workspaceGeneration });
   }
 
   protected onSortChange(sort: Sort): void {
@@ -627,7 +685,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .getCodingIncompleteVariables(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
+      .getCodingIncompleteVariables(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
           this.preloadedVariables = variables;
@@ -654,7 +712,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       } as CodingJobDefinitionDialogData
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result) {
         const newId = this.getNextId();
         const now = new Date();
@@ -695,6 +753,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
     const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich löschen?`;
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -707,18 +768,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result) {
-        const workspaceId = this.appService.selectedWorkspaceId;
-        if (!workspaceId) {
-          this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
-            duration: 3000
-          });
-          return;
-        }
-
         this.codingJobBackendService
-          .deleteCodingJob(workspaceId, job.id).pipe(takeUntilDestroyed(this.destroyRef))
+          .deleteCodingJob(workspaceId, job.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: response => {
               if (response.success) {
@@ -903,7 +956,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     );
 
     this.codingJobBackendService
-      .startCodingJob(workspaceId, selectedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
+      .startCodingJob(workspaceId, selectedJob.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: startResult => {
           loadingSnack.dismiss();
@@ -968,7 +1021,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     );
 
     this.codingJobBackendService
-      .prepareCodingJobReview(workspaceId, selectedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
+      .prepareCodingJobReview(workspaceId, selectedJob.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: reviewResult => {
           loadingSnack.dismiss();
@@ -1135,7 +1188,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     this.coderTrainingsSubscription?.unsubscribe();
     this.coderTrainingsSubscription = this.codingTrainingBackendService.getCoderTrainings(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntil(this.destroy$))
       .subscribe({
         next: trainings => {
           if (workspaceId !== this.appService.selectedWorkspaceId) {
@@ -1182,10 +1235,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result && this.canRestartCodingJob(job)) {
         this.codingJobBackendService
-          .restartCodingJobWithOpenUnits(workspaceId, job.id).pipe(takeUntilDestroyed(this.destroyRef))
+          .restartCodingJobWithOpenUnits(workspaceId, job.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: restartedJob => {
               const loadingSnack = this.snackBar.open(
@@ -1195,7 +1248,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
               );
 
               this.codingJobBackendService
-                .startCodingJob(workspaceId, restartedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
+                .startCodingJob(workspaceId, restartedJob.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
                 .subscribe({
                   next: restartResult => {
                     loadingSnack.dismiss();
@@ -1279,17 +1332,17 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.backdropClick().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+    dialogRef.backdropClick().pipe(takeUntil(dialogRef.afterClosed()), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       dialogRef.componentInstance.closeDialog();
     });
 
     dialogRef.keydownEvents()
-      .pipe(filter(event => event.key === 'Escape')).pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(filter(event => event.key === 'Escape'), takeUntil(dialogRef.afterClosed())).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         dialogRef.componentInstance.closeDialog();
       });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result?.resultsApplied) {
         this.notifyCodingResultsApplied(workspaceId);
         this.loadCodingJobs();
@@ -1326,7 +1379,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       data: { canApplyResults: this.canApplyResults() }
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result?.resultsApplied) {
         this.jobsChanged.emit();
       }
@@ -1364,8 +1417,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       data: { coders: this.allCoders() }
     });
 
-    dialogRef
-      .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+    this.observeWorkspaceDialog(dialogRef)
       .subscribe((result?: TransferCodingCasesDialogResult) => {
         if (!result) {
           return;
@@ -1376,7 +1428,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             workspaceId,
             result.sourceCoderId,
             result.targetCoderId
-          ).pipe(takeUntilDestroyed(this.destroyRef))
+          ).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: transferResult => {
               this.snackBar.open(
@@ -1400,12 +1452,13 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   protected openCohensKappaStatisticsDialog(): void {
-    this.dialog.open(CohensKappaStatisticsComponent, {
+    const dialogRef = this.dialog.open(CohensKappaStatisticsComponent, {
       width: '90vw',
       maxWidth: '1400px',
       height: '95vh',
       data: {}
     });
+    this.observeWorkspaceDialog(dialogRef).subscribe();
   }
 
   canDeleteSelectedJobs(): boolean {
@@ -1423,7 +1476,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const selectedJobs = this.selection.selected;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+    const selectedJobs = [...this.selection.selected];
     if (selectedJobs.length === 0) {
       this.snackBar.open('Keine Kodierjobs ausgewählt', 'Schließen', {
         duration: 3000
@@ -1446,16 +1501,16 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result) {
-        this.performBulkDelete(selectedJobs);
+        this.performBulkDelete(selectedJobs, workspaceId);
       }
     });
   }
 
-  private async performBulkDelete(jobs: CodingJob[]): Promise<void> {
+  private async performBulkDelete(jobs: CodingJob[], workspaceId: number): Promise<void> {
     if (!jobs.every(job => this.permissions.canEdit(job))) return;
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const generation = this.workspaceGeneration;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
         duration: 3000
@@ -1474,7 +1529,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const failedJobs: string[] = [];
 
     try {
-      const response = await firstValueFrom(this.codingJobBackendService.deleteCodingJobs(workspaceId, jobs.map(job => job.id)));
+      const response = await firstValueFrom(this.codingJobBackendService.deleteCodingJobs(workspaceId, jobs.map(job => job.id)).pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => loadingSnack.dismiss())
+      ), { defaultValue: undefined });
+      if (!response) return;
       if (response.success) successCount = jobs.length;
       else { failureCount = jobs.length; failedJobs.push(...jobs.map(job => job.name)); }
     } catch {
@@ -1483,6 +1543,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     loadingSnack.dismiss();
+    if (this.destroyRef.destroyed || generation !== this.workspaceGeneration) return;
 
     this.selection.clear();
 
@@ -1531,8 +1592,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef
-      .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+    this.observeWorkspaceDialog(dialogRef)
       .subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
         if (!dialogResult) {
           return;
@@ -1547,7 +1607,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.codingJobBackendService
           .applyCodingResults(workspaceId, job.id, {
             overwriteExisting: dialogResult.overwriteExisting
-          }).pipe(takeUntilDestroyed(this.destroyRef))
+          }).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               loadingSnack.dismiss();
@@ -1677,15 +1737,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
       if (result) {
-        this.performBulkApply();
+        this.performBulkApply(workspaceId);
       }
     });
   }
 
-  private performBulkApply(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  private performBulkApply(workspaceId: number): void {
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
         duration: 3000
@@ -1699,7 +1758,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (result.success) {

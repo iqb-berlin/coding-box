@@ -110,6 +110,15 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
     expect(button('download-button').disabled).toBe(false);
   });
 
+  it('retains existing rows when a refresh returns new objects for the same combinations', async () => {
+    const row = fixture.nativeElement.querySelector('tbody tr');
+    fixture.componentInstance.changePageSize(100);
+    pageResponse.next({ ...page(1), pageSize: 100 });
+    pageResponse.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('tbody tr')).toBe(row);
+  });
+
   it('clears loading after a page error and renders a successful retry', async () => {
     button('next-page').click();
     await idle();

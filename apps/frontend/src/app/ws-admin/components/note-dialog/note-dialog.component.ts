@@ -42,7 +42,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
 
         <div class="notes-container">
           <div class="notes-list">
-            @for (note of notes; track note) {
+            @for (note of notes; track note.id) {
               <div class="note-item">
                 <div class="note-header">
                   <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
