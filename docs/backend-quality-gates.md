@@ -2,7 +2,7 @@
 
 `GET /api/health` checks process liveness. `GET /api/health/ready` checks
 PostgreSQL and Redis concurrently and returns 503 if either check fails or takes
-longer than 1.5 seconds. Pending probes are shared until the underlying operation
+longer than one second. Pending probes are shared until the underlying operation
 settles, so health requests cannot accumulate database queries during an outage.
 The Compose healthcheck uses readiness. The existing Redis diagnostics endpoint
 also returns 503 on failure and has the same timeout.
