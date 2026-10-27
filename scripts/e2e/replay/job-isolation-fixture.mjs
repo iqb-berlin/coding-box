@@ -109,12 +109,14 @@ export async function verifyJobIsolation(state) {
     const statisticsPath = `/coding/statistics/job/${statisticsId}`;
     const completedStatistics = await pollCompleted(`${owner}${statisticsPath}`);
     assert.ok(completedStatistics.result && typeof completedStatistics.result === 'object');
-    for (const foreignPath of [statisticsPath, `/coding/job/${statisticsId}`]) {
-      const rejected = await request(`${other}${foreignPath}`);
-      assert.equal(rejected.status, 200);
-      assert.deepEqual(Object.keys(rejected.body), ['error']);
-      assert.match(rejected.body.error, /not found/);
-    }
+    const foreignStatistics = await request(`${other}${statisticsPath}`);
+    assert.equal(foreignStatistics.status, 404);
+    assert.equal(foreignStatistics.body.statusCode, 404);
+    assert.equal(foreignStatistics.body.message, 'Coding statistics job not found');
+    const foreignJob = await request(`${other}/coding/job/${statisticsId}`);
+    assert.equal(foreignJob.status, 200);
+    assert.deepEqual(Object.keys(foreignJob.body), ['error']);
+    assert.match(foreignJob.body.error, /not found/);
     const ownerStatistics = await request(`${owner}${statisticsPath}`);
     assert.equal(ownerStatistics.status, 200);
     assert.deepEqual(ownerStatistics.body, completedStatistics);
