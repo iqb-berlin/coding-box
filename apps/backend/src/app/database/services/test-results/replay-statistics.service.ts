@@ -354,12 +354,12 @@ export class ReplayStatisticsService {
     unitId?: string,
     options?: { from?: string; to?: string; lastDays?: string }
   ): Promise<{
-      min: number;
-      max: number;
-      average: number;
-      distribution: Record<string, number>;
-      unitAverages?: Record<string, number>;
-    }> {
+    min: number;
+    max: number;
+    average: number;
+    distribution: Record<string, number>;
+    unitAverages?: Record<string, number>;
+  }> {
     try {
       const baseQuery = this.replayStatisticsRepository
         .createQueryBuilder('stats')
@@ -540,12 +540,12 @@ export class ReplayStatisticsService {
     workspaceId: number,
     options?: { from?: string; to?: string; lastDays?: string; limit?: string }
   ): Promise<{
-      successRate: number;
-      totalReplays: number;
-      successfulReplays: number;
-      failedReplays: number;
-      commonErrors: Array<{ message: string; count: number }>;
-    }> {
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
     try {
       const overallQb = this.replayStatisticsRepository
         .createQueryBuilder('stats')

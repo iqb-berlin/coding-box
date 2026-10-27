@@ -404,12 +404,12 @@ export class WsgCodingJobController {
                    @Query('includeIssueSummary') includeIssueSummary: string | undefined,
                    @Req() req: Request
   ): Promise<{
-      data: CodingJobDto[];
-      total: number;
-      totalOpenUnits: number;
-      page: number;
-      limit?: number;
-    }> {
+    data: CodingJobDto[];
+    total: number;
+    totalOpenUnits: number;
+    page: number;
+    limit?: number;
+  }> {
     let assignedToUserId: number | undefined;
     if (assignedTo) {
       if (assignedTo !== 'me') {
@@ -1490,23 +1490,23 @@ export class WsgCodingJobController {
     @Req() req: Request,
     @Query('onlyOpen') onlyOpen?: string
   ): Promise<
-      Array<{
-        responseId: number;
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        variableAnchor: string;
-        variablePage: string;
-        bookletName: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        variableBundleId: number | null;
-        bundleContext: unknown | null;
-        isDoubleCoded: boolean;
-        otherCoders: string[];
-      }>
-    > {
+    Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      variablePage: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      variableBundleId: number | null;
+      bundleContext: unknown | null;
+      isDoubleCoded: boolean;
+      otherCoders: string[];
+    }>
+  > {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');

@@ -55,7 +55,7 @@ import Persons from '../../entities/persons.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import {
   CODING_PROCESS_CACHE_INVALIDATOR,
@@ -69,7 +69,7 @@ import { ResponseDeletionAuditContext, WorkspaceResponseValidationService } from
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 import {
   isExcludedByResolvedExclusions,
@@ -1600,11 +1600,11 @@ ${bookletRefs}
     reason: unknown,
     details?: string[]
   ): {
-      failed: true;
-      filename: string;
-      reason: string;
-      details?: string[];
-    } {
+    failed: true;
+    filename: string;
+    reason: string;
+    details?: string[];
+  } {
     return {
       failed: true,
       filename,
@@ -2811,11 +2811,11 @@ ${bookletRefs}
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.workspaceResponseValidationService.validateResponseStatus(
       workspaceId,
       page,
@@ -2830,12 +2830,12 @@ ${bookletRefs}
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-      summary: VariableValidationSummaryDto;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+    summary: VariableValidationSummaryDto;
+  }> {
     return this.workspaceResponseValidationService.validateVariables(
       workspaceId,
       page,
@@ -2850,11 +2850,11 @@ ${bookletRefs}
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.workspaceResponseValidationService.validateVariableTypes(
       workspaceId,
       page,
@@ -2869,14 +2869,14 @@ ${bookletRefs}
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      testTakersFound: boolean;
-      groupsWithResponses: { group: string; hasResponse: boolean }[];
-      allGroupsHaveResponses: boolean;
-      total: number;
-      totalGroupsWithoutResponses: number;
-      page: number;
-      limit: number;
-    }> {
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+    total: number;
+    totalGroupsWithoutResponses: number;
+    page: number;
+    limit: number;
+  }> {
     try {
       if (onProgress) onProgress(10);
       if (!workspaceId) {
@@ -4332,13 +4332,13 @@ ${bookletRefs}
   private extractVariableMetadata(
     variable: ParsedVariableElement
   ): Pick<
-      VariableDetailDto,
+    VariableDetailDto,
     | 'multiple'
     | 'nullable'
     | 'values'
     | 'valuesComplete'
     | 'valuePositionLabels'
-    > {
+  > {
     return {
       multiple: this.parseOptionalBoolean(variable.$?.multiple),
       nullable: this.parseOptionalBoolean(variable.$?.nullable),

@@ -339,9 +339,9 @@ export class TagDialogComponent implements OnInit {
     }
 
     // Convert the color to RGB
-    let r = 0;
-    let g = 0;
-    let b = 0;
+    let r: number;
+    let g: number;
+    let b: number;
 
     // Handle hex colors
     if (backgroundColor.startsWith('#')) {

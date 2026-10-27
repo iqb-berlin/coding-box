@@ -237,25 +237,25 @@ export class JobQueueService {
     blockedBy: string;
     label: string;
   }> = [
-      { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
-      { target: 'test-results-upload', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'test-results-upload', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'test-results-upload', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'test-person-coding', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'validation-task', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'validation-task', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'validation-task', blockedBy: 'reset-coding-version', label: 'reset coding version' },
-      { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'reset-coding-version', blockedBy: 'external-coding-import', label: 'external coding import' },
-      { target: 'external-coding-import', blockedBy: 'test-person-coding', label: 'auto-coding' },
-      { target: 'external-coding-import', blockedBy: 'test-results-upload', label: 'test results upload' },
-      { target: 'external-coding-import', blockedBy: 'reset-coding-version', label: 'reset coding version' }
-    ];
+    { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
+    { target: 'test-results-upload', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'test-results-upload', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+    { target: 'test-results-upload', blockedBy: 'external-coding-import', label: 'external coding import' },
+    { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
+    { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+    { target: 'test-person-coding', blockedBy: 'external-coding-import', label: 'external coding import' },
+    { target: 'validation-task', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'validation-task', blockedBy: 'test-results-upload', label: 'test results upload' },
+    { target: 'validation-task', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+    { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
+    { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'reset-coding-version', blockedBy: 'external-coding-import', label: 'external coding import' },
+    { target: 'external-coding-import', blockedBy: 'test-person-coding', label: 'auto-coding' },
+    { target: 'external-coding-import', blockedBy: 'test-results-upload', label: 'test results upload' },
+    { target: 'external-coding-import', blockedBy: 'reset-coding-version', label: 'reset coding version' }
+  ];
 
   constructor(
     @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
