@@ -5,6 +5,8 @@ import {
   IsArray,
   IsBoolean,
   IsNumber,
+  IsInt,
+  ArrayUnique,
   IsString,
   IsNotEmpty,
   MaxLength,
@@ -92,7 +94,9 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsArray()
-  @IsNumber({}, { each: true })
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Max(2147483647, { each: true })
   @Min(1, { each: true })
   @Type(() => Number)
   @IsOptional()
@@ -114,8 +118,9 @@ export class CreateJobDefinitionDto {
     example: 1,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(0)
+  @Max(2147483647)
   @Type(() => Number)
   @IsOptional()
   missingsProfileId?: number;
@@ -125,7 +130,7 @@ export class CreateJobDefinitionDto {
     example: 300,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(1)
   @Type(() => Number)
   @IsOptional()
@@ -137,7 +142,7 @@ export class CreateJobDefinitionDto {
     required: false,
     nullable: true
   })
-  @IsNumber()
+  @IsInt()
   @Min(1)
   @Type(() => Number)
   @IsOptional()
@@ -148,7 +153,7 @@ export class CreateJobDefinitionDto {
     example: 10,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Type(() => Number)
   @IsOptional()

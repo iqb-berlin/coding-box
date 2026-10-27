@@ -20,7 +20,7 @@ describePostgres('Workspace settings with PostgreSQL', () => {
       password: process.env.POSTGRES_PASSWORD || 'root-password',
       database: process.env.POSTGRES_DB || 'coding-box',
       schema,
-      entities: [Setting, JournalEntry],
+      entities: [`${__dirname}/../database/entities/*.entity.ts`],
       synchronize: false,
       extra: { max: 2, connectionTimeoutMillis: 2000 }
     });

@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsNumber } from 'class-validator';
+import {
+  ArrayUnique, IsArray, IsInt, Min, Max
+} from 'class-validator';
 
 /**
  * DTO for assigning coders to a coding job
@@ -11,6 +13,9 @@ export class AssignCodersDto {
     example: [1, 2, 3]
   })
   @IsArray()
-  @IsNumber({}, { each: true })
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(2147483647, { each: true })
   userIds: number[];
 }

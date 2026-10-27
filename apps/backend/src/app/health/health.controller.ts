@@ -1,6 +1,9 @@
-import { Controller, Get, Logger } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { JobQueueService, RedisConnectionStatus } from '../job-queue/job-queue.service';
+import {
+  Controller, Get, Logger, ServiceUnavailableException
+} from '@nestjs/common';
+import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import { RedisConnectionStatus } from '../job-queue/job-queue.service';
+import { ReadinessService, ReadinessStatus } from './readiness.service';
 
 export interface ApplicationHealthStatus {
   status: 'ok';
@@ -13,7 +16,16 @@ export interface ApplicationHealthStatus {
 export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
-  constructor(private readonly jobQueueService: JobQueueService) {}
+  constructor(private readonly readiness: ReadinessService) {}
+
+  @Get('ready')
+  @ApiOkResponse({ description: 'Database and Redis are reachable' })
+  @ApiServiceUnavailableResponse({ description: 'A required dependency is unavailable or timed out' })
+  async checkReadiness(): Promise<ReadinessStatus> {
+    const result = await this.readiness.check();
+    if (result.status !== 'ok') throw new ServiceUnavailableException(result);
+    return result;
+  }
 
   @Get()
   @ApiOkResponse({
@@ -49,6 +61,7 @@ export class HealthController {
    * @returns Redis connection status
    */
   @Get('redis')
+  @ApiServiceUnavailableResponse({ description: 'Redis is unavailable or timed out' })
   @ApiOkResponse({
     description: 'Redis connection status',
     type: Object,
@@ -118,6 +131,10 @@ export class HealthController {
   })
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
     this.logger.log('Health check: Checking Redis connection');
-    return this.jobQueueService.checkRedisConnection();
+    const result = await this.readiness.redisStatus();
+    if (!result.connected || result.details?.queueStatus?.isReady === false) {
+      throw new ServiceUnavailableException('Redis is unavailable');
+    }
+    return result;
   }
 }

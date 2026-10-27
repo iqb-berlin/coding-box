@@ -107,3 +107,30 @@ test('both backend CI gates exercise BullMQ against Redis without making failure
   assert.ok(tests.includes('--env BULLMQ_TEST_REDIS_HOST=bullmq-redis'));
   assert.ok(tests.includes('--env BULLMQ_TEST_REDIS_PORT=6379'));
 });
+
+test('the mandatory integration gate is uncached and gates backend images on every quality-gate pipeline', () => {
+  const require = createRequire(import.meta.url);
+  const yaml = require('js-yaml');
+  const schema = yaml.DEFAULT_SCHEMA.extend([new yaml.Type('!reference', { kind: 'sequence', construct: data => data })]);
+  const read = file => yaml.load(readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), { schema });
+  const branch = read('.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml');
+  const release = read('.gitlab-ci/Release-Pipelines.gitlab-ci.yml');
+  const gate = branch['test-backend-integration'];
+  assert.equal(gate.allow_failure, false);
+  assert.deepEqual(gate.rules, branch['test-backend'].rules);
+  assert.ok(gate.services.some(service => service.alias === 'integration-postgres'));
+  assert.ok(gate.services.some(service => service.alias === 'integration-redis'));
+  assert.ok(gate.variables.BACKEND_INTEGRATION_TEST_DATABASE_URL);
+  assert.ok(gate.script.includes('npx nx run backend:test-integration'));
+  for (const configuration of [branch, release]) {
+    for (const [name, job] of Object.entries(configuration)) {
+      if (!Array.isArray(job.needs) || !job.needs.some(need => need.job === 'test-backend')) continue;
+      assert.ok(job.needs.some(need => need.job === 'test-backend-integration' && !need.optional), name);
+    }
+  }
+  const project = JSON.parse(readFileSync(new URL('../../apps/backend/project.json', import.meta.url), 'utf8'));
+  assert.equal(project.targets['test-integration'].cache, false);
+  for (const variable of ['POSTGRES_INTEGRATION_TESTS', 'WORKSPACE_DELETION_TEST_DATABASE_URL', 'POSTGRES_DB', 'REDIS_HOST', 'REDIS_PORT', 'REDIS_PREFIX']) {
+    assert.ok(project.targets.test.inputs.some(input => input.env === variable));
+  }
+});
