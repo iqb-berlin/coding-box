@@ -820,8 +820,8 @@ describe('real Keycloak coding session', () => {
       let releaseRegex: (() => void) | undefined;
       let releaseConfig: (() => void) | undefined;
       const allowed = role.isAdmin || role.accessLevel >= 3;
-      // Missing membership is 403; insufficient access levels retain the legacy 401.
-      const deniedStatus = !role.isAdmin && role.accessLevel === 0 ? 403 : 401;
+      // A valid identity without the required workspace permissions receives 403.
+      const deniedStatus = 403;
       const api = (method: 'GET' | 'POST' | 'PUT', route: string, body?: Record<string, unknown>) => (
         cy.then(() => cy.request({
           method, url: `${setup.apiUrl}/api${route}`,
