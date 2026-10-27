@@ -146,25 +146,25 @@ export class CodingJobService {
     assignedToUserId?: number,
     filters: CodingJobListFilters = {}
   ): Promise<{
-      data: (CodingJob & {
-        assignedCoders?: number[];
-        assignedVariables?: { unitName: string; variableId: string }[];
-        assignedVariableBundles?: {
-          name: string;
-          variables: { unitName: string; variableId: string }[];
-        }[];
-        progress?: number;
-        codedUnits?: number;
-        totalUnits?: number;
-        openUnits?: number;
-        hasIssues?: boolean;
-        issueSummary?: CodingJobIssueSummary;
-      })[];
-      total: number;
-      totalOpenUnits?: number;
-      page: number;
-      limit?: number;
-    }> {
+    data: (CodingJob & {
+      assignedCoders?: number[];
+      assignedVariables?: { unitName: string; variableId: string }[];
+      assignedVariableBundles?: {
+        name: string;
+        variables: { unitName: string; variableId: string }[];
+      }[];
+      progress?: number;
+      codedUnits?: number;
+      totalUnits?: number;
+      openUnits?: number;
+      hasIssues?: boolean;
+      issueSummary?: CodingJobIssueSummary;
+    })[];
+    total: number;
+    totalOpenUnits?: number;
+    page: number;
+    limit?: number;
+  }> {
     return this.query.getCodingJobs(workspaceId, page, limit, assignedToUserId, filters);
   }
 
@@ -172,11 +172,11 @@ export class CodingJobService {
     id: number,
     workspaceId?: number
   ): Promise<{
-      codingJob: CodingJob & { durationSeconds?: number };
-      assignedCoders: number[];
-      variables: { unitName: string; variableId: string }[];
-      variableBundles: VariableBundle[];
-    }> {
+    codingJob: CodingJob & { durationSeconds?: number };
+    assignedCoders: number[];
+    variables: { unitName: string; variableId: string }[];
+    variableBundles: VariableBundle[];
+  }> {
     return this.query.getCodingJob(id, workspaceId);
   }
 
@@ -448,10 +448,10 @@ export class CodingJobService {
     responses: SlimResponse[],
     flags: ResponseMatchingFlag[]
   ): {
-      normalizedValue: string;
-      responses: SlimResponse[];
-      totalResponses: number;
-    }[] {
+    normalizedValue: string;
+    responses: SlimResponse[];
+    totalResponses: number;
+  }[] {
     return this.aggregation.aggregateResponsesByValue(responses, flags);
   }
 
@@ -515,19 +515,19 @@ export class CodingJobService {
       distributionSeed?: string | number;
     }
   ): Promise<{
-      distribution: Record<string, Record<string, number>>;
-      distributionByCoderId: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
-      aggregationInfo: Record<
-        string,
-        { uniqueCases: number; totalResponses: number }
-      >;
-      matchingFlags: ResponseMatchingFlag[];
-      warnings: JobCreationWarning[];
-      pairDistribution: Record<string, number>;
-      tasksPerCoder: Record<string, number>;
-      coderWeights: Record<string, number>;
-    }> {
+    distribution: Record<string, Record<string, number>>;
+    distributionByCoderId: Record<string, Record<string, number>>;
+    doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
+    aggregationInfo: Record<
+      string,
+      { uniqueCases: number; totalResponses: number }
+    >;
+    matchingFlags: ResponseMatchingFlag[];
+    warnings: JobCreationWarning[];
+    pairDistribution: Record<string, number>;
+    tasksPerCoder: Record<string, number>;
+    coderWeights: Record<string, number>;
+  }> {
     return this.distribution.calculateDistribution(workspaceId, request);
   }
 
@@ -557,8 +557,8 @@ export class CodingJobService {
     codingJobIds: number[],
     workspaceId: number
   ): Promise<
-      Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
-    > {
+    Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
+  > {
     return this.replay.getBulkCodingProgress(codingJobIds, workspaceId);
   }
 

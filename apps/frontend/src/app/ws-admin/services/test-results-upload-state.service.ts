@@ -772,10 +772,10 @@ export class TestResultsUploadStateService {
     completedResults: TestResultsUploadResultDto[],
     hasMissingCompletedResult: boolean = false
   ): Observable<{
-      overview: TestResultsOverviewResponse | null;
-      loaded: boolean;
-      changed: boolean;
-    }> {
+    overview: TestResultsOverviewResponse | null;
+    loaded: boolean;
+    changed: boolean;
+  }> {
     const shouldWaitForOverviewChange =
       batch.resultType === 'responses' &&
       (

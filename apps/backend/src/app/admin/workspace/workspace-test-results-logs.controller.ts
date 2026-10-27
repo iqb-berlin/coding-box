@@ -62,8 +62,8 @@ export class WorkspaceTestResultsLogsController {
     @Param('workspace_id') workspace_id: number,
     @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<
-      { id: number; unitid: number; ts: string; key: string; parameter: string }[]
-    > {
+    { id: number; unitid: number; ts: string; key: string; parameter: string }[]
+  > {
     return this.workspaceTestResultsService.findUnitLogs(workspace_id, unitId);
   }
 

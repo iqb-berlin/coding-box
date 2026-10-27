@@ -22,7 +22,7 @@
             (selectionChange)="onCoderFilterChange()"
             >
             <mat-option [value]="null">Alle Kodierer</mat-option>
-            @for (coder of allCoders(); track coder) {
+            @for (coder of allCoders(); track coder.id) {
               <mat-option [value]="coder.id">
                 {{ coder.displayName || coder.name }}
               </mat-option>
@@ -61,7 +61,7 @@
                 >
                 <mat-option [value]="null">Alle Trainings</mat-option>
                 <mat-option value="none">Ohne Training</mat-option>
-                @for (training of coderTrainings(); track training) {
+                @for (training of coderTrainings(); track training.id) {
                   <mat-option
                     [value]="training.id"
                     >

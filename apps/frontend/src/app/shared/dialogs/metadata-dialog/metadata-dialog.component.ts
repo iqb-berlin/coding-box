@@ -120,27 +120,27 @@ export interface MetadataDialogData {
           <div class="item-info">
             <mat-form-field appearance="outline">
               <mat-label>Item-ID</mat-label>
-              <input matInput
+              <input matInput #itemIdInput
                      [value]="getSelectedItem()!.id"
                      [readonly]="!canEdit || !isEditing()"
-                     (input)="updateItemProperty('id', $any($event.target).value)">
+                     (input)="updateItemProperty('id', itemIdInput.value)">
             </mat-form-field>
 
             <mat-form-field appearance="outline">
               <mat-label>Variablen-ID</mat-label>
-              <input matInput
+              <input matInput #itemVariableInput
                      [value]="getSelectedItem()!.variableId"
                      [readonly]="!canEdit || !isEditing()"
-                     (input)="updateItemProperty('variableId', $any($event.target).value)">
+                     (input)="updateItemProperty('variableId', itemVariableInput.value)">
             </mat-form-field>
 
             <mat-form-field appearance="outline">
               <mat-label>Beschreibung</mat-label>
-              <textarea matInput
+              <textarea matInput #itemDescriptionInput
                         [value]="getSelectedItem()!.description"
                         [readonly]="!canEdit || !isEditing()"
                         rows="3"
-                        (input)="updateItemProperty('description', $any($event.target).value)"></textarea>
+                        (input)="updateItemProperty('description', itemDescriptionInput.value)"></textarea>
             </mat-form-field>
           </div>
         }
@@ -299,8 +299,6 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   private updateFormData(form: MetadataProfileFormElement): void {
     if (this.selectedView() === 'unit') {
       form.metadataValues = {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
         profiles: this.localMetadataValues()?.profiles || []
       };
       // Force reference change to trigger update if needed
@@ -312,8 +310,6 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
 
       if (selectedItem) {
         form.metadataValues = {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
           profiles: selectedItem.profiles || []
         };
         // Force reference change to trigger update if needed

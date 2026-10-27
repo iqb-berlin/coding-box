@@ -14,6 +14,7 @@ import { ManualCodingAggregationFacade } from './manual-coding-aggregation.facad
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingSummaryFacade } from './manual-coding-summary.facade';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
+import { DuplicateValueGroupDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { ManualCodingViewState } from './manual-coding-view-state.service';
 
 @Component({
@@ -119,6 +120,10 @@ export class ManualCodingPreparationViewComponent {
   }
 
   protected loadResponseAnalysis(): void { return this.analysis.loadResponseAnalysis(); }
+
+  protected duplicateGroupKey(group: DuplicateValueGroupDto): string {
+    return JSON.stringify([group.unitName, group.variableId, group.normalizedValue]);
+  }
 
   protected readonly responseAnalysis = this.analysis.responseAnalysis;
 

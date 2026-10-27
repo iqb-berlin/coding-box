@@ -110,6 +110,44 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
     expect(button('download-button').disabled).toBe(false);
   });
 
+  it('retains existing rows when a refresh returns new objects for the same combinations', async () => {
+    const row = fixture.nativeElement.querySelector('tbody tr');
+    fixture.componentInstance.changePageSize(100);
+    pageResponse.next({ ...page(1), pageSize: 100 });
+    pageResponse.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('tbody tr')).toBe(row);
+  });
+
+  it.each(['unit_alias', 'variable_page', 'variable_anchor', 'duplicate'] as const)(
+    'keeps validation rows distinct and stable for %s inputs', async dimension => {
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const first = page(1).results[0];
+      const second = {
+        ...first,
+        combination: { ...first.combination, ...(dimension === 'duplicate' ? {} : { [dimension]: 'other' }) }
+      };
+      fixture.componentInstance.changePageSize(100);
+      pageResponse.next({ ...page(1), results: [first, second] });
+      pageResponse.complete();
+      await fixture.whenStable();
+      const rows = Array.from(fixture.nativeElement.querySelectorAll('tbody tr'));
+      expect(rows).toHaveLength(2);
+
+      pageResponse = new Subject<ValidateCodingCompletenessResponseDto>();
+      fixture.componentInstance.changePageSize(200);
+      const refreshed = (dimension === 'duplicate' ? [first, second] : [second, first])
+        .map(result => ({ ...result, combination: { ...result.combination } }));
+      pageResponse.next({ ...page(1), results: refreshed });
+      pageResponse.complete();
+      await fixture.whenStable();
+      const refreshedRows = Array.from(fixture.nativeElement.querySelectorAll('tbody tr'));
+      expect(refreshedRows[0]).toBe(rows[dimension === 'duplicate' ? 0 : 1]);
+      expect(refreshedRows[1]).toBe(rows[dimension === 'duplicate' ? 1 : 0]);
+      expect(warning.mock.calls.flat().join(' ')).not.toContain('NG0955');
+    }
+  );
+
   it('clears loading after a page error and renders a successful retry', async () => {
     button('next-page').click();
     await idle();

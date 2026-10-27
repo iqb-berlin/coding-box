@@ -14,9 +14,9 @@ import { VariableAnalysisProcessor } from './processors/variable-analysis.proces
 import { ExternalCodingImportProcessor } from './processors/external-coding-import.processor';
 import { getEnabledProcessorNames } from './job-queue-processor-selection';
 import { AutocoderRunService } from './autocoder-run.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingModule } from '../coding/coding.module';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CacheClientModule } from '../cache/cache-client.module';
 import { ResponseEntity } from '../database/entities/response.entity';

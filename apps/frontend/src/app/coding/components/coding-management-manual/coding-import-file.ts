@@ -1,7 +1,7 @@
 import type { CodingImportDetectedFormat, CodingImportFormatDialogData } from './coding-import-format-dialog.component';
 
 export async function detectCodingImportFormat(file: File): Promise<CodingImportFormatDialogData> {
-  let headers: string[] = [];
+  let headers: string[];
   const fileName = file.name;
 
   try {
@@ -103,7 +103,7 @@ export function buildFormatDialogData(
 ): CodingImportFormatDialogData {
   const availableVersions = getAvailableCodingVersions(headers);
   const sharedDescription =
-        'Für Testfälle, die außerhalb der Kodierbox bereits mit Code und Score kodiert wurden.';
+    'Für Testfälle, die außerhalb der Kodierbox bereits mit Code und Score kodiert wurden.';
 
   if (detectedFormat === 'external-coding') {
     return {

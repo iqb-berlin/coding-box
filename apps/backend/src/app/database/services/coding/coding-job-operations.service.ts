@@ -231,28 +231,28 @@ export class CodingJobOperationsService {
     },
     actorUserId?: number
   ): Promise<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<
-        string,
-        {
-          totalCases: number;
-          doubleCodedCases: number;
-          singleCodedCasesAssigned: number;
-          doubleCodedCasesPerCoder: Record<string, number>;
-        }
-      >;
-      jobs: {
-        coderId: number;
-        coderName: string;
-        variable: { unitName: string; variableId: string };
-        jobId: number;
-        jobName: string;
-        caseCount: number;
-      }[];
-    }> {
+    success: boolean;
+    jobsCreated: number;
+    message: string;
+    distribution: Record<string, Record<string, number>>;
+    doubleCodingInfo: Record<
+      string,
+      {
+        totalCases: number;
+        doubleCodedCases: number;
+        singleCodedCasesAssigned: number;
+        doubleCodedCasesPerCoder: Record<string, number>;
+      }
+    >;
+    jobs: {
+      coderId: number;
+      coderName: string;
+      variable: { unitName: string; variableId: string };
+      jobId: number;
+      jobName: string;
+      caseCount: number;
+    }[];
+  }> {
     return this.codingJobService.createDistributedCodingJobs(
       workspaceId,
       request,

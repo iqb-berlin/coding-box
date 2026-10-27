@@ -114,14 +114,14 @@ export class ValidationService {
     page: number = 1,
     limit: number = 10
   ): Observable<{
-      testTakersFound: boolean;
-      groupsWithResponses: { group: string; hasResponse: boolean }[];
-      allGroupsHaveResponses: boolean;
-      total: number;
-      totalGroupsWithoutResponses: number;
-      page: number;
-      limit: number;
-    }> {
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+    total: number;
+    totalGroupsWithoutResponses: number;
+    page: number;
+    limit: number;
+  }> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());

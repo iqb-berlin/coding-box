@@ -334,7 +334,7 @@ export class CodingJobBulkCreationDialogComponent {
           continue;
         }
 
-        let jobName = '';
+        let jobName: string;
         let preview: JobPreview;
 
         if ('variables' in item) { // bundle
