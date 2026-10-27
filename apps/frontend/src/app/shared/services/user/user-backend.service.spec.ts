@@ -53,6 +53,17 @@ describe('UserBackendService', () => {
     });
   });
 
+  it.each([0, 403, 500])('preserves global directory failures with HTTP %s', status => {
+    const failed = jest.fn();
+    const received = jest.fn();
+    service.getUsersFull().subscribe({ next: received, error: failed });
+    const request = httpMock.expectOne(`${mockServerUrl}admin/users/full`);
+    if (status === 0) request.error(new ProgressEvent('error'));
+    else request.flush('Failed', { status, statusText: 'Failed' });
+    expect(failed).toHaveBeenCalledWith(expect.objectContaining({ status }));
+    expect(received).not.toHaveBeenCalled();
+  });
+
   describe('getUsersForWorkspaceSelection', () => {
     it('uses the study-manager directory for the selected workspace', () => {
       const users = [{ id: 7, username: 'coder' }];
@@ -66,12 +77,12 @@ describe('UserBackendService', () => {
     });
 
     it('does not fall back to the global directory when permission is denied', () => {
-      service.getUsersForWorkspaceSelection(3).subscribe(result => {
-        expect(result).toEqual([]);
-      });
+      const rejected = jest.fn();
+      service.getUsersForWorkspaceSelection(3).subscribe({ error: rejected });
 
       httpMock.expectOne(`${mockServerUrl}admin/users/directory/3`)
         .flush('Denied', { status: 401, statusText: 'Unauthorized' });
+      expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
       httpMock.expectNone(`${mockServerUrl}admin/users/full`);
     });
   });

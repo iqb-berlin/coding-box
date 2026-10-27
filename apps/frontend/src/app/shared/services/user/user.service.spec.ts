@@ -103,4 +103,12 @@ describe('UserService', () => {
       expect(received).toEqual([status === 200]);
     });
   });
+  it('propagates global directory failures instead of returning an empty list', () => {
+    const failed = jest.fn();
+    const received = jest.fn();
+    service.getUsersFull().subscribe({ next: received, error: failed });
+    httpMock.expectOne(`${mockServerUrl}admin/users/full`).flush('failed', { status: 500, statusText: 'Failed' });
+    expect(failed).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
+    expect(received).not.toHaveBeenCalled();
+  });
 });

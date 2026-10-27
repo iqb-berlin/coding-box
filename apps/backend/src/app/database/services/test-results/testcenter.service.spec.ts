@@ -1,9 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock, DeepMocked } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
-import { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { DataSource, Repository } from 'typeorm';
-import { of, throwError } from 'rxjs';
+import * as https from 'https';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { execFileSync } from 'child_process';
+import { AddressInfo } from 'net';
+import { from, of, throwError } from 'rxjs';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
 import { TestcenterService } from './testcenter.service';
@@ -141,11 +147,75 @@ describe('TestCenterService', () => {
   });
 
   afterEach(() => {
+    for (const [url, , config] of httpService.put.mock.calls) {
+      if (String(url).includes('iqb-testcenter')) expect(new URL(url).protocol).toBe('https:');
+      expect(config.httpsAgent.options.rejectUnauthorized).toBe(true);
+    }
+    for (const [url, config] of httpService.axiosRef.get.mock.calls) {
+      if (String(url).includes('iqb-testcenter')) expect(new URL(url).protocol).toBe('https:');
+      expect(config.httpsAgent.options.rejectUnauthorized).toBe(true);
+    }
     jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('rejects an untrusted Testcenter certificate and supports a trusted private CA', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'testcenter-tls-'));
+    let server: https.Server | undefined;
+    let agent: https.Agent | undefined;
+    let requests = 0;
+    try {
+      execFileSync('openssl', [
+        'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+        '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+        '-keyout', path.join(directory, 'key.pem'), '-out', path.join(directory, 'cert.pem')
+      ], { stdio: 'ignore' });
+      const cert = fs.readFileSync(path.join(directory, 'cert.pem'));
+      server = https.createServer({ key: fs.readFileSync(path.join(directory, 'key.pem')), cert }, (_req, res) => {
+        requests += 1;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ token: 'trusted-testcenter-token' }));
+      });
+      await new Promise<void>(resolve => {
+        server!.listen(0, '127.0.0.1', resolve);
+      });
+      httpService.put.mockImplementation((url, data, config) => {
+        agent = config.httpsAgent;
+        return from(axios.put(url, data, { ...config, proxy: false }));
+      });
+      const credentials = {
+        username: 'admin',
+        password: 'test-password',
+        server: '',
+        url: `https://127.0.0.1:${(server.address() as AddressInfo).port}`
+      };
+      await expect(service.authenticate(credentials)).rejects.toThrow(/self.signed certificate/i);
+      expect(requests).toBe(0);
+      expect(agent!.options.rejectUnauthorized).toBe(true);
+
+      agent!.options.ca = cert;
+      await expect(service.authenticate(credentials)).resolves.toEqual({ token: 'trusted-testcenter-token' });
+      expect(requests).toBe(1);
+
+      agent!.options.servername = 'different-testcenter.example';
+      await expect(service.authenticate(credentials)).rejects.toThrow(/does not match certificate/i);
+      expect(requests).toBe(1);
+    } finally {
+      if (agent) {
+        delete agent.options.ca;
+        delete agent.options.servername;
+        agent.destroy();
+      }
+      if (server) {
+        await new Promise<void>((resolve, reject) => {
+          server!.close(error => (error ? reject(error) : resolve()));
+        });
+      }
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   describe('Testcenter data import', () => {

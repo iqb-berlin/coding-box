@@ -16,6 +16,8 @@ import {
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { JobDistributionPreviewComponent } from './job-distribution-preview.component';
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
+import { JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
+import { JobBundleRow } from './job-bundle-selection.component';
 import { DistributionPreviewSummary } from './coding-workload';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -2175,6 +2177,39 @@ describe('CodingJobDefinitionDialogComponent', () => {
       true,
       undefined
     );
+  });
+
+  it('retains selection view references until their data, filters or selections change', () => {
+    createComponent();
+    const view = component as unknown as {
+      variableSelectionRows(): JobVariableRow[];
+      bundleSelectionRows(): JobBundleRow[];
+      variableSelectionFilters(): JobVariableFilters;
+      applyBundleFilter(): void;
+    };
+    const variables = view.variableSelectionRows();
+    const bundles = view.bundleSelectionRows();
+    const filters = view.variableSelectionFilters();
+    component.isLoading.set(true);
+    component.codingJobForm.controls.durationSeconds.setValue(60);
+    expect(view.variableSelectionRows()).toBe(variables);
+    expect(view.bundleSelectionRows()).toBe(bundles);
+    expect(view.variableSelectionFilters()).toBe(filters);
+
+    component.selectedVariables().select(component.variables()[0]);
+    expect(view.variableSelectionRows()[0].selected).toBe(true);
+    expect(view.variableSelectionRows()).not.toBe(variables);
+    component.selectedVariableBundles.select(component.variableBundles()[0]);
+    expect(view.bundleSelectionRows()[0].selected).toBe(true);
+    expect(view.bundleSelectionRows()).not.toBe(bundles);
+
+    component.bundleNameFilter.set('missing');
+    view.applyBundleFilter();
+    expect(view.bundleSelectionRows()).toEqual([]);
+    component.unitNameFilter.set('Unit 3');
+    component.applyAvailabilityFilter();
+    expect(view.variableSelectionFilters().unitName).toBe('Unit 3');
+    expect(view.variableSelectionRows().map(row => row.variable.unitName)).toEqual(['Unit 3']);
   });
 
   it('routes capacity changes through the owner and renders its shared workload snapshot', () => {

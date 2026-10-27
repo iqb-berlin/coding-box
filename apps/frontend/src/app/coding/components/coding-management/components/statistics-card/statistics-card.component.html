@@ -2,7 +2,7 @@
 <div class="statistics-placeholder">
   <div class="statistics-icon-container">
     <button mat-fab color="primary" (click)="onLoadStatistics()"
-      [matTooltip]="'coding-management.tooltips.load-statistics' | translate" class="statistics-load-button">
+      [matTooltip]="'coding-management.tooltips.load-statistics' | translate" class="statistics-load-button" [attr.aria-label]="'coding-management.tooltips.load-statistics' | translate">
       <mat-icon>analytics</mat-icon>
     </button>
     <p class="statistics-placeholder-text">{{ 'coding-management.descriptions.load-statistics' | translate }}</p>
@@ -37,7 +37,7 @@
         <button mat-icon-button
           (click)="isDownloadInProgress() ? onCancelDownloadResults() : onDownloadResults()"
           [matTooltip]="(isDownloadInProgress() ? 'coding-management.download-dialog.cancel-tooltip' : 'coding-management.download-dialog.download-tooltip') | translate"
-          [color]="isDownloadInProgress() ? 'warn' : 'primary'" class="download-results-button">
+          [color]="isDownloadInProgress() ? 'warn' : 'primary'" class="download-results-button" [attr.aria-label]="(isDownloadInProgress() ? 'coding-management.download-dialog.cancel-tooltip' : 'coding-management.download-dialog.download-tooltip') | translate">
           <mat-icon>{{ isDownloadInProgress() ? 'cancel' : 'download' }}</mat-icon>
         </button>
         @if (isDownloadInProgress()) {
@@ -53,7 +53,7 @@
       <div class="button-group">
         <button mat-icon-button (click)="onResetVersion()"
           [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate" color="primary"
-          class="reset-version-button" [disabled]="isLoading() || isDownloadInProgress() || resetProgress() !== null">
+          class="reset-version-button" [disabled]="isLoading() || isDownloadInProgress() || resetProgress() !== null" [attr.aria-label]="'coding-management.reset-dialog.reset-tooltip' | translate">
           <mat-icon>restart_alt</mat-icon>
         </button>
       </div>

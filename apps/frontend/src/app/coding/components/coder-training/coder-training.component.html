@@ -1,7 +1,7 @@
 <div class="coder-training-container">
   <div class="header">
     <h2 class="title">{{ getDialogTitle() }}</h2>
-    <button mat-icon-button (click)="onClose()" class="close-button">
+    <button mat-icon-button (click)="onClose()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
       <mat-icon>close</mat-icon>
     </button>
   </div>
@@ -96,7 +96,7 @@
       [coders]="coders()" [selected]="selectedCoders()" [editable]="canEditTraining"
       (coderToggled)="toggleCoderSelection($event)" (selectAll)="selectAllCoders()" (clearSelection)="deselectAllCoders()" />
 
-    <coding-box-training-sample-editor [form]="trainingForm" [view]="sampleEditorView" [editable]="canEditTraining"
+    <coding-box-training-sample-editor [form]="trainingForm" [view]="sampleEditorView()" [editable]="canEditTraining"
       [bundleFilterCtrl]="bundleFilterCtrl" [variableFilterCtrl]="variableFilterCtrl"
       [loadingBundles]="isLoadingBundles()" [loadingVariables]="isLoadingVariables()"
       (importRequested)="openImportDialog()" (bundlesChanged)="onBundleSelectionChange($event)"

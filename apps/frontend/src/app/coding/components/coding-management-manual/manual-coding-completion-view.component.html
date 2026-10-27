@@ -1,0 +1,259 @@
+@let appliedResultsOverviewValue = appliedResultsOverview();
+<div id="manual-completion">
+  @if (appliedResultsOverviewValue) {
+    <div class="applied-results-section">
+      <div class="statistics-card">
+        <h2 class="section-title section-title-with-action">
+          {{ 'applied-results-overview.title' | translate }}
+          <button
+            mat-icon-button
+            (click)="showAppliedResultsInfo.set(!showAppliedResultsInfo())"
+            [matTooltip]="
+              'coding-management-manual.applied-results.info-tooltip'
+                | translate
+            "
+            [attr.aria-label]="
+              'coding-management-manual.applied-results.info-tooltip'
+                | translate
+            "
+            class="section-info-button"
+          >
+            <mat-icon class="section-info-icon">info</mat-icon>
+          </button>
+        </h2>
+        @if (showAppliedResultsInfo()) {
+          <div class="info-alert applied-results-info">
+            <mat-icon class="info-alert-icon">auto_awesome</mat-icon>
+            <div class="info-alert-content">
+              <strong>{{
+                'coding-management-manual.applied-results.info-total-title'
+                  | translate
+              }}</strong>
+              <span class="info-alert-text-spaced">{{
+                'coding-management-manual.applied-results.info-total-desc'
+                  | translate
+              }}</span>
+              <strong>{{
+                'coding-management-manual.applied-results.info-applied-title'
+                  | translate
+              }}</strong>
+              <span>{{
+                'coding-management-manual.applied-results.info-applied-desc'
+                  | translate
+              }}</span>
+            </div>
+          </div>
+        }
+        <div class="coverage-stats">
+          <div class="stat-item">
+            <span class="stat-label">{{
+              'applied-results-overview.coding-incomplete' | translate
+            }}</span>
+            <span class="stat-value">{{ effectiveCodingCases() }}</span>
+          </div>
+          @if (aggregationSavings() > 0) {
+            <div class="stat-item">
+              <span class="stat-label stat-label-success">
+                <mat-icon class="stat-label-inline-icon">layers</mat-icon>
+                {{ 'applied-results-overview.aggregation-savings' | translate }}
+              </span>
+              <span class="stat-value stat-value-success">{{
+                aggregationSavings()
+              }}</span>
+            </div>
+          }
+          <div class="stat-item">
+            <span class="stat-label">{{
+              'applied-results-overview.applied-results' | translate
+            }}</span>
+            <span class="stat-value covered">{{
+              appliedResultsOverviewValue.appliedResponses
+            }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">{{
+              'applied-results-overview.remaining' | translate
+            }}</span>
+            <span class="stat-value missing">{{
+              appliedResultsOverviewValue.remainingResponses
+            }}</span>
+          </div>
+          @if (hasDeriveErrorManualCases()) {
+            <div class="stat-item">
+              <span class="stat-label">{{
+                'applied-results-overview.derive-error-additional' | translate
+              }}</span>
+              <span class="stat-value">
+                {{
+                  'applied-results-overview.derive-error-progress'
+                    | translate
+                      : {
+                          applied: deriveErrorAppliedCases(),
+                          total: deriveErrorManualCases(),
+                          remaining: deriveErrorRemainingCases()
+                        }
+                }}
+              </span>
+            </div>
+          }
+          <div class="stat-item">
+            <span class="stat-label">{{
+              'applied-results-overview.completion-progress' | translate
+            }}</span>
+            <span class="stat-value percentage"
+              >{{
+                appliedResultsOverviewValue.completionPercentage
+                  | number: '1.1-1'
+              }}%</span
+            >
+          </div>
+        </div>
+        @if (appliedResultsOverviewValue.aggregationActive) {
+          <div class="aggregation-note">
+            <mat-icon>filter_alt</mat-icon>
+            <span>
+              {{
+                'coding-management-manual.coding-progress.aggregation-note'
+                  | translate
+                    : {
+                        rawCases:
+                          appliedResultsOverviewValue.rawTotalIncompleteResponses,
+                        effectiveCases:
+                          appliedResultsOverviewValue.totalIncompleteResponses,
+                        threshold:
+                          appliedResultsOverviewValue.aggregationThreshold,
+                        collapsedCases:
+                          appliedResultsOverviewValue.aggregatedDuplicateCases
+                      }
+              }}
+            </span>
+          </div>
+        }
+        <div class="coverage-bar">
+          <div
+            class="coverage-fill"
+            [style.width.%]="appliedResultsOverviewValue.completionPercentage"
+          ></div>
+        </div>
+        <div
+          class="completion-action-panel"
+          [class.is-complete]="isCompletionComplete()"
+          [class.has-ready-jobs]="hasCompletedJobsReadyForApply()"
+        >
+          <div class="completion-action-copy">
+            <mat-icon>{{ getCompletionActionIcon() }}</mat-icon>
+            <div>
+              <strong>{{ getCompletionActionTitle() }}</strong>
+              <span>{{ getCompletionActionDescription() }}</span>
+            </div>
+          </div>
+          <div class="completion-action-buttons">
+            @if (!hasCompletedJobsReadyForApply() && !isCompletionComplete()) {
+              <button
+                mat-stroked-button
+                color="primary"
+                type="button"
+                (click)="executionRequested.emit()"
+              >
+                <mat-icon>assignment</mat-icon>
+                Zu den Kodierjobs
+              </button>
+            }
+            @if (canShowCompletedJobApplyActions()) {
+              <button
+                mat-raised-button
+                color="accent"
+                type="button"
+                (click)="applyAllRequested.emit()"
+                [disabled]="
+                  !canApplyCompletedJobResults() ||
+                  isApplyingCodingResults() ||
+                  isLoadingCompletedJobsReadyForApply()
+                "
+              >
+                @if (!isApplyingCodingResults()) {
+                  <mat-icon>done_all</mat-icon>
+                }
+                @if (isApplyingCodingResults()) {
+                  <mat-spinner diameter="18"></mat-spinner>
+                }
+                Alle Ergebnisse anwenden
+              </button>
+            }
+          </div>
+        </div>
+        @if (hasCompletedJobsReadyForApply()) {
+          <div class="completed-jobs-apply-list">
+            @for (job of completedJobsReadyForApply(); track job) {
+              <div class="completed-job-apply-row">
+                <div class="completed-job-copy">
+                  <strong>{{ job.name }}</strong>
+                  <span>{{ getCodingJobResultSummary(job) }}</span>
+                  @if (job.hasIssues) {
+                    <span class="completed-job-review-note">
+                      Offene Hinweise bleiben zur manuellen Prüfung bestehen.
+                    </span>
+                  }
+                </div>
+                @if (canApplyCompletedJobResults()) {
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    (click)="jobApplyRequested.emit(job)"
+                    [disabled]="
+                      isApplyingCodingResults() || isApplyingJobResults(job.id)
+                    "
+                  >
+                    @if (!isApplyingJobResults(job.id)) {
+                      <mat-icon>input</mat-icon>
+                    }
+                    @if (isApplyingJobResults(job.id)) {
+                      <mat-spinner diameter="18"></mat-spinner>
+                    }
+                    Ergebnisse anwenden
+                  </button>
+                }
+                @if (!canApplyCompletedJobResults()) {
+                  <span class="completed-job-readonly-note">
+                    <mat-icon>lock</mat-icon>
+                    {{
+                      'coding-management-manual.completed-jobs.readonly-note'
+                        | translate
+                    }}
+                  </span>
+                }
+              </div>
+            }
+          </div>
+        }
+        @if (
+          hasCompletedJobsBlockedForReview() && !hasCompletedJobsReadyForApply()
+        ) {
+          <div class="completed-jobs-apply-list review-required-list">
+            @for (job of completedJobsBlockedForReview(); track job) {
+              <div class="completed-job-apply-row">
+                <div class="completed-job-copy">
+                  <strong>{{ job.name }}</strong>
+                  <span
+                    >Review erforderlich: unsichere Code-Vergabe oder neuer Code
+                    nötig.</span
+                  >
+                </div>
+                <button
+                  mat-stroked-button
+                  color="primary"
+                  type="button"
+                  (click)="executionRequested.emit()"
+                >
+                  <mat-icon>visibility</mat-icon>
+                  Zu den Kodierjobs
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>
