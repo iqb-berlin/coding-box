@@ -26,7 +26,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  debounceTime, finalize, Observable,
+  finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
 import { variableKey } from '../../utils/variable-key.util';
@@ -36,6 +36,7 @@ import { ManualCodingExecutionViewComponent } from './manual-coding-execution-vi
 import { ManualCodingCompletionViewComponent } from './manual-coding-completion-view.component';
 import { ManualCodingViewState } from './manual-coding-view-state.service';
 import { ManualCodingCompletionFacade } from './manual-coding-completion.facade';
+import { CodingJobsReloadScope, ManualCodingJobsRefreshFacade } from './manual-coding-jobs-refresh.facade';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CoderTraining } from '../../models/coder-training.model';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
@@ -118,9 +119,6 @@ import {
   ManualCodingExportDialogResult
 } from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 
-type ConcreteCodingJobsReloadScope = 'productive' | 'training';
-type CodingJobsReloadScope = 'active' | 'productive' | 'training' | 'rendered';
-
 interface ManualFreshnessJobSummary {
   activeTrainingJobs: number;
   openProductiveJobs: number;
@@ -134,7 +132,7 @@ interface ManualFreshnessJobSummary {
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
   standalone: true,
-  providers: [ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
+  providers: [ManualCodingJobsRefreshFacade, ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
   imports: [
     ManualCodingPreparationViewComponent,
     ManualCodingPlanningViewComponent,
@@ -179,6 +177,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly planningData = inject(ManualCodingPlanningFacade);
   private readonly exportScope = inject(ManualCodingExportScopeFacade);
   private readonly exports = inject(ManualCodingExportFacade);
+  private readonly jobsRefresh = inject(ManualCodingJobsRefreshFacade);
 
   readonly codingJobsComponent = viewChild<CodingJobsComponent>('productiveCodingJobs');
 
@@ -244,11 +243,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private get hasLoadedPlanningDataBundle(): boolean { return this.planningData.hasLoadedPlanningDataBundle; }
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
-
-  private readonly pendingCodingJobsReloadScopes =
-    new Set<ConcreteCodingJobsReloadScope>();
-
-  private pendingCodingJobsReloadTimer?: ReturnType<typeof setTimeout>;
 
   private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
     'preparation',
@@ -328,9 +322,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   protected readonly duplicatePageIndex = this.analysis.duplicatePageIndex;
   protected readonly duplicatePageSize = this.analysis.duplicatePageSize;
 
-  // Debouncing for job definition changes
-  private jobDefinitionChangeSubject = new Subject<CodingJobsReloadScope>();
-
   readonly codingProgressOverview = this.statistics.codingProgressOverview;
 
   readonly variableCoverageOverview = this.statistics.variableCoverageOverview;
@@ -408,6 +399,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     getUnavailableCasesForNewJobs: this.getUnavailableCasesForNewJobs()
   }));
 
+  constructor() {
+    this.jobsRefresh.connectViews({
+      activeTab: () => this.activeManualTab,
+      productive: () => this.getProductiveCodingJobsComponent(),
+      training: () => this.getTrainingCodingJobsComponent(),
+      coderTrainings: () => this.coderTrainingsListComponent()
+    });
+  }
+
   ngOnInit(): void {
     this.completion.resultsApplied$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refreshAfterApplyingCodingResults());
     this.aggregation.refreshRequested$.pipe(takeUntil(this.destroy$)).subscribe(request => {
@@ -460,8 +460,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodersForExport();
 
     // Set up debounced statistics refresh
-    this.jobDefinitionChangeSubject
-      .pipe(debounceTime(500), takeUntil(this.destroy$))
+    this.jobsRefresh.definitionChanges$
+      .pipe(takeUntil(this.destroy$))
       .subscribe(reloadScope => {
         this.invalidateCodingStatusCache();
         this.loadJobDefinitionsForExport();
@@ -522,14 +522,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.discardPendingPlanningDataBundle();
     this.cancelResponseAnalysisRequest();
     this.document.defaultView?.removeEventListener('focus', this.handleWindowFocus);
-    if (this.pendingCodingJobsReloadTimer) {
-      clearTimeout(this.pendingCodingJobsReloadTimer);
-      this.pendingCodingJobsReloadTimer = undefined;
-    }
     this.destroy$.next();
     this.destroy$.complete();
-
-    this.jobDefinitionChangeSubject.complete();
   }
 
   get activeManualTab(): ManualCodingTab {
@@ -941,7 +935,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
    * Uses debouncing to prevent excessive API calls
    */
   protected onJobDefinitionChanged(reloadScope: CodingJobsReloadScope = 'active'): void {
-    this.jobDefinitionChangeSubject.next(reloadScope);
+    this.jobsRefresh.definitionChanged(reloadScope);
   }
 
   /**
@@ -967,22 +961,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   reloadCodingJobsList(reloadScope: CodingJobsReloadScope = 'active'): void {
-    const concreteReloadScopes =
-      this.getConcreteCodingJobsReloadScopes(reloadScope);
-    concreteReloadScopes.forEach(scope => {
-      const component = this.getCodingJobsComponentForScope(scope);
-      if (component) {
-        component.loadCodingJobs();
-        this.pendingCodingJobsReloadScopes.delete(scope);
-      } else {
-        this.pendingCodingJobsReloadScopes.add(scope);
-      }
-    });
-    const coderTrainingsListComponent = this.coderTrainingsListComponent();
-    if (this.shouldReloadCoderTrainings(reloadScope) &&
-      coderTrainingsListComponent) {
-      coderTrainingsListComponent.loadCoderTrainings();
-    }
+    this.jobsRefresh.reload(reloadScope);
   }
 
   refreshManualCodingPlanning(): void {
@@ -1126,20 +1105,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private schedulePendingCodingJobsReloadForTab(tab: ManualCodingTab): void {
-    const hasPendingReloadForTab = this.getCodingJobsScopeForTab(tab)
-      .some(scope => this.pendingCodingJobsReloadScopes.has(scope));
-    if (!hasPendingReloadForTab) {
-      return;
-    }
-
-    if (this.pendingCodingJobsReloadTimer) {
-      clearTimeout(this.pendingCodingJobsReloadTimer);
-    }
-
-    this.pendingCodingJobsReloadTimer = setTimeout(() => {
-      this.pendingCodingJobsReloadTimer = undefined;
-      this.reloadPendingCodingJobsForTab(tab);
-    }, 0);
+    this.jobsRefresh.schedulePendingForTab(tab);
   }
 
   private getProductiveCodingJobsComponent(): CodingJobsComponent | undefined {
@@ -1156,65 +1122,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.getProductiveCodingJobsComponent();
   }
 
-  private getConcreteCodingJobsReloadScopes(
-    reloadScope: CodingJobsReloadScope
-  ): ConcreteCodingJobsReloadScope[] {
-    switch (reloadScope) {
-      case 'productive':
-        return ['productive'];
-      case 'training':
-        return ['training'];
-      case 'rendered':
-        return ['productive', 'training'];
-      case 'active':
-      default:
-        return this.getCodingJobsScopeForTab(this.activeManualTab);
-    }
-  }
-
-  private getCodingJobsScopeForTab(
-    tab: ManualCodingTab
-  ): ConcreteCodingJobsReloadScope[] {
-    switch (tab) {
-      case 'execution':
-        return ['productive'];
-      case 'training':
-        return ['training'];
-      default:
-        return [];
-    }
-  }
-
-  private getCodingJobsComponentForScope(
-    reloadScope: ConcreteCodingJobsReloadScope
-  ): CodingJobsComponent | undefined {
-    return reloadScope === 'productive' ?
-      this.getProductiveCodingJobsComponent() :
-      this.getTrainingCodingJobsComponent();
-  }
-
-  private refreshCodingJobsAfterDataChange(
-    reloadScope: CodingJobsReloadScope
-  ): void {
-    this.getConcreteCodingJobsReloadScopes(reloadScope)
-      .forEach(scope => {
-        if (this.getCodingJobsScopeForTab(this.activeManualTab).includes(scope)) {
-          this.reloadCodingJobsList(scope);
-          return;
-        }
-        this.pendingCodingJobsReloadScopes.add(scope);
-      });
+  private refreshCodingJobsAfterDataChange(reloadScope: CodingJobsReloadScope): void {
+    this.jobsRefresh.refreshAfterDataChange(reloadScope);
   }
 
   private reloadPendingCodingJobsForTab(tab: ManualCodingTab): void {
-    this.getCodingJobsScopeForTab(tab)
-      .filter(scope => this.pendingCodingJobsReloadScopes.has(scope))
-      .forEach(scope => this.reloadCodingJobsList(scope));
-  }
-
-  private shouldReloadCoderTrainings(reloadScope: CodingJobsReloadScope): boolean {
-    return this.getConcreteCodingJobsReloadScopes(reloadScope)
-      .includes('training');
+    this.jobsRefresh.reloadPendingForTab(tab);
   }
 
   private shouldLoadManualTabWhileStatusChecksAreSuppressed(
