@@ -120,9 +120,9 @@ The table grants no rights to public routes. A workspace bearer is not an OIDC
 refresh token and cannot be substituted for one at `/api/auth/refresh`.
 
 Missing/wrong scopes, token type, signature or expiration and a different token
-workspace normally produce 401. Revoked workspace access or missing job permission
-produces 403; a missing job may return 404. The existing AccessLevelGuard still
-returns 401 for insufficient access level. Do not hide these distinctions by
+workspace normally produce 401. Missing or revoked workspace access, insufficient
+access level or missing job permission produces 403; a missing job may return 404.
+Do not hide these distinctions by
 indiscriminately requesting another login.
 
 ## Issuance and Use
