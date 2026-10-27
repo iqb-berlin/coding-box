@@ -151,6 +151,71 @@ Push abgebrochen und liefert keine vollständige Freigabe. Der anschließende
 lokale Gesamtlauf bestand 160/160 E2E-Fälle in 29 Specs ohne Retries,
 übersprungene Fälle oder Renderer-Absturz (6:50 Minuten).
 
+## Paket 2: Aktualisierungsablauf der manuellen Kodierung
+
+Aufbauend auf Paket 1, PR #1121 bei `82df61c97cc047f0ae9b8d1ef5fb0ef8caa0f741`,
+bündelt die komponentenlokale `ManualCodingRefreshWorkflowFacade` die Zulassung
+von Aktualisierungen: Fensterfokus mit 30-Sekunden-Drosselung, manuelles
+Nachladen, Hintergrundjob-Guards sowie vorgemerkte Statistik- und
+Freshness-Anforderungen. Wiederholte Anforderungen werden während eines Guards
+zusammengefasst; ein Force-Flag bleibt dabei erhalten. Beim Freigeben des Guards
+wird wie bisher der dann aktive Tab geladen, statt alle Statistiken pauschal
+nachzuladen. Auf Planung löst Fokus weiterhin keine Abfragen aus.
+
+Die Seite behält Tabnavigation, Berechtigungen, Anzeige, Dialoge,
+Refresh-Einstellung und tabbezogene Ladepolitik. Die Fassade erhält schmale
+Abfragen für aktuellen Tab, Ladeeinstellung und Definitionsansicht sowie den
+bestehenden Tab-Ladebefehl. Sie injiziert keine Elternkomponente. Statistik-,
+Planungs-, Export- und Joblistenfassaden behalten ihre Datenabfragen,
+Cache-/Snapshot-Regeln und ausstehenden Listen-Reloads. Öffentliche
+Komponenten-Einstiegspunkte und alle Defer-Grenzen bleiben erhalten.
+
+Vorgemerkte Statusanforderungen und die Fokusfrist gehören zur aktuellen
+Workspace-Instanz. Der erste Wechsel verwirft sie, auch bei A → B → A.
+Ansichtsende entfernt Fokuslistener und Guard-Abonnement und verwirft offene
+Anforderungen; laufende Serverjobs bleiben beim vorhandenen Hintergrundservice.
+Die Tests verwenden den echten Guard-Service, kontrollierte Zeitwerte und die
+bestehende native Zoneless-Konfiguration. Ein Host-Test prüft die fortgesetzte
+Anzeige mit `whenStable()` ohne manuelle Change Detection. Der zusätzliche
+Browserfall prüft sichtbare Fortschrittswerte, die 30-Sekunden-Grenze und das
+Ausbleiben zusätzlicher Joblistenabfragen.
+
+Die Basis von Paket 1 enthält #1120 bei `094bbcb2`. Spätere Korrekturen auf
+`fix/angular21-quality-followups` werden hier weder nachgebaut noch übernommen.
+Der Folge-PR wird auf `refactor/manual-coding-orchestration` gestapelt; die
+Integration dieser Abhängigkeiten bleibt separat.
+
+Lokale Prüfung am 27.10.2026 mit Node 22.14.0 über die lokale Nx-Installation,
+ausschließlich im verwalteten Worktree `manual-coding-refresh-workflow`:
+
+- Frontend-Lint ohne Warnungen bestanden.
+- Vollständiger Frontend-Testlauf mit `--runInBand --skipNxCache`: 309 Suites /
+  3.421 Tests bestanden, darunter 29 neue Fälle der Workflow-Fassade.
+- Produktionsbuild mit `--configuration=production --skipNxCache` bestanden:
+  initial 1,23 MB, manuelle Verwaltungsroute 512,12 kB. Job- und Schulungslisten
+  bleiben separate Lazy-Chunks. Die Hauptkomponente umfasst nun 1.810 statt
+  2.010 TypeScript-Zeilen; die Verantwortung bestimmt den Schnitt.
+- `frontend:zoneless-approval` nach Aktualisierung des Inventars und der
+  Risikoreferenzen bestanden. Dies ist keine vollständige Freigabe aller
+  Inventarszenarien und ersetzt keine entfernte CI.
+- `frontend:e2e --configuration=ci --browser=electron --port=4530
+  --spec=cypress/zoneless/manual-preparation.cy.ts --skipNxCache`: 25/25 Fälle
+  gegen den eigenen frischen Produktionsbuild bestanden, ohne Retries oder
+  übersprungene Fälle. API-Antworten verwenden Fixtures; Backend-Persistenz und
+  reale Systemverbindungen werden damit nicht geprüft.
+- `git diff --check` bestanden.
+
+Der Browser-Einstieg verwendet auch für den Inhaltscontainer den bestehenden
+Helfer zum Beenden endlicher Eintrittsanimationen. Der Definitionsfall wartet
+auf beide Antworten des manuellen Refreshs, bevor er das Zeilenmenü öffnet.
+Sichtbarkeitsprüfungen und reguläre Klicks bleiben erhalten. Der Fokusfall wartet
+auf die Vorbereitungsanalyse und prüft zusätzliche produktive Listenabrufe
+gegenüber dem abgeschlossenen Erstladen.
+
+SHA-256 des frischen Produktionsartefakts vor und nach dem Browserlauf
+(ohne den temporären SPA-Fallback `404.html`):
+`dc4fb1a7a017d5668302157e32d39900f4277414a6e1ccc08fe83f052ee1566e`.
+
 ## Bestandsaufnahme und weitere Schnitte
 
 Die Tabelle behält die ursprüngliche Priorisierung bei und zeigt die aktuellen
