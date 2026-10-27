@@ -1,7 +1,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsArray, IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min, ValidateNested
+  IsArray, IsBoolean, IsEnum, IsInt, Max, IsOptional, IsString, Min, ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -35,7 +35,8 @@ export class JobDefinitionVariableBundleDto {
     description: 'Bundle ID',
     example: 1
   })
-  @IsNumber()
+  @IsInt()
+  @Max(2147483647)
   @Min(1)
   @Type(() => Number)
   id: number;

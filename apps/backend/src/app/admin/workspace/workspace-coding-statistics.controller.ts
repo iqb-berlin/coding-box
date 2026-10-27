@@ -1,8 +1,8 @@
 import {
-  Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, Res
+  Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, NotFoundException, ParseEnumPipe, Res
 } from '@nestjs/common';
 import {
-  ApiOkResponse, ApiParam, ApiQuery, ApiTags
+  ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -45,6 +45,8 @@ type CodingStatisticsJobStatusResponse = {
   result?: CodingStatistics;
   error?: string;
 };
+
+const codingStatisticsVersions = { v1: 'v1', v2: 'v2', v3: 'v3' } as const;
 
 type DistributionDoubleCodingInfoResponse = {
   totalCases: number;
@@ -146,7 +148,7 @@ export class WorkspaceCodingStatisticsController {
   })
   async getCodingStatistics(
     @WorkspaceId() workspace_id: number,
-    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
+    @Query('version', new ParseEnumPipe(codingStatisticsVersions, { optional: true })) version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<CodingStatistics> {
     return this.codingStatisticsService.getCodingStatistics(
       workspace_id,
@@ -321,12 +323,13 @@ export class WorkspaceCodingStatisticsController {
   })
   async createCodingStatisticsJob(
     @WorkspaceId() workspace_id: number,
-    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
+    @Query('version', new ParseEnumPipe(codingStatisticsVersions, { optional: true })) version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     return this.codingStatisticsService.createCodingStatisticsJob(workspace_id, version);
   }
 
   @Get(':workspace_id/coding/statistics/job/:jobId')
+  @ApiNotFoundResponse({ description: 'Coding statistics job not found in this workspace' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -337,10 +340,10 @@ export class WorkspaceCodingStatisticsController {
   async getCodingStatisticsJobStatus(
     @WorkspaceId() workspaceId: number,
     @Param('jobId') jobId: string
-  ): Promise<CodingStatisticsJobStatusResponse | { error: string }> {
+  ): Promise<CodingStatisticsJobStatusResponse> {
     const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId, workspaceId);
     if (!status) {
-      return { error: `Coding statistics job with ID ${jobId} not found` };
+      throw new NotFoundException('Coding statistics job not found');
     }
     return status;
   }

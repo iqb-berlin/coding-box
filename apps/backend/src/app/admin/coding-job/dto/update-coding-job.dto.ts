@@ -6,6 +6,9 @@ import {
   ArrayUnique,
   IsIn,
   IsNumber,
+  IsInt,
+  Min,
+  Max,
   IsBoolean,
   ValidateNested
 } from 'class-validator';
@@ -47,6 +50,7 @@ export class UpdateCodingJobDto {
   status?: string;
 
   @ApiProperty({
+    items: { type: 'integer', minimum: 1, maximum: 2147483647 },
     description: 'IDs of coders assigned to the coding job',
     type: [Number],
     example: [1, 2, 3],
@@ -54,7 +58,9 @@ export class UpdateCodingJobDto {
   })
   @IsArray()
   @ArrayUnique()
-  @IsNumber({}, { each: true })
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(2147483647, { each: true })
   @IsOptional()
   assignedCoders?: number[];
 
@@ -70,13 +76,16 @@ export class UpdateCodingJobDto {
   variables?: VariableDto[];
 
   @ApiProperty({
+    items: { type: 'integer', minimum: 1, maximum: 2147483647 },
     description: 'IDs of variable bundles assigned to the coding job',
     type: [Number],
     example: [1, 2, 3],
     required: false
   })
   @IsArray()
-  @IsNumber({}, { each: true })
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(2147483647, { each: true })
   @IsOptional()
   variableBundleIds?: number[];
 
@@ -92,11 +101,16 @@ export class UpdateCodingJobDto {
   variableBundles?: SimpleVariableBundleDto[];
 
   @ApiProperty({
-    description: 'ID of the missings profile to assign to the coding job',
+    type: 'integer',
+    minimum: 0,
+    maximum: 2147483647,
+    description: 'ID of the missings profile; 0 selects the default profile',
     example: 1,
     required: false
   })
-  @IsNumber()
+  @IsInt()
+  @Min(0)
+  @Max(2147483647)
   @IsOptional()
   missingsProfileId?: number;
 
@@ -110,38 +124,57 @@ export class UpdateCodingJobDto {
   comment?: string;
 
   @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     description: 'Duration in seconds for one coding task',
     example: 300,
     required: false
   })
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
   @IsOptional()
   durationSeconds?: number;
 
   @ApiProperty({
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     description: 'Maximum number of coding cases for this job',
     example: 100,
     required: false
   })
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
   @IsOptional()
   maxCodingCases?: number;
 
   @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    maximum: 2147483647,
     description: 'Absolute number of cases that should be double coded',
     example: 10,
     required: false
   })
-  @IsNumber()
+  @IsInt()
+  @Min(0)
+  @Max(2147483647)
   @IsOptional()
   doubleCodingAbsolute?: number;
 
   @ApiProperty({
+    minimum: 0,
+    maximum: 100,
     description: 'Percentage (0-100) of cases that should be double coded',
     example: 25.5,
     required: false
   })
   @IsNumber()
+  @Min(0)
+  @Max(100)
   @IsOptional()
   doubleCodingPercentage?: number;
 

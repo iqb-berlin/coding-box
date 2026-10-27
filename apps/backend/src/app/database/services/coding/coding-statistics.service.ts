@@ -272,7 +272,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       return statistics;
     } catch (error) {
       this.logger.error(`Error getting coding statistics: ${getErrorMessage(error)}`);
-      return statistics;
+      throw error;
     }
   }
 
@@ -433,7 +433,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         `Error getting coding statistics job status: ${getErrorMessage(error)}`,
         getErrorStack(error)
       );
-      return null;
+      throw error;
     }
   }
 

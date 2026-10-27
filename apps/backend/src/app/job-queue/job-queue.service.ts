@@ -1330,6 +1330,11 @@ export class JobQueueService {
     );
   }
 
+  async pingRedis(): Promise<void> {
+    const client = await this.testPersonCodingQueue.getBackend().client;
+    await client.runCommand('ping', []);
+  }
+
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
     try {
       this.logger.log('Checking Redis connection status...');

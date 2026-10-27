@@ -75,6 +75,17 @@
         { "env": "BULLMQ_TEST_REDIS_HOST" },
         { "env": "BULLMQ_TEST_REDIS_PORT" },
         { "env": "KAPPA_QUERY_TEST_DATABASE_URL" },
+        { "env": "POSTGRES_INTEGRATION_TESTS" },
+        { "env": "POSTGRES_HOST" },
+        { "env": "POSTGRES_PORT" },
+        { "env": "POSTGRES_USER" },
+        { "env": "POSTGRES_PASSWORD" },
+        { "env": "POSTGRES_DB" },
+        { "env": "REDIS_HOST" },
+        { "env": "REDIS_PORT" },
+        { "env": "REDIS_PREFIX" },
+        { "env": "WORKSPACE_DELETION_TEST_DATABASE_URL" },
+        { "env": "PSQL_BIN" },
         { "env": "KAPPA_QUERY_BENCHMARK" },
         { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
       ],
@@ -143,6 +154,17 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/backend-hardening/verify-runtime.mjs"
+      }
+    },
+    "test-integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "commands": [
+          "node --test scripts/qa/run-backend-integration.test.mjs",
+          "node scripts/qa/run-backend-integration.mjs"
+        ],
+        "parallel": false
       }
     },
     "verify-bullmq-live": {
