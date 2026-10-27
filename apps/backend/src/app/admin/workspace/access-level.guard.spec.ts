@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { UsersService } from '../../database/services/users';
@@ -175,7 +175,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(1);
       const context = createMockExecutionContext(42, '123', 3);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
       await expect(guard.canActivate(context)).rejects.toThrow(
         'Access level 3 required. Current user has level 1'
       );
@@ -261,7 +261,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(null);
       const context = createMockExecutionContext(42, '123', 1);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
       await expect(guard.canActivate(context)).rejects.toThrow(
         'User does not have access to workspace 123'
       );
@@ -272,7 +272,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(null);
       const context = createMockExecutionContext(42, '456', 2);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
       await expect(guard.canActivate(context)).rejects.toThrow('workspace 456');
     });
   });
@@ -474,7 +474,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(-1);
       const context = createMockExecutionContext(42, '123', 1);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
 
     it('should handle very high user access level', async () => {
@@ -502,7 +502,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(0);
       const context = createMockExecutionContext(42, '123', 1);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -556,7 +556,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(1);
       const context = createMockExecutionContext(42, '123', 2);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
 
     it('should not allow level 2 user to access level 3 resources', async () => {
@@ -564,7 +564,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(2);
       const context = createMockExecutionContext(42, '123', 3);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
 
     it('should not allow level 3 user to access level 4 resources', async () => {
@@ -572,7 +572,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(3);
       const context = createMockExecutionContext(42, '123', 4);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
 
     it('should not cache access level between requests', async () => {
@@ -584,7 +584,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValueOnce(1);
 
       await guard.canActivate(context1);
-      await expect(guard.canActivate(context2)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context2)).rejects.toThrow(ForbiddenException);
 
       expect(usersService.getUserAccessLevel).toHaveBeenCalledTimes(2);
     });
@@ -641,7 +641,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(1);
       const context = createMockExecutionContext(42, '123', 3);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
       await expect(guard.canActivate(context)).rejects.toThrow('Access level 3 required. Current user has level 1');
     });
 
@@ -650,7 +650,7 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(null);
       const context = createMockExecutionContext(42, '789', 2);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
       await expect(guard.canActivate(context)).rejects.toThrow('User does not have access to workspace 789');
     });
 

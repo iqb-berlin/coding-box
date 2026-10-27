@@ -280,7 +280,7 @@ describe('Workspace token permissions over HTTP (#569)', () => {
 
   it('retains manager checks on general job updates without widening coding access', async () => {
     const signed = workspaceToken([C]);
-    expect((await request('PUT', jobPath, signed, { name: 'Synthetic rename' })).status).toBe(401);
+    expect((await request('PUT', jobPath, signed, { name: 'Synthetic rename' })).status).toBe(403);
     expect(jobs.updateCodingJob).not.toHaveBeenCalled();
     users.getUserAccessLevel.mockResolvedValue(2);
     assignmentRepository.count.mockResolvedValue(0);
@@ -335,7 +335,7 @@ describe('Workspace token permissions over HTTP (#569)', () => {
 
   it('rejects minting for another identity below workspace level 3', async () => {
     const path = '/admin/workspace/7/other-identity/token/1?scopes=replay:read';
-    expect((await request('GET', path, oidcToken())).status).toBe(401);
+    expect((await request('GET', path, oidcToken())).status).toBe(403);
     expect(journal.recordEvent).not.toHaveBeenCalled();
     users.getUserAccessLevel.mockResolvedValue(3);
     expect((await request('GET', path, oidcToken())).status).toBe(200);
