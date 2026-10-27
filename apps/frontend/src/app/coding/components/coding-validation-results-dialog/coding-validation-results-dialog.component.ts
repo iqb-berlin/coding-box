@@ -16,6 +16,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import {
   ValidateCodingCompletenessResponseDto
@@ -85,6 +86,14 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
       if (id !== this.workspaceId) this.dialogRef.close();
     });
+  }
+
+  protected validationResultKey(result: ValidationResultDto): string {
+    const combination = result.combination;
+    return JSON.stringify([
+      combination.unit_key, combination.login_name, combination.person_group ?? '',
+      combination.login_code, combination.booklet_id, combination.variable_id
+    ]);
   }
 
   protected nextPage(): void {
