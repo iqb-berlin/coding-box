@@ -184,7 +184,7 @@
         </div>
         @if (hasCompletedJobsReadyForApply()) {
           <div class="completed-jobs-apply-list">
-            @for (job of completedJobsReadyForApply(); track job) {
+            @for (job of completedJobsReadyForApply(); track job.id) {
               <div class="completed-job-apply-row">
                 <div class="completed-job-copy">
                   <strong>{{ job.name }}</strong>
@@ -231,7 +231,7 @@
           hasCompletedJobsBlockedForReview() && !hasCompletedJobsReadyForApply()
         ) {
           <div class="completed-jobs-apply-list review-required-list">
-            @for (job of completedJobsBlockedForReview(); track job) {
+            @for (job of completedJobsBlockedForReview(); track job.id) {
               <div class="completed-job-apply-row">
                 <div class="completed-job-copy">
                   <strong>{{ job.name }}</strong>

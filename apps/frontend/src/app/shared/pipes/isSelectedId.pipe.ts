@@ -5,8 +5,7 @@ import { Pipe, PipeTransform } from '@angular/core';
   standalone: true
 })
 export class IsSelectedIdPipe implements PipeTransform {
-  // eslint-disable-next-line class-methods-use-this,@typescript-eslint/no-explicit-any
-  transform(element: any, id: number): boolean {
+  transform(element: { id: number }, id: number): boolean {
     return element.id === id;
   }
 }

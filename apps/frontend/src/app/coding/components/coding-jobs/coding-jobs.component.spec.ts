@@ -23,6 +23,7 @@ describe('CodingJobsComponent', () => {
   let codingJobBackendServiceMock: Partial<CodingJobBackendService>;
   let codingTrainingBackendServiceMock: Partial<CodingTrainingBackendService>;
   let appServiceMock: Partial<AppService>;
+  let workspaceChanges: Subject<number>;
   let coderServiceMock: Partial<CoderService>;
   let matSnackBarMock: Partial<MatSnackBar>;
   let matDialogMock: Partial<MatDialog>;
@@ -63,6 +64,7 @@ describe('CodingJobsComponent', () => {
   ] as Coder[];
 
   beforeEach(async () => {
+    workspaceChanges = new Subject<number>();
     codingJobBackendServiceMock = {
       getCodingIncompleteVariables: jest.fn().mockReturnValue(of([])),
       getCodingJobs: jest.fn().mockReturnValue(
@@ -120,6 +122,7 @@ describe('CodingJobsComponent', () => {
 
     appServiceMock = {
       selectedWorkspaceId: 1,
+      selectedWorkspaceId$: workspaceChanges,
       authData: {
         userId: 1,
         isAdmin: false,
@@ -240,6 +243,152 @@ describe('CodingJobsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  const changeWorkspace = (id: number): void => {
+    appServiceMock.selectedWorkspaceId = id;
+    workspaceChanges.next(id);
+  };
+
+  it.each([false, true])('discards old job lists after a workspace change (round trip: %s)', roundTrip => {
+    const oldJobs = new Subject<{ data: Partial<CodingJob>[]; total: number }>();
+    const newJobs = [{ ...mockCodingJobs[1], name: 'Current workspace job' }];
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock)
+      .mockReturnValueOnce(oldJobs)
+      .mockReturnValue(of({ data: newJobs, total: 1 }));
+    component.loadCodingJobs();
+    component.selection.select(component.dataSource.data[0]);
+    component.selectedJobName.set('Old workspace filter');
+
+    changeWorkspace(2);
+    if (roundTrip) changeWorkspace(1);
+
+    expect(oldJobs.observed).toBe(false);
+    expect(component.selection.isEmpty()).toBe(true);
+    expect(component.selectedJobName()).toBeNull();
+    oldJobs.next({ data: mockCodingJobs, total: 2 });
+    oldJobs.error(new Error('Old workspace failure'));
+    expect(component.dataSource.data.map(job => job.name)).toEqual(['Current workspace job']);
+    expect(component.jobsTotal()).toBe(1);
+    expect(component.isLoading()).toBe(false);
+    expect(matSnackBarMock.open).not.toHaveBeenCalled();
+  });
+
+  it('clears visible workspace data while the next workspace is loading', () => {
+    const pending = new Subject<{ data: CodingJob[]; total: number }>();
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(pending);
+    changeWorkspace(2);
+    expect(component.dataSource.data).toEqual([]);
+    expect(component.originalData()).toEqual([]);
+    expect(component.jobsTotal()).toBe(0);
+    expect(component.hasLoadedJobs()).toBe(false);
+    expect(component.isLoading()).toBe(true);
+    pending.complete();
+  });
+
+  it('does not restore old rights or coder options after returning to the same workspace', () => {
+    const oldUsers = new Subject<{ id: number; accessLevel: number }[]>();
+    const oldCoders = new Subject<Coder[]>();
+    (userBackendServiceMock.getUsers as jest.Mock).mockReturnValueOnce(oldUsers).mockReturnValue(of([]));
+    (coderServiceMock.getCoders as jest.Mock).mockReturnValueOnce(oldCoders).mockReturnValue(of([]));
+    changeWorkspace(2);
+    changeWorkspace(1);
+    changeWorkspace(2);
+    expect(oldUsers.observed).toBe(false);
+    expect(oldCoders.observed).toBe(false);
+    oldUsers.next([{ id: 1, accessLevel: 3 }]);
+    oldCoders.next(mockCoders);
+    expect(component.canManageCodingJobs()).toBe(false);
+    expect(component.canApplyResults()).toBe(false);
+    expect(component.allCoders()).toEqual([]);
+  });
+
+  it.each(['delete', 'bulk-delete', 'bulk-apply', 'apply', 'restart', 'transfer'] as const)(
+    'cancels an open %s confirmation permanently when its workspace changes', action => {
+      const confirmation = new Subject<unknown>();
+      const close = jest.fn();
+      (matDialogMock.open as jest.Mock).mockReturnValue({ afterClosed: () => confirmation, close });
+      const job = { ...mockCodingJobs[0], status: 'completed', hasIssues: false } as CodingJob;
+      component.selection.select(job);
+      const actions = {
+        delete: () => component.deleteCodingJob(job),
+        'bulk-delete': () => component.bulkDeleteCodingJobs(),
+        'bulk-apply': () => component.bulkApplyCodingResults(),
+        apply: () => component.applyCodingResults(job),
+        restart: () => component.restartCodingJob(job),
+        transfer: () => component.openTransferCodingCasesDialog()
+      };
+      actions[action]();
+      expect(matDialogMock.open).toHaveBeenCalledTimes(1);
+      changeWorkspace(2);
+      changeWorkspace(1);
+      expect(close).toHaveBeenCalledTimes(1);
+      confirmation.next(action === 'transfer' ? { sourceCoderId: 1, targetCoderId: 2 } : { overwriteExisting: false });
+      for (const method of ['deleteCodingJob', 'deleteCodingJobs', 'bulkApplyCodingResults', 'applyCodingResults', 'restartCodingJobWithOpenUnits', 'transferCodingCases'] as const) {
+        expect(codingJobBackendServiceMock[method]).not.toHaveBeenCalled();
+      }
+      confirmation.complete();
+    }
+  );
+
+  it('does not open a creation dialog from variables returned for an old workspace', () => {
+    const variables = new Subject<never[]>();
+    (codingJobBackendServiceMock.getCodingIncompleteVariables as jest.Mock).mockReturnValue(variables);
+    component.createCodingJob();
+    changeWorkspace(2);
+    changeWorkspace(1);
+    expect(variables.observed).toBe(false);
+    variables.next([]);
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+  });
+
+  it('does not refresh the next workspace after an accepted deletion completes', () => {
+    const deletion = new Subject<{ success: boolean }>();
+    (codingJobBackendServiceMock.deleteCodingJob as jest.Mock).mockReturnValue(deletion);
+    (matDialogMock.open as jest.Mock).mockReturnValue({ afterClosed: () => of(true), close: jest.fn() });
+    const changed = jest.spyOn(component.jobsChanged, 'emit');
+    component.deleteCodingJob(mockCodingJobs[0] as CodingJob);
+    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledWith(1, 1);
+    changeWorkspace(2);
+    const reads = (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mock.calls.length;
+    expect(deletion.observed).toBe(false);
+    deletion.next({ success: true });
+    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(reads);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('settles a cancelled bulk deletion without clearing the next workspace selection', async () => {
+    const deletion = new Subject<{ success: boolean }>();
+    (codingJobBackendServiceMock.deleteCodingJobs as jest.Mock).mockReturnValue(deletion);
+    (matDialogMock.open as jest.Mock).mockReturnValue({ afterClosed: () => of(true), close: jest.fn() });
+    const changed = jest.spyOn(component.jobsChanged, 'emit');
+    component.selection.select(component.dataSource.data[0]);
+    component.bulkDeleteCodingJobs();
+    expect(codingJobBackendServiceMock.deleteCodingJobs).toHaveBeenCalledWith(1, [1]);
+    changeWorkspace(2);
+    const nextJob = component.dataSource.data[1];
+    component.selection.select(nextJob);
+    await fixture.whenStable();
+    expect(deletion.observed).toBe(false);
+    deletion.next({ success: true });
+    await fixture.whenStable();
+    expect(component.selection.selected).toEqual([nextJob]);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('drops a debounced filter from an earlier workspace generation', async () => {
+    jest.useFakeTimers();
+    try {
+      component.selectedJobName.set('Old filter');
+      component.onJobNameFilterChange();
+      changeWorkspace(2);
+      changeWorkspace(1);
+      const reads = (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mock.calls.length;
+      await jest.advanceTimersByTimeAsync(300);
+      expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(reads);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should load coding jobs and coders on init', () => {
@@ -519,10 +668,13 @@ describe('CodingJobsComponent', () => {
 
   it('should view coding results', () => {
     const job = mockCodingJobs[0] as CodingJob;
+    const closed = new Subject<{ resultsApplied: boolean }>();
+    const backdrop = new Subject<void>();
     const dialogRefSpyObj = {
-      afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true })),
-      backdropClick: jest.fn().mockReturnValue(of(undefined)),
+      afterClosed: jest.fn().mockReturnValue(closed),
+      backdropClick: jest.fn().mockReturnValue(backdrop),
       keydownEvents: jest.fn().mockReturnValue(of()),
+      close: jest.fn(),
       componentInstance: {
         closeDialog: jest.fn()
       }
@@ -531,6 +683,9 @@ describe('CodingJobsComponent', () => {
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
 
     component.viewCodingResults(job);
+    backdrop.next();
+    closed.next({ resultsApplied: true });
+    closed.complete();
 
     expect(matDialogMock.open).toHaveBeenCalledWith(
       expect.anything(),
@@ -541,6 +696,8 @@ describe('CodingJobsComponent', () => {
     );
     expect(loadSpy).toHaveBeenCalled();
     expect(dialogRefSpyObj.componentInstance.closeDialog).toHaveBeenCalled();
+    backdrop.next();
+    expect(dialogRefSpyObj.componentInstance.closeDialog).toHaveBeenCalledTimes(1);
   });
 
   it('should not delete if confirmation cancelled', () => {

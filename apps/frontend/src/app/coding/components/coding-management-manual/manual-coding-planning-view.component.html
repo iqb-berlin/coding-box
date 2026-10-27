@@ -190,7 +190,7 @@
                     <span class="conflict-label">Zugeordnet zu:</span>
                     @for (
                       def of conflict.conflictingDefinitions;
-                      track def;
+                      track def.id;
                       let last = $last
                     ) {
                       <span class="conflict-definition">

@@ -8,13 +8,13 @@
                   <mat-label>Suche</mat-label>
                   <mat-icon matPrefix>search</mat-icon>
                   <input
-                    matInput
-                    (keyup)="filterChanged.emit($any($event.target).value)"
+                    matInput #trainingFilterInput
+                    (keyup)="filterChanged.emit(trainingFilterInput.value)"
                     placeholder="Schulungen filtern..."
                     />
                 </mat-form-field>
               </div>
-              @for (training of filteredTrainings(); track training) {
+              @for (training of filteredTrainings(); track training.id) {
                 <mat-checkbox
                   class="training-checkbox"
                   [checked]="selectedTrainings().includes(training.id)"
@@ -50,7 +50,7 @@
                             >
                           }
                         </mat-select-trigger>
-                        @for (coder of betweenCoders(); track coder) {
+                        @for (coder of betweenCoders(); track coder.trainingId + ":" + coder.coderId) {
                           <mat-option
                             [value]="coder.trainingId + '_' + coder.coderId"
                             >
@@ -83,7 +83,7 @@
                         </span>
                       }
                     </mat-select-trigger>
-                    @for (training of trainings(); track training) {
+                    @for (training of trainings(); track training.id) {
                       <mat-option
                         [value]="training.id"
                         >
@@ -116,7 +116,7 @@
                               >
                             }
                           </mat-select-trigger>
-                          @for (coder of withinCoders(); track coder) {
+                          @for (coder of withinCoders(); track coder.jobId) {
                             <mat-option
                               [value]="coder.jobId"
                               >{{ coder.coderName }}</mat-option

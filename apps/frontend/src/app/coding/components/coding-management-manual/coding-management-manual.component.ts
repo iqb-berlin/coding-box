@@ -29,6 +29,7 @@ import {
   debounceTime, finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
+import { variableKey } from '../../utils/variable-key.util';
 import { ManualCodingPreparationViewComponent } from './manual-coding-preparation-view.component';
 import { ManualCodingPlanningViewComponent } from './manual-coding-planning-view.component';
 import { ManualCodingExecutionViewComponent } from './manual-coding-execution-view.component';
@@ -143,6 +144,7 @@ interface ManualFreshnessJobSummary {
     MatAnchor,
     CodingJobsComponent,
     CodingJobDefinitionsComponent,
+    CoderTrainingsListComponent,
     MatIcon,
     MatButton,
     MatIconButton,
@@ -152,7 +154,6 @@ interface ManualFreshnessJobSummary {
     MatTooltipModule,
     VariableBundleManagerComponent,
     CoderTrainingComponent,
-    CoderTrainingsListComponent,
     CommonModule,
     FormsModule,
     MatCheckboxModule,
@@ -163,6 +164,8 @@ interface ManualFreshnessJobSummary {
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
+  protected readonly variableKey = variableKey;
+
   private readonly destroy$ = new Subject<void>();
   private readonly destroyRef = inject(DestroyRef);
   private readonly importFacade = inject(ManualCodingImportFacade);
@@ -177,15 +180,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly exportScope = inject(ManualCodingExportScopeFacade);
   private readonly exports = inject(ManualCodingExportFacade);
 
-  readonly codingJobsComponent = viewChild(CodingJobsComponent);
+  readonly codingJobsComponent = viewChild<CodingJobsComponent>('productiveCodingJobs');
 
   readonly productiveCodingJobsComponent = viewChild<CodingJobsComponent>('productiveCodingJobs');
 
   readonly trainingCodingJobsComponent = viewChild<CodingJobsComponent>('trainingCodingJobs');
 
-  readonly codingJobDefinitionsComponent = viewChild(CodingJobDefinitionsComponent);
+  readonly codingJobDefinitionsComponent = viewChild<CodingJobDefinitionsComponent>('jobDefinitions');
 
-  readonly coderTrainingsListComponent = viewChild(CoderTrainingsListComponent);
+  readonly coderTrainingsListComponent = viewChild<CoderTrainingsListComponent>('coderTrainings');
 
   private testPersonCodingService = inject(TestPersonCodingService);
 
@@ -562,20 +565,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected getManualTabLabel(tab: ManualCodingTab): string {
-    switch (tab) {
-      case 'preparation':
-        return 'Vorbereitung';
-      case 'planning':
-        return 'Planung';
-      case 'training':
-        return 'Schulung';
-      case 'execution':
-        return 'Durchführung';
-      case 'completion':
-        return 'Abschluss';
-      default:
-        return '';
-    }
+    return this.translateService.instant(`manual-tabs.${tab}`);
   }
 
   protected isManualTab(tab: ManualCodingTab): boolean {

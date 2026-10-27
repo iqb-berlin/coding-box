@@ -1,19 +1,21 @@
 import { Routes } from '@angular/router';
+import { pageTitle } from '../core/page-title.resolver';
 import { canActivateAdmin } from '../core/guards/admin.guard';
 
 export const sysAdminRoutes: Routes = [
   {
     path: 'admin',
+    title: pageTitle('admin'),
     canActivate: [canActivateAdmin],
     loadComponent: () => import('./components/admin/admin.component').then(m => m.AdminComponent),
     children: [
       { path: '', redirectTo: 'users', pathMatch: 'full' },
-      { path: 'users', loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) },
-      { path: 'settings', loadComponent: () => import('./components/sys-admin-settings/sys-admin-settings.component').then(m => m.SysAdminSettingsComponent) },
-      { path: 'notifications', loadComponent: () => import('./components/system-notifications/system-notifications.component').then(m => m.SystemNotificationsComponent) },
-      { path: 'workspaces', loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
-      { path: 'workspace/:ws', loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
-      { path: '**', loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) }
+      { path: 'users', title: pageTitle('users'), loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) },
+      { path: 'settings', title: pageTitle('settings'), loadComponent: () => import('./components/sys-admin-settings/sys-admin-settings.component').then(m => m.SysAdminSettingsComponent) },
+      { path: 'notifications', title: pageTitle('notifications'), loadComponent: () => import('./components/system-notifications/system-notifications.component').then(m => m.SystemNotificationsComponent) },
+      { path: 'workspaces', title: pageTitle('workspaces'), loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
+      { path: 'workspace/:ws', title: pageTitle('workspaces'), loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
+      { path: '**', title: pageTitle('users'), loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) }
     ]
   }
 ];

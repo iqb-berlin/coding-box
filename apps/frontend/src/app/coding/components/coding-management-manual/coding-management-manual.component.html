@@ -114,7 +114,7 @@
             <div class="manual-code-availability-list">
               @for (
                 warning of getVisibleManualCodeAvailabilityWarnings();
-                track warning
+                track variableKey(warning)
               ) {
                 <span class="manual-code-availability-chip">
                   {{ warning.unitName }} / {{ warning.variableId }}
@@ -160,7 +160,7 @@
               manualCodingFreshnessExplanationText
             }}</span>
             <div class="manual-freshness-chip-row">
-              @for (item of codingFreshnessWarnings; track item) {
+              @for (item of codingFreshnessWarnings; track item.version) {
                 <span class="manual-freshness-chip">
                   {{ getManualFreshnessChipLabel(item) }}
                 </span>
@@ -297,10 +297,17 @@
               </div>
             }
             @if (shouldRenderManualTabData('planning')) {
-              <coding-box-coding-job-definitions
-                (bulkCreationCompleted)="reloadCodingJobsList('productive')"
-                (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
-              ></coding-box-coding-job-definitions>
+              @defer (on immediate) {
+                <coding-box-coding-job-definitions
+                  #jobDefinitions
+                  (bulkCreationCompleted)="reloadCodingJobsList('productive')"
+                  (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
+                ></coding-box-coding-job-definitions>
+              } @loading (after 100ms) {
+                <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+              } @error {
+                <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+              }
             }
           </div>
         }
@@ -425,17 +432,23 @@
               </div>
             }
             @if (shouldRenderManualTabData('execution')) {
-              <coding-box-coding-jobs
-                #productiveCodingJobs
-                [jobScope]="'productive'"
-                [showTrainingFilter]="false"
-                [showComparisonActions]="false"
-                [showTransferAction]="false"
-                [showApplyActions]="false"
-                [showRefreshAction]="shouldShowManualRefreshButton()"
-                [autoReloadOnFocus]="false"
-                (jobsChanged)="onJobDefinitionChanged('productive')"
-              ></coding-box-coding-jobs>
+              @defer (on immediate) {
+                <coding-box-coding-jobs
+                  #productiveCodingJobs
+                  [jobScope]="'productive'"
+                  [showTrainingFilter]="false"
+                  [showComparisonActions]="false"
+                  [showTransferAction]="false"
+                  [showApplyActions]="false"
+                  [showRefreshAction]="shouldShowManualRefreshButton()"
+                  [autoReloadOnFocus]="false"
+                  (jobsChanged)="onJobDefinitionChanged('productive')"
+                ></coding-box-coding-jobs>
+              } @loading (after 100ms) {
+                <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+              } @error {
+                <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+              }
             }
           </div>
         }
@@ -707,28 +720,41 @@
               </div>
             }
             @if (shouldRenderManualTabData('training')) {
-              <coding-box-coder-trainings-list
-                [showCreateButton]="false"
-                [workspaceId]="workspaceId"
-                (trainingCreationRequested)="openCoderTraining()"
-                (trainingEditRequested)="openTrainingEdit($event)"
-              >
-              </coding-box-coder-trainings-list>
+              @defer (on immediate) {
+                <coding-box-coder-trainings-list
+                  #coderTrainings
+                  [showCreateButton]="false"
+                  [workspaceId]="workspaceId"
+                  (trainingCreationRequested)="openCoderTraining()"
+                  (trainingEditRequested)="openTrainingEdit($event)"
+                >
+                </coding-box-coder-trainings-list>
+              } @loading (after 100ms) {
+                <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+              } @error {
+                <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+              }
             }
             <div class="coding-jobs-container manual-section-block">
               <h3 class="manual-section-title">Kodierjobs</h3>
               @if (shouldRenderManualTabData('training')) {
-                <coding-box-coding-jobs
-                  #trainingCodingJobs
-                  [jobScope]="'training'"
-                  [showTrainingFilter]="true"
-                  [showComparisonActions]="false"
-                  [showTransferAction]="false"
-                  [showApplyActions]="false"
-                  [showRefreshAction]="shouldShowManualRefreshButton()"
-                  [autoReloadOnFocus]="false"
-                  (jobsChanged)="onJobDefinitionChanged('training')"
-                ></coding-box-coding-jobs>
+                @defer (on immediate) {
+                  <coding-box-coding-jobs
+                    #trainingCodingJobs
+                    [jobScope]="'training'"
+                    [showTrainingFilter]="true"
+                    [showComparisonActions]="false"
+                    [showTransferAction]="false"
+                    [showApplyActions]="false"
+                    [showRefreshAction]="shouldShowManualRefreshButton()"
+                    [autoReloadOnFocus]="false"
+                    (jobsChanged)="onJobDefinitionChanged('training')"
+                  ></coding-box-coding-jobs>
+                } @loading (after 100ms) {
+                  <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+                } @error {
+                  <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+                }
               }
             </div>
           </div>
@@ -786,7 +812,13 @@
               </div>
             }
             @if (shouldRenderManualTabData('preparation')) {
-              <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
+              @defer (on immediate) {
+                <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
+              } @loading (after 100ms) {
+                <p role="status">{{ 'deferred-view.loading' | translate }}</p>
+              } @error {
+                <p role="alert">{{ 'deferred-view.error' | translate }}</p>
+              }
             }
           </div>
         }

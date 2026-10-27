@@ -17,7 +17,7 @@
         <mat-label>Name filtern</mat-label>
         <mat-select [(value)]="selectedName" (selectionChange)="onNameFilterChange()">
           <mat-option [value]="null">Alle Namen</mat-option>
-          @for (bundle of originalData(); track bundle) {
+          @for (bundle of originalData(); track bundle.id) {
             <mat-option [value]="bundle.name">
               {{bundle.name}}
             </mat-option>
