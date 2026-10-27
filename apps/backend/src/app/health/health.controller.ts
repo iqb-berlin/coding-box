@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { RedisConnectionStatus } from '../job-queue/job-queue.service';
-import { ReadinessService, ReadinessStatus } from './readiness.service';
+import { ReadinessService } from './readiness.service';
 
 export interface ApplicationHealthStatus {
   status: 'ok';
@@ -17,15 +17,6 @@ export class HealthController {
   private readonly logger = new Logger(HealthController.name);
 
   constructor(private readonly readiness: ReadinessService) {}
-
-  @Get('ready')
-  @ApiOkResponse({ description: 'Database and Redis are reachable' })
-  @ApiServiceUnavailableResponse({ description: 'A required dependency is unavailable or timed out' })
-  async checkReadiness(): Promise<ReadinessStatus> {
-    const result = await this.readiness.check();
-    if (result.status !== 'ok') throw new ServiceUnavailableException(result);
-    return result;
-  }
 
   @Get()
   @ApiOkResponse({

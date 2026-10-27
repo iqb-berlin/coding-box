@@ -1,52 +1,127 @@
+import { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { JobQueueService } from '../job-queue/job-queue.service';
-import { ReadinessService } from './readiness.service';
+import { READINESS_TIMEOUT_MS, ReadinessService } from './readiness.service';
 
 describe('ReadinessService', () => {
-  const database = { query: jest.fn() };
-  const jobs = { pingRedis: jest.fn(), checkRedisConnection: jest.fn() };
+  const query = jest.fn();
+  const runCommand = jest.fn();
+  const getBackend = jest.fn();
+  const diagnostics = jest.fn();
+  let dataSource: { isInitialized: boolean; query: typeof query };
   let service: ReadinessService;
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.resetAllMocks();
-    database.query.mockResolvedValue([{ '?column?': 1 }]);
-    jobs.pingRedis.mockResolvedValue(undefined);
-    service = new ReadinessService(database as unknown as DataSource, jobs as unknown as JobQueueService);
+    query.mockReset().mockResolvedValue([{ '?column?': 1 }]);
+    diagnostics.mockReset().mockResolvedValue({ connected: true, message: 'Redis is connected' });
+    runCommand.mockReset().mockResolvedValue('PONG');
+    getBackend.mockReset().mockReturnValue({ client: Promise.resolve({ runCommand }) });
+    dataSource = { isInitialized: true, query };
+    service = new ReadinessService(dataSource as unknown as DataSource, { getBackend } as unknown as Queue, { checkRedisConnection: diagnostics } as unknown as JobQueueService);
   });
 
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => { jest.useRealTimers(); });
 
-  it('requires both dependencies and recovers after a failed probe', async () => {
-    database.query.mockRejectedValueOnce(new Error('private database details'));
-    await expect(service.check()).resolves.toEqual({ status: 'down', checks: { database: 'down', redis: 'up' } });
+  it('checks PostgreSQL and the existing queue Redis without inspecting queue contents', async () => {
+    await expect(service.check()).resolves.toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
+    expect(query).toHaveBeenCalledWith('SELECT 1');
+    expect(runCommand).toHaveBeenCalledWith('ping', []);
+  });
+
+  it('rejects an uninitialized data source without querying it', async () => {
+    dataSource.isInitialized = false;
+    await expect(service.check()).resolves.toEqual({ status: 'error', checks: { database: 'down', redis: 'up' } });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each(['database', 'redis'])('reports a failed %s probe without disclosing driver errors', async dependency => {
+    const probe = dependency === 'database' ? query : runCommand;
+    probe.mockRejectedValueOnce(new Error('sensitive connection detail'));
+    const result = await service.check();
+    expect(result).toEqual({
+      status: 'error',
+      checks: { database: dependency === 'database' ? 'down' : 'up', redis: dependency === 'redis' ? 'down' : 'up' }
+    });
+    expect(JSON.stringify(result)).not.toContain('sensitive');
     await expect(service.check()).resolves.toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
   });
 
-  it('bounds hung probes and shares them until the original operation settles', async () => {
-    let release!: () => void;
-    database.query.mockReturnValueOnce(new Promise<void>(resolve => { release = resolve; }));
+  it('reports Redis as down when client acquisition rejects or PING has an unexpected reply', async () => {
+    getBackend.mockReturnValueOnce({ client: Promise.reject(new Error('connection unavailable')) });
+    expect((await service.check()).checks.redis).toBe('down');
+    runCommand.mockResolvedValueOnce('unexpected');
+    expect((await service.check()).checks.redis).toBe('down');
+  });
+
+  it('bounds response time and reuses hanging probes across concurrent and later polls', async () => {
+    jest.useFakeTimers();
+    let resolveQuery!: (value: unknown[]) => void;
+    let resolvePing!: (value: string) => void;
+    query.mockReturnValueOnce(new Promise(resolve => { resolveQuery = resolve; }));
+    runCommand.mockReturnValueOnce(new Promise(resolve => { resolvePing = resolve; }));
+
     const first = service.check();
     const concurrent = service.check();
-    await jest.advanceTimersByTimeAsync(1500);
-    await expect(first).resolves.toMatchObject({ status: 'down', checks: { database: 'down' } });
-    await expect(concurrent).resolves.toMatchObject({ status: 'down' });
-    await expect(service.check()).resolves.toMatchObject({ status: 'down' });
-    expect(database.query).toHaveBeenCalledTimes(1);
-    release();
+    await jest.advanceTimersByTimeAsync(READINESS_TIMEOUT_MS);
+    const down = { status: 'error', checks: { database: 'down', redis: 'down' } };
+    await expect(first).resolves.toEqual(down);
+    await expect(concurrent).resolves.toEqual(down);
+
+    const later = service.check();
+    await jest.advanceTimersByTimeAsync(READINESS_TIMEOUT_MS);
+    await expect(later).resolves.toEqual(down);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
+
+    resolveQuery([]);
+    resolvePing('PONG');
     await jest.advanceTimersByTimeAsync(0);
-    await expect(service.check()).resolves.toMatchObject({ status: 'ok' });
+    await expect(service.check()).resolves.toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(runCommand).toHaveBeenCalledTimes(2);
+    expect(jest.getTimerCount()).toBe(0);
   });
 
-  it('reports Redis failure without publishing driver errors', async () => {
-    jobs.pingRedis.mockRejectedValueOnce(new Error('redis://private-host:6379'));
-    await expect(service.check()).resolves.toEqual({ status: 'down', checks: { database: 'up', redis: 'down' } });
+  it('handles a late driver rejection after the response timeout and recovers', async () => {
+    jest.useFakeTimers();
+    let rejectQuery!: (error: Error) => void;
+    query.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectQuery = reject; }));
+    const pending = service.check();
+    await jest.advanceTimersByTimeAsync(READINESS_TIMEOUT_MS);
+    expect((await pending).checks.database).toBe('down');
+    rejectQuery(new Error('late failure'));
+    await jest.advanceTimersByTimeAsync(0);
+    expect((await service.check()).status).toBe('ok');
+    expect(jest.getTimerCount()).toBe(0);
   });
 
-  it('also bounds detailed Redis diagnostics', async () => {
-    jobs.checkRedisConnection.mockReturnValue(new Promise(() => { /* Deliberately hung driver. */ }));
+  it('reports shutdown without starting more probes', async () => {
+    service.beforeApplicationShutdown();
+    await expect(service.check()).resolves.toEqual({ status: 'shutting_down', checks: {} });
+    expect(query).not.toHaveBeenCalled();
+    expect(getBackend).not.toHaveBeenCalled();
+  });
+
+  it('bounds and shares hanging diagnostics and recovers when the driver settles', async () => {
+    jest.useFakeTimers();
+    let release!: (status: { connected: boolean; message: string }) => void;
+    diagnostics.mockReturnValueOnce(new Promise(resolve => { release = resolve; }));
     const result = service.redisStatus();
-    await jest.advanceTimersByTimeAsync(1500);
+    await jest.advanceTimersByTimeAsync(READINESS_TIMEOUT_MS);
     await expect(result).resolves.toEqual({ connected: false, message: 'Redis is unavailable' });
+    await expect(service.redisStatus()).resolves.toMatchObject({ connected: false });
+    expect(diagnostics).toHaveBeenCalledTimes(1);
+    release({ connected: true, message: 'Redis is connected' });
+    await jest.advanceTimersByTimeAsync(0);
+    await expect(service.redisStatus()).resolves.toMatchObject({ connected: true });
+  });
+
+  it('sanitizes rejected diagnostics and refuses them during shutdown', async () => {
+    diagnostics.mockRejectedValueOnce(new Error('private connection details'));
+    await expect(service.redisStatus()).resolves.toEqual({ connected: false, message: 'Redis is unavailable' });
+    service.beforeApplicationShutdown();
+    await expect(service.redisStatus()).resolves.toMatchObject({ connected: false });
+    expect(diagnostics).toHaveBeenCalledTimes(1);
   });
 });

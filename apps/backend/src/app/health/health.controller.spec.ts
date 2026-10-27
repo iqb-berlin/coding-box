@@ -2,6 +2,7 @@ import { INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { HealthController } from './health.controller';
 import { ReadinessService } from './readiness.service';
+import { ReadinessController } from './readiness.controller';
 import { GlobalHttpExceptionFilter } from '../http/global-http-exception.filter';
 
 describe('Health HTTP contracts', () => {
@@ -12,7 +13,7 @@ describe('Health HTTP contracts', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [HealthController], providers: [{ provide: ReadinessService, useValue: readiness }]
+      controllers: [HealthController, ReadinessController], providers: [{ provide: ReadinessService, useValue: readiness }]
     }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api');
@@ -43,7 +44,7 @@ describe('Health HTTP contracts', () => {
   });
 
   it.each(['database', 'redis'])('returns 503 when %s is down', async dependency => {
-    readiness.check.mockResolvedValue({ status: 'down', checks: { database: 'up', redis: 'up', [dependency]: 'down' } });
+    readiness.check.mockResolvedValue({ status: 'error', checks: { database: 'up', redis: 'up', [dependency]: 'down' } });
     expect((await fetch(`${baseUrl}/api/health/ready`)).status).toBe(503);
   });
 
