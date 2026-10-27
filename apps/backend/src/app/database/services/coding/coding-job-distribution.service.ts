@@ -1086,11 +1086,11 @@ export class CodingJobDistributionService {
     caseOrderingMode: 'continuous' | 'alternating',
     bundleNameCounts = new Map<string, number>()
   ): {
-      itemVariables: VariableReference[];
-      itemKey: string;
-      itemLabel: string;
-      itemCaseOrderingMode: 'continuous' | 'alternating';
-    } {
+    itemVariables: VariableReference[];
+    itemKey: string;
+    itemLabel: string;
+    itemCaseOrderingMode: 'continuous' | 'alternating';
+  } {
     if (itemObj.type === 'bundle') {
       const bundleItem = itemObj.item as BundleItem;
       return {
@@ -2090,19 +2090,19 @@ export class CodingJobDistributionService {
       distributionSeed?: string | number;
     }
   ): Promise<{
-      distribution: Record<string, Record<string, number>>;
-      distributionByCoderId: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
-      aggregationInfo: Record<
-        string,
-        { uniqueCases: number; totalResponses: number }
-      >;
-      matchingFlags: ResponseMatchingFlag[];
-      warnings: JobCreationWarning[];
-      pairDistribution: Record<string, number>;
-      tasksPerCoder: Record<string, number>;
-      coderWeights: Record<string, number>;
-    }> {
+    distribution: Record<string, Record<string, number>>;
+    distributionByCoderId: Record<string, Record<string, number>>;
+    doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
+    aggregationInfo: Record<
+      string,
+      { uniqueCases: number; totalResponses: number }
+    >;
+    matchingFlags: ResponseMatchingFlag[];
+    warnings: JobCreationWarning[];
+    pairDistribution: Record<string, number>;
+    tasksPerCoder: Record<string, number>;
+    coderWeights: Record<string, number>;
+  }> {
     await this.access.assertDeriveErrorManualCodingEnabled(workspaceId, request);
     const plan = await this.buildDistributionPlan(workspaceId, request);
     return {

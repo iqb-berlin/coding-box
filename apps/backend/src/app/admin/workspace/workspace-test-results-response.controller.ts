@@ -91,12 +91,12 @@ export class WorkspaceTestResultsResponseController {
     @Param('responseId', ParseIntPipe) responseId: number,
     @Req() req: RequestWithUser
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedResponse: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedResponse: number | null;
+      warnings: string[];
+    };
+  }> {
     const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
@@ -147,11 +147,11 @@ export class WorkspaceTestResultsResponseController {
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{
-      data: ResponseEntity[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: ResponseEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const [responses, total] =
       await this.workspaceTestResultsService.findWorkspaceResponses(id, {
         page,
@@ -174,11 +174,11 @@ export class WorkspaceTestResultsResponseController {
     @Param('testPerson') testPerson: string,
     @Param('unitId') unitId: string
   ): Promise<{
-      responses: {
-        id: string;
-        content: string;
-      }[];
-    }> {
+    responses: {
+      id: string;
+      content: string;
+    }[];
+  }> {
     return this.workspaceTestResultsService.findUnitResponse(
       id,
       testPerson,

@@ -156,7 +156,7 @@ export class TestResultsImportFacade {
             mode: 'indeterminate'
           });
 
-          let current: TestResultsOverviewResponse | null = null;
+          let current: TestResultsOverviewResponse | null;
           try {
             current = await firstValueFrom(
               this.testResultService.getWorkspaceOverview(workspaceId).pipe(timeout(Math.min(5000, Math.max(1, deadline - Date.now()))), takeUntil(cancellation)),
@@ -220,10 +220,6 @@ export class TestResultsImportFacade {
             overview: TestResultsOverviewResponse;
             loaded: boolean;
             changed: boolean;
-          } = {
-            overview: this.overview() || beforeOverview,
-            loaded: false,
-            changed: false
           };
 
           try {

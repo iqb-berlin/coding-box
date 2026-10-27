@@ -876,10 +876,10 @@ export class CodingResultsService {
     workspaceId: number,
     queryRunner: QueryRunner
   ): Promise<{
-      success: boolean;
-      updatedCount: number;
-      message: string;
-    }> {
+    success: boolean;
+    updatedCount: number;
+    message: string;
+  }> {
     await queryRunner.startTransaction('READ COMMITTED');
 
     try {

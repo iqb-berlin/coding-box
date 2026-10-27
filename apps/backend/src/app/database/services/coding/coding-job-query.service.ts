@@ -424,11 +424,11 @@ export class CodingJobQueryService {
     jobIds: number[],
     workspaceId: number
   ): Promise<
-      Map<
-        number,
-        { progress: number; coded: number; total: number; open: number }
-      >
-    > {
+    Map<
+      number,
+      { progress: number; coded: number; total: number; open: number }
+    >
+  > {
     const progressByJobId = new Map<
       number,
       { progress: number; coded: number; total: number; open: number }
@@ -888,25 +888,25 @@ export class CodingJobQueryService {
     assignedToUserId?: number,
     filters: CodingJobListFilters = {}
   ): Promise<{
-      data: (CodingJob & {
-        assignedCoders?: number[];
-        assignedVariables?: { unitName: string; variableId: string }[];
-        assignedVariableBundles?: {
-          name: string;
-          variables: { unitName: string; variableId: string }[];
-        }[];
-        progress?: number;
-        codedUnits?: number;
-        totalUnits?: number;
-        openUnits?: number;
-        hasIssues?: boolean;
-        issueSummary?: CodingJobIssueSummary;
-      })[];
-      total: number;
-      totalOpenUnits?: number;
-      page: number;
-      limit?: number;
-    }> {
+    data: (CodingJob & {
+      assignedCoders?: number[];
+      assignedVariables?: { unitName: string; variableId: string }[];
+      assignedVariableBundles?: {
+        name: string;
+        variables: { unitName: string; variableId: string }[];
+      }[];
+      progress?: number;
+      codedUnits?: number;
+      totalUnits?: number;
+      openUnits?: number;
+      hasIssues?: boolean;
+      issueSummary?: CodingJobIssueSummary;
+    })[];
+    total: number;
+    totalOpenUnits?: number;
+    page: number;
+    limit?: number;
+  }> {
     const validPage = page > 0 ? page : 1;
     const shouldPaginate = limit !== undefined && limit > 0;
     const skip = shouldPaginate ? (validPage - 1) * limit : undefined;
@@ -1101,11 +1101,11 @@ export class CodingJobQueryService {
     id: number,
     workspaceId?: number
   ): Promise<{
-      codingJob: CodingJob & { durationSeconds?: number };
-      assignedCoders: number[];
-      variables: { unitName: string; variableId: string }[];
-      variableBundles: VariableBundle[];
-    }> {
+    codingJob: CodingJob & { durationSeconds?: number };
+    assignedCoders: number[];
+    variables: { unitName: string; variableId: string }[];
+    variableBundles: VariableBundle[];
+  }> {
     const whereClause: { id: number; workspace_id?: number } = { id };
 
     if (workspaceId !== undefined) {

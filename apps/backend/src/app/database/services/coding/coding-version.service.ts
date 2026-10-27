@@ -42,11 +42,11 @@ export class CodingVersionService {
     progressCallback?: (progress: number) => Promise<void>,
     audit: ResetAuditContext = {}
   ): Promise<{
-      affectedResponseCount: number;
-      deletedGeneratedResponseCount: number;
-      cascadeResetVersions: ('v2' | 'v3')[];
-      message: string;
-    }> {
+    affectedResponseCount: number;
+    deletedGeneratedResponseCount: number;
+    cascadeResetVersions: ('v2' | 'v3')[];
+    message: string;
+  }> {
     let committedMutation = false;
     const onCommitted = () => { committedMutation = true; };
     try {

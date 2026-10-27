@@ -532,20 +532,20 @@ export class CodingValidationService {
     includeDeriveErrorOnly = false,
     excludeJobDefinitionId?: number
   ): Promise<
-      {
-        unitName: string;
-        variableId: string;
-        responseCount: number;
-        deriveErrorResponseCount: number;
-        casesInJobs: number;
-        availableCases: number;
-        uniqueCasesAfterAggregation: number;
-        availableCasesWithDeriveError?: number;
-        uniqueCasesAfterAggregationWithDeriveError?: number;
-        isDerived: boolean;
-        coderTrainingRequired: boolean;
-      }[]
-    > {
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      deriveErrorResponseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
+      isDerived: boolean;
+      coderTrainingRequired: boolean;
+    }[]
+  > {
     try {
       if (
         !unitName &&

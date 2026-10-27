@@ -1,5 +1,5 @@
 import {
-  // eslint-disable-next-line max-len
+
   MatTable,
   MatColumnDef,
   MatHeaderCellDef,

@@ -66,9 +66,9 @@ import { PsychometricExportWriter } from '../database/services/coding/psychometr
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-process-cache-invalidator.token';
 import { CODING_READINESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-readiness-cache-invalidator.token';
 import { JobDefinitionService } from '../database/services/jobs';
-// eslint-disable-next-line import/no-cycle
+
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
-// eslint-disable-next-line import/no-cycle
+
 import { CacheClientModule } from '../cache/cache-client.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceModule } from '../workspace/workspace.module';
