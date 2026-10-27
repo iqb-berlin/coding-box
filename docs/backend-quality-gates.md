@@ -35,8 +35,9 @@ enables every PostgreSQL suite and the real BullMQ tests, and runs them serially
 without Nx caching. Suites that provision their own schema also receive the
 explicit test server. The runner drops only its own database in cleanup.
 
-Missing services, migration errors, failed tests and skipped suites fail the
-gate. The optional Kappa benchmark remains disabled by default. JUnit and JSON
+Missing services, migration errors, failed tests, skipped suites and individually
+skipped mandatory tests fail the gate. Only the optional Kappa benchmark may be
+skipped, and it must pass when explicitly enabled. JUnit and JSON
 results are written separately from unit-test reports under
 `coverage/apps/backend/integration-*`.
 

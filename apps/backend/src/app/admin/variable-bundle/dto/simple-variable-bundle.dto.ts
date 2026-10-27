@@ -19,6 +19,9 @@ import { VariableDto } from './variable.dto';
 export class SimpleVariableBundleDto {
   @ApiProperty({
     description: 'The ID of the variable bundle',
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     example: 1,
     required: false
   })
