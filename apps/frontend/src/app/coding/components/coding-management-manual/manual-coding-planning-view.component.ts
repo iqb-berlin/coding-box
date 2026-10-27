@@ -7,7 +7,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 import { ManualCodingViewState } from './manual-coding-view-state.service';
@@ -21,6 +21,7 @@ import { ManualCodingViewState } from './manual-coding-view-state.service';
   host: { style: 'display: contents' }
 })
 export class ManualCodingPlanningViewComponent {
+  private readonly translate = inject(TranslateService);
   private readonly statistics = inject(ManualCodingStatisticsFacade);
 
   readonly shouldShowManualRefreshButton = input(false);
@@ -37,16 +38,8 @@ export class ManualCodingPlanningViewComponent {
   }
 
   protected getStatusLabel(status: string): string {
-    switch (status) {
-      case 'draft':
-        return 'Entwurf';
-      case 'pending_review':
-        return 'Warten auf Genehmigung';
-      case 'approved':
-        return 'Genehmigt';
-      default:
-        return status;
-    }
+    return ['draft', 'pending_review', 'approved'].includes(status) ?
+      this.translate.instant(`manual-job-status.${status}`) : status;
   }
 
   protected readonly variableCoverageOverview = this.statistics.variableCoverageOverview;

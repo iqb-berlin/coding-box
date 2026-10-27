@@ -107,7 +107,7 @@
               </tr>
             </thead>
             <tbody>
-              @for (variable of codingIncompleteVariables(); track variable) {
+              @for (variable of codingIncompleteVariables(); track variableKey(variable)) {
                 <tr>
                   <td>{{ variable.unitName }}</td>
                   <td>{{ variable.variableId }}</td>
