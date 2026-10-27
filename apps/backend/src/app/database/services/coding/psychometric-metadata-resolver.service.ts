@@ -465,11 +465,11 @@ export class PsychometricMetadataResolver {
     itemId: string,
     vomdVariableId: string
   ): {
-      variable?: PsychometricMappedItem['variable'];
-      issue?: string;
-      issueCode?: PsychometricMappingIssueCode;
-      fallbackNote?: string;
-    } {
+    variable?: PsychometricMappedItem['variable'];
+    issue?: string;
+    issueCode?: PsychometricMappingIssueCode;
+    fallbackNote?: string;
+  } {
     const variableCandidates = this.findVariableCandidatesByAlias(
       unit.variables,
       vomdVariableId

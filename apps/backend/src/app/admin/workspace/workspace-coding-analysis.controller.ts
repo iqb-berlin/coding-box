@@ -95,11 +95,11 @@ export class WorkspaceCodingAnalysisController {
     @Query('derivation') derivation?: string,
     @Query('regexSearch') regexSearch?: string
   ): Promise<{
-      data: VariableAnalysisItemDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: VariableAnalysisItemDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
     const effectiveRegexSearch = regexSearch === 'true' &&
@@ -265,19 +265,19 @@ export class WorkspaceCodingAnalysisController {
     @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string,
     @Query('excludeJobDefinitionId') excludeJobDefinitionId?: string
   ): Promise<
-      {
-        unitName: string;
-        variableId: string;
-        responseCount: number;
-        deriveErrorResponseCount: number;
-        casesInJobs: number;
-        availableCases: number;
-        uniqueCasesAfterAggregation: number;
-        availableCasesWithDeriveError?: number;
-        uniqueCasesAfterAggregationWithDeriveError?: number;
-        isDerived: boolean;
-      }[]
-    > {
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      deriveErrorResponseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
+      isDerived: boolean;
+    }[]
+  > {
     let trainingRequiredParam: boolean | undefined;
     if (trainingRequired === 'true') {
       trainingRequiredParam = true;
@@ -718,12 +718,12 @@ export class WorkspaceCodingAnalysisController {
     @WorkspaceId() workspace_id: number,
     @ValidatedBody('WorkspaceCodingAnalysisController_applyDuplicateAggregation') body: RequestBody<'WorkspaceCodingAnalysisController_applyDuplicateAggregation'>
   ): Promise<{
-      success: boolean;
-      aggregatedGroups: number;
-      aggregatedResponses: number;
-      uniqueCodingCases: number;
-      message: string;
-    }> {
+    success: boolean;
+    aggregatedGroups: number;
+    aggregatedResponses: number;
+    uniqueCodingCases: number;
+    message: string;
+  }> {
     return this.codingAnalysisService.applyDuplicateAggregation(
       workspace_id,
       body.threshold,

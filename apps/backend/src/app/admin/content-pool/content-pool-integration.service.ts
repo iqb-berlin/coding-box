@@ -1373,11 +1373,11 @@ export class ContentPoolIntegrationService {
     replacementPlan: Array<{ workspaceFile: FileUpload; targetFileName: string }>,
     changelog: string
   ): Promise<{
-      snapshot?: {
-        id?: string;
-        versionNumber?: number;
-      };
-    }> {
+    snapshot?: {
+      id?: string;
+      versionNumber?: number;
+    };
+  }> {
     const formData = new FormData();
     for (const plan of replacementPlan) {
       formData.append('files', this.decodeStoredFileData(plan.workspaceFile.data), {

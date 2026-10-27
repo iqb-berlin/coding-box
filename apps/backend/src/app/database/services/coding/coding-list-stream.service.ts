@@ -23,7 +23,7 @@ import {
   CodingItemVersionExportValues
 } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   buildGeoGebraFileName,
@@ -265,9 +265,9 @@ export class CodingListStreamService {
     trainingRequired?: boolean,
     checkCancellation?: () => Promise<void>
   ): Promise<{
-      filterOptions: ResponseFilterOptions;
-      trainingRequiredMap: Map<string, Set<string>> | null;
-    }> {
+    filterOptions: ResponseFilterOptions;
+    trainingRequiredMap: Map<string, Set<string>> | null;
+  }> {
     await checkCancellation?.();
     const includeDeriveError = await isDeriveErrorInManualCodingEnabled(
       this.settingRepository,

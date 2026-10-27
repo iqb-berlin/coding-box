@@ -212,9 +212,9 @@ export class CohensKappaExportService {
     sourceItems: KappaSourceItem[],
     replayUrlByItemKey: Map<string, string>
   ): {
-      headers: string[];
-      rows: Record<string, string | number>[];
-    } {
+    headers: string[];
+    rows: Record<string, string | number>[];
+  } {
     const coderNamesById = new Map<number, string>();
     sourceItems.forEach(item => {
       item.coderResults.forEach(result => {

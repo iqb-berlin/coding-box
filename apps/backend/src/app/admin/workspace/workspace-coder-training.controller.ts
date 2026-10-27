@@ -342,23 +342,23 @@ export class WorkspaceCoderTrainingController {
     @ValidatedBody('WorkspaceCoderTrainingController_generateCoderTrainingPackages')
                    body: RequestBody<'WorkspaceCoderTrainingController_generateCoderTrainingPackages'>
   ): Promise<
-      {
-        coderId: number;
-        coderName: string;
-        responses: {
-          responseId: number;
-          unitAlias: string;
-          variableId: string;
-          unitName: string;
-          value: string | null;
-          personLogin: string;
-          personCode: string;
-          personGroup: string;
-          bookletName: string;
-          variable: string;
-        }[];
-      }[]
-    > {
+    {
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string | null;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]
+  > {
     return this.coderTrainingService.generateCoderTrainingPackages(
       workspace_id,
       body.selectedCoders,
@@ -505,17 +505,17 @@ export class WorkspaceCoderTrainingController {
                    body: RequestBody<'WorkspaceCoderTrainingController_createCoderTrainingJobs'>,
                    @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      jobs: {
-        coderId: number;
-        coderName: string;
-        jobId: number;
-        jobName: string;
-      }[];
-      trainingId?: number;
-    }> {
+    success: boolean;
+    jobsCreated: number;
+    message: string;
+    jobs: {
+      coderId: number;
+      coderName: string;
+      jobId: number;
+      jobName: string;
+    }[];
+    trainingId?: number;
+  }> {
     return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
@@ -678,14 +678,14 @@ export class WorkspaceCoderTrainingController {
     @ValidatedBody('WorkspaceCoderTrainingController_saveDiscussionResult') body: RequestBody<'WorkspaceCoderTrainingController_saveDiscussionResult'>,
     @Req() req: Request
   ): Promise<{
-      success: boolean;
-      code: number | null;
-      score: number | null;
-      notes: string | null;
-      source: 'manual' | 'auto_agreement' | null;
-      managerUserId: number | null;
-      managerName: string | null;
-    }> {
+    success: boolean;
+    code: number | null;
+    score: number | null;
+    notes: string | null;
+    source: 'manual' | 'auto_agreement' | null;
+    managerUserId: number | null;
+    managerName: string | null;
+  }> {
     const reqUser = (req as Request & {
       user?: { id?: string | number; username?: string; preferred_username?: string; name?: string };
     }).user;
@@ -844,19 +844,19 @@ export class WorkspaceCoderTrainingController {
     @WorkspaceId() workspace_id: number,
     @Param('trainingId') trainingId: number
   ): Promise<
-      Array<{
-        id: number;
-        name: string;
-        description?: string;
-        status: string;
-        created_at: Date;
-        coder: {
-          userId: number;
-          username: string;
-        };
-        unitsCount: number;
-      }>
-    > {
+    Array<{
+      id: number;
+      name: string;
+      description?: string;
+      status: string;
+      created_at: Date;
+      coder: {
+        userId: number;
+        username: string;
+      };
+      unitsCount: number;
+    }>
+  > {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }

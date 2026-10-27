@@ -259,7 +259,7 @@
                     <tbody>
                       @for (
                         item of responseAnalysisValue.emptyResponses.items;
-                        track item
+                        track item.responseId
                       ) {
                         <tr [class.coded-row]="item.isCoded">
                           <td>{{ item.unitAlias || item.unitName }}</td>
@@ -417,7 +417,7 @@
               <div class="analysis-details" id="duplicate-values-details">
                 @for (
                   group of responseAnalysisValue.duplicateValues.groups;
-                  track group
+                  track duplicateGroupKey(group)
                 ) {
                   <div class="duplicate-group">
                     <div class="duplicate-group-header">
@@ -436,7 +436,7 @@
                     <ul class="occurrence-list">
                       @for (
                         occ of group.occurrences | slice: 0 : 5;
-                        track occ
+                        track occ.responseId
                       ) {
                         <li>
                           {{ occ.personLogin

@@ -42,9 +42,9 @@ export class WorkspaceFilesValidationController {
     workspaceId: number
   ): Promise<void> {
     const versionKey =
-            this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-              workspaceId
-            );
+      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+        workspaceId
+      );
     const nextVersion = await this.cacheService.incr(versionKey);
     await this.jobQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
@@ -136,13 +136,13 @@ export class WorkspaceFilesValidationController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ): Promise<{
-      testTakersFound: boolean;
-      groupsWithResponses: { group: string; hasResponse: boolean }[];
-      allGroupsHaveResponses: boolean;
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    testTakersFound: boolean;
+    groupsWithResponses: { group: string; hasResponse: boolean }[];
+    allGroupsHaveResponses: boolean;
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.workspaceFilesService.validateGroupResponses(
       workspace_id,
       page,
@@ -171,11 +171,11 @@ export class WorkspaceFilesValidationController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.workspaceFilesService.validateResponseStatus(
       workspace_id,
       page,
@@ -231,12 +231,12 @@ export class WorkspaceFilesValidationController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-      summary: VariableValidationSummaryDto;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+    summary: VariableValidationSummaryDto;
+  }> {
     return this.workspaceFilesService.validateVariables(
       workspace_id,
       page,
@@ -265,11 +265,11 @@ export class WorkspaceFilesValidationController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     return this.workspaceFilesService.validateVariableTypes(
       workspace_id,
       page,

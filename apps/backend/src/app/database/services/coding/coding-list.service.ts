@@ -69,9 +69,9 @@ export class CodingListService {
     serverUrl?: string,
     trainingRequired?: boolean
   ): Promise<{
-      items: CodingItem[];
-      total: number;
-    }> {
+    items: CodingItem[];
+    total: number;
+  }> {
     return this.queryService.getCodingList(workspace_id, authToken, serverUrl, trainingRequired);
   }
 

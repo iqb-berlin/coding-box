@@ -110,8 +110,8 @@
                     }
                     <mat-form-field appearance="outline" class="bundle-sample-field">
                       <mat-label>Stichproben pro Variable</mat-label>
-                      <input matInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
-                        (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: $any($event.target).value})" min="1"
+                      <input matInput #bundleSampleInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
+                        (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: bundleSampleInput.value})" min="1"
                         max="1000">
                     </mat-form-field>
                     <mat-form-field appearance="outline" class="bundle-case-ordering-field">

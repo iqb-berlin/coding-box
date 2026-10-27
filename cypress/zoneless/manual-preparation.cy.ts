@@ -658,6 +658,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/admin/workspace/6/missings-profiles/IQB-Standard', { body: null });
     cy.intercept('GET', '**/api/admin/users/access/6', { body: [] });
     cy.intercept('GET', '**/api/admin/workspace/6/coders', { body: { data: [], total: 0 } });
+    cy.intercept('GET', '**/api/admin/workspace/6/coding/coder-trainings', { body: [] });
     cy.intercept('GET', '**/api/wsg-admin/workspace/6/coding-job?*', { body: { data: [], total: 0, page: 1, limit: 1 } });
   }
 
@@ -667,6 +668,62 @@ describe('Zoneless manual preparation workflows', () => {
     cy.window().then(win => { win.location.hash = '/workspace-admin/6/coding/manual'; });
     cy.get('coding-box-coding-management-manual').should('be.visible');
   }
+
+  function stubWorkspaceJobs(): void {
+    for (const workspaceId of [5, 6]) {
+      cy.intercept('GET', `**/api/wsg-admin/workspace/${workspaceId}/coding-job?*`, {
+        body: { data: [{
+          id: workspaceId * 10, workspace_id: workspaceId, creatorUserId: 2,
+          name: `Workspace ${workspaceId} job`, status: 'completed',
+          assignedCoders: [11], assignedVariables: [], totalUnits: 1, codedUnits: 1,
+          openUnits: 0, progress: 100, created_at: '2026-10-27', updated_at: '2026-10-27'
+        }], total: 1, page: 1, limit: 50 }
+      });
+    }
+  }
+
+  it('reloads the existing job view and closes old confirmations when only the workspace route parameter changes', () => {
+    setup();
+    stubNextWorkspace();
+    stubWorkspaceJobs();
+    let deletions = 0;
+    cy.intercept('DELETE', '**/api/wsg-admin/workspace/*/coding-job/*', request => {
+      deletions += 1;
+      request.reply({ body: { success: true } });
+    });
+    openManual();
+    cy.title().should('equal', 'Manuelle Kodierung | IQB-Kodierbox');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution button', 'Aktualisieren').click();
+    cy.contains('coding-box-coding-jobs mat-row', 'Workspace 5 job')
+      .find('button.more-actions-button').click();
+    cy.get('button[aria-label="Kodierjob löschen: Workspace 5 job"]').click();
+    cy.get('coding-box-confirm-dialog').find('mat-dialog-content').should('be.visible');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/6/coding/manual'; });
+    cy.get('coding-box-confirm-dialog').should('not.exist');
+    cy.contains('coding-box-coding-jobs mat-row', 'Workspace 6 job').should('be.visible');
+    cy.get('coding-box-coding-jobs').should('not.contain.text', 'Workspace 5 job');
+    cy.then(() => { expect(deletions).to.equal(0); });
+  });
+
+  it('loads the job-list chunk only when the execution tab is opened', () => {
+    setup();
+    openManual();
+    cy.window().then(win => {
+      const requests = win.performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('.js')).length;
+      cy.wrap(requests).as('initialScriptRequests');
+    });
+    cy.get('coding-box-coding-jobs').should('not.exist');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-jobs').should('be.visible');
+    cy.get<number>('@initialScriptRequests').then(initial => {
+      cy.window().should(win => {
+        const requests = win.performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('.js')).length;
+        expect(requests).to.be.greaterThan(initial);
+      });
+    });
+  });
 
   it('does not open an old bulk preview after leaving its workspace', () => {
     setup();

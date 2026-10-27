@@ -8,9 +8,9 @@ import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache
 import { WorkspaceCacheWarmupRunner } from './workspace-cache-warmup.runner';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceModule } from '../workspace/workspace.module';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingModule } from '../coding/coding.module';
 
 @Module({

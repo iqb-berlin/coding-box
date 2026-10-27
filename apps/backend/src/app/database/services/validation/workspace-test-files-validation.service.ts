@@ -129,10 +129,10 @@ export class WorkspaceTestFilesValidationService {
   private createExclusionFingerprint(
     exclusions: WorkspaceSettingsDto | null | undefined
   ): {
-      ignoredUnits: string[];
-      ignoredBooklets: string[];
-      ignoredTestlets: { bookletId: string; testletId: string }[];
-    } {
+    ignoredUnits: string[];
+    ignoredBooklets: string[];
+    ignoredTestlets: { bookletId: string; testletId: string }[];
+  } {
     const uniqueSorted = (
       values: string[] | undefined,
       normalize: (value: string | null | undefined) => string
@@ -651,8 +651,8 @@ export class WorkspaceTestFilesValidationService {
     usedTestTakerFileIds: Set<string>,
     allResourceIds: string[]
   ): Promise<
-      Array<{ id: number; fileId: string; filename: string; fileType: string }>
-    > {
+    Array<{ id: number; fileId: string; filename: string; fileType: string }>
+  > {
     const usedTokens = new Set<string>();
 
     const addPlayerPatchTokens = (token: string | undefined | null): void => {
