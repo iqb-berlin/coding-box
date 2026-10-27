@@ -33,6 +33,9 @@ export class JobDefinitionVariableDto {
 export class JobDefinitionVariableBundleDto {
   @ApiProperty({
     description: 'Bundle ID',
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     example: 1
   })
   @IsInt()

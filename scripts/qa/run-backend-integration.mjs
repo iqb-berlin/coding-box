@@ -26,6 +26,28 @@ export function integrationConfiguration(environment) {
   return { server, redisHost: environment.BULLMQ_TEST_REDIS_HOST, redisPort: Number(environment.BULLMQ_TEST_REDIS_PORT) };
 }
 
+export function assertIntegrationResults(results, benchmarkEnabled = false) {
+  if (!results.success || !results.numPassedTests || results.numPendingTestSuites || !results.testResults?.length) {
+    throw new Error('Integration gate requires executed, successful suites; skipped suites are not accepted.');
+  }
+  let skippedBenchmarks = 0;
+  for (const suite of results.testResults) {
+    for (const assertion of suite.assertionResults) {
+      if (assertion.status === 'passed') continue;
+      if (!benchmarkEnabled && assertion.status === 'pending' &&
+          path.basename(suite.name) === 'double-coding-kappa-query.postgres.spec.ts' &&
+          assertion.fullName === 'Kappa SQL filters against PostgreSQL and the complete Liquibase schema measures the former and filtered retrieval on identical synthetic data') {
+        skippedBenchmarks += 1;
+        continue;
+      }
+      throw new Error(`Integration gate requires every mandatory test to pass: ${assertion.fullName} (${assertion.status}).`);
+    }
+  }
+  if (results.numPendingTests !== skippedBenchmarks || results.numTodoTests) {
+    throw new Error('Only the optional Kappa benchmark may be skipped by the integration gate.');
+  }
+}
+
 export async function runIntegration(environment = process.env) {
   const config = integrationConfiguration(environment);
   const databaseName = `backend_integration_${randomUUID().replaceAll('-', '')}`;
@@ -78,9 +100,7 @@ export async function runIntegration(environment = process.env) {
     });
     if (code !== 0) throw new Error('Backend integration tests failed.');
     const results = JSON.parse(await readFile(resultsFile, 'utf8'));
-    if (!results.success || !results.numTotalTests || results.numPendingTestSuites) {
-      throw new Error('Integration gate requires executed, successful suites; skipped suites are not accepted.');
-    }
+    assertIntegrationResults(results, environment.KAPPA_QUERY_BENCHMARK === '1');
     console.log(`Backend integration gate passed: ${results.numPassedTests} tests, ${results.numPendingTests} optional tests skipped.`);
   } finally {
     redis.disconnect();
