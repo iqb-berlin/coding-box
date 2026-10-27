@@ -725,6 +725,61 @@ describe('Zoneless manual preparation workflows', () => {
     });
   });
 
+  it('refreshes hidden productive jobs once after a definition change without reloading training jobs', () => {
+    setup();
+    cy.intercept('GET', '**/api/workspace/5/settings/auto-refresh-manual-coding-jobs', {
+      body: { value: '{"enabled":true}' }
+    });
+    let deleted = false;
+    let definitionReadsAfterDelete = 0;
+    const reloads = { productive: 0, training: 0 };
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', request => {
+      if (deleted) definitionReadsAfterDelete += 1;
+      request.reply({ body: deleted ? [] : [{ ...definition, blockingCreatedJobsCount: 0 }] });
+    });
+    cy.intercept('DELETE', '**/api/admin/workspace/5/coding/job-definitions/99', request => {
+      deleted = true;
+      request.reply({ body: { success: true } });
+    }).as('deleteDefinition');
+    cy.intercept('GET', '**/api/wsg-admin/workspace/5/coding-job?*', request => {
+      const scope = request.query.scope;
+      if (scope !== 'productive' && scope !== 'training') {
+        request.reply({ body: { data: [], total: 0, page: 1, limit: 50 } });
+        return;
+      }
+      if (deleted) reloads[scope] += 1;
+      request.reply({ body: { data: [{
+        id: scope === 'productive' ? 50 : 51, workspace_id: 5, creatorUserId: 2,
+        name: `${scope} ${deleted ? 'updated' : 'original'}`, status: 'completed',
+        assignedCoders: [11], assignedVariables: [], totalUnits: 1, codedUnits: 1,
+        openUnits: 0, progress: 100, created_at: '2026-10-27', updated_at: '2026-10-27'
+      }], total: 1, page: 1, limit: 50 } });
+    });
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.contains('#manual-support mat-row', 'training original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.contains('coding-box-coding-job-definitions tr', 'Browser definition')
+      .find('.more-actions-button').click();
+    cy.get('.danger-menu-item').click();
+    cy.wait('@deleteDefinition');
+    // The child refreshes immediately; the second read comes from the debounced parent workflow.
+    cy.wrap(null).should(() => { expect(definitionReadsAfterDelete).to.equal(2); });
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 0, training: 0 }); });
+
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive updated').scrollIntoView().should('be.visible');
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 1, training: 0 }); });
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.contains('#manual-support mat-row', 'training original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive updated').scrollIntoView().should('be.visible');
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 1, training: 0 }); });
+  });
+
   it('does not open an old bulk preview after leaving its workspace', () => {
     setup();
     stubNextWorkspace();
