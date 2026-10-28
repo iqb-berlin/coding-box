@@ -10,6 +10,8 @@ import {
   EMPTY, Observable, of, Subject, throwError
 } from 'rxjs';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
+import { ManualCodingRefreshWorkflowFacade } from './manual-coding-refresh-workflow.facade';
+import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
@@ -438,23 +440,19 @@ describe('CodingManagementManualComponent', () => {
 
   it('should run pending manual state and forced freshness refresh after a background guard clears', () => {
     component.selectedManualTabIndex.set(1);
+    TestBed.inject(AppService).selectedWorkspaceId = 5;
+    const jobs = TestBed.inject(CodingBackgroundJobsService);
+    const workflow = fixture.debugElement.injector.get(ManualCodingRefreshWorkflowFacade);
+    jobs.setJobRunning(5, 'freshness-coding', true);
+    workflow.refreshAllStatistics();
+    workflow.loadCodingFreshness({ force: true });
     const componentInternals = component as unknown as {
-      pendingManualStateRefreshAfterBackgroundJob: boolean;
-      pendingForcedCodingFreshnessRefreshAfterBackgroundJob: boolean;
-      refreshPendingManualStatusAfterBackgroundJob(): void;
       loadManualTabData(tab: string, options?: { reloadCodingJobs?: boolean }): void;
-      loadCodingFreshness(options?: { force?: boolean }): void;
     };
-    componentInternals.pendingManualStateRefreshAfterBackgroundJob = true;
-    componentInternals.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
-    const loadManualTabDataSpy = jest
-      .spyOn(componentInternals, 'loadManualTabData')
-      .mockImplementation();
-    const loadCodingFreshnessSpy = jest
-      .spyOn(componentInternals, 'loadCodingFreshness')
-      .mockImplementation();
+    const loadManualTabDataSpy = jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
+    const loadCodingFreshnessSpy = jest.spyOn(workflow, 'loadCodingFreshness').mockImplementation();
 
-    componentInternals.refreshPendingManualStatusAfterBackgroundJob();
+    jobs.setJobRunning(5, 'freshness-coding', false);
 
     expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning', { reloadCodingJobs: false });
     expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
@@ -462,34 +460,25 @@ describe('CodingManagementManualComponent', () => {
 
   it('should keep a suppressed manual refresh forced after a background guard clears', () => {
     component.selectedManualTabIndex.set(3);
+    TestBed.inject(AppService).selectedWorkspaceId = 5;
+    const jobs = TestBed.inject(CodingBackgroundJobsService);
+    jobs.setJobRunning(5, 'freshness-coding', true);
+    component.refreshManualCodingPlanning();
     const componentInternals = component as unknown as {
-      pendingManualStateRefreshAfterBackgroundJob: boolean;
-      pendingForcedManualStateRefreshAfterBackgroundJob: boolean;
-      refreshPendingManualStatusAfterBackgroundJob(): void;
-      loadManualTabData(
-        tab: string,
-        options?: { reloadCodingJobs?: boolean; forceRefresh?: boolean }
-      ): void;
-      loadCodingFreshness(
-        options?: { force?: boolean; invalidateCache?: boolean }
-      ): void;
+      loadManualTabData(tab: string, options?: { reloadCodingJobs?: boolean; forceRefresh?: boolean }): void;
     };
-    componentInternals.pendingManualStateRefreshAfterBackgroundJob = true;
-    componentInternals.pendingForcedManualStateRefreshAfterBackgroundJob = true;
-    const loadManualTabDataSpy = jest
-      .spyOn(componentInternals, 'loadManualTabData')
-      .mockImplementation();
-    const loadCodingFreshnessSpy = jest
-      .spyOn(componentInternals, 'loadCodingFreshness')
-      .mockImplementation();
+    const loadManualTabDataSpy = jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
+    const loadCodingFreshnessSpy = jest.spyOn(
+      fixture.debugElement.injector.get(ManualCodingRefreshWorkflowFacade), 'loadCodingFreshness'
+    ).mockImplementation();
 
-    componentInternals.refreshPendingManualStatusAfterBackgroundJob();
+    jobs.setJobRunning(5, 'freshness-coding', false);
 
     expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution', {
       reloadCodingJobs: false,
       forceRefresh: true
     });
-    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
   });
 
   it('should flag duplicate findings as diagnostic when aggregation is disabled', () => {
@@ -2558,8 +2547,6 @@ describe('CodingManagementManualComponent', () => {
     const componentInternals = component as unknown as {
       appService: { selectedWorkspaceId: number };
       hasLoadedManualCodingJobRefreshSetting: boolean;
-      pendingManualStateRefreshAfterBackgroundJob: boolean;
-      shouldSuppressCodingStatusChecks(): boolean;
       loadCodingProgressOverview(): void;
       loadCaseCoverageOverview(): void;
       loadWorkspaceKappaSummary(): void;
@@ -2568,9 +2555,7 @@ describe('CodingManagementManualComponent', () => {
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
-    jest
-      .spyOn(componentInternals, 'shouldSuppressCodingStatusChecks')
-      .mockReturnValue(true);
+    TestBed.inject(CodingBackgroundJobsService).setJobRunning(5, 'freshness-coding', true);
     const codingProgressSpy = jest
       .spyOn(componentInternals, 'loadCodingProgressOverview')
       .mockImplementation();
@@ -2590,7 +2575,6 @@ describe('CodingManagementManualComponent', () => {
     component.refreshManualCodingPlanning();
 
     expect(component.shouldRenderManualTabData('execution')).toBe(true);
-    expect(componentInternals.pendingManualStateRefreshAfterBackgroundJob).toBe(true);
     expect(codingProgressSpy).not.toHaveBeenCalled();
     expect(caseCoverageSpy).not.toHaveBeenCalled();
     expect(kappaSummarySpy).not.toHaveBeenCalled();
@@ -2604,15 +2588,11 @@ describe('CodingManagementManualComponent', () => {
     const componentInternals = component as unknown as {
       appService: { selectedWorkspaceId: number };
       hasLoadedManualCodingJobRefreshSetting: boolean;
-      pendingManualStateRefreshAfterBackgroundJob: boolean;
-      shouldSuppressCodingStatusChecks(): boolean;
       reloadCodingJobsList(reloadScope?: string): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
-    jest
-      .spyOn(componentInternals, 'shouldSuppressCodingStatusChecks')
-      .mockReturnValue(true);
+    TestBed.inject(CodingBackgroundJobsService).setJobRunning(5, 'freshness-coding', true);
     const reloadCodingJobsListSpy = jest
       .spyOn(componentInternals, 'reloadCodingJobsList')
       .mockImplementation();
@@ -2621,7 +2601,6 @@ describe('CodingManagementManualComponent', () => {
 
     expect(component.shouldRenderManualTabData('training')).toBe(true);
     expect(component.shouldShowManualTabLoadHint('training')).toBe(false);
-    expect(componentInternals.pendingManualStateRefreshAfterBackgroundJob).toBe(true);
     expect(reloadCodingJobsListSpy).toHaveBeenCalledWith('active');
   });
 
@@ -2814,7 +2793,7 @@ describe('CodingManagementManualComponent', () => {
       reloadCodingJobsList(): void;
     };
     const loadCodingFreshnessSpy = jest
-      .spyOn(componentInternals, 'loadCodingFreshness')
+      .spyOn(fixture.debugElement.injector.get(ManualCodingRefreshWorkflowFacade), 'loadCodingFreshness')
       .mockImplementation();
     jest
       .spyOn(componentInternals, 'loadCodingProgressOverview')
@@ -2838,10 +2817,10 @@ describe('CodingManagementManualComponent', () => {
   it('should not refresh preparation on window focus', () => {
     component.selectedManualTabIndex.set(0);
     const componentInternals = component as unknown as {
-      refreshManualStateAfterExternalChange(): void;
+      loadManualTabData(tab: string): void;
     };
     const refreshSpy = jest
-      .spyOn(componentInternals, 'refreshManualStateAfterExternalChange')
+      .spyOn(componentInternals, 'loadManualTabData')
       .mockImplementation();
 
     window.dispatchEvent(new Event('focus'));
