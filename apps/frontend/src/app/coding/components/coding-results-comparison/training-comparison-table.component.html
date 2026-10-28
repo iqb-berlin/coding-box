@@ -6,29 +6,29 @@
       <td mat-cell *matCellDef="let row; let i = index">{{ pageIndex() * pageSize() + i + 1 }}</td>
     </ng-container>
     <ng-container matColumnDef="unitVariable">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">Aufgabe/Variable</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">{{ 'coding.trainings.compare.unit-variable' | translate }}</th>
       <td mat-cell *matCellDef="let row"><div class="unit-variable-cell">
         <div class="unit-name">{{ row.source.unitName }}</div><div class="variable-id">{{ row.source.variableId }}</div>
       </div></td>
     </ng-container>
     <ng-container matColumnDef="personInfo">
-      <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">Personeninformationen</th>
+      <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">{{ 'coding.trainings.compare.person-information' | translate }}</th>
       <td mat-cell *matCellDef="let row"><div class="person-info-cell">
         <div class="person-login">{{ row.source.personLogin || '-' }}</div><div class="person-code">{{ row.source.personCode || '-' }}</div>
         <div class="person-group">{{ row.source.personGroup || '-' }}</div><div class="booklet-name">{{ row.source.bookletName || '-' }}</div>
       </div></td>
     </ng-container>
     <ng-container matColumnDef="replay">
-      <th mat-header-cell *matHeaderCellDef>Replay</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.replay' | translate }}</th>
       <td mat-cell *matCellDef="let row"><button mat-icon-button type="button" color="primary"
-        (click)="replayRequested.emit(row.source)" matTooltip="Replay inkl. Kodieranweisungen öffnen" [attr.aria-label]="'accessibility.actions.open-replay' | translate"><mat-icon>play_circle</mat-icon></button></td>
+        (click)="replayRequested.emit(row.source)" [matTooltip]="'coding.trainings.compare.open-replay-hint' | translate" [attr.aria-label]="'accessibility.actions.open-replay' | translate"><mat-icon>play_circle</mat-icon></button></td>
     </ng-container>
     <ng-container matColumnDef="givenAnswer">
-      <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.given-response' | translate }}</th>
       <td mat-cell *matCellDef="let row"><div class="given-answer-cell"><div class="answer-text" [matTooltip]="row.source.givenAnswer || 'N/A'">{{ row.source.givenAnswer || 'N/A' }}</div></div></td>
     </ng-container>
     <ng-container matColumnDef="match">
-      <th mat-header-cell *matHeaderCellDef>Übereinstimmung</th>
+      <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.agreement' | translate }}</th>
       <td mat-cell *matCellDef="let row" [class]="'match-status-' + row.status" [matTooltip]="row.statusTooltip"><mat-icon>{{ row.statusIcon }}</mat-icon></td>
     </ng-container>
     <ng-container matColumnDef="modalValue">
@@ -38,8 +38,8 @@
       </div></td>
     </ng-container>
     <ng-container matColumnDef="discussion">
-      <th mat-header-cell *matHeaderCellDef><div class="discussion-header"><span class="discussion-header-title">Diskussionsergebnis</span>
-        @if (managerLabel()) { <span class="discussion-header-manager">Manager: {{ managerLabel() }}</span> }
+      <th mat-header-cell *matHeaderCellDef><div class="discussion-header"><span class="discussion-header-title">{{ 'coding.trainings.compare.discussion-result' | translate }}</span>
+        @if (managerLabel()) { <span class="discussion-header-manager">{{ 'coding.trainings.compare.manager' | translate:{name: managerLabel()} }}</span> }
       </div></th>
       <td mat-cell *matCellDef="let row"><coding-box-training-discussion-editor [view]="row.discussion"
         (codeChanged)="discussionCodeChanged.emit({row: row.source, value: $event})"
@@ -51,15 +51,15 @@
         <th mat-header-cell *matHeaderCellDef>{{ column.label }}</th>
         <td mat-cell *matCellDef="let row"><div class="code-cell">
           @if (row.coders[column.id]; as coder) {
-            <div class="coder-result"><div class="code-line"><span class="code-label">Code:</span><strong class="code-value">{{ coder.code }}</strong>
+            <div class="coder-result"><div class="code-line"><span class="code-label">{{ 'coding.trainings.compare.code-label' | translate }}</span><strong class="code-value">{{ coder.code }}</strong>
               @if (coder.issueLabel) {
                 <span class="coding-issue-badge" [class]="coder.issueClass" [matTooltip]="coder.issueTooltip">
                   <mat-icon class="coding-issue-icon" [class]="coder.issueClass" aria-hidden="true">flag</mat-icon>{{ coder.issueLabel }}
                 </span>
               }
-              @if (coder.noteTooltip) { <mat-icon class="note-icon" [matTooltip]="coder.noteTooltip" aria-label="Kodierer-Notiz">comment</mat-icon> }
+              @if (coder.noteTooltip) { <mat-icon class="note-icon" [matTooltip]="coder.noteTooltip" [aria-label]="'coding.trainings.compare.coder-note' | translate">comment</mat-icon> }
             </div>
-            @if (coder.showScore) { <div class="score-line">Score: {{ coder.score ?? '-' }}</div> }
+            @if (coder.showScore) { <div class="score-line">{{ 'coding.trainings.compare.score' | translate:{score: coder.score ?? '-'} }}</div> }
             </div>
           } @else { <span class="no-data">-</span> }
         </div></td>
