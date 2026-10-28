@@ -10,7 +10,7 @@ import {
 import { CodingJob } from './coding-job.entity';
 // eslint-disable-next-line import/no-cycle
 import { VariableBundle } from './variable-bundle.entity';
-// eslint-disable-next-line import/no-cycle
+
 import { CaseOrderingMode } from './job-definition.entity';
 
 /**

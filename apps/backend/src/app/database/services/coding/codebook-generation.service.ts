@@ -96,16 +96,16 @@ export class CodebookGenerationService {
 
       if (missingsProfile) {
         const profile =
-                    await this.missingsProfilesService.getMissingsProfileDetails(
-                      workspaceId,
-                      missingsProfile
-                    );
+          await this.missingsProfilesService.getMissingsProfileDetails(
+            workspaceId,
+            missingsProfile
+          );
         if (profile && profile.missings) {
           try {
             const profileMissings =
-                            typeof profile.missings === 'string' ?
-                              JSON.parse(profile.missings) :
-                              profile.missings;
+              typeof profile.missings === 'string' ?
+                JSON.parse(profile.missings) :
+                profile.missings;
             if (Array.isArray(profileMissings) && profileMissings.length > 0) {
               missings = profileMissings.map(m => ({
                 code: m.code,

@@ -1,0 +1,191 @@
+@let codingProgressOverviewValue = codingProgressOverview();
+@let manualCodingScopeSummaryValue = manualCodingScopeSummary();
+@if (codingProgressOverviewValue) {
+  <div
+    class="coding-progress-section statistics-section"
+    [class.blurred-content]="isLoadingCodingProgress()"
+  >
+    <div class="statistics-card">
+      <h2 class="section-title section-title-with-action">
+        Kodierungsfortschritt
+        <button
+          mat-icon-button
+          (click)="showProgressInfo.set(!showProgressInfo())"
+          [matTooltip]="
+            'coding-management-manual.coding-progress.info-tooltip' | translate
+          "
+          [attr.aria-label]="
+            'coding-management-manual.coding-progress.info-tooltip' | translate
+          "
+          class="section-info-button"
+        >
+          <mat-icon class="section-info-icon">info</mat-icon>
+        </button>
+      </h2>
+      @if (showProgressInfo()) {
+        <div class="info-alert progress-info">
+          <mat-icon class="info-alert-icon">school</mat-icon>
+          <div class="info-alert-content">
+            <strong>{{
+              'coding-management-manual.coding-progress.info-total-title'
+                | translate
+            }}</strong>
+            <span class="info-alert-text-spaced">{{
+              'coding-management-manual.coding-progress.info-total-desc'
+                | translate
+            }}</span>
+            <strong>{{
+              'coding-management-manual.coding-progress.info-completed-title'
+                | translate
+            }}</strong>
+            <span class="info-alert-text-spaced">{{
+              'coding-management-manual.coding-progress.info-completed-desc'
+                | translate
+            }}</span>
+            <strong>{{
+              'coding-management-manual.coding-progress.info-aggregation-title'
+                | translate
+            }}</strong>
+            <span>{{
+              'coding-management-manual.coding-progress.info-aggregation-desc'
+                | translate
+            }}</span>
+          </div>
+        </div>
+      }
+      <div class="coverage-stats">
+        <button
+          type="button"
+          class="stat-item stat-item-button"
+          (click)="showTotalDetails.set(!showTotalDetails())"
+          [attr.aria-expanded]="showTotalDetails()"
+          aria-controls="total-details"
+          matTooltip="Klicken, um die Zusammensetzung anzuzeigen"
+        >
+          <span class="stat-label"
+            >Effektive Kodierfälle gesamt:
+            <mat-icon class="stat-label-inline-icon">{{
+              showTotalDetails() ? 'expand_less' : 'expand_more'
+            }}</mat-icon></span
+          >
+          <span class="stat-value stat-value-link">{{
+            codingProgressOverviewValue.totalCasesToCode
+          }}</span>
+        </button>
+        <div class="stat-item">
+          <span class="stat-label">Abgeschlossene Fälle:</span>
+          <span class="stat-value covered">{{
+            codingProgressOverviewValue.completedCases
+          }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Offene Arbeitsfälle:</span>
+          <span class="stat-value missing">{{
+            codingProgressOverviewValue.totalCasesToCode -
+              codingProgressOverviewValue.completedCases
+          }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Fertigstellungsrate:</span>
+          <span class="stat-value percentage"
+            >{{
+              codingProgressOverviewValue.completionPercentage
+                | number: '1.1-1'
+            }}%</span
+          >
+        </div>
+      </div>
+      @if (showTotalDetails()) {
+        <div id="total-details" class="total-details-container">
+          <h4 class="details-title">Zusammensetzung nach Variablen</h4>
+          <table class="details-table">
+            <thead>
+              <tr>
+                <th>Unit</th>
+                <th>Variable</th>
+                <th class="numeric-cell">Anzahl Fälle</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (variable of codingIncompleteVariables(); track variableKey(variable)) {
+                <tr>
+                  <td>{{ variable.unitName }}</td>
+                  <td>{{ variable.variableId }}</td>
+                  <td class="numeric-cell strong-cell">
+                    {{ getVariableEffectiveCaseCount(variable) }}
+                  </td>
+                </tr>
+              }
+              @if (codingIncompleteVariables().length === 0) {
+                <tr>
+                  <td colspan="3" class="empty-details-cell">
+                    Keine offenen Variablen gefunden.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (
+        manualCodingScopeSummaryValue &&
+        manualCodingScopeSummaryValue.coveredSourceResponseCount > 0
+      ) {
+        <div class="manual-scope-note">
+          <mat-icon>info_outline</mat-icon>
+          <span>
+            {{
+              'coding-management-manual.manual-scope-note'
+                | translate
+                  : {
+                      statusResponseCount:
+                        manualCodingScopeSummaryValue.manualResponseCount +
+                        manualCodingScopeSummaryValue.coveredSourceResponseCount,
+                      responseCount:
+                        manualCodingScopeSummaryValue.coveredSourceResponseCount,
+                      variableCount:
+                        manualCodingScopeSummaryValue.coveredSourceVariableCount
+                    }
+            }}
+          </span>
+        </div>
+      }
+      @if (codingProgressOverviewValue.aggregationActive) {
+        <div class="aggregation-note">
+          <mat-icon>filter_alt</mat-icon>
+          <span>
+            {{
+              'coding-management-manual.coding-progress.aggregation-note'
+                | translate
+                  : {
+                      rawCases: codingProgressOverviewValue.rawTotalCasesToCode,
+                      effectiveCases:
+                        codingProgressOverviewValue.totalCasesToCode,
+                      threshold:
+                        codingProgressOverviewValue.aggregationThreshold,
+                      collapsedCases:
+                        codingProgressOverviewValue.aggregatedDuplicateCases
+                    }
+            }}
+          </span>
+        </div>
+      }
+      <div class="coverage-bar coverage-bar-spaced">
+        <div
+          class="coverage-fill"
+          [style.width.%]="codingProgressOverviewValue.completionPercentage"
+        ></div>
+      </div>
+    </div>
+    @if (isLoadingCodingProgress()) {
+      <div class="loading-overlay">
+        <div class="loading-content">
+          <mat-spinner diameter="40"></mat-spinner>
+          <div class="loading-text">
+            {{ 'coding-management-manual.loading.coding-progress' | translate }}
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}

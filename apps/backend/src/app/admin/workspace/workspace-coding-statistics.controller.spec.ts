@@ -401,7 +401,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.workspaceSummary.totalDoubleCodedResponses).toBe(1);
     expect(
       codingReviewService.getCodedVariablesForKappa
-    ).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32], 'code');
+    ).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32], 'code', { unitName: undefined, variableId: undefined });
   });
 
   it('calculates detailed kappa statistics on score level when requested', async () => {
@@ -503,7 +503,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       'score'
     );
     expect(codingReviewService.getCodedVariablesForKappa)
-      .toHaveBeenCalledWith(5, false, [], [], [], 'score');
+      .toHaveBeenCalledWith(5, false, [], [], [], 'score', { unitName: undefined, variableId: undefined });
     expect(result.variables[0].doubleCodedCount).toBe(1);
     expect(result.workspaceSummary.calculationLevel).toBe('score');
   });
@@ -674,7 +674,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     );
 
     expect(codingReviewService.getCodedVariablesForKappa)
-      .toHaveBeenCalledWith(5, false, [], [], [], 'code');
+      .toHaveBeenCalledWith(5, false, [], [], [], 'code', { unitName: 'UNIT', variableId: 'VAR' });
     expect(response.setHeader).toHaveBeenCalledWith(
       'Content-Type',
       'text/csv; charset=utf-8'

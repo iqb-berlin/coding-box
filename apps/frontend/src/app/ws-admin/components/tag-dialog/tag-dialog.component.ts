@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -44,7 +45,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
               <div class="tag-item" [style.background-color]="tag.color || '#e3f2fd'">
                 <span class="tag-text" [style.color]="getContrastColor(tag.color)">{{ tag.tag }}</span>
                 <div class="tag-actions">
-                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
+                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen" [attr.aria-label]="'accessibility.actions.delete-tag' | translate">
                     <mat-icon [style.color]="getContrastColor(tag.color)">close</mat-icon>
                   </button>
                 </div>
@@ -209,7 +210,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
       min-width: 100px;
     }
   `],
-  imports: [
+  imports: [TranslateModule,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,
@@ -338,9 +339,9 @@ export class TagDialogComponent implements OnInit {
     }
 
     // Convert the color to RGB
-    let r = 0;
-    let g = 0;
-    let b = 0;
+    let r: number;
+    let g: number;
+    let b: number;
 
     // Handle hex colors
     if (backgroundColor.startsWith('#')) {

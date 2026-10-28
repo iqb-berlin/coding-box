@@ -1,0 +1,523 @@
+@let responseAnalysisValue = responseAnalysis();
+@let responseAnalysisErrorValue = responseAnalysisError();
+@let emptyResponseMissingValue = emptyResponseMissing();
+<div id="manual-preparation" class="manual-coding-sections-container">
+  <div class="aggregation-config">
+    <h3
+      class="subsection-title"
+      [matTooltip]="responseAnalysisValue?.isCalculating ? 'Analyse läuft' : ''"
+    >
+      <mat-icon>settings</mat-icon>
+      {{
+        'coding-management-manual.duplicate-aggregation.config-title'
+          | translate
+      }}
+      @if (responseAnalysisValue?.isCalculating) {
+        <mat-icon class="aggregation-lock-icon" matTooltip="Analyse läuft"
+          >lock</mat-icon
+        >
+      }
+    </h3>
+    <p class="subsection-description">
+      {{
+        'coding-management-manual.duplicate-aggregation.config-description'
+          | translate
+      }}
+    </p>
+    <div class="analysis-summary">
+      <div class="analysis-card">
+        <div class="analysis-details">
+          <coding-box-manual-coding-aggregation-settings
+            [isCalculating]="!!responseAnalysisValue?.isCalculating"
+            [isLoadingResponseAnalysis]="isLoadingResponseAnalysis()"
+            [isApplying]="isApplyingDuplicateAggregation()"
+            (thresholdChanged)="onThresholdChanged($event)"
+            (aggregationModeChanged)="onAggregationModeChanged($event)"
+            (matchingFlagToggled)="toggleMatchingFlag($event)"
+            (restartRequested)="restartAnalysis()"
+          />
+        </div>
+      </div>
+      @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
+        <div class="aggregation-impact">
+          <mat-icon>insights</mat-icon>
+          <div>
+            <strong>
+              {{
+                aggregation.aggregationActive
+                  ? 'Aggregation aktiv'
+                  : 'Aggregation nicht aktiv'
+              }}
+            </strong>
+            <span>
+              {{
+                'coding-management-manual.coding-progress.analysis-aggregation-note'
+                  | translate
+                    : {
+                        rawCases: aggregation.rawCases,
+                        effectiveCases: aggregation.effectiveCases
+                      }
+              }}
+              @if (aggregation.collapsedCases > 0) {
+                {{
+                  'coding-management-manual.coding-progress.analysis-aggregation-savings'
+                    | translate
+                      : {
+                          collapsedCases: aggregation.collapsedCases
+                        }
+                }}
+              }
+            </span>
+          </div>
+        </div>
+      }
+      @if (
+        isResponseAnalysisOutdated() || hasResponseAnalysisRestScopeDifference()
+      ) {
+        <div class="analysis-stale-note">
+          @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
+            <mat-icon>warning</mat-icon>
+            @if (isResponseAnalysisOutdated()) {
+              <span>
+                {{
+                  'coding-management-manual.response-analysis.outdated-note'
+                    | translate
+                      : {
+                          analysisRawCases: aggregation.rawCases,
+                          referenceRawCases:
+                            getResponseAnalysisReferenceRawCases()
+                        }
+                }}
+              </span>
+            } @else {
+              <span>
+                {{
+                  'coding-management-manual.response-analysis.rest-scope-note'
+                    | translate
+                      : {
+                          analysisRawCases: aggregation.rawCases,
+                          currentRawManualResponses:
+                            getCurrentRawManualResponses()
+                        }
+                }}
+              </span>
+            }
+          }
+        </div>
+      }
+    </div>
+  </div>
+  <!-- Response Analysis Section -->
+  <div
+    class="response-analysis-section statistics-section"
+    [class.blurred-content]="isLoadingResponseAnalysis()"
+  >
+    <h3 class="subsection-title">
+      <mat-icon>analytics</mat-icon>
+      {{ 'coding-management-manual.response-analysis.title' | translate }}
+      <button
+        mat-icon-button
+        (click)="restartAnalysis()"
+        matTooltip="Antwortanalyse neu berechnen"
+        [disabled]="
+          isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
+        "
+        [attr.aria-label]="'accessibility.actions.restart-analysis' | translate"
+      >
+        <mat-icon>autorenew</mat-icon>
+      </button>
+      @if (
+        isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
+      ) {
+        <span class="loading-indicator">
+          <mat-spinner diameter="16"></mat-spinner>
+          @if (responseAnalysisValue?.isCalculating) {
+            <span class="analysis-progress-text">
+              Berechnung läuft...
+              @if (
+                responseAnalysisValue?.progress !== null &&
+                responseAnalysisValue?.progress !== undefined
+              ) {
+                <span>({{ responseAnalysisValue?.progress }}%)</span>
+              }
+            </span>
+          }
+        </span>
+      }
+    </h3>
+    <p class="subsection-description">
+      {{ 'coding-management-manual.response-analysis.description' | translate }}
+    </p>
+    @if (responseAnalysisValue) {
+      <div class="analysis-summary">
+        <!-- Empty Responses Summary -->
+        @if (!responseAnalysisValue.isCalculating) {
+          <div
+            class="analysis-card"
+            [class.has-issues]="hasUncodedEmptyResponses()"
+          >
+            <button
+              type="button"
+              class="analysis-header"
+              (click)="toggleEmptyResponsesDetails()"
+              [attr.aria-expanded]="showEmptyResponsesDetails()"
+              aria-controls="empty-responses-details"
+            >
+              <div class="analysis-icon-title">
+                <mat-icon
+                  [class.warning-icon]="hasUncodedEmptyResponses()"
+                  [class.success-icon]="
+                    !hasUncodedEmptyResponses() &&
+                    responseAnalysisValue.emptyResponses.total > 0
+                  "
+                >
+                  {{ hasUncodedEmptyResponses() ? 'warning' : 'check_circle' }}
+                </mat-icon>
+                <div class="analysis-title-content">
+                  <span class="analysis-title">{{
+                    'coding-management-manual.response-analysis.empty-responses'
+                      | translate
+                  }}</span>
+                  <span
+                    class="analysis-count"
+                    [class.warning-count]="hasUncodedEmptyResponses()"
+                    [class.success-count]="
+                      !hasUncodedEmptyResponses() &&
+                      responseAnalysisValue.emptyResponses.total > 0
+                    "
+                  >
+                    {{ responseAnalysisValue.emptyResponses.total }}
+                    @if (responseAnalysisValue.emptyResponses.total > 0) {
+                      <span class="count-detail">
+                        ({{ getUncodedCount() }}
+                        {{
+                          'coding-management-manual.response-analysis.open'
+                            | translate
+                        }})
+                      </span>
+                    }
+                  </span>
+                </div>
+              </div>
+              <mat-icon class="expand-icon">{{
+                showEmptyResponsesDetails() ? 'expand_less' : 'expand_more'
+              }}</mat-icon>
+            </button>
+            @if (
+              showEmptyResponsesDetails() &&
+              responseAnalysisValue.emptyResponses.total > 0
+            ) {
+              <div class="analysis-details" id="empty-responses-details">
+                <div class="table-responsive">
+                  <table class="analysis-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.unit'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.variable'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.person'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.group'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.booklet'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.value'
+                              | translate
+                          }}
+                        </th>
+                        <th>
+                          {{
+                            'coding-management-manual.response-analysis.table.status'
+                              | translate
+                          }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (
+                        item of responseAnalysisValue.emptyResponses.items;
+                        track item.responseId
+                      ) {
+                        <tr [class.coded-row]="item.isCoded">
+                          <td>{{ item.unitAlias || item.unitName }}</td>
+                          <td>{{ item.variableId }}</td>
+                          <td>
+                            {{ item.personLogin
+                            }}{{
+                              item.personCode
+                                ? ' (' + item.personCode + ')'
+                                : ''
+                            }}
+                          </td>
+                          <td>{{ item.personGroup }}</td>
+                          <td>{{ item.bookletName }}</td>
+                          <td class="value-cell">
+                            {{ item.value || '(leer)' }}
+                          </td>
+                          <td class="status-cell">
+                            @if (item.isCoded) {
+                              <span class="coded-badge">
+                                Kodiert (Code: {{ item.assignedCode }})
+                              </span>
+                            }
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                <mat-paginator
+                  [length]="responseAnalysisValue.emptyResponses.total"
+                  [pageSize]="emptyPageSize()"
+                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
+                  [pageIndex]="emptyPageIndex()"
+                  (page)="onEmptyPageChange($event)"
+                  aria-label="Seite der leeren Antworten auswählen"
+                >
+                </mat-paginator>
+                <div class="analysis-actions">
+                  @if (canApplyCompletedJobResults()) {
+                    <button
+                      mat-stroked-button
+                      color="primary"
+                      (click)="emptyCodingRequested.emit()"
+                      [disabled]="
+                        isApplyingEmptyCoding() ||
+                        responseAnalysisValue.isCalculating ||
+                        !hasUncodedEmptyResponses() ||
+                        !emptyResponseMissingValue
+                      "
+                      [matTooltip]="getApplyEmptyResponseCodingTooltip()"
+                    >
+                      @if (!isApplyingEmptyCoding()) {
+                        <mat-icon>flash_on</mat-icon>
+                      }
+                      @if (isApplyingEmptyCoding()) {
+                        <mat-spinner diameter="20"></mat-spinner>
+                      }
+                      {{
+                        'coding-management-manual.response-analysis.apply-empty-coding-button'
+                          | translate
+                      }}
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+        <!-- Duplicate Values Summary -->
+        @if (!responseAnalysisValue.isCalculating) {
+          <div
+            class="analysis-card"
+            [class.has-issues]="hasDuplicateFindingsWithoutAggregation()"
+          >
+            <button
+              type="button"
+              class="analysis-header"
+              (click)="toggleDuplicateValuesDetails()"
+              [attr.aria-expanded]="showDuplicateValuesDetails()"
+              aria-controls="duplicate-values-details"
+            >
+              <div class="analysis-icon-title">
+                <mat-icon
+                  [class.warning-icon]="
+                    hasDuplicateFindingsWithoutAggregation()
+                  "
+                >
+                  {{
+                    responseAnalysisValue.duplicateValues.total > 0
+                      ? 'content_copy'
+                      : 'check_circle'
+                  }}
+                </mat-icon>
+                <div class="analysis-title-content">
+                  <span class="analysis-title">
+                    {{
+                      'coding-management-manual.response-analysis.duplicate-values'
+                        | translate
+                    }}
+                    @if (
+                      responseAnalysisValue.duplicateValues.isAggregationApplied
+                    ) {
+                      <span class="aggregation-applied-badge">
+                        <mat-icon>layers</mat-icon>
+                        {{
+                          'coding-management-manual.duplicate-aggregation.is-applied'
+                            | translate
+                        }}
+                      </span>
+                    }
+                  </span>
+                  <span
+                    class="analysis-count"
+                    [class.warning-count]="
+                      hasDuplicateFindingsWithoutAggregation()
+                    "
+                  >
+                    {{ responseAnalysisValue.duplicateValues.total }}
+                    {{
+                      'coding-management-manual.response-analysis.groups'
+                        | translate
+                    }}
+                    ({{ responseAnalysisValue.duplicateValues.totalResponses }}
+                    {{
+                      'coding-management-manual.response-analysis.responses'
+                        | translate
+                    }})
+                    @if (responseAnalysisAggregationSavings() > 0) {
+                      <span>
+                        - {{ responseAnalysisAggregationSavings() }} Einsparung
+                        in dieser Analyse
+                      </span>
+                    }
+                  </span>
+                  @if (hasDuplicateFindingsWithoutAggregation()) {
+                    <span class="analysis-note aggregation-disabled-note">
+                      <mat-icon>info</mat-icon>
+                      {{
+                        'coding-management-manual.response-analysis.duplicates-detected-no-aggregation'
+                          | translate
+                      }}
+                    </span>
+                  }
+                </div>
+              </div>
+              <mat-icon class="expand-icon">{{
+                showDuplicateValuesDetails() ? 'expand_less' : 'expand_more'
+              }}</mat-icon>
+            </button>
+            @if (
+              showDuplicateValuesDetails() &&
+              responseAnalysisValue.duplicateValues.total > 0
+            ) {
+              <div class="analysis-details" id="duplicate-values-details">
+                @for (
+                  group of responseAnalysisValue.duplicateValues.groups;
+                  track duplicateGroupKey(group)
+                ) {
+                  <div class="duplicate-group">
+                    <div class="duplicate-group-header">
+                      <strong>{{ group.unitAlias || group.unitName }}</strong> /
+                      {{ group.variableId }}
+                      <span class="duplicate-value"
+                        >"{{ group.normalizedValue | slice: 0 : 50
+                        }}{{
+                          group.normalizedValue.length > 50 ? '...' : ''
+                        }}"</span
+                      >
+                      <span class="occurrence-count"
+                        >({{ group.occurrences.length }}x)</span
+                      >
+                    </div>
+                    <ul class="occurrence-list">
+                      @for (
+                        occ of group.occurrences | slice: 0 : 5;
+                        track occ.responseId
+                      ) {
+                        <li>
+                          {{ occ.personLogin
+                          }}{{
+                            occ.personCode ? ' (' + occ.personCode + ')' : ''
+                          }}
+                          - {{ occ.bookletName }}
+                        </li>
+                      }
+                      @if (group.occurrences.length > 5) {
+                        <li class="more-occurrences">
+                          +{{ group.occurrences.length - 5 }}
+                          {{
+                            'coding-management-manual.response-analysis.more'
+                              | translate
+                          }}
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+                <mat-paginator
+                  [length]="responseAnalysisValue.duplicateValues.total"
+                  [pageSize]="duplicatePageSize()"
+                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
+                  [pageIndex]="duplicatePageIndex()"
+                  (page)="onDuplicatePageChange($event)"
+                  aria-label="Seite der Duplikatgruppen auswählen"
+                >
+                </mat-paginator>
+              </div>
+            }
+          </div>
+        }
+        <p class="analysis-timestamp">
+          <mat-icon>schedule</mat-icon>
+          {{
+            'coding-management-manual.response-analysis.last-updated'
+              | translate
+          }}: {{ responseAnalysisValue.analysisTimestamp | date: 'medium' }}
+        </p>
+      </div>
+    }
+    @if (responseAnalysisErrorValue && !isLoadingResponseAnalysis()) {
+      <div class="no-analysis-data error-state">
+        <mat-icon>error</mat-icon>
+        <span>{{ responseAnalysisErrorValue }}</span>
+        <button mat-stroked-button color="warn" (click)="restartAnalysis()">
+          <mat-icon>autorenew</mat-icon>
+          Erneut versuchen
+        </button>
+      </div>
+    }
+    @if (
+      !responseAnalysisValue &&
+      !responseAnalysisErrorValue &&
+      !isLoadingResponseAnalysis()
+    ) {
+      <div class="no-analysis-data">
+        <mat-icon>info</mat-icon>
+        <span>{{
+          'coding-management-manual.response-analysis.no-data' | translate
+        }}</span>
+        <button mat-stroked-button color="primary" (click)="restartAnalysis()">
+          <mat-icon>autorenew</mat-icon>
+          Analyse starten
+        </button>
+      </div>
+    }
+    <!-- Loading Overlay for Response Analysis -->
+    @if (isLoadingResponseAnalysis()) {
+      <div class="loading-overlay">
+        <div class="loading-content">
+          <mat-spinner diameter="40"></mat-spinner>
+          <div class="loading-text">
+            {{
+              'coding-management-manual.loading.response-analysis' | translate
+            }}
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>

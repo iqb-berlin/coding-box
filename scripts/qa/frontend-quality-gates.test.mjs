@@ -18,14 +18,27 @@ const { ESLint } = require('eslint');
 const eslint = new ESLint({
   cwd: workspace,
   overrideConfig: {
-    parserOptions: {
-      // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
-      disallowAutomaticSingleRunInference: true
+    languageOptions: {
+      parserOptions: {
+        // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
+        disallowAutomaticSingleRunInference: true
+      }
     }
   }
 });
 const templatePath = 'apps/frontend/src/app/components/home/home.component.html';
 const componentPath = 'apps/frontend/src/app/components/home/home.component.ts';
+
+test('ESLint 10 uses compatible import rules and hashes the shared flat configuration', async () => {
+  assert.match(ESLint.version, /^10\./);
+  const config = await eslint.calculateConfigForFile(componentPath);
+  assert.match(config.plugins.import.meta.name, /import-x/);
+  assert.ok(config.settings['import-x/resolver']);
+  const backend = await eslint.calculateConfigForFile('apps/backend/src/app/app.controller.ts');
+  assert.equal(backend.rules['@angular-eslint/prefer-inject'], undefined);
+  const nx = JSON.parse(readFileSync(join(workspace, 'nx.json'), 'utf8'));
+  assert.ok(nx.namedInputs.sharedGlobals.includes('{workspaceRoot}/eslint.config.cjs'));
+});
 
 test('TypeScript-ESLint and migrated IQB formatting rules remain active', async () => {
   const parserVersion = require('@typescript-eslint/parser/package.json').version;
@@ -349,7 +362,7 @@ test('the actual backend job checks its complete suite and rejects test failures
   const directory = mkdtempSync(join(tmpdir(), 'backend-commit-gate-'));
   const env = {
     ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true', NX_TUI: 'false',
-    NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
+    CI_PROJECT_DIR: directory, NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
   };
   const run = (command, args) => spawnSync(command, args, {
     cwd: directory, env, encoding: 'utf8', timeout: 30000
@@ -371,6 +384,9 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync(project + '.tested', 'checked');
       if (project === 'frontend' || fs.existsSync('fail-backend')) process.exitCode = 1;
     `);
+    mkdirSync(join(directory, 'scripts/tests'), { recursive: true });
+    writeFileSync(join(directory, 'scripts/tests/install-migration-regression.sh'),
+      'set -eu\nprintf checked > migration.tested\n');
     writeFileSync(join(directory, 'typecheck.cjs'), `
       const fs = require('node:fs');
       fs.writeFileSync('typecheck.tested', 'checked');
@@ -407,6 +423,7 @@ test('the actual backend job checks its complete suite and rejects test failures
 
     const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
+    assert.equal(readFileSync(join(directory, 'migration.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
@@ -594,4 +611,79 @@ test('the actual coverage thresholds reject passing tests with uncovered code', 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('Material icon buttons in external and inline templates have accessible names', async () => {
+  const { parseTemplate } = await import('@angular/compiler');
+  const ts = require('typescript');
+  const sourceRoot = join(workspace, 'apps/frontend/src/app');
+  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? walk(file) : [file];
+  });
+  const missing = [];
+  function check(template, file) {
+    const parsed = parseTemplate(template, file);
+    assert.ok(!parsed.errors?.length, file);
+    const seen = new Set();
+    function visit(node) {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+      function hasReadableContent(nodes) {
+        return (nodes || []).some(child => {
+          if (['mat-icon', 'coding-box-wrapped-icon'].includes(child.name)) return false;
+          if (typeof child.value === 'string' && child.value.trim()) return true;
+          if (child.value?.source?.trim()) return true;
+          return ['children', 'branches', 'cases'].some(key => hasReadableContent(child[key]));
+        });
+      }
+      const materialButton = ['button', 'a'].includes(node.name) && node.attributes?.some(attribute =>
+        /^(mat-(icon-button|fab|mini-fab|button|raised-button|stroked-button|flat-button)|matIconButton|matFab|matMiniFab|matButton)$/.test(attribute.name));
+      const iconButton = materialButton && (node.attributes.some(attribute =>
+        ['mat-icon-button', 'mat-fab', 'mat-mini-fab', 'matIconButton', 'matFab', 'matMiniFab'].includes(attribute.name)) ||
+        (/<(?:mat-icon|coding-box-wrapped-icon)\b/.test(node.sourceSpan.toString()) && !hasReadableContent(node.children)));
+      if (iconButton) {
+        const named = [...node.attributes, ...node.inputs].some(attribute =>
+          ['aria-label', 'aria-labelledby'].includes(attribute.name) &&
+          (typeof attribute.value === 'string' ? attribute.value.trim() : attribute.value.source?.trim()));
+        if (!named) missing.push(`${file}:${node.sourceSpan.start.line + 1}`);
+      }
+      for (const key of ['children', 'branches', 'cases', 'empty', 'placeholder', 'loading', 'error']) {
+        const child = node[key];
+        if (Array.isArray(child)) child.forEach(visit);
+        else visit(child);
+      }
+    }
+    parsed.nodes.forEach(visit);
+  }
+  for (const file of walk(sourceRoot)) {
+    const source = readFileSync(file, 'utf8');
+    if (file.endsWith('.html')) check(source, file);
+    if (!file.endsWith('.ts') || /\.(spec|mock)\.ts$/.test(file)) continue;
+    const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    function visit(node) {
+      if (ts.isPropertyAssignment(node) && node.name.getText(tree) === 'template' &&
+        (ts.isNoSubstitutionTemplateLiteral(node.initializer) || ts.isStringLiteral(node.initializer))) check(node.initializer.text, file);
+      ts.forEachChild(node, visit);
+    }
+    visit(tree);
+  }
+  assert.deepEqual(missing, [], 'Icon buttons need aria-label or aria-labelledby; a tooltip is a description.');
+});
+
+test('production ExcelJS imports remain deferred', () => {
+  const ts = require('typescript');
+  const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const file = join(directory, entry.name);
+    return entry.isDirectory() ? walk(file) : [file];
+  });
+  const eager = [];
+  for (const file of walk(join(workspace, 'apps/frontend/src/app'))) {
+    if (!file.endsWith('.ts') || /\.(spec|mock)\.ts$/.test(file)) continue;
+    const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+    for (const node of tree.statements) {
+      if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === 'exceljs' && !node.importClause?.isTypeOnly) eager.push(file);
+    }
+  }
+  assert.deepEqual(eager, [], 'Load ExcelJS with import() inside the workbook action.');
 });

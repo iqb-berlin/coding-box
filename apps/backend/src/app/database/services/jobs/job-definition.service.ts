@@ -520,9 +520,9 @@ export class JobDefinitionService {
     assignedVariables: JobDefinitionVariable[] = [],
     assignedVariableBundles: JobDefinitionBundleForUsage[] = []
   ): {
-      selectedVariables: JobDefinitionVariable[];
-      selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
-    } {
+    selectedVariables: JobDefinitionVariable[];
+    selectedVariableBundles: JobDefinitionDistributionVariableBundle[];
+  } {
     const assignedVariableOptionsByKey = assignedVariables.reduce(
       (variablesByKey, variable) => {
         const key = this.makeVariableKey(variable.unitName, variable.variableId);
@@ -1477,10 +1477,10 @@ export class JobDefinitionService {
   private normalizeBundlesForComparison(
     bundles?: JobDefinitionVariableBundle[]
   ): {
-      id: number;
-      caseOrderingMode?: CaseOrderingMode;
-      variables: JobDefinitionVariable[];
-    }[] {
+    id: number;
+    caseOrderingMode?: CaseOrderingMode;
+    variables: JobDefinitionVariable[];
+  }[] {
     return (bundles || [])
       .map(bundle => ({
         id: Number(bundle.id),

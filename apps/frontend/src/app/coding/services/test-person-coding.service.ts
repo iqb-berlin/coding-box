@@ -1197,17 +1197,17 @@ export class TestPersonCodingService {
     workspaceId: number,
     jobId: string
   ): Observable<{
-      status: string;
-      progress: number;
-      result?: {
-        message: string;
-        processedRows: number;
-        updatedRows: number;
-        errorCount: number;
-        affectedRowCount: number;
-      };
-      error?: string;
-    }> {
+    status: string;
+    progress: number;
+    result?: {
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errorCount: number;
+      affectedRowCount: number;
+    };
+    error?: string;
+  }> {
     return this.http.get<{
       status: string;
       progress: number;
@@ -1302,23 +1302,23 @@ export class TestPersonCodingService {
       sampleCount: number;
     }[]
   ): Observable<
-      {
-        coderId: number;
-        coderName: string;
-        responses: {
-          responseId: number;
-          unitAlias: string;
-          variableId: string;
-          unitName: string;
-          value: string;
-          personLogin: string;
-          personCode: string;
-          personGroup: string;
-          bookletName: string;
-          variable: string;
-        }[];
-      }[]
-    > {
+    {
+      coderId: number;
+      coderName: string;
+      responses: {
+        responseId: number;
+        unitAlias: string;
+        variableId: string;
+        unitName: string;
+        value: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        bookletName: string;
+        variable: string;
+      }[];
+    }[]
+  > {
     const request = {
       selectedCoders,
       variableConfigs
@@ -1723,12 +1723,12 @@ export class TestPersonCodingService {
     threshold: number,
     aggregateMode: boolean
   ): Observable<{
-      success: boolean;
-      aggregatedGroups: number;
-      aggregatedResponses: number;
-      uniqueCodingCases: number;
-      message: string;
-    }> {
+    success: boolean;
+    aggregatedGroups: number;
+    aggregatedResponses: number;
+    uniqueCodingCases: number;
+    message: string;
+  }> {
     return this.http
       .post<{
       success: boolean;
@@ -1985,26 +1985,26 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = true,
     scope?: CohensKappaScope
   ): Observable<{
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalSharedResponses: number;
-        validPairs: number;
-        interpretation: string;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-      };
-    }> {
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+      weightingMethod: 'weighted' | 'unweighted';
+    };
+  }> {
     const params = this.appendCohensKappaScopeParams(
       new HttpParams()
         .set('weightedMean', weightedMean.toString())

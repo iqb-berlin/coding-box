@@ -1,19 +1,13 @@
 import {
-  MatTableDataSource
-} from '@angular/material/table';
-import {
   Component, DestroyRef, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { finalize, timer } from 'rxjs';
+import { finalize } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
-import { SelectionModel } from '@angular/cdk/collections';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
-import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
-import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import { CreateUserForm, EditUserForm } from '../../models/user-form.model';
@@ -33,17 +27,13 @@ import {
 export class UsersComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
-  private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
   readonly selectedUsers = signal<number[]>([]);
   protected readonly selectedRows = signal<UserFullDto[]>([]);
-  userObjectsDatasource = new MatTableDataSource<UserFullDto>();
-  tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
-  tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
+  protected readonly usersRefreshVersion = signal(0);
 
   readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
@@ -52,39 +42,11 @@ export class UsersComponent implements OnInit {
         this.authData.set(authData);
       }
     );
-    timer(0).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.createWorkspaceList();
-      this.updateUserList();
-    });
-  }
-
-  private setObjectsDatasource(users: UserFullDto[]): void {
-    this.userObjectsDatasource = new MatTableDataSource(users);
-    this.userObjectsDatasource
-      .filterPredicate = (userList: UserFullDto, filter) => [
-        'username', 'displayName'
-      ].some(column => (userList[column as keyof UserFullDto] as string || '')
-        .toLowerCase()
-        .includes(filter));
   }
 
   updateUserList(): void {
-    this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().pipe(
-      takeUntilDestroyed(this.destroyRef),
-      finalize(() => { this.appService.dataLoading = false; })
-    ).subscribe(
-      (users: UserFullDto[]) => {
-        if (users.length > 0) {
-          this.setObjectsDatasource(users);
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
-        } else {
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
-        }
-      }
-    );
+    this.usersRefreshVersion.update(version => version + 1);
+    this.appService.dataLoading = false;
   }
 
   protected addUser(userData: CreateUserForm): void {
@@ -212,11 +174,5 @@ export class UsersComponent implements OnInit {
           this.appService.dataLoading = false;
         }
       );
-  }
-
-  createWorkspaceList(): void {
-    this.workspaceBackendService.getAllWorkspacesList().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaces => {
-      if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
-    });
   }
 }

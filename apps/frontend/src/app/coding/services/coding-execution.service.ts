@@ -16,13 +16,13 @@ export class CodingExecutionService {
     testPersonIds: number[],
     autoCoderRun: 1 | 2
   ): Observable<{
-      totalResponses: number;
-      statusCounts: {
-        [key: string]: number;
-      };
-      jobId?: string;
-      message?: string;
-    }> {
+    totalResponses: number;
+    statusCounts: {
+      [key: string]: number;
+    };
+    jobId?: string;
+    message?: string;
+  }> {
     const params = new HttpParams()
       .set('testPersons', testPersonIds.join(','))
       .set('autoCoderRun', autoCoderRun.toString());

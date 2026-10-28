@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -17,7 +18,7 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   templateUrl: './unit-info-dialog.component.html',
   styleUrls: ['./unit-info-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     CommonModule,
     MatDialogModule,
     MatButtonModule,

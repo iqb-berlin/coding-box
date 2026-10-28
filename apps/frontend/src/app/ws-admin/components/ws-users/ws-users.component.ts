@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, DestroyRef, OnInit, inject, output, signal, viewChild, effect, ChangeDetectionStrategy
+  Component, DestroyRef, OnInit, inject, output, signal, viewChild, effect, untracked, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, timer } from 'rxjs';
@@ -24,6 +24,9 @@ import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatDialog } from '@angular/material/dialog';
+import { UserDirectoryStatusComponent } from '../../../shared/components/user-directory-status/user-directory-status.component';
+import { UserDirectoryFacade } from '../../../shared/services/user/user-directory.facade';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -44,13 +47,25 @@ import {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [UserDirectoryFacade],
   selector: 'coding-box-ws-users',
   templateUrl: './ws-users.component.html',
   styleUrls: ['./ws-users.component.scss'],
-  imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
+  imports: [UserDirectoryStatusComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class WsUsersComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private readonly directory = inject(UserDirectoryFacade);
+  protected readonly usersStatus = this.directory.status;
+  private readonly synchronizeUsers = effect(() => {
+    const users = this.directory.users();
+    untracked(() => {
+      this.setObjectsDatasource(users);
+      this.tableSelectionCheckboxes.clear();
+      this.tableSelectionRow.clear();
+    });
+  });
+
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
@@ -101,20 +116,17 @@ export class WsUsersComponent implements OnInit {
   }
 
   updateUserList(): void {
-    this.appService.dataLoading = true;
-    const usersRequest = this.canManageGlobalUsers ?
-      this.userBackendService.getUsersFull() :
-      this.userBackendService.getUsersForWorkspaceSelection(this.appService.selectedWorkspaceId);
-    usersRequest.pipe(
-      takeUntilDestroyed(this.destroyRef),
-      finalize(() => { this.appService.dataLoading = false; })
-    ).subscribe(
-      (users: UserFullDto[]) => {
-        this.setObjectsDatasource(users);
-        this.tableSelectionCheckboxes.clear();
-        this.tableSelectionRow.clear();
-      }
-    );
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const global = this.canManageGlobalUsers;
+    this.directory.load(() => {
+      this.appService.dataLoading = true;
+      return (global ?
+        this.userBackendService.getUsersFull() :
+        this.userBackendService.getUsersForWorkspaceSelection(workspaceId)).pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        finalize(() => { this.appService.dataLoading = false; })
+      );
+    });
   }
 
   createWorkspaceList(): void {

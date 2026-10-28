@@ -410,12 +410,12 @@ export class CodingAnalysisService {
     threshold: number,
     aggregateMode: boolean
   ): Promise<{
-      success: boolean;
-      aggregatedGroups: number;
-      aggregatedResponses: number;
-      uniqueCodingCases: number;
-      message: string;
-    }> {
+    success: boolean;
+    aggregatedGroups: number;
+    aggregatedResponses: number;
+    uniqueCodingCases: number;
+    message: string;
+  }> {
     const currentFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
     const nextFlags = aggregateMode ?
       currentFlags.filter(flag => flag !== ResponseMatchingFlag.NO_AGGREGATION) :

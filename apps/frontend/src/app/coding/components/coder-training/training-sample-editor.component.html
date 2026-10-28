@@ -110,8 +110,8 @@
                     }
                     <mat-form-field appearance="outline" class="bundle-sample-field">
                       <mat-label>Stichproben pro Variable</mat-label>
-                      <input matInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
-                        (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: $any($event.target).value})" min="1"
+                      <input matInput #bundleSampleInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
+                        (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: bundleSampleInput.value})" min="1"
                         max="1000">
                     </mat-form-field>
                     <mat-form-field appearance="outline" class="bundle-case-ordering-field">
@@ -126,7 +126,7 @@
                       </mat-select>
                     </mat-form-field>
                     <button mat-icon-button type="button" [disabled]="!editable()" color="warn" (click)="bundleRemoved.emit(bundleGroup.bundle.id)"
-                      matTooltip="Variablenbündel entfernen">
+                      matTooltip="Variablenbündel entfernen" [attr.aria-label]="'accessibility.actions.remove-bundle' | translate">
                       <mat-icon>delete</mat-icon>
                     </button>
                   </div>
@@ -310,7 +310,7 @@
                     }
                   </div>
                   <button mat-icon-button type="button" [disabled]="!editable()" color="warn" (click)="variableRemoved.emit(item.index)"
-                    class="remove-variable-button">
+                    class="remove-variable-button" [attr.aria-label]="'accessibility.actions.remove-variable' | translate">
                     <mat-icon>delete</mat-icon>
                   </button>
                 </div>

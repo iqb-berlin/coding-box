@@ -45,17 +45,17 @@ import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingValidationService } from '../coding/coding-validation.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 // eslint-disable-next-line import/no-cycle
 import { ResponseManagementService } from './response-management.service';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-// eslint-disable-next-line import/no-cycle
+
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -323,13 +323,10 @@ export class WorkspaceTestResultsService {
 
   private static readonly ignoredDerivedCodingStatuses = STATISTICS_IGNORED_STATUSES;
 
-  private static readonly geoGebraValueParams = {
-    ggRawPrefix: 'UEsD%',
-    ggDataUriPrefix: 'data:%;base64,UEsD%'
-  };
-
   private static createGeoGebraValueCondition(responseAlias: string): string {
-    return `(${responseAlias}.value LIKE :ggRawPrefix OR ${responseAlias}.value ILIKE :ggDataUriPrefix)`;
+    // Keep these fixed literals aligned with idx_response_geogebra_unit.
+    // Bound pattern parameters cannot imply the partial index predicate in a generic plan.
+    return `(${responseAlias}.value LIKE 'UEsD%' OR ${responseAlias}.value ILIKE 'data:%;base64,UEsD%')`;
   }
 
   private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
@@ -2050,41 +2047,41 @@ export class WorkspaceTestResultsService {
     personId: number,
     workspaceId: number
   ): Promise<
-      {
+    {
+      id: number;
+      name: string;
+      logs: {
+        id: number;
+        bookletid: number;
+        ts: string;
+        parameter: string;
+        key: string;
+      }[];
+      units: {
         id: number;
         name: string;
-        logs: {
+        alias: string | null;
+        results: {
           id: number;
-          bookletid: number;
-          ts: string;
-          parameter: string;
-          key: string;
+          unitid: number;
+          variableid: string;
+          status: string;
+          value: string;
+          subform: string;
+          code?: number | null;
+          score?: number | null;
+          codedstatus?: string;
         }[];
-        units: {
+        tags: {
           id: number;
-          name: string;
-          alias: string | null;
-          results: {
-            id: number;
-            unitid: number;
-            variableid: string;
-            status: string;
-            value: string;
-            subform: string;
-            code?: number | null;
-            score?: number | null;
-            codedstatus?: string;
-          }[];
-          tags: {
-            id: number;
-            unitId: number;
-            tag: string;
-            color?: string;
-            createdAt: Date;
-          }[];
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
         }[];
-      }[]
-    > {
+      }[];
+    }[]
+  > {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
     }
@@ -2685,26 +2682,26 @@ export class WorkspaceTestResultsService {
     },
     queryRunner?: QueryRunner
   ): Promise<
-      [
-        Array<{
-          bookletId: number;
-          responseId: number;
-          unitId: number;
-          personId: number;
-          code: string;
-          group: string;
-          login: string;
-          booklet: string;
-          unit: string;
-          response: string;
-          responseStatus: string;
-          responseValue: string;
-          tags: string[];
-          logAnomalies: LogAnomalySummary[];
-        }>,
-        number
-      ]
-    > {
+    [
+      Array<{
+        bookletId: number;
+        responseId: number;
+        unitId: number;
+        personId: number;
+        code: string;
+        group: string;
+        login: string;
+        booklet: string;
+        unit: string;
+        response: string;
+        responseStatus: string;
+        responseValue: string;
+        tags: string[];
+        logAnomalies: LogAnomalySummary[];
+      }>,
+      number
+    ]
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -2970,8 +2967,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       qb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -3215,8 +3211,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       countQb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -3469,14 +3464,14 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     combos: Array<{ unitKey: string; variableId: string; values: string[] }>
   ): Promise<
-      Record<
-        string,
-        {
-          total: number;
-          values: Array<{ value: string; count: number; p: number }>;
-        }
-      >
-    > {
+    Record<
+      string,
+      {
+        total: number;
+        values: Array<{ value: string; count: number; p: number }>;
+      }
+    >
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -3767,21 +3762,21 @@ export class WorkspaceTestResultsService {
       sessionIds?: string;
     }
   ): Promise<{
-      codes: string[];
-      groups: string[];
-      logins: string[];
-      booklets: string[];
-      units: string[];
-      responses: string[];
-      responseStatuses: string[];
-      tags: string[];
-      processingDurations: string[];
-      unitProgresses: string[];
-      sessionBrowsers: string[];
-      sessionOs: string[];
-      sessionScreens: string[];
-      sessionIds: string[];
-    }> {
+    codes: string[];
+    groups: string[];
+    logins: string[];
+    booklets: string[];
+    units: string[];
+    responses: string[];
+    responseStatuses: string[];
+    tags: string[];
+    processingDurations: string[];
+    unitProgresses: string[];
+    sessionBrowsers: string[];
+    sessionOs: string[];
+    sessionScreens: string[];
+    sessionIds: string[];
+  }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -3929,8 +3924,7 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       baseQb.andWhere(
-        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit')
       );
     }
 
@@ -4249,8 +4243,8 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     unitId: number
   ): Promise<
-      { id: number; unitid: number; ts: string; key: string; parameter: string }[]
-    > {
+    { id: number; unitid: number; ts: string; key: string; parameter: string }[]
+  > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -4301,35 +4295,35 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     unitId: number
   ): Promise<{
-      bookletId: number;
+    bookletId: number;
+    logs: {
+      id: number;
+      bookletid: number;
+      ts: string;
+      key: string;
+      parameter: string;
+    }[];
+    sessions: {
+      id: number;
+      browser: string;
+      os: string;
+      screen: string;
+      ts: string;
+    }[];
+    units: {
+      id: number;
+      bookletid: number;
+      name: string;
+      alias: string | null;
       logs: {
         id: number;
-        bookletid: number;
+        unitid: number;
         ts: string;
         key: string;
         parameter: string;
       }[];
-      sessions: {
-        id: number;
-        browser: string;
-        os: string;
-        screen: string;
-        ts: string;
-      }[];
-      units: {
-        id: number;
-        bookletid: number;
-        name: string;
-        alias: string | null;
-        logs: {
-          id: number;
-          unitid: number;
-          ts: string;
-          key: string;
-          parameter: string;
-        }[];
-      }[];
-    }> {
+    }[];
+  }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -4426,11 +4420,11 @@ export class WorkspaceTestResultsService {
     connector: string,
     unitId: string
   ): Promise<{
-      responses: {
-        id: string;
-        content: string;
-      }[];
-    }> {
+    responses: {
+      id: string;
+      content: string;
+    }[];
+  }> {
     const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
@@ -4713,12 +4707,12 @@ export class WorkspaceTestResultsService {
     testPersonIds: string,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedPersons: number[];
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedPersons: number[];
+      warnings: string[];
+    };
+  }> {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
@@ -4919,9 +4913,9 @@ export class WorkspaceTestResultsService {
       }
 
       const finalSnapshot =
-      WorkspaceTestResultsService.dedupeDeleteDependencySnapshot(
-        dependencySnapshot
-      );
+        WorkspaceTestResultsService.dedupeDeleteDependencySnapshot(
+          dependencySnapshot
+        );
 
       await onProgress?.(92, 'Verwaiste Testheft-Metadaten werden bereinigt...');
       await this.deleteOrphanedBookletInfos(finalSnapshot.bookletInfoIds);
@@ -6558,12 +6552,12 @@ export class WorkspaceTestResultsService {
     unitId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedUnit: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedUnit: number | null;
+      warnings: string[];
+    };
+  }> {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
@@ -6631,12 +6625,12 @@ export class WorkspaceTestResultsService {
     responseId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedResponse: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedResponse: number | null;
+      warnings: string[];
+    };
+  }> {
     const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
@@ -6656,12 +6650,12 @@ export class WorkspaceTestResultsService {
     bookletId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedBooklet: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedBooklet: number | null;
+      warnings: string[];
+    };
+  }> {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
@@ -6749,27 +6743,27 @@ export class WorkspaceTestResultsService {
       sortDirection?: ResponseSearchSortDirection;
     } = {}
   ): Promise<{
-      data: {
-        responseId: number;
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number | null;
-        score?: number | null;
-        codedStatus?: string;
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        variablePage?: string;
-      }[];
-      total: number;
-    }> {
+    data: {
+      responseId: number;
+      variableId: string;
+      value: string;
+      status: string;
+      code?: number | null;
+      score?: number | null;
+      codedStatus?: string;
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      variablePage?: string;
+    }[];
+    total: number;
+  }> {
     if (!workspaceId) {
       throw new Error('workspaceId is required.');
     }
@@ -6949,8 +6943,7 @@ export class WorkspaceTestResultsService {
 
         if (searchParams.geogebra) {
           query.andWhere(
-            WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
-            WorkspaceTestResultsService.geoGebraValueParams
+            WorkspaceTestResultsService.createGeoGebraValueCondition('response')
           );
         }
 
@@ -7035,7 +7028,7 @@ export class WorkspaceTestResultsService {
             null :
             Number(rawEffectiveCodingStatus);
           const variablePage =
-          variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
+            variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
           '0';
 
           return {
@@ -7175,34 +7168,34 @@ export class WorkspaceTestResultsService {
     unitName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-      data: {
+    data: {
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      tags: {
+        id: number;
         unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        tags: {
-          id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
-        }[];
-        responses: {
-          variableId: string;
-          value: string;
-          status: string;
-          code?: number | null;
-          score?: number | null;
-          codedStatus?: string;
-        }[];
+        tag: string;
+        color?: string;
+        createdAt: Date;
       }[];
-      total: number;
-    }> {
+      responses: {
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number | null;
+        score?: number | null;
+        codedStatus?: string;
+      }[];
+    }[];
+    total: number;
+  }> {
     if (!workspaceId || !unitName) {
       throw new Error('Both workspaceId and unitName are required.');
     }
@@ -7317,21 +7310,21 @@ export class WorkspaceTestResultsService {
     bookletName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-      data: {
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        units: {
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-        }[];
+    data: {
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      units: {
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
       }[];
-      total: number;
-    }> {
+    }[];
+    total: number;
+  }> {
     if (!workspaceId || !bookletName) {
       throw new Error('Both workspaceId and bookletName are required.');
     }
@@ -8217,13 +8210,9 @@ export class WorkspaceTestResultsService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere(
-        WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
-        WorkspaceTestResultsService.geoGebraValueParams
+        WorkspaceTestResultsService.createGeoGebraValueCondition('response')
       );
     this.applyExclusionsToQuery(query, exclusions);
-    const count = await query
-      .getCount();
-
-    return count > 0;
+    return query.getExists();
   }
 }

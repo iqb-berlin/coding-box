@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
   SetMetadata
@@ -87,12 +88,12 @@ export class AccessLevelGuard implements CanActivate {
     const userAccessLevel = await this.usersService.getUserAccessLevel(userId, workspaceId);
 
     if (userAccessLevel === null) {
-      throw new UnauthorizedException(`User does not have access to workspace ${workspaceId}`);
+      throw new ForbiddenException(`User does not have access to workspace ${workspaceId}`);
     }
 
     // Check if user has sufficient access level
     if (userAccessLevel < requiredLevel) {
-      throw new UnauthorizedException(
+      throw new ForbiddenException(
         `Access level ${requiredLevel} required. Current user has level ${userAccessLevel}`
       );
     }

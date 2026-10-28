@@ -12,7 +12,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../core/services/app.service';
 import { FileService } from '../../../shared/services/file/file.service';
-import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
+import type { ReplayUnitResponse } from '../../services/replay-backend.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { PageData } from '../../models/page-data.model';
 import { normalizeMathTextReplayDataParts } from '../../utils/replay-data-parts-normalization';
@@ -47,7 +47,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   readonly unitDef = input<string>();
   readonly unitPlayer = input<string>();
-  readonly unitResponses = input<ResponseDto>();
+  readonly unitResponses = input<Partial<ReplayUnitResponse>>();
   readonly pageId = input<string>();
   readonly printMode = input<boolean>(false);
   readonly iFrameHeight = input<number>();
@@ -214,7 +214,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     } catch (error) { /* empty */ }
   }
 
-  private handleResponsesChange(unitResponses: ResponseDto): void {
+  private handleResponsesChange(unitResponses: Partial<ReplayUnitResponse>): void {
     if (unitResponses?.responses) {
       const dataParts = unitResponses.responses.reduce(
         (acc: { [key: string]: string }, response: { id: string; content: string }) => {

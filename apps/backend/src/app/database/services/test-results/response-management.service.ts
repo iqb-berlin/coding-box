@@ -799,12 +799,12 @@ export class ResponseManagementService {
     responseId: number,
     userId: string
   ): Promise<{
-      success: boolean;
-      report: {
-        deletedResponse: number | null;
-        warnings: string[];
-      };
-    }> {
+    success: boolean;
+    report: {
+      deletedResponse: number | null;
+      warnings: string[];
+    };
+  }> {
     return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
       let affectedUnitId: number | null = null;
       return this.connection.transaction(async manager => {

@@ -35,10 +35,7 @@ export class UserService {
     return this.http
       .get<UserFullDto[]>(
         `${this.serverUrl}admin/users/full`,
-        {})
-      .pipe(
-        catchError(() => of([]))
-      );
+        {});
   }
 
   addUser(newUser: RequestBody<'CreateUserDto'>): Observable<boolean> {

@@ -15,11 +15,9 @@ import {
 import {
   ApiOkResponse, ApiParam, ApiTags, ApiOperation
 } from '@nestjs/swagger';
-import { randomUUID } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
 import { Response } from 'express';
 import { requireJobId } from '../../job-queue/job-queue.util';
+import { createExternalCodingImportFile, removeExternalCodingImportFile } from '../../job-queue/external-coding-import-file.util';
 import { getErrorMessage } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
@@ -30,8 +28,6 @@ import { WorkspaceId } from './workspace.decorator';
 import { ExternalCodingImportService } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
-
-const TEMP_DIR = '/tmp/external-coding-import';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -137,29 +133,33 @@ export class WorkspaceCodingImportController {
 
     await this.jobQueueService.assertNoDependencyConflicts('external-coding-import', workspace_id);
 
-    // Write base64 file to temp location to avoid bloating Redis
-    if (!fs.existsSync(TEMP_DIR)) {
-      fs.mkdirSync(TEMP_DIR, { recursive: true });
-    }
-    const tempFileName = `${randomUUID()}-${body.fileName || 'import.csv'}`;
-    const tempFilePath = path.join(TEMP_DIR, tempFileName);
     const fileBuffer = Buffer.from(body.file, 'base64');
-    fs.writeFileSync(tempFilePath, fileBuffer);
+    const tempFilePath = createExternalCodingImportFile(fileBuffer);
 
     this.logger.log(
       `Wrote temp file for external coding import: ${tempFilePath} (${fileBuffer.length} bytes)`
     );
 
-    const job = await this.jobQueueService.addExternalCodingImportJob({
-      workspaceId: workspace_id,
-      requestedByUserId,
-      tempFilePath,
-      fileName: body.fileName || 'external-coding.csv',
-      sourceFormat: body.sourceFormat,
-      sourceVersion: body.sourceVersion,
-      scoreMode: body.scoreMode,
-      existingCodingMode: body.existingCodingMode
-    });
+    let job;
+    try {
+      job = await this.jobQueueService.addExternalCodingImportJob({
+        workspaceId: workspace_id,
+        requestedByUserId,
+        tempFilePath,
+        fileName: body.fileName || 'external-coding.csv',
+        sourceFormat: body.sourceFormat,
+        sourceVersion: body.sourceVersion,
+        scoreMode: body.scoreMode,
+        existingCodingMode: body.existingCodingMode
+      });
+    } catch (error) {
+      try {
+        removeExternalCodingImportFile(tempFilePath);
+      } catch (cleanupError) {
+        this.logger.warn(`Failed to clean up unqueued import: ${getErrorMessage(cleanupError)}`);
+      }
+      throw error;
+    }
 
     this.logger.log(
       `External coding import job ${job.id} queued for workspace ${workspace_id}`
@@ -181,17 +181,17 @@ export class WorkspaceCodingImportController {
     @WorkspaceId() workspace_id: number,
     @Param('jobId') jobId: string
   ): Promise<{
-      status: string;
-      progress: number;
-      result?: {
-        message: string;
-        processedRows: number;
-        updatedRows: number;
-        errorCount: number;
-        affectedRowCount: number;
-      };
-      error?: string;
-    }> {
+    status: string;
+    progress: number;
+    result?: {
+      message: string;
+      processedRows: number;
+      updatedRows: number;
+      errorCount: number;
+      affectedRowCount: number;
+    };
+    error?: string;
+  }> {
     const job = await this.jobQueueService.getExternalCodingImportJob(jobId);
     if (!job) {
       throw new NotFoundException(`Job ${jobId} not found`);
@@ -278,29 +278,29 @@ export class WorkspaceCodingImportController {
     @WorkspaceId() workspace_id: number,
     @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
   ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: 'update' | 'skip' | 'unchanged';
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+    message: string;
+    processedRows: number;
+    updatedRows: number;
+    errors: string[];
+    affectedRows: Array<{
+      unitAlias: string;
+      variableId: string;
+      personCode?: string;
+      personLogin?: string;
+      personGroup?: string;
+      bookletName?: string;
+      originalCodedStatus: string;
+      originalCode: number | null;
+      originalScore: number | null;
+      updatedCodedStatus: string | null;
+      updatedCode: number | null;
+      updatedScore: number | null;
+      importAction?: 'update' | 'skip' | 'unchanged';
+      actionReason?: string;
+      hasExistingCoding?: boolean;
+      hasConflict?: boolean;
+    }>;
+  }> {
     if (body.previewOnly !== true) {
       throw new BadRequestException(
         'Use the /apply endpoint for applying changes. This endpoint is only for preview mode.'

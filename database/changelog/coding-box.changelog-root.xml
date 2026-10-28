@@ -48,4 +48,5 @@
   <include file="coding-box.changelog-testcenter-import-runs.sql"/>
   <include file="coding-box.changelog-827-user-profile-names.sql"/>
   <include file="coding-box.changelog-workspace-deletion.sql"/>
+  <include file="coding-box.changelog-965-geogebra-existence.sql"/>
 </databaseChangeLog>

@@ -53,7 +53,7 @@
         </div>
       </div>
     </div>
-    <button mat-icon-button (click)="dismissBackendUnavailable()" class="close-button">
+    <button mat-icon-button (click)="dismissBackendUnavailable()" class="close-button" [attr.aria-label]="'accessibility.actions.dismiss-backend-unavailable' | translate">
       <mat-icon>close</mat-icon>
     </button>
   </div>
@@ -139,7 +139,7 @@
         }
       </div>
     </div>
-    <button mat-icon-button (click)="dismissError(error.id)" class="close-button">
+    <button mat-icon-button (click)="dismissError(error.id)" class="close-button" [attr.aria-label]="'accessibility.actions.dismiss-error' | translate">
       <mat-icon>close</mat-icon>
     </button>
   </div>

@@ -336,18 +336,18 @@ export class FileService {
     workspaceId: number,
     jobId: string
   ): Observable<{
-      id: string;
-      status:
+    id: string;
+    status:
       | 'completed'
       | 'waiting'
       | 'active'
       | 'delayed'
       | 'failed'
       | 'paused';
-      progress: number;
-      result?: TestResultsUploadResultDto;
-      error?: unknown;
-    }> {
+    progress: number;
+    result?: TestResultsUploadResultDto;
+    error?: unknown;
+  }> {
     return this.http.get<{
       id: string;
       status:
@@ -529,8 +529,8 @@ export class FileService {
   getUnitsWithFileIds(
     workspaceId: number
   ): Observable<
-      { id: number; unitId: string; fileName: string; data: string }[]
-    > {
+    { id: number; unitId: string; fileName: string; data: string }[]
+  > {
     return this.http
       .get<
       { id: number; unitId: string; fileName: string; data: string }[]

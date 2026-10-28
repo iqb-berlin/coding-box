@@ -80,6 +80,7 @@ services:
       HTTP_PORT: ${HTTP_PORT:-4200}
       JWT_SECRET: ${JWT_SECRET}
       NODE_OPTIONS: ${BACKEND_NODE_OPTIONS:-}
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
       GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
       EXPORT_CODING_LIST_BATCH_SIZE: ${EXPORT_CODING_LIST_BATCH_SIZE:-500}
       EXPORT_VERSIONED_BATCH_SIZE: ${EXPORT_VERSIONED_BATCH_SIZE:-250}
@@ -93,11 +94,13 @@ services:
       AUTOCODER_SCHEMA_VALIDATION_MODE: ${AUTOCODER_SCHEMA_VALIDATION_MODE:-compatible}
       DISABLED_JOB_QUEUE_PROCESSORS: data-export
       <<: [ *env-redis, *env-postgres, *env-oidc, *env-auth-policy ]
+    volumes:
+      - "./config/trusted-cas:/etc/coding-box/trusted-cas:ro"
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "node -e \"const http=require('http');const req=http.get('http://backend:3333/api/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(2000,()=>{req.destroy();process.exit(1);});\""
+          "node -e \"const http=require('http');const req=http.get('http://backend:3333/api/health/ready',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(2000,()=>{req.destroy();process.exit(1);});\""
         ]
       interval: 5s
       timeout: 3s

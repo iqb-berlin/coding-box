@@ -2,7 +2,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 import { CodingJobsComponent } from '../../apps/frontend/src/app/coding/components/coding-jobs/coding-jobs.component';
 import { CodingJobBackendService } from '../../apps/frontend/src/app/coding/services/coding-job-backend.service';
@@ -57,6 +57,7 @@ describe('CodingJobsComponent', () => {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 5,
+            selectedWorkspaceId$: new Subject<number>(),
             authData: {
               userId: 1,
               isAdmin: level === 3

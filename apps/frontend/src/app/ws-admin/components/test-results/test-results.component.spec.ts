@@ -1,5 +1,5 @@
 import { DeferBlockBehavior, ComponentFixture, TestBed } from '@angular/core/testing';
-// eslint-disable-next-line max-classes-per-file
+
 import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';

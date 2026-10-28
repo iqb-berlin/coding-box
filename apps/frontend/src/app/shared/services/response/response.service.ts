@@ -159,27 +159,27 @@ export class ResponseService {
     page?: number,
     limit?: number
   ): Observable<{
-      data: {
-        responseId: number;
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number;
-        score?: number;
-        codedStatus?: string;
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-        bookletId: number;
-        bookletName: string;
-        personId: number;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        variablePage?: string;
-      }[];
-      total: number;
-    }> {
+    data: {
+      responseId: number;
+      variableId: string;
+      value: string;
+      status: string;
+      code?: number;
+      score?: number;
+      codedStatus?: string;
+      unitId: number;
+      unitName: string;
+      unitAlias: string | null;
+      bookletId: number;
+      bookletName: string;
+      personId: number;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      variablePage?: string;
+    }[];
+    total: number;
+  }> {
     let params = new HttpParams();
 
     if (searchParams.value) {
