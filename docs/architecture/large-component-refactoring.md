@@ -180,10 +180,12 @@ Anzeige mit `whenStable()` ohne manuelle Change Detection. Der zusätzliche
 Browserfall prüft sichtbare Fortschrittswerte, die 30-Sekunden-Grenze und das
 Ausbleiben zusätzlicher Joblistenabfragen.
 
-Die Basis von Paket 1 enthält #1120 bei `094bbcb2`. Spätere Korrekturen auf
-`fix/angular21-quality-followups` werden hier weder nachgebaut noch übernommen.
-Der Folge-PR wird auf `refactor/manual-coding-orchestration` gestapelt; die
-Integration dieser Abhängigkeiten bleibt separat.
+Paket 2 wurde zunächst als PR #1122 auf `refactor/manual-coding-orchestration`
+gestapelt. PR #1121 wurde am 28.10.2026 in `develop` übernommen; PR #1122 wurde
+anschließend nur in seinen bisherigen Zielbranch integriert. Der weitere PR
+gegen `develop` übernimmt deshalb den verbleibenden Aktualisierungsablauf.
+Seine Basis enthält nun auch die vollständigen Korrekturen aus #1120 sowie
+Paket 1. Der Abgleich mit `develop` bei `3b9e7be94` war konfliktfrei.
 
 Lokale Prüfung am 27.10.2026 mit Node 22.14.0 über die lokale Nx-Installation,
 ausschließlich im verwalteten Worktree `manual-coding-refresh-workflow`:
@@ -215,6 +217,17 @@ gegenüber dem abgeschlossenen Erstladen.
 SHA-256 des frischen Produktionsartefakts vor und nach dem Browserlauf
 (ohne den temporären SPA-Fallback `404.html`):
 `dc4fb1a7a017d5668302157e32d39900f4277414a6e1ccc08fe83f052ee1566e`.
+
+Die Integration gegen `develop` bei `3b9e7be94` wurde am 28.10.2026 mit
+Node 22.23.1 erneut über lokale Nx-Ziele geprüft: 309 Testsuiten mit 3.425
+bestandenen Tests, Frontend-Lint ohne Warnungen und Produktionsbuild bestanden.
+Alle 25 Browserfälle aus `manual-preparation.cy.ts` bestanden gegen diesen
+Build ohne Retries oder übersprungene Fälle. Alle 51 Quality-Gate-Tests sowie
+das Zoneless-Inventar und seine Risikoreferenzen bestanden ebenfalls.
+Die Browserprüfung verwendet
+weiterhin API-Fixtures. SHA-256 des Produktionsartefakts vor und nach diesem
+Browserlauf:
+`04d5cb661c5d3dc3f1698e942d96aa4508d47ce534d4db0548778a2349b5ece1`.
 
 ## Bestandsaufnahme und weitere Schnitte
 
