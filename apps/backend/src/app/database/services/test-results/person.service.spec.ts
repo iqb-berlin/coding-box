@@ -44,6 +44,36 @@ describe('PersonService', () => {
       expect(parse('KEY=VALUE')).toEqual({ key: 'KEY', value: 'VALUE' });
     });
 
+    it('should split before JSON colons and preserve structured payloads', () => {
+      const value = JSON.stringify({
+        synthetic: true,
+        answer: '',
+        url: 'https://example.org/?a=b',
+        path: 'C:\\temp\\file',
+        quoted: 'say "yes"',
+        values: ['', 'A', 'C']
+      });
+      expect(parse(`RESPONSE = ${value}`)).toEqual({ key: 'RESPONSE', value });
+      expect(parse(`RESPONSE : ${value}`)).toEqual({ key: 'RESPONSE', value });
+    });
+
+    it('should retain separators inside values and quoted keys', () => {
+      expect(parse('URL=https://example.org/?a=b')).toEqual({
+        key: 'URL', value: 'https://example.org/?a=b'
+      });
+      expect(parse('"KEY:PART" = a=b:c')).toEqual({
+        key: 'KEY:PART', value: 'a=b:c'
+      });
+    });
+
+    it('should decode JSON and CSV wrappers once without changing inner JSON', () => {
+      const value = JSON.stringify({ empty: '', path: 'a\\b', quote: '"' });
+      const log = `EVENT = ${value}`;
+      expect(parse(JSON.stringify(log))).toEqual({ key: 'EVENT', value });
+      expect(parse(`"${log.replace(/"/g, '""')}"`)).toEqual({ key: 'EVENT', value });
+      expect(parse(`EVENT : ${JSON.stringify(value)}`)).toEqual({ key: 'EVENT', value });
+    });
+
     it('should handle quoted keys', () => {
       expect(parse('"CONNECTION" : LOST')).toEqual({
         key: 'CONNECTION',
