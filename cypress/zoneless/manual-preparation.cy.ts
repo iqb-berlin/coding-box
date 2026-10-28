@@ -77,7 +77,7 @@ describe('Zoneless manual preparation workflows', () => {
       aggregationSummary: { duplicateGroups: 0, duplicateResponses: 0, collapsedCases: 0, rawCases: 30,
         effectiveCases: 30, threshold: 2, aggregationActive: false },
       matchingFlags: [], analysisTimestamp: '2026-10-03T10:00:00Z'
-    } });
+    } }).as('preparationAnalysis');
     cy.intercept('GET', '**/api/admin/workspace/5/coding/double-coded-review?*', {
       body: { data: [], total: 0, page: 1, limit: 1 }
     });
@@ -742,6 +742,54 @@ describe('Zoneless manual preparation workflows', () => {
         expect(requests).to.be.greaterThan(initial);
       });
     });
+  });
+
+  it('renders focus refreshes while throttling repeated requests and keeping productive jobs idle', () => {
+    setup();
+    cy.intercept('GET', '**/api/workspace/5/settings/auto-refresh-manual-coding-jobs', {
+      body: { value: '{"enabled":true}' }
+    }).as('autoRefreshSetting');
+    let progressReads = 0;
+    let productiveReads = 0;
+    let productiveReadsBeforeFocus = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/progress-overview', request => {
+      progressReads += 1;
+      request.reply({ body: {
+        totalCasesToCode: 10, completedCases: progressReads,
+        completionPercentage: progressReads * 10
+      } });
+    }).as('progressOverview');
+    cy.intercept('GET', '**/api/wsg-admin/workspace/5/coding-job?*', request => {
+      if (request.query.scope === 'productive') productiveReads += 1;
+      request.reply({ body: { data: [], total: 0, page: 1, limit: 50 } });
+    });
+    openManual();
+    cy.wait(['@autoRefreshSetting', '@preparationAnalysis']);
+    cy.clock(Date.now(), ['Date']);
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '1');
+    cy.get('#manual-execution coding-box-coding-jobs .no-data-message').should('exist');
+    cy.get('#manual-execution coding-box-coding-jobs mat-spinner').should('not.exist');
+    cy.then(() => {
+      expect(productiveReads).to.be.greaterThan(0);
+      productiveReadsBeforeFocus = productiveReads;
+    });
+
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '2');
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.tick(29999);
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '2');
+    cy.then(() => { expect(progressReads).to.equal(2); expect(productiveReads).to.equal(productiveReadsBeforeFocus); });
+
+    cy.tick(1);
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '3');
+    cy.then(() => { expect(progressReads).to.equal(3); expect(productiveReads).to.equal(productiveReadsBeforeFocus); });
   });
 
   it('refreshes hidden productive jobs once after a definition change without reloading training jobs', () => {
