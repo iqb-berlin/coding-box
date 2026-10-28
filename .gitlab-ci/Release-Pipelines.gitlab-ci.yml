@@ -340,6 +340,8 @@ build-main-pr-backend-image:
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -404,6 +406,8 @@ build-main-pr-frontend-image:
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -876,6 +880,8 @@ build-main-commit-backend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -929,6 +935,8 @@ build-main-commit-frontend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -1271,6 +1279,8 @@ build-release:
   rules:
     - !reference [ .release_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend

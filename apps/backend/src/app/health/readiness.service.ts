@@ -2,6 +2,7 @@ import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DataSource } from 'typeorm';
+import { JobQueueService, RedisConnectionStatus } from '../job-queue/job-queue.service';
 
 type Dependency = 'database' | 'redis';
 type DependencyStatus = 'up' | 'down';
@@ -17,10 +18,12 @@ export const READINESS_TIMEOUT_MS = 1000;
 export class ReadinessService implements BeforeApplicationShutdown {
   private readonly inFlight = new Map<Dependency, Promise<DependencyStatus>>();
   private shuttingDown = false;
+  private redisDiagnostics?: Promise<RedisConnectionStatus>;
 
   constructor(
     private readonly dataSource: DataSource,
-    @InjectQueue('test-person-coding') private readonly queue: Queue
+    @InjectQueue('test-person-coding') private readonly queue: Queue,
+    private readonly jobs: JobQueueService
   ) {}
 
   beforeApplicationShutdown(): void {
@@ -47,6 +50,29 @@ export class ReadinessService implements BeforeApplicationShutdown {
     if (this.shuttingDown) status = 'shutting_down';
     else if (database === 'up' && redis === 'up') status = 'ok';
     return { status, checks: { database, redis } };
+  }
+
+  redisStatus(): Promise<RedisConnectionStatus> {
+    const unavailable = { connected: false, message: 'Redis is unavailable' };
+    if (this.shuttingDown) return Promise.resolve(unavailable);
+    if (this.redisDiagnostics) return this.redisDiagnostics;
+
+    // Keep a timed-out diagnostic operation shared until the driver settles.
+    const pending = Promise.resolve().then(() => this.jobs.checkRedisConnection());
+    const result = new Promise<RedisConnectionStatus>(resolve => {
+      const timer = setTimeout(() => resolve(unavailable), READINESS_TIMEOUT_MS);
+      pending.then(value => {
+        clearTimeout(timer);
+        this.redisDiagnostics = undefined;
+        resolve(value);
+      }, () => {
+        clearTimeout(timer);
+        this.redisDiagnostics = undefined;
+        resolve(unavailable);
+      });
+    });
+    this.redisDiagnostics = result;
+    return result;
   }
 
   private async checkDependency(name: Dependency, probe: () => Promise<void>): Promise<DependencyStatus> {

@@ -1,6 +1,7 @@
 import { DataSource, Repository } from 'typeorm';
 import { PersonPersistenceService } from './person-persistence.service';
 import Persons from '../../entities/persons.entity';
+import Workspace from '../../entities/workspace.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
@@ -10,8 +11,6 @@ import { ChunkEntity } from '../../entities/chunk.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
-import { UnitTag } from '../../entities/unitTag.entity';
-import { UnitNote } from '../../entities/unitNote.entity';
 import { Person } from '../shared';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
@@ -39,25 +38,13 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
   let responseRepository: Repository<ResponseEntity>;
   let cleanupPersonIds: number[] = [];
   let cleanupBookletInfoIds: number[] = [];
+  let cleanupWorkspaceIds: number[] = [];
 
   beforeAll(async () => {
     dataSource = new DataSource({
       type: 'postgres',
       ...postgresConfig,
-      entities: [
-        Persons,
-        BookletInfo,
-        Booklet,
-        Session,
-        BookletLog,
-        Unit,
-        UnitLog,
-        UnitLastState,
-        ChunkEntity,
-        ResponseEntity,
-        UnitTag,
-        UnitNote
-      ],
+      entities: [`${__dirname}/../../entities/*.entity.ts`],
       synchronize: false
     });
 
@@ -85,8 +72,10 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
 
   it('rolls back a failed new unit and imports it successfully on a skip retry', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const workspaceId = (await dataSource.getRepository(Workspace).save({ name: `rollback-${suffix}` })).id;
+    cleanupWorkspaceIds.push(workspaceId);
     const person = await personsRepository.save({
-      workspace_id: 900000001,
+      workspace_id: workspaceId,
       group: `rollback-${suffix}`,
       login: 'test',
       code: 'test',
@@ -137,17 +126,23 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
       await bookletInfoRepository.delete({ id: bookletInfoId });
     }
 
+    for (const workspaceId of cleanupWorkspaceIds) {
+      await dataSource.getRepository(Workspace).delete({ id: workspaceId });
+    }
+
     cleanupPersonIds = [];
     cleanupBookletInfoIds = [];
+    cleanupWorkspaceIds = [];
   });
 
   afterAll(async () => {
-    await dataSource?.destroy();
+    if (dataSource?.isInitialized) await dataSource.destroy();
   });
 
   it('persists a merge upload with a new unit against the real Postgres schema', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const workspaceId = 900000000 + Math.floor(Math.random() * 1000000);
+    const workspaceId = (await dataSource.getRepository(Workspace).save({ name: `merge-${suffix}` })).id;
+    cleanupWorkspaceIds.push(workspaceId);
     const bookletName = `booklet-merge-${suffix}`;
     const group = `group-${suffix}`;
     const login = `login-${suffix}`;
