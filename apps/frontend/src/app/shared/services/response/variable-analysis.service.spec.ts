@@ -214,13 +214,14 @@ describe('VariableAnalysisService', () => {
 
   describe('exports', () => {
     it('should export results as CSV with filters', () => {
+      const blob = new Blob(['binary export']);
       service
         .exportAnalysisResultsAsCsv(mockWorkspaceId, 5, {
           search: 'VAR',
           onlyEmpty: true,
           includeSchemaCodes: true
         })
-        .subscribe();
+        .subscribe(result => expect(result).toBe(blob));
 
       const req = httpMock.expectOne(
         r => r.url ===
@@ -231,15 +232,16 @@ describe('VariableAnalysisService', () => {
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
-      req.flush(new Blob(['csv'], { type: 'text/csv' }));
+      req.flush(blob);
     });
 
     it('should export results as XLSX with filters', () => {
+      const blob = new Blob(['binary export']);
       service
         .exportAnalysisResultsAsXlsx(mockWorkspaceId, 5, {
           search: 'VAR'
         })
-        .subscribe();
+        .subscribe(result => expect(result).toBe(blob));
 
       const req = httpMock.expectOne(
         r => r.url ===
@@ -249,9 +251,7 @@ describe('VariableAnalysisService', () => {
       );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
-      req.flush(new Blob(['xlsx'], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      }));
+      req.flush(blob);
     });
   });
 });

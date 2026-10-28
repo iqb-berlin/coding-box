@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription, EMPTY
+  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription, EMPTY, lastValueFrom
 } from 'rxjs';
 import {
   catchError, map, switchMap, takeWhile, finalize, filter
@@ -597,7 +597,7 @@ export class CodingManagementService {
 
     try {
       // Start the job
-      const jobStartResult = await this.exportService.startExportJob(
+      const jobStartResult = await lastValueFrom(this.exportService.startExportJob(
         workspaceId,
         'results-by-version',
         version,
@@ -608,7 +608,7 @@ export class CodingManagementService {
         includeGeoGebraFiles,
         includeGeoGebraResponseValues,
         missingsProfileId
-      ).toPromise();
+      ), { defaultValue: undefined });
 
       if (!jobStartResult) {
         this.showErrorSnackbar('Failed to start export job', false);
@@ -659,14 +659,14 @@ export class CodingManagementService {
     try {
       this.showInfoSnackbar(this.translateService.instant('coding-management.descriptions.job-started', { defaultValue: 'Export-Job gestartet...' }));
 
-      const jobStartResult = await this.exportService.startExportJob(
+      const jobStartResult = await lastValueFrom(this.exportService.startExportJob(
         workspaceId,
         'coding-list',
         undefined,
         format,
         false,
         trainingRequired
-      ).toPromise();
+      ), { defaultValue: undefined });
 
       if (!jobStartResult) {
         this.showErrorSnackbar('Failed to start export job', false);
