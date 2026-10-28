@@ -1,6 +1,7 @@
 import {
-  ChangeDetectionStrategy, Component, input, output
+  ChangeDetectionStrategy, Component, inject, input, output
 } from '@angular/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule, ReactiveFormsModule, FormControl } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,11 +17,12 @@ import { getTrainingOptionTitle, getTrainingOptionMeta } from '../../utils/coder
 @Component({
   selector: 'coding-box-training-comparison-selection',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, ReactiveFormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatProgressSpinnerModule],
+  imports: [TranslateModule, FormsModule, ReactiveFormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatProgressSpinnerModule],
   templateUrl: './training-comparison-selection.component.html',
   styleUrls: ['./training-comparison-selection.component.scss']
 })
 export class TrainingComparisonSelectionComponent {
+  private readonly translate = inject(TranslateService);
   readonly mode = input.required<'between-trainings' | 'within-training'>();
   readonly trainings = input.required<readonly CoderTraining[]>();
   readonly filteredTrainings = input.required<readonly CoderTraining[]>();
@@ -41,7 +43,7 @@ export class TrainingComparisonSelectionComponent {
   readonly applyRequested = output<TrainingDiscussionApplySource>();
   protected readonly getTrainingOptionTitle = getTrainingOptionTitle;
   protected getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
+    return getTrainingOptionMeta(training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
   }
 
   protected selectedTraining(): CoderTraining | undefined {

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
@@ -9,6 +9,7 @@ import {
 // Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
+import applicationTranslations from '../../../../assets/i18n/de.json';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
@@ -97,6 +98,9 @@ describe('SysAdminSettingsComponent', () => {
       ],
       imports: [TranslateModule.forRoot()]
     }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', applicationTranslations);
+    translate.use('de');
     fixture = TestBed.createComponent(SysAdminSettingsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
