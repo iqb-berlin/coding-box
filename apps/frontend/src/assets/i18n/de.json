@@ -2643,11 +2643,11 @@
       "duration-label": "Dauer für eine Kodieraufgabe (Sekunden)",
       "duration-placeholder": "z.B. 300 (5 Minuten)",
       "duration-hint": "Optionale Angabe der erwarteten Bearbeitungszeit für eine einzelne Kodieraufgabe in Sekunden",
-      "duration-error": "Die Dauer muss mindestens 1 Sekunde betragen",
+      "duration-error": "Die Dauer muss eine ganze Zahl zwischen 1 und 2.147.483.647 Sekunden sein",
       "max-cases-label": "Maximale Anzahl Kodierfälle",
       "max-cases-placeholder": "z.B. 100",
       "max-cases-hint": "Optionale Angabe der maximalen Anzahl von Kodierfällen. Bei mehr verfügbaren Fällen wird zufällig ausgewählt.",
-      "max-cases-error": "Die maximale Anzahl muss mindestens 1 betragen",
+      "max-cases-error": "Die maximale Anzahl muss eine ganze Zahl zwischen 1 und 2.147.483.647 sein",
       "missings-profile-label": "Missing-Profil",
       "missings-profile-loading": "Lade Missing-Profile..."
     },
