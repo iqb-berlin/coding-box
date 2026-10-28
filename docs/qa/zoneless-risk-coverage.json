@@ -27,6 +27,7 @@
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-jobs-refresh.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-refresh-workflow.facade.spec.ts",
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.zoneless.spec.ts",
@@ -53,7 +54,10 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-completion.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-data.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-presentation.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-views.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-views.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-replay.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-recovery.service.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-values.spec.ts"
       ]
     },
     {
@@ -91,7 +95,11 @@
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-reliability.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component.spec.ts",
         "apps/frontend/src/app/coding/components/coder-training/coder-training.component.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-definition-recovery.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-availability.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-data.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-selection.spec.ts"
       ]
     },
     {
@@ -271,7 +279,9 @@
         "apps/frontend/src/app/shared/services/response/variable-analysis.service.spec.ts",
         "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts",
         "apps/frontend/src/app/shared/services/user/user-directory.facade.spec.ts",
-        "cypress/zoneless/user-directory.cy.ts"
+        "cypress/zoneless/user-directory.cy.ts",
+        "apps/frontend/src/app/shared/services/database-export.service.spec.ts",
+        "cypress/e2e/database-exports.cy.ts"
       ]
     }
   ],

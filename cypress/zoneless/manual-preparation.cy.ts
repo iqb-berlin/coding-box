@@ -77,7 +77,7 @@ describe('Zoneless manual preparation workflows', () => {
       aggregationSummary: { duplicateGroups: 0, duplicateResponses: 0, collapsedCases: 0, rawCases: 30,
         effectiveCases: 30, threshold: 2, aggregationActive: false },
       matchingFlags: [], analysisTimestamp: '2026-10-03T10:00:00Z'
-    } });
+    } }).as('preparationAnalysis');
     cy.intercept('GET', '**/api/admin/workspace/5/coding/double-coded-review?*', {
       body: { data: [], total: 0, page: 1, limit: 1 }
     });
@@ -263,6 +263,45 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@definitionDialog').contains('.count-item', 'Für neue Jobs verfügbar:').find('.count-value').should('have.text', '4');
     cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '2:00');
     cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Workload draft');
+  });
+
+  it('restores a definition draft after catalog loading and preserves selection across variable reloads', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables?*', request => {
+      const unitName = request.query.unitName;
+      request.reply({ delay: 200, body: unitName ? variables.filter(variable => variable.unitName === unitName) : variables });
+    }).as('draftVariables');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').should('be.visible');
+    cy.window().then(win => {
+      const key = 'coding-job-definition-active-state';
+      win.sessionStorage.setItem(`coding-box-session-recovery:${key}`, JSON.stringify({
+        key, version: 1, createdAt: Date.now(), expiresAt: Date.now() + 60_000,
+        data: {
+          workspaceId: 5, mode: 'definition', isEdit: false,
+          formValue: { name: 'Recovered workflow draft', durationSeconds: 30, maxCodingCases: 4 },
+          doubleCodingMode: 'absolute', selectedVariables: [variables[1]],
+          selectedVariableBundles: [], selectedCoderConfigs: [], unitNameFilter: '', variableIdFilter: '',
+          bundleNameFilter: '', availabilityFilter: 'all', trainingRequiredFilter: 'all', distributionSeed: 'stable-seed'
+        }
+      }));
+    });
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Recovered workflow draft');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').should('have.class', 'selected');
+    cy.get('@definitionDialog').find('input[placeholder="Filter nach Aufgaben-ID"]').type('UNIT_B');
+    cy.get('@definitionDialog').contains('button', 'Filter anwenden').click();
+    cy.wait('@draftVariables');
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_B_VAR_1').should('be.visible');
+    cy.get('@definitionDialog').contains('button', 'Filter zurücksetzen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').should('have.class', 'selected');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '2:00');
   });
 
   it('estimates a scoped manual export, offers the compact format and releases startup after failure', () => {
@@ -742,6 +781,54 @@ describe('Zoneless manual preparation workflows', () => {
         expect(requests).to.be.greaterThan(initial);
       });
     });
+  });
+
+  it('renders focus refreshes while throttling repeated requests and keeping productive jobs idle', () => {
+    setup();
+    cy.intercept('GET', '**/api/workspace/5/settings/auto-refresh-manual-coding-jobs', {
+      body: { value: '{"enabled":true}' }
+    }).as('autoRefreshSetting');
+    let progressReads = 0;
+    let productiveReads = 0;
+    let productiveReadsBeforeFocus = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/progress-overview', request => {
+      progressReads += 1;
+      request.reply({ body: {
+        totalCasesToCode: 10, completedCases: progressReads,
+        completionPercentage: progressReads * 10
+      } });
+    }).as('progressOverview');
+    cy.intercept('GET', '**/api/wsg-admin/workspace/5/coding-job?*', request => {
+      if (request.query.scope === 'productive') productiveReads += 1;
+      request.reply({ body: { data: [], total: 0, page: 1, limit: 50 } });
+    });
+    openManual();
+    cy.wait(['@autoRefreshSetting', '@preparationAnalysis']);
+    cy.clock(Date.now(), ['Date']);
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '1');
+    cy.get('#manual-execution coding-box-coding-jobs .no-data-message').should('exist');
+    cy.get('#manual-execution coding-box-coding-jobs mat-spinner').should('not.exist');
+    cy.then(() => {
+      expect(productiveReads).to.be.greaterThan(0);
+      productiveReadsBeforeFocus = productiveReads;
+    });
+
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '2');
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.tick(29999);
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '2');
+    cy.then(() => { expect(progressReads).to.equal(2); expect(productiveReads).to.equal(productiveReadsBeforeFocus); });
+
+    cy.tick(1);
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.wait('@progressOverview');
+    cy.get('coding-box-manual-coding-execution-view .stat-value.covered').should('be.visible').and('have.text', '3');
+    cy.then(() => { expect(progressReads).to.equal(3); expect(productiveReads).to.equal(productiveReadsBeforeFocus); });
   });
 
   it('refreshes hidden productive jobs once after a definition change without reloading training jobs', () => {

@@ -151,6 +151,84 @@ Push abgebrochen und liefert keine vollständige Freigabe. Der anschließende
 lokale Gesamtlauf bestand 160/160 E2E-Fälle in 29 Specs ohne Retries,
 übersprungene Fälle oder Renderer-Absturz (6:50 Minuten).
 
+## Paket 2: Aktualisierungsablauf der manuellen Kodierung
+
+Aufbauend auf Paket 1, PR #1121 bei `82df61c97cc047f0ae9b8d1ef5fb0ef8caa0f741`,
+bündelt die komponentenlokale `ManualCodingRefreshWorkflowFacade` die Zulassung
+von Aktualisierungen: Fensterfokus mit 30-Sekunden-Drosselung, manuelles
+Nachladen, Hintergrundjob-Guards sowie vorgemerkte Statistik- und
+Freshness-Anforderungen. Wiederholte Anforderungen werden während eines Guards
+zusammengefasst; ein Force-Flag bleibt dabei erhalten. Beim Freigeben des Guards
+wird wie bisher der dann aktive Tab geladen, statt alle Statistiken pauschal
+nachzuladen. Auf Planung löst Fokus weiterhin keine Abfragen aus.
+
+Die Seite behält Tabnavigation, Berechtigungen, Anzeige, Dialoge,
+Refresh-Einstellung und tabbezogene Ladepolitik. Die Fassade erhält schmale
+Abfragen für aktuellen Tab, Ladeeinstellung und Definitionsansicht sowie den
+bestehenden Tab-Ladebefehl. Sie injiziert keine Elternkomponente. Statistik-,
+Planungs-, Export- und Joblistenfassaden behalten ihre Datenabfragen,
+Cache-/Snapshot-Regeln und ausstehenden Listen-Reloads. Öffentliche
+Komponenten-Einstiegspunkte und alle Defer-Grenzen bleiben erhalten.
+
+Vorgemerkte Statusanforderungen und die Fokusfrist gehören zur aktuellen
+Workspace-Instanz. Der erste Wechsel verwirft sie, auch bei A → B → A.
+Ansichtsende entfernt Fokuslistener und Guard-Abonnement und verwirft offene
+Anforderungen; laufende Serverjobs bleiben beim vorhandenen Hintergrundservice.
+Die Tests verwenden den echten Guard-Service, kontrollierte Zeitwerte und die
+bestehende native Zoneless-Konfiguration. Ein Host-Test prüft die fortgesetzte
+Anzeige mit `whenStable()` ohne manuelle Change Detection. Der zusätzliche
+Browserfall prüft sichtbare Fortschrittswerte, die 30-Sekunden-Grenze und das
+Ausbleiben zusätzlicher Joblistenabfragen.
+
+Paket 2 wurde zunächst als PR #1122 auf `refactor/manual-coding-orchestration`
+gestapelt. PR #1121 wurde am 28.10.2026 in `develop` übernommen; PR #1122 wurde
+anschließend nur in seinen bisherigen Zielbranch integriert. Der weitere PR
+gegen `develop` übernimmt deshalb den verbleibenden Aktualisierungsablauf.
+Seine Basis enthält nun auch die vollständigen Korrekturen aus #1120 sowie
+Paket 1. Der Abgleich mit `develop` bei `3b9e7be94` war konfliktfrei.
+
+Lokale Prüfung am 27.10.2026 mit Node 22.14.0 über die lokale Nx-Installation,
+ausschließlich im verwalteten Worktree `manual-coding-refresh-workflow`:
+
+- Frontend-Lint ohne Warnungen bestanden.
+- Vollständiger Frontend-Testlauf mit `--runInBand --skipNxCache`: 309 Suites /
+  3.421 Tests bestanden, darunter 29 neue Fälle der Workflow-Fassade.
+- Produktionsbuild mit `--configuration=production --skipNxCache` bestanden:
+  initial 1,23 MB, manuelle Verwaltungsroute 512,12 kB. Job- und Schulungslisten
+  bleiben separate Lazy-Chunks. Die Hauptkomponente umfasst nun 1.810 statt
+  2.010 TypeScript-Zeilen; die Verantwortung bestimmt den Schnitt.
+- `frontend:zoneless-approval` nach Aktualisierung des Inventars und der
+  Risikoreferenzen bestanden. Dies ist keine vollständige Freigabe aller
+  Inventarszenarien und ersetzt keine entfernte CI.
+- `frontend:e2e --configuration=ci --browser=electron --port=4530
+  --spec=cypress/zoneless/manual-preparation.cy.ts --skipNxCache`: 25/25 Fälle
+  gegen den eigenen frischen Produktionsbuild bestanden, ohne Retries oder
+  übersprungene Fälle. API-Antworten verwenden Fixtures; Backend-Persistenz und
+  reale Systemverbindungen werden damit nicht geprüft.
+- `git diff --check` bestanden.
+
+Der Browser-Einstieg verwendet auch für den Inhaltscontainer den bestehenden
+Helfer zum Beenden endlicher Eintrittsanimationen. Der Definitionsfall wartet
+auf beide Antworten des manuellen Refreshs, bevor er das Zeilenmenü öffnet.
+Sichtbarkeitsprüfungen und reguläre Klicks bleiben erhalten. Der Fokusfall wartet
+auf die Vorbereitungsanalyse und prüft zusätzliche produktive Listenabrufe
+gegenüber dem abgeschlossenen Erstladen.
+
+SHA-256 des frischen Produktionsartefakts vor und nach dem Browserlauf
+(ohne den temporären SPA-Fallback `404.html`):
+`dc4fb1a7a017d5668302157e32d39900f4277414a6e1ccc08fe83f052ee1566e`.
+
+Die Integration gegen `develop` bei `3b9e7be94` wurde am 28.10.2026 mit
+Node 22.23.1 erneut über lokale Nx-Ziele geprüft: 309 Testsuiten mit 3.425
+bestandenen Tests, Frontend-Lint ohne Warnungen und Produktionsbuild bestanden.
+Alle 25 Browserfälle aus `manual-preparation.cy.ts` bestanden gegen diesen
+Build ohne Retries oder übersprungene Fälle. Alle 51 Quality-Gate-Tests sowie
+das Zoneless-Inventar und seine Risikoreferenzen bestanden ebenfalls.
+Die Browserprüfung verwendet
+weiterhin API-Fixtures. SHA-256 des Produktionsartefakts vor und nach diesem
+Browserlauf:
+`04d5cb661c5d3dc3f1698e942d96aa4508d47ce534d4db0548778a2349b5ece1`.
+
 ## Bestandsaufnahme und weitere Schnitte
 
 Die Tabelle behält die ursprüngliche Priorisierung bei und zeigt die aktuellen

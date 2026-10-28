@@ -31,7 +31,13 @@ import {
   debounceTime, distinctUntilChanged, filter as filterWorkspace, Subject, take, takeUntil
 } from 'rxjs';
 import { variableKey } from '../../utils/variable-key.util';
-import { comparisonPresentation, selectedCodeSlots, ComparisonSelection } from './training-comparison-presentation';
+import { TrainingDiscussionRecovery, TrainingDiscussionRecoveryDraft } from './training-discussion-recovery.service';
+import {
+  discussionScoreFromKnownCodes, parseDiscussionCode, isUnchangedDiscussionValue, mapDiscussionCodeForDisplay
+} from './training-discussion-values';
+import {
+  comparisonPresentation, selectedCodeSlots, ComparisonSelection, modalValueSummary, ModalValueSummary
+} from './training-comparison-presentation';
 import type { TrainingCodingComparisonPageDto, WithinTrainingCodingComparisonPageDto } from '../../../../../../../api-dto/coding/training-comparison.dto';
 import { TrainingComparisonDataFacade } from './training-comparison-data.facade';
 import {
@@ -43,7 +49,7 @@ import { VariableKappaSummary } from './training-reliability';
 import { TrainingReliabilityFacade, TrainingReliabilityContext } from './training-reliability.facade';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
-import { normalizeTestperson } from '../../../replay/utils/token-utils';
+import { reviewCodeSelections as buildReviewCodeSelections, findReplayRow } from './training-comparison-replay';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import type {
@@ -135,26 +141,6 @@ interface SelectedCodeSlot {
   trainingId?: number;
 }
 
-interface TrainingDiscussionRecoveryEntry {
-  responseId: number;
-  codeValue: string;
-  score: number | null;
-  notes: string;
-}
-
-interface TrainingDiscussionRecoveryDraft {
-  workspaceId: number;
-  trainingId: number;
-  entries: TrainingDiscussionRecoveryEntry[];
-}
-
-interface ModalValueSummary {
-  modalValue: string | null;
-  deviationCount: number | null;
-  validCount: number;
-  isTie: boolean;
-}
-
 const EMPTY_COMPARISON_SUMMARY: TrainingComparisonSummaryDto = {
   visibleRows: 0,
   comparableRows: 0,
@@ -174,7 +160,7 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],
   standalone: true,
-  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade],
+  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingDiscussionRecovery],
   imports: [
     TrainingComparisonTableComponent,
     TrainingComparisonSelectionComponent,
@@ -228,7 +214,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private hasInitializedBetweenCoderSelection = false;
   private hasInitializedWithinCoderSelection = false;
   private unregisterRecoveryProvider: (() => void) | null = null;
-  private readonly trainingDiscussionRecoveryKey = 'training-discussion-active-state';
+  private readonly discussionRecovery = inject(TrainingDiscussionRecovery);
+  private readonly trainingDiscussionRecoveryKey = this.discussionRecovery.key;
 
   private readonly comparisons = inject(TrainingComparisonDataFacade);
   readonly isLoading = this.comparisons.isLoading;
@@ -350,17 +337,17 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   readonly variableKappaSummaries = this.reliability.variableKappaSummaries;
 
   readonly codingIssueLabelMap: Record<number, string> = {
-    [-1]: 'Code-Vergabe unsicher',
-    [-2]: 'Neuer Code nötig',
-    [-3]: 'Ungültig (Spaßantwort)',
-    [-4]: 'Technische Probleme'
+    [-1]: 'coding.trainings.compare.issue-uncertain',
+    [-2]: 'coding.trainings.compare.issue-new-code',
+    [-3]: 'coding.trainings.compare.issue-invalid',
+    [-4]: 'coding.trainings.compare.issue-technical'
   };
 
   readonly codingIssueShortLabelMap: Record<number, string> = {
-    [-1]: 'Unsicher',
-    [-2]: 'Neuer Code',
-    [-3]: 'Spaßantwort',
-    [-4]: 'Technisch'
+    [-1]: 'coding.trainings.compare.issue-uncertain-short',
+    [-2]: 'coding.trainings.compare.issue-new-code-short',
+    [-3]: 'coding.trainings.compare.issue-invalid-short',
+    [-4]: 'coding.trainings.compare.issue-technical-short'
   };
 
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
@@ -712,7 +699,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private formatTrainingList(trainings: CoderTraining[]): string {
     const visible = trainings.slice(0, 3).map(training => this.getTrainingOptionTitle(training));
     const remaining = trainings.length - visible.length;
-    return remaining > 0 ? `${visible.join(', ')} und ${remaining} weitere` : visible.join(', ');
+    return remaining > 0 ? this.translate.instant('coding.trainings.compare.more-trainings', { trainings: visible.join(', '), count: remaining }) : visible.join(', ');
   }
 
   protected getComparisonWarnings(): ComparisonWarning[] {
@@ -726,13 +713,13 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (selectedSourceCount === 0) {
       warnings.push({
         icon: 'person_off',
-        text: 'Es ist kein Kodierer ausgewählt. Wählen Sie mindestens zwei Kodierer aus, um Vergleichswerte zu sehen.',
+        text: this.translate.instant('coding.trainings.compare.warning-no-coders'),
         severity: 'info'
       });
     } else if (selectedSourceCount === 1) {
       warnings.push({
         icon: 'person',
-        text: 'Aktuell ist nur ein Kodierer ausgewählt. Die Fälle werden angezeigt, sind aber noch nicht vergleichbar.',
+        text: this.translate.instant('coding.trainings.compare.warning-one-coder'),
         severity: 'warn'
       });
     }
@@ -741,18 +728,19 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (trainingsWithoutCodes.length > 0) {
       warnings.push({
         icon: 'playlist_remove',
-        text: `Keine Kodierergebnisse im Vergleich für: ${this.formatTrainingList(trainingsWithoutCodes)}.`,
+        text: this.translate.instant('coding.trainings.compare.warning-no-codes', { trainings: this.formatTrainingList(trainingsWithoutCodes) }),
         severity: 'warn'
       });
     }
 
     if (selectedSourceCount >= 2 && this.incompleteComparisons > 0) {
-      const incompleteCasesText = this.incompleteComparisons === 1 ?
-        '1 sichtbarer Fall ist unvollständig' :
-        `${this.incompleteComparisons} sichtbare Fälle sind unvollständig`;
       warnings.push({
         icon: 'warning',
-        text: `${incompleteCasesText}, weil mindestens ein ausgewählter Kodierer keinen Code hat.`,
+        text: this.translate.instant(
+          this.incompleteComparisons === 1 ? 'coding.trainings.compare.warning-incomplete-one' :
+            'coding.trainings.compare.warning-incomplete-many',
+          { count: this.incompleteComparisons }
+        ),
         severity: 'warn'
       });
     }
@@ -766,7 +754,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     ) {
       warnings.push({
         icon: 'pending_actions',
-        text: 'Diese Schulung enthält Fälle, aber noch keine vollständig kodierten Vergleichspaare.',
+        text: this.translate.instant('coding.trainings.compare.warning-no-complete-pairs'),
         severity: 'warn'
       });
     }
@@ -778,14 +766,14 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (codingIssueOption === null || codingIssueOption === undefined) {
       return '';
     }
-    return this.codingIssueLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
+    return this.translate.instant(this.codingIssueLabelMap[codingIssueOption] || 'coding.trainings.compare.issue-unknown', { count: codingIssueOption });
   }
 
   getCodingIssueShortLabel(codingIssueOption: number | null | undefined): string {
     if (codingIssueOption === null || codingIssueOption === undefined) {
       return '';
     }
-    return this.codingIssueShortLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
+    return this.translate.instant(this.codingIssueShortLabelMap[codingIssueOption] || 'coding.trainings.compare.issue-unknown', { count: codingIssueOption });
   }
 
   private getCoderSourceLabel(coder: ComparisonCoderResult): string {
@@ -856,46 +844,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     return this.translate.instant(this.getComparisonPresentation(comparison).tooltipKey);
   }
 
-  private sortCodeValues(values: string[]): string[] {
-    return [...values].sort((a, b) => {
-      const aNumber = Number(a);
-      const bNumber = Number(b);
-      const bothNumeric = Number.isFinite(aNumber) && Number.isFinite(bNumber);
-      return bothNumeric ? aNumber - bNumber : a.localeCompare(b);
-    });
-  }
-
   private getModalValueSummary(comparison: TrainingComparison | WithinTrainingComparison): ModalValueSummary {
-    const values = this.getSelectedCoderResults(comparison)
-      .map(coder => coder.code)
-      .filter((code): code is string => code !== null);
-
-    if (values.length === 0) {
-      return {
-        modalValue: null,
-        deviationCount: null,
-        validCount: 0,
-        isTie: false
-      };
-    }
-
-    const counts = new Map<string, number>();
-    values.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
-
-    const maxCount = Math.max(...counts.values());
-    const modalCandidates = this.sortCodeValues(
-      Array.from(counts.entries())
-        .filter(([, count]) => count === maxCount)
-        .map(([value]) => value)
-    );
-    const modalValue = modalCandidates[0] ?? null;
-
-    return {
-      modalValue,
-      deviationCount: modalValue === null ? null : values.length - maxCount,
-      validCount: values.length,
-      isTie: modalCandidates.length > 1
-    };
+    return modalValueSummary(this.getSelectedCoderResults(comparison));
   }
 
   private getModalValueText(summary: ModalValueSummary): string {
@@ -984,34 +934,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   mapCodeForDisplay(code: string | number | null | undefined): string {
-    if (code === null || code === undefined || code === '') {
-      return '';
-    }
-    const codeNum = typeof code === 'string' ? parseInt(code, 10) : code;
-    if (Number.isNaN(codeNum)) {
-      return String(code);
-    }
-    if (codeNum === -1 || codeNum === -2) {
-      return '';
-    }
-    return String(codeNum);
+    return mapDiscussionCodeForDisplay(code);
   }
 
   private getDiscussionScoreFromKnownCodes(comparison: WithinTrainingComparison, codeAsNumber: number): number | null {
-    const matchedCoder = comparison.coders.find(c => c.code !== null && parseInt(c.code, 10) === codeAsNumber && c.score !== null);
-    if (matchedCoder) {
-      return matchedCoder.score;
-    }
-
-    if (comparison.replayCode !== null && comparison.replayCode !== undefined && comparison.replayCode === codeAsNumber) {
-      return comparison.replayScore ?? null;
-    }
-
-    if (codeAsNumber < 0) {
-      return 0;
-    }
-
-    return null;
+    return discussionScoreFromKnownCodes(comparison, codeAsNumber);
   }
 
   protected onDiscussionCodeInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
@@ -1039,33 +966,13 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private parseDiscussionCode(value: string): number | null | undefined {
-    const normalized = (value || '').trim();
-    if (!normalized) {
-      return null;
-    }
-
-    if (!/^-?\d+$/.test(normalized)) {
-      return undefined;
-    }
-
-    return parseInt(normalized, 10);
+    return parseDiscussionCode(value);
   }
 
   private isUnchangedDiscussionValue(
-    comparison: WithinTrainingComparison,
-    parsedCode: number | null,
-    score: number | null,
-    notes: string | null,
-    scoreOverride?: number | null
-  ): boolean {
-    if (scoreOverride !== undefined) {
-      return false;
-    }
-
-    return parsedCode === (comparison.discussionCode ?? null) &&
-      score === (comparison.discussionScore ?? null) &&
-      notes === ((comparison.discussionNotes || '').trim() || null);
-  }
+    comparison: WithinTrainingComparison, code: number | null, score: number | null,
+    notes: string | null, scoreOverride?: number | null
+  ): boolean { return isUnchangedDiscussionValue(comparison, code, score, notes, scoreOverride); }
 
   protected onDiscussionNotesInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
     if (!this.canEditDiscussion) return;
@@ -1096,8 +1003,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     const parsedCode = this.parseDiscussionCode(rawValue);
 
     if (parsedCode === undefined) {
-      this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: 'Bitte nur ganze Zahlen für den Diskussionscode eingeben.' }));
-      this.snackBar.open('Bitte nur ganze Zahlen für den Diskussionscode eingeben.', this.translate.instant('common.close'), { duration: 3000 });
+      this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: this.translate.instant('coding.trainings.compare.discussion-integer-required') }));
+      this.snackBar.open(this.translate.instant('coding.trainings.compare.discussion-integer-required'), this.translate.instant('common.close'), { duration: 3000 });
       return;
     }
 
@@ -1180,7 +1087,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
           if (this.isRecoverableDiscussionAuthError(error)) {
             const message = error instanceof AuthRefreshUnavailableError || getAuthProviderFailureCode(error) ?
               this.translate.instant('error.auth_refresh_pending_save_message') :
-              'Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.';
+              this.translate.instant('coding.trainings.compare.discussion-requires-login');
             this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: message }));
             const draft = this.createTrainingDiscussionRecoveryDraft();
             if (draft) {
@@ -1198,7 +1105,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private getDiscussionSaveErrorMessage(error: unknown): string {
-    const fallbackMessage = 'Diskussionsergebnis konnte nicht gespeichert werden.';
+    const fallbackMessage = this.translate.instant('coding.trainings.compare.discussion-save-error');
     if (!(error instanceof HttpErrorResponse)) {
       return fallbackMessage;
     }
@@ -1213,27 +1120,27 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     }
 
     if (message.includes('Unsupported code for variable')) {
-      return 'Der Code ist im Kodierschema dieser Variable nicht vorhanden.';
+      return this.translate.instant('coding.trainings.compare.discussion-code-unknown');
     }
 
     if (message.includes('Unsupported missing code')) {
-      return 'Der Code ist im Missing-Profil nicht als negativer Code hinterlegt.';
+      return this.translate.instant('coding.trainings.compare.discussion-missing-code-unknown');
     }
 
     if (message.includes('Conflicting missing profiles')) {
-      return 'Für diesen Fall sind unterschiedliche Missing-Profile im Training hinterlegt.';
+      return this.translate.instant('coding.trainings.compare.discussion-conflicting-profiles');
     }
 
     if (message.includes('Missing profile') && message.includes('not found')) {
-      return 'Das Missing-Profil des Kodierjobs konnte nicht geladen werden.';
+      return this.translate.instant('coding.trainings.compare.discussion-profile-unavailable');
     }
 
     if (message.includes('Coding scheme not found') || message.includes('Coding scheme variable not found')) {
-      return 'Der Score konnte nicht aus dem Kodierschema abgeleitet werden.';
+      return this.translate.instant('coding.trainings.compare.discussion-score-unavailable');
     }
 
     if (message.includes('Discussion code must be an integer')) {
-      return 'Bitte nur ganze Zahlen für den Diskussionscode eingeben.';
+      return this.translate.instant('coding.trainings.compare.discussion-integer-required');
     }
 
     return message;
@@ -1242,7 +1149,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
     if (!this.permissions.canApply) return;
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
-      this.snackBar.open('Bitte zuerst eine Schulung auswählen.', this.translate.instant('common.close'), { duration: 3000 });
+      this.snackBar.open(this.translate.instant('coding.trainings.compare.training-required'), this.translate.instant('common.close'), { duration: 3000 });
       return;
     }
 
@@ -1360,31 +1267,31 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     removedJobUnitCount: number;
   }): string {
     if (!result.success) {
-      return 'Schulungsergebnisse konnten nicht angewendet werden.';
+      return this.translate.instant('coding.trainings.compare.apply-error');
     }
 
-    const parts = [`${result.updatedResponsesCount} Ergebnisse angewendet`];
+    const parts = [this.translate.instant('coding.trainings.compare.apply-updated', { count: result.updatedResponsesCount })];
     if (result.overwrittenExistingResultsCount > 0) {
-      parts.push(`${result.overwrittenExistingResultsCount} bestehende Ergebnisse überschrieben`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-overwritten', { count: result.overwrittenExistingResultsCount }));
     }
     if (result.skippedExistingResultsCount > 0) {
-      parts.push(`${result.skippedExistingResultsCount} bestehende Ergebnisse übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-existing', { count: result.skippedExistingResultsCount }));
     }
     if (result.skippedJobConflictCount > 0) {
-      parts.push(`${result.skippedJobConflictCount} Fälle wegen Kodierjob-Konflikten übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-conflicts', { count: result.skippedJobConflictCount }));
     }
     if (result.skippedMissingScoreCount > 0) {
-      parts.push(`${result.skippedMissingScoreCount} Fälle ohne Score übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-scores', { count: result.skippedMissingScoreCount }));
     }
     if (result.removedJobUnitCount > 0) {
-      parts.push(`${result.removedJobUnitCount} Fälle aus Kodierjobs entfernt`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-removed-jobs', { count: result.removedJobUnitCount }));
     }
 
     return `${parts.join(', ')}.`;
   }
 
   private getApplyDiscussionResultsErrorMessage(error: unknown): string {
-    const fallbackMessage = 'Schulungsergebnisse konnten nicht angewendet werden.';
+    const fallbackMessage = this.translate.instant('coding.trainings.compare.apply-error');
     if (!(error instanceof HttpErrorResponse)) {
       return fallbackMessage;
     }
@@ -1452,11 +1359,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
               this.getReplayDisplayOptions(comparison)
             ), '_blank');
           } else {
-            this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
+            this.snackBar.open(this.translate.instant('coding.trainings.compare.replay-url-error'), this.translate.instant('common.close'), { duration: 3000 });
           }
         },
         error: () => {
-          this.snackBar.open('Replay konnte nicht geöffnet werden.', this.translate.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(this.translate.instant('coding.trainings.compare.replay-open-error'), this.translate.instant('common.close'), { duration: 3000 });
         }
       });
   }
@@ -1486,52 +1393,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private getReviewCodeSelections(comparison: TrainingComparison | WithinTrainingComparison): ReviewCodeSelection[] {
-    const coderNamesByCode = new Map<number, string[]>();
-
-    comparison.coders.forEach(coder => {
-      const coderName = this.getCoderSourceLabel(coder);
-      this.getReviewSelectionCodes(coder).forEach(code => {
-        const coderNames = coderNamesByCode.get(code) || [];
-        if (!coderNames.includes(coderName)) {
-          coderNames.push(coderName);
-        }
-        coderNamesByCode.set(code, coderNames);
-      });
-    });
-
-    return Array.from(coderNamesByCode.entries())
-      .sort(([codeA], [codeB]) => codeA - codeB)
-      .map(([code, coderNames]) => ({ code, coderNames }));
-  }
-
-  private getReviewSelectionCodes(coder: ComparisonCoderResult): number[] {
-    if (
-      coder.codingIssueOption !== null &&
-      coder.codingIssueOption !== undefined &&
-      this.standaloneCodingIssueOptionIds.has(coder.codingIssueOption)
-    ) {
-      return [coder.codingIssueOption];
-    }
-
-    const codes = new Set<number>();
-    const code = this.parseReviewCode(coder.code);
-    if (code !== null) {
-      codes.add(code);
-    }
-    if (coder.codingIssueOption !== null && coder.codingIssueOption !== undefined) {
-      codes.add(coder.codingIssueOption);
-    }
-    return Array.from(codes);
-  }
-
-  private parseReviewCode(code: string | null): number | null {
-    const trimmedCode = code?.trim();
-    if (!trimmedCode) {
-      return null;
-    }
-
-    const parsedCode = Number(trimmedCode);
-    return Number.isFinite(parsedCode) ? parsedCode : null;
+    return buildReviewCodeSelections(comparison, coder => this.getCoderSourceLabel(coder));
   }
 
   private buildReplayUrl(
@@ -1608,11 +1470,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
+    return getTrainingOptionMeta(training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
   }
 
   getTrainingCoderOptionLabel(coder: { trainingId: number; trainingLabel: string; coderName: string }): string {
-    return `${coder.trainingLabel} · ID ${coder.trainingId}: ${coder.coderName}`;
+    return this.translate.instant('coding.trainings.compare.training-coder', { training: coder.trainingLabel, id: coder.trainingId, coder: coder.coderName });
   }
 
   private invalidateDiscussionContext(): void {
@@ -1730,7 +1592,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
   protected getCoderName(jobId: number): string {
     const coder = this.availableCoders.find(c => c.jobId === jobId);
-    return coder ? coder.coderName : `Kodierer ${jobId}`;
+    return coder ? coder.coderName : this.translate.instant('coding.trainings.compare.coder-number', { id: jobId });
   }
 
   getCoderFromTrainingCode(comparison: TrainingComparison, key: string): string | null {
@@ -2130,28 +1992,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
   private findWithinTrainingReplayRow(
     data: Pick<ReplayCodeSelectedMessage, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
-  ): WithinTrainingComparison | null {
-    const targetVarId = (data.variableId || '').toLowerCase();
-    const targetUnitId = (data.unitId || '').toLowerCase();
-    const normalizedMsgTP = normalizeTestperson(data.testPerson || '').toLowerCase();
-
-    // 1. Primary match: responseId (most reliable)
-    let row = data.responseId ? this.withinTrainingData.find(d => d.responseId === data.responseId &&
-      (d.variableId || '').toLowerCase() === targetVarId
-    ) : null;
-
-    // 2. Fallback match: unitName + variableId + testperson
-    if (!row) {
-      row = this.withinTrainingData.find(d => {
-        const rowUnitId = (d.unitName || '').toLowerCase();
-        const rowVarId = (d.variableId || '').toLowerCase();
-        const rowTP = normalizeTestperson(d.testperson || '').toLowerCase();
-        return rowUnitId === targetUnitId && rowVarId === targetVarId && rowTP === normalizedMsgTP;
-      });
-    }
-
-    return row || null;
-  }
+  ): WithinTrainingComparison | null { return findReplayRow(this.withinTrainingData, data); }
 
   private getDiscussionScoreOverride(responseId: number): number | null | undefined {
     return Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId(), responseId) ?
@@ -2173,7 +2014,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
       this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
-        `Kodierung für ${data.variableId} aus Replay übernommen`,
+        this.translate.instant('coding.trainings.compare.code-from-replay', { variable: data.variableId }),
         this.translate.instant('common.close'),
         { duration: 3000 }
       );
@@ -2209,66 +2050,19 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private createTrainingDiscussionRecoveryDraft(): TrainingDiscussionRecoveryDraft | null {
-    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
-      return null;
-    }
-
-    const entries = this.withinTrainingData
-      .map(row => this.createTrainingDiscussionRecoveryEntry(row))
-      .filter((entry): entry is TrainingDiscussionRecoveryEntry => entry !== null);
-
-    if (entries.length === 0) {
-      return null;
-    }
-
-    return {
-      workspaceId: this.data.workspaceId,
-      trainingId: this.selectedTrainingForWithin,
-      entries
-    };
-  }
-
-  private createTrainingDiscussionRecoveryEntry(row: WithinTrainingComparison): TrainingDiscussionRecoveryEntry | null {
-    const responseId = row.responseId;
-    const codeValue = Object.prototype.hasOwnProperty.call(this.discussionCodeByResponseId(), responseId) ?
-      this.discussionCodeByResponseId()[responseId] :
-      this.getPersistedDiscussionCodeValue(row);
-    const score = Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId(), responseId) ?
-      this.discussionScoreByResponseId()[responseId] :
-      row.discussionScore ?? null;
-    const notes = Object.prototype.hasOwnProperty.call(this.discussionNotesByResponseId(), responseId) ?
-      this.discussionNotesByResponseId()[responseId] :
-      row.discussionNotes || '';
-
-    const hasPendingNotes = Object.prototype.hasOwnProperty.call(this.pendingDiscussionNotesByResponseId, responseId);
-    const isDirty = codeValue !== this.getPersistedDiscussionCodeValue(row) ||
-      score !== (row.discussionScore ?? null) ||
-      notes !== (row.discussionNotes || '') ||
-      hasPendingNotes ||
-      !!this.isSavingDiscussionByResponseId()[responseId] ||
-      !!this.discussionErrorByResponseId()[responseId];
-    if (!isDirty) {
-      return null;
-    }
-
-    return {
-      responseId,
-      codeValue,
-      score,
-      notes: hasPendingNotes ? this.pendingDiscussionNotesByResponseId[responseId] : notes
-    };
-  }
-
-  private getPersistedDiscussionCodeValue(row: WithinTrainingComparison): string {
-    return row.discussionCode !== null && row.discussionCode !== undefined ?
-      this.mapCodeForDisplay(row.discussionCode.toString()) :
-      '';
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) return null;
+    return this.discussionRecovery.capture(this.data.workspaceId, this.selectedTrainingForWithin, this.withinTrainingData, {
+      codes: this.discussionCodeByResponseId(),
+      scores: this.discussionScoreByResponseId(),
+      notes: this.discussionNotesByResponseId(),
+      pendingNotes: this.pendingDiscussionNotesByResponseId,
+      saving: this.isSavingDiscussionByResponseId(),
+      errors: this.discussionErrorByResponseId()
+    });
   }
 
   private restoreTrainingDiscussionRecoveryDraft(): boolean {
-    const draft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
-      this.trainingDiscussionRecoveryKey
-    );
+    const draft = this.discussionRecovery.peek();
     if (!draft || !this.isTrainingDiscussionRecoveryDraftForCurrentContext(draft)) {
       return false;
     }
@@ -2295,57 +2089,17 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private isTrainingDiscussionRecoveryDraftForCurrentContext(draft: TrainingDiscussionRecoveryDraft): boolean {
-    return draft.workspaceId === this.data.workspaceId &&
-      draft.trainingId === this.selectedTrainingForWithin &&
-      this.comparisonMode === 'within-training';
+    return this.comparisonMode === 'within-training' &&
+      this.discussionRecovery.matches(draft, this.data.workspaceId, this.selectedTrainingForWithin);
   }
 
   private saveTrainingDiscussionRecoveryDraft(draft: TrainingDiscussionRecoveryDraft): void {
-    const existingDraft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
-      this.trainingDiscussionRecoveryKey
-    );
-    if (!existingDraft || !this.isSameTrainingDiscussionRecoveryContext(existingDraft, draft)) {
-      this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, draft);
-      return;
-    }
-
-    const entriesByResponseId = new Map<number, TrainingDiscussionRecoveryEntry>();
-    existingDraft.entries.forEach(entry => entriesByResponseId.set(entry.responseId, entry));
-    draft.entries.forEach(entry => entriesByResponseId.set(entry.responseId, entry));
-    this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, {
-      ...draft,
-      entries: Array.from(entriesByResponseId.values())
-    });
+    this.discussionRecovery.save(draft);
   }
 
   private clearTrainingDiscussionRecoveryEntry(responseId: number): void {
-    const draft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
-      this.trainingDiscussionRecoveryKey
-    );
-    if (!draft || !this.isTrainingDiscussionRecoveryDraftForCurrentContext(draft)) {
-      return;
+    if (this.comparisonMode === 'within-training') {
+      this.discussionRecovery.clearEntry(responseId, this.data.workspaceId, this.selectedTrainingForWithin);
     }
-
-    const entries = draft.entries.filter(entry => entry.responseId !== responseId);
-    if (entries.length === draft.entries.length) {
-      return;
-    }
-
-    if (entries.length > 0) {
-      this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, {
-        ...draft,
-        entries
-      });
-    } else {
-      this.sessionRecoveryService.clearDraft(this.trainingDiscussionRecoveryKey);
-    }
-  }
-
-  private isSameTrainingDiscussionRecoveryContext(
-    first: TrainingDiscussionRecoveryDraft,
-    second: TrainingDiscussionRecoveryDraft
-  ): boolean {
-    return first.workspaceId === second.workspaceId &&
-      first.trainingId === second.trainingId;
   }
 }
