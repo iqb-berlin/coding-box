@@ -59,6 +59,17 @@ describe('coding job form rules', () => {
     expect(legacy.controls.missingsProfileId!.value).toBe(7);
   });
 
+  it.each(['durationSeconds', 'maxCodingCases', 'doubleCodingAbsolute'] as const)(
+    'rejects fractional counts in %s before submitting the API request', field => {
+      const form = createCodingJobForm({ mode: 'job', isEdit: false });
+      form.controls[field].setValue(1.5);
+      expect(form.controls[field].invalid).toBe(true);
+      form.controls[field].setValue(1);
+      form.controls.doubleCodingPercentage.setValue(25.5);
+      expect(form.valid).toBe(true);
+    }
+  );
+
   it('locks only status while keeping it in the payload and other fields editable', () => {
     const form = createCodingJobForm({
       mode: 'job', isEdit: true, lockStatus: true, job: { status: 'active' }

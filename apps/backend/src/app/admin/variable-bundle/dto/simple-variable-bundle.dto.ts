@@ -1,7 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsArray,
-  IsNumber,
+  IsInt,
+  IsIn,
+  Min,
+  Max,
   IsOptional,
   IsString,
   ValidateNested
@@ -16,10 +19,15 @@ import { VariableDto } from './variable.dto';
 export class SimpleVariableBundleDto {
   @ApiProperty({
     description: 'The ID of the variable bundle',
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     example: 1,
     required: false
   })
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
   @IsOptional()
   id?: number;
 
@@ -47,7 +55,7 @@ export class SimpleVariableBundleDto {
     enum: ['continuous', 'alternating'],
     required: false
   })
-  @IsString()
+  @IsIn(['continuous', 'alternating'])
   @IsOptional()
   caseOrderingMode?: 'continuous' | 'alternating';
 
