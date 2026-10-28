@@ -5,7 +5,7 @@ import 'multer';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import * as fs from 'fs';
-import { unlink } from 'fs/promises';
+import { open, unlink } from 'fs/promises';
 import { Job } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { requireJobId } from '../../../job-queue/job-queue.util';
@@ -552,6 +552,20 @@ export class UploadResultsService {
         }
 
         if (resultType === 'logs') {
+          // Source19 quotes every header and cell; legacy local exports use
+          // unquoted headers and allow raw quote characters inside log data.
+          // Inspect only a bounded prefix, retaining streaming for large files.
+          fileStream.pause();
+          const handle = await open(file.path, 'r');
+          let quotedLogCsv: boolean;
+          try {
+            const prefix = Buffer.alloc(256);
+            const { bytesRead } = await handle.read(prefix, 0, prefix.length, 0);
+            quotedLogCsv = prefix.subarray(0, bytesRead).toString('utf8').replace(/^\uFEFF/, '').trimStart()
+              .startsWith('"');
+          } finally {
+            await handle.close();
+          }
           await this.handleCsvStream<Log>(fileStream, resultType, issues, file.originalname, async rowData => {
             const bookletLogKeys = new Set(
               rowData
@@ -633,7 +647,7 @@ export class UploadResultsService {
             if (result.issues) {
               issues.push(...result.issues);
             }
-          });
+          }, quotedLogCsv);
         } else if (resultType === 'responses') {
           let responsesImportMutatedData = false;
           try {
@@ -971,7 +985,8 @@ export class UploadResultsService {
     resultType: 'logs' | 'responses',
     issues: TestResultsUploadIssueDto[],
     fileName: string,
-    onDataProcessed: (rowData: T[]) => Promise<void>
+    onDataProcessed: (rowData: T[]) => Promise<void>,
+    quotedLogCsv = false
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       let batch: T[] = [];
@@ -984,7 +999,7 @@ export class UploadResultsService {
           `Processing CSV stream for ${resultType} in a single file pass`
       );
 
-      const stream = csv.parseStream<T, T>(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' ? null : '"' })
+      const stream = csv.parseStream<T, T>(bufferStream, { headers: true, delimiter: ';', quote: resultType === 'logs' && !quotedLogCsv ? null : '"' })
         .on('headers', (headers: string[]) => {
           headersValid = this.validateCsvHeaders(headers, resultType, fileName, issues);
           if (!headersValid) {
@@ -992,7 +1007,7 @@ export class UploadResultsService {
           }
         })
         .transform((row: T) => {
-          if (resultType === 'logs') {
+          if (resultType === 'logs' && !quotedLogCsv) {
             const record = row as Record<string, unknown>;
             Object.keys(record).forEach(key => {
               if (typeof record[key] === 'string') {
