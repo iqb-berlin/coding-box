@@ -262,3 +262,93 @@ weiterhin eigenständige Folgearbeiten. Jeder weitere Schnitt soll separat
 reviewbar bleiben und Verhaltenstests für seinen Auswahl-, Speicher- und
 Lebensdauervertrag mitbringen. Die verbleibende Zeilenzahl ist kein
 Abnahmekriterium.
+
+
+## Paket 3: Replay-Sitzung, Wiederherstellung und Player-Abfragen
+
+Stand 28.10.2026, Basis `b551329189357095f5eca7a4ccb54a1cce4f8a07`
+auf `angular21-toolchain-type-safety` (PR #1128). Der erste Folge-PR richtet
+sich bis zur Übernahme dieser Basis gegen denselben Branch.
+
+| Lokaler Besitzer | Fachliche Verantwortung |
+| --- | --- |
+| `ReplayAuthSessionService` | Replay-Token prüfen/erneuern, Refreshs nach Workspace und normalisierten Scopes teilen, ungültige Versuche abbrechen und erneuerte Tokens aus der URL entfernen. |
+| `ReplayRecoveryService` | Unvollständige Kodierungen erfassen, Draft-Kontext prüfen, gespeicherte Änderungen bestätigen und Entscheidungsnachrichten an den Opener senden. Ein alter Abschluss löscht keinen neueren Draft. |
+| `ReplayPayloadFacade` | Vollständige Player-Daten und reine Antwortwechsel mit einer gemeinsamen ersetzbaren Anfrage verwalten; abhängige Schema-Ladevorgänge an dieselbe Lebensdauer binden. |
+| Vorhandene `ReplaySessionLoaderService` / `ReplayCodingService` | Replay-Sitzungsendpunkt samt 404/405-Rückfall, Kodierungszustand und Speichervorgänge weiterverwenden. Der Sitzungsloader meldet ersetzte Anfragen jetzt ab. |
+| `ReplayComponent` | Route, Modus, sichtbare Auswahl, Navigation, Player-Darstellung, Tastatur, Dialoge und Statistiken miteinander verbinden. |
+
+Alle drei neuen Besitzer werden pro Replay-Komponente bereitgestellt. Sie
+injizieren keine Elternkomponente. Recovery erhält einen typisierten Snapshot
+und meldet die wiederherzustellende Position über einen schmalen Callback.
+Routerparameter, Draft-Schlüssel, Opener-Nachrichten und Verona-Protokoll sind
+unverändert. Direkte Seitennavigation, Antwortwechsel innerhalb derselben Unit
+und vollständiger Payloadwechsel bleiben getrennte Strategien.
+
+Ein Workspace-Wechsel verwirft offene Versuche sofort, auch bei A → B → A.
+Die zentrale Reauthentifizierung behält weiterhin den vorhandenen Recovery-
+Service und den bisherigen Speicherablauf. Beim Ansichtsende enden lokale
+Token-, Sitzungs- und Payload-Anfragen. Der bestehende globale Asset-Cache
+behält seine eigene Lebensdauer. Ein gescheiterter Recovery-Speicherversuch
+lässt den Draft verfügbar; ein älterer Versuch überschreibt keinen neueren.
+
+Die neuen Service- und Komponententests verwenden die native Zoneless-
+Konfiguration. Verzögerte Player-Eingaben und Workspace-Wechsel werden mit
+`whenStable()` ohne nachträgliches `detectChanges()` geprüft. Die Browser-Spec
+`cypress/zoneless/replay-lifecycle.cy.ts` nutzt synthetische API-Antworten und
+einen kleinen Verona-Protokollplayer. Sie ergänzt die vorhandenen realen
+Keycloak-/Aspect-Suites, ersetzt deren Systemnachweis aber nicht.
+
+### Erneute Bestandsaufnahme
+
+Gezählt wurde erneut am Basiscommit: 17 Komponenten mit mehr als 1.000
+physischen TypeScript-Zeilen. Die Tabelle zeigt den Ausgangsstand dieses Pakets,
+nicht die historischen Zahlen der älteren Abschnitte. Alle Methodenlisten
+wurden erneut gegen die aktuellen Quelldateien geprüft.
+
+| Komponente | Basiszeilen | Nächste fachliche Grenze |
+| --- | ---: | --- |
+| Replay | 2215 | Obiges Paket; anschließend gegebenenfalls reine Routeninterpretation und die verbleibenden Ansichtsaktionen separat beurteilen. |
+| Ergebnisvergleich | 2105 | Diskussionsübernahme mit Vorschau/Fehlern; vorhandene Daten-, Recovery- und Reliabilitätsfassaden erhalten. |
+| Testergebnisse | 2026 | Auswahl und kontextgebundene Tags-/Notizen-/Booklet-Details; vorhandene Import-/Export-/Statistikbesitzer nutzen. |
+| Jobdefinitionsdialog | 2016 | Definitionsänderung mit Verwendungs-/Refresh-Vorschau und Review-Einreichung; bestehende Form-/Variablen-/Persistence-Module nutzen. |
+| Dateivalidierung | 1915 | Reine Ableitung von Zusammenfassung, fehlenden Referenzen und Beziehungen aus dem Validierungsergebnis; danach getrennt von Ausschluss-/Löschaktionen prüfen. |
+| Kodierverwaltung | 1842 | Freshness-/Readiness-Abfragen und Hintergrundjob-Polling; Filter und Download als eigene Abläufe. |
+| Flache Testergebnistabelle | 1825 | Filteroptionen/Häufigkeiten mit Anfrageersetzung; vorhandene Tabelle und seitenübergreifende Auswahl erhalten. |
+| Manuelle Kodierverwaltung | 1810 | Manuelle Exportkonfiguration mit Größenschätzung und Ergebnisübernahme; vorhandene Workflow-/Statistik-/Importbesitzer nutzen. |
+| Kodierjobs | 1810 | Einzel-/Sammelübernahme und Löschaktionen samt Rechten/Bestätigung; Listenabfragen und Auswahl getrennt halten. |
+| Kodiertraining | 1705 | Referenz-/Definitionsimport gegenüber Trainingsanlage; bestehendes FormArray und Recovery erhalten. |
+| Testdateien | 1550 | Content-Pool-Übertragung gegenüber Dateiaktionen; vorhandene Uploadverfolgung und Berechtigungen nutzen. |
+| Variablenanalyse | 1488 | Analyseauftrag/Polling/Abbruch gegenüber paginierten Resultaten und reiner Transformation. |
+| Doppelkodierungsprüfung | 1401 | Entscheidungen und Kommentare gegenüber Filtern/Paging; vorhandene Review-Fassade und Replay-Entscheidungen erhalten. |
+| Jobdefinitionen | 1218 | Freigabe/Review und Distributionsexport gegenüber Listenpflege und Anlage. |
+| Codeauswahl | 1131 | Navigations-/Indexbildung gegenüber Code-/Notizeditor; Kommentarpflicht und Tastenkürzel erhalten. |
+| Testcenter-Import | 1083 | Import-/Fortschrittslebensdauer gegenüber den bereits geschnittenen Ansichten; unklaren Serverstatus erhalten. |
+| Jobergebnisdialog | 1037 | Aktualisierungs-/Filterabfragen gegenüber Schema-/Replay-Aktionen mit demselben Auftragskontext. |
+
+Die Grenze dient weiterhin nur der Suche. Ein sinnvoller Schnitt bekommt einen
+kleinen fachlichen Vertrag und gezielte Regressionen; die verbleibende
+Komponentengröße entscheidet nicht über die Abnahme.
+
+### Lokale Prüfung von Paket 3
+
+Am endgültigen Stand, Node 22.23.1, über die lokalen Nx-Ziele:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Frontend-Lint | Bestanden, keine Warnungen. |
+| Vollständige native Zoneless-Suite | 320 Suites, 3.521 Tests bestanden; 35 zusätzliche Regressionen gegenüber der Basis. |
+| Frontend-Produktionsbuild | Bestanden, initial 1,23 MB. Normale Projektoptionen, keine zusätzlichen Node-Symlink-Flags. |
+| Backend-Produktionsbuild | Anschließend separat bestanden. Backend und DTOs wurden nicht geändert. |
+| `frontend:test-quality-gates` | Alle 51 Tests bestanden. |
+| `frontend:zoneless-inventory-test` / `frontend:zoneless-approval` | Beide Inventartests und Risikoreferenzen bestanden; 411 Quelldateien, 9.363 Einträge. Keine vollständige Einzelabnahme des gesamten Inventars. |
+| Browser: `replay-lifecycle.cy.ts`, `oidc-replay-callback.cy.ts` | 4/4 in Chrome gegen den frischen Produktionsbuild bestanden, ohne Retries oder übersprungene Fälle. |
+| `git diff --check` | Bestanden. |
+
+Das eigene Review fand und korrigierte eine zusätzliche Promise-Grenze zwischen
+Fassade und Komponente. Zwei Regressionen reproduzierten zunächst die Annahme
+veralteter Ergebnisse; unmittelbar vor deren Übernahme wird die aktuelle
+Anfrage nun erneut geprüft. Weitere Tests prüfen Abbruch zwischen 404 und
+Legacy-Rückfall sowie verspätete beziehungsweise entprellte Opener-Nachrichten
+nach Workspace-Wechseln. Das abschließende Eigenreview hat keine offenen
+Befunde. Remote-CI und fachliche Abnahme bleiben separat am PR zu prüfen.
