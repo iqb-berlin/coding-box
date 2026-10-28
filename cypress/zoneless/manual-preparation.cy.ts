@@ -84,12 +84,22 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/coding/applied-results-overview', { body: null });
   }
 
-  function openManual(): void {
+  function openManual(options: { holdEntrance?: boolean } = {}): void {
     cy.visit('/');
     cy.wait('@authData');
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
-    cy.get('coding-box-coding-management-manual').should('be.visible');
+    cy.get('coding-box-coding-management-manual > .coding-container')
+      .then(manual => {
+        if (options.holdEntrance) {
+          const animation = manual[0].animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+          animation.pause();
+          animation.currentTime = 0;
+          expect(manual[0].ownerDocument.defaultView!.getComputedStyle(manual[0]).opacity).to.equal('0');
+        }
+        settleFiniteAncestorAnimations(manual[0]);
+      })
+      .should('be.visible');
   }
 
   function openTraining(options: { holdEntrance?: boolean } = {}): void {
@@ -708,7 +718,7 @@ describe('Zoneless manual preparation workflows', () => {
 
   it('loads the job-list chunk only when the execution tab is opened', () => {
     setup();
-    openManual();
+    openManual({ holdEntrance: true });
     cy.window().then(win => {
       const requests = win.performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('.js')).length;
       cy.wrap(requests).as('initialScriptRequests');
