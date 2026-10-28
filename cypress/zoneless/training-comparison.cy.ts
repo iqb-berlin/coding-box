@@ -273,6 +273,7 @@ describe('Zoneless training comparison', () => {
         cy.get('@dialog').find('.level-indicator').should('contain.text', 'Score-Ebene');
       } else {
         cy.get('@dialog').find('.kappa-statistics').should('not.exist');
+        cy.get('.mat-mdc-snack-bar-container').should('contain.text', 'Fehler beim Laden der Interrater-Reliabilität');
       }
     });
 

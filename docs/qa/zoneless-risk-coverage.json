@@ -271,7 +271,9 @@
         "apps/frontend/src/app/shared/services/response/variable-analysis.service.spec.ts",
         "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts",
         "apps/frontend/src/app/shared/services/user/user-directory.facade.spec.ts",
-        "cypress/zoneless/user-directory.cy.ts"
+        "cypress/zoneless/user-directory.cy.ts",
+        "apps/frontend/src/app/shared/services/database-export.service.spec.ts",
+        "cypress/e2e/database-exports.cy.ts"
       ]
     }
   ],

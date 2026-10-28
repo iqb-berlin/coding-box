@@ -350,17 +350,17 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   readonly variableKappaSummaries = this.reliability.variableKappaSummaries;
 
   readonly codingIssueLabelMap: Record<number, string> = {
-    [-1]: 'Code-Vergabe unsicher',
-    [-2]: 'Neuer Code nötig',
-    [-3]: 'Ungültig (Spaßantwort)',
-    [-4]: 'Technische Probleme'
+    [-1]: 'coding.trainings.compare.issue-uncertain',
+    [-2]: 'coding.trainings.compare.issue-new-code',
+    [-3]: 'coding.trainings.compare.issue-invalid',
+    [-4]: 'coding.trainings.compare.issue-technical'
   };
 
   readonly codingIssueShortLabelMap: Record<number, string> = {
-    [-1]: 'Unsicher',
-    [-2]: 'Neuer Code',
-    [-3]: 'Spaßantwort',
-    [-4]: 'Technisch'
+    [-1]: 'coding.trainings.compare.issue-uncertain-short',
+    [-2]: 'coding.trainings.compare.issue-new-code-short',
+    [-3]: 'coding.trainings.compare.issue-invalid-short',
+    [-4]: 'coding.trainings.compare.issue-technical-short'
   };
 
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
@@ -712,7 +712,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private formatTrainingList(trainings: CoderTraining[]): string {
     const visible = trainings.slice(0, 3).map(training => this.getTrainingOptionTitle(training));
     const remaining = trainings.length - visible.length;
-    return remaining > 0 ? `${visible.join(', ')} und ${remaining} weitere` : visible.join(', ');
+    return remaining > 0 ? this.translate.instant('coding.trainings.compare.more-trainings', { trainings: visible.join(', '), count: remaining }) : visible.join(', ');
   }
 
   protected getComparisonWarnings(): ComparisonWarning[] {
@@ -726,13 +726,13 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (selectedSourceCount === 0) {
       warnings.push({
         icon: 'person_off',
-        text: 'Es ist kein Kodierer ausgewählt. Wählen Sie mindestens zwei Kodierer aus, um Vergleichswerte zu sehen.',
+        text: this.translate.instant('coding.trainings.compare.warning-no-coders'),
         severity: 'info'
       });
     } else if (selectedSourceCount === 1) {
       warnings.push({
         icon: 'person',
-        text: 'Aktuell ist nur ein Kodierer ausgewählt. Die Fälle werden angezeigt, sind aber noch nicht vergleichbar.',
+        text: this.translate.instant('coding.trainings.compare.warning-one-coder'),
         severity: 'warn'
       });
     }
@@ -741,18 +741,19 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (trainingsWithoutCodes.length > 0) {
       warnings.push({
         icon: 'playlist_remove',
-        text: `Keine Kodierergebnisse im Vergleich für: ${this.formatTrainingList(trainingsWithoutCodes)}.`,
+        text: this.translate.instant('coding.trainings.compare.warning-no-codes', { trainings: this.formatTrainingList(trainingsWithoutCodes) }),
         severity: 'warn'
       });
     }
 
     if (selectedSourceCount >= 2 && this.incompleteComparisons > 0) {
-      const incompleteCasesText = this.incompleteComparisons === 1 ?
-        '1 sichtbarer Fall ist unvollständig' :
-        `${this.incompleteComparisons} sichtbare Fälle sind unvollständig`;
       warnings.push({
         icon: 'warning',
-        text: `${incompleteCasesText}, weil mindestens ein ausgewählter Kodierer keinen Code hat.`,
+        text: this.translate.instant(
+          this.incompleteComparisons === 1 ? 'coding.trainings.compare.warning-incomplete-one' :
+            'coding.trainings.compare.warning-incomplete-many',
+          { count: this.incompleteComparisons }
+        ),
         severity: 'warn'
       });
     }
@@ -766,7 +767,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     ) {
       warnings.push({
         icon: 'pending_actions',
-        text: 'Diese Schulung enthält Fälle, aber noch keine vollständig kodierten Vergleichspaare.',
+        text: this.translate.instant('coding.trainings.compare.warning-no-complete-pairs'),
         severity: 'warn'
       });
     }
@@ -778,14 +779,14 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     if (codingIssueOption === null || codingIssueOption === undefined) {
       return '';
     }
-    return this.codingIssueLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
+    return this.translate.instant(this.codingIssueLabelMap[codingIssueOption] || 'coding.trainings.compare.issue-unknown', { count: codingIssueOption });
   }
 
   getCodingIssueShortLabel(codingIssueOption: number | null | undefined): string {
     if (codingIssueOption === null || codingIssueOption === undefined) {
       return '';
     }
-    return this.codingIssueShortLabelMap[codingIssueOption] || `Hinweis ${codingIssueOption}`;
+    return this.translate.instant(this.codingIssueShortLabelMap[codingIssueOption] || 'coding.trainings.compare.issue-unknown', { count: codingIssueOption });
   }
 
   private getCoderSourceLabel(coder: ComparisonCoderResult): string {
@@ -1096,8 +1097,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     const parsedCode = this.parseDiscussionCode(rawValue);
 
     if (parsedCode === undefined) {
-      this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: 'Bitte nur ganze Zahlen für den Diskussionscode eingeben.' }));
-      this.snackBar.open('Bitte nur ganze Zahlen für den Diskussionscode eingeben.', this.translate.instant('common.close'), { duration: 3000 });
+      this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: this.translate.instant('coding.trainings.compare.discussion-integer-required') }));
+      this.snackBar.open(this.translate.instant('coding.trainings.compare.discussion-integer-required'), this.translate.instant('common.close'), { duration: 3000 });
       return;
     }
 
@@ -1180,7 +1181,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
           if (this.isRecoverableDiscussionAuthError(error)) {
             const message = error instanceof AuthRefreshUnavailableError || getAuthProviderFailureCode(error) ?
               this.translate.instant('error.auth_refresh_pending_save_message') :
-              'Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.';
+              this.translate.instant('coding.trainings.compare.discussion-requires-login');
             this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: message }));
             const draft = this.createTrainingDiscussionRecoveryDraft();
             if (draft) {
@@ -1198,7 +1199,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private getDiscussionSaveErrorMessage(error: unknown): string {
-    const fallbackMessage = 'Diskussionsergebnis konnte nicht gespeichert werden.';
+    const fallbackMessage = this.translate.instant('coding.trainings.compare.discussion-save-error');
     if (!(error instanceof HttpErrorResponse)) {
       return fallbackMessage;
     }
@@ -1213,27 +1214,27 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     }
 
     if (message.includes('Unsupported code for variable')) {
-      return 'Der Code ist im Kodierschema dieser Variable nicht vorhanden.';
+      return this.translate.instant('coding.trainings.compare.discussion-code-unknown');
     }
 
     if (message.includes('Unsupported missing code')) {
-      return 'Der Code ist im Missing-Profil nicht als negativer Code hinterlegt.';
+      return this.translate.instant('coding.trainings.compare.discussion-missing-code-unknown');
     }
 
     if (message.includes('Conflicting missing profiles')) {
-      return 'Für diesen Fall sind unterschiedliche Missing-Profile im Training hinterlegt.';
+      return this.translate.instant('coding.trainings.compare.discussion-conflicting-profiles');
     }
 
     if (message.includes('Missing profile') && message.includes('not found')) {
-      return 'Das Missing-Profil des Kodierjobs konnte nicht geladen werden.';
+      return this.translate.instant('coding.trainings.compare.discussion-profile-unavailable');
     }
 
     if (message.includes('Coding scheme not found') || message.includes('Coding scheme variable not found')) {
-      return 'Der Score konnte nicht aus dem Kodierschema abgeleitet werden.';
+      return this.translate.instant('coding.trainings.compare.discussion-score-unavailable');
     }
 
     if (message.includes('Discussion code must be an integer')) {
-      return 'Bitte nur ganze Zahlen für den Diskussionscode eingeben.';
+      return this.translate.instant('coding.trainings.compare.discussion-integer-required');
     }
 
     return message;
@@ -1242,7 +1243,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
     if (!this.permissions.canApply) return;
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
-      this.snackBar.open('Bitte zuerst eine Schulung auswählen.', this.translate.instant('common.close'), { duration: 3000 });
+      this.snackBar.open(this.translate.instant('coding.trainings.compare.training-required'), this.translate.instant('common.close'), { duration: 3000 });
       return;
     }
 
@@ -1360,31 +1361,31 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     removedJobUnitCount: number;
   }): string {
     if (!result.success) {
-      return 'Schulungsergebnisse konnten nicht angewendet werden.';
+      return this.translate.instant('coding.trainings.compare.apply-error');
     }
 
-    const parts = [`${result.updatedResponsesCount} Ergebnisse angewendet`];
+    const parts = [this.translate.instant('coding.trainings.compare.apply-updated', { count: result.updatedResponsesCount })];
     if (result.overwrittenExistingResultsCount > 0) {
-      parts.push(`${result.overwrittenExistingResultsCount} bestehende Ergebnisse überschrieben`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-overwritten', { count: result.overwrittenExistingResultsCount }));
     }
     if (result.skippedExistingResultsCount > 0) {
-      parts.push(`${result.skippedExistingResultsCount} bestehende Ergebnisse übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-existing', { count: result.skippedExistingResultsCount }));
     }
     if (result.skippedJobConflictCount > 0) {
-      parts.push(`${result.skippedJobConflictCount} Fälle wegen Kodierjob-Konflikten übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-conflicts', { count: result.skippedJobConflictCount }));
     }
     if (result.skippedMissingScoreCount > 0) {
-      parts.push(`${result.skippedMissingScoreCount} Fälle ohne Score übersprungen`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-scores', { count: result.skippedMissingScoreCount }));
     }
     if (result.removedJobUnitCount > 0) {
-      parts.push(`${result.removedJobUnitCount} Fälle aus Kodierjobs entfernt`);
+      parts.push(this.translate.instant('coding.trainings.compare.apply-removed-jobs', { count: result.removedJobUnitCount }));
     }
 
     return `${parts.join(', ')}.`;
   }
 
   private getApplyDiscussionResultsErrorMessage(error: unknown): string {
-    const fallbackMessage = 'Schulungsergebnisse konnten nicht angewendet werden.';
+    const fallbackMessage = this.translate.instant('coding.trainings.compare.apply-error');
     if (!(error instanceof HttpErrorResponse)) {
       return fallbackMessage;
     }
@@ -1452,11 +1453,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
               this.getReplayDisplayOptions(comparison)
             ), '_blank');
           } else {
-            this.snackBar.open('Replay-URL konnte nicht erzeugt werden.', this.translate.instant('common.close'), { duration: 3000 });
+            this.snackBar.open(this.translate.instant('coding.trainings.compare.replay-url-error'), this.translate.instant('common.close'), { duration: 3000 });
           }
         },
         error: () => {
-          this.snackBar.open('Replay konnte nicht geöffnet werden.', this.translate.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(this.translate.instant('coding.trainings.compare.replay-open-error'), this.translate.instant('common.close'), { duration: 3000 });
         }
       });
   }
@@ -1608,11 +1609,11 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
+    return getTrainingOptionMeta(training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
   }
 
   getTrainingCoderOptionLabel(coder: { trainingId: number; trainingLabel: string; coderName: string }): string {
-    return `${coder.trainingLabel} · ID ${coder.trainingId}: ${coder.coderName}`;
+    return this.translate.instant('coding.trainings.compare.training-coder', { training: coder.trainingLabel, id: coder.trainingId, coder: coder.coderName });
   }
 
   private invalidateDiscussionContext(): void {
@@ -1730,7 +1731,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
   protected getCoderName(jobId: number): string {
     const coder = this.availableCoders.find(c => c.jobId === jobId);
-    return coder ? coder.coderName : `Kodierer ${jobId}`;
+    return coder ? coder.coderName : this.translate.instant('coding.trainings.compare.coder-number', { id: jobId });
   }
 
   getCoderFromTrainingCode(comparison: TrainingComparison, key: string): string | null {
@@ -2173,7 +2174,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
       this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
-        `Kodierung für ${data.variableId} aus Replay übernommen`,
+        this.translate.instant('coding.trainings.compare.code-from-replay', { variable: data.variableId }),
         this.translate.instant('common.close'),
         { duration: 3000 }
       );

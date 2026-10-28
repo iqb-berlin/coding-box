@@ -8,10 +8,11 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   BehaviorSubject, Observable, of, Subject, throwError
 } from 'rxjs';
+import applicationTranslations from '../../../../assets/i18n/de.json';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
@@ -224,6 +225,9 @@ describe('CodingResultsComparisonComponent', () => {
       ]
     }).compileComponents();
 
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', applicationTranslations);
+    translate.use('de');
     fixture = TestBed.createComponent(CodingResultsComparisonComponent);
     component = fixture.componentInstance;
     (component as unknown as { dialog: typeof matDialog }).dialog = matDialog;
@@ -897,7 +901,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(openSpy).not.toHaveBeenCalled();
     expect(snackBar.open).toHaveBeenCalledWith(
       'Replay-URL konnte nicht erzeugt werden.',
-      'common.close',
+      'Schließen',
       { duration: 3000 }
     );
   });
@@ -2024,7 +2028,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.discussionErrorByResponseId()[1]).toBe('Der Code ist im Kodierschema dieser Variable nicht vorhanden.');
     expect(snackBar.open).toHaveBeenCalledWith(
       'Der Code ist im Kodierschema dieser Variable nicht vorhanden.',
-      'common.close',
+      'Schließen',
       { duration: 4000 }
     );
   });
@@ -2703,9 +2707,9 @@ describe('CodingResultsComparisonComponent', () => {
     expect(tableText).toContain('15');
     expect(inlineSummaryText).toContain('Mittelwert U1 - V1');
     expect(inlineSummaryText).toContain('Kappa 0.840');
-    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-brennan-prediger-kappa 0.900');
-    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-fleiss-kappa 0.750');
-    expect(inlineSummaryText).toContain('coding.trainings.compare.complete-of-possible-cases');
+    expect(inlineSummaryText).toContain('Brennan-Prediger-Kappa 0.900');
+    expect(inlineSummaryText).toContain("Fleiss' Kappa 0.750");
+    expect(inlineSummaryText).toContain('8 vollständige / 10 mögliche Fälle');
     expect(inlineSummaryText).toContain('Übereinstimmung 86.7%');
     expect(inlineSummaryText).toContain('Fälle 1');
     expect(inlineSummaryText).toContain('Gültige Paarwerte 15');
@@ -2734,7 +2738,7 @@ describe('CodingResultsComparisonComponent', () => {
     fixture.detectChanges();
 
     const hint = fixture.nativeElement.querySelector('.fleiss-minimum-hint') as HTMLElement;
-    expect(hint.textContent).toContain('coding.trainings.compare.fleiss-minimum-raters');
+    expect(hint.textContent).toContain('Fleiss\' Kappa wird erst ab drei ausgewählten Kodierern berechnet.');
   });
 
   it('should render unweighted mean kappa summaries when weighting is disabled', () => {
