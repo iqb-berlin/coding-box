@@ -1,18 +1,18 @@
 <div class="discussion-cell">
   <mat-form-field appearance="outline" class="discussion-input">
-    <mat-label>Code</mat-label>
+    <mat-label>{{ 'coding.trainings.compare.code' | translate }}</mat-label>
     <input matInput #codeInput [readonly]="!view().editable" [value]="view().code"
       (input)="codeChanged.emit(codeInput.value)" (blur)="committed.emit()" />
   </mat-form-field>
-  <span class="discussion-score">Score: {{ view().score ?? '-' }}</span>
+  <span class="discussion-score">{{ 'coding.trainings.compare.score' | translate:{score: view().score ?? '-'} }}</span>
   <mat-form-field appearance="outline" class="discussion-notes">
     <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
     <textarea matInput #notesInput rows="2" [placeholder]="'double-coded-review.comment-placeholder' | translate"
       [readonly]="!view().editable" [value]="view().notes"
       (input)="notesChanged.emit(notesInput.value)" (blur)="committed.emit()"></textarea>
   </mat-form-field>
-  @if (view().saving) { <span class="discussion-saving">Speichert ...</span> }
+  @if (view().saving) { <span class="discussion-saving">{{ 'coding.trainings.compare.saving' | translate }}</span> }
   @if (view().error) { <span class="discussion-error">{{ view().error }}</span> }
-  @if (view().source === 'auto_agreement') { <span class="discussion-source discussion-source-auto">Auto-Konsens</span> }
-  @if (view().source === 'manual') { <span class="discussion-source discussion-source-manual">Festgelegt</span> }
+  @if (view().source === 'auto_agreement') { <span class="discussion-source discussion-source-auto">{{ 'coding.trainings.compare.auto-consensus' | translate }}</span> }
+  @if (view().source === 'manual') { <span class="discussion-source discussion-source-manual">{{ 'coding.trainings.compare.manual-result' | translate }}</span> }
 </div>

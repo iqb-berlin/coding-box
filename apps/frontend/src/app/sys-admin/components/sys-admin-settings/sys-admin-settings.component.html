@@ -4,25 +4,25 @@
 <div class="wrapper">
   <mat-card class="logo-settings-card">
     <mat-card-header>
-      <mat-card-title>Logo-Einstellungen</mat-card-title>
+      <mat-card-title>{{ 'sys-admin-settings.logo-title' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="logo-preview-container">
-        <h3>Aktuelles Logo</h3>
+        <h3>{{ 'sys-admin-settings.current-logo' | translate }}</h3>
         <div class="current-logo">
-          <img [src]="appService.appLogo.data" alt="Aktuelles Logo" class="logo-preview">
+          <img [src]="appService.appLogo.data" [alt]="'sys-admin-settings.current-logo' | translate" class="logo-preview">
           @if (isDefaultLogo()) {
-            <p class="default-logo-text">Standard-Logo</p>
+            <p class="default-logo-text">{{ 'sys-admin-settings.default-logo' | translate }}</p>
           }
           @if (!isDefaultLogo()) {
-            <p class="custom-logo-text">Benutzerdefiniertes Logo</p>
+            <p class="custom-logo-text">{{ 'sys-admin-settings.custom-logo' | translate }}</p>
           }
         </div>
       </div>
 
 
       <div class="logo-upload-container">
-        <h3>Logo ändern</h3>
+        <h3>{{ 'sys-admin-settings.change-logo' | translate }}</h3>
         <div class="file-input-container">
           <input
             type="file"
@@ -32,46 +32,46 @@
             class="file-input">
           <label for="logo-upload" class="file-input-label">
             <mat-icon>cloud_upload</mat-icon>
-            Datei auswählen
+            {{ 'sys-admin-settings.choose-file' | translate }}
           </label>
           @if (selectedFileValue) {
             <span class="file-name">{{ selectedFileValue.name }}</span>
           }
-          <p class="file-hint">Erlaubte Dateitypen: JPEG, PNG, GIF, SVG, WebP. Maximale Größe: 4MB.</p>
+          <p class="file-hint">{{ 'sys-admin-settings.allowed-file-types' | translate }}</p>
         </div>
 
         @if (previewUrlValue) {
           <div class="preview-container">
-            <h4>Vorschau</h4>
-            <img [src]="previewUrlValue" alt="Logo Vorschau" class="logo-preview">
+            <h4>{{ 'sys-admin-settings.preview' | translate }}</h4>
+            <img [src]="previewUrlValue" [alt]="'sys-admin-settings.logo-preview' | translate" class="logo-preview">
             <div class="preview-actions">
               <button mat-raised-button color="primary" (click)="uploadLogo()">
-                <mat-icon>save</mat-icon> Logo speichern
+                <mat-icon>save</mat-icon> {{ 'sys-admin-settings.save-logo' | translate }}
               </button>
               <button mat-button (click)="resetFileInput()">
-                <mat-icon>cancel</mat-icon> Abbrechen
+                <mat-icon>cancel</mat-icon> {{ 'cancel' | translate }}
               </button>
             </div>
           </div>
         }
       </div>
       <div class="logo-alt-text-container">
-        <h3>Alternativtext für das Logo</h3>
+        <h3>{{ 'sys-admin-settings.logo-alt-title' | translate }}</h3>
         <mat-form-field class="full-width">
-          <mat-label>Alternativtext</mat-label>
-          <input matInput [(ngModel)]="logoAltText" placeholder="Alternativtext für das Logo eingeben">
-          <mat-hint>Dieser Text wird angezeigt, wenn das Logo nicht geladen werden kann oder für Screenreader</mat-hint>
+          <mat-label>{{ 'sys-admin-settings.alt-text' | translate }}</mat-label>
+          <input matInput [(ngModel)]="logoAltText" [placeholder]="'sys-admin-settings.alt-text-placeholder' | translate">
+          <mat-hint>{{ 'sys-admin-settings.alt-text-hint' | translate }}</mat-hint>
         </mat-form-field>
         <div class="alt-text-actions">
           <button mat-raised-button color="primary" (click)="saveAltText()">
-            <mat-icon>save</mat-icon> Alternativtext speichern
+            <mat-icon>save</mat-icon> {{ 'sys-admin-settings.save-alt-text' | translate }}
           </button>
         </div>
       </div>
       @if (!isDefaultLogo()) {
         <div class="reset-container">
           <button mat-raised-button color="warn" (click)="resetToDefaultLogo()">
-            <mat-icon>restore</mat-icon> Zum Standard-Logo zurücksetzen
+            <mat-icon>restore</mat-icon> {{ 'sys-admin-settings.reset-logo' | translate }}
           </button>
         </div>
       }
@@ -80,21 +80,21 @@
 
   <mat-card class="background-settings-card">
     <mat-card-header>
-      <mat-card-title>Hintergrund-Einstellungen</mat-card-title>
+      <mat-card-title>{{ 'sys-admin-settings.background-title' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="background-color-container">
         <mat-form-field class="full-width">
-          <mat-label>Hintergrundfarbe</mat-label>
-          <input matInput [(ngModel)]="backgroundColorValue" placeholder="z.B. #ff0000, rgb(255,0,0), oder linear-gradient(...)">
-          <mat-hint>Geben Sie eine Farbe oder einen Farbverlauf im CSS-Format ein</mat-hint>
+          <mat-label>{{ 'sys-admin-settings.background-color' | translate }}</mat-label>
+          <input matInput [(ngModel)]="backgroundColorValue" [placeholder]="'sys-admin-settings.background-placeholder' | translate">
+          <mat-hint>{{ 'sys-admin-settings.background-hint' | translate }}</mat-hint>
         </mat-form-field>
         <div class="background-color-actions">
           <button mat-raised-button color="primary" (click)="saveBackgroundColor()">
-            <mat-icon>save</mat-icon> Hintergrundfarbe speichern
+            <mat-icon>save</mat-icon> {{ 'sys-admin-settings.save-background' | translate }}
           </button>
           <button mat-raised-button color="accent" (click)="resetToDefaultBackground()" class="reset-background-button">
-            <mat-icon>restore</mat-icon> Standard-Farbverlauf wiederherstellen
+            <mat-icon>restore</mat-icon> {{ 'sys-admin-settings.reset-background' | translate }}
           </button>
         </div>
       </div>
@@ -103,7 +103,7 @@
 
   <mat-card class="legal-notice-settings-card">
     <mat-card-header>
-      <mat-card-title>Impressum/Datenschutz</mat-card-title>
+      <mat-card-title>{{ 'sys-admin-settings.legal-notice-title' | translate }}</mat-card-title>
     </mat-card-header>
     @if (isLoadingLegalNotice()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -111,14 +111,14 @@
     <mat-card-content>
       <div class="legal-notice-editor-container">
         <mat-form-field class="full-width">
-          <mat-label>Text</mat-label>
+          <mat-label>{{ 'sys-admin-settings.text' | translate }}</mat-label>
           <textarea
             matInput
             [(ngModel)]="legalNoticeHtml"
             (ngModelChange)="updateLegalNoticePreview()"
             [disabled]="isLoadingLegalNotice() || isSavingLegalNotice()"
             rows="14"></textarea>
-          <mat-hint>HTML wird beim Anzeigen bereinigt.</mat-hint>
+          <mat-hint>{{ 'sys-admin-settings.html-hint' | translate }}</mat-hint>
         </mat-form-field>
 
         <div class="legal-notice-actions">
@@ -128,7 +128,7 @@
             [disabled]="isLoadingLegalNotice() || isSavingLegalNotice()"
             (click)="saveLegalNotice()">
             <mat-icon>save</mat-icon>
-            {{ isSavingLegalNotice() ? 'Speichere...' : 'Text speichern' }}
+            {{ (isSavingLegalNotice() ? 'sys-admin-settings.saving' : 'sys-admin-settings.save-text') | translate }}
           </button>
           <button
             mat-stroked-button
@@ -136,13 +136,13 @@
             [disabled]="isLoadingLegalNotice() || isSavingLegalNotice() || isLegalNoticeDefault()"
             (click)="resetLegalNoticeToDefault()">
             <mat-icon>restore</mat-icon>
-            Standard wiederherstellen
+            {{ 'sys-admin-settings.restore-default' | translate }}
           </button>
         </div>
       </div>
 
       <div class="legal-notice-preview-container">
-        <h3>Vorschau</h3>
+        <h3>{{ 'sys-admin-settings.preview' | translate }}</h3>
         <div class="legal-notice-preview" [innerHTML]="legalNoticePreviewHtml()"></div>
       </div>
     </mat-card-content>
@@ -150,7 +150,7 @@
 
   <mat-card class="content-pool-settings-card">
     <mat-card-header>
-      <mat-card-title>Content-Pool Integration</mat-card-title>
+      <mat-card-title>{{ 'sys-admin-settings.content-pool-title' | translate }}</mat-card-title>
     </mat-card-header>
     @if (isLoadingContentPoolSettings()) {
       <mat-progress-bar mode="indeterminate"></mat-progress-bar>
@@ -158,31 +158,29 @@
     <mat-card-content>
       <div class="content-pool-settings-container">
         <p class="content-pool-description">
-          Steuert die Übertragung von Kodierschemata aus der Coding-Box in den Content Pool.
-          Die URL kann flexibel als Domain oder IP hinterlegt werden; der Zugriff erfolgt
-          über ein Application-Token aus dem Content Pool.
+          {{ 'sys-admin-settings.content-pool-description' | translate }}
         </p>
 
         <div class="content-pool-toggle">
           <mat-slide-toggle [ngModel]="contentPoolSettings().enabled" (ngModelChange)="setContentPoolSettingsField('enabled', $event)">
-            {{ contentPoolSettings().enabled ? 'Feature aktiv' : 'Feature inaktiv' }}
+            {{ (contentPoolSettings().enabled ? 'sys-admin-settings.feature-active' : 'sys-admin-settings.feature-inactive') | translate }}
           </mat-slide-toggle>
         </div>
 
         <mat-form-field class="full-width">
-          <mat-label>Content-Pool URL oder Domain</mat-label>
+          <mat-label>{{ 'sys-admin-settings.content-pool-url' | translate }}</mat-label>
           <input
             matInput
             [ngModel]="contentPoolSettings().baseUrl"
             [disabled]="isSavingContentPoolSettings() || isTestingContentPoolConnection()"
-            placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201" (ngModelChange)="setContentPoolSettingsField('baseUrl', $event)">
+            [placeholder]="'sys-admin-settings.content-pool-url-placeholder' | translate" (ngModelChange)="setContentPoolSettingsField('baseUrl', $event)">
           <mat-hint>
-            Wenn kein Protokoll gesetzt ist, wird HTTPS verwendet. Der API-Pfad wird automatisch ergänzt.
+            {{ 'sys-admin-settings.content-pool-url-hint' | translate }}
           </mat-hint>
         </mat-form-field>
 
         <mat-form-field class="full-width">
-          <mat-label>Content-Pool Application-Token</mat-label>
+          <mat-label>{{ 'sys-admin-settings.content-pool-token' | translate }}</mat-label>
           <input
             matInput
             type="password"
@@ -190,21 +188,20 @@
             [(ngModel)]="contentPoolApplicationToken"
             (ngModelChange)="onContentPoolTokenInputChange($event)"
             [disabled]="isSavingContentPoolSettings() || isTestingContentPoolConnection()"
-            placeholder="Neues Token eintragen">
+            [placeholder]="'sys-admin-settings.content-pool-token-placeholder' | translate">
           <mat-hint>
             @if (contentPoolSettings().hasApplicationToken && !clearContentPoolApplicationToken()) {
-              Token ist gespeichert. Feld nur zum Ersetzen ausfüllen.
+              {{ 'sys-admin-settings.content-pool-token-stored' | translate }}
             } @else if (clearContentPoolApplicationToken()) {
-              Gespeichertes Token wird beim Speichern entfernt.
+              {{ 'sys-admin-settings.content-pool-token-removal' | translate }}
             } @else {
-              Token wird nur backendseitig gespeichert und nicht wieder angezeigt.
+              {{ 'sys-admin-settings.content-pool-token-hint' | translate }}
             }
           </mat-hint>
         </mat-form-field>
 
         <p class="content-pool-description">
-          Benötigte Content-Pool-Scopes: acp.read, files.read, files.write.
-          Der Verbindungstest prüft URL, Token und diese Scopes.
+          {{ 'sys-admin-settings.content-pool-scopes' | translate }}
         </p>
 
         <div class="content-pool-actions">
@@ -214,7 +211,7 @@
             [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
             (click)="saveContentPoolSettings()">
             <mat-icon>save</mat-icon>
-            {{ isSavingContentPoolSettings() ? 'Speichere...' : 'Einstellungen speichern' }}
+            {{ (isSavingContentPoolSettings() ? 'sys-admin-settings.saving' : 'sys-admin-settings.save-settings') | translate }}
           </button>
           <button
             mat-stroked-button
@@ -222,7 +219,7 @@
             [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
             (click)="testContentPoolConnection()">
             <mat-icon>{{ isTestingContentPoolConnection() ? 'hourglass_empty' : 'wifi_tethering' }}</mat-icon>
-            {{ isTestingContentPoolConnection() ? 'Teste...' : 'Verbindung testen' }}
+            {{ (isTestingContentPoolConnection() ? 'sys-admin-settings.testing' : 'sys-admin-settings.test-connection') | translate }}
           </button>
           @if (contentPoolSettings().hasApplicationToken && !clearContentPoolApplicationToken()) {
             <button
@@ -231,7 +228,7 @@
               [disabled]="isSavingContentPoolSettings() || isLoadingContentPoolSettings() || isTestingContentPoolConnection()"
               (click)="clearStoredContentPoolToken()">
               <mat-icon>delete</mat-icon>
-              Token entfernen
+              {{ 'sys-admin-settings.remove-token' | translate }}
             </button>
           }
         </div>
@@ -241,20 +238,15 @@
 
   <mat-card class="database-export-card">
     <mat-card-header>
-      <mat-card-title>Datenbank-Export</mat-card-title>
+      <mat-card-title>{{ 'sys-admin-settings.export-title' | translate }}</mat-card-title>
     </mat-card-header>
     <mat-card-content>
       <div class="database-export-container">
         <p class="export-description">
-          Beim Datenbank-Download wird eine vollständige SQLite-Kopie der aktuellen
-          PostgreSQL-Datenbank erzeugt. Der Export läuft im Hintergrund als Job, damit
-          auch große Datenmengen stabil verarbeitet werden.
+          {{ 'sys-admin-settings.export-description' | translate }}
         </p>
         <p class="export-description">
-          Enthalten sind unter anderem Benutzer- und Rechteverwaltung, Arbeitsbereiche,
-          Kodierungen, Antworten, Logs und Systemeinstellungen. Dazu zählen auch
-          System-Secrets wie ein gespeichertes Content-Pool Application-Token. Die Datei
-          kann sensible Daten enthalten und sollte entsprechend geschützt abgelegt werden.
+          {{ 'sys-admin-settings.export-data-description' | translate }}
         </p>
         <div class="export-actions">
           <button
@@ -263,16 +255,16 @@
             (click)="exportDatabase()"
             [disabled]="isExporting()">
             <mat-icon>{{isExporting() ? 'hourglass_empty' : 'download'}}</mat-icon>
-            {{isExporting() ? 'Export läuft...' : 'Datenbank als SQLite exportieren'}}
+            {{ (isExporting() ? 'sys-admin-settings.export-running' : 'sys-admin-settings.export-sqlite') | translate }}
           </button>
         </div>
         @if (isExporting()) {
           <div class="export-progress">
             <mat-progress-bar mode="determinate" [value]="databaseExportProgress()"></mat-progress-bar>
             <p class="progress-text">
-              Status: {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress() }}%
+              {{ 'sys-admin-settings.export-progress' | translate:{status: getDatabaseExportStatusLabel(), progress: databaseExportProgress()} }}
             </p>
-            <p class="progress-text">Dies kann bei großen Datenbanken einige Minuten dauern.</p>
+            <p class="progress-text">{{ 'sys-admin-settings.export-duration-hint' | translate }}</p>
           </div>
         }
         @if (databaseExportErrorValue) {

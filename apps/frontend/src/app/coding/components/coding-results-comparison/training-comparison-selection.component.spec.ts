@@ -1,10 +1,11 @@
 import { FormControl } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { TestBed } from '@angular/core/testing';
 import { TrainingComparisonSelectionComponent } from './training-comparison-selection.component';
 import { CoderTraining } from '../../models/coder-training.model';
 
 it('preserves the checkbox and keyboard focus when training objects are refreshed', async () => {
-  TestBed.configureTestingModule({ imports: [TrainingComparisonSelectionComponent] });
+  TestBed.configureTestingModule({ imports: [TrainingComparisonSelectionComponent, TranslateModule.forRoot()] });
   const fixture = TestBed.createComponent(TrainingComparisonSelectionComponent);
   const training: CoderTraining = {
     id: 7,

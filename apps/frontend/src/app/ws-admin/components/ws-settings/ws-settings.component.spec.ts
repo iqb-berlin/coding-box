@@ -45,6 +45,7 @@ describe('WsSettingsComponent', () => {
   beforeEach(async () => {
     mockAppService = {
       selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new Subject<number>(),
       loggedUser: { sub: 'test-user' },
       createOwnToken: jest.fn().mockReturnValue(of('test-token')),
       getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of({
