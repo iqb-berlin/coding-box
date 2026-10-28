@@ -56,109 +56,23 @@ import {
 import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
-import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/booklet-testlet.dto';
-import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 
+import {
+  buildFilesValidationViewModel,
+  createEmptyValidationSummary,
+  ExpandedFilesLists,
+  FilteredTestTaker,
+  FilesValidation,
+  FilesValidationView,
+  isValidationUnitIgnored,
+  ValidationIgnoreContext,
+  ValidationSummary
+} from './files-validation-view-model';
+
 const VALIDATION_REFRESH_POLL_INTERVAL_MS = 300;
-
-type FileStatus = {
-  filename: string;
-  exists: boolean;
-  schemaValid?: boolean;
-  schemaErrors?: string[];
-  schemaWarnings?: string[];
-  ignored?: boolean;
-  parents?: string[];
-};
-
-type TestletDto = {
-  id: string;
-  label?: string;
-  ignored?: boolean;
-};
-
-type DataValidation = {
-  complete: boolean;
-  missing: string[];
-  missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
-  unitsWithoutPlayer?: string[];
-  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
-  files: FileStatus[];
-  testlets?: TestletDto[];
-};
-
-type FilteredTestTaker = {
-  testTaker: string;
-  mode: string;
-  login: string;
-  consider?: boolean | null;
-};
-
-type FilesValidation = {
-  testTaker: string,
-  testTakerSchemaValid?: boolean;
-  testTakerSchemaErrors?: string[];
-  booklets: DataValidation;
-  units: DataValidation;
-  schemes: DataValidation;
-  schemer: DataValidation;
-  definitions: DataValidation;
-  player: DataValidation;
-  metadata: DataValidation;
-};
-
-interface ExpandedFilesLists {
-  booklets: boolean;
-  units: boolean;
-  schemes: boolean;
-  schemer: boolean;
-  definitions: boolean;
-  player: boolean;
-  metadata: boolean;
-}
-
-interface SectionSummary {
-  complete: number;
-  incomplete: number;
-  missingFiles: number;
-  missingFileNames: string[];
-}
-
-interface ValidationSummary {
-  totalTestTakers: number;
-  validTestTakerXmls: number;
-  invalidTestTakerXmls: number;
-  booklets: SectionSummary;
-  units: SectionSummary;
-  schemes: SectionSummary;
-  schemer: SectionSummary;
-  definitions: SectionSummary;
-  player: SectionSummary;
-  metadata: SectionSummary;
-}
-
-type ValidationSectionKey = keyof ExpandedFilesLists;
-
-interface MissingRelationInfo {
-  all: string[];
-  preview: string[];
-  remaining: number;
-}
-
-interface DerivedDataValidation extends DataValidation {
-  existingCount: number;
-  missingCount: number;
-  filteredMissingCount: number;
-  isCompleteForView: boolean;
-  relatedEntitiesByMissingFile: Record<string, MissingRelationInfo>;
-}
-
-type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
-  [K in ValidationSectionKey]: DerivedDataValidation;
-};
 
 @Component({
   selector: 'coding-box-files-validation-dialog',
@@ -259,35 +173,9 @@ export class FilesValidationDialogComponent implements OnInit {
   protected readonly refreshValidationProgressMessage = signal('');
   protected readonly isInstallingCompatibleAspectPlayer = signal(false);
 
-  readonly summary = signal<ValidationSummary>({
-    totalTestTakers: 0,
-    validTestTakerXmls: 0,
-    invalidTestTakerXmls: 0,
-    booklets: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    units: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    schemes: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    schemer: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    definitions: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    player: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    },
-    metadata: {
-      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-    }
-  });
+  readonly summary = signal<ValidationSummary>(createEmptyValidationSummary());
 
   readonly expandedSummaryLists = signal<Set<string>>(new Set());
-  private readonly relationPreviewLimit = 3;
 
   protected toggleSummaryList(section: string): void {
     if (this.expandedSummaryLists().has(section)) {
@@ -309,122 +197,19 @@ export class FilesValidationDialogComponent implements OnInit {
     return this.expandedSummaryLists().has(section);
   }
 
-  private calculateSummary(): void {
-    if (!this.validationResults().length) {
-      this.summary.set({
-        totalTestTakers: 0,
-        validTestTakerXmls: 0,
-        invalidTestTakerXmls: 0,
-        booklets: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        units: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        schemes: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        schemer: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        definitions: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        player: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        },
-        metadata: {
-          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-        }
-      });
-      return;
-    }
-
-    const summaryData: ValidationSummary = {
-      totalTestTakers: this.validationResults().length,
-      validTestTakerXmls: 0,
-      invalidTestTakerXmls: 0,
-      booklets: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      units: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      schemes: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      schemer: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      definitions: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      player: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      },
-      metadata: {
-        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
-      }
+  private validationIgnoreContext(): ValidationIgnoreContext {
+    return {
+      ignoredUnits: this.ignoredUnits(),
+      ignoredBooklets: this.ignoredBooklets(),
+      ignoredTestlets: this.ignoredTestlets(),
+      bookletData: this.bookletData()
     };
-
-    const missingFilesSets = {
-      booklets: new Set<string>(),
-      units: new Set<string>(),
-      schemes: new Set<string>(),
-      schemer: new Set<string>(),
-      definitions: new Set<string>(),
-      player: new Set<string>(),
-      metadata: new Set<string>()
-    };
-
-    this.validationResults().forEach(val => {
-      if (val.testTakerSchemaValid === false) {
-        summaryData.invalidTestTakerXmls += 1;
-      } else {
-        summaryData.validTestTakerXmls += 1;
-      }
-
-      const updateSectionStats = (section: keyof typeof missingFilesSets, data: DerivedDataValidation) => {
-        if (data.isCompleteForView) {
-          summaryData[section].complete += 1;
-        } else {
-          summaryData[section].incomplete += 1;
-        }
-
-        if (data.files) {
-          data.files.forEach(f => {
-            if (!f.exists) {
-              if (section === 'units' && this.isUnitIgnored(f.filename)) {
-                return;
-              }
-              missingFilesSets[section].add(f.filename);
-            }
-          });
-        }
-      };
-
-      updateSectionStats('booklets', val.booklets);
-      updateSectionStats('units', val.units);
-      updateSectionStats('schemes', val.schemes);
-      updateSectionStats('schemer', val.schemer);
-      updateSectionStats('definitions', val.definitions);
-      updateSectionStats('player', val.player);
-      updateSectionStats('metadata', val.metadata);
-    });
-
-    // Sort missing files and assign to summary
-    (Object.keys(missingFilesSets) as (keyof typeof missingFilesSets)[]).forEach(section => {
-      summaryData[section].missingFileNames = Array.from(missingFilesSets[section]).sort();
-      summaryData[section].missingFiles = summaryData[section].missingFileNames.length;
-    });
-
-    this.summary.set(summaryData);
   }
 
   private rebuildValidationResults(): void {
-    const rawResults = this.data.validationResults || [];
-    this.validationResults.set(rawResults.map(result => this.createValidationView(result)));
-    this.calculateSummary();
+    const view = buildFilesValidationViewModel(this.data.validationResults || [], this.validationIgnoreContext());
+    this.validationResults.set(view.results);
+    this.summary.set(view.summary);
   }
 
   private resetExpandedFilesLists(results: FilesValidation[]): void {
@@ -606,85 +391,6 @@ export class FilesValidationDialogComponent implements OnInit {
       });
   }
 
-  private createValidationView(result: FilesValidation): FilesValidationView {
-    return {
-      ...result,
-      booklets: this.createDerivedValidation(result.booklets, 'booklets'),
-      units: this.createDerivedValidation(result.units, 'units'),
-      schemes: this.createDerivedValidation(result.schemes, 'schemes'),
-      schemer: this.createDerivedValidation(result.schemer, 'schemer'),
-      definitions: this.createDerivedValidation(result.definitions, 'definitions'),
-      player: this.createDerivedValidation(result.player, 'player'),
-      metadata: this.createDerivedValidation(result.metadata, 'metadata')
-    };
-  }
-
-  private createDerivedValidation(
-    data: DataValidation,
-    sectionType: ValidationSectionKey
-  ): DerivedDataValidation {
-    const existingCount = data.files.filter(file => file.exists).length;
-    const missingFiles = data.files.filter(file => !file.exists);
-    const missingCount = missingFiles.length;
-    const filteredMissingCount = sectionType === 'units' ?
-      missingFiles.filter(file => !this.isUnitIgnored(file.filename)).length :
-      missingCount;
-
-    return {
-      ...data,
-      existingCount,
-      missingCount,
-      filteredMissingCount,
-      isCompleteForView: this.computeSectionComplete(data, sectionType),
-      relatedEntitiesByMissingFile: this.createRelatedEntitiesByMissingFile(data, sectionType, missingFiles)
-    };
-  }
-
-  private createRelatedEntitiesByMissingFile(
-    data: DataValidation,
-    sectionType: ValidationSectionKey,
-    missingFiles: FileStatus[]
-  ): Record<string, MissingRelationInfo> {
-    if (sectionType === 'booklets') {
-      return {};
-    }
-
-    const relations: Record<string, MissingRelationInfo> = {};
-
-    missingFiles.forEach(file => {
-      const relatedEntities = sectionType === 'units' ?
-        this.findBookletsForMissingUnit(data, file.filename) :
-        this.findUnitsForMissingRef(data, file.filename);
-
-      if (relatedEntities.length > 0) {
-        relations[file.filename] = this.createMissingRelationInfo(relatedEntities);
-      }
-    });
-
-    return relations;
-  }
-
-  private createMissingRelationInfo(values: string[]): MissingRelationInfo {
-    const uniqueValues = Array.from(new Set(values));
-    return {
-      all: uniqueValues,
-      preview: uniqueValues.slice(0, this.relationPreviewLimit),
-      remaining: Math.max(0, uniqueValues.length - this.relationPreviewLimit)
-    };
-  }
-
-  private computeSectionComplete(data: DataValidation, sectionType: ValidationSectionKey): boolean {
-    if (data.complete || !data.missing || data.missing.length === 0) {
-      return true;
-    }
-
-    if (sectionType === 'units') {
-      return data.missing.every(unit => this.isUnitIgnored(unit));
-    }
-
-    return false;
-  }
-
   private isKnownTestTaker(item: FilteredTestTaker): boolean {
     return item.consider === true || item.consider === false;
   }
@@ -775,29 +481,7 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   protected isUnitIgnored(unit: string, parents?: string[]): boolean {
-    if (!unit) return false;
-    const normalizedUnit = unit.toUpperCase();
-
-    // Direct unit ignore
-    if (this.ignoredUnits().has(normalizedUnit)) return true;
-
-    // Check parent exclusions if parents are provided
-    if (parents && parents.length > 0) {
-      return parents.some(bookletId => {
-        const normalizedBooklet = bookletId.toUpperCase();
-        if (this.ignoredBooklets().has(normalizedBooklet)) return true;
-
-        // Check testlets if we have booklet data loaded
-        const info = this.bookletData().get(normalizedBooklet);
-        if (info && info.testlets) {
-          return info.testlets.some((testlet: BookletTestletDto) => this.isTestletIgnored(normalizedBooklet, testlet.id) &&
-            (testlet.units || []).some((u: BookletUnitDto) => u.id.toUpperCase() === normalizedUnit));
-        }
-        return false;
-      });
-    }
-
-    return false;
+    return isValidationUnitIgnored(unit, this.validationIgnoreContext(), parents);
   }
 
   protected isBookletIgnored(booklet: string): boolean {
@@ -1201,45 +885,6 @@ export class FilesValidationDialogComponent implements OnInit {
 
   protected close(): void {
     this.dialogRef.close(this.filesDeleted());
-  }
-
-  private findBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
-    if (!data.missingUnitsPerBooklet || data.missingUnitsPerBooklet.length === 0 || !unit) {
-      return [];
-    }
-    const normalizedUnit = unit.toUpperCase().trim();
-    return data.missingUnitsPerBooklet
-      .filter(entry => (entry.missingUnits || []).map(u => u.toUpperCase().trim()).includes(normalizedUnit))
-      .map(entry => entry.booklet);
-  }
-
-  private findUnitsForMissingRef(data: DataValidation, ref: string): string[] {
-    if (!data.missingRefsPerUnit || data.missingRefsPerUnit.length === 0 || !ref) {
-      return [];
-    }
-
-    const normalize = (value: string): { full: string; base: string; noExt: string } => {
-      const full = (value || '').trim().toUpperCase().replace(/\\/g, '/');
-      const base = full.includes('/') ? (full.split('/').pop() || full) : full;
-      const dot = base.lastIndexOf('.');
-      const noExt = dot > 0 ? base.substring(0, dot) : base;
-      return { full, base, noExt };
-    };
-
-    const target = normalize(ref);
-
-    const matches = (candidateRaw: string): boolean => {
-      const candidate = normalize(candidateRaw);
-      return (
-        candidate.full === target.full ||
-        candidate.base === target.base ||
-        candidate.noExt === target.noExt
-      );
-    };
-
-    return data.missingRefsPerUnit
-      .filter(entry => (entry.missingRefs || []).some(r => matches(r || '')))
-      .map(entry => entry.unit);
   }
 
   // Select which occurrence of a duplicate test taker to keep

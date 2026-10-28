@@ -159,7 +159,8 @@
         "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
         "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation-view-model.spec.ts"
       ]
     },
     {
