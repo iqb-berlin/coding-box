@@ -23,6 +23,7 @@ Upload-, Cache- und Session-Recovery-Services behalten ihre Zuständigkeiten.
 | `manual-coding-job-summary.ts` | Reine Regeln für aktive Schulungs-/Produktivjobs, Übernahmefähigkeit und Kodierungshinweise |
 | `ManualCodingPlanning` | Reine Priorisierung von Planungsstatus, Erklärung und nächstem fachlichem Schritt anhand eines expliziten Zustandswertes; keine Referenz auf die Angular-Komponente |
 | `ManualCodingPlanningFacade` | Vollständiges Planungsbündel laden, eine weitere Aktualisierung vormerken, fehlerhafte/noch laufende Bündel vom Cache ausschließen und vorhandene Snapshots wiederherstellen |
+| `ManualCodingJobsRefreshFacade` | Produktive und Schulungsauftragslisten gezielt aktualisieren, Änderungen für ausgeblendete oder noch nicht gerenderte Listen zusammenfassen und Definitionsänderungen entprellen; View-Queries werden erst beim Reload gelesen, Timer und Benachrichtigungen enden mit der Seiteninstanz |
 | `TestResultsStatisticsFacade` | Übersicht, bedarfsgesteuerte Logqualität, Workspace-Einstellungen und Aktualität der Kodierungen; eigene ersetzbare Abfragen |
 | `TestResultsImportFacade` | Testcenter-Import mit Vorher-/Nachher-Übersicht, Fristen, Fortschrittsdialog und Ergebnisdarstellung; CSV-/JSON-/ZIP-Uploads bleiben im vorhandenen `TestResultsUploadStateService` |
 | `TestResultsDeletionFacade` | Vorschau und bestätigte Lösch-/Bereinigungsjobs einschließlich Fortschritt, Ergebnis, Fehler und Cacheinvalidierung; Auswahl und Tabellenansicht bleiben in der Seite |
