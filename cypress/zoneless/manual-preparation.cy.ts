@@ -265,6 +265,45 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Workload draft');
   });
 
+  it('restores a definition draft after catalog loading and preserves selection across variable reloads', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables?*', request => {
+      const unitName = request.query.unitName;
+      request.reply({ delay: 200, body: unitName ? variables.filter(variable => variable.unitName === unitName) : variables });
+    }).as('draftVariables');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').should('be.visible');
+    cy.window().then(win => {
+      const key = 'coding-job-definition-active-state';
+      win.sessionStorage.setItem(`coding-box-session-recovery:${key}`, JSON.stringify({
+        key, version: 1, createdAt: Date.now(), expiresAt: Date.now() + 60_000,
+        data: {
+          workspaceId: 5, mode: 'definition', isEdit: false,
+          formValue: { name: 'Recovered workflow draft', durationSeconds: 30, maxCodingCases: 4 },
+          doubleCodingMode: 'absolute', selectedVariables: [variables[1]],
+          selectedVariableBundles: [], selectedCoderConfigs: [], unitNameFilter: '', variableIdFilter: '',
+          bundleNameFilter: '', availabilityFilter: 'all', trainingRequiredFilter: 'all', distributionSeed: 'stable-seed'
+        }
+      }));
+    });
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Recovered workflow draft');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').should('have.class', 'selected');
+    cy.get('@definitionDialog').find('input[placeholder="Filter nach Aufgaben-ID"]').type('UNIT_B');
+    cy.get('@definitionDialog').contains('button', 'Filter anwenden').click();
+    cy.wait('@draftVariables');
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_B_VAR_1').should('be.visible');
+    cy.get('@definitionDialog').contains('button', 'Filter zurücksetzen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').should('have.class', 'selected');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '2:00');
+  });
+
   it('estimates a scoped manual export, offers the compact format and releases startup after failure', () => {
     setup();
     let attempts = 0;

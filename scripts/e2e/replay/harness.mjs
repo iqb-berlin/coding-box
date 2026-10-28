@@ -5,6 +5,7 @@ import path from 'node:path';
 import AdmZip from 'adm-zip';
 import { findComposeContainer } from './compose-container.mjs';
 import { FIXTURE_ADMIN_USERNAME } from './auth-environment.mjs';
+import { waitForHttp } from './http-readiness.mjs';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_OIDC_ISSUER',
@@ -782,6 +783,16 @@ async function appendFile(form, filePath, fileName, mimeType) {
     new Blob([await readFile(filePath)], { type: mimeType }),
     fileName
   );
+}
+
+export async function waitForBackendAuthentication(config, timeoutMs = 180_000, options = {}) {
+  const token = await createAdminToken(config);
+  // Health does not exercise the backend-to-Keycloak JWKS path. Probe a safe GET
+  // before Cypress creates fixtures; retrying workspace POSTs could duplicate them.
+  await waitForHttp(`${config.apiUrl}/api/admin/workspace?page=1&limit=1`, timeoutMs, {
+    ...options,
+    headers: { authorization: `Bearer ${token}` }
+  });
 }
 
 export async function createAdminToken(config) {
