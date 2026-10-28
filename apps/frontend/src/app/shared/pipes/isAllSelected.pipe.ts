@@ -5,7 +5,6 @@ import { Pipe, PipeTransform } from '@angular/core';
   standalone: true
 })
 export class IsAllSelectedPipe implements PipeTransform {
-  // eslint-disable-next-line class-methods-use-this
   transform(selectionCount: number, total: number): boolean {
     return IsAllSelectedPipe.isAllSelected(selectionCount, total);
   }

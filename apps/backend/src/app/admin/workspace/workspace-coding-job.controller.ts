@@ -84,7 +84,7 @@ export class WorkspaceCodingJobController {
         error?: string;
       }
       | { error: string }
-    > {
+  > {
     const status = await this.codingStatisticsService.getJobStatus(jobId, workspaceId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };

@@ -77,7 +77,7 @@ describe('coding ownership with real role login and PostgreSQL', () => {
     }).its('status').should('eq', 403);
     cy.then(() => {
       const route = resource('job', rows.job.legacy);
-      api(route.edit, 'PUT', { name: 'Forbidden rename' }).its('status').should('eq', 401);
+      api(route.edit, 'PUT', { name: 'Forbidden rename' }).its('status').should('eq', 403);
       api(`${route.edit}/pause`, 'POST').its('status').should('eq', 201);
       api(`${route.edit}/resume`, 'POST').its('status').should('eq', 201);
       api(`${route.edit}/notes`, 'POST', { ...rows.legacyCoding, notes: 'Assigned coder note' }).its('status').should('eq', 201);
@@ -125,9 +125,9 @@ describe('coding ownership with real role login and PostgreSQL', () => {
           });
         });
         api(`/admin/workspace/${setup.workspaceId}/coding/double-coded-review/apply-resolutions`, 'POST', { decisions: [] })
-          .its('status').should('eq', 401);
+          .its('status').should('eq', 403);
         api(`/admin/workspace/${setup.workspaceId}/coding/coder-trainings/${rows.training.own}/apply-discussion-results`, 'POST', { source: 'manual' })
-          .its('status').should('eq', 401);
+          .its('status').should('eq', 403);
         api(`/wsg-admin/workspace/${setup.workspaceId}/coding-job/bulk-delete`, 'POST', {
           ids: [rows.job.own, rows.job.foreign]
         }).its('status').should('eq', 403);

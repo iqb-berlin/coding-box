@@ -103,12 +103,12 @@ export class WorkspaceFilesController {
     @Query('searchText') searchText?: string,
     @Query('regexSearch') regexSearch?: string
   ): Promise<{
-      data: FilesDto[];
-      total: number;
-      page: number;
-      limit: number;
-      fileTypes: string[];
-    }> {
+    data: FilesDto[];
+    total: number;
+    page: number;
+    limit: number;
+    fileTypes: string[];
+  }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'

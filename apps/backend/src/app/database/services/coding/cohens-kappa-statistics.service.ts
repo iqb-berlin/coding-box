@@ -177,13 +177,14 @@ export class CohensKappaStatisticsService {
       }${options.variableId ? `, variable: ${options.variableId}` : ''}`
     );
 
-    const allCodedItems = (await this.doubleCodingReviewQueryService.getCodedVariablesForKappa(
+    const codedItems = (await this.doubleCodingReviewQueryService.getCodedVariablesForKappa(
       workspaceId,
       options.excludeTrainings,
       options.jobDefinitionIds,
       options.coderTrainingIds,
       options.coderIds,
-      options.calculationLevel
+      options.calculationLevel,
+      { unitName: options.unitName, variableId: options.variableId }
     )).map(item => ({
       responseId: item.responseId,
       unitName: item.unitName,
@@ -213,13 +214,7 @@ export class CohensKappaStatisticsService {
       variableId: string;
       items: KappaSourceItem[];
     }>();
-    const filteredCodedItems: KappaSourceItem[] = [];
-
-    allCodedItems.forEach(item => {
-      if (options.unitName && item.unitName !== options.unitName) return;
-      if (options.variableId && item.variableId !== options.variableId) return;
-
-      filteredCodedItems.push(item);
+    codedItems.forEach(item => {
       const key = this.getVariableKey(item.unitName, item.variableId);
       if (!groupedData.has(key)) {
         groupedData.set(key, {
@@ -405,7 +400,7 @@ export class CohensKappaStatisticsService {
     return {
       variables,
       workspaceSummary,
-      sourceItems: filteredCodedItems
+      sourceItems: codedItems
     };
   }
 }

@@ -7,7 +7,7 @@ import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
 import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
 import { CodingStatistics } from '../shared';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingReadinessService } from '../coding/coding-readiness.service';

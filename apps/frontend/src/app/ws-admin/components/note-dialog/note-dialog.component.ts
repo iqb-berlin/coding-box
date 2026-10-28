@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -41,12 +42,12 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
 
         <div class="notes-container">
           <div class="notes-list">
-            @for (note of notes; track note) {
+            @for (note of notes; track note.id) {
               <div class="note-item">
                 <div class="note-header">
                   <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
                   <div class="note-actions">
-                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Notiz löschen">
+                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Notiz löschen" [attr.aria-label]="'accessibility.actions.delete-note' | translate">
                       <mat-icon>delete</mat-icon>
                     </button>
                   </div>
@@ -238,7 +239,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
       min-width: 100px;
     }
   `],
-  imports: [
+  imports: [TranslateModule,
     MatDialogContent,
     MatDialogTitle,
     MatDialogActions,

@@ -1,6 +1,6 @@
 <div class="booklet-navigation">
   <div class="navigation-controls">
-    <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe" class="nav-button prev-button">
+    <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe" class="nav-button prev-button" [attr.aria-label]="'accessibility.actions.previous-unit' | translate">
       <mat-icon>chevron_left</mat-icon>
     </button>
 
@@ -10,7 +10,7 @@
       <span class="total-units">{{ totalUnits }}</span>
     </div>
 
-    <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe" class="nav-button next-button">
+    <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe" class="nav-button next-button" [attr.aria-label]="'accessibility.actions.next-unit' | translate">
       <mat-icon>chevron_right</mat-icon>
     </button>
   </div>

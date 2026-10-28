@@ -725,7 +725,7 @@
                     [class.has-ignored-testlets]="hasIgnoredTestlets(file.filename)">
                     <div class="file-item-header">
                       @if (file.exists) {
-                      <button mat-icon-button class="expansion-toggle" (click)="toggleBookletExpand(file.filename); $event.stopPropagation()">
+                      <button mat-icon-button class="expansion-toggle" (click)="toggleBookletExpand(file.filename); $event.stopPropagation()" [attr.aria-label]="'accessibility.actions.toggle-booklet-expand' | translate">
                           <mat-icon>{{ expandedBooklets().has(file.filename.toUpperCase()) ? 'expand_less' : 'expand_more' }}</mat-icon>
                       </button>
                       }
@@ -755,7 +755,7 @@
                       }
                       <button mat-icon-button class="file-action-button"
                         (click)="toggleBookletIgnore(file.filename); $event.stopPropagation()"
-                        matTooltip="{{ isBookletIgnored(file.filename) ? 'Testheft wiederherstellen' : 'Testheft ignorieren' }}">
+                        matTooltip="{{ isBookletIgnored(file.filename) ? 'Testheft wiederherstellen' : 'Testheft ignorieren' }}" [attr.aria-label]="(isBookletIgnored(file.filename) ? 'accessibility.actions.restore-booklet' : 'accessibility.actions.ignore-booklet') | translate">
                         <mat-icon>{{ isBookletIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
                       </button>
                     </div>
@@ -774,12 +774,12 @@
                             <button mat-icon-button class="testlet-action-button testlet-bulk-action-button"
                                     [disabled]="isApplyingTestletBulk()"
                                     (click)="toggleTestletIgnoreForAllBooklets(file.filename, testlet.id); $event.stopPropagation()"
-                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Dieses Testlet in allen Testheften wiederherstellen' : 'Dieses Testlet in allen Testheften ignorieren' }}">
+                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Dieses Testlet in allen Testheften wiederherstellen' : 'Dieses Testlet in allen Testheften ignorieren' }}" [attr.aria-label]="(isTestletIgnored(file.filename, testlet.id) ? 'accessibility.actions.restore-testlet-everywhere' : 'accessibility.actions.ignore-testlet-everywhere') | translate">
                               <mat-icon>{{ isApplyingTestletBulk() ? 'hourglass_top' : 'done_all' }}</mat-icon>
                             </button>
                             <button mat-icon-button class="testlet-action-button"
                                     (click)="toggleTestletIgnore(file.filename, testlet.id); $event.stopPropagation()"
-                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Testlet wiederherstellen' : 'Testlet ignorieren' }}">
+                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Testlet wiederherstellen' : 'Testlet ignorieren' }}" [attr.aria-label]="(isTestletIgnored(file.filename, testlet.id) ? 'accessibility.actions.restore-testlet' : 'accessibility.actions.ignore-testlet') | translate">
                               <mat-icon>{{ isTestletIgnored(file.filename, testlet.id) ? 'visibility_off' : 'visibility' }}</mat-icon>
                             </button>
                           </li>
@@ -887,7 +887,7 @@
                       }
                       <button mat-icon-button class="file-action-button"
                         (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
-                        matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}">
+                        matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}" [attr.aria-label]="(isUnitIgnored(file.filename) ? 'accessibility.actions.restore-unit' : 'accessibility.actions.ignore-unit') | translate">
                         <mat-icon>{{ isUnitIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
                       </button>
                     </div>

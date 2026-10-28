@@ -7,7 +7,6 @@ import {
 
 @Injectable()
 export class ParseFile implements PipeTransform {
-  // eslint-disable-next-line class-methods-use-this
   transform(
     files: Express.Multer.File | Express.Multer.File[],
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

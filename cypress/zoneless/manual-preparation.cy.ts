@@ -89,7 +89,9 @@ describe('Zoneless manual preparation workflows', () => {
     cy.wait('@authData');
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
-    cy.get('coding-box-coding-management-manual').should('be.visible');
+    cy.get('coding-box-coding-management-manual > .coding-container')
+      .then(manual => settleFiniteAncestorAnimations(manual[0]))
+      .should('be.visible');
   }
 
   function openTraining(options: { holdEntrance?: boolean } = {}): void {
@@ -109,6 +111,19 @@ describe('Zoneless manual preparation workflows', () => {
       settleFiniteAncestorAnimations(training[0]);
     });
   }
+
+  it('keeps extracted view styles scoped and preserves the job-definition notice styling', () => {
+    setup();
+    openManual();
+    cy.get('coding-box-manual-coding-preparation-view .aggregation-config').should('be.visible');
+    cy.get('coding-box-manual-coding-preparation-view .aggregation-config .subsection-title')
+      .should('have.css', 'color', 'rgb(25, 118, 210)');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .info-button').click();
+    cy.get('coding-box-coding-job-definitions .info-alert')
+      .should('be.visible').and('have.css', 'background-color', 'rgb(252, 228, 236)');
+  });
 
   function settleFiniteAncestorAnimations(element: HTMLElement): void {
     // Electron can stall entrance motion on the workspace, modal and Material menu.
@@ -645,6 +660,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/admin/workspace/6/missings-profiles/IQB-Standard', { body: null });
     cy.intercept('GET', '**/api/admin/users/access/6', { body: [] });
     cy.intercept('GET', '**/api/admin/workspace/6/coders', { body: { data: [], total: 0 } });
+    cy.intercept('GET', '**/api/admin/workspace/6/coding/coder-trainings', { body: [] });
     cy.intercept('GET', '**/api/wsg-admin/workspace/6/coding-job?*', { body: { data: [], total: 0, page: 1, limit: 1 } });
   }
 
@@ -654,6 +670,146 @@ describe('Zoneless manual preparation workflows', () => {
     cy.window().then(win => { win.location.hash = '/workspace-admin/6/coding/manual'; });
     cy.get('coding-box-coding-management-manual').should('be.visible');
   }
+
+  function stubWorkspaceJobs(): void {
+    for (const workspaceId of [5, 6]) {
+      cy.intercept('GET', `**/api/wsg-admin/workspace/${workspaceId}/coding-job?*`, {
+        body: { data: [{
+          id: workspaceId * 10, workspace_id: workspaceId, creatorUserId: 2,
+          name: `Workspace ${workspaceId} job`, status: 'completed',
+          assignedCoders: [11], assignedVariables: [], totalUnits: 1, codedUnits: 1,
+          openUnits: 0, progress: 100, created_at: '2026-10-27', updated_at: '2026-10-27'
+        }], total: 1, page: 1, limit: 50 }
+      });
+    }
+  }
+
+  it('reloads the existing job view and closes old confirmations when only the workspace route parameter changes', () => {
+    setup();
+    stubNextWorkspace();
+    stubWorkspaceJobs();
+    let deletions = 0;
+    cy.intercept('DELETE', '**/api/wsg-admin/workspace/*/coding-job/*', request => {
+      deletions += 1;
+      request.reply({ body: { success: true } });
+    });
+    openManual();
+    cy.title().should('equal', 'Manuelle Kodierung | IQB-Kodierbox');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution button', 'Aktualisieren').click();
+    cy.contains('coding-box-coding-jobs mat-row', 'Workspace 5 job')
+      .find('button.more-actions-button').click();
+    cy.get('button[aria-label="Kodierjob löschen: Workspace 5 job"]').click();
+    cy.get('coding-box-confirm-dialog').find('mat-dialog-content').should('be.visible');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/6/coding/manual'; });
+    cy.get('coding-box-confirm-dialog').should('not.exist');
+    cy.contains('coding-box-coding-jobs mat-row', 'Workspace 6 job').should('be.visible');
+    cy.get('coding-box-coding-jobs').should('not.contain.text', 'Workspace 5 job');
+    cy.then(() => { expect(deletions).to.equal(0); });
+  });
+
+  it('loads the job-list chunk only when the execution tab is opened', () => {
+    setup();
+    let entranceHeld = false;
+    cy.on('window:before:load', win => {
+      const observer = new win.MutationObserver(() => {
+        const container = win.document.querySelector<HTMLElement>('coding-box-coding-management-manual > .coding-container');
+        if (!container) return;
+        const held = container.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+        held.pause();
+        held.currentTime = 0;
+        expect(win.getComputedStyle(container).opacity,
+          'manual page entrance was held at its invisible first frame').to.equal('0');
+        entranceHeld = true;
+        observer.disconnect();
+      });
+      observer.observe(win.document, { childList: true, subtree: true });
+      releases.push(() => observer.disconnect());
+    });
+    openManual();
+    cy.then(() => { expect(entranceHeld, 'paused page entrance was exercised').to.equal(true); });
+    cy.window().then(win => {
+      const requests = win.performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('.js')).length;
+      cy.wrap(requests).as('initialScriptRequests');
+    });
+    cy.get('coding-box-coding-jobs').should('not.exist');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-jobs').should('be.visible');
+    cy.get<number>('@initialScriptRequests').then(initial => {
+      cy.window().should(win => {
+        const requests = win.performance.getEntriesByType('resource').filter(entry => entry.name.endsWith('.js')).length;
+        expect(requests).to.be.greaterThan(initial);
+      });
+    });
+  });
+
+  it('refreshes hidden productive jobs once after a definition change without reloading training jobs', () => {
+    setup();
+    cy.intercept({
+      method: 'GET', url: '**/api/admin/workspace/5/coding/job-definitions', middleware: true
+    }, request => {
+      request.on('before:response', response => response.setDelay(400));
+    });
+    cy.intercept('GET', '**/api/workspace/5/settings/auto-refresh-manual-coding-jobs', {
+      body: { value: '{"enabled":true}' }
+    });
+    let deleted = false;
+    let definitionReadsAfterDelete = 0;
+    const reloads = { productive: 0, training: 0 };
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', request => {
+      if (deleted) definitionReadsAfterDelete += 1;
+      request.reply({ body: deleted ? [] : [{ ...definition, blockingCreatedJobsCount: 0 }] });
+    }).as('jobDefinitions');
+    cy.intercept('DELETE', '**/api/admin/workspace/5/coding/job-definitions/99', request => {
+      deleted = true;
+      request.reply({ body: { success: true } });
+    }).as('deleteDefinition');
+    cy.intercept('GET', '**/api/wsg-admin/workspace/5/coding-job?*', request => {
+      const scope = request.query.scope;
+      if (scope !== 'productive' && scope !== 'training') {
+        request.reply({ body: { data: [], total: 0, page: 1, limit: 50 } });
+        return;
+      }
+      if (deleted) reloads[scope] += 1;
+      request.reply({ body: { data: [{
+        id: scope === 'productive' ? 50 : 51, workspace_id: 5, creatorUserId: 2,
+        name: `${scope} ${deleted ? 'updated' : 'original'}`, status: 'completed',
+        assignedCoders: [11], assignedVariables: [], totalUnits: 1, codedUnits: 1,
+        openUnits: 0, progress: 100, created_at: '2026-10-27', updated_at: '2026-10-27'
+      }], total: 1, page: 1, limit: 50 } });
+    });
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.contains('#manual-support mat-row', 'training original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.wait('@jobDefinitions');
+    cy.get('coding-box-coding-job-definitions .job-definitions-table-wrapper')
+      .should('have.attr', 'aria-busy', 'false');
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    // Await both export choices and the visible list before opening its row menu.
+    cy.wait(['@jobDefinitions', '@jobDefinitions']);
+    cy.get('coding-box-coding-job-definitions .job-definitions-table-wrapper')
+      .should('have.attr', 'aria-busy', 'false');
+    cy.contains('coding-box-coding-job-definitions tr', 'Browser definition')
+      .find('.more-actions-button').click();
+    cy.get('.danger-menu-item').click();
+    cy.wait('@deleteDefinition');
+    // The child refreshes immediately; the second read comes from the debounced parent workflow.
+    cy.wrap(null).should(() => { expect(definitionReadsAfterDelete).to.equal(2); });
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 0, training: 0 }); });
+
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive updated').scrollIntoView().should('be.visible');
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 1, training: 0 }); });
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
+    cy.contains('#manual-support mat-row', 'training original').scrollIntoView().should('be.visible');
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.contains('#manual-execution mat-row', 'productive updated').scrollIntoView().should('be.visible');
+    cy.then(() => { expect(reloads).to.deep.equal({ productive: 1, training: 0 }); });
+  });
 
   it('does not open an old bulk preview after leaving its workspace', () => {
     setup();

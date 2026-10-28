@@ -82,7 +82,7 @@
         <div class="progress-container failed">
           <mat-icon color="warn">error</mat-icon>
           <span class="progress-label">{{ codebookJobError() }}</span>
-          <button mat-icon-button (click)="resetCodebookJob()" matTooltip="Reset">
+          <button mat-icon-button (click)="resetCodebookJob()" matTooltip="Reset" [attr.aria-label]="'accessibility.actions.reset-codebook-job' | translate">
             <mat-icon>refresh</mat-icon>
           </button>
         </div>

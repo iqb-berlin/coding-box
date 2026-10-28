@@ -29,7 +29,9 @@ export class ManualCodingAnalysisFacade {
   readonly failed$ = this.failedSubject.asObservable();
   private readonly reloadRequestedSubject = new Subject<void>();
   readonly reloadRequested$ = this.reloadRequestedSubject.asObservable();
-  isViewActive: () => boolean = () => false;
+  private isViewActive: () => boolean = () => false;
+
+  setViewActivity(isActive: () => boolean): void { this.isViewActive = isActive; }
   private readonly responseAnalysisState = signal<ResponseAnalysisDto | null>(null);
   readonly responseAnalysis = this.responseAnalysisState.asReadonly();
 
@@ -42,15 +44,16 @@ export class ManualCodingAnalysisFacade {
   private readonly responseAnalysisRequestCancelSubject = new Subject<void>();
   readonly responseAnalysisRequestCancel$ = this.responseAnalysisRequestCancelSubject.asObservable();
 
-  responseAnalysisRequestId = 0;
+  private responseAnalysisRequestId = 0;
 
-  analysisPollingTimer?: ReturnType<typeof setTimeout>;
+  private analysisPollingTimer?: ReturnType<typeof setTimeout>;
 
-  responseAnalysisGuardActive = false;
+  private guardActive = false;
+  get responseAnalysisGuardActive(): boolean { return this.guardActive; }
 
-  responseAnalysisGuardWorkspaceId: number | null = null;
+  private responseAnalysisGuardWorkspaceId: number | null = null;
 
-  hasShownResponseAnalysisPollingError = false;
+  private hasShownResponseAnalysisPollingError = false;
 
   private readonly emptyPageIndexState = signal(0);
   readonly emptyPageIndex = this.emptyPageIndexState.asReadonly();
@@ -141,7 +144,7 @@ export class ManualCodingAnalysisFacade {
       this.responseAnalysisGuardWorkspaceId || this.appService.selectedWorkspaceId,
       this.settings.normalizeAggregationThreshold(this.settings.duplicateAggregationThreshold())
     );
-    this.responseAnalysisGuardActive = false;
+    this.guardActive = false;
     this.responseAnalysisGuardWorkspaceId = null;
   }
 
@@ -201,7 +204,7 @@ export class ManualCodingAnalysisFacade {
       this.appService.selectedWorkspaceId :
       this.responseAnalysisGuardWorkspaceId;
     if (!workspaceId ||
-      (this.responseAnalysisGuardActive === isActive &&
+      (this.guardActive === isActive &&
         this.responseAnalysisGuardWorkspaceId === workspaceId)) {
       return;
     }
@@ -216,7 +219,7 @@ export class ManualCodingAnalysisFacade {
       );
     }
 
-    this.responseAnalysisGuardActive = isActive;
+    this.guardActive = isActive;
     this.responseAnalysisGuardWorkspaceId = isActive ? workspaceId : null;
     this.setManualResponseAnalysisGuardRunning(
       workspaceId,

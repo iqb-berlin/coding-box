@@ -13,6 +13,7 @@ import { withReplayAttemptHeader } from '../utils/replay-request-correlation';
 const REPLAY_ASSETS_REQUEST_TIMEOUT_MS = 120_000;
 
 export type ReplayUnitResponse = {
+  unit_state?: { CURRENT_PAGE_ID?: string };
   responses: {
     id: string;
     content: string;
@@ -378,12 +379,12 @@ export class ReplayBackendService {
     unitId?: string,
     options?: { from?: string; to?: string; lastDays?: number }
   ): Observable<{
-      min: number;
-      max: number;
-      average: number;
-      distribution: Record<string, number>;
-      unitAverages?: Record<string, number>;
-    }> {
+    min: number;
+    max: number;
+    average: number;
+    distribution: Record<string, number>;
+    unitAverages?: Record<string, number>;
+  }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/duration`;
     let params = new HttpParams();
     if (unitId) {
@@ -447,12 +448,12 @@ export class ReplayBackendService {
     workspaceId: number,
     options?: { from?: string; to?: string; lastDays?: number; limit?: number }
   ): Observable<{
-      successRate: number;
-      totalReplays: number;
-      successfulReplays: number;
-      failedReplays: number;
-      commonErrors: Array<{ message: string; count: number }>;
-    }> {
+    successRate: number;
+    totalReplays: number;
+    successfulReplays: number;
+    failedReplays: number;
+    commonErrors: Array<{ message: string; count: number }>;
+  }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics/errors`;
     let params = new HttpParams();
     if (options?.from) {

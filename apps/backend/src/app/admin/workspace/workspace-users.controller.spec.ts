@@ -340,8 +340,8 @@ describe('WorkspaceUsersController', () => {
     });
 
     it.each([
-      { userId: 1, workspaceId: 3, expectedStatus: 401 },
-      { userId: 2, workspaceId: 3, expectedStatus: 401 },
+      { userId: 1, workspaceId: 3, expectedStatus: 403 },
+      { userId: 2, workspaceId: 3, expectedStatus: 403 },
       { userId: 3, workspaceId: 4, expectedStatus: 403 },
       { userId: 5, workspaceId: 3, expectedStatus: 403 }
     ])('denies user $userId changing membership in workspace $workspaceId', async ({ userId, workspaceId, expectedStatus }) => {

@@ -539,11 +539,11 @@ export class CodingJobReplayService {
     response: ResponseEntity | undefined,
     manualUnit: CodingJobUnit | undefined
   ): {
-      status: CodingJobBundleVariableStatus;
-      code: number | null;
-      score: number | null;
-      source: 'manual' | 'auto' | 'none';
-    } {
+    status: CodingJobBundleVariableStatus;
+    code: number | null;
+    score: number | null;
+    source: 'manual' | 'auto' | 'none';
+  } {
     const latestCode = response ? getLatestCode(response) : null;
     const hasManualCode =
       manualUnit?.code !== null &&
@@ -804,8 +804,8 @@ export class CodingJobReplayService {
     codingJobIds: number[],
     workspaceId: number
   ): Promise<
-      Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
-    > {
+    Record<number, Record<string, SaveCodingProgressDto['selectedCode']>>
+  > {
     if (codingJobIds.length === 0) {
       return {};
     }

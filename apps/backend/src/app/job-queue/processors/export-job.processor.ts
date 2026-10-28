@@ -572,16 +572,16 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
           try {
             if (job.data.format === 'excel') {
               diagnostics =
-              await this.codingExportOrchestratorService.exportItemMatrixAsExcelToFile(
-                filePath,
-                itemMatrixOptions
-              );
+                await this.codingExportOrchestratorService.exportItemMatrixAsExcelToFile(
+                  filePath,
+                  itemMatrixOptions
+                );
             } else {
               diagnostics =
-              await this.codingExportOrchestratorService.exportItemMatrixAsCsvToFile(
-                filePath,
-                itemMatrixOptions
-              );
+                await this.codingExportOrchestratorService.exportItemMatrixAsCsvToFile(
+                  filePath,
+                  itemMatrixOptions
+                );
             }
           } finally {
             await diagnosticsWriter.close();

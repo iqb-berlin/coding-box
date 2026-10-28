@@ -1,10 +1,8 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {
-  BehaviorSubject,
   firstValueFrom,
   Observable,
   Subject,
@@ -16,6 +14,7 @@ import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
 import { AuthRefreshUnavailableError } from '../interceptors/auth-refresh-unavailable.error';
 import { SessionRecoveryService } from './session-recovery.service';
+import { AuthSessionState } from './auth-session-state.service';
 
 @Injectable({
   providedIn: 'root'
@@ -30,6 +29,7 @@ export class AuthService {
   private readonly document = inject(DOCUMENT);
   private readonly appService = inject(AppService);
   private readonly sessionRecovery = inject(SessionRecoveryService);
+  private readonly session = inject(AuthSessionState);
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
@@ -41,11 +41,9 @@ export class AuthService {
     promise: Promise<string | undefined>;
   };
 
-  private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasStoredSession());
-  private readonly authenticatedState = toSignal(this.isAuthenticatedSubject, { requireSync: true });
-
   constructor() {
     this.checkTokenValidity();
+    this.session.setCredentialsAvailable(this.hasStoredSession());
   }
 
   getLoggedUser(): DecodedToken | undefined {
@@ -90,10 +88,10 @@ export class AuthService {
   }
 
   isLoggedIn(): boolean {
-    this.authenticatedState();
+    const currentAvailability = this.session.credentialsAvailable();
     const hasStoredSession = this.hasStoredSession();
-    if (hasStoredSession !== this.isAuthenticatedSubject.value) {
-      this.isAuthenticatedSubject.next(hasStoredSession);
+    if (hasStoredSession !== currentAvailability) {
+      this.session.setCredentialsAvailable(hasStoredSession);
     }
     return hasStoredSession;
   }
@@ -154,7 +152,7 @@ export class AuthService {
     this.invalidatePendingRefresh();
     this.appService.markExplicitLogoutInProgress();
     this.appService.clearAuthState({ clearReAuthentication: true });
-    this.isAuthenticatedSubject.next(false);
+    this.session.clear();
 
     if (refreshToken) {
       this.http.post(`${this.appService.serverUrl}auth/logout`, { refresh_token: refreshToken }).subscribe({
@@ -187,7 +185,7 @@ export class AuthService {
 
   private storeAccessToken(token: string): void {
     localStorage.setItem(this.tokenKey, token);
-    this.isAuthenticatedSubject.next(true);
+    this.session.setCredentialsAvailable(true);
   }
 
   setIdToken(idToken: string): void {
@@ -279,7 +277,8 @@ export class AuthService {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.idTokenKey);
     localStorage.removeItem(this.refreshTokenKey);
-    this.isAuthenticatedSubject.next(false);
+    // AppService captures recovery drafts before clearing the accepted identity.
+    this.session.setCredentialsAvailable(false);
   }
 
   private invalidatePendingRefresh(): void {

@@ -1308,9 +1308,9 @@ export class CodingProcessService {
     maxCodedResponses: number = Number.MAX_SAFE_INTEGER,
     preflightManager?: EntityManager
   ): Promise<{
-      allCodedResponses: CodedResponse[];
-      statistics: CodingStatistics;
-    }> {
+    allCodedResponses: CodedResponse[];
+    statistics: CodingStatistics;
+  }> {
     const allCodedResponses: CodedResponse[] = [];
     const persistenceSources: AutocoderPersistenceSource[] = [];
     let responseIndex = 0;
@@ -2809,9 +2809,9 @@ export class CodingProcessService {
     fileIdToTestFileMap: Map<string, FileUpload>,
     jobId?: string
   ): Promise<{
-      codingSchemeRefs: Set<string>;
-      unitToCodingSchemeRefMap: Map<number, string>;
-    }> {
+    codingSchemeRefs: Set<string>;
+    unitToCodingSchemeRefMap: Map<number, string>;
+  }> {
     const codingSchemeRefs = new Set<string>();
     const unitToCodingSchemeRefMap = new Map<number, string>();
     const batchSize = 50;

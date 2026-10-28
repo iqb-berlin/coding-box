@@ -143,7 +143,7 @@ describe('Cohen kappa service wiring and HTTP contracts', () => {
     const response = await fetch(`${baseUrl}?weightedMean=false&excludeTrainings=true&jobDefinitionIds=11,12&coderTrainingIds=21&coderIds=31&coderIds=32&level=score`);
 
     expect(response.status).toBe(200);
-    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32], 'score');
+    expect(query.getCodedVariablesForKappa).toHaveBeenCalledWith(5, false, [11, 12], [21], [31, 32], 'score', { unitName: undefined, variableId: undefined });
     expect((await response.json()).workspaceSummary).toMatchObject({ weightingMethod: 'unweighted', calculationLevel: 'score' });
   });
 

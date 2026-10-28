@@ -240,21 +240,21 @@ export class CodingJobsController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: Request
   ): Promise<{ data: {
+    id: number;
+    unitid: number;
+    variableid: string;
+    status: string;
+    value: string | null;
+    subform: string | null;
+    code_v1: number | null;
+    score_v1: number | null;
+    status_v1: string | null;
+    unit: {
       id: number;
-      unitid: number;
-      variableid: string;
-      status: string;
-      value: string | null;
-      subform: string | null;
-      code_v1: number | null;
-      score_v1: number | null;
-      status_v1: string | null;
-      unit: {
-        id: number;
-        name: string;
-        alias: string;
-      };
-    }[] }> {
+      name: string;
+      alias: string;
+    };
+  }[] }> {
     const codingJob = await this.codingJobService.getCodingJobById(id);
     await this.assertCanAccessDirectCodingJob(id, codingJob.workspace_id, req);
     const responses = await this.codingJobService.getResponsesForCodingJob(id);

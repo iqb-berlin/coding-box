@@ -21,7 +21,7 @@
     <ng-container matColumnDef="replay">
       <th mat-header-cell *matHeaderCellDef>Replay</th>
       <td mat-cell *matCellDef="let row"><button mat-icon-button type="button" color="primary"
-        (click)="replayRequested.emit(row.source)" matTooltip="Replay inkl. Kodieranweisungen öffnen"><mat-icon>play_circle</mat-icon></button></td>
+        (click)="replayRequested.emit(row.source)" matTooltip="Replay inkl. Kodieranweisungen öffnen" [attr.aria-label]="'accessibility.actions.open-replay' | translate"><mat-icon>play_circle</mat-icon></button></td>
     </ng-container>
     <ng-container matColumnDef="givenAnswer">
       <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>

@@ -1,7 +1,7 @@
 <div class="dialog-container">
   <div class="dialog-header">
     <h2 class="dialog-title">Testheft-Information: {{ data.bookletId }}</h2>
-    <button mat-icon-button (click)="close()" class="close-button">
+    <button mat-icon-button (click)="close()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
       <mat-icon>close</mat-icon>
     </button>
   </div>

@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 
@@ -13,7 +14,7 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-job-definition-selection-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatButtonModule,
     MatIconModule,
     MatFormFieldModule,
@@ -24,7 +25,7 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
   template: `
     <div class="dialog-header">
       <h2>Jobdefinition auswählen</h2>
-      <button mat-icon-button (click)="close()">
+      <button mat-icon-button (click)="close()" [attr.aria-label]="'deferred-view.close' | translate">
         <mat-icon>close</mat-icon>
       </button>
     </div>

@@ -1,6 +1,7 @@
 import { DataSource, Repository } from 'typeorm';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import Persons from '../../entities/persons.entity';
+import Workspace from '../../entities/workspace.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
@@ -30,7 +31,7 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
       password: process.env.POSTGRES_PASSWORD || 'root-password',
       database: process.env.POSTGRES_DB || 'coding-box',
       schema,
-      entities: [Persons, Booklet, BookletInfo, Unit, ResponseEntity, UnitLastState,
+      entities: [Workspace, Persons, Booklet, BookletInfo, Unit, ResponseEntity, UnitLastState,
         BookletLog, Session, UnitLog, ChunkEntity, UnitTag, UnitNote],
       synchronize: false
     });

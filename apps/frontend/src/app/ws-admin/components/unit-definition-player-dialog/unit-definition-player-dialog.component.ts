@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
@@ -21,7 +22,7 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   templateUrl: './unit-definition-player-dialog.component.html',
   styleUrls: ['./unit-definition-player-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

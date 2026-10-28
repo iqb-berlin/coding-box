@@ -70,9 +70,13 @@
         "{workspaceRoot}/docs/workspace-api-token-rights-de.md",
         "{workspaceRoot}/docs/workspace-api-token-rights.md",
         "{workspaceRoot}/scripts/qa/**/*",
+        "{workspaceRoot}/database/changelog/**/*",
         "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*",
         { "env": "BULLMQ_TEST_REDIS_HOST" },
-        { "env": "BULLMQ_TEST_REDIS_PORT" }
+        { "env": "BULLMQ_TEST_REDIS_PORT" },
+        { "env": "KAPPA_QUERY_TEST_DATABASE_URL" },
+        { "env": "KAPPA_QUERY_BENCHMARK" },
+        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
       ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",

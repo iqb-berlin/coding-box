@@ -682,20 +682,20 @@ export class CodingJobBackendService {
     includeDeriveErrorOnly?: boolean,
     excludeJobDefinitionId?: number
   ): Observable<
-      {
-        unitName: string;
-        variableId: string;
-        responseCount: number;
-        deriveErrorResponseCount: number;
-        casesInJobs: number;
-        availableCases: number;
-        uniqueCasesAfterAggregation: number;
-        availableCasesWithDeriveError?: number;
-        uniqueCasesAfterAggregationWithDeriveError?: number;
-        isDerived: boolean;
-        coderTrainingRequired?: boolean;
-      }[]
-    > {
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      deriveErrorResponseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      availableCasesWithDeriveError?: number;
+      uniqueCasesAfterAggregationWithDeriveError?: number;
+      isDerived: boolean;
+      coderTrainingRequired?: boolean;
+    }[]
+  > {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
     if (unitName) {
