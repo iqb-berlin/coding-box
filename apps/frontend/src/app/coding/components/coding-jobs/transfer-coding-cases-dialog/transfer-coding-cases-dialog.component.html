@@ -8,7 +8,7 @@
   <mat-form-field appearance="outline">
     <mat-label>Von Kodierer</mat-label>
     <mat-select [(value)]="sourceCoderId">
-      @for (coder of coders; track coder) {
+      @for (coder of coders; track coder.id) {
         <mat-option [value]="coder.id">
           {{ coder.displayName || coder.name }}
         </mat-option>
@@ -19,7 +19,7 @@
   <mat-form-field appearance="outline">
     <mat-label>Zu Kodierer</mat-label>
     <mat-select [(value)]="targetCoderId">
-      @for (coder of coders; track coder) {
+      @for (coder of coders; track coder.id) {
         <mat-option [value]="coder.id">
           {{ coder.displayName || coder.name }}
         </mat-option>

@@ -187,22 +187,22 @@ export class CodingExportService {
     workspaceId: number,
     jobId: string
   ): Observable<{
-      status: string;
-      progress: number;
-      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        exportFormat: string;
-        createdAt: number;
-      };
-      error?: string;
-    }> {
+    status: string;
+    progress: number;
+    progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+    processedRows?: number;
+    totalRows?: number;
+    progressMessage?: string;
+    result?: {
+      fileId: string;
+      fileName: string;
+      fileSize: number;
+      workspaceId: number;
+      exportFormat: string;
+      createdAt: number;
+    };
+    error?: string;
+  }> {
     return this.http.get<{
       status: string;
       progress: number;

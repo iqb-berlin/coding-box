@@ -137,7 +137,7 @@ export class WorkspaceCodingController {
   async getManualTestPersons(
     @Query('testPersons') testPersons: string,
     @Query('codedStatus') codedStatus: string,
-    @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+    @WorkspaceId()
                           workspace_id: number
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     return this.codingResponseQueryService.getManualTestPersons(
@@ -238,11 +238,11 @@ export class WorkspaceCodingController {
     @Query('sortBy') sortBy?: CodingResponseSortBy,
     @Query('sortDirection') sortDirection?: CodingResponseSortDirection
   ): Promise<{
-      data: ResponseEntity[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: ResponseEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
@@ -308,10 +308,10 @@ export class WorkspaceCodingController {
   async applyEmptyResponseCoding(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-      success: boolean;
-      updatedCount: number;
-      message: string;
-    }> {
+    success: boolean;
+    updatedCount: number;
+    message: string;
+  }> {
     return this.codingResultsService.applyEmptyResponseCoding(workspace_id);
   }
 }

@@ -3183,5 +3183,36 @@
       "ignore-unit": "Aufgabe ignorieren",
       "show-error-details": "Fehlerdetails anzeigen"
     }
+  },
+  "page-titles": {
+    "home": "Startseite",
+    "replay": "Replay",
+    "manual": "Manuelle Kodierung",
+    "test-person-coding": "Testpersonenkodierung",
+    "coding": "Meine Kodierjobs",
+    "admin": "Administration",
+    "users": "Benutzer",
+    "settings": "Einstellungen",
+    "notifications": "Systemmeldungen",
+    "workspaces": "Arbeitsbereiche",
+    "workspace": "Arbeitsbereich",
+    "test-files": "Testdateien",
+    "test-results": "Testergebnisse",
+    "management": "Kodierungsübersicht",
+    "statistics": "Kodierstatistik",
+    "export": "Export",
+    "cleaning": "Datenbereinigung"
+  },
+  "manual-job-status": {
+    "draft": "Entwurf",
+    "pending_review": "Warten auf Genehmigung",
+    "approved": "Genehmigt"
+  },
+  "manual-tabs": {
+    "preparation": "Vorbereitung",
+    "planning": "Planung",
+    "training": "Schulung",
+    "execution": "Durchführung",
+    "completion": "Abschluss"
   }
 }

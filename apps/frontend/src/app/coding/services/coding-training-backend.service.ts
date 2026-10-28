@@ -395,14 +395,14 @@ export class CodingTrainingBackendService {
     score: number | null,
     notes?: string | null
   ): Observable<{
-      success: boolean;
-      code: number | null;
-      score: number | null;
-      notes: string | null;
-      source: 'manual' | 'auto_agreement' | null;
-      managerUserId: number | null;
-      managerName: string | null;
-    }> {
+    success: boolean;
+    code: number | null;
+    score: number | null;
+    notes: string | null;
+    source: 'manual' | 'auto_agreement' | null;
+    managerUserId: number | null;
+    managerName: string | null;
+  }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/discussion-result`;
     return this.http.post<{
       success: boolean;

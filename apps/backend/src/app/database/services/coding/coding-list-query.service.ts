@@ -78,9 +78,9 @@ export class CodingListQueryService {
     serverUrl?: string,
     trainingRequired?: boolean
   ): Promise<{
-      items: CodingItem[];
-      total: number;
-    }> {
+    items: CodingItem[];
+    total: number;
+  }> {
     try {
       const server = serverUrl;
       const includeDeriveError =

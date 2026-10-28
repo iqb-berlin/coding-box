@@ -16,6 +16,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import {
   ValidateCodingCompletenessResponseDto
@@ -51,6 +52,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   private dialogRef = inject<MatDialogRef<CodingValidationResultsDialogComponent>>(MatDialogRef);
 
   protected validationResults: ValidateCodingCompletenessResponseDto;
+  protected validationRows: { key: string; result: ValidationResultDto }[];
   validationCacheKey: string | null = null;
   protected isLoading = false;
   protected currentPage = 1;
@@ -77,6 +79,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     }>(MAT_DIALOG_DATA);
 
     this.validationResults = data.validationResults;
+    this.validationRows = this.buildValidationRows(data.validationResults?.results ?? []);
     this.validationCacheKey = data.validationCacheKey || null;
     this.expectedCombinations = data.expectedCombinations || [];
   }
@@ -84,6 +87,23 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   ngOnInit(): void {
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
       if (id !== this.workspaceId) this.dialogRef.close();
+    });
+  }
+
+  private buildValidationRows(results: ValidationResultDto[]): { key: string; result: ValidationResultDto }[] {
+    const occurrences = new Map<string, number>();
+    return results.map(result => {
+      const combination = result.combination;
+      const identity = JSON.stringify([
+        combination.unit_key, combination.unit_alias ?? '', combination.login_name,
+        combination.person_group ?? '', combination.login_code, combination.booklet_id,
+        combination.variable_id, combination.variable_page ?? '', combination.variable_anchor ?? ''
+      ]);
+      // The API retains repeated input rows. Distinguish their occurrences while
+      // keeping other rows stable when the response order or validation status changes.
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return { key: JSON.stringify([identity, occurrence]), result };
     });
   }
 
@@ -124,6 +144,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) { this.isLoading = false; this.changeDetectorRef.markForCheck(); } })).subscribe({
       next: results => {
         this.validationResults = results;
+        this.validationRows = this.buildValidationRows(results?.results ?? []);
         this.currentPage = page;
         if (results?.cacheKey) {
           this.validationCacheKey = results.cacheKey;
