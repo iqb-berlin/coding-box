@@ -9,6 +9,7 @@ import { startLoopbackForwarders } from './loopback-forwarders.mjs';
 import { waitForHttp } from './http-readiness.mjs';
 import {
   cleanupReplayWorkspaceFromState,
+  waitForBackendAuthentication,
   redactReplayArtifactLog
 } from './harness.mjs';
 
@@ -102,6 +103,14 @@ try {
     await waitForHttp(url, 180_000);
     process.stdout.write(`[replay-e2e] ${service} is ready.\n`);
   }
+
+  process.stdout.write('[replay-e2e] Waiting for backend JWT authentication.\n');
+  await waitForBackendAuthentication({
+    issuer: replayEnvironment.REPLAY_E2E_OIDC_ISSUER,
+    authPassword: replayEnvironment.REPLAY_E2E_AUTH_PASSWORD,
+    apiUrl: replayEnvironment.REPLAY_E2E_API_URL
+  });
+  process.stdout.write('[replay-e2e] Backend JWT authentication is ready.\n');
 
   process.stdout.write('[replay-e2e] Starting Cypress.\n');
   await run(
