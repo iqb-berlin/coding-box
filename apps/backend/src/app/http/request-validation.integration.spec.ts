@@ -10,6 +10,7 @@ import {
   Query
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { json } from 'express';
 import { CodingJobController } from '../admin/coding-job/coding-job.controller';
 import { WsgCodingJobController } from '../wsg-admin/coding-job/coding-job.controller';
@@ -135,6 +136,16 @@ describe('HTTP request validation and exception handling', () => {
   it.each([
     { name: 123, assignedCoders: 'not-an-array', showScore: 'yes' },
     { name: 'Job', assignedCoders: ['7'] },
+    { name: 'Job', assignedCoders: [1.5] },
+    { name: 'Job', assignedCoders: [0] },
+    { name: 'Job', variableBundleIds: [-1] },
+    { name: 'Job', missings_profile_id: 1.5 },
+    { name: 'Job', durationSeconds: 0 },
+    { name: 'Job', maxCodingCases: -1 },
+    { name: 'Job', maxCodingCases: 1.5 },
+    { name: 'Job', doubleCodingAbsolute: -1 },
+    { name: 'Job', doubleCodingPercentage: 150 },
+    { name: 'Job', doubleCodingPercentage: -1 },
     { name: 'Job', variables: [{ unitName: 'U1', variableId: 12 }] },
     { name: 'Job', status: 'unrecognized' },
     null, [], [{ name: 'Job' }], 'Job', 1, true
@@ -178,6 +189,23 @@ describe('HTTP request validation and exception handling', () => {
     expect(codingJobs.createCodingJob).toHaveBeenCalledWith(47, payload, 7);
   });
 
+  it('documents the same coding job numeric bounds that runtime validation enforces', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    const schema = document.components?.schemas?.CreateCodingJobDto;
+    if (!schema || '$ref' in schema) throw new Error('Missing coding job schema');
+    expect(schema.properties?.assignedCoders).toMatchObject({
+      type: 'array', items: { type: 'integer', minimum: 1, maximum: 2147483647 }
+    });
+    expect(schema.properties?.maxCodingCases).toMatchObject({ type: 'integer', minimum: 1 });
+    expect(schema.properties?.doubleCodingPercentage).toMatchObject({ minimum: 0, maximum: 100 });
+  });
+
+  it('preserves the zero profile sentinel used by existing clients', async () => {
+    const payload = { name: 'Job', missings_profile_id: 0 };
+    expect((await post('admin/workspace/47/coding-job', payload)).status).toBe(201);
+    expect(codingJobs.createCodingJob).toHaveBeenCalledWith(47, payload, 7);
+  });
+
   function distributionPayload(maxCodingCases: unknown) {
     return {
       selectedVariables: [{ unitName: 'U1', variableId: 'V1' }],
@@ -207,11 +235,31 @@ describe('HTTP request validation and exception handling', () => {
     expect(codingJobs.calculateDistribution).toHaveBeenCalledWith(47, JSON.parse(JSON.stringify(payload)));
   });
 
-  it.each(['100', {}])('rejects malformed case limits before creating jobs: %j', async maxCodingCases => {
+  it.each(['100', {}, -1, 0, 1.5])('rejects malformed case limits before creating jobs: %j', async maxCodingCases => {
     const response = await post('admin/workspace/47/coding/create-distributed-jobs', distributionPayload(maxCodingCases));
     expect(response.status).toBe(400);
     expect(codingJobs.createDistributedCodingJobs).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { doubleCodingAbsolute: -1 }, { doubleCodingAbsolute: 1.5 },
+    { doubleCodingPercentage: -1 }, { doubleCodingPercentage: 101 },
+    { selectedCoders: [{ id: 1.5, name: 'Coder', username: 'coder' }] },
+    { selectedVariableBundles: [{ id: 0, name: 'Bundle', variables: [] }] }
+  ])('rejects invalid distribution bounds before calculation or job creation: %j', async invalid => {
+    const payload = { ...distributionPayload(null), ...invalid };
+    for (const route of ['calculate-distribution', 'create-distributed-jobs']) {
+      expect((await post(`admin/workspace/47/coding/${route}`, payload)).status).toBe(400);
+    }
+    expect(codingJobs.calculateDistribution).not.toHaveBeenCalled();
+    expect(codingJobs.createDistributedCodingJobs).not.toHaveBeenCalled();
+  });
+
+  it.each([{ assignedCoders: [1.5] }, { maxCodingCases: -1 }, { doubleCodingPercentage: 101 }])(
+    'rejects invalid updates as well as creates: %j', async payload => {
+      expect((await post('admin/workspace/47/coding-job/23', payload, 'PUT')).status).toBe(400);
+    }
+  );
 
   it('omits Testcenter query credentials from logs when group retrieval fails', async () => {
     const token = 'synthetic-testcenter-token';

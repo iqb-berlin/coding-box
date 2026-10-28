@@ -86,14 +86,20 @@ describe('VOCS preview without Zone.js', () => {
     cy.then(() => { releaseSchemerList(); });
   }
 
+  function getSchemerBody() {
+    cy.wait('@schemerDownload');
+    return cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe')
+      .should('be.visible')
+      .its('0.contentDocument.body', { timeout: 10000 })
+      .should('contain.text', 'Schemer 2.5.0: iqb@3.0')
+      .then(cy.wrap);
+  }
+
   it('opens the referenced 2.5.0 after delayed responses and passes the XML scheme type to the iframe', () => {
     openPreview();
-    cy.wait('@schemerDownload');
+    getSchemerBody().should('contain.text', 'Schema ändern');
     cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
     cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('not.exist');
-    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should('be.visible').should($iframe => {
-      expect($iframe[0].contentDocument?.body.textContent).to.contain('Schemer 2.5.0: iqb@3.0');
-    });
   });
 
   it('explains an unavailable 2.5 reference instead of using the newer 2.8 Schemer', () => {
@@ -127,11 +133,7 @@ describe('VOCS preview without Zone.js', () => {
       }
     });
     openPreview();
-    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should($iframe => {
-      expect($iframe[0].contentDocument?.body.textContent).to.contain('Schema ändern');
-    }).then($iframe => {
-      cy.wrap($iframe[0].contentDocument!.body).contains('button', 'Schema ändern').click();
-    });
+    getSchemerBody().contains('button', 'Schema ändern').click();
     cy.contains('coding-box-scheme-editor-dialog button', 'Speichern').should('not.be.disabled').click();
     cy.wait('@saveScheme');
     cy.get('coding-box-scheme-editor-dialog').should('not.exist');
