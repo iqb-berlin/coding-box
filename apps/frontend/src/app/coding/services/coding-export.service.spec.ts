@@ -62,8 +62,9 @@ describe('CodingExportService', () => {
   });
 
   it('should get coding list as CSV', () => {
+    const blob = new Blob(['binary export']);
     service.getCodingListAsCsv(1).subscribe(res => {
-      expect(res).toBeDefined();
+      expect(res).toBe(blob);
     });
 
     expect(appServiceMock.getWorkspaceTokenPolicy).toHaveBeenCalled();
@@ -80,7 +81,8 @@ describe('CodingExportService', () => {
       request.params.get('authToken') === 'auth-token'
     );
     expect(req.request.method).toBe('GET');
-    req.flush(new Blob());
+    expect(req.request.responseType).toBe('blob');
+    req.flush(blob);
   });
 
   it('should use the backend policy duration for coding list CSV tokens', () => {
@@ -140,8 +142,9 @@ describe('CodingExportService', () => {
   });
 
   it('should get coding list as Excel', () => {
+    const blob = new Blob(['binary export']);
     service.getCodingListAsExcel(1).subscribe(res => {
-      expect(res).toBeDefined();
+      expect(res).toBe(blob);
     });
 
     expect(appServiceMock.getWorkspaceTokenPolicy).toHaveBeenCalled();
@@ -154,12 +157,14 @@ describe('CodingExportService', () => {
       request.params.get('authToken') === 'auth-token'
     );
     expect(req.request.method).toBe('GET');
-    req.flush(new Blob());
+    expect(req.request.responseType).toBe('blob');
+    req.flush(blob);
   });
 
   it('should get coding results by version', () => {
+    const blob = new Blob(['binary export']);
     service.getCodingResultsByVersion(1, 'v2', 7, true, false).subscribe(res => {
-      expect(res).toBeDefined();
+      expect(res).toBe(blob);
     });
 
     expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
@@ -176,7 +181,27 @@ describe('CodingExportService', () => {
       request.params.get('missingsProfileId') === '7'
     );
     expect(req.request.method).toBe('GET');
-    req.flush(new Blob());
+    expect(req.request.responseType).toBe('blob');
+    req.flush(blob);
+  });
+
+  it('should return the binary Excel results body with the requested export options', () => {
+    const blob = new Blob(['excel export'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    service.getCodingResultsByVersionAsExcel(1, 'v2', 7, false, true, false, true)
+      .subscribe(result => expect(result).toBe(blob));
+
+    const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version/excel`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    expect(req.request.params.get('version')).toBe('v2');
+    expect(req.request.params.get('missingsProfileId')).toBe('7');
+    expect(req.request.params.get('includeResponseValues')).toBe('true');
+    expect(req.request.params.get('includeGeoGebraFiles')).toBe('false');
+    expect(req.request.params.get('includeGeoGebraResponseValues')).toBe('true');
+    expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
+    req.flush(blob);
   });
 
   it('should use the configured export replay token duration for coding results by version', () => {
