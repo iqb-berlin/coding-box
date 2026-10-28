@@ -26,6 +26,7 @@
         "cypress/zoneless/cohens-kappa.cy.ts",
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-jobs-refresh.facade.spec.ts",
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.zoneless.spec.ts",
