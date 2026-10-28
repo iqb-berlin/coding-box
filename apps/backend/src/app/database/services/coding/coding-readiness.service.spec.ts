@@ -150,7 +150,14 @@ const createService = (
   const fileUploadRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(fileRevisionQuery),
     find: jest.fn()
-      .mockResolvedValueOnce(fixture.unitFiles)
+      .mockResolvedValueOnce(fixture.unitFiles.map(file => {
+        // Older query/cache fixtures declare their Unit variables in this map.
+        // Explicit XML declarations are retained for compatibility regressions.
+        if (file.data.includes('<BaseVariables>')) return file;
+        const variables = [...(fixture.unitVariableMap.get(file.file_id) || [])]
+          .map(id => `<Variable id="${id}" alias="${id}" type="string"/>`).join('');
+        return { ...file, data: file.data.replace('</Unit>', `<BaseVariables>${variables}</BaseVariables></Unit>`) };
+      }))
       .mockResolvedValueOnce(fixture.codingSchemeFiles || [])
   };
   const workspaceFilesService = {
@@ -196,6 +203,71 @@ const createService = (
 };
 
 describe('CodingReadinessService', () => {
+  it.each([false, true])('blocks the MMV032 alias mismatch even with another usable Unit: %s', async withUsableUnit => {
+    const units = [createUnit(1, 'MMV032')];
+    const unitFiles = [createFile('MMV032', `<Unit>
+      <CodingSchemeRef>MMV032.VOCS</CodingSchemeRef>
+      <BaseVariables><Variable id="technical-a" alias="01a" type="string"/></BaseVariables>
+    </Unit>`)];
+    const codingSchemeFiles = [createFile('MMV032.VOCS', JSON.stringify({
+      version: '3.4',
+      variableCodings: [{
+        id: 'technical-a', alias: 'wrong-alias', sourceType: 'BASE', codes: []
+      }]
+    }))];
+    const candidateRows = [{ unitid: 1, variableid: '01a', response_count: 317 }];
+    const unitVariableMap = new Map([['MMV032', new Set(['01a'])]]);
+    if (withUsableUnit) {
+      units.push(createUnit(2, 'UNIT_OK'));
+      unitFiles.push(createFile('UNIT_OK', `<Unit><CodingSchemeRef>SCHEME_OK</CodingSchemeRef>
+        <BaseVariables><Variable id="var1" alias="var1" type="string"/></BaseVariables></Unit>`));
+      codingSchemeFiles.push(createFile('SCHEME_OK', createCodingScheme('var1')));
+      candidateRows.push({ unitid: 2, variableid: 'var1', response_count: 1 });
+      unitVariableMap.set('UNIT_OK', new Set(['var1']));
+    }
+    const fixture = {
+      units,
+      unitFiles,
+      codingSchemeFiles,
+      candidateRows,
+      unitVariableMap,
+      rawResponsesTotal: withUsableUnit ? 318 : 317
+    };
+    const service = createService(fixture);
+
+    const readiness = await service.getReadiness(1, { forceRefresh: true });
+
+    expect(readiness.readiness).toBe('BLOCKED');
+    expect(readiness.blockers).toContain('INVALID_CODING_SCHEMES');
+    expect(readiness.invalidCodingSchemes).toContain('MMV032.VOCS');
+    expect(readiness.codeableResponses).toBe(withUsableUnit ? 1 : 0);
+    await expect(createService(fixture).assertAutoCodingCanProcess(1))
+      .rejects.toThrow('kann nicht gestartet werden');
+    const responses = [createResponse(1, 1, '01a')];
+    if (withUsableUnit) responses.push(createResponse(2, 2, 'var1'));
+    await expect(createService(fixture).filterResponsesCodeable(1, responses, units))
+      .rejects.toThrow('"01a", im VOCS jedoch "wrong-alias"');
+  });
+
+  it('rejects incompatible queued data even when the imported alias no longer matches the Unit', async () => {
+    const units = [createUnit(1, 'MMV032')];
+    const service = createService({
+      units,
+      rawResponsesTotal: 1,
+      candidateRows: [],
+      unitFiles: [createFile('MMV032', `<Unit><CodingSchemeRef>MMV032.VOCS</CodingSchemeRef>
+        <BaseVariables><Variable id="technical-a" alias="01a" type="string"/></BaseVariables></Unit>`)],
+      codingSchemeFiles: [createFile('MMV032.VOCS', JSON.stringify({
+        variableCodings: [{
+          id: 'technical-a', alias: 'old-alias', sourceType: 'BASE', codes: []
+        }]
+      }))],
+      unitVariableMap: new Map([['MMV032', new Set(['01a'])]])
+    });
+    await expect(service.filterResponsesCodeable(1, [createResponse(1, 1, 'old-alias')], units))
+      .rejects.toThrow('"01a", im VOCS jedoch "old-alias"');
+  });
+
   it('allows required no-value sources and imported derived aliases but not unrelated helpers', async () => {
     const units = [createUnit(1, 'UNIT_OK')];
     const service = createService({

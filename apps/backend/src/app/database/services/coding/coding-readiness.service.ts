@@ -32,6 +32,7 @@ import {
 import { CacheService } from '../../../cache/cache.service';
 import { getCodingDependencyVariables, mergeCodingVariableMaps } from './coding-dependency-variables.util';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
+import { validateUnitCodingSchemeCompatibility } from './unit-coding-scheme-compatibility.util';
 import {
   getCodingReadinessCacheKey,
   getCodingReadinessCachePattern,
@@ -82,6 +83,7 @@ type CodingSchemeDiagnostics = {
   usableCodingSchemeRefs: Set<string>;
   missingCodingSchemes: string[];
   invalidCodingSchemes: string[];
+  compatibilityErrors: string[];
 };
 
 type VariableFilterDiagnostics = {
@@ -242,21 +244,27 @@ export class CodingReadinessService {
       units,
       manager
     );
-    const unitsWithValidResponses = this.getUnitsWithResponses(
+    // A queued job must fail on incompatible files, even if the Unit's current
+    // variable map would otherwise discard all imported responses first.
+    const unitsWithResponses = this.getUnitsWithResponses(
       units,
-      variableDiagnostics.validResponses
+      responses
     );
     const unitFileDiagnostics = await this.getUnitFileDiagnostics(
       workspaceId,
-      this.uniqueUnitFileIds(unitsWithValidResponses),
+      this.uniqueUnitFileIds(unitsWithResponses),
       manager
     );
     const codingSchemeDiagnostics = await this.getCodingSchemeDiagnostics(
       workspaceId,
-      unitsWithValidResponses,
+      unitsWithResponses,
       unitFileDiagnostics.unitFileMap,
       manager
     );
+
+    if (codingSchemeDiagnostics.compatibilityErrors.length > 0) {
+      throw new BadRequestException(codingSchemeDiagnostics.compatibilityErrors.join(' '));
+    }
 
     return variableDiagnostics.validResponses.filter(
       response => codingSchemeDiagnostics.unitHasCodingScheme.get(response.unitid) === true
@@ -594,6 +602,7 @@ export class CodingReadinessService {
     const availableCodingSchemeRefs = new Set(codingSchemeFiles.map(file => file.file_id));
     const usableCodingSchemeRefs = new Set<string>();
     const invalidCodingSchemes: string[] = [];
+    const compatibilityErrors: string[] = [];
     codingSchemeFiles.forEach(file => {
       if (this.isUsableCodingScheme(file)) {
         usableCodingSchemeRefs.add(file.file_id);
@@ -603,17 +612,45 @@ export class CodingReadinessService {
       invalidCodingSchemes.push(file.file_id);
     });
     const unitHasCodingScheme = new Map<number, boolean>();
-    units.forEach(unit => {
+    const schemesByRef = new Map(codingSchemeFiles.map(file => [file.file_id, file]));
+    const compatibilityChecks = new Map<string, Promise<string[]>>();
+    for (const unit of units) {
       const schemeRef = unitToSchemeRef.get(unit.id);
-      unitHasCodingScheme.set(unit.id, !!schemeRef && usableCodingSchemeRefs.has(schemeRef));
-    });
+      let usable = !!schemeRef && usableCodingSchemeRefs.has(schemeRef);
+      const unitFileId = this.getUnitFileId(unit);
+      const unitFile = unitFileId ? unitFileMap.get(unitFileId) : undefined;
+      const schemeFile = schemeRef ? schemesByRef.get(schemeRef) : undefined;
+      if (usable && unitFile && schemeFile) {
+        const pairKey = JSON.stringify([unitFileId, schemeRef]);
+        let check = compatibilityChecks.get(pairKey);
+        const firstCheck = !check;
+        if (!check) {
+          const data = typeof schemeFile.data === 'string' ? JSON.parse(schemeFile.data) : schemeFile.data;
+          check = validateUnitCodingSchemeCompatibility(
+            unitFile.data.toString(), new CodingScheme(data).variableCodings, unitFile.file_id, schemeFile.file_id
+          );
+          compatibilityChecks.set(pairKey, check);
+        }
+        const errors = await check;
+        if (errors.length > 0) {
+          usable = false;
+          invalidCodingSchemes.push(schemeFile.file_id);
+          if (firstCheck) {
+            compatibilityErrors.push(...errors);
+            this.logger.warn(errors.join(' '));
+          }
+        }
+      }
+      unitHasCodingScheme.set(unit.id, usable);
+    }
 
     return {
       unitHasCodingScheme,
       usableCodingSchemeRefs,
       missingCodingSchemes: Array.from(schemeRefs)
         .filter(schemeRef => !availableCodingSchemeRefs.has(schemeRef)),
-      invalidCodingSchemes: invalidCodingSchemes.sort((a, b) => a.localeCompare(b))
+      invalidCodingSchemes: [...new Set(invalidCodingSchemes)].sort((a, b) => a.localeCompare(b)),
+      compatibilityErrors
     };
   }
 
@@ -825,6 +862,9 @@ export class CodingReadinessService {
     }
 
     const blockers: AutocodingReadinessBlocker[] = [];
+    if (input.invalidCodingSchemes.length > 0) {
+      blockers.push('INVALID_CODING_SCHEMES');
+    }
     if (input.rawResponsesWithRelevantStatus === 0) {
       blockers.push('NO_RELEVANT_RESPONSES');
     }
@@ -837,9 +877,6 @@ export class CodingReadinessService {
       }
       if (input.missingCodingSchemes.length > 0) {
         blockers.push('MISSING_CODING_SCHEMES');
-      }
-      if (input.invalidCodingSchemes.length > 0) {
-        blockers.push('INVALID_CODING_SCHEMES');
       }
       blockers.push('NO_CODEABLE_RESPONSES');
     }
