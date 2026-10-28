@@ -346,12 +346,12 @@ export class WorkspaceResponseValidationService {
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-      summary: VariableValidationSummaryDto;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+    summary: VariableValidationSummaryDto;
+  }> {
     const emptySummary: VariableValidationSummaryDto = {
       unitFileNotFound: 0,
       variableNotDefinedInUnit: 0
@@ -668,11 +668,11 @@ export class WorkspaceResponseValidationService {
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
@@ -1226,11 +1226,11 @@ export class WorkspaceResponseValidationService {
     limit: number = 10,
     onProgress?: (progress: number) => void
   ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: InvalidVariableDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {

@@ -25,7 +25,7 @@
               ('coding.my-coding-jobs.select-all-workspaces' | translate)
               }}
             </mat-option>
-            @for (ws of currentWorkspaces(); track ws) {
+            @for (ws of currentWorkspaces(); track ws.id) {
               <mat-option [value]="ws.id">
                 {{ws.name}}
               </mat-option>

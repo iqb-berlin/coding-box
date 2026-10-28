@@ -6,8 +6,7 @@ import { SelectionModel } from '@angular/cdk/collections';
   standalone: true
 })
 export class HasSelectionValuePipe implements PipeTransform {
-  // eslint-disable-next-line class-methods-use-this,@typescript-eslint/no-explicit-any
-  transform(selectionModel: SelectionModel<any>, selectionLength: number): boolean {
+  transform<T>(selectionModel: SelectionModel<T>, selectionLength: number): boolean {
     return !!selectionLength && selectionModel.hasValue();
   }
 }

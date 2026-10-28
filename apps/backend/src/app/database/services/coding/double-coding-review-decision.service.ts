@@ -288,13 +288,13 @@ export class DoubleCodingReviewDecisionService {
     decisions: DoubleCodedResolutionDecisionDto[],
     manager: { userId: number; name: string }
   ): Promise<{
-      success: boolean;
-      appliedCount: number;
-      failedCount: number;
-      skippedCount: number;
-      message: string;
-      results: DoubleCodedResolutionResultDto[];
-    }> {
+    success: boolean;
+    appliedCount: number;
+    failedCount: number;
+    skippedCount: number;
+    message: string;
+    results: DoubleCodedResolutionResultDto[];
+  }> {
     if (
       !manager ||
       !Number.isInteger(manager.userId) ||
@@ -636,10 +636,10 @@ export class DoubleCodingReviewDecisionService {
     workspaceId: number,
     decision: DoubleCodingReviewDecision
   ): Promise<{
-      sourceUnit: CodingJobUnit | null;
-      aggregationSettings: CodingJobAggregationSettings | null;
-      reason?: string;
-    }> {
+    sourceUnit: CodingJobUnit | null;
+    aggregationSettings: CodingJobAggregationSettings | null;
+    reason?: string;
+  }> {
     const decisionTime = decision.finalized_at || decision.updated_at;
     const sourceUnits = (await entityManager.find(CodingJobUnit, {
       where: [

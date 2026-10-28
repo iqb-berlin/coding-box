@@ -17,7 +17,7 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 export type CodingResponseSortBy =
@@ -60,11 +60,11 @@ export class CodingResponseQueryService {
     sortBy?: CodingResponseSortBy,
     sortDirection?: CodingResponseSortDirection
   ): Promise<{
-      data: ResponseEntity[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    data: ResponseEntity[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     try {
       const codingVersion = this.normalizeCodingVersion(version);
       const statusNumber = statusStringToNumber(status);

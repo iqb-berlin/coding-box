@@ -18,7 +18,7 @@ import {
 } from 'typeorm';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
-// eslint-disable-next-line import/no-cycle
+
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService

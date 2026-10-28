@@ -649,12 +649,12 @@ export class PersonService {
     overwriteExistingLogs: boolean = true,
     audit?: TestResultsImportAuditContext
   ): Promise<{
-      success: boolean;
-      totalBooklets: number;
-      totalLogsSaved: number;
-      totalLogsSkipped: number;
-      issues?: TestResultsUploadIssueDto[];
-    }> {
+    success: boolean;
+    totalBooklets: number;
+    totalLogsSaved: number;
+    totalLogsSkipped: number;
+    issues?: TestResultsUploadIssueDto[];
+  }> {
     return this.personPersistenceService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs, audit);
   }
 }

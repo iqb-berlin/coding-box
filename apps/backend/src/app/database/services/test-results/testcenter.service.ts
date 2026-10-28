@@ -745,17 +745,17 @@ export class TestcenterService {
     overwriteFileIds?: string[],
     importRunId?: string
   ): Promise<{
-      success: boolean;
-      testFiles: number;
-      filesPlayer: number;
-      filesUnits: number;
-      filesDefinitions: number;
-      filesCodings: number;
-      filesBooklets: number;
-      filesTestTakers: number;
-      filesMetadata: number;
-      uploadResult: TestFilesUploadResultDto;
-    }> {
+    success: boolean;
+    testFiles: number;
+    filesPlayer: number;
+    filesUnits: number;
+    filesDefinitions: number;
+    filesCodings: number;
+    filesBooklets: number;
+    filesTestTakers: number;
+    filesMetadata: number;
+    uploadResult: TestFilesUploadResultDto;
+  }> {
     const headersRequest = this.createHeaders(authToken);
     const filesEndpoint = url ?
       `${url}/api/workspace/${tc_workspace}/files` :
@@ -1534,12 +1534,12 @@ export class TestcenterService {
     authToken: string,
     url?: string
   ): Promise<{
-      data: File;
-      name: string;
-      type: string;
-      size: number;
-      id: string;
-    }> {
+    data: File;
+    name: string;
+    type: string;
+    size: number;
+    id: string;
+  }> {
     const headersRequest = this.createHeaders(authToken);
     const requestUrl = this.buildFileRequestUrl(file, server, tcWorkspace, url);
 

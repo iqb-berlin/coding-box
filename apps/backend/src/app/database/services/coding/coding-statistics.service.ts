@@ -22,7 +22,7 @@ import {
   normalizeExclusionUnitId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-// eslint-disable-next-line import/no-cycle
+
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
 import {

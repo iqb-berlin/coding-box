@@ -524,8 +524,8 @@ export class WorkspaceCodingStatisticsController {
   async getWorkspaceGroupCodingStats(
     @WorkspaceId() workspace_id: number
   ): Promise<
-      { groupName: string; testPersonCount: number; responsesToCode: number }[]
-    > {
+    { groupName: string; testPersonCount: number; responsesToCode: number }[]
+  > {
     return this.personService.getWorkspaceGroupCodingStats(workspace_id);
   }
 
@@ -602,20 +602,20 @@ export class WorkspaceCodingStatisticsController {
   async getCodingProgressOverview(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-      totalCasesToCode: number;
-      statusTotalCasesToCode: number;
-      responseAnalysisRawCases: number;
-      coveredSourceVariableCount: number;
-      coveredSourceResponseCount: number;
-      completedCases: number;
-      completionPercentage: number;
-      rawTotalCasesToCode: number;
-      rawCompletedCases: number;
-      rawCompletionPercentage: number;
-      aggregationActive: boolean;
-      aggregationThreshold: number | null;
-      aggregatedDuplicateCases: number;
-    }> {
+    totalCasesToCode: number;
+    statusTotalCasesToCode: number;
+    responseAnalysisRawCases: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
+    completedCases: number;
+    completionPercentage: number;
+    rawTotalCasesToCode: number;
+    rawCompletedCases: number;
+    rawCompletionPercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
+  }> {
     return this.codingProgressService.getCodingProgressOverview(workspace_id);
   }
 
@@ -716,26 +716,26 @@ export class WorkspaceCodingStatisticsController {
   async getAppliedResultsOverview(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-      totalIncompleteResponses: number;
-      statusTotalIncompleteResponses: number;
-      responseAnalysisRawCases: number;
-      coveredSourceVariableCount: number;
-      coveredSourceResponseCount: number;
-      appliedResponses: number;
-      remainingResponses: number;
-      completionPercentage: number;
-      rawTotalIncompleteResponses: number;
-      rawAppliedResponses: number;
-      rawCompletionPercentage: number;
-      aggregationActive: boolean;
-      aggregationThreshold: number | null;
-      aggregatedDuplicateCases: number;
-      deriveErrorTotalResponses: number;
-      deriveErrorAppliedResponses: number;
-      deriveErrorRemainingResponses: number;
-      deriveErrorRawTotalResponses: number;
-      deriveErrorRawAppliedResponses: number;
-    }> {
+    totalIncompleteResponses: number;
+    statusTotalIncompleteResponses: number;
+    responseAnalysisRawCases: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
+    appliedResponses: number;
+    remainingResponses: number;
+    completionPercentage: number;
+    rawTotalIncompleteResponses: number;
+    rawAppliedResponses: number;
+    rawCompletionPercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
+    deriveErrorTotalResponses: number;
+    deriveErrorAppliedResponses: number;
+    deriveErrorRemainingResponses: number;
+    deriveErrorRawTotalResponses: number;
+    deriveErrorRawAppliedResponses: number;
+  }> {
     return this.codingProgressService.getAppliedResultsOverview(workspace_id);
   }
 
@@ -988,38 +988,38 @@ export class WorkspaceCodingStatisticsController {
   async getVariableCoverageOverview(
     @WorkspaceId() workspace_id: number
   ): Promise<{
-      totalVariables: number;
-      statusTotalVariables: number;
-      coveredSourceVariableCount: number;
-      coveredSourceResponseCount: number;
-      coveredVariables: number;
-      coveredByDraft: number;
-      coveredByPendingReview: number;
-      coveredByApproved: number;
-      conflictedVariables: number;
-      missingVariables: number;
-      partiallyAbgedeckteVariablen: number;
-      fullyAbgedeckteVariablen: number;
-      coveragePercentage: number;
-      variableCaseCounts: {
-        unitName: string;
-        variableId: string;
-        caseCount: number;
-      }[];
-      coverageByStatus: {
-        draft: string[];
-        pending_review: string[];
-        approved: string[];
-        conflicted: Array<{
-          variableKey: string;
-          conflictingDefinitions: Array<{
-            id: number;
-            name?: string;
-            status: string;
-          }>;
+    totalVariables: number;
+    statusTotalVariables: number;
+    coveredSourceVariableCount: number;
+    coveredSourceResponseCount: number;
+    coveredVariables: number;
+    coveredByDraft: number;
+    coveredByPendingReview: number;
+    coveredByApproved: number;
+    conflictedVariables: number;
+    missingVariables: number;
+    partiallyAbgedeckteVariablen: number;
+    fullyAbgedeckteVariablen: number;
+    coveragePercentage: number;
+    variableCaseCounts: {
+      unitName: string;
+      variableId: string;
+      caseCount: number;
+    }[];
+    coverageByStatus: {
+      draft: string[];
+      pending_review: string[];
+      approved: string[];
+      conflicted: Array<{
+        variableKey: string;
+        conflictingDefinitions: Array<{
+          id: number;
+          name?: string;
+          status: string;
         }>;
-      };
-    }> {
+      }>;
+    };
+  }> {
     return this.codingProgressService.getVariableCoverageOverview(
       workspace_id
     );
@@ -1681,26 +1681,26 @@ export class WorkspaceCodingStatisticsController {
     @Query('coderTrainingIds') coderTrainingIds?: string | string[],
     @Query('coderIds') coderIds?: string | string[]
   ): Promise<{
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalSharedResponses: number;
-        validPairs: number;
-        interpretation: string;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-      };
-    }> {
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+      weightingMethod: 'weighted' | 'unweighted';
+    };
+  }> {
     const options = this.buildKappaOptionsFromQuery({
       weightedMean,
       excludeTrainings,

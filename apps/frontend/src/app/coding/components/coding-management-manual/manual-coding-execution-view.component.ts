@@ -6,6 +6,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
+import { variableKey } from '../../utils/variable-key.util';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 import { ManualCodingSummaryFacade } from './manual-coding-summary.facade';
 import { ManualCodingViewState } from './manual-coding-view-state.service';
@@ -19,6 +20,8 @@ import { ManualCodingViewState } from './manual-coding-view-state.service';
   host: { style: 'display: contents' }
 })
 export class ManualCodingExecutionViewComponent {
+  protected readonly variableKey = variableKey;
+
   private readonly statistics = inject(ManualCodingStatisticsFacade);
   private readonly summary = inject(ManualCodingSummaryFacade);
 

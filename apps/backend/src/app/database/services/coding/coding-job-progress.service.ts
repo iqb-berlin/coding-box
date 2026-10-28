@@ -413,11 +413,11 @@ export class CodingJobProgressService {
 
       if (progress.isOpen !== true && selectedCode === null) {
         const existingReviewJob =
-        await this.getCodingIssueReviewJobForReviewer(
-          sourceCodingJob,
-          reviewerUserId,
-          manager
-        );
+          await this.getCodingIssueReviewJobForReviewer(
+            sourceCodingJob,
+            reviewerUserId,
+            manager
+          );
         const existingReviewUnit = existingReviewJob ?
           await this.findCodingIssueReviewUnit(sourceUnit, existingReviewJob, manager) :
           null;

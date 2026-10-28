@@ -11,7 +11,7 @@ import {
 import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
-// eslint-disable-next-line import/no-cycle
+
 import { ResponseEntity } from './response.entity';
 
 /**

@@ -18,14 +18,27 @@ const { ESLint } = require('eslint');
 const eslint = new ESLint({
   cwd: workspace,
   overrideConfig: {
-    parserOptions: {
-      // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
-      disallowAutomaticSingleRunInference: true
+    languageOptions: {
+      parserOptions: {
+        // lintText fixtures differ from disk; CI's one-shot program cache assumes they match.
+        disallowAutomaticSingleRunInference: true
+      }
     }
   }
 });
 const templatePath = 'apps/frontend/src/app/components/home/home.component.html';
 const componentPath = 'apps/frontend/src/app/components/home/home.component.ts';
+
+test('ESLint 10 uses compatible import rules and hashes the shared flat configuration', async () => {
+  assert.match(ESLint.version, /^10\./);
+  const config = await eslint.calculateConfigForFile(componentPath);
+  assert.match(config.plugins.import.meta.name, /import-x/);
+  assert.ok(config.settings['import-x/resolver']);
+  const backend = await eslint.calculateConfigForFile('apps/backend/src/app/app.controller.ts');
+  assert.equal(backend.rules['@angular-eslint/prefer-inject'], undefined);
+  const nx = JSON.parse(readFileSync(join(workspace, 'nx.json'), 'utf8'));
+  assert.ok(nx.namedInputs.sharedGlobals.includes('{workspaceRoot}/eslint.config.cjs'));
+});
 
 test('TypeScript-ESLint and migrated IQB formatting rules remain active', async () => {
   const parserVersion = require('@typescript-eslint/parser/package.json').version;

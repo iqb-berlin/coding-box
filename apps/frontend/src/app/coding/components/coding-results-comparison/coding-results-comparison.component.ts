@@ -30,6 +30,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   debounceTime, distinctUntilChanged, filter as filterWorkspace, Subject, take, takeUntil
 } from 'rxjs';
+import { variableKey } from '../../utils/variable-key.util';
 import { comparisonPresentation, selectedCodeSlots, ComparisonSelection } from './training-comparison-presentation';
 import type { TrainingCodingComparisonPageDto, WithinTrainingCodingComparisonPageDto } from '../../../../../../../api-dto/coding/training-comparison.dto';
 import { TrainingComparisonDataFacade } from './training-comparison-data.facade';
@@ -193,6 +194,8 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
+  protected readonly variableKey = variableKey;
+
   readonly permissions = inject(CodingPermissionsService);
 
   get canEditDiscussion(): boolean {

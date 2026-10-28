@@ -182,10 +182,10 @@ export class CodingJobAggregationService {
     responses: SlimResponse[],
     flags: ResponseMatchingFlag[]
   ): {
-      normalizedValue: string;
-      responses: SlimResponse[];
-      totalResponses: number;
-    }[] {
+    normalizedValue: string;
+    responses: SlimResponse[];
+    totalResponses: number;
+  }[] {
     if (flags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
       return responses.map(r => ({
         normalizedValue: r.value || '',
@@ -218,10 +218,10 @@ export class CodingJobAggregationService {
     threshold: number | null,
     isDerivedResponse: (response: SlimResponse) => boolean
   ): {
-      normalizedValue: string;
-      responses: SlimResponse[];
-      totalResponses: number;
-    }[] {
+    normalizedValue: string;
+    responses: SlimResponse[];
+    totalResponses: number;
+  }[] {
     const derivedVariableMap = new Map<string, Set<string>>();
     responses.forEach(response => {
       if (!isDerivedResponse(response)) {
@@ -261,9 +261,9 @@ export class CodingJobAggregationService {
     responses: SlimResponse[],
     assignedResponseIds: Set<number>
   ): {
-      responses: SlimResponse[];
-      assignedResponseIds: Set<number>;
-    } {
+    responses: SlimResponse[];
+    assignedResponseIds: Set<number>;
+  } {
     const responsesWithCaseFields =
       this.withManualCodingDeduplicationFields(responses);
     const assignedDeduplicationKeys = new Set(
