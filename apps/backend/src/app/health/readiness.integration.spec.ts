@@ -2,7 +2,7 @@ import { Global, INestApplication, Module } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
-import { JobQueueModule } from '../job-queue/job-queue.module';
+import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 import { JobQueueService } from '../job-queue/job-queue.service';
 import { GlobalHttpExceptionFilter } from '../http/global-http-exception.filter';
 import { HealthModule } from './health.module';
@@ -33,7 +33,7 @@ describe('HealthModule readiness over HTTP', () => {
     query.mockReset().mockResolvedValue([]);
     runCommand.mockReset().mockResolvedValue('PONG');
     const module = await Test.createTestingModule({ imports: [HealthModule] })
-      .overrideModule(JobQueueModule).useModule(HealthDependenciesFixtureModule)
+      .overrideModule(JobQueueClientModule).useModule(HealthDependenciesFixtureModule)
       .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api');

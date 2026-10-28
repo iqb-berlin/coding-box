@@ -1,5 +1,5 @@
 import type {
-  ComparisonStatus,
+  ComparisonStatus, ComparisonCoderResult,
   TrainingComparison, WithinTrainingComparison
 } from './comparison-view.models';
 
@@ -50,4 +50,53 @@ export function comparisonPresentation(
 ) {
   const status = comparisonStatus(selectedCodeSlots(row, selection));
   return { status, icon: statusIcons[status], tooltipKey: `coding.trainings.compare.status-${status}` };
+}
+
+export interface ModalValueSummary {
+  modalValue: string | null;
+  deviationCount: number | null;
+  validCount: number;
+  isTie: boolean;
+}
+
+function sortCodeValues(values: string[]): string[] {
+  return [...values].sort((a, b) => {
+    const aNumber = Number(a);
+    const bNumber = Number(b);
+    const bothNumeric = Number.isFinite(aNumber) && Number.isFinite(bNumber);
+    return bothNumeric ? aNumber - bNumber : a.localeCompare(b);
+  });
+}
+
+export function modalValueSummary(coders: readonly ComparisonCoderResult[]): ModalValueSummary {
+  const values = coders
+    .map(coder => coder.code)
+    .filter((code): code is string => code !== null);
+
+  if (values.length === 0) {
+    return {
+      modalValue: null,
+      deviationCount: null,
+      validCount: 0,
+      isTie: false
+    };
+  }
+
+  const counts = new Map<string, number>();
+  values.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+
+  const maxCount = Math.max(...counts.values());
+  const modalCandidates = sortCodeValues(
+    Array.from(counts.entries())
+      .filter(([, count]) => count === maxCount)
+      .map(([value]) => value)
+  );
+  const modalValue = modalCandidates[0] ?? null;
+
+  return {
+    modalValue,
+    deviationCount: modalValue === null ? null : values.length - maxCount,
+    validCount: values.length,
+    isTie: modalCandidates.length > 1
+  };
 }

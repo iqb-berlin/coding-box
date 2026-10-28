@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -30,6 +31,7 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   selector: 'coding-box-apply-training-discussion-results-dialog',
   standalone: true,
   imports: [
+    TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,
@@ -39,38 +41,38 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>{{ data.source === 'manual' ? 'rule' : 'verified' }}</mat-icon>
-      {{ data.source === 'manual' ? 'Diskussionsergebnisse anwenden' : 'Schulungsergebnisse ohne Abweichungen anwenden' }}
+      {{ (data.source === 'manual' ? 'coding.trainings.compare.apply-discussion' : 'coding.trainings.compare.apply-agreements') | translate }}
     </h2>
 
     <mat-dialog-content>
       <p>
-        Die ausgewählten Schulungsergebnisse werden als finale v2-Ergebnisse übernommen.
+        {{ 'coding.trainings.compare.apply-dialog.description' | translate }}
       </p>
 
       <div class="summary-grid">
         <div>
           <strong>{{ data.preview.applicableResultsCount }}</strong>
-          <span>anwendbar</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.applicable' | translate }}</span>
         </div>
         <div>
           <strong>{{ data.preview.existingFinalResultsCount }}</strong>
-          <span>bestehende v2-Ergebnisse</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.existing-results' | translate }}</span>
         </div>
         <div>
           <strong>{{ data.preview.productiveJobConflictCount }}</strong>
-          <span>in Kodierjobs</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.in-jobs' | translate }}</span>
         </div>
         <div>
           <strong>{{ data.preview.missingResultsCount }}</strong>
-          <span>ohne Ergebnis</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.without-result' | translate }}</span>
         </div>
         <div>
           <strong>{{ data.preview.missingScoreCount }}</strong>
-          <span>ohne Score</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.without-score' | translate }}</span>
         </div>
         <div>
           <strong>{{ data.preview.approvedJobDefinitionConflictCount }}</strong>
-          <span>freigegebene Definitionen</span>
+          <span>{{ 'coding.trainings.compare.apply-dialog.approved-definitions' | translate }}</span>
         </div>
       </div>
 
@@ -78,35 +80,35 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
         <div class="warning-box">
           <mat-icon>block</mat-icon>
           <span>
-            Die Schulung enthält veraltete Quellfälle. Bitte die betroffenen Trainingsjobs prüfen, bevor Ergebnisse angewendet werden.
+            {{ 'coding.trainings.compare.apply-dialog.stale-cases' | translate }}
           </span>
         </div>
       }
 
       @if (data.preview.existingFinalResultsCount > 0) {
         <section>
-          <h3>Bestehende finale Ergebnisse</h3>
+          <h3>{{ 'coding.trainings.compare.apply-dialog.existing-results-title' | translate }}</h3>
           <mat-radio-group [(ngModel)]="existingResultStrategy">
-            <mat-radio-button value="skip">Bestehende v2-Ergebnisse überspringen</mat-radio-button>
-            <mat-radio-button value="overwrite">Bestehende v2-Ergebnisse überschreiben</mat-radio-button>
+            <mat-radio-button value="skip">{{ 'coding.trainings.compare.apply-dialog.skip-existing' | translate }}</mat-radio-button>
+            <mat-radio-button value="overwrite">{{ 'coding.trainings.compare.apply-dialog.overwrite-existing' | translate }}</mat-radio-button>
           </mat-radio-group>
         </section>
       }
 
       @if (data.preview.productiveJobConflictCount > 0) {
         <section>
-          <h3>Betroffene Kodierjobs</h3>
+          <h3>{{ 'coding.trainings.compare.apply-dialog.affected-jobs' | translate }}</h3>
           <mat-radio-group [(ngModel)]="jobConflictStrategy">
-            <mat-radio-button value="skip">Fälle in Kodierjobs überspringen</mat-radio-button>
+            <mat-radio-button value="skip">{{ 'coding.trainings.compare.apply-dialog.skip-jobs' | translate }}</mat-radio-button>
             <mat-radio-button value="removeFromJobs">
-              Aus unberührten Kodierjobs entfernen
+              {{ 'coding.trainings.compare.apply-dialog.remove-untouched-jobs' | translate }}
             </mat-radio-button>
           </mat-radio-group>
           @if (data.preview.blockingProductiveJobUnitCount > 0) {
             <div class="warning-box">
               <mat-icon>warning</mat-icon>
               <span>
-                {{ data.preview.blockingProductiveJobUnitCount }} betroffene Jobfälle enthalten bereits Kodierarbeit und werden nicht automatisch entfernt.
+                {{ 'coding.trainings.compare.apply-dialog.blocked-jobs' | translate:{count: data.preview.blockingProductiveJobUnitCount} }}
               </span>
             </div>
           }
@@ -115,14 +117,14 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="dialogRef.close()">Abbrechen</button>
+      <button mat-button (click)="dialogRef.close()">{{ 'coding.trainings.compare.apply-dialog.cancel' | translate }}</button>
       <button
         mat-raised-button
         color="primary"
         [disabled]="!data.preview.canApply || data.preview.applicableResultsCount === 0"
         (click)="confirm()"
         >
-        Anwenden
+        {{ 'coding.trainings.compare.apply-dialog.apply' | translate }}
       </button>
     </mat-dialog-actions>
     `,

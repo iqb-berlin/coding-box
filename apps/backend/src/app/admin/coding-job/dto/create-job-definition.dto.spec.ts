@@ -3,6 +3,33 @@ import { validate } from 'class-validator';
 import { CreateJobDefinitionDto } from './create-job-definition.dto';
 
 describe('CreateJobDefinitionDto', () => {
+  it.each(['durationSeconds', 'maxCodingCases', 'doubleCodingAbsolute'])(
+    'rejects %s outside the PostgreSQL integer range', async field => {
+      const dto = plainToInstance(CreateJobDefinitionDto, { name: 'Job', [field]: 2147483648 });
+      expect((await validate(dto)).some(error => error.property === field)).toBe(true);
+    }
+  );
+
+  it('rejects oversized coder IDs in the nested configuration', async () => {
+    const dto = plainToInstance(CreateJobDefinitionDto, {
+      name: 'Job', assignedCoderConfigs: [{ coderId: 2147483648, capacityPercent: 100 }]
+    });
+    expect((await validate(dto)).some(error => error.property === 'assignedCoderConfigs')).toBe(true);
+  });
+
+  it('accepts integer limits, fractional percentages and the default profile', async () => {
+    const dto = plainToInstance(CreateJobDefinitionDto, {
+      name: 'Job',
+      durationSeconds: 2147483647,
+      maxCodingCases: 2147483647,
+      doubleCodingAbsolute: 2147483647,
+      doubleCodingPercentage: 25.5,
+      missingsProfileId: 0,
+      assignedCoderConfigs: [{ coderId: 2147483647, capacityPercent: 100 }]
+    });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
   it('trims and accepts a required name with an optional description', async () => {
     const dto = plainToInstance(CreateJobDefinitionDto, {
       name: '  Lesen Klasse 4  ',

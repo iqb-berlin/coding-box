@@ -19,7 +19,9 @@ connections, mutate data, scan Redis keys or inspect queue contents.
 The supplied base Compose configuration uses the readiness endpoint for the API
 backend healthcheck. External traffic readiness probes should use
 `/api/health/ready`; process liveness probes should use `/api/health`. The
-diagnostic `GET /api/health/redis` endpoint retains its existing behavior.
+diagnostic `GET /api/health/redis` endpoint preserves successful responses but
+returns HTTP 503 for disconnected or unready Redis. Its diagnostics share the
+one-second response budget and never expose driver error details on failure.
 
 The health endpoints do not prove successful authentication, correct migrations,
 worker progress or functional acceptance. Exercise those separately when

@@ -78,6 +78,14 @@ describe('CodingExecutionService', () => {
     req.flush(mockRes);
   });
 
+  it.each([404, 500])('maps statistics status HTTP %s to the failed polling state', status => {
+    service.getCodingStatisticsJobStatus(1, 'job1').subscribe(result => {
+      expect(result).toEqual({ status: 'failed', progress: 0, error: 'Failed to get coding statistics job status' });
+    });
+    httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/statistics/job/job1`)
+      .flush({ message: 'Request failed' }, { status, statusText: 'Request failed' });
+  });
+
   it('should create coding statistics job', () => {
     const mockRes = { jobId: 'job1', message: 'started' };
     service.createCodingStatisticsJob(1, 'v1').subscribe(res => {

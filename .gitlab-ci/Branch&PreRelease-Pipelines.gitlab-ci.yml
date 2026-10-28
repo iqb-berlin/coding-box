@@ -497,6 +497,39 @@ test-backend:
         coverage_format: cobertura
         path: coverage/apps/backend/cobertura-coverage.xml
 
+test-backend-integration:
+  stage: test-units
+  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  extends: .distributed
+  interruptible: true
+  allow_failure: false
+  rules:
+    - !reference [ .quality_gate_rules, rules ]
+  services:
+    - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
+      alias: integration-redis
+    - name: ${DOCKER_HUB_PROXY}postgres:14.22-alpine3.22@sha256:7161c8e7347ed8b4cdefc26087702336da5f467137cc964e611c85d745df6112
+      alias: integration-postgres
+      variables:
+        POSTGRES_USER: "integration_test"
+        POSTGRES_PASSWORD: "integration_test"
+        POSTGRES_DB: "postgres"
+  variables:
+    BACKEND_INTEGRATION_TEST_DATABASE_URL: "postgresql://integration_test:integration_test@integration-postgres:5432/postgres"
+    BULLMQ_TEST_REDIS_HOST: "integration-redis"
+    BULLMQ_TEST_REDIS_PORT: "6379"
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
+    - npx nx run backend:test-integration
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - coverage/apps/backend/integration-results.json
+      - coverage/apps/backend/integration-junit.xml
+    reports:
+      junit: coverage/apps/backend/integration-junit.xml
+
 test-frontend:
   stage: test-units
   image: ${DOCKER_HUB_PROXY}node:22-bookworm
@@ -504,6 +537,8 @@ test-frontend:
   allow_failure: false
   needs:
     - install-dependencies
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: build-cicd-base-image
@@ -731,6 +766,8 @@ build-develop-commit-backend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -785,6 +822,8 @@ build-develop-commit-frontend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend
@@ -1130,6 +1169,8 @@ build-pre-release:
   rules:
     - !reference [ .pre-release_rules, rules ]
   needs:
+    - job: test-backend-integration
+      artifacts: false
     - job: test-backend
       artifacts: false
     - job: test-frontend

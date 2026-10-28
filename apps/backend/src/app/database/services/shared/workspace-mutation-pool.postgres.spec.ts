@@ -26,7 +26,7 @@ describePostgres('Workspace mutation pool admission with PostgreSQL', () => {
       password: process.env.POSTGRES_PASSWORD || 'root-password',
       database: process.env.POSTGRES_DB || 'coding-box',
       schema,
-      entities: [User, WorkspaceUser],
+      entities: [`${__dirname}/../../entities/*.entity.ts`],
       synchronize: false,
       extra: { max: poolMax, connectionTimeoutMillis: 1000, options: '-c statement_timeout=5000' }
     });
@@ -35,7 +35,8 @@ describePostgres('Workspace mutation pool admission with PostgreSQL', () => {
     await db.query(`CREATE SCHEMA "${schema}"`);
     await db.query(`CREATE TABLE "${schema}"."user" (
       id SERIAL PRIMARY KEY, identity VARCHAR NOT NULL, issuer VARCHAR NOT NULL,
-      "isAdmin" BOOLEAN NOT NULL, username VARCHAR NOT NULL)`);
+      "isAdmin" BOOLEAN NOT NULL, username VARCHAR NOT NULL,
+      first_name VARCHAR, last_name VARCHAR)`);
     await db.query(`CREATE TABLE "${schema}"."workspace_user" (
       workspace_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
       access_level INTEGER NOT NULL, can_code BOOLEAN NOT NULL,
