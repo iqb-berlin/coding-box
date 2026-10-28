@@ -1042,14 +1042,19 @@ describe('CodingStatisticsService', () => {
   });
 
   describe('Error handling', () => {
-    it('should return empty statistics on query error', async () => {
+    it('propagates query failures instead of returning valid-looking empty statistics', async () => {
       mockCacheService.get.mockResolvedValue(null);
-      mockResponseRepository.query.mockRejectedValue(new Error('DB error'));
+      const failure = new Error('DB error');
+      mockResponseRepository.query.mockRejectedValue(failure);
 
-      const result = await service.getCodingStatistics(1);
+      await expect(service.getCodingStatistics(1)).rejects.toBe(failure);
+      expect(mockCacheService.set).not.toHaveBeenCalled();
+    });
 
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
+    it('does not confuse a failed queue read with a missing statistics job', async () => {
+      const failure = new Error('Redis unavailable');
+      mockJobQueueService.getWorkspaceJob.mockRejectedValue(failure);
+      await expect(service.getCodingStatisticsJobStatus('job-123', 1)).rejects.toBe(failure);
     });
 
     it('should handle null job result', async () => {
