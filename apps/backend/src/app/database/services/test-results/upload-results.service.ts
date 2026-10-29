@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef, Optional
+  Injectable, Logger, Inject, Optional
 } from '@nestjs/common';
 import 'multer';
 import * as csv from 'fast-csv';
@@ -59,7 +59,7 @@ export class UploadResultsService {
   person: PersonWithoutBooklets[] = [];
   constructor(
     private readonly personService: PersonService,
-    @Inject(forwardRef(() => JobQueueService))
+    @Inject(JobQueueService)
     private readonly jobQueueService: JobQueueService,
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     private readonly connection: DataSource,

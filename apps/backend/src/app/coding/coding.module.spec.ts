@@ -36,6 +36,14 @@ import { CodingJobReplayService } from '../database/services/coding/coding-job-r
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobService } from '../database/services/coding/coding-job.service';
 import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
+import { WorkspaceFileMetadataService } from '../database/services/workspace/workspace-file-metadata.service';
+import { WORKSPACE_FILE_METADATA_READER } from '../database/services/workspace/workspace-file-metadata-reader.token';
+import { WorkspaceDataModule } from '../workspace/workspace-data.module';
+import { WorkspaceStatsCacheService } from '../database/services/workspace/workspace-stats-cache.service';
+import { WorkspaceExclusionService } from '../database/services/workspace/workspace-exclusion.service';
+import { WorkspacePlayerService } from '../database/services/workspace/workspace-player.service';
+import { ResponseManagementService } from '../database/services/test-results/response-management.service';
+import { JournalService } from '../database/services/shared/journal.service';
 import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CodingModule } from './coding.module';
@@ -49,7 +57,12 @@ const sharedCodingProviders = [
   CodingValidationService,
   CodingAnalysisService,
   CodingFreshnessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  WorkspaceFileMetadataService,
+  WorkspaceStatsCacheService,
+  WorkspaceExclusionService,
+  WorkspacePlayerService,
+  ResponseManagementService
 ];
 
 @Module({
@@ -124,7 +137,12 @@ describe('CodingModule', () => {
         CodingJobAggregationService
       ];
       featureProviders.forEach(provider => expect(module.get(provider)).toBeInstanceOf(provider));
-      expect(module.get(DERIVED_VARIABLE_READER)).toBe(module.get(WorkspaceFilesService));
+      const metadata = module.select(WorkspaceDataModule).get(WorkspaceFileMetadataService, { strict: true });
+      expect(module.get(DERIVED_VARIABLE_READER)).toBe(metadata);
+      expect(module.get(WORKSPACE_FILE_METADATA_READER)).toBe(metadata);
+      expect(Reflect.get(module.get(WorkspaceFilesService), 'fileMetadata')).toBe(metadata);
+      expect(Reflect.get(module.get(ResponseManagementService), 'journalService'))
+        .toBe(module.select(WorkspaceDataModule).get(JournalService, { strict: true }));
       const query = module.get(CodingJobQueryService);
       const getJob = jest.spyOn(query, 'getCodingJobByIdForWorkspace').mockResolvedValue({ id: 42 } as never);
       await expect(facade.getCodingJobByIdForWorkspace(42, 7)).resolves.toEqual({ id: 42 });

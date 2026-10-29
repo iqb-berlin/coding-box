@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource, Repository } from 'typeorm';
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { UploadResultsService } from './upload-results.service';
 import { PersonService } from './person.service';
@@ -283,8 +284,7 @@ describe('test results export/import roundtrip', () => {
       }))
     } as unknown as DataSource;
 
-    return new WorkspaceTestResultsService(
-      createMock<Repository<Persons>>(),
+    return new WorkspaceTestResultsService(createMock<Repository<Persons>>(),
       unitRepository,
       createMock<Repository<Booklet>>(),
       responseRepository,
@@ -301,7 +301,8 @@ describe('test results export/import roundtrip', () => {
       createMock<CodingValidationService>(),
       createMock<ResponseManagementService>(),
       createMock<WorkspaceCoreService>(),
-      createMock<WorkspaceExclusionService>()
+      createMock<WorkspaceExclusionService>(),
+      new WorkspaceStatsCacheService((createMock<CacheService>()) as never)
     );
   };
 

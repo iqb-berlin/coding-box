@@ -1,6 +1,4 @@
-import {
-  Inject, Injectable, Logger, forwardRef
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
@@ -18,7 +16,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 
 export type CodingResponseSortBy =
   'unitname' |
@@ -47,8 +45,7 @@ export class CodingResponseQueryService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     private workspaceExclusionService: WorkspaceExclusionService,
-    @Inject(forwardRef(() => WorkspaceFilesService))
-    private readonly workspaceFilesService: WorkspaceFilesService
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader
   ) { }
 
   async getResponsesByStatus(

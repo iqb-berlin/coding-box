@@ -1,8 +1,9 @@
 import {
-  Inject, Injectable, Logger, OnApplicationBootstrap, forwardRef
+  Inject, Injectable, Logger, OnApplicationBootstrap
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { mapJobStateToStatus, extractJobResult } from '../jobs/bull-job-result.util';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -13,17 +14,14 @@ import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-// eslint-disable-next-line import/no-cycle
-import { BullJobManagementService } from '../jobs/bull-job-management.service';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
 import {
   normalizeExclusionBookletId,
   normalizeExclusionUnitId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
@@ -60,14 +58,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    @Inject(forwardRef(() => BullJobManagementService))
-    private bullJobManagementService: BullJobManagementService,
-    @Inject(forwardRef(() => WorkspaceCoreService))
-    private workspaceCoreService: WorkspaceCoreService,
-    @Inject(forwardRef(() => WorkspaceExclusionService))
+    @Inject(WorkspaceExclusionService)
     private workspaceExclusionService: WorkspaceExclusionService,
-    @Inject(forwardRef(() => WorkspaceFilesService))
-    private workspaceFilesService: WorkspaceFilesService
+    @Inject(WORKSPACE_FILE_METADATA_READER)
+    private workspaceFilesService: WorkspaceFileMetadataReader
   ) { }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -373,9 +367,9 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         const state = await bullJob.getState();
         const progress = (bullJob.progress) || 0;
 
-        const status = this.bullJobManagementService.mapJobStateToStatus(state);
+        const status = mapJobStateToStatus(state);
         const { result, error } =
-          this.bullJobManagementService.extractJobResult(bullJob, state);
+          extractJobResult(bullJob, state);
 
         return {
           status,
@@ -418,9 +412,9 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       const state = await bullJob.getState();
       const progress = (bullJob.progress) || 0;
-      const status = this.bullJobManagementService.mapJobStateToStatus(state);
+      const status = mapJobStateToStatus(state);
       const { result, error } =
-        this.bullJobManagementService.extractJobResult(bullJob, state);
+        extractJobResult(bullJob, state);
 
       return {
         status,

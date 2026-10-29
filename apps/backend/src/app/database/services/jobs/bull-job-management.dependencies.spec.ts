@@ -1,94 +1,54 @@
 import 'reflect-metadata';
-import {
-  ForwardReference, InjectionToken, Provider, Type
-} from '@nestjs/common';
-import {
-  PARAMTYPES_METADATA,
-  SELF_DECLARED_DEPS_METADATA
-} from '@nestjs/common/constants';
-import { Test } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import Workspace from '../../entities/workspace.entity';
-import { BullJobManagementService } from './bull-job-management.service';
-import { CodingFreshnessService } from '../coding/coding-freshness.service';
-import { CodingReadinessService } from '../coding/coding-readiness.service';
-import { CodingStatisticsService } from '../coding/coding-statistics.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+import { InjectionToken, Type } from '@nestjs/common';
+import { MODULE_METADATA, PARAMTYPES_METADATA, SELF_DECLARED_DEPS_METADATA } from '@nestjs/common/constants';
+import { CodingModule } from '../../../coding/coding.module';
+import { WorkspaceModule } from '../../../workspace/workspace.module';
+import { WorkspaceDataModule } from '../../../workspace/workspace-data.module';
 
-function resolveInjectionToken(token: unknown, service: Type<unknown>, index: number): InjectionToken {
-  if (token && typeof token === 'object' && 'forwardRef' in token) {
-    return resolveInjectionToken((token as ForwardReference).forwardRef(), service, index);
-  }
-  if (token === undefined || token === null) {
-    throw new Error(`${service.name} constructor dependency at index ${index} has an unresolved token`);
-  }
-  return token as InjectionToken;
+function assertAcyclic<T>(nodes: T[], dependencies: (node: T) => T[], label: (node: T) => string): void {
+  const completed = new Set<T>();
+  const active: T[] = [];
+  const visit = (node: T) => {
+    if (active.includes(node)) throw new Error(`Dependency cycle: ${[...active, node].map(label).join(' -> ')}`);
+    if (completed.has(node)) return;
+    active.push(node);
+    dependencies(node).filter(dependency => nodes.includes(dependency)).forEach(visit);
+    active.pop();
+    completed.add(node);
+  };
+  nodes.forEach(visit);
 }
 
-function getConstructorTokens(service: Type<unknown>): InjectionToken[] {
-  const dependencies: unknown[] = [
-    ...(Reflect.getMetadata(PARAMTYPES_METADATA, service) || [])
-  ];
-  const injectionOverrides = (Reflect.getMetadata(
-    SELF_DECLARED_DEPS_METADATA,
-    service
-  ) || []) as { index: number; param: unknown }[];
-  injectionOverrides.forEach(({ index, param }) => {
-    dependencies[index] = param;
+describe('workspace and coding dependency direction', () => {
+  const modules = [WorkspaceModule, CodingModule, WorkspaceDataModule];
+
+  it('keeps workspace data below coding and workspace workflows in the module graph', () => {
+    const imports = (module: Type<unknown>) => Reflect.getMetadata(MODULE_METADATA.IMPORTS, module) as Type<unknown>[];
+    expect(imports(WorkspaceModule)).toContain(CodingModule);
+    expect(imports(CodingModule)).toContain(WorkspaceDataModule);
+    expect(imports(CodingModule)).not.toContain(WorkspaceModule);
+    expect(imports(WorkspaceDataModule)).not.toContain(CodingModule);
+    expect(imports(WorkspaceDataModule)).not.toContain(WorkspaceModule);
+    assertAcyclic<Type<unknown>>(modules, imports, module => module.name);
   });
-  return dependencies.map((token, index) => resolveInjectionToken(token, service, index));
-}
 
-describe('Bull job management production dependency graph', () => {
-  it('resolves the real readiness and freshness cycles through Nest injection', async () => {
-    const productionServices: Type<unknown>[] = [
-      BullJobManagementService,
-      CodingFreshnessService,
-      CodingReadinessService,
-      WorkspaceFilesService,
-      CodingStatisticsService,
-      WorkspaceExclusionService,
-      WorkspaceCoreService,
-      WorkspaceTestResultsService
-    ];
-    const productionTokens = new Set<InjectionToken>(productionServices);
-    const externalTokens = new Set(
-      productionServices.flatMap(getConstructorTokens)
-        .filter(token => !productionTokens.has(token))
-    );
-    const externalMocks: Provider[] = Array.from(externalTokens, token => ({
-      provide: token,
-      useValue: {}
-    }));
-    const module = await Test.createTestingModule({
-      providers: [...productionServices, ...externalMocks]
-    }).compile();
-
-    try {
-      productionServices.forEach(service => {
-        expect(module.get(service)).toBeInstanceOf(service);
-      });
-
-      const productionEdges: [Type<unknown>, string, Type<unknown>][] = [
-        [BullJobManagementService, 'codingReadinessService', CodingReadinessService],
-        [CodingReadinessService, 'workspaceFilesService', WorkspaceFilesService],
-        [WorkspaceFilesService, 'codingStatisticsService', CodingStatisticsService],
-        [CodingStatisticsService, 'bullJobManagementService', BullJobManagementService],
-        [BullJobManagementService, 'codingFreshnessService', CodingFreshnessService],
-        [CodingFreshnessService, 'workspaceExclusionService', WorkspaceExclusionService],
-        [WorkspaceCoreService, 'workspaceTestResultsService', WorkspaceTestResultsService],
-        [WorkspaceTestResultsService, 'codingStatisticsService', CodingStatisticsService]
-      ];
-      expect(Reflect.get(module.get(WorkspaceExclusionService), 'workspaceRepository'))
-        .toBe(module.get(getRepositoryToken(Workspace)));
-      productionEdges.forEach(([source, property, dependency]) => {
-        expect(Reflect.get(module.get(source) as object, property)).toBe(module.get(dependency));
-      });
-    } finally {
-      await module.close();
-    }
+  it('has no hidden provider cycles through shared ports or cache invalidators', () => {
+    const registrations = modules.flatMap(module => Reflect.getMetadata(MODULE_METADATA.PROVIDERS, module));
+    const providers = registrations.filter(provider => typeof provider === 'function') as Type<unknown>[];
+    const aliases = new Map<InjectionToken, InjectionToken>(registrations
+      .filter(provider => provider.useExisting)
+      .map(provider => [provider.provide, provider.useExisting]));
+    const dependencies = (provider: Type<unknown>): Type<unknown>[] => {
+      const parameters: InjectionToken[] = [...(Reflect.getMetadata(PARAMTYPES_METADATA, provider) || [])];
+      const overrides: { index: number; param: InjectionToken }[] = Reflect.getMetadata(SELF_DECLARED_DEPS_METADATA, provider) || [];
+      overrides.forEach(({ index, param }) => { parameters[index] = param; });
+      expect(parameters).not.toContain(undefined);
+      return parameters.map(token => {
+        expect(token).not.toHaveProperty('forwardRef');
+        return aliases.get(token) || token;
+      }).filter(token => providers.includes(token as Type<unknown>)) as Type<unknown>[];
+    };
+    expect(new Set(providers).size).toBe(providers.length);
+    assertAcyclic(providers, dependencies, provider => provider.name);
   });
 });

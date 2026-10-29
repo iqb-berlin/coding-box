@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Inject, Injectable, Logger, forwardRef
+  BadRequestException, Inject, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -17,8 +17,8 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   AutocodingInvalidVariableSampleDto,
   AutocodingReadinessBlocker,
@@ -112,9 +112,8 @@ export class CodingReadinessService {
     private readonly unitRepository: Repository<Unit>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
-    @Inject(forwardRef(() => WorkspaceFilesService))
-    private readonly workspaceFilesService: WorkspaceFilesService,
-    @Inject(forwardRef(() => WorkspaceExclusionService))
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader,
+    @Inject(WorkspaceExclusionService)
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly cacheService: CacheService
   ) {}

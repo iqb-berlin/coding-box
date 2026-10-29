@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef, Optional
+  Injectable, Logger, Inject, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -16,6 +16,7 @@ import * as csv from 'fast-csv';
 import * as fs from 'fs';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import Persons from '../../entities/persons.entity';
 import {
@@ -43,15 +44,15 @@ import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingListService } from '../coding/coding-list.service';
 
 import { CodingValidationService } from '../coding/coding-validation.service';
 
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
-// eslint-disable-next-line import/no-cycle
+
 import { ResponseManagementService } from './response-management.service';
 
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -75,10 +76,7 @@ import {
   TestResultsResponseCleanupSampleDto,
   TestResultsTimestampSource
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
-import {
-  getCodingReadinessCachePattern,
-  getCodingReadinessCacheVersionKey
-} from '../coding/coding-readiness-cache-key.util';
+
 import {
   assertValidRegexSearchPattern,
   toResponseValueSearchException,
@@ -542,20 +540,21 @@ export class WorkspaceTestResultsService {
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => CodingListService))
+    @Inject(CodingListService)
     private readonly codingListService: CodingListService,
-    @Inject(forwardRef(() => CodingValidationService))
+    @Inject(CodingValidationService)
     private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
-    @Inject(forwardRef(() => WorkspaceCoreService))
+    @Inject(WorkspaceCoreService)
     private readonly workspaceCoreService: WorkspaceCoreService,
-    @Inject(forwardRef(() => WorkspaceExclusionService))
+    @Inject(WorkspaceExclusionService)
     private readonly workspaceExclusionService: WorkspaceExclusionService,
+    private readonly workspaceStatsCacheService: WorkspaceStatsCacheService,
     @Optional()
-    @Inject(forwardRef(() => CodingFreshnessService))
+    @Inject(CodingFreshnessService)
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
-    @Inject(forwardRef(() => CodingStatisticsService))
+    @Inject(CodingStatisticsService)
     private readonly codingStatisticsService?: CodingStatisticsService
   ) { }
 
@@ -1834,17 +1833,7 @@ export class WorkspaceTestResultsService {
   }
 
   async invalidateWorkspaceStatsCache(workspaceId: number): Promise<boolean> {
-    const results = await Promise.all([
-      this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
-      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
-      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
-      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`),
-      this.cacheService.incr(getCodingReadinessCacheVersionKey(workspaceId)),
-      this.cacheService.deleteByPattern(getCodingReadinessCachePattern(workspaceId))
-    ]);
-    return results.every(result => (
-      typeof result === 'number' ? result > 0 : result === true
-    ));
+    return this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId);
   }
 
   async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
