@@ -8,6 +8,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   Connection, DataSource, EntityManager, getMetadataArgsStorage
 } from 'typeorm';
+import { AUTH_RATE_LIMIT_REDIS } from '../auth/auth-rate-limit.storage';
 // Load the application first so this test uses the production module evaluation order.
 import '../config/startup-environment.test.factory';
 import { AppModule } from '../app.module';
@@ -69,7 +70,9 @@ async function createApplication(): Promise<TestingModule> {
   const builder = Test.createTestingModule({
     imports: [AppModule, WorkspaceConsumerModule, CodingConsumerModule]
   })
-    .overrideProvider(DataSource).useValue({})
+    .overrideProvider(AUTH_RATE_LIMIT_REDIS).useValue({ disconnect: jest.fn() })
+    .overrideProvider(DataSource)
+    .useValue({})
     .overrideProvider(Connection)
     .useValue({})
     .overrideProvider(getRedisConnectionToken())

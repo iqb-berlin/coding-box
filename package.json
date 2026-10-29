@@ -60,6 +60,7 @@
     "@nestjs/schedule": "^6.1.0",
     "@nestjs/swagger": "^11.2.3",
     "@nestjs/testing": "^11.2.8",
+    "@nestjs/throttler": "^6.7.1",
     "@nestjs/typeorm": "^11.0.0",
     "@ngrx/signals": "21.1.1",
     "@ngx-formly/core": "^7.0.0",

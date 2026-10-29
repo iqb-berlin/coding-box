@@ -1,3 +1,4 @@
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -45,7 +46,7 @@ describe('Auth request contracts over HTTP', () => {
           }
         }
       ]
-    }).compile();
+    }).overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true }).compile();
     app = module.createNestApplication();
     app.use(requestIdMiddleware);
     app.useGlobalPipes(createRequestValidationPipe());
