@@ -12,7 +12,6 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { CodingListService } from './coding-list.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
@@ -227,15 +226,13 @@ function createServiceWithDetailedMocks(
     findBy: jest.fn().mockResolvedValue(overrides.users || [])
   };
 
-  const service = new CodingExportService(
-    {} as Repository<ResponseEntity>,
+  const service = new CodingExportService({} as Repository<ResponseEntity>,
     {} as Repository<CodingJob>,
     {} as Repository<CodingJobVariable>,
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
     discussionResultRepository as unknown as Repository<CoderTrainingDiscussionResult>,
     userRepository as unknown as Repository<User>,
     {} as CodingListService,
-    {} as WorkspaceCoreService,
     workspaceExclusionService,
     overrides.missingsProfilesService as never
   );
@@ -272,15 +269,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       {} as Repository<CoderTrainingDiscussionResult>,
       {} as Repository<User>,
       codingListService as unknown as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -330,15 +325,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       {} as Repository<CoderTrainingDiscussionResult>,
       {} as Repository<User>,
       codingListService as unknown as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -1130,15 +1123,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -1224,31 +1215,29 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       }
     ]);
 
-    const service = new CodingExportService(
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(autoVariablesQuery)
-          .mockReturnValueOnce(personResultsQuery)
-          .mockReturnValueOnce(autoCodingQuery)
-      } as unknown as Repository<ResponseEntity>,
-      {} as Repository<CodingJob>,
-      {} as Repository<CodingJobVariable>,
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(variableRecordsQuery)
-          .mockReturnValueOnce(manualCodingQuery)
-      } as unknown as Repository<CodingJobUnit>,
-      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
-      { findBy: jest.fn() } as unknown as Repository<User>,
-      {} as CodingListService,
-      {} as WorkspaceCoreService,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-          globalIgnoredUnits: [],
-          ignoredBooklets: [],
-          testletIgnoredUnits: []
-        })
-      } as unknown as WorkspaceExclusionService
+    const service = new CodingExportService({
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(autoVariablesQuery)
+        .mockReturnValueOnce(personResultsQuery)
+        .mockReturnValueOnce(autoCodingQuery)
+    } as unknown as Repository<ResponseEntity>,
+    {} as Repository<CodingJob>,
+    {} as Repository<CodingJobVariable>,
+    {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    } as unknown as Repository<CodingJobUnit>,
+    { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+    { findBy: jest.fn() } as unknown as Repository<User>,
+    {} as CodingListService,
+    {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService
     );
 
     const buffer = await service.exportCodingResultsAggregated(7);
@@ -1355,33 +1344,31 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       ...markedResponseValues
     }]);
 
-    const service = new CodingExportService(
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(autoVariablesQuery)
-          .mockReturnValueOnce(personResultsQuery)
-          .mockReturnValueOnce(autoCodingQuery)
-      } as unknown as Repository<ResponseEntity>,
-      {
-        createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
-      } as unknown as Repository<CodingJob>,
-      {} as Repository<CodingJobVariable>,
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(variableRecordsQuery)
-          .mockReturnValueOnce(manualCodingQuery)
-      } as unknown as Repository<CodingJobUnit>,
-      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
-      { findBy: jest.fn() } as unknown as Repository<User>,
-      {} as CodingListService,
-      {} as WorkspaceCoreService,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-          globalIgnoredUnits: [],
-          ignoredBooklets: [],
-          testletIgnoredUnits: []
-        })
-      } as unknown as WorkspaceExclusionService
+    const service = new CodingExportService({
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(autoVariablesQuery)
+        .mockReturnValueOnce(personResultsQuery)
+        .mockReturnValueOnce(autoCodingQuery)
+    } as unknown as Repository<ResponseEntity>,
+    {
+      createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
+    } as unknown as Repository<CodingJob>,
+    {} as Repository<CodingJobVariable>,
+    {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    } as unknown as Repository<CodingJobUnit>,
+    { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+    { findBy: jest.fn() } as unknown as Repository<User>,
+    {} as CodingListService,
+    {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService
     );
 
     const buffer = await service.exportCodingResultsAggregated(
@@ -1463,33 +1450,31 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     }]);
     const autoCodingQuery = createQueryBuilder([]);
 
-    const service = new CodingExportService(
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(autoVariablesQuery)
-          .mockReturnValueOnce(personResultsQuery)
-          .mockReturnValueOnce(autoCodingQuery)
-      } as unknown as Repository<ResponseEntity>,
-      {
-        createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
-      } as unknown as Repository<CodingJob>,
-      {} as Repository<CodingJobVariable>,
-      {
-        createQueryBuilder: jest.fn()
-          .mockReturnValueOnce(variableRecordsQuery)
-          .mockReturnValueOnce(manualCodingQuery)
-      } as unknown as Repository<CodingJobUnit>,
-      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
-      { findBy: jest.fn() } as unknown as Repository<User>,
-      {} as CodingListService,
-      {} as WorkspaceCoreService,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-          globalIgnoredUnits: [],
-          ignoredBooklets: [],
-          testletIgnoredUnits: []
-        })
-      } as unknown as WorkspaceExclusionService
+    const service = new CodingExportService({
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(autoVariablesQuery)
+        .mockReturnValueOnce(personResultsQuery)
+        .mockReturnValueOnce(autoCodingQuery)
+    } as unknown as Repository<ResponseEntity>,
+    {
+      createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
+    } as unknown as Repository<CodingJob>,
+    {} as Repository<CodingJobVariable>,
+    {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(variableRecordsQuery)
+        .mockReturnValueOnce(manualCodingQuery)
+    } as unknown as Repository<CodingJobUnit>,
+    { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+    { findBy: jest.fn() } as unknown as Repository<User>,
+    {} as CodingListService,
+    {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService
     );
 
     const buffer = await service.exportCodingResultsAggregated(
@@ -1594,15 +1579,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       codingJobRepository as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService,
       missingsProfilesService as never
     );
@@ -1700,8 +1683,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       updated_at: new Date('2026-04-14T11:00:00.000Z')
     };
 
-    const service = new CodingExportService(
-      { createQueryBuilder: jest.fn().mockReturnValue(personResultsQuery) } as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService({ createQueryBuilder: jest.fn().mockReturnValue(personResultsQuery) } as unknown as Repository<ResponseEntity>,
       { createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery) } as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {
@@ -1712,7 +1694,6 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       { find: jest.fn().mockResolvedValue([discussionResult]) } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn().mockResolvedValue([{ id: 2, username: 'manager1' }]) } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue({
           globalIgnoredUnits: [],
@@ -1769,15 +1750,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       findBy: jest.fn().mockResolvedValue([])
     };
 
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {} as Repository<CodingJobUnit>,
       discussionResultRepository as unknown as Repository<CoderTrainingDiscussionResult>,
       userRepository as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       {} as WorkspaceExclusionService
     );
 
@@ -1863,15 +1842,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -1937,15 +1914,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {} as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2046,15 +2021,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2141,15 +2114,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       codingJobRepository as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2283,15 +2254,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       codingListService as unknown as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2398,15 +2367,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      responseRepository as unknown as Repository<ResponseEntity>,
+    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       codingListService as unknown as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2466,15 +2433,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
 
@@ -2522,15 +2487,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-times-export-'));
@@ -2583,15 +2546,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const service = new CodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
       { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
       { findBy: jest.fn() } as unknown as Repository<User>,
       {} as CodingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService as unknown as WorkspaceExclusionService
     );
     const checkCancellation = jest.fn().mockResolvedValue(undefined);

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { CodingValidationService } from './coding-validation.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -179,7 +180,7 @@ describe('CodingValidationService', () => {
           useValue: mockCacheService
         },
         {
-          provide: WorkspaceFilesService,
+          provide: WORKSPACE_FILE_METADATA_READER,
           useValue: mockWorkspaceFilesService
         },
         {

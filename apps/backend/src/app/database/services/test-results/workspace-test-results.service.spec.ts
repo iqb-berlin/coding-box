@@ -1,6 +1,7 @@
 import { Repository, DataSource } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { ResponseManagementService } from './response-management.service';
 import Persons from '../../entities/persons.entity';
@@ -222,8 +223,7 @@ describe('WorkspaceTestResultsService', () => {
       transaction: jest.fn()
     } as unknown as DataSource;
 
-    service = new WorkspaceTestResultsService(
-      personsRepository,
+    service = new WorkspaceTestResultsService(personsRepository,
       unitRepository,
       bookletRepository,
       responseRepository,
@@ -241,6 +241,7 @@ describe('WorkspaceTestResultsService', () => {
       responseManagementService,
       workspaceCoreService,
       workspaceExclusionService,
+      new WorkspaceStatsCacheService((cacheService as unknown as CacheService) as never),
       undefined,
       codingStatisticsService
     );

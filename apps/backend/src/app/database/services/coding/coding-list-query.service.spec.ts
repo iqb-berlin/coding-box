@@ -3,7 +3,7 @@ import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Setting } from '../../entities/setting.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
@@ -147,11 +147,9 @@ describe('CodingListQueryService', () => {
       )
     } as unknown as Repository<Setting>;
 
-    return new CodingListQueryService(
-      responseRepository,
+    return new CodingListQueryService(responseRepository,
       fileCacheService,
       workspaceFilesService,
-      {} as unknown as WorkspaceCoreService,
       workspaceExclusionService,
       replayAnchorService,
       settingRepository

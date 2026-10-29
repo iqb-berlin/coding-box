@@ -20,12 +20,9 @@ describe('Statistics failure contracts', () => {
     getUnitVariableMap: jest.fn().mockResolvedValue(new Map([['UNIT', new Set(['V'])]])),
     getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
   };
-  const statistics = new CodingStatisticsService(
-    repository as never,
+  const statistics = new CodingStatisticsService(repository as never,
     cache as never,
     queue as never,
-    {} as never,
-    {} as never,
     { resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }) } as never,
     files as never
   );

@@ -7,7 +7,6 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingListService } from './coding-list.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 jest.mock('./coding-list.service', () => ({
@@ -218,13 +217,11 @@ function createService(overrides: {
     })
   } as unknown as WorkspaceExclusionService;
 
-  const service = new CodingResultsExportService(
-    responseRepository as unknown as Repository<ResponseEntity>,
+  const service = new CodingResultsExportService(responseRepository as unknown as Repository<ResponseEntity>,
     codingJobRepository as unknown as Repository<CodingJob>,
     codingJobVariableRepository as unknown as Repository<CodingJobVariable>,
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
     codingListService,
-    {} as WorkspaceCoreService,
     workspaceExclusionService,
     overrides.missingsProfilesService as never
   );

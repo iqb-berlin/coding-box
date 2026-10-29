@@ -1,11 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import {
-  Injectable,
-  Logger,
-  Inject,
-  forwardRef,
-  OnModuleDestroy,
-  OnModuleInit
+  Injectable, Logger, Inject, OnModuleDestroy, OnModuleInit
 } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as path from 'path';
@@ -54,11 +49,11 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
   >();
 
   constructor(
-    @Inject(forwardRef(() => CodingExportService))
+    @Inject(CodingExportService)
     private codingExportService: CodingExportService,
-    @Inject(forwardRef(() => CodingExportOrchestratorService))
+    @Inject(CodingExportOrchestratorService)
     private codingExportOrchestratorService: CodingExportOrchestratorService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    @Inject(WorkspaceTestResultsService)
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,

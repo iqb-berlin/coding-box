@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  forwardRef
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
@@ -30,7 +25,7 @@ export class ValidationTaskService {
     private taskRepository: Repository<ValidationTask>,
     private validationService: WorkspaceFilesService,
     private testResultsService: WorkspaceTestResultsService,
-    @Inject(forwardRef(() => JobQueueService))
+    @Inject(JobQueueService)
     private readonly jobQueueService: JobQueueService
   ) { }
 

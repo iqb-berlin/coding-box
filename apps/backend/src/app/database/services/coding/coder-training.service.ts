@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ForbiddenException, Injectable, Logger
+  Inject, BadRequestException, ForbiddenException, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -25,7 +25,7 @@ import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entiti
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService } from './coding-job.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   IQB_STANDARD_MISSING_CODES,
   IQB_STANDARD_MISSING_SCORES,
@@ -374,7 +374,7 @@ export class CoderTrainingService {
     @InjectRepository(ChunkEntity)
     private chunkRepository: Repository<ChunkEntity>,
     private codingJobService: CodingJobService,
-    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private workspaceFilesService: WorkspaceFileMetadataReader,
     private missingsProfilesService: MissingsProfilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingStatisticsService: CodingStatisticsService
