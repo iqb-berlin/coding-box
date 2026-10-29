@@ -1217,7 +1217,42 @@ describe('VariableAnalysisService', () => {
     expect(sheet.getRow(2).getCell(headers.indexOf('Score (Code)')).value).toBe(0);
     expect(sheet.getRow(2).getCell(headers.indexOf('Kodierlauf')).value).toBe('v2');
   });
-  it.each(['   ', 'null', '[ ]', '[false, false]'])('marks the raw empty representation %s as empty in CSV', async value => {
+  it.each(['null', 'NULL', ' null '])('preserves the literal answer %s in CSV and XLSX', async value => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
+      data: { workspaceId: 1 },
+      returnvalue: {
+        total: 1,
+        variableCombos: [{
+          unitId: 1, unitName: 'UNIT', variableId: 'VAR', totalCount: 2, validCount: 1, invalidCount: 1, emptyCount: 1
+        }],
+        frequencies: {
+          '1:VAR': [
+            {
+              variableId: 'VAR', value, count: 1, validOccurrenceCount: 1, percentage: 50, percentageValid: 100
+            },
+            {
+              variableId: 'VAR', value: '', count: 1, validOccurrenceCount: 0, percentage: 50, percentageValid: 0
+            }
+          ]
+        }
+      }
+    }));
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    const [header, textRow, emptyRow] = csv.split(/\r?\n/).map(row => row.split(';'));
+    expect(textRow[header.indexOf('Wert ist leer')]).toBe('nein');
+    expect(textRow[header.indexOf('Anzahl gültiger Antworten')]).toBe('1');
+    expect(emptyRow[header.indexOf('Wert ist leer')]).toBe('ja');
+
+    const workbook = new ExcelJS.Workbook();
+    const bytes = await service.exportAnalysisResultsAsXlsx('job-1', 1);
+    await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Antwortwerte')!;
+    const headers = sheet.getRow(1).values as string[];
+    expect(sheet.getRow(2).getCell(headers.indexOf('Wert ist leer')).value).toBe('nein');
+    expect(sheet.getRow(3).getCell(headers.indexOf('Wert ist leer')).value).toBe('ja');
+  });
+
+  it.each(['   ', '[ ]', '[false, false]'])('marks the raw empty representation %s as empty in CSV', async value => {
     jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
       data: { workspaceId: 1 },
       returnvalue: {

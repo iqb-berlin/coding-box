@@ -1330,7 +1330,7 @@ export class VariableAnalysisService {
           analysisMode: combo.analysisMode === 'codes' ? 'Codes' : 'Antwortwerte',
           codingVersion: combo.analysisMode === 'codes' ? combo.codingVersion ?? 'v1' : '',
           score: frequency.score ?? '',
-          isEmptyValue: /^(null|\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(frequency.value.trim()) ? 'ja' : 'nein',
+          isEmptyValue: /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(frequency.value.trim()) ? 'ja' : 'nein',
           count: frequency.count,
           validOccurrenceCount,
           percentageTotal: this.roundPercentage(percentageTotal),

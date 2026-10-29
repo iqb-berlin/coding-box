@@ -1,5 +1,5 @@
 describe('Answer-value and assigned-code analysis', () => {
-  it('starts a separate code analysis for the chosen run and displays its denominators and metadata', () => {
+  it('starts a code analysis and preserves its export filename after switching results', () => {
     cy.viewport(1800, 1000);
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -37,9 +37,18 @@ describe('Answer-value and assigned-code analysis', () => {
       variableCombos: [codeCombo], frequencies: { '1:VAR': codeFrequencies },
       rows: codeFrequencies.map(frequency => ({ ...codeCombo, ...frequency, hiddenValueCount: 0, statusSummary: 'CODING_COMPLETE: 3 (75%), INVALID: 1 (25%)' }))
     } }).as('codeResults');
-    cy.intercept('GET', '**/variable-analysis/jobs/codes-job/results/export/csv', {
+    let exportId = '';
+    let exportStarted = false;
+    cy.task<{ id: string; url: string }>('deferred:create', {
       headers: { 'content-type': 'text/csv' }, body: 'Auswertung;Kodierlauf;Code\nCodes;v2;0'
-    }).as('exportCsv');
+    }).then(gate => {
+      exportId = gate.id;
+      cy.intercept('GET', '**/variable-analysis/jobs/codes-job/results/export/csv', request => {
+        exportStarted = true;
+        request.url = gate.url;
+        request.continue();
+      }).as('exportCsv');
+    });
 
     cy.visit('/');
     cy.wait('@authData');
@@ -70,6 +79,13 @@ describe('Answer-value and assigned-code analysis', () => {
     cy.get('@dialog').find('.variable-status-entry').should('have.length', 1).and('contain.text', 'CODING_COMPLETE').and('contain.text', 'INVALID');
     cy.get('@dialog').find('.analysis-table .mat-column-statusSummary').should('not.exist');
     cy.get('@dialog').contains('.top-actions button', 'CSV').click();
+    cy.wrap(null).should(() => { expect(exportStarted).to.equal(true); });
+    cy.get('@dialog').find('[role="tab"]').eq(1).click();
+    cy.get('@dialog').contains('tr', 'values-job').find('button[aria-label="Ergebnisse anzeigen"]').click();
+    cy.wait('@rawResults');
+    cy.get('@dialog').find('[role="tab"]').first().click();
+    cy.get('@dialog').find('.analysis-context').should('contain.text', 'Antwortwerte und Kategorien');
+    cy.then(() => cy.task('deferred:release', exportId));
     cy.wait('@exportCsv');
     cy.readFile(`cypress/downloads/variable-analysis-5-codes-v2-${new Date().toISOString().slice(0, 10)}.csv`).should('contain', 'Codes;v2;0');
   });

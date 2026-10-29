@@ -506,7 +506,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private getEmptyValueSql(alias: string, column: string): string {
     const value = `${alias}."${column}"`;
-    return String.raw`(${value} IS NULL OR ${value} ~* '^\s*(null|\[\s*(false\s*(,\s*false\s*)*)?\])?\s*$')`;
+    // The importer stores missing null values as SQL NULL and literal strings unchanged.
+    return String.raw`(${value} IS NULL OR ${value} ~* '^\s*(\[\s*(false\s*(,\s*false\s*)*)?\])?\s*$')`;
   }
 
   private isValidAnalysisRow(row: {
@@ -1154,7 +1155,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         return this.parseMultipleArrayValue(parsedValue, metadata);
       }
 
-      return this.valueToCategory(parsedValue, metadata);
+      // A missing raw value was handled above; the text "null" is a response category.
+      return this.valueToCategory(parsedValue === null ? trimmedValue : parsedValue, metadata);
     } catch {
       return this.valueToCategory(trimmedValue, metadata);
     }
@@ -1233,7 +1235,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   }
 
   private isEmptyStoredValue(value: string): boolean {
-    return /^(null|\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(value);
+    return /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(value);
   }
 
   private formatDirectValuePreview(value: string): string {

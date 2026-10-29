@@ -606,6 +606,43 @@ describe('VariableAnalysisDialogComponent', () => {
   });
 
   describe('downloadAnalysisResults', () => {
+    it.each(['csv', 'xlsx'] as const)('keeps the original mode and coding run in a delayed %s export after viewing another job', format => {
+      const page: VariableAnalysisResultPageDto = {
+        variableCombos: [{
+          unitId: 10, unitName: 'UNIT', variableId: 'VAR', analysisMode: 'codes', codingVersion: 'v2'
+        }],
+        frequencies: {},
+        total: 1,
+        unfilteredTotal: 1,
+        page: 1,
+        pageSize: 50,
+        totalPages: 1
+      };
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValueOnce(of(page));
+      component.viewJobResults(1);
+      const exportResponse = new Subject<Blob>();
+      const exportMethod = format === 'csv' ?
+        mockVariableAnalysisService.exportAnalysisResultsAsCsv :
+        mockVariableAnalysisService.exportAnalysisResultsAsXlsx;
+      exportMethod.mockReturnValue(exportResponse);
+      const saveSpy = jest.spyOn(component as unknown as { saveBlob(blob: Blob, name: string): void }, 'saveBlob').mockImplementation(jest.fn());
+
+      component.downloadAnalysisResults(format);
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValueOnce(of({
+        ...page,
+        variableCombos: [{
+          unitId: 10, unitName: 'UNIT', variableId: 'VAR', analysisMode: 'values'
+        }]
+      }));
+      component.viewJobResults(2);
+      const blob = new Blob(['code result']);
+      exportResponse.next(blob);
+      exportResponse.complete();
+
+      expect(exportMethod).toHaveBeenCalledWith(1, 1, expect.any(Object));
+      expect(saveSpy).toHaveBeenCalledWith(blob, expect.stringMatching(new RegExp(`^variable-analysis-1-codes-v2-.*\\.${format}$`)));
+    });
+
     it('should export the current completed analysis with active filters', () => {
       Object.defineProperty(window.URL, 'createObjectURL', {
         value: jest.fn().mockReturnValue('blob:variable-analysis'),
@@ -692,6 +729,25 @@ describe('VariableAnalysisDialogComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.mat-column-score')).toBeNull();
     expect(fixture.nativeElement.querySelector('th.mat-column-value').textContent).toContain('variable-analysis.value-category-column');
+  });
+
+  it.each(['null', 'NULL', ' null '])('preserves the literal answer %s in the local response preview', value => {
+    component.data.analysisResults = undefined;
+    component.data.responses = [
+      {
+        id: 1, unitid: 10, variableid: 'VAR', value, status: 'VALUE_CHANGED', subform: ''
+      },
+      {
+        id: 2, unitid: 10, variableid: 'VAR', value: '', status: 'VALUE_CHANGED', subform: ''
+      }
+    ];
+    component.analyzeVariables();
+    expect(component.allVariableCombos()[0]).toMatchObject({
+      totalCount: 2, validCount: 1, invalidCount: 1, emptyCount: 1
+    });
+    expect(component.variableFrequencies()['0:VAR'].find(row => row.value === value)).toMatchObject({
+      count: 1, validOccurrenceCount: 1, percentageTotal: 50, percentageValid: 100
+    });
   });
 
   it('uses the same raw-value validity rules for the local response preview', () => {

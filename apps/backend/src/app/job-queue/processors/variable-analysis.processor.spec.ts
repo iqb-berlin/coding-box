@@ -1260,6 +1260,46 @@ describe('VariableAnalysisProcessor', () => {
       ]]
     ]);
   });
+  it('preserves the text null in multiple responses while excluding actual null entries', async () => {
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', alias: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'MULTI', totalCount: 5, emptyCount: 0, distinctValueCount: 5
+        }],
+        [],
+        ['null', '["null",null,"NULL"]', null, '[null]', '[false,false]'].map((value, index) => ({
+          responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+        })),
+        [], []
+      ]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 2
+      })
+    ]);
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
+      ['1:MULTI', expect.arrayContaining([
+        expect.objectContaining({
+          value: 'null', count: 2, validOccurrenceCount: 2, percentageValid: 100
+        }),
+        expect.objectContaining({
+          value: 'NULL', count: 1, validOccurrenceCount: 1, percentageValid: 50
+        })
+      ])]
+    ]);
+  });
+
   it.each(['v1', 'v2', 'v3'] as const)('counts assigned codes from %s with their schema metadata, independently of raw categories', async codingVersion => {
     const { processor, cacheService, analysisQuery } = createProcessor({
       unitVariableDetails: [{

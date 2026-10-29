@@ -40,7 +40,7 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
         (8, 8, 'VAR', '', 'intended', 3, 2, 12, 0,   NULL, NULL, NULL, NULL, NULL, NULL),
         (9, 1, 'VAR', '', '',         3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
     `);
-    for (const [index, value] of ['', '\t', '[ ]', '[false, false]', 'null'].entries()) {
+    for (const [index, value] of ['', '\t', '[ ]', '[false, false]', null].entries()) {
       await client.query(`INSERT INTO analysis_response
         (id, unitid, variableid, subform, value, status, code_v1, status_v1)
         VALUES ($1, 1, 'EMPTY', $2, $3, 3, 0, 5)`, [20 + index, `empty-${index}`, value]);
@@ -83,14 +83,15 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
 
   it('keeps raw validity independent of coding results and rejects VALUE_CHANGED with an empty value', async () => {
     const result = await analyze({ analysisMode: 'values' });
-    expect(result.summary).toEqual({ total: 8, valid: 4, empty: 3 });
+    expect(result.summary).toEqual({ total: 8, valid: 5, empty: 2 });
     expect(result.frequencies).toContainEqual({ value: 'shared', count: 3, valid: 3 });
     expect(result.frequencies).toContainEqual({ value: '', count: 1, valid: 0 });
+    expect(result.frequencies).toContainEqual({ value: 'null', count: 1, valid: 1 });
   });
 
   it('separates codes for the same raw answer, including code zero and a code without a score', async () => {
     const result = await analyze({ analysisMode: 'codes', codingVersion: 'v1' });
-    expect(result.summary).toEqual({ total: 8, valid: 4, empty: 3 });
+    expect(result.summary).toEqual({ total: 8, valid: 4, empty: 2 });
     expect(result.frequencies).toEqual([
       { value: '', count: 3, valid: 0 },
       { value: '0', count: 2, valid: 2 },
@@ -100,9 +101,9 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
   });
 
   it('uses only the selected coding run, including a run with no assigned codes', async () => {
-    expect((await analyze({ analysisMode: 'codes', codingVersion: 'v2' })).summary).toEqual({ total: 8, valid: 2, empty: 3 });
+    expect((await analyze({ analysisMode: 'codes', codingVersion: 'v2' })).summary).toEqual({ total: 8, valid: 2, empty: 2 });
     const result = await analyze({ analysisMode: 'codes', codingVersion: 'v3' });
-    expect(result.summary).toEqual({ total: 8, valid: 0, empty: 3 });
+    expect(result.summary).toEqual({ total: 8, valid: 0, empty: 2 });
     expect(result.frequencies).toEqual([{ value: '', count: 8, valid: 0 }]);
   });
 

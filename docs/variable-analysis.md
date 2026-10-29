@@ -33,9 +33,10 @@ wird ein nicht leerer Rohwert, anschließend die jüngste Antwort-ID.
 | Fehlend/ungültig | Antworten gesamt minus gültige Antworten |
 | Leere Rohwerte | Unabhängig davon gezählte leere Rohantworten |
 
-Für Antwortwerte gelten `NULL`, leere oder nur aus Leerzeichen bestehende
-Zeichenketten, der Text `null` (ohne Beachtung der Großschreibung) und leere Listen
-als leer. Boolesche Listen ohne ausgewählte Option gelten ebenfalls als leer.
+Für Antwortwerte gelten SQL-`NULL`, leere oder nur aus Leerzeichen bestehende
+Zeichenketten und leere Listen als leer. Der eingegebene Text `null` ist ein
+regulärer Antwortwert; der Import speichert ihn getrennt von fehlenden Nullwerten.
+Boolesche Listen ohne ausgewählte Option gelten ebenfalls als leer.
 Bei Mehrfachantworten zählen auch Antworten ohne ausgewählte Kategorie
 als leer. Nicht leere Antworten sind gültig, wenn ihr ursprünglicher Status nicht
 `UNSET`, `NOT_REACHED`, `DISPLAYED`, `DERIVE_ERROR`, `INVALID`, `CODING_ERROR` oder
@@ -57,13 +58,15 @@ Die Statusübersicht zeigt pro Variable einmal die vollständige Verteilung auf
 der aktuellen Ergebnisseite. Bei Antwortwerten verwendet sie den ursprünglichen
 Antwortstatus, bei Codes den Status des gewählten Kodierlaufs. Sie ist keine
 Statusverteilung einzelner Wertzeilen. CSV und XLSX kennzeichnen Grundlage und
-Kodierlauf und enthalten dieselben Bezugsgrößen.
+Kodierlauf und enthalten dieselben Bezugsgrößen. Der Dateiname wird beim Start des
+Exports festgelegt und behält diese Zuordnung auch beim Wechsel zu einem anderen
+Analyseergebnis während des Downloads.
 
 ## Prüfung
 
 Die Prozessor- und Servicetests prüfen Kategorien, Code-Metadaten, die drei
-Kodierläufe, fehlende Werte, Null-Nenner sowie CSV/XLSX. Die zusätzliche
-`variable-analysis.processor.integration.spec.ts` führt die erzeugten SQL-Abfragen
+Kodierläufe, fehlende Werte, den Antworttext `null`, Null-Nenner sowie CSV/XLSX.
+Die zusätzliche `variable-analysis.processor.integration.spec.ts` führt die erzeugten SQL-Abfragen
 gegen PostgreSQL aus. Sie benötigt `VARIABLE_ANALYSIS_TEST_DB_URL` mit einer
 Verbindung zu einer Wegwerfdatenbank und arbeitet ausschließlich mit temporären
 Tabellen. Ohne diese Variable wird sie übersprungen.

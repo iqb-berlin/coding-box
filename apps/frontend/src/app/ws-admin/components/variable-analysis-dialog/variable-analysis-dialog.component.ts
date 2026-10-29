@@ -512,7 +512,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         };
         summary.totalCount = (summary.totalCount || 0) + 1;
         const trimmedValue = value.trim().toLowerCase();
-        const isEmpty = /^(null|\[\s*(false\s*(,\s*false\s*)*)?\])?$/.test(trimmedValue);
+        const isEmpty = /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/.test(trimmedValue);
         const numericStatus = getResponseStatusMetadata(response.status)?.numeric ?? 0;
         const isValid = !isEmpty && ![0, 1, 2, 4, 7, 9, 10].includes(numericStatus);
         if (isEmpty) summary.emptyCount = (summary.emptyCount || 0) + 1;
@@ -1128,6 +1128,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const fileName = this.createExportFileName(format);
     this.isExporting.set(true);
     const options = {
       search: this.searchText().trim() || undefined,
@@ -1148,7 +1149,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: blob => {
-        this.saveBlob(blob, this.createExportFileName(format));
+        this.saveBlob(blob, fileName);
         this.isExporting.set(false);
         this.snackBar.open(
           this.translate.instant('variable-analysis.export-success'),

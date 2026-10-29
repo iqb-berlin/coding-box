@@ -1727,7 +1727,7 @@
     "variable-status-overview": "Statusverteilung je Variable auf dieser Seite",
     "value-status-help": "Status aller berücksichtigten Antworten je Aufgabe/Variable, unabhängig vom einzelnen Antwortwert. VALUE_CHANGED allein garantiert keinen gefüllten Wert.",
     "code-status-help": "Kodierstatus des ausgewählten Laufs für alle berücksichtigten Antworten je Aufgabe/Variable, unabhängig vom einzelnen Code.",
-    "value-validity-help": "Gültig sind nicht leere Antwortwerte ohne Fehlend- oder Fehlerstatus. Leere Zeichenketten, Leerzeichen, null und leere Listen gelten als leer; Mehrfachantworten ohne ausgewählte Kategorie ebenfalls. Kodierergebnisse verändern diese Rohwertzählung nicht.",
+    "value-validity-help": "Gültig sind nicht leere Antwortwerte ohne Fehlend- oder Fehlerstatus. Fehlende Nullwerte, leere Zeichenketten, Leerzeichen und leere Listen gelten als leer; Mehrfachantworten ohne ausgewählte Kategorie ebenfalls. Der eingegebene Text „null“ bleibt ein Antwortwert. Kodierergebnisse verändern diese Rohwertzählung nicht.",
     "code-validity-help": "Gültig sind vorhandene Codes mit Status CODING_COMPLETE oder INTENDED_INCOMPLETE im ausgewählten Lauf. Code 0, Score 0 und Codes ohne Score werden mitgezählt. Fehlende Codes und andere Status zählen zu Fehlend/ungültig. Leere Rohwerte werden unabhängig davon ausgewiesen.",
 
     "analysis-results": "Analyseergebnisse",
