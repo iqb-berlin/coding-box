@@ -202,6 +202,43 @@ test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
       ).toHaveBeenCalledWith(1);
     });
 
+    it('imports Source19 quoted log CSV without changing embedded JSON or multiline cells', async () => {
+      const columns = ['groupname', 'loginname', 'code', 'bookletname', 'unitname', 'originalUnitId', 'timestamp', 'logentry'];
+      const entries = [
+        `EVENT = ${JSON.stringify({
+          text: 'A;B\nC', empty: '', quoted: 'say "yes"', values: ['', 'A']
+        })}`,
+        '"QUOTED:KEY" : "first; second"\nthird line'
+      ];
+      const quote = (value: string) => `"${value.replace(/"/g, '""')}"`;
+      const content = `\uFEFF${[columns, ...entries.map((entry, index) => ['G', 'P', '', 'B', 'U', 'original', String(100 + index), entry])]
+        .map(row => row.map(quote).join(';')).join('\n')}`;
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quoted-log-csv-'));
+      const filePath = path.join(directory, 'source19.csv');
+      fs.writeFileSync(filePath, content);
+      try {
+        const file: FileIo = {
+          buffer: Buffer.from(content),
+          originalname: 'source19.csv',
+          mimetype: 'text/csv',
+          size: Buffer.byteLength(content),
+          fieldname: 'files',
+          encoding: 'utf-8',
+          path: filePath
+        };
+        const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+          id: 'quoted-source19', data: { workspaceId: 1, file, resultType: 'logs' }
+        }));
+        expect(result.issues?.filter(issue => issue.level === 'error') || []).toEqual([]);
+        expect(result.importSummary).toMatchObject({ logRows: 2, totalRows: 2 });
+        const rows = jest.mocked(personService.createPersonList).mock.calls[0][0];
+        expect(rows).toEqual(entries.map(logentry => expect.objectContaining({ logentry })));
+        expect(rows.map(row => row.loginname)).toEqual(['P', 'P']);
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
     it('should report missing CSV columns before importing rows', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;timestamp
 test-group;test-user;code;booklet1;unit1;123456789`;

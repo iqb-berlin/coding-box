@@ -6,6 +6,7 @@ import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
 import { of, Subject } from 'rxjs';
+import { FilesValidation } from './files-validation-view-model';
 import { FilesValidationDialogComponent } from './files-validation.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
@@ -118,6 +119,28 @@ describe('FilesValidationComponent', () => {
     fixture = TestBed.createComponent(FilesValidationDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('updates the summary after delayed exclusion settings without manual change detection', async () => {
+    const settings = new Subject<{ ignoredUnits: string[] }>();
+    workspaceService.getWorkspaceSettings.mockReturnValue(settings);
+    const raw: FilesValidation = createValidationResult('PERSON', []);
+    raw.units = { complete: false, missing: ['MISSING'], files: [{ filename: 'MISSING', exists: false }] };
+    component.data.validationResults = [raw, { ...raw, testTaker: 'PERSON2' }];
+    component.data.workspaceId = 5;
+    (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
+    component.loadWorkspaceSettings();
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const unitSummary = () => Array.from(element.querySelectorAll('.summary-card'))
+      .find(card => card.querySelector('.card-header')?.textContent?.includes('Aufgaben'));
+    expect(unitSummary()?.querySelector('.value.success')?.textContent?.trim()).toBe('0 / 2');
+    settings.next({ ignoredUnits: ['missing'] });
+    await fixture.whenStable();
+    expect(component.summary().units.missingFiles).toBe(0);
+    expect(unitSummary()?.querySelector('.value.success')?.textContent?.trim()).toBe('2 / 2');
+    fixture.destroy();
+    expect(settings.observed).toBe(false);
   });
 
   it('should create', () => {

@@ -2,10 +2,11 @@ import { ChangeDetectorRef, provideZonelessChangeDetection } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   BehaviorSubject, Observable, of, Subject
 } from 'rxjs';
+import applicationTranslations from '../../../../assets/i18n/de.json';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
@@ -75,6 +76,9 @@ describe('Coding comparison without Zone', () => {
         }
       ]
     }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', applicationTranslations);
+    translate.use('de');
     fixture = TestBed.createComponent(CodingResultsComparisonComponent);
     fixture.autoDetectChanges();
     await fixture.whenStable();
@@ -132,7 +136,7 @@ describe('Coding comparison without Zone', () => {
     await fixture.whenStable();
     expect(choiceLabels()).toEqual([]);
     expect(snackBar.open).toHaveBeenCalledWith(
-      'coding.trainings.loading.error', 'common.close', { duration: 3000 }
+      'Fehler beim Laden der Kodierer-Schulungen', 'Schließen', { duration: 3000 }
     );
     const retry = new Subject<CoderTraining[]>();
     getCoderTrainings.mockReturnValue(retry);
@@ -209,7 +213,7 @@ describe('Coding comparison without Zone', () => {
     expect(c.isTableRegexFilterInvalid('unitName')).toBe(true);
     expect(fixture.nativeElement.querySelector('.regex-filter-invalid')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.regex-filter-error')?.textContent)
-      .toContain('search-filter.invalid-regex');
+      .toContain('Ungültiger regulärer Ausdruck');
   });
 
   it('renders a delayed Kappa result after the header click without another interaction', async () => {
@@ -264,7 +268,7 @@ describe('Coding comparison without Zone', () => {
     expect(c.isLoadingKappa()).toBe(false);
     expect(c.kappaStatistics()).toBeNull();
     expect(fixture.nativeElement.textContent).not.toContain('Berechne Interrater-Reliabilität');
-    expect(snackBar.open).toHaveBeenCalledWith('coding.trainings.kappa.error', 'common.close', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Laden der Interrater-Reliabilität', 'Schließen', { duration: 3000 });
   });
 
   it('shows a delayed discussion save error and clears the saving indication', async () => {

@@ -9,6 +9,6 @@
     "strict": true,
     "strictPropertyInitialization": false
   },
-  "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/*test.factory.ts", "jest.config.ts"],
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "**/*test.factory.ts", "jest*.config.ts"],
   "include": ["**/*.ts"]
 }

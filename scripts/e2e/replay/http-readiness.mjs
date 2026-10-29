@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
 export async function waitForHttp(url, timeoutMs, {
+  headers,
   requestTimeoutMs = 5000,
   retryIntervalMs = 500
 } = {}) {
@@ -10,6 +11,7 @@ export async function waitForHttp(url, timeoutMs, {
   while (performance.now() < deadline) {
     try {
       const response = await fetch(url, {
+        headers,
         signal: AbortSignal.timeout(Math.max(1, Math.ceil(Math.min(requestTimeoutMs, deadline - performance.now()))))
       });
       lastHttpStatus = response.status;

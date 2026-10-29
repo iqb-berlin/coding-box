@@ -5,6 +5,8 @@ import {
   IsArray,
   IsBoolean,
   IsNumber,
+  IsInt,
+  ArrayUnique,
   IsString,
   IsNotEmpty,
   MaxLength,
@@ -88,11 +90,14 @@ export class CreateJobDefinitionDto {
   @ApiProperty({
     description: 'Assigned coder IDs',
     type: [Number],
+    items: { type: 'integer', minimum: 1, maximum: 2147483647 },
     example: [1, 2, 3],
     required: false
   })
   @IsArray()
-  @IsNumber({}, { each: true })
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Max(2147483647, { each: true })
   @Min(1, { each: true })
   @Type(() => Number)
   @IsOptional()
@@ -110,52 +115,70 @@ export class CreateJobDefinitionDto {
   assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
 
   @ApiProperty({
-    description: 'ID of the missings profile to assign to the job definition. If omitted, IQB-Standard is used.',
+    description: 'ID of the missings profile. Omitted or 0 selects the default profile.',
+    type: 'integer',
+    minimum: 0,
+    maximum: 2147483647,
     example: 1,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(0)
+  @Max(2147483647)
   @Type(() => Number)
   @IsOptional()
   missingsProfileId?: number;
 
   @ApiProperty({
     description: 'Duration in seconds for one coding task',
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     example: 300,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(1)
+  @Max(2147483647)
   @Type(() => Number)
   @IsOptional()
   durationSeconds?: number;
 
   @ApiProperty({
     description: 'Maximum number of coding cases',
+    type: 'integer',
+    minimum: 1,
+    maximum: 2147483647,
     example: 100,
     required: false,
     nullable: true
   })
-  @IsNumber()
+  @IsInt()
   @Min(1)
+  @Max(2147483647)
   @Type(() => Number)
   @IsOptional()
   maxCodingCases?: number | null;
 
   @ApiProperty({
     description: 'Absolute number of cases per variable that should be double coded',
+    type: 'integer',
+    minimum: 0,
+    maximum: 2147483647,
     example: 10,
     required: false
   })
-  @IsNumber()
+  @IsInt()
   @Min(0)
+  @Max(2147483647)
   @Type(() => Number)
   @IsOptional()
   doubleCodingAbsolute?: number;
 
   @ApiProperty({
     description: 'Percentage (0-100) of cases per variable that should be double coded',
+    minimum: 0,
+    maximum: 100,
     example: 25.5,
     required: false
   })

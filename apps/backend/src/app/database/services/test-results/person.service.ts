@@ -294,23 +294,42 @@ export class PersonService {
 
   private normalizeQuotedLogPart(value: string): string {
     const trimmed = value.trim();
-    const unwrapped = trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') ?
-      trimmed.substring(1, trimmed.length - 1) :
-      trimmed;
-
-    return unwrapped
-      .replace(/""/g, '"')
-      .replace(/\\"/g, '"')
-      .replace(/\\\\/g, '\\');
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      try {
+        const decoded: unknown = JSON.parse(trimmed);
+        if (typeof decoded === 'string') return decoded;
+      } catch {
+        // Some legacy imports retain a CSV field's outer quotes.
+        if (/^"(?:[^"]|"")*"$/.test(trimmed)) {
+          return trimmed.substring(1, trimmed.length - 1).replace(/""/g, '"');
+        }
+        if (/^"[[{]/.test(trimmed) && /[\]}]"$/.test(trimmed)) {
+          // Legacy LOADCOMPLETE payloads may contain unquoted object keys.
+          return trimmed.substring(1, trimmed.length - 1);
+        }
+      }
+    }
+    // JSON objects and arrays already contain meaningful quotes and escapes.
+    return trimmed;
   }
 
   private parseLogEntry(logentry: string): { key: string; value: string } | null {
     const normalizedLogEntry = this.normalizeQuotedLogPart(logentry || '');
     if (!normalizedLogEntry) return null;
 
-    const separatorIndex = normalizedLogEntry.indexOf(':') !== -1 ?
-      normalizedLogEntry.indexOf(':') :
-      normalizedLogEntry.indexOf('=');
+    let separatorIndex = -1;
+    let quoted = false;
+    for (let i = 0; i < normalizedLogEntry.length; i++) {
+      const char = normalizedLogEntry[i];
+      if (quoted && char === '\\') {
+        i += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (!quoted && (char === ':' || char === '=')) {
+        separatorIndex = i;
+        break;
+      }
+    }
     if (separatorIndex === -1) {
       const key = this.normalizeQuotedLogPart(normalizedLogEntry);
       if (!key) return null;

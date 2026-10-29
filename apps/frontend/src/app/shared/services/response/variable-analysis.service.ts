@@ -188,9 +188,9 @@ export class VariableAnalysisService implements OnDestroy {
       {
         headers: this.authHeader,
         params: this.buildExportParams(options),
-        responseType: 'blob' as 'json'
+        responseType: 'blob'
       }
-    ) as unknown as Observable<Blob>;
+    );
   }
 
   exportAnalysisResultsAsXlsx(
@@ -203,9 +203,9 @@ export class VariableAnalysisService implements OnDestroy {
       {
         headers: this.authHeader,
         params: this.buildExportParams(options),
-        responseType: 'blob' as 'json'
+        responseType: 'blob'
       }
-    ) as unknown as Observable<Blob>;
+    );
   }
 
   getAnalysisJob(

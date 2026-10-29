@@ -1,4 +1,3 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
   Component, inject, OnDestroy, OnInit, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -17,8 +16,6 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { Subscription, timer } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
 
 import { AppService, WorkspaceTokenPolicy } from '../../../core/services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
@@ -38,28 +35,7 @@ import {
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
-import { SERVER_URL } from '../../../injection-tokens';
-
-type DatabaseExportStatus =
-  | 'queued'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
-
-interface DatabaseExportJobState {
-  status: DatabaseExportStatus;
-  progress: number;
-  result?: {
-    fileName: string;
-    fileSize: number;
-    createdAt: number;
-    requestedByUserId: number;
-    scope: 'system' | 'workspace';
-    workspaceId?: number;
-  };
-  error?: string;
-}
+import { DatabaseExportService } from '../../../shared/services/database-export.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -67,6 +43,7 @@ interface DatabaseExportJobState {
   templateUrl: './ws-settings.component.html',
   styleUrls: ['./ws-settings.component.scss'],
   standalone: true,
+  providers: [DatabaseExportService],
   imports: [
     FormsModule,
     TranslateModule,
@@ -88,15 +65,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
   private appService: AppService = inject(AppService);
-  private http = inject(HttpClient);
+  private readonly databaseExport = inject(DatabaseExportService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
-  private rawServerUrl = inject(SERVER_URL);
-
-  private exportPollingSubscription: Subscription | null = null;
 
   readonly authToken = signal<string | null>(null);
   readonly duration = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
@@ -114,10 +88,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly includeDeriveErrorInManualCoding = signal(false);
   readonly enableRegexSearch = signal(false);
   readonly showTestResultsLogAnomalies = signal(false);
-  readonly isExporting = signal(false);
-  protected readonly databaseExportProgress = signal(0);
-  readonly databaseExportStatus = signal<DatabaseExportStatus | null>(null);
-  protected readonly databaseExportError = signal<string | null>(null);
+  readonly isExporting = this.databaseExport.isExporting;
+  protected readonly databaseExportProgress = this.databaseExport.progress;
+  readonly databaseExportStatus = this.databaseExport.status;
+  protected readonly databaseExportError = this.databaseExport.error;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -174,7 +148,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.stopExportPolling();
+    this.databaseExport.cancel();
   }
 
   protected openProcessOverview(): void {
@@ -719,200 +693,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const authHeaders = this.getAuthHeaders();
-    this.isExporting.set(true);
-    this.databaseExportProgress.set(0);
-    this.databaseExportStatus.set('queued');
-    this.databaseExportError.set(null);
-
-    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
-
-    this.http
-      .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders }).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: ({ jobId }) => {
-          this.startExportPolling(workspaceId, jobId, authHeaders);
-        },
-        error: error => {
-          this.isExporting.set(false);
-          const message = this.extractErrorMessage(
-            error,
-            this.translateService.instant('ws-settings.error-starting-workspace-database-export')
-          );
-          this.databaseExportError.set(message);
-          this.databaseExportStatus.set('failed');
-          this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
-        }
-      });
+    this.databaseExport.start({ kind: 'workspace', workspaceId });
   }
 
   protected getDatabaseExportStatusLabel(): string {
-    switch (this.databaseExportStatus()) {
-      case 'queued':
-        return this.translateService.instant('ws-settings.export-status-queued');
-      case 'running':
-        return this.translateService.instant('ws-settings.export-status-running');
-      case 'completed':
-        return this.translateService.instant('ws-settings.export-status-completed');
-      case 'failed':
-        return this.translateService.instant('ws-settings.export-status-failed');
-      case 'cancelled':
-        return this.translateService.instant('ws-settings.export-status-cancelled');
-      default:
-        return this.translateService.instant('ws-settings.export-status-unknown');
-    }
-  }
-
-  private startExportPolling(
-    workspaceId: number,
-    jobId: string,
-    headers: HttpHeaders
-  ): void {
-    this.stopExportPolling();
-
-    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
-
-    this.exportPollingSubscription = timer(0, 2000)
-      .pipe(
-        switchMap(() => this.http.get<DatabaseExportJobState>(
-          `${apiUrl}/job/${jobId}`,
-          { headers }
-        ))
-      ).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: state => {
-          this.databaseExportStatus.set(state.status);
-          this.databaseExportProgress.set(Math.max(0, Math.min(100, Math.round(state.progress || 0))));
-
-          if (state.status === 'completed') {
-            this.databaseExportProgress.set(100);
-            this.stopExportPolling();
-            this.downloadExportFile(workspaceId, jobId, headers);
-            return;
-          }
-
-          if (state.status === 'failed' || state.status === 'cancelled') {
-            this.stopExportPolling();
-            this.isExporting.set(false);
-            const message =
-              state.error ||
-              this.translateService.instant('ws-settings.error-exporting-workspace-database-retry');
-            this.databaseExportError.set(message);
-            this.snackBar.open(
-              message,
-              this.translateService.instant('close'),
-              { duration: 5000 }
-            );
-          }
-        },
-        error: error => {
-          this.stopExportPolling();
-          this.isExporting.set(false);
-          const message = this.extractErrorMessage(
-            error,
-            this.translateService.instant('ws-settings.error-fetching-workspace-database-export-status')
-          );
-          this.databaseExportStatus.set('failed');
-          this.databaseExportError.set(message);
-          this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
-        }
-      });
-  }
-
-  private downloadExportFile(
-    workspaceId: number,
-    jobId: string,
-    headers: HttpHeaders
-  ): void {
-    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
-
-    this.http
-      .get(`${apiUrl}/job/${jobId}/download`, {
-        headers,
-        responseType: 'blob'
-      }).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: blob => {
-          this.saveBlob(
-            blob,
-            `workspace-${workspaceId}-export-${new Date().toISOString().split('T')[0]}.sqlite`
-          );
-          this.isExporting.set(false);
-          this.databaseExportStatus.set('completed');
-          this.databaseExportError.set(null);
-          this.snackBar.open(
-            this.translateService.instant('ws-settings.workspace-database-exported-successfully'),
-            this.translateService.instant('close'),
-            { duration: 3000 }
-          );
-        },
-        error: error => {
-          this.isExporting.set(false);
-          this.databaseExportStatus.set('failed');
-          this.databaseExportError.set(this.extractErrorMessage(error, this.translateService.instant('ws-settings.error-downloading-workspace-database-export')));
-          this.snackBar.open(this.databaseExportError() ?? '',
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
-        }
-      });
-  }
-
-  private stopExportPolling(): void {
-    if (this.exportPollingSubscription) {
-      this.exportPollingSubscription.unsubscribe();
-      this.exportPollingSubscription = null;
-    }
-  }
-
-  private getAuthHeaders(): HttpHeaders {
-    return new HttpHeaders({
-      Accept: 'application/json'
-    });
-  }
-
-  private getWorkspaceDatabaseExportApiUrl(workspaceId: number): string {
-    return `${this.serverUrl}/admin/workspace/${workspaceId}/export/sqlite`;
-  }
-
-  private get serverUrl(): string {
-    return this.rawServerUrl.endsWith('/') ?
-      this.rawServerUrl.slice(0, -1) :
-      this.rawServerUrl;
-  }
-
-  private saveBlob(blob: Blob, filename: string): void {
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.style.display = 'none';
-    anchor.href = url;
-    anchor.download = filename;
-    document.body.appendChild(anchor);
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(anchor);
-  }
-
-  private extractErrorMessage(error: unknown, fallback: string): string {
-    const payload = error as {
-      error?: {
-        message?: string | string[];
-      };
-      message?: string;
-    };
-
-    if (Array.isArray(payload?.error?.message)) {
-      return payload.error.message.join(', ');
-    }
-
-    if (typeof payload?.error?.message === 'string') {
-      return payload.error.message;
-    }
-
-    if (typeof payload?.message === 'string') {
-      return payload.message;
-    }
-
-    return fallback;
+    return this.databaseExport.getStatusLabel();
   }
 }
