@@ -1,4 +1,6 @@
-import { comparisonPresentation, comparisonStatus, selectedCodeSlots } from './training-comparison-presentation';
+import {
+  modalValueSummary, comparisonPresentation, comparisonStatus, selectedCodeSlots
+} from './training-comparison-presentation';
 import type { ComparisonSelection } from './training-comparison-presentation';
 import type { TrainingComparison, WithinTrainingComparison } from './comparison-view.models';
 
@@ -56,6 +58,20 @@ describe('training comparison presentation', () => {
     };
     expect(comparisonPresentation(row, between)).toEqual({
       status: 'incomplete', icon: 'warning', tooltipKey: 'coding.trainings.compare.status-incomplete'
+    });
+  });
+});
+
+describe('modal code calculation', () => {
+  it('ignores missing codes and breaks numeric ties deterministically', () => {
+    const coders = ['10', '2', null].map((code, jobId) => ({
+      code, jobId, coderName: 'Coder', score: null
+    }));
+    expect(modalValueSummary(coders)).toEqual({
+      modalValue: '2', deviationCount: 1, validCount: 2, isTie: true
+    });
+    expect(modalValueSummary([])).toEqual({
+      modalValue: null, deviationCount: null, validCount: 0, isTie: false
     });
   });
 });

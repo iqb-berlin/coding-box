@@ -24,11 +24,15 @@ Upload-, Cache- und Session-Recovery-Services behalten ihre Zuständigkeiten.
 | `ManualCodingPlanning` | Reine Priorisierung von Planungsstatus, Erklärung und nächstem fachlichem Schritt anhand eines expliziten Zustandswertes; keine Referenz auf die Angular-Komponente |
 | `ManualCodingPlanningFacade` | Vollständiges Planungsbündel laden, eine weitere Aktualisierung vormerken, fehlerhafte/noch laufende Bündel vom Cache ausschließen und vorhandene Snapshots wiederherstellen |
 | `ManualCodingJobsRefreshFacade` | Produktive und Schulungsauftragslisten gezielt aktualisieren, Änderungen für ausgeblendete oder noch nicht gerenderte Listen zusammenfassen und Definitionsänderungen entprellen; View-Queries werden erst beim Reload gelesen, Timer und Benachrichtigungen enden mit der Seiteninstanz |
+| `ManualCodingRefreshWorkflowFacade` | Fokus-Drosselung, manuelles Nachladen und Status-Guards koordinieren; vorgemerkte Statistik-/Freshness-Anforderungen einschließlich Force-Flags zusammenfassen und beim Workspacewechsel oder Ansichtsende verwerfen; Tab-Ladepolitik und Navigation bleiben in der Seite |
 | `TestResultsStatisticsFacade` | Übersicht, bedarfsgesteuerte Logqualität, Workspace-Einstellungen und Aktualität der Kodierungen; eigene ersetzbare Abfragen |
 | `TestResultsImportFacade` | Testcenter-Import mit Vorher-/Nachher-Übersicht, Fristen, Fortschrittsdialog und Ergebnisdarstellung; CSV-/JSON-/ZIP-Uploads bleiben im vorhandenen `TestResultsUploadStateService` |
 | `TestResultsDeletionFacade` | Vorschau und bestätigte Lösch-/Bereinigungsjobs einschließlich Fortschritt, Ergebnis, Fehler und Cacheinvalidierung; Auswahl und Tabellenansicht bleiben in der Seite |
 | `TestResultsExportFacade` | Exportoptionen, Start, Wiederaufnahme, Status, Abbruch und Download; Polling überlappt keine Statusabrufe und endet bei terminalem Status |
 | `TestResultsOverviewComponent` | Kennzahlen und Antwortstatusverteilung mit expliziten Inputs/Outputs; vorhandene Gestaltung und Statusnavigation |
+| `ReplayAuthSessionService` | Komponentenlokale Replay-Credentials, nach Workspace/Scopes geteilte Token-Erneuerung und Abbruch veralteter Versuche; zentrale Anmeldung bleibt bei den Auth-Services |
+| `ReplayRecoveryService` | Replay-Draft-Kontext, Wiederherstellung und Bestätigung gespeicherter Änderungen sowie Entscheidungsnachrichten; Position und Playeransicht bleiben in der Komponente |
+| `ReplayPayloadFacade` | Ersetzbare vollständige Player-/Antwortabfragen und Lebensdauer abhängiger Schemaabfragen; vorhandene Sitzungs-, Kodierungs- und Asset-Cache-Services bleiben zuständig |
 
 Die Seiten verbinden die fachlichen Ereignisse mit ihrer Darstellung. In der manuellen
 Seite bleiben insbesondere Tab-/Scrollnavigation, Berechtigungsanzeige, Schulungs-Overlay

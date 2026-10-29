@@ -93,6 +93,40 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
+  it('restores a discussion draft with its explicit score and notes, then clears only the accepted entry', () => {
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', request => {
+      expect(request.body).to.deep.equal({ responseId: 501, code: 2, score: 4, notes: 'Recovered note' });
+      request.reply({ delay: 200, body: {
+        success: true, code: 2, score: 4, notes: 'Recovered note', managerUserId: 2,
+        managerName: 'Recovery manager', source: 'manual'
+      } });
+    }).as('recoverySave');
+    openTrainingList();
+    cy.wait('@trainings');
+    cy.window().then(win => {
+      const key = 'training-discussion-active-state';
+      win.sessionStorage.setItem(`coding-box-session-recovery:${key}`, JSON.stringify({
+        key, version: 1, createdAt: Date.now(), expiresAt: Date.now() + 60_000,
+        data: { workspaceId: 5, trainingId: 7, entries: [
+          { responseId: 501, codeValue: '2', score: 4, notes: 'Recovered note' },
+          { responseId: 999, codeValue: '1', score: 1, notes: 'Other page' }
+        ] }
+      }));
+    });
+    cy.get('#manual-support .more-actions-button').first().click();
+    cy.contains('[role="menuitem"]', 'Ergebnisse vergleichen').click();
+    cy.get('coding-box-coding-results-comparison').as('dialog');
+    cy.wait('@recoverySave');
+    cy.get('@dialog').find('.discussion-input input').should('have.value', '2');
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Recovered note');
+    cy.get('@dialog').find('.discussion-score').should('contain.text', '4');
+    cy.get('@dialog').find('.discussion-saving').should('not.exist');
+    cy.window().then(win => {
+      const draft = JSON.parse(win.sessionStorage.getItem('coding-box-session-recovery:training-discussion-active-state')!);
+      expect(draft.data.entries.map((entry: { responseId: number }) => entry.responseId)).to.deep.equal([999]);
+    });
+  });
+
   it('finishes a pending reliability export after changing the comparison page', () => {
     let exportId: string;
     let exportsStarted = 0;
@@ -273,6 +307,7 @@ describe('Zoneless training comparison', () => {
         cy.get('@dialog').find('.level-indicator').should('contain.text', 'Score-Ebene');
       } else {
         cy.get('@dialog').find('.kappa-statistics').should('not.exist');
+        cy.get('.mat-mdc-snack-bar-container').should('contain.text', 'Fehler beim Laden der Interrater-Reliabilität');
       }
     });
 

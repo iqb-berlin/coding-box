@@ -48,6 +48,34 @@ describe('Zoneless information from file validation', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
+  it('rebuilds unique missing-file counts after delayed ignored-unit settings', () => {
+    cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-files-validation-dialog').should('not.exist');
+    let releaseSettings: () => void;
+    const settingsGate = new Cypress.Promise<void>(resolve => { releaseSettings = resolve; });
+    cy.intercept('GET', '**/api/admin/workspace/5/settings', request => settingsGate.then(() => request.reply({
+      body: { ignoredUnits: ['UNIT_IGNORED'], ignoredBooklets: [], ignoredTestlets: [] }
+    }))).as('ignoredSettings');
+    const validationResult = { testTaker: 'TESTTAKER_ZL',
+      booklets: completeFiles,
+      units: { complete: false, missing: ['UNIT_IGNORED', 'UNIT_MISSING'], files: [
+        { filename: 'UNIT_IGNORED', exists: false }, { filename: 'UNIT_MISSING', exists: false }
+      ] },
+      schemes: completeFiles, schemer: completeFiles, definitions: completeFiles, player: completeFiles, metadata: completeFiles };
+    cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/701/results', {
+      body: { testTakersFound: true, validationResults: [validationResult, { ...validationResult, testTaker: 'SECOND' }] }
+    }).as('missingUnits');
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
+    cy.wait('@missingUnits');
+    cy.contains('coding-box-files-validation-dialog .summary-card', 'Aufgaben').as('unitSummary');
+    cy.get('@unitSummary').find('.value.error').should('contain.text', '2');
+    cy.then(() => releaseSettings());
+    cy.wait('@ignoredSettings');
+    cy.get('@unitSummary').find('.value.error').should('contain.text', '1');
+    cy.get('@unitSummary').contains('.card-stat', 'So viele fehlen').click();
+    cy.get('@unitSummary').find('.missing-files-list').should('contain.text', 'UNIT_MISSING').and('not.contain.text', 'UNIT_IGNORED');
+  });
+
   it('shows validation progress and creates one task after a double click', () => {
     cy.get('coding-box-files-validation-dialog').contains('button', 'Schließen').click();
     cy.get('coding-box-files-validation-dialog').should('not.exist');

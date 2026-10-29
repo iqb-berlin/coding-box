@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  Observable, Subject, of, throwError
+  EMPTY, Observable, Subject, of, throwError
 } from 'rxjs';
 import { CodingManagementService } from './coding-management.service';
 import {
@@ -19,6 +19,7 @@ import { ResponseService } from '../../shared/services/response/response.service
 import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import type { ExportJobStatusResponseDto } from '../../../../../../api-dto/coding/export-request.dto';
 
 describe('CodingManagementService', () => {
   let service: CodingManagementService;
@@ -349,6 +350,68 @@ describe('CodingManagementService', () => {
         1,
         100
       );
+    });
+  });
+
+  describe.each(['coding-results', 'coding-list'] as const)('%s export startup', kind => {
+    const startDownload = () => (kind === 'coding-results' ?
+      service.downloadCodingResults('v2', 'csv', 7, false, true) :
+      service.performBackgroundCodingListDownload(1, 'csv'));
+    const getProgress = () => (kind === 'coding-results' ?
+      service.downloadProgress$.getValue() : service.codingListDownloadProgress$.getValue());
+
+    it('handles an empty startup stream and clears progress without polling', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(EMPTY);
+
+      await startDownload();
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'Failed to start export job',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(getProgress()).toBeNull();
+      expect(exportServiceMock.getExportJobStatus).not.toHaveBeenCalled();
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+    });
+
+    it('reports startup errors and clears progress without polling', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(throwError(() => new Error('startup failed')));
+
+      await startDownload();
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'coding-management.download-dialog.download-failed: startup failed',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(getProgress()).toBeNull();
+      expect(exportServiceMock.getExportJobStatus).not.toHaveBeenCalled();
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+    });
+
+    it('waits for startup completion and uses the final emitted job', async () => {
+      const startup = new Subject<{ jobId: string; message: string }>();
+      exportServiceMock.startExportJob.mockReturnValue(startup);
+      exportServiceMock.getExportJobStatus.mockReturnValue(of<ExportJobStatusResponseDto>({ status: 'completed', progress: 100 }));
+      exportServiceMock.downloadExportFile.mockReturnValue(of(new Blob(['csv data'])));
+      global.URL.createObjectURL = jest.fn();
+      global.URL.revokeObjectURL = jest.fn();
+
+      const download = startDownload();
+      startup.next({ jobId: 'first-job', message: 'started' });
+      startup.next({ jobId: 'final-job', message: 'started' });
+      await Promise.resolve();
+      expect(exportServiceMock.getExportJobStatus).not.toHaveBeenCalled();
+      expect(getProgress()).toBe(0);
+
+      startup.complete();
+      await download;
+
+      expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'final-job');
+      expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledTimes(1);
+      expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'final-job');
+      expect(getProgress()).toBeNull();
     });
   });
 

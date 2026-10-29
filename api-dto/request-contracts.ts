@@ -3,6 +3,9 @@ import { ResponseMatchingFlag } from './coding/response-matching-flag';
 
 const trainingDiscussionApplySource = values('manual', 'auto_agreement');
 const nonEmptyString = { type: 'string', minLength: 1 } as const;
+const positiveInteger = { type: 'integer', minimum: 1, maximum: 2147483647 } as const;
+const nonNegativeInteger = { type: 'integer', minimum: 0, maximum: 2147483647 } as const;
+const percentage = { type: 'number', minimum: 0, maximum: 100 } as const;
 
 const exportTransport = {
   authToken: string,
@@ -218,7 +221,7 @@ export const requestBodySchemas = {
       includeDeriveError: boolean
     }, ['unitName', 'variableId'])),
     selectedVariableBundles: array(object({
-      id: number,
+      id: positiveInteger,
       name: string,
       caseOrderingMode: values('continuous', 'alternating'),
       variables: array(object({
@@ -228,16 +231,16 @@ export const requestBodySchemas = {
       }, ['unitName', 'variableId']))
     }, ['id', 'name', 'variables'])),
     selectedCoders: array(object({
-      id: number,
+      id: positiveInteger,
       name: string,
       username: string,
       weight: number,
       capacityPercent: number
     }, ['id', 'name', 'username'])),
-    doubleCodingAbsolute: number,
-    doubleCodingPercentage: number,
+    doubleCodingAbsolute: nonNegativeInteger,
+    doubleCodingPercentage: percentage,
     caseOrderingMode: values('continuous', 'alternating'),
-    maxCodingCases: either({ type: 'null' }, number),
+    maxCodingCases: either({ type: 'null' }, positiveInteger),
     distributionSeed: either(string, number)
   }, ['selectedVariables', 'selectedCoders']),
   WorkspaceCodingStatisticsController_createDistributedCodingJobs: object({
@@ -247,7 +250,7 @@ export const requestBodySchemas = {
       includeDeriveError: boolean
     }, ['unitName', 'variableId'])),
     selectedVariableBundles: array(object({
-      id: number,
+      id: positiveInteger,
       name: string,
       caseOrderingMode: values('continuous', 'alternating'),
       variables: array(object({
@@ -257,16 +260,16 @@ export const requestBodySchemas = {
       }, ['unitName', 'variableId']))
     }, ['id', 'name', 'variables'])),
     selectedCoders: array(object({
-      id: number,
+      id: positiveInteger,
       name: string,
       username: string,
       weight: number,
       capacityPercent: number
     }, ['id', 'name', 'username'])),
-    doubleCodingAbsolute: number,
-    doubleCodingPercentage: number,
+    doubleCodingAbsolute: nonNegativeInteger,
+    doubleCodingPercentage: percentage,
     caseOrderingMode: values('continuous', 'alternating'),
-    maxCodingCases: either({ type: 'null' }, number),
+    maxCodingCases: either({ type: 'null' }, positiveInteger),
     distributionSeed: either(string, number),
     showScore: boolean,
     allowComments: boolean,

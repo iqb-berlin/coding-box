@@ -35,10 +35,11 @@ export function createCodingJobForm({
   mode, isEdit, job, readOnly = false, lockStatus = false
 }: CodingJobFormOptions): CodingJobForm {
   const fb = new FormBuilder().nonNullable;
+  const wholeNumber = Validators.pattern(/^\d+$/);
   const form: CodingJobForm = fb.group({
-    durationSeconds: [job?.durationSeconds || 1, [Validators.min(1)]],
-    maxCodingCases: fb.control<number | null>(job?.maxCodingCases || null, [Validators.min(1)]),
-    doubleCodingAbsolute: [job?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
+    durationSeconds: [job?.durationSeconds || 1, [Validators.min(1), Validators.max(2147483647), wholeNumber]],
+    maxCodingCases: fb.control<number | null>(job?.maxCodingCases || null, [Validators.min(1), Validators.max(2147483647), wholeNumber]),
+    doubleCodingAbsolute: [job?.doubleCodingAbsolute ?? 0, [Validators.min(0), Validators.max(2147483647), wholeNumber]],
     doubleCodingPercentage: [job?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
     caseOrderingMode: fb.control<'continuous' | 'alternating'>(job?.caseOrderingMode || 'continuous', [Validators.required]),
     showScore: [job?.showScore ?? mode !== 'definition'],
@@ -49,7 +50,7 @@ export function createCodingJobForm({
   if (mode === 'definition') {
     form.addControl('name', fb.control(job?.name || '', [Validators.required, Validators.pattern(/\S/), Validators.maxLength(255)]));
     form.addControl('description', fb.control(job?.description || ''));
-    form.addControl('missingsProfileId', fb.control(job?.missingsProfileId ?? job?.missings_profile_id ?? 0, [Validators.min(0)]));
+    form.addControl('missingsProfileId', fb.control(job?.missingsProfileId ?? job?.missings_profile_id ?? 0, [Validators.min(0), Validators.max(2147483647), wholeNumber]));
   }
   if (isEdit) {
     form.addControl('status', fb.control(job?.status || (mode === 'definition' ? 'draft' : 'pending'), [Validators.required]));
