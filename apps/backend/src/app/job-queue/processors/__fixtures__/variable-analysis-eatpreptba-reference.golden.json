@@ -46,8 +46,7 @@
       "percentageTotal": 40,
       "percentageValid": 50,
       "isSchemaOnly": false,
-      "label": "Alpha",
-      "score": 1
+      "label": "Alpha"
     },
     {
       "unitName": "UNIT_REF",
@@ -58,8 +57,7 @@
       "percentageTotal": 20,
       "percentageValid": 25,
       "isSchemaOnly": false,
-      "label": "Beta",
-      "score": 0
+      "label": "Beta"
     },
     {
       "unitName": "UNIT_REF",
@@ -80,8 +78,7 @@
       "percentageTotal": 0,
       "percentageValid": 0,
       "isSchemaOnly": true,
-      "label": "Gamma",
-      "score": 0
+      "label": "Gamma"
     },
     {
       "unitName": "UNIT_REF",

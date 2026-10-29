@@ -13,6 +13,25 @@
           <p>{{ 'variable-analysis.analyzing-variables' | translate }}</p>
         </div>
         } @else {
+        <div class="result-controls analysis-options">
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'variable-analysis.new-analysis-mode' | translate }}</mat-label>
+            <mat-select [(ngModel)]="newAnalysisMode" [disabled]="!!activeJobValue || isStartingJob()">
+              <mat-option value="values">{{ 'variable-analysis.mode-values' | translate }}</mat-option>
+              <mat-option value="codes">{{ 'variable-analysis.mode-codes' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          @if (newAnalysisMode() === 'codes') {
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'variable-analysis.coding-version' | translate }}</mat-label>
+            <mat-select [(ngModel)]="newCodingVersion" [disabled]="!!activeJobValue || isStartingJob()">
+              <mat-option value="v1">{{ 'variable-analysis.version-v1' | translate }}</mat-option>
+              <mat-option value="v2">{{ 'variable-analysis.version-v2' | translate }}</mat-option>
+              <mat-option value="v3">{{ 'variable-analysis.version-v3' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          }
+        </div>
         <div class="top-actions">
           <button mat-button (click)="refreshJobs()" [disabled]="isJobsLoading() || isInitializing()">
             <mat-icon>refresh</mat-icon>
@@ -92,7 +111,7 @@
             {{ 'variable-analysis.only-empty-values' | translate }}
           </mat-checkbox>
           <mat-slide-toggle [(ngModel)]="includeSchemaCodes" (change)="onSchemaCodesToggleChange()" color="primary">
-            {{ 'variable-analysis.include-schema-codes' | translate }}
+            {{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.include-schema-codes' : 'variable-analysis.include-metadata-values') | translate }}
           </mat-slide-toggle>
         </div>
 
@@ -111,6 +130,20 @@
         </div>
         } @else {
         <div class="variables-container">
+          <p class="analysis-context">
+            <strong>{{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.mode-codes' : 'variable-analysis.mode-values') | translate }}</strong>
+            @if (resultAnalysisMode() === 'codes') {
+            <span> · {{ ('variable-analysis.version-' + resultCodingVersion()) | translate }}</span>
+            }
+          </p>
+          <p class="validity-help">{{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.code-validity-help' : 'variable-analysis.value-validity-help') | translate }}</p>
+          <details class="variable-status-overview">
+            <summary>{{ 'variable-analysis.variable-status-overview' | translate }}</summary>
+            <p>{{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.code-status-help' : 'variable-analysis.value-status-help') | translate }}</p>
+            @for (combo of variableCombos(); track combo.unitId + ':' + combo.variableId) {
+            <p class="variable-status-entry"><strong>{{ combo.unitName }} / {{ combo.variableId }}:</strong> {{ getStatusSummary(combo.statusCounts || []) }}</p>
+            }
+          </details>
           <div class="info-message">
             <mat-icon>table_chart</mat-icon>
             <span>{{ 'variable-analysis.result-table-info' | translate:{max: MAX_VALUES_PER_VARIABLE} }}</span>
@@ -144,12 +177,12 @@
 
               <ng-container matColumnDef="value">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                  {{ 'variable-analysis.code-category-column' | translate }}
+                  {{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.code-column' : 'variable-analysis.value-category-column') | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">
                   <div class="value-cell">
-                    @if (row.value === '') {
-                    <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
+                    @if (row.value.trim() === '') {
+                    <span class="empty-value">{{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.missing-code' : 'variable-analysis.empty-value') | translate }}</span>
                     } @else {
                     <span>{{ row.value | slice:0:100 }}{{ row.value.length > 100 ? '...' : '' }}</span>
                     }
@@ -161,7 +194,7 @@
               </ng-container>
 
               <ng-container matColumnDef="label">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                <th mat-header-cell *matHeaderCellDef mat-sort-header [matTooltip]="'variable-analysis.label-help' | translate">
                   {{ 'variable-analysis.label-column' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">
@@ -170,7 +203,7 @@
               </ng-container>
 
               <ng-container matColumnDef="score">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                <th mat-header-cell *matHeaderCellDef mat-sort-header [matTooltip]="'variable-analysis.score-help' | translate">
                   {{ 'variable-analysis.score-column' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">{{ formatOptionalNumber(row.score) }}</td>
@@ -191,14 +224,14 @@
               </ng-container>
 
               <ng-container matColumnDef="percentageTotal">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                <th mat-header-cell *matHeaderCellDef mat-sort-header [matTooltip]="'variable-analysis.percentage-total-help' | translate">
                   {{ 'variable-analysis.percentage-total-column' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">{{ row.percentageTotal | number:'1.1-1' }}%</td>
               </ng-container>
 
               <ng-container matColumnDef="percentageValid">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header>
+                <th mat-header-cell *matHeaderCellDef mat-sort-header [matTooltip]="'variable-analysis.percentage-valid-help' | translate">
                   {{ 'variable-analysis.percentage-valid-column' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">{{ formatOptionalPercentage(row.percentageValid) }}</td>
@@ -218,21 +251,19 @@
                 <td mat-cell *matCellDef="let row">{{ row.validCount ?? 0 }}</td>
               </ng-container>
 
+              <ng-container matColumnDef="invalidCount">
+                <th mat-header-cell *matHeaderCellDef [matTooltip]="'variable-analysis.invalid-count-help' | translate">
+                  {{ 'variable-analysis.invalid-count-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.invalidCount ?? 0 }}</td>
+              </ng-container>
+
               <ng-container matColumnDef="emptyCount">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
                   {{ 'variable-analysis.empty-values' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">
                   {{ row.emptyCount }} ({{ row.emptyPercentage | number:'1.1-1' }}%)
-                </td>
-              </ng-container>
-
-              <ng-container matColumnDef="statusSummary">
-                <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                  {{ 'variable-analysis.status-distribution' | translate }}
-                </th>
-                <td mat-cell *matCellDef="let row" class="status-summary-cell" [matTooltip]="row.statusSummary">
-                  {{ row.statusSummary || ('variable-analysis.no-status-data' | translate) }}
                 </td>
               </ng-container>
 
@@ -313,6 +344,16 @@
             <ng-container matColumnDef="id">
               <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.id-column' | translate }}</th>
               <td mat-cell *matCellDef="let job">{{ job.id }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="analysisMode">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.analysis-mode' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                {{ (job.analysisMode === 'codes' ? 'variable-analysis.mode-codes' : 'variable-analysis.mode-values') | translate }}
+                @if (job.analysisMode === 'codes') {
+                <span> · {{ ('variable-analysis.version-' + (job.codingVersion || 'v1')) | translate }}</span>
+                }
+              </td>
             </ng-container>
 
             <!-- Status Column -->

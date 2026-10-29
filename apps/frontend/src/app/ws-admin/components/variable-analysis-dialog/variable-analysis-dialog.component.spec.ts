@@ -52,7 +52,7 @@ describe('VariableAnalysisDialogComponent', () => {
         id: 1,
         unitid: 10,
         variableid: 'VAR1',
-        status: 'VALUE',
+        status: 'VALUE_CHANGED',
         value: 'Val1',
         subform: ''
       },
@@ -60,7 +60,7 @@ describe('VariableAnalysisDialogComponent', () => {
         id: 2,
         unitid: 10,
         variableid: 'VAR1',
-        status: 'VALUE',
+        status: 'VALUE_CHANGED',
         value: 'Val1',
         subform: ''
       },
@@ -68,7 +68,7 @@ describe('VariableAnalysisDialogComponent', () => {
         id: 3,
         unitid: 10,
         variableid: 'VAR2',
-        status: 'VALUE',
+        status: 'VALUE_CHANGED',
         value: 'Val2',
         subform: ''
       }
@@ -380,7 +380,7 @@ describe('VariableAnalysisDialogComponent', () => {
       component.startNewAnalysis();
       expect(
         mockVariableAnalysisService.createAnalysisJob
-      ).toHaveBeenCalledWith(1, 10);
+      ).toHaveBeenCalledWith(1, 10, undefined, { analysisMode: 'values', codingVersion: undefined });
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalled();
     });
 
@@ -652,5 +652,65 @@ describe('VariableAnalysisDialogComponent', () => {
     await new Promise<void>(resolve => { setTimeout(resolve, 80); });
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain('variable-analysis.analysis-running');
+  });
+  it('starts a code analysis for the selected run without changing the displayed result mode', () => {
+    component.activeJob.set(undefined);
+    component.newAnalysisMode.set('codes');
+    component.newCodingVersion.set('v2');
+    component.startNewAnalysis();
+    expect(mockVariableAnalysisService.createAnalysisJob).toHaveBeenCalledWith(1, 10, undefined, { analysisMode: 'codes', codingVersion: 'v2' });
+    expect(component.resultAnalysisMode()).toBe('values');
+  });
+
+  it('shows code labels, zero scores, missing counts and one status summary per variable', () => {
+    component.data.analysisResults = {
+      total: 1,
+      variableCombos: [{
+        unitId: 10, unitName: 'UNIT', variableId: 'VAR', analysisMode: 'codes', codingVersion: 'v2', totalCount: 3, validCount: 2, invalidCount: 1, emptyCount: 0, statusCounts: [{ status: 5, count: 2, percentage: 200 / 3 }]
+      }],
+      frequencies: {
+        '10:VAR': [
+          {
+            unitId: 10, variableId: 'VAR', value: '0', label: 'Incorrect', score: 0, count: 1, percentage: 100 / 3
+          },
+          {
+            unitId: 10, variableId: 'VAR', value: '1', label: 'Correct', count: 1, percentage: 100 / 3
+          }
+        ]
+      }
+    };
+    component.analyzeVariables();
+    fixture.detectChanges();
+    expect(component.resultCodingVersion()).toBe('v2');
+    expect(fixture.nativeElement.querySelector('th.mat-column-value').textContent).toContain('variable-analysis.code-column');
+    expect(fixture.nativeElement.querySelector('td.mat-column-score').textContent.trim()).toBe('0');
+    expect(fixture.nativeElement.querySelector('td.mat-column-invalidCount').textContent.trim()).toBe('1');
+    expect(fixture.nativeElement.querySelectorAll('.variable-status-entry')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelectorAll('.analysis-table .mat-column-statusSummary')).toHaveLength(0);
+    component.data.analysisResults.variableCombos[0].analysisMode = 'values';
+    component.analyzeVariables();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.mat-column-score')).toBeNull();
+    expect(fixture.nativeElement.querySelector('th.mat-column-value').textContent).toContain('variable-analysis.value-category-column');
+  });
+
+  it('uses the same raw-value validity rules for the local response preview', () => {
+    component.data.analysisResults = undefined;
+    component.data.responses = [
+      {
+        id: 1, unitid: 10, variableid: 'VAR', value: 'A', status: 'VALUE_CHANGED', subform: ''
+      },
+      {
+        id: 2, unitid: 10, variableid: 'VAR', value: 'A', status: 'INVALID', subform: ''
+      },
+      {
+        id: 3, unitid: 10, variableid: 'VAR', value: '   ', status: 'VALUE_CHANGED', subform: ''
+      }
+    ];
+    component.analyzeVariables();
+    expect(component.allVariableCombos()[0]).toMatchObject({
+      totalCount: 3, validCount: 1, invalidCount: 2, emptyCount: 1
+    });
+    expect(component.variableFrequencies()['0:VAR'].find(row => row.value === 'A')).toMatchObject({ count: 2, validOccurrenceCount: 1, percentageValid: 100 });
   });
 });

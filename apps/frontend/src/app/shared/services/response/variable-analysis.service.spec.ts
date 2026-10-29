@@ -254,4 +254,11 @@ describe('VariableAnalysisService', () => {
       req.flush(blob);
     });
   });
+  it('sends the selected analysis mode and coding run when creating a job', () => {
+    service.createAnalysisJob(mockWorkspaceId, undefined, undefined, { analysisMode: 'codes', codingVersion: 'v3' }).subscribe();
+    const req = httpMock.expectOne(request => request.url.endsWith('/variable-analysis/jobs'));
+    expect(req.request.params.get('analysisMode')).toBe('codes');
+    expect(req.request.params.get('codingVersion')).toBe('v3');
+    req.flush({});
+  });
 });

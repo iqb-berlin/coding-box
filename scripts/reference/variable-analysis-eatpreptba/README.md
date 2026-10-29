@@ -28,3 +28,5 @@ Refresh workflow:
 
 The normalizer keeps Kodierbox percentages as percent values. eatPrepTBA proportions from `category_p_total` and `category_p_valid` are multiplied by `100`.
 It also checks that counts, denominators, proportions, duplicate keys, and expected schema/response rows are internally consistent.
+
+The golden fixture covers raw answer categories. Labels come from unit value metadata; code IDs and code scores are not attached to matching raw values. Assigned-code frequencies and coding-run selection are covered separately by the processor regression tests.

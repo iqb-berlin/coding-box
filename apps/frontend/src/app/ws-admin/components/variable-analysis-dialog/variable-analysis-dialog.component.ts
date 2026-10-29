@@ -22,6 +22,7 @@ import {
 } from '@angular/material/paginator';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +32,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
+import { VariableAnalysisMode, VariableAnalysisCodingVersion, VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import {
   VariableAnalysisService,
   JobCancelResult,
@@ -45,7 +47,7 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
-import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
+import { getResponseStatusLabel, getResponseStatusMetadata } from '../../../shared/utils/response-status-metadata.util';
 
 export interface VariableAnalysisData {
   unitId: number;
@@ -64,7 +66,7 @@ export interface VariableAnalysisData {
     expanded?: boolean;
   }[];
   analysisResults?: {
-    variableCombos: {
+    variableCombos: (VariableAnalysisOptions & {
       unitId: number;
       unitName: string;
       variableId: string;
@@ -81,7 +83,7 @@ export interface VariableAnalysisData {
       emptyPercentage?: number;
       distinctValueCount?: number;
       statusCounts?: VariableStatusCount[];
-    }[];
+    })[];
     frequencies: {
       [key: string]: {
         unitId?: number;
@@ -143,7 +145,7 @@ export interface VariableStatusCount {
   percentage: number;
 }
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;
@@ -193,6 +195,7 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
     MatPaginatorModule,
     MatInputModule,
     MatFormFieldModule,
+    MatSelectModule,
     MatCheckboxModule,
     MatSlideToggleModule,
     MatTabsModule,
@@ -215,7 +218,16 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     [key: string]: VariableFrequency[];
   }>({});
 
-  protected displayedColumns: string[] = [
+  readonly newAnalysisMode = signal<VariableAnalysisMode>('values');
+  readonly newCodingVersion = signal<VariableAnalysisCodingVersion>('v1');
+  readonly resultAnalysisMode = signal<VariableAnalysisMode>('values');
+  readonly resultCodingVersion = signal<VariableAnalysisCodingVersion>('v1');
+
+  protected get displayedColumns(): string[] {
+    return this.baseDisplayedColumns.filter(column => column !== 'score' || this.resultAnalysisMode() === 'codes');
+  }
+
+  private readonly baseDisplayedColumns: string[] = [
     'unitName',
     'variableId',
     'value',
@@ -227,8 +239,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'percentageValid',
     'totalCount',
     'validCount',
+    'invalidCount',
     'emptyCount',
-    'statusSummary',
     'metric'
   ];
 
@@ -264,6 +276,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   protected jobsDisplayedColumns: string[] = [
     'id',
     'status',
+    'analysisMode',
     'createdAt',
     'unitId',
     'variableId',
@@ -411,6 +424,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.serverAnalysisRows = [];
 
     if (this.data.analysisResults) {
+      const resultOptions = this.data.analysisResults.variableCombos[0];
+      const resultJob = this.jobs().find(job => job.id === this.currentAnalysisJobId);
+      this.resultAnalysisMode.set(resultOptions?.analysisMode ?? resultJob?.analysisMode ?? 'values');
+      this.resultCodingVersion.set(resultOptions?.codingVersion ?? resultJob?.codingVersion ?? 'v1');
       Object.keys(this.data.analysisResults!.frequencies).forEach(
         comboKey => {
           const firstFreq = this.data.analysisResults!.frequencies[comboKey][0];
@@ -451,6 +468,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     } else if (this.data.responses && this.data.responses.length > 0) {
       const responsesByVariable: { [key: string]: { [key: string]: number } } =
         {};
+      this.resultAnalysisMode.set('values');
+      const validCountsByVariable = new Map<string, Map<string, number>>();
       const comboSummaries = new Map<string, VariableCombo>();
 
       const variableIds = Array.from(
@@ -485,16 +504,23 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           unitName: 'Unknown',
           variableId: response.variableid,
           totalCount: 0,
+          validCount: 0,
           emptyCount: 0,
           emptyPercentage: 0,
           distinctValueCount: 0,
           statusCounts: []
         };
         summary.totalCount = (summary.totalCount || 0) + 1;
-        if (value === '') {
-          summary.emptyCount = (summary.emptyCount || 0) + 1;
-        } else {
+        const trimmedValue = value.trim().toLowerCase();
+        const isEmpty = /^(null|\[\s*(false\s*(,\s*false\s*)*)?\])?$/.test(trimmedValue);
+        const numericStatus = getResponseStatusMetadata(response.status)?.numeric ?? 0;
+        const isValid = !isEmpty && ![0, 1, 2, 4, 7, 9, 10].includes(numericStatus);
+        if (isEmpty) summary.emptyCount = (summary.emptyCount || 0) + 1;
+        if (isValid) {
           summary.validCount = (summary.validCount || 0) + 1;
+          const validCounts = validCountsByVariable.get(response.variableid) ?? new Map<string, number>();
+          validCounts.set(value, (validCounts.get(value) ?? 0) + 1);
+          validCountsByVariable.set(response.variableid, validCounts);
         }
 
         const status = response.status;
@@ -518,14 +544,13 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           0
         );
         const comboKey = `0:${variableid}`;
-        const emptyResponses = valueMap[''] || 0;
-        const validResponses = Math.max(0, totalResponses - emptyResponses);
+        const validResponses = comboSummaries.get(comboKey)?.validCount ?? 0;
         this.variableFrequencies.update(current => ({
           ...current,
           [comboKey]: Object.keys(valueMap)
             .map(value => {
               const count = valueMap[value];
-              const validOccurrenceCount = value === '' ? 0 : count;
+              const validOccurrenceCount = validCountsByVariable.get(variableid)?.get(value) ?? 0;
               const percentageTotal = (count / totalResponses) * 100;
               return {
                 unitName: 'Unknown',
@@ -649,20 +674,16 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     return `${value.toFixed(1)}%`;
   }
 
-  private getStatusSummary(statusCounts: VariableStatusCount[]): string {
+  protected getStatusSummary(statusCounts: VariableStatusCount[]): string {
     if (!statusCounts.length) {
       return this.translate.instant('variable-analysis.no-status-data');
     }
 
-    const visibleItems = statusCounts.slice(0, 3).map(item => {
+    const visibleItems = statusCounts.map(item => {
       const status = this.getStatusLabel(item.status);
       return `${status}: ${item.count} (${this.formatPercentage(item.percentage)})`;
     });
-    const remainingCount = statusCounts.length - visibleItems.length;
-
-    return remainingCount > 0 ?
-      `${visibleItems.join(', ')} +${remainingCount}` :
-      visibleItems.join(', ');
+    return visibleItems.join(', ');
   }
 
   getStatusLabel(status: number | string): string {
@@ -886,7 +907,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.variableAnalysisService
       .createAnalysisJob(
         this.data.workspaceId,
-        this.data.unitId // Optional unit ID, may be undefined
+        this.data.unitId,
+        undefined,
+        {
+          analysisMode: this.newAnalysisMode(),
+          codingVersion: this.newAnalysisMode() === 'codes' ? this.newCodingVersion() : undefined
+        }
       ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (job: VariableAnalysisJobDto) => {
@@ -1144,7 +1170,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   private createExportFileName(format: VariableAnalysisExportFormat): string {
     const date = new Date().toISOString().slice(0, 10);
-    return `variable-analysis-${this.data.workspaceId}-${date}.${format}`;
+    const mode = this.resultAnalysisMode() === 'codes' ? `codes-${this.resultCodingVersion()}` : 'values';
+    return `variable-analysis-${this.data.workspaceId}-${mode}-${date}.${format}`;
   }
 
   private saveBlob(blob: Blob, fileName: string): void {
