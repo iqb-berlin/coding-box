@@ -125,7 +125,12 @@
         "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
         "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts",
-        "apps/frontend/src/app/core/services/auth-session-state.service.spec.ts"
+        "apps/frontend/src/app/core/services/auth-session-state.service.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay-auth-session.service.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay-payload.facade.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay-recovery.service.spec.ts",
+        "apps/frontend/src/app/replay/services/replay-session-loader.service.spec.ts",
+        "cypress/zoneless/replay-lifecycle.cy.ts"
       ]
     },
     {
