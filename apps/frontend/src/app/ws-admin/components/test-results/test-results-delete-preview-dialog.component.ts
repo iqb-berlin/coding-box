@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -20,6 +21,7 @@ interface DeleteMetric {
   selector: 'coding-box-test-results-delete-preview-dialog',
   standalone: true,
   imports: [
+    TranslateModule,
     MatButtonModule,
     MatCheckboxModule,
     MatDialogModule,
@@ -263,6 +265,7 @@ export class TestResultsDeletePreviewDialogComponent {
   get requiresAcknowledgement(): boolean {
     if (this.isLogDelete) {
       return this.preview.scope === 'filteredPersons' ||
+        this.preview.scope === 'filteredGroups' ||
         this.preview.scope === 'groups' ||
         this.totalLogRows >= 100;
     }
@@ -272,6 +275,7 @@ export class TestResultsDeletePreviewDialogComponent {
     }
 
     return this.preview.scope === 'filteredPersons' ||
+      this.preview.scope === 'filteredGroups' ||
       this.preview.scope === 'groups' ||
       this.preview.persons > 1 ||
       this.preview.responses >= 100;

@@ -1,6 +1,6 @@
 import {
   ChangeDetectionStrategy,
-  Component, DestroyRef,
+  Component, computed, DestroyRef,
   effect,
   ElementRef, inject, OnDestroy, OnInit, signal,
   viewChild
@@ -50,7 +50,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  debounceTime, distinctUntilChanged, finalize,
+  debounceTime, finalize,
   Subject, Subscription,
   takeUntil
 } from 'rxjs';
@@ -295,6 +295,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubscription: Subscription | null = null;
   private testResultsRequest = { page: 0, limit: 50, searchText: '' };
   private testResultsRequestGeneration = 0;
+  protected readonly personSearchText = signal('');
+  private readonly appliedPersonSearchText = signal<string | null>(null);
 
   private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
@@ -330,6 +332,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   protected readonly testResultsLoadFailed = signal(false);
   protected readonly isUploadingResults = this.imports.isUploadingResults;
   protected readonly isSearching = signal<boolean>(false);
+  protected readonly isPersonListCurrent = computed(() => !this.isLoading() && !this.testResultsLoadFailed() &&
+    this.personSearchText().trim() === this.appliedPersonSearchText());
+
   readonly isLoadingBooklets = signal<boolean>(false);
   protected readonly isDeletingTestPersons = this.deletion.isDeletingTestPersons;
   readonly activeDeleteTask = this.deletion.activeDeleteTask;
@@ -398,8 +403,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.testPerson.set(null);
     });
     this.searchSubscription = this.searchSubject
-      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
+      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME))
       .subscribe(searchText => {
+        if (searchText.trim() !== this.personSearchText().trim()) return;
+        if (searchText.trim() === this.testResultsRequest.searchText.trim()) return;
         this.createTestResultsList(0, this.pageSize(), searchText);
       });
 
@@ -852,7 +859,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.isSearching.set(true);
+    this.selection.clear();
+    this.personSearchText.set(filterValue);
+    this.isSearching.set(filterValue.trim() !== this.appliedPersonSearchText());
     this.searchSubject.next(filterValue);
   }
 
@@ -1138,20 +1147,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   getCurrentSearchText(): string {
-    const searchInput = document.querySelector(
-      '.search-input'
-    ) as HTMLInputElement;
-    return searchInput ? searchInput.value : '';
+    return this.personSearchText();
   }
 
   protected clearSearch(): void {
-    const searchInput = document.querySelector(
-      '.search-input'
-    ) as HTMLInputElement;
-    if (searchInput) {
-      searchInput.value = '';
-      this.createTestResultsList(0, this.pageSize());
-    }
+    this.searchSubject.next('');
+    this.createTestResultsList(0, this.pageSize());
   }
 
   protected onPaginatorChange(event: PageEvent): void {
@@ -1172,7 +1173,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.testResultsRequestGeneration += 1;
     const requestGeneration = this.testResultsRequestGeneration;
     const workspaceId = this.appService.selectedWorkspaceId;
+    this.selection.clear();
+    this.pageIndex.set(page);
+    this.pageSize.set(limit);
     this.testResultsRequest = { page, limit, searchText };
+    this.personSearchText.set(searchText);
+    this.appliedPersonSearchText.set(null);
     this.isLoading.set(true);
     this.testResultsLoadFailed.set(false);
     this.testResultService
@@ -1183,7 +1189,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (requestGeneration !== this.testResultsRequestGeneration ||
             workspaceId !== this.appService.selectedWorkspaceId) return;
           this.isLoading.set(false);
-          this.isSearching.set(false);
+          this.appliedPersonSearchText.set(searchText.trim());
+          this.isSearching.set(this.personSearchText().trim() !== searchText.trim());
           const { data, total } = response;
           this.updateTable(data, total);
         },
@@ -1414,9 +1421,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   getResponseStatusTooltip(status: string): string { return this.summary.getResponseStatusTooltip(status); }
 
   protected isAllSelected(): boolean {
-    const numSelected = this.selection.selected.length;
-    const numRows = this.dataSource?.data.length ?? 0;
-    return numSelected === numRows;
+    const rows = this.dataSource?.data ?? [];
+    return rows.length > 0 && rows.every(row => this.selection.isSelected(row));
   }
 
   protected masterToggle(): void {
@@ -1432,6 +1438,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private updateTable(data: Record<string, unknown>[], total: number): void {
+    this.selection.clear();
     this.data = data as unknown as P[];
     const mappedResults = data.map((result: Record<string, unknown>) => ({
       id: result.id as number,
@@ -1478,7 +1485,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected deleteSelectedPersons(): void {
     const selectedTestPersons = this.selection.selected;
-    if (selectedTestPersons.length === 0) {
+    if (!this.isPersonListCurrent() || selectedTestPersons.length === 0) {
       return;
     }
 
@@ -1489,13 +1496,27 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   protected deleteFilteredPersons(): void {
+    if (!this.isPersonListCurrent()) return;
     this.confirmAndStartDelete({
       scope: 'filteredPersons',
-      searchText: this.getCurrentSearchText()
+      searchText: this.testResultsRequest.searchText
+    });
+  }
+
+  protected get hasPersonFilter(): boolean {
+    return this.personSearchText().trim().length > 0;
+  }
+
+  protected deleteFilteredGroups(): void {
+    if (!this.isPersonListCurrent()) return;
+    this.confirmAndStartDelete({
+      scope: 'filteredGroups',
+      searchText: this.testResultsRequest.searchText
     });
   }
 
   protected deleteSelectedGroups(): void {
+    if (!this.isPersonListCurrent()) return;
     const groups = Array.from(
       new Set(
         this.selection.selected
