@@ -1,5 +1,6 @@
 import * as childProcess from 'child_process';
 import * as path from 'path';
+import { createHash } from 'crypto';
 import { Job } from 'bullmq';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
@@ -128,6 +129,17 @@ const expectCloseToReference = (
   );
 };
 
+const literalCoding = (id: string, definitions: { value: string; label: string; score?: number }[]) => ({
+  id,
+  sourceType: 'BASE',
+  codes: definitions.map((definition, index) => ({
+    id: index + 1,
+    label: definition.label,
+    score: definition.score,
+    ruleSets: [{ rules: [{ method: 'MATCH', parameters: [definition.value] }] }]
+  }))
+});
+
 const createProcessor = ({
   representativeRows = [{ unitName: 'UNIT', unitId: '1' }],
   queryResults = [],
@@ -142,7 +154,7 @@ const createProcessor = ({
           type: 'string',
           sourceType: 'BASE',
           hasCodingScheme: true,
-          codes: [{ id: 'A', label: 'Alpha' }]
+          values: [{ value: 'A', label: 'Alpha' }]
         }
       ]
     }
@@ -199,6 +211,131 @@ const createProcessor = ({
 };
 
 describe('VariableAnalysisProcessor', () => {
+  it('merges long Unicode schema answers with their observed previews without counting them twice', async () => {
+    const answer = `${'🦈'.repeat(501)} Hai`;
+    const valueLength = Array.from(answer).length;
+    const valueHash = createHash('md5').update(answer).digest('hex');
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'VAR',
+          alias: 'VAR',
+          type: 'string',
+          hasCodingScheme: true,
+          coding: literalCoding('VAR', [{ value: answer, label: 'Hai', score: 1 }])
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: 2, validCount: 2, emptyCount: 0, distinctValueCount: 1
+        }],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', value: Array.from(answer).slice(0, 500).join(''), valueLength, valueHash, count: 2, validCount: 2
+        }],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', value: answer, count: 2, validCount: 2
+        }],
+        []
+      ]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const entries = findCacheSetPayload<Array<[string, Array<Record<string, unknown>>]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(entries[0][1]).toHaveLength(1);
+    expect(entries[0][1][0]).toMatchObject({
+      count: 2, score: 1, isFromSchema: true, percentage: 100
+    });
+    expect(entries[0][1][0].value).toContain(valueHash);
+  });
+
+  it('counts animal answers and supplements literal answers instead of code ids', async () => {
+    const codes = [
+      {
+        id: 1, label: 'Gesuchte Antwort', score: 1, ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['Hai\nhai\nHay'] }] }]
+      },
+      {
+        id: 4, label: 'Andere Tiere', score: 0, ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['Elefant', 'Zebra', 'Löwe'] }] }]
+      }
+    ];
+    const { processor, cacheService, responseRepository } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'ANIMALS',
+          alias: 'VAR',
+          type: 'string',
+          sourceType: 'BASE',
+          hasCodingScheme: true,
+          codes,
+          coding: { id: 'ANIMALS', sourceType: 'BASE', codes }
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: '4', validCount: '4', emptyCount: '0', distinctValueCount: '3'
+        }],
+        [
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Hai', valueLength: 3, count: '2', validCount: '2'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Hay', valueLength: 3, count: '1', validCount: '1'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Elefant', valueLength: 7, count: '1', validCount: '1'
+          }
+        ],
+        [
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Hai', count: '2', validCount: '2'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Hay', count: '1', validCount: '1'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: 'Elefant', count: '1', validCount: '1'
+          }
+        ],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', status: 3, count: '4'
+        }]
+      ]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    const entries = findCacheSetPayload<Array<[string, Array<Record<string, unknown>>]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    const rows = entries[0][1];
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: 'Hai', count: 2, validOccurrenceCount: 2, score: 1, isFromSchema: true
+      }),
+      expect.objectContaining({
+        value: 'Hay', count: 1, score: 1, isFromSchema: true
+      }),
+      expect.objectContaining({
+        value: 'Elefant', count: 1, validOccurrenceCount: 1, score: 0, isFromSchema: true
+      }),
+      expect.objectContaining({
+        value: 'hai', count: 0, score: 1, isFromSchema: true, isSchemaOnly: true
+      }),
+      expect.objectContaining({
+        value: 'Zebra', count: 0, score: 0, isFromSchema: true, isSchemaOnly: true
+      })
+    ]));
+    expect(rows.map(row => row.value)).not.toEqual(expect.arrayContaining(['1', '4']));
+    const schemaQuery = responseRepository.query.mock.calls.find(([sql]) => String(sql).includes('jsonb_to_recordset'));
+    expect(JSON.parse(schemaQuery?.[1].at(-1))).toEqual([
+      'Hai', 'hai', 'Hay', 'Elefant', 'Zebra', 'Löwe'
+    ].map(value => ({ logicalKey: 'UNIT\u001FVAR', value })));
+  });
+
   it('keeps the documented eatPrepTBA reference golden in sync with the normalized reference table', () => {
     try {
       childProcess.execFileSync(
@@ -233,11 +370,11 @@ describe('VariableAnalysisProcessor', () => {
               type: 'string',
               sourceType: 'BASE',
               hasCodingScheme: true,
-              codes: [
-                { id: 'A', label: 'Alpha', score: 1 },
-                { id: 'B', label: 'Beta', score: 0 },
-                { id: 'C', label: 'Gamma', score: 0 }
-              ]
+              coding: literalCoding('VAR_BASE', [
+                { value: 'A', label: 'Alpha', score: 1 },
+                { value: 'B', label: 'Beta', score: 0 },
+                { value: 'C', label: 'Gamma', score: 0 }
+              ])
             },
             {
               id: 'VAR_MULTI',
@@ -518,10 +655,10 @@ describe('VariableAnalysisProcessor', () => {
               type: 'string',
               sourceType: 'BASE',
               hasCodingScheme: true,
-              codes: [
-                { id: 'A', label: 'Alpha' },
-                { id: 'B', label: 'Beta' }
-              ]
+              coding: literalCoding('SCHEME_VAR', [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' }
+              ])
             },
             {
               id: 'MISSING',
@@ -529,7 +666,7 @@ describe('VariableAnalysisProcessor', () => {
               type: 'string',
               sourceType: 'BASE',
               hasCodingScheme: true,
-              codes: [{ id: 'Z', label: 'Zed' }]
+              coding: literalCoding('MISSING', [{ value: 'Z', label: 'Zed' }])
             },
             {
               id: 'NO_VALUE',
@@ -770,10 +907,10 @@ describe('VariableAnalysisProcessor', () => {
               type: 'string',
               sourceType: 'BASE',
               hasCodingScheme: true,
-              codes: [
-                { id: 'A', label: 'Alpha', score: 1 },
-                { id: 'B', label: 'Beta', score: 0 }
-              ]
+              coding: literalCoding('VAR', [
+                { value: 'A', label: 'Alpha', score: 1 },
+                { value: 'B', label: 'Beta', score: 0 }
+              ])
             }
           ]
         }

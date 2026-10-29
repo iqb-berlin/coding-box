@@ -1391,6 +1391,32 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     });
   });
 
+  it('includes the complete coding rules only for callers that request them', async () => {
+    const service = makeService();
+    const coding = {
+      id: 'B1',
+      alias: 'base_alias',
+      sourceType: 'BASE',
+      processing: ['IGNORE_CASE'],
+      fragmenting: '(.*)',
+      codes: [{
+        id: 7,
+        score: 1,
+        ruleSetOperatorAnd: true,
+        ruleSets: [{ ruleOperatorAnd: true, rules: [{ method: 'MATCH', parameters: ['Hai', 'Hay'] }] }]
+      }]
+    };
+    mockFileUploadRepository.find.mockImplementation(({ where }) => Promise.resolve(
+      where.file_type === 'Unit' ? unitFiles : [{
+        ...codingSchemes[0], data: JSON.stringify({ ...codingScheme, variableCodings: [coding] })
+      }]
+    ));
+    const [ordinary] = await service.getUnitVariableDetails(1);
+    expect(ordinary.variables.find(variable => variable.alias === 'base_alias')?.coding).toBeUndefined();
+    const [detailed] = await service.getUnitVariableDetails(1, { includeCodingRules: true });
+    expect(detailed.variables.find(variable => variable.alias === 'base_alias')?.coding).toEqual(coding);
+  });
+
   it('should keep schema ids separate from aliases when ids collide with other aliases', async () => {
     const service = makeService();
 
