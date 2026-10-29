@@ -47,7 +47,7 @@ try {
     const lock = local('./package-lock.json');
     const modules = [
       'express', '@nestjs/core', '@nestjs/platform-express', '@nestjs/bullmq',
-      'bullmq', 'ioredis', 'pg', 'libxmljs2', 'sqlite3'
+      '@nestjs/throttler', 'bullmq', 'ioredis', 'pg', 'libxmljs2', 'sqlite3'
     ];
     for (const name of modules) {
       assert.ok(local.resolve(name).startsWith(path.join(process.cwd(), 'node_modules') + path.sep),
