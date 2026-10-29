@@ -57,7 +57,7 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
   }
 
   private normalizeRequestParsingError(exception: unknown): unknown {
-    // Nest's adapter does not yet map these newer Multer field parsing errors.
+    // Preserve HTTP 400 if a raw parser error reaches the filter without adapter mapping.
     if (exception instanceof MulterError && [
       'INVALID_FIELD_NAME',
       'LIMIT_FIELD_ARRAY_INDEX'

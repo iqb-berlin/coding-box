@@ -59,6 +59,23 @@ Invalid credentials remain HTTP 401; network/server failures and invalid provide
 responses receive HTTP 503 with safe error codes and request IDs. Provider payloads
 and credentials are not included in diagnostics.
 
+## Reproducible backend runtime dependencies
+
+Nest's core, common, Express adapter and testing packages use the 11.2.8 patch
+line. Build and runtime Docker stages use npm 11.18.0. The runtime installs from
+the unchanged workspace `package.json`, `package-lock.json` and local `vendor`
+targets using `npm ci --omit=dev`. This preserves the locked dependency locations;
+Nx's reduced lockfile can incorrectly relocate incompatible nested packages such
+as Express 4 and 5. The image retains the manifests used for installation when
+copying the compiled application. It includes all workspace production dependencies,
+but omits development dependencies. The PostgreSQL driver and overrides come from
+the workspace lockfile; no packages are added or resolved separately in Docker.
+
+`npx nx run backend:verify-runtime-package` repeats the fresh production installation
+with the Docker npm version in a temporary directory. It verifies unchanged
+manifests and loads the HTTP adapter, queue, database and native XML/SQLite modules
+without access to the workspace's `node_modules`. Both backend CI gates run it.
+
 ## BullMQ queues and cutover
 
 All twelve queues use `@nestjs/bullmq` and BullMQ 6. Producers enqueue named jobs;
@@ -150,6 +167,7 @@ Run frontend and backend tasks separately and sequentially:
 ```sh
 npx nx lint backend
 npx nx run backend:typecheck
+npx nx run backend:verify-runtime-package
 npx nx test backend --configuration=ci --maxWorkers=2
 npx nx build backend --configuration=production
 npx nx run frontend:test-quality-gates

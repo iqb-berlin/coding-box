@@ -81,7 +81,8 @@ describe('Workspace multipart uploads', () => {
     crafted.append('items[]', 'y');
     const rejected = await fetch(url, { method: 'POST', body: crafted });
     expect(rejected.status).toBe(400);
-    expect(await rejected.json()).toMatchObject({ message: 'Invalid multipart field name' });
+    // Nest 11.2.8 maps Multer's error code before the global filter sees it.
+    expect(await rejected.json()).toMatchObject({ statusCode: 400, message: expect.stringMatching(/^Invalid field name/) });
     expect(filesService.uploadTestFiles).not.toHaveBeenCalled();
 
     const valid = new FormData();
