@@ -432,6 +432,11 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync('typecheck.tested', 'checked');
       if (fs.existsSync('fail-typecheck')) process.exitCode = 1;
     `);
+    writeFileSync(join(directory, 'runtime-package.cjs'), `
+      const fs = require('node:fs');
+      fs.writeFileSync('runtime-package.tested', 'checked');
+      if (fs.existsSync('fail-runtime-package')) process.exitCode = 1;
+    `);
     for (const project of ['frontend', 'backend']) {
       const root = join(directory, 'apps', project);
       mkdirSync(root, { recursive: true });
@@ -439,9 +444,14 @@ test('the actual backend job checks its complete suite and rejects test failures
         name: project,
         targets: {
           test: { executor: 'nx:run-commands', options: { command: `node test.cjs ${project}` } },
-          ...(project === 'backend' ? { typecheck: {
-            executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
-          } } : {})
+          ...(project === 'backend' ? {
+            typecheck: {
+              executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
+            },
+            'verify-runtime-package': {
+              executor: 'nx:run-commands', cache: false, options: { command: 'node runtime-package.cjs' }
+            }
+          } : {})
         }
       }));
       writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
@@ -466,6 +476,7 @@ test('the actual backend job checks its complete suite and rejects test failures
     assert.equal(readFileSync(join(directory, 'migration.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
+    assert.equal(readFileSync(join(directory, 'runtime-package.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
     writeFileSync(join(directory, 'fail-backend'), 'fail');
     const failed = run('sh', ['-eu', '-c', script]);
@@ -480,6 +491,14 @@ test('the actual backend job checks its complete suite and rejects test failures
     assert.ifError(failedTypes.error);
     assert.equal(failedTypes.status, 1, failedTypes.stdout + failedTypes.stderr);
     assert.match(failedTypes.stdout + failedTypes.stderr, /backend:typecheck/);
+    assert.equal(existsSync(join(directory, 'backend.tested')), false);
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+    rmSync(join(directory, 'fail-typecheck'));
+    writeFileSync(join(directory, 'fail-runtime-package'), 'fail');
+    const failedRuntime = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failedRuntime.error);
+    assert.equal(failedRuntime.status, 1, failedRuntime.stdout + failedRuntime.stderr);
+    assert.match(failedRuntime.stdout + failedRuntime.stderr, /backend:verify-runtime-package/);
     assert.equal(existsSync(join(directory, 'backend.tested')), false);
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
   } finally {
