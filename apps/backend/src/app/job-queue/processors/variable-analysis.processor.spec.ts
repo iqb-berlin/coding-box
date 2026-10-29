@@ -211,6 +211,187 @@ const createProcessor = ({
 };
 
 describe('VariableAnalysisProcessor', () => {
+  it.each([
+    {
+      nullCount: 2, label: 'NULL', score: 1, isFromSchema: true
+    },
+    {
+      nullCount: 0, label: 'Leer', score: 0, isFromSchema: true
+    },
+    {
+      nullCount: 1, label: undefined, score: undefined, isFromSchema: undefined
+    }
+  ].flatMap(expected => [true, false].map(inTopValues => ({ ...expected, inTopValues }))))(
+    'does not confuse null and empty answers with nullCount=$nullCount and inTopValues=$inTopValues', async expected => {
+      const { processor, cacheService, responseRepository } = createProcessor({
+        unitVariableDetails: [{
+          unitName: 'UNIT',
+          unitId: 'UNIT',
+          variables: [{
+            id: 'VAR',
+            alias: 'VAR',
+            type: 'string',
+            hasCodingScheme: true,
+            coding: {
+              id: 'VAR',
+              sourceType: 'BASE',
+              codes: [
+                {
+                  id: 1, label: 'NULL', score: 1, ruleSets: [{ rules: [{ method: 'IS_NULL' }] }]
+                },
+                {
+                  id: 2, label: 'Leer', score: 0, ruleSets: [{ rules: [{ method: 'IS_EMPTY' }] }]
+                }
+              ]
+            },
+            values: [{ value: '', label: 'Leere Antwort' }]
+          }]
+        }],
+        queryResults: [
+          [{
+            unitName: 'UNIT',
+            variableId: 'VAR',
+            totalCount: expected.inTopValues ? 2 : 42,
+            validCount: expected.inTopValues ? 0 : 40,
+            emptyCount: 2,
+            distinctValueCount: expected.inTopValues ? 1 : 21
+          }],
+          expected.inTopValues ?
+            [{
+              unitName: 'UNIT', variableId: 'VAR', value: '', valueLength: 0, nullCount: expected.nullCount, count: 2, validCount: 0
+            }] :
+            Array.from({ length: 20 }, (_, index) => ({
+              unitName: 'UNIT', variableId: 'VAR', value: `Antwort${index}`, valueLength: 9, nullCount: 0, count: 2, validCount: 2
+            })),
+          [{
+            unitName: 'UNIT', variableId: 'VAR', value: '', nullCount: expected.nullCount, count: 2, validCount: 0
+          }],
+          []
+        ]
+      });
+      await processor.processWorkspaceJob(createJob());
+      const entries = findCacheSetPayload<Array<[string, Array<Record<string, unknown>>]>>(
+        cacheService, 'variable-analysis:1:job-1:frequencies:0'
+      );
+      const emptyRow = entries[0][1].find(row => row.value === '');
+      expect(entries[0][1]).toHaveLength(expected.inTopValues ? 1 : 21);
+      expect(emptyRow).toMatchObject({
+        value: '', count: 2, score: expected.score, isFromSchema: expected.isFromSchema
+      });
+      if (expected.label) expect(emptyRow?.label).toBe(expected.label);
+      expect(responseRepository.query.mock.calls[1][0]).toContain('AS "nullCount"');
+    }
+  );
+
+  it('applies range coding to unit metadata answers outside the top twenty', async () => {
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'VAR',
+          alias: 'VAR',
+          type: 'integer',
+          hasCodingScheme: true,
+          coding: {
+            id: 'VAR',
+            sourceType: 'BASE',
+            codes: [{
+              id: 7, label: 'Im Bereich', score: 1, ruleSets: [{ rules: [{ method: 'NUMERIC_RANGE', parameters: ['1', '10'] }] }]
+            }]
+          },
+          values: [{ value: '5', label: 'Fünf' }, { value: '6', label: 'Sechs' }]
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: 41, validCount: 41, emptyCount: 0, distinctValueCount: 21
+        }],
+        Array.from({ length: 20 }, (_, index) => ({
+          unitName: 'UNIT', variableId: 'VAR', value: String(100 + index), valueLength: 3, count: 2, validCount: 2
+        })),
+        [{
+          unitName: 'UNIT', variableId: 'VAR', value: '5', count: 1, validCount: 1
+        }],
+        []
+      ]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const entries = findCacheSetPayload<Array<[string, Array<Record<string, unknown>>]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(entries[0][1]).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: '5', label: 'Im Bereich', count: 1, score: 1, isFromSchema: true, isSchemaSupplemental: true
+      }),
+      expect.objectContaining({
+        value: '6', label: 'Im Bereich', count: 0, score: 1, isFromSchema: true, isSchemaOnly: true
+      })
+    ]));
+  });
+
+  it('codes complete long regex answers in batches while caching only their previews', async () => {
+    const answers = Array.from({ length: 21 }, (_, index) => `Hai ${index} ${'🦈'.repeat(501)}${index === 20 ? 'x' : ''}`);
+    const { processor, cacheService, responseRepository } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: answers.map((answer, index) => ({
+          id: `VAR${index}`,
+          alias: `VAR${index}`,
+          type: 'string',
+          hasCodingScheme: true,
+          coding: {
+            id: 'VAR',
+            sourceType: 'BASE',
+            codes: [{
+              id: 7,
+              label: 'Langer Hai',
+              score: 1,
+              ruleSets: [{ rules: [{ method: 'MATCH_REGEX', parameters: ['^Hai .*🦈$'] }] }]
+            }]
+          }
+        }))
+      }],
+      queryResults: [
+        answers.map((answer, index) => ({
+          unitName: 'UNIT', variableId: `VAR${index}`, totalCount: 2, validCount: 2, emptyCount: 0, distinctValueCount: 1
+        })),
+        answers.map((answer, index) => ({
+          unitName: 'UNIT',
+          variableId: `VAR${index}`,
+          value: Array.from(answer).slice(0, 500).join(''),
+          valueLength: Array.from(answer).length,
+          valueHash: createHash('md5').update(answer).digest('hex'),
+          responseId: index + 1,
+          count: 2,
+          validCount: 2
+        })),
+        answers.slice(0, 20).map((value, index) => ({ responseId: index + 1, value })).reverse(),
+        answers.slice(20).map((value, index) => ({ responseId: index + 21, value })),
+        []
+      ]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const entries = findCacheSetPayload<Array<[string, Array<Record<string, unknown>>]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    const rows = entries.flatMap(([, frequencies]) => frequencies);
+    expect(rows).toHaveLength(21);
+    rows.forEach((row, index) => {
+      expect(row).toMatchObject({
+        label: index === 20 ? undefined : 'Langer Hai',
+        score: index === 20 ? undefined : 1,
+        isFromSchema: index === 20 ? undefined : true,
+        count: 2
+      });
+      expect(row.value).not.toBe(answers[index]);
+      expect(row.value).toContain(createHash('md5').update(answers[index]).digest('hex'));
+    });
+    expect(responseRepository.query.mock.calls[2][1]).toEqual([Array.from({ length: 20 }, (_, index) => index + 1)]);
+    expect(responseRepository.query.mock.calls[3][1]).toEqual([[21]]);
+  });
+
   it('merges long Unicode schema answers with their observed previews without counting them twice', async () => {
     const answer = `${'🦈'.repeat(501)} Hai`;
     const valueLength = Array.from(answer).length;
@@ -232,8 +413,9 @@ describe('VariableAnalysisProcessor', () => {
           unitName: 'UNIT', variableId: 'VAR', totalCount: 2, validCount: 2, emptyCount: 0, distinctValueCount: 1
         }],
         [{
-          unitName: 'UNIT', variableId: 'VAR', value: Array.from(answer).slice(0, 500).join(''), valueLength, valueHash, count: 2, validCount: 2
+          unitName: 'UNIT', variableId: 'VAR', value: Array.from(answer).slice(0, 500).join(''), valueLength, valueHash, responseId: 1, count: 2, validCount: 2
         }],
+        [{ responseId: 1, value: answer }],
         [{
           unitName: 'UNIT', variableId: 'VAR', value: answer, count: 2, validCount: 2
         }],

@@ -108,6 +108,80 @@ describe('variable analysis schema values', () => {
     expect(getExplicitSchemaValues(variable).map(row => [row.value, row.score])).toEqual([['true', 1], ['false', 0]]);
   });
 
+  it('distinguishes null from an empty string when applying coding rules', () => {
+    const variable: VariableDetailDto = {
+      ...animals,
+      coding: {
+        id: 'V',
+        sourceType: 'BASE',
+        codes: [
+          {
+            id: 1, label: 'NULL', score: 1, ruleSets: [{ rules: [{ method: 'IS_NULL' }] }]
+          },
+          {
+            id: 2, label: 'Leer', score: 0, ruleSets: [{ rules: [{ method: 'IS_EMPTY' }] }]
+          }
+        ]
+      }
+    };
+    expect(resolveSchemaValue(null, variable)).toMatchObject({ label: 'NULL', score: 1 });
+    expect(resolveSchemaValue('', variable)).toMatchObject({ label: 'Leer', score: 0 });
+  });
+
+  it.each([0, 4])('resolves numeric intended-incomplete fallback code %i', id => {
+    const variable: VariableDetailDto = {
+      ...animals,
+      coding: {
+        id: 'V',
+        sourceType: 'BASE',
+        codes: [
+          { id: 'INTENDED_INCOMPLETE', label: 'Sonderfall', ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['Sonderfall'] }] }] },
+          {
+            id, label: 'Unvollständig', score: 0, type: 'INTENDED_INCOMPLETE'
+          }
+        ]
+      }
+    };
+    expect(resolveSchemaValue('Andere Antwort', variable)).toMatchObject({
+      label: 'Unvollständig', score: 0, order: 1, isFromSchema: true
+    });
+    expect(resolveSchemaValue('Sonderfall', variable)).toMatchObject({
+      label: 'Sonderfall', score: 0, order: 0, isFromSchema: true
+    });
+  });
+
+  it.each([0, 4])('resolves numeric intended-incomplete code %i without a special string id', id => {
+    expect(resolveSchemaValue('Andere Antwort', {
+      ...animals,
+      coding: {
+        id: 'V',
+        sourceType: 'BASE',
+        codes: [{
+          id, label: 'Unvollständig', score: 0, type: 'INTENDED_INCOMPLETE'
+        }]
+      }
+    })).toMatchObject({ label: 'Unvollständig', score: 0, isFromSchema: true });
+  });
+
+  it.each(['INVALID', 'INTENDED_INCOMPLETE'] as const)('preserves special code id %s alongside numeric code zero', id => {
+    const variable: VariableDetailDto = {
+      ...animals,
+      coding: {
+        id: 'V',
+        sourceType: 'BASE',
+        codes: [
+          {
+            id: 0, label: 'Null', score: 1, ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['0'] }] }]
+          },
+          { id, label: 'Sonderfall', ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['Sonderfall'] }] }] }
+        ]
+      }
+    };
+    expect(resolveSchemaValue('Sonderfall', variable)).toMatchObject({
+      label: 'Sonderfall', score: 0, order: 1, isFromSchema: true
+    });
+  });
+
   it('keeps whole-response coding separate from individual multiple-response categories', () => {
     expect(getExplicitSchemaValues({ ...animals, multiple: true })).toEqual([]);
     expect(resolveSchemaValue('Hai', { ...animals, multiple: true })).toBeUndefined();

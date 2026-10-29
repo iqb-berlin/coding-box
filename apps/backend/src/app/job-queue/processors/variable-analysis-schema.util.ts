@@ -13,7 +13,7 @@ type AnalysisVariable = Pick<VariableDetailDto, 'coding' | 'type' | 'multiple'>;
 
 /** Resolve the complete raw answer using the same rule engine as autocoding. */
 export function resolveSchemaValue(
-  value: string,
+  value: string | null,
   variable: AnalysisVariable
 ): SchemaValueDefinition | undefined {
   const { coding } = variable;
@@ -21,24 +21,34 @@ export function resolveSchemaValue(
   if (!coding?.codes?.length || variable.multiple || variable.type === 'json' || variable.type === 'attachment') {
     return undefined;
   }
-  const responseValue = variable.type === 'boolean' && ['true', 'false'].includes(value) ?
+  const responseValue = variable.type === 'boolean' && value !== null && ['true', 'false'].includes(value) ?
     value === 'true' : value;
-  const result = CodingFactory.code({
+  const response = {
     id: coding.id,
-    status: 'VALUE_CHANGED',
+    status: 'VALUE_CHANGED' as const,
     value: responseValue
-  }, coding);
+  };
+  const result = CodingFactory.code(response, coding);
   if (!['CODING_COMPLETE', 'INVALID', 'INTENDED_INCOMPLETE'].includes(result.status)) {
     return undefined;
   }
   const codeId = ['INVALID', 'INTENDED_INCOMPLETE'].includes(result.status) ?
     result.status : result.code;
-  const order = coding.codes.findIndex(code => code.id === codeId);
+  let order = coding.codes.findIndex(code => code.id === codeId);
+  if (result.status === 'INTENDED_INCOMPLETE') {
+    const fallbackOrder = coding.codes.findIndex(code => code.id === result.code && code.type === 'INTENDED_INCOMPLETE');
+    // Matched special IDs are returned as code 0, which may also be a numeric fallback ID.
+    const matchedSpecialCode = order >= 0 && coding.codes[order].type !== 'INTENDED_INCOMPLETE' &&
+      CodingFactory.code(response, { ...coding, codes: [coding.codes[order]] }).status === 'INTENDED_INCOMPLETE';
+    if (fallbackOrder >= 0 && (result.code !== 0 || !matchedSpecialCode)) {
+      order = fallbackOrder;
+    }
+  }
   if (order < 0) {
     return undefined;
   }
   return {
-    value,
+    value: value ?? '',
     label: coding.codes[order].label || String(coding.codes[order].id),
     score: result.score,
     order,
