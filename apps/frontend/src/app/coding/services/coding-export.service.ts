@@ -41,9 +41,9 @@ export class CodingExportService {
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
           {
             params,
-            responseType: 'blob' as 'json'
+            responseType: 'blob'
           }
-        ) as unknown as Observable<Blob>;
+        );
       })
     );
   }
@@ -65,9 +65,9 @@ export class CodingExportService {
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
           {
             params,
-            responseType: 'blob' as 'json'
+            responseType: 'blob'
           }
-        ) as unknown as Observable<Blob>;
+        );
       })
     );
   }
@@ -98,9 +98,9 @@ export class CodingExportService {
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
             params,
-            responseType: 'blob' as 'json'
+            responseType: 'blob'
           }
-        ) as unknown as Observable<Blob>;
+        );
       })
     );
   }
@@ -133,9 +133,9 @@ export class CodingExportService {
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
             params,
-            responseType: 'blob' as 'json'
+            responseType: 'blob'
           }
-        ) as unknown as Observable<Blob>;
+        );
       })
     );
   }
