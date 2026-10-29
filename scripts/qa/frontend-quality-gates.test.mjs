@@ -149,6 +149,46 @@ test('native buttons pass template accessibility rules', async () => {
   assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
 });
 
+test('application components retain OnPush, signal inputs and modern outputs', async () => {
+  const rules = [
+    '@angular-eslint/prefer-on-push-component-change-detection',
+    '@angular-eslint/prefer-signals',
+    '@angular-eslint/prefer-output-emitter-ref'
+  ];
+  const legacy = `import { Component, Input, Output, EventEmitter } from '@angular/core';
+    @Component({ selector: 'coding-box-probe', template: '' })
+    export class ProbeComponent {
+      @Input() value = '';
+      @Output() changed = new EventEmitter<string>();
+    }`;
+  const [rejected] = await eslint.lintText(legacy, { filePath: componentPath });
+  for (const rule of rules) {
+    assert.ok(rejected.messages.some(message => message.ruleId === rule),
+      `${rule}: ${JSON.stringify(rejected.messages)}`);
+  }
+  const modern = `import {
+  ChangeDetectionStrategy, Component, input, output
+} from '@angular/core';
+
+@Component({
+  selector: 'coding-box-probe',
+  template: '',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class ProbeComponent {
+  readonly value = input('');
+  readonly changed = output<string>();
+}
+`;
+  const [accepted] = await eslint.lintText(modern, { filePath: componentPath });
+  assert.equal(accepted.errorCount, 0, JSON.stringify(accepted.messages));
+  const [testHost] = await eslint.lintText(legacy, {
+    filePath: componentPath.replace('.ts', '.spec.ts')
+  });
+  assert.ok(!testHost.messages.some(message => rules.includes(message.ruleId)),
+    JSON.stringify(testHost.messages));
+});
+
 test('Core rejects feature imports and accepts shared services', async () => {
   const filePath = 'apps/frontend/src/app/core/services/authentication.service.ts';
   for (const feature of [
