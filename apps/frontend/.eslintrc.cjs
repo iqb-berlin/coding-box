@@ -17,6 +17,9 @@ module.exports = {
       rules: {
         ...typescriptConfig.rules,
         '@angular-eslint/prefer-inject': 'error',
+        '@angular-eslint/prefer-on-push-component-change-detection': 'error',
+        '@angular-eslint/prefer-signals': 'error',
+        '@angular-eslint/prefer-output-emitter-ref': 'error',
         '@angular-eslint/component-selector': ['error', {
           type: 'element',
           prefix: 'coding-box',
@@ -63,7 +66,11 @@ module.exports = {
       files: ['*.spec.ts'],
       rules: {
         // Test doubles can represent third-party components with their original selectors.
-        '@angular-eslint/component-selector': 'off'
+        '@angular-eslint/component-selector': 'off',
+        // Test hosts also exercise legacy integration and change detection behavior.
+        '@angular-eslint/prefer-on-push-component-change-detection': 'off',
+        '@angular-eslint/prefer-signals': 'off',
+        '@angular-eslint/prefer-output-emitter-ref': 'off'
       }
     },
     {

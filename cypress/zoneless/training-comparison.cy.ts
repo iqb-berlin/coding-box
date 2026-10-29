@@ -1,3 +1,4 @@
+import type { TrainingDiscussionApplyPreviewDto } from '../../api-dto/coding/training-discussion-apply.dto';
 import type { TrainingKappaStatisticsDto } from '../../api-dto/coding/training-kappa-statistics.dto';
 import type { WithinTrainingCodingComparisonPageDto } from '../../api-dto/coding/training-comparison.dto';
 
@@ -92,6 +93,44 @@ describe('Zoneless training comparison', () => {
     cy.wait('@comparison');
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
+
+  it('previews and applies discussion results through the confirmation dialog without another UI interaction', () => {
+    const previewGate = createResponseGate();
+    const applyGate = createResponseGate();
+    const preview: TrainingDiscussionApplyPreviewDto = {
+      trainingId: 7, source: 'manual', totalTrainingResponses: 1, sourceResultsCount: 1, applicableResultsCount: 1,
+      missingResultsCount: 0, missingScoreCount: 0, existingFinalResultsCount: 1, productiveJobConflictCount: 0,
+      removableProductiveJobUnitCount: 0, blockingProductiveJobUnitCount: 0, approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0, affectedJobIds: [], affectedJobDefinitionIds: [], canApply: true
+    };
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/apply-discussion-results-preview', async request => {
+      expect(request.body).to.deep.equal({ source: 'manual' });
+      await previewGate.wait;
+      request.reply({ body: preview });
+    }).as('applyPreview');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/apply-discussion-results', async request => {
+      expect(request.body).to.deep.equal({ source: 'manual', existingResultStrategy: 'skip', jobConflictStrategy: 'skip' });
+      await applyGate.wait;
+      request.reply({ body: {
+        ...preview, success: true, updatedResponsesCount: 0, skippedExistingResultsCount: 1,
+        overwrittenExistingResultsCount: 0, skippedJobConflictCount: 0, skippedMissingScoreCount: 0,
+        removedJobUnitCount: 0, messageKey: 'success'
+      } });
+    }).as('applyResults');
+
+    openComparison();
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').click().should('be.disabled');
+    cy.then(() => { previewGate.release(); });
+    cy.wait('@applyPreview');
+    cy.get('coding-box-apply-training-discussion-results-dialog').contains('button', 'Anwenden').click();
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').should('be.disabled');
+    cy.then(() => { applyGate.release(); });
+    cy.wait('@applyResults');
+    cy.wait('@comparison');
+    cy.get('coding-box-apply-training-discussion-results-dialog').should('not.exist');
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').should('be.enabled');
+    cy.contains('1 bestehende Ergebnisse übersprungen').should('be.visible');
+  });
 
   it('restores a discussion draft with its explicit score and notes, then clears only the accepted entry', () => {
     cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', request => {
