@@ -475,8 +475,12 @@
     }
 
     .delete-button {
-      white-space: nowrap;
+      white-space: normal;
       flex: 0 1 auto;
+      max-width: 100%;
+      height: auto;
+      min-height: 40px;
+      padding-block: 8px;
     }
   }
 

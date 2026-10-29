@@ -4,6 +4,7 @@ import { CodingFreshnessImpactDto } from '../coding/coding-freshness.dto';
 export type TestResultsDeleteScope =
   | 'persons'
   | 'filteredPersons'
+  | 'filteredGroups'
   | 'groups'
   | 'booklets'
   | 'units';
@@ -43,6 +44,7 @@ export interface TestResultsDeletePreviewDto {
   bookletLogs?: number;
   unitLogs?: number;
   sessions?: number;
+  /** Complete affected group list; consumers may limit the displayed names. */
   groups: string[];
   bookletNames: string[];
   unitNames: string[];

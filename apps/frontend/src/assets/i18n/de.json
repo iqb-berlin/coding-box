@@ -2579,6 +2579,16 @@
     }
   },
   "test-results-page": {
+    "deletion": {
+      "selected-persons": "Ausgewählte Personen löschen",
+      "selected-groups": "Gruppen der Auswahl löschen",
+      "filtered-persons": "Alle gefilterten Personen löschen",
+      "all-persons": "Alle Personen des Arbeitsbereichs löschen",
+      "filtered-groups": "Alle gefilterten Gruppen löschen",
+      "all-groups": "Alle Gruppen des Arbeitsbereichs löschen",
+      "scope-hint": "Die Zeilenauswahl gilt für die aktuelle Seite. Gefilterte Löschaktionen erfassen alle Seiten. Bei Gruppen werden auch Mitglieder ohne eigenen Filtertreffer gelöscht.",
+      "groups": "Testgruppen"
+    },
     "loading": "Testergebnisse werden geladen...",
     "retry": "Wiederholen",
     "coding-status": {

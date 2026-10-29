@@ -5166,7 +5166,7 @@ export class WorkspaceTestResultsService {
       responseIds,
       unitIds
     );
-    const groups = WorkspaceTestResultsService.limitPreviewStrings(
+    const groups = WorkspaceTestResultsService.normalizeStringList(
       rows.map(row => row.personGroup)
     );
     const bookletNames = WorkspaceTestResultsService.limitPreviewStrings(
@@ -5701,6 +5701,10 @@ export class WorkspaceTestResultsService {
     kind: TestResultsDeleteTargetKind,
     ids: number[]
   ): Promise<number[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
     if (kind === 'units') {
       return ids;
     }
@@ -6068,6 +6072,32 @@ export class WorkspaceTestResultsService {
         ids = rows.map(row => row.id);
         break;
       }
+      case 'filteredGroups': {
+        // Expand matching persons to their complete groups in the same workspace.
+        // Neither the matching query nor the target query is paginated.
+        const matchingGroups = this.personsRepository
+          .createQueryBuilder('matchingPerson')
+          .select('matchingPerson.group')
+          .where('matchingPerson.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('matchingPerson.consider = :consider', { consider: true })
+          .andWhere("BTRIM(matchingPerson.group) <> ''");
+        if (normalizedRequest.searchText) {
+          matchingGroups.andWhere(
+            '(matchingPerson.code ILIKE :searchText OR matchingPerson.group ILIKE :searchText OR matchingPerson.login ILIKE :searchText)',
+            { searchText: `%${normalizedRequest.searchText}%` }
+          );
+        }
+        const rows = await this.personsRepository
+          .createQueryBuilder('person')
+          .select(['person.id'])
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
+          .andWhere(`person.group IN (${matchingGroups.getQuery()})`)
+          .setParameters(matchingGroups.getParameters())
+          .getMany();
+        ids = rows.map(row => row.id);
+        break;
+      }
       case 'groups':
         kind = 'persons';
         if (normalizedRequest.groups.length > 0) {
@@ -6326,8 +6356,8 @@ export class WorkspaceTestResultsService {
 
     return {
       groups: WorkspaceTestResultsService.toPreviewList(raw?.groups),
-      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames),
-      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames)
+      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames).slice(0, 30),
+      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames).slice(0, 30)
     };
   }
 
@@ -6422,14 +6452,13 @@ export class WorkspaceTestResultsService {
   private static toPreviewList(value?: string[] | string | null): string[] {
     if (!value) return [];
     if (Array.isArray(value)) {
-      return value.map(v => String(v)).filter(v => v.length > 0).slice(0, 30);
+      return value.map(v => String(v)).filter(v => v.length > 0);
     }
     return String(value)
       .replace(/^{|}$/g, '')
       .split(',')
       .map(v => v.replace(/^"|"$/g, '').trim())
-      .filter(v => v.length > 0)
-      .slice(0, 30);
+      .filter(v => v.length > 0);
   }
 
   private static limitPreviewStrings(values: string[]): string[] {
@@ -6472,7 +6501,11 @@ export class WorkspaceTestResultsService {
       case 'filteredPersons':
         return request.searchText ?
           `alle Testpersonen mit Filter "${request.searchText}"` :
-          'alle sichtbaren Testpersonen';
+          'alle Testpersonen des Arbeitsbereichs (alle Seiten)';
+      case 'filteredGroups':
+        return request.searchText ?
+          `alle Testgruppen mit Treffern für Filter "${request.searchText}" (einschließlich aller Gruppenmitglieder)` :
+          'alle Testgruppen des Arbeitsbereichs (alle Seiten)';
       case 'groups':
         return `Testgruppe(n): ${request.groups.join(', ')}`;
       case 'booklets':
