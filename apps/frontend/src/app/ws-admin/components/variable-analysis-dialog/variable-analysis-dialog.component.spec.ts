@@ -550,6 +550,39 @@ describe('VariableAnalysisDialogComponent', () => {
       });
     });
 
+    it('marks observed answers from the schema without marking zero-count placeholders', () => {
+      component.data.analysisResults = {
+        variableCombos: [{
+          unitId: 10, unitName: 'Unit 10', variableId: 'VAR1', totalCount: 2
+        }],
+        frequencies: {
+          '10:VAR1': [
+            {
+              unitId: 10, variableId: 'VAR1', value: 'Hai', count: 2, percentage: 100, score: 1, isFromSchema: true
+            },
+            {
+              unitId: 10, variableId: 'VAR1', value: '', count: 0, percentage: 0, isSchemaOnly: true
+            }
+          ]
+        },
+        total: 1
+      };
+      component.analyzeVariables();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelectorAll('.schema-chip')).toHaveLength(1);
+      expect(component.analysisRows().find(row => row.value === 'Hai')).toMatchObject({ isFromSchema: true, count: 2, score: 1 });
+    });
+
+    it('asks for a new analysis and clears old results when the evaluation has changed', () => {
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValue(throwError(() => ({
+        error: { code: 'VARIABLE_ANALYSIS_OUTDATED' }
+      })));
+      component.viewJobResults(1);
+      expect(mockSnackBar.open).toHaveBeenLastCalledWith('variable-analysis.results-outdated', 'error', { duration: 3000 });
+      expect(component.analysisRows()).toEqual([]);
+      expect(component.canExportAnalysisResults()).toBe(false);
+    });
+
     it('reloads server-side results when sorting changes', () => {
       component.viewJobResults(1);
       mockVariableAnalysisService.getAnalysisResultsPage.mockClear();

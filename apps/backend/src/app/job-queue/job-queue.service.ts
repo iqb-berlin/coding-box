@@ -130,6 +130,7 @@ export interface CodingAnalysisJobData {
 }
 
 export interface VariableAnalysisJobData {
+  resultVersion?: number;
   skipRetries?: boolean;
   workspaceId: number;
   unitId?: number;

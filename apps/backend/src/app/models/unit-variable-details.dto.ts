@@ -1,3 +1,5 @@
+import type { VariableCodingData } from '@iqbspecs/coding-scheme';
+
 /**
  * Data transfer object for detailed unit variable information
  */
@@ -28,6 +30,8 @@ export interface VariableDetailDto {
   nullable?: boolean;
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
+  /** Included only when the caller requests the coding rules. */
+  coding?: VariableCodingData;
   sourceType?: string;
   processing?: string[];
   codes?: CodeInfo[];

@@ -11,6 +11,7 @@ import * as fastCsv from 'fast-csv';
 import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {
   VariableAnalysisResultDto,
+  VARIABLE_ANALYSIS_RESULT_VERSION,
   VariableCombo
 } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisResultPageDto } from '../../../admin/variable-analysis/dto/variable-analysis-result-page.dto';
@@ -86,7 +87,9 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Antwortstatus', key: 'statusSummary', width: 42 },
   { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
   { header: 'Code-PBC', key: 'codePbc', width: 14 },
-  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 }
+  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 },
+  { header: 'Score', key: 'score', width: 12 },
+  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 }
 ] as const;
 
 type VariableAnalysisExportColumnKey =
@@ -151,6 +154,7 @@ export class VariableAnalysisService {
     }
 
     const jobData: VariableAnalysisJobData = {
+      resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
       workspaceId,
       unitId,
       variableId,
@@ -452,6 +456,13 @@ export class VariableAnalysisService {
       throw new BadRequestException(
         `Job with ID ${jobId} is not completed (status: ${state})`
       );
+    }
+
+    if (job.data.resultVersion !== VARIABLE_ANALYSIS_RESULT_VERSION) {
+      throw new BadRequestException({
+        code: 'VARIABLE_ANALYSIS_OUTDATED',
+        message: 'Bitte starten Sie eine neue Antwortwertanalyse. Dieses Ergebnis wurde mit einer älteren Auswertung berechnet.'
+      });
     }
 
     return job;
@@ -1033,6 +1044,7 @@ export class VariableAnalysisService {
         label: row.label,
         score: row.score,
         schemaOrder: row.schemaOrder,
+        isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
         isSchemaSupplemental: row.isSchemaSupplemental,
         count: row.count,
@@ -1202,6 +1214,7 @@ export class VariableAnalysisService {
         label: row.label,
         score: row.score,
         schemaOrder: row.schemaOrder,
+        isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
         isSchemaSupplemental: row.isSchemaSupplemental,
         count: row.count,
@@ -1304,6 +1317,8 @@ export class VariableAnalysisService {
           variableId: combo.variableId,
           value: frequency.value,
           label: frequency.label || '',
+          score: frequency.score ?? '',
+          isFromSchema: frequency.isFromSchema ? 'ja' : 'nein',
           isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
           count: frequency.count,
           validOccurrenceCount,
@@ -1500,7 +1515,7 @@ export class VariableAnalysisService {
     includeSchemaCodes: boolean
   ): VariableFrequencyDto[] {
     if (!includeSchemaCodes) {
-      return rows.filter(row => !row.isSchemaSupplemental);
+      return rows.filter(row => !row.isSchemaSupplemental || row.count > 0);
     }
 
     return [...rows].sort((a, b) => {
