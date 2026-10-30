@@ -106,7 +106,8 @@ export class TestcenterService {
               password: credentials.password
             },
             {
-              httpsAgent: agent
+              httpsAgent: agent,
+              timeout: TESTCENTER_REQUEST_TIMEOUT_MS
             }
           )
           .pipe(
@@ -153,6 +154,7 @@ export class TestcenterService {
           `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`,
         {
           httpsAgent: agent,
+          timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
           headers: headersRequest
         }
       );
@@ -767,6 +769,7 @@ export class TestcenterService {
           filesEndpoint,
           {
             httpsAgent: agent,
+            timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
             headers: headersRequest
           }
         );
@@ -1546,6 +1549,7 @@ export class TestcenterService {
     try {
       const response = await this.httpService.axiosRef.get<File>(requestUrl, {
         httpsAgent: agent,
+        timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
         headers: headersRequest
       });
 
