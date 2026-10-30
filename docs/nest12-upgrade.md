@@ -2,8 +2,12 @@
 
 ## Basis und Umfang
 
-Eigenständige Änderung auf `harden-backend-exports` bei
-`cc9cb2971072d403d613cc65f3fa4f21244a93da` (PR #1138 gegen `develop`).
+Eigenständige Änderung auf `harden-backend-exports` (PR #1138 gegen `develop`).
+Ursprünglicher Ausgangspunkt war `cc9cb2971072d403d613cc65f3fa4f21244a93da`.
+Nach der Neuschreibung und Erweiterung des Basisbranches wurde das Upgrade
+ausdrücklich zur Aktualisierung freigegeben und auf
+`60b16a5e24bbce02fe051b11f55668b6893c01c0` rebasiert. Die vier Upgrade- und
+CI-Korrekturcommits blieben dabei laut `git range-diff` inhaltlich unverändert.
 Solange #1138 offen ist, richtet sich der Upgrade-PR gegen diesen Branch.
 Die fachlichen Änderungen von #1138 sind eine Voraussetzung; sie werden hier
 nicht erneut implementiert. Keine automatische Zusammenführung oder Release-Veröffentlichung.

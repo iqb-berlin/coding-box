@@ -1,7 +1,9 @@
 # Nest-12-Upgrade: technischer Testbericht
 
-Stand: 30.10.2026. Basis ist PR #1138 bei
-`cc9cb2971072d403d613cc65f3fa4f21244a93da`; Arbeitsbranch `upgrade-nest-12`, [Entwurf-PR #1140](https://github.com/iqb-berlin/coding-box/pull/1140).
+Stand: 30.10.2026. Basis ist PR #1138, ursprünglich bei
+`cc9cb2971072d403d613cc65f3fa4f21244a93da`, nach ausdrücklich freigegebenem
+Rebase nun bei `60b16a5e24bbce02fe051b11f55668b6893c01c0`;
+Arbeitsbranch `upgrade-nest-12`, [PR #1140](https://github.com/iqb-berlin/coding-box/pull/1140).
 Geprüft wurde die hier vorbereitete Änderung mit Nest 12.3.2 und Node 24.22.1,
 nicht der frühere Nest-11-Stand. Betriebssystem: macOS ARM64, PostgreSQL 14.24,
 Redis 7.4.2, npm 11.19.1, Nx 22.7.12, Jest 30.5.2, ts-jest 29.4.15.
@@ -149,7 +151,7 @@ Ein Release oder eine fachliche Freigabe wird daraus nicht abgeleitet.
 
 ### Review und CI-Korrektur
 
-Der Review gegen die unveränderte Basis `cc9cb297` ergab zwei belegte Fehler
+Der ursprüngliche Review gegen die Basis `cc9cb297` ergab zwei belegte Fehler
 beim Start der CI-Jobs unter der neuen Werkzeugkette:
 
 1. `build-app` ([492068](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/492068))
@@ -181,6 +183,17 @@ allen 55 Prüfungen, einschließlich der drei neuen CI-Regressionen. Die
 Proxy-Anmeldung wird dabei sowohl mit Passwortargument als auch mit
 `--password-stdin` und ohne Proxy geprüft. Keine Anwendungssources wurden
 bei dieser CI-Korrektur verändert.
+
+Der Basisbranch wurde danach parallel neu geschrieben und um weitere
+Export-Absicherungen ergänzt. Der ausdrücklich freigegebene Rebase auf
+`60b16a5e` übernahm diese Änderungen; `git range-diff` bestätigt, dass alle
+vier Upgrade-/CI-Commits ohne inhaltliche Änderung übertragen wurden. Die
+oben genannten Vollsuite-, Build- und Browserergebnisse beziehen sich weiterhin
+auf den ursprünglichen geprüften Stand. Die neue Remote-Pipeline muss den
+rebasierten Stand vollständig prüfen.
+Nach dem Rebase bestanden lokal alle 125 Tests aus den drei Suites für
+Export-Dateisicherheit, Boolean-Query-Verträge und Nest-ESM-Metadaten:
+`nx test backend --testPathPatterns='coding-export.service.spec.ts|nest-esm.spec.ts|boolean-query.integration.spec.ts' --coverage=false --maxWorkers=2`.
 
 Die noch offenen lokalen Imageprüfungen sind ausdrücklich **nicht ausgeführt**:
 
