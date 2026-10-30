@@ -194,7 +194,7 @@ check-pre-release-rules:
 
 install-dependencies:
   stage: build
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   rules:
     - !reference [ .quality_gate_rules, rules ]
@@ -459,7 +459,7 @@ test-db:
 
 test-backend:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   services:
     - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
       alias: bullmq-redis
@@ -500,7 +500,7 @@ test-backend:
 
 test-backend-integration:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   extends: .distributed
   interruptible: true
   allow_failure: false
@@ -533,7 +533,7 @@ test-backend-integration:
 
 test-frontend:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   allow_failure: false
   needs:
@@ -636,7 +636,7 @@ test-workflows-live:
 
 lint-app:
   stage: lint
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   extends: .distributed
   interruptible: true
   allow_failure: false

@@ -32,7 +32,7 @@ This `AGENTS.md` provides context and guidelines for AI agents working on the Ko
 
 ## Tech Stack
 - **Frontend**: Angular 20+, Angular Material, RxJS.
-- **Backend**: NestJS 11+, TypeORM, PostgreSQL.
+- **Backend**: NestJS 12+, TypeORM, PostgreSQL.
 - **Infrastructure**: Docker, Docker Compose, Make, Traefik, Redis, Liquibase.
 - **Tooling**: Nx (Monorepo), Jest, Cypress, ESLint, Prettier.
 

@@ -39,8 +39,8 @@ Dieses Repository folgt dem Git-Flow-Branching-Modell:
 
 Stellen Sie sicher, dass die folgenden Tools auf Ihrem System installiert sind:
 
-* Node.js
-* npm
+* Node.js 24.22.1 (`nvm use`, siehe `.nvmrc`)
+* npm 11.19.1
 * Docker
 * Docker Compose
 * Make

@@ -3,7 +3,7 @@
 These instructions apply to `apps/backend` and supplement the root `AGENTS.md`.
 
 ## Project Shape
-- This is a NestJS 11 application using TypeORM, PostgreSQL, BullMQ queues, Redis, Swagger, and Jest.
+- This is a NestJS 12 application using TypeORM, PostgreSQL, BullMQ queues, Redis, Swagger, and Jest.
 - The bootstrap file is `src/main.ts`; the API prefix is `/api`, and Swagger UI is served at `/api/docs`.
 - `src/app/app.module.ts` wires the main application modules.
 - `src/app/database` contains TypeORM entities, repositories, database services, and database utilities.

@@ -7,7 +7,7 @@ Start the production backend twice, once with `APP_ROLE=api` and once with
 directory and use `REDIS_PREFIX=item-matrix-proof`. All remaining database,
 Redis and authentication settings are the codebook fixture's settings.
 
-Run from this checkout with Node 22:
+Run from this checkout with Node 24.22.1:
 
 ```sh
 ITEM_MATRIX_DISPOSABLE_FIXTURE=true npx nx run backend:verify-item-matrix-live

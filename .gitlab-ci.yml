@@ -56,9 +56,9 @@ variables:
   REGISTRY_PROJECT: "/${CI_PROJECT_PATH}/"
   DOCKER_HUB_PROXY: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/"
   # Match package.json/.nvmrc and retain Python/compiler tools for native modules.
-  BASE_IMAGE: node:22-bookworm
+  BASE_IMAGE: node:24.22.1-bookworm
   CICD_BASE_IMAGE: "${BASE_IMAGE}-git"
-  CYPRESS_IMAGE: cypress/browsers:node-22.14.0-chrome-134.0.6998.165-1-ff-136.0.3-edge-134.0.3124.85-1
+  CYPRESS_IMAGE: cypress/browsers:node-24.22.1-chrome-156.0.8078.73-1-ff-159.0-edge-156.0.4314.50-1
   CYPRESS_CACHE_FOLDER: "${CI_PROJECT_DIR}/cache/Cypress"
   E2E_BASE_IMAGE: "${CYPRESS_IMAGE}-docker"
   DOCKER_HOST: tcp://docker:2375

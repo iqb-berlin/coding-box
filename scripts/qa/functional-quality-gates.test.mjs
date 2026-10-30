@@ -171,8 +171,18 @@ test('release backend test and lint failures block publication', () => {
   assert.equal(job.artifacts.when, 'always');
   assert.equal(job.artifacts.reports.junit, 'coverage/apps/backend/junit.xml');
   const project = JSON.parse(readFileSync(new URL('../../apps/backend/project.json', import.meta.url)));
-  assert.equal(project.targets.test.configurations.ci.codeCoverage, true);
-  assert.equal(project.targets.test.options.passWithNoTests, false);
+  assert.equal(project.targets.test.executor, 'nx:run-commands');
+  assert.equal(project.targets.test.configurations.ci.command,
+    'node scripts/qa/run-backend-jest.mjs --configuration=ci');
+  const launcher = readFileSync(new URL('./run-backend-jest.mjs', import.meta.url), 'utf8');
+  assert.match(launcher, /'--experimental-vm-modules'/);
+  assert.match(launcher, /'backend:test-jest'/);
+  const jest = project.targets['test-jest'];
+  assert.equal(jest.executor, '@nx/jest:jest');
+  assert.equal(jest.cache, false);
+  assert.equal(jest.configurations.ci.codeCoverage, true);
+  assert.equal(jest.configurations.ci.ci, true);
+  assert.equal(jest.options.passWithNoTests, false);
 });
 
 test('the installed frontend JUnit reporter includes suite initialization errors', async t => {

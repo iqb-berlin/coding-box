@@ -4,7 +4,7 @@ This fixture uses a dedicated PostgreSQL database (port 15441), Redis (16441),
 Keycloak (18441), and a production backend on `127.0.0.1:3333`. It seeds synthetic records with
 SQL, submits jobs through the regular authenticated HTTP endpoints, observes
 HTTP status and BullMQ records, downloads the output, and reads persisted results.
-It never uses production data. Run it from an isolated checkout with Node 22.
+It never uses production data. Run it from an isolated checkout with Node 24.22.1.
 
 Check available disk space first. Install the lockfile with `npm ci` if needed.
 Frontend and backend tasks must run separately and sequentially:
