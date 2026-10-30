@@ -1,0 +1,5116 @@
+[
+  {
+    "id": 1,
+    "input": [
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V04",
+        "value": null,
+        "response_present": true,
+        "code_status": "PARTLY_DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "PARTLY_DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V05",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 1,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V05",
+            "variable_ref": "ref_V05",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_V04",
+            "item_no": 4
+          },
+          {
+            "variable_id": "V05",
+            "item_id": "U1_V05",
+            "item_no": 5
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V04",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V05",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V04",
+            "variable_position": 4,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "PARTLY_DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V05",
+            "variable_position": 5,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V04",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "PARTLY_DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V05",
+            "variable_position": 5,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "input": [
+      {
+        "case_id": 2,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 2,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 2,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "input": [
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 3,
+        "testlet_no": 1,
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 3,
+        "unit_alias": "u3"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "input": [
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 4,
+        "testlet_no": 1,
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 3,
+        "unit_alias": "u3"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "input": [
+      {
+        "case_id": 5,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 5,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 5,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 5,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "input": [
+      {
+        "case_id": 6,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 6,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 6,
+        "testlet_no": 2,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 6,
+        "testlet_no": 2,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 2,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 2,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "input": [
+      {
+        "case_id": 7,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 7,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 7,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 7,
+        "testlet_no": 1,
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 3,
+        "unit_alias": "u3"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": null,
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": null,
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 8,
+    "input": [
+      {
+        "case_id": 8,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 8,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 8,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "input": [
+      {
+        "case_id": 9,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 9,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 9,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 9,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": "?",
+        "response_present": true,
+        "code_status": "INVALID",
+        "code_id": -98,
+        "code_type": "MISSING_INVALID_RESPONSE",
+        "code_score": 0,
+        "legacy_code_status": "INVALID",
+        "legacy_code_id": -98,
+        "legacy_code_type": "MISSING_INVALID_RESPONSE",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 9,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": "?",
+        "response_present": true,
+        "code_status": "CODING_ERROR",
+        "code_id": -97,
+        "code_type": "MISSING_CODING_IMPOSSIBLE",
+        "code_score": null,
+        "legacy_code_status": "CODING_ERROR",
+        "legacy_code_id": -97,
+        "legacy_code_type": "MISSING_CODING_IMPOSSIBLE",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -98,
+            "code_score": 0,
+            "code_status": "INVALID",
+            "code_type": "MISSING_INVALID_RESPONSE",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -97,
+            "code_score": null,
+            "code_status": "CODING_ERROR",
+            "code_type": "MISSING_CODING_IMPOSSIBLE",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -98,
+            "code_score": 0,
+            "code_status": "INVALID",
+            "code_type": "MISSING_INVALID_RESPONSE",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -97,
+            "code_score": null,
+            "code_status": "CODING_ERROR",
+            "code_type": "MISSING_CODING_IMPOSSIBLE",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "input": [
+      {
+        "case_id": 10,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NO_CODING",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NO_CODING",
+        "legacy_code_id": -94,
+        "legacy_code_type": "NO_CODING",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -93,
+            "code_score": null,
+            "code_status": "NO_CODING",
+            "code_type": "NO_CODING",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -93,
+            "code_score": null,
+            "code_status": "NO_CODING",
+            "code_type": "NO_CODING",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "input": [
+      {
+        "case_id": 11,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 11,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 11,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": false,
+        "code_status": null,
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": null,
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -199,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -196,
+            "code_score": 0.5,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -196,
+            "code_score": 0.5,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -196,
+            "code_score": 0.5,
+            "code_status": null,
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "input": [
+      {
+        "case_id": 12,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 12,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 12,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 13,
+    "input": [
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "DISPLAYED",
+        "code_id": -99,
+        "code_type": "MISSING_BY_OMISSION",
+        "code_score": 0,
+        "legacy_code_status": "DISPLAYED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -99,
+        "legacy_code_type": "MISSING_BY_OMISSION",
+        "legacy_code_score": 0
+      },
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 13,
+        "testlet_no": 1,
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U2",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 2,
+        "unit_alias": "u2"
+      },
+      {
+        "unit_key": "U3",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 3,
+        "unit_alias": "u3"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "DISPLAYED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U2",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U3",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 14,
+    "input": [
+      {
+        "case_id": 14,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 14,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 14,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 14,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V04",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 3,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 4,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_I02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_I03",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V01",
+            "item_id": "U1_I09",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_I11",
+            "item_no": 4
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V04",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V04",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V04",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "input": [
+      {
+        "case_id": 15,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": null,
+        "code_type": null,
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 15,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 15,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_V01"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "input": [
+      {
+        "case_id": 16,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "value": "A",
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 16,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 16,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 2,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 1,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 3,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "V01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "V03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "V02",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V01",
+            "variable_position": 2,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "V03",
+            "variable_position": 3,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 17,
+    "input": [
+      {
+        "case_id": 17,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01a",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 17,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01b",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 17,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01",
+        "value": null,
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 17,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 1,
+            "variable_section": null,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "variable_sources": [
+              {
+                "variable_source_ref": "ref_01a",
+                "variable_source_id": "01a",
+                "variable_source_direct": true
+              },
+              {
+                "variable_source_ref": "ref_01b",
+                "variable_source_id": "01b",
+                "variable_source_direct": true
+              }
+            ]
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "01a",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "01b",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "01a",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01b",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "02",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "01a",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01b",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "02",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 18,
+    "input": [
+      {
+        "case_id": 18,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01a",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 18,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01b",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 18,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "01",
+        "value": null,
+        "response_present": true,
+        "code_status": "CODING_COMPLETE",
+        "code_id": 1,
+        "code_type": "FULL_CREDIT",
+        "code_score": 1,
+        "legacy_code_status": "CODING_COMPLETE",
+        "legacy_code_id": 1,
+        "legacy_code_type": "FULL_CREDIT",
+        "legacy_code_score": 1
+      },
+      {
+        "case_id": 18,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "02",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      },
+      {
+        "case_id": 18,
+        "testlet_no": 1,
+        "unit_key": "U1",
+        "variable_id": "03",
+        "value": null,
+        "response_present": true,
+        "code_status": "NOT_REACHED",
+        "code_id": -96,
+        "code_type": "MISSING_NOT_REACHED",
+        "code_score": null,
+        "legacy_code_status": "NOT_REACHED",
+        "legacy_code_id": -96,
+        "legacy_code_type": "MISSING_NOT_REACHED",
+        "legacy_code_score": null
+      }
+    ],
+    "units": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01a"
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 2,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01b"
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "03",
+            "variable_ref": "ref_03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_fehlt"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "03",
+            "item_id": "U1_03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "design": [
+      {
+        "unit_key": "U1",
+        "variable_id": "01a",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "01b",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "01",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "02",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      },
+      {
+        "unit_key": "U1",
+        "variable_id": "03",
+        "testlet_no": 1,
+        "login_code": "P1",
+        "booklet_id": "B1",
+        "booklet_no": 1,
+        "unit_booklet_no": 1,
+        "unit_alias": "u1"
+      }
+    ],
+    "modes": [
+      {
+        "recode": false,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "01a",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01b",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "02",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "03",
+            "variable_position": 5,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      },
+      {
+        "recode": true,
+        "rows": [
+          {
+            "unit_key": "U1",
+            "variable_id": "01a",
+            "variable_position": 1,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01b",
+            "variable_position": 2,
+            "code_id": -99,
+            "code_score": 0,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_BY_OMISSION",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "01",
+            "variable_position": 3,
+            "code_id": 1,
+            "code_score": 1,
+            "code_status": "CODING_COMPLETE",
+            "code_type": "FULL_CREDIT",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "02",
+            "variable_position": 4,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          },
+          {
+            "unit_key": "U1",
+            "variable_id": "03",
+            "variable_position": 5,
+            "code_id": -96,
+            "code_score": null,
+            "code_status": "NOT_REACHED",
+            "code_type": "MISSING_NOT_REACHED",
+            "id_used": true
+          }
+        ]
+      }
+    ]
+  }
+]

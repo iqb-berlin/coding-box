@@ -1,0 +1,1639 @@
+{
+  "profile": {
+    "mir": [
+      -98,
+      0
+    ],
+    "mci": [
+      -97,
+      null
+    ],
+    "mbi_mbo": [
+      -99,
+      0
+    ],
+    "mnr": [
+      -96,
+      null
+    ],
+    "mbd": [
+      -95,
+      null
+    ]
+  },
+  "kappa": [
+    {
+      "id": "kappa-code-versus-score",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        0,
+        0,
+        6,
+        8,
+        9,
+        0,
+        6,
+        8,
+        null
+      ],
+      "right": [
+        0,
+        6,
+        6,
+        9,
+        9,
+        0,
+        0,
+        8,
+        0
+      ],
+      "expected": {
+        "kappa": 0.48936170212765956,
+        "agreement": 0.625,
+        "validPairs": 8
+      }
+    },
+    {
+      "id": "kappa-two-scores",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0
+      ],
+      "right": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0
+      ],
+      "expected": {
+        "kappa": 0.5,
+        "agreement": 0.75,
+        "validPairs": 8
+      }
+    },
+    {
+      "id": "kappa-perfect-constant",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        0,
+        0,
+        0
+      ],
+      "right": [
+        0,
+        0,
+        0
+      ],
+      "expected": {
+        "kappa": 1.0,
+        "agreement": 1.0,
+        "validPairs": 3
+      }
+    },
+    {
+      "id": "kappa-all-disagree",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        0,
+        1
+      ],
+      "right": [
+        1,
+        0
+      ],
+      "expected": {
+        "kappa": -1.0,
+        "agreement": 0.0,
+        "validPairs": 2
+      }
+    },
+    {
+      "id": "kappa-no-pairs",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        null
+      ],
+      "right": [
+        0
+      ],
+      "expected": {
+        "kappa": null,
+        "agreement": 0,
+        "validPairs": 0
+      }
+    },
+    {
+      "id": "kappa-zero-is-valid",
+      "issues": [
+        506,
+        426
+      ],
+      "left": [
+        0,
+        null,
+        1
+      ],
+      "right": [
+        0,
+        1,
+        null
+      ],
+      "expected": {
+        "kappa": 1.0,
+        "agreement": 1.0,
+        "validPairs": 1
+      }
+    }
+  ],
+  "empty": [
+    {
+      "id": "empty-base-null",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": null,
+      "sources": [],
+      "derived": {},
+      "selected": true
+    },
+    {
+      "id": "empty-base-empty",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": "",
+      "sources": [],
+      "derived": {},
+      "selected": true
+    },
+    {
+      "id": "empty-base-whitespace",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": " \t ",
+      "sources": [],
+      "derived": {},
+      "selected": true
+    },
+    {
+      "id": "empty-base-array",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": "[]",
+      "sources": [],
+      "derived": {},
+      "selected": true
+    },
+    {
+      "id": "empty-base-zero",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": "0",
+      "sources": [],
+      "derived": {},
+      "selected": false
+    },
+    {
+      "id": "empty-base-false",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": "false",
+      "sources": [],
+      "derived": {},
+      "selected": false
+    },
+    {
+      "id": "empty-base-text-null",
+      "issues": [
+        970,
+        973
+      ],
+      "target": "B",
+      "value": "null",
+      "sources": [],
+      "derived": {},
+      "selected": false
+    },
+    {
+      "id": "empty-derived-all-empty",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "",
+          5
+        ],
+        [
+          "B",
+          "[]",
+          5
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A",
+          "B"
+        ]
+      },
+      "selected": true
+    },
+    {
+      "id": "empty-derived-answered-source",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "answer",
+          5
+        ],
+        [
+          "B",
+          "",
+          5
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A",
+          "B"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-nested",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "answer",
+          5
+        ]
+      ],
+      "derived": {
+        "D": [
+          "I"
+        ],
+        "I": [
+          "A"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-missing-source",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [],
+      "derived": {
+        "D": [
+          "A"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-duplicate-source",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "",
+          5
+        ],
+        [
+          "A",
+          "",
+          5
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-cycle",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [],
+      "derived": {
+        "D": [
+          "I"
+        ],
+        "I": [
+          "D"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-mc-reason-empty",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "selected",
+          5
+        ],
+        [
+          "B",
+          "",
+          12
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A",
+          "B"
+        ]
+      },
+      "selected": true
+    },
+    {
+      "id": "empty-derived-mc-reason-answered",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "selected",
+          5
+        ],
+        [
+          "B",
+          "reason",
+          12
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A",
+          "B"
+        ]
+      },
+      "selected": false
+    },
+    {
+      "id": "empty-derived-mc-ambiguous",
+      "issues": [
+        970,
+        972,
+        973
+      ],
+      "target": "D",
+      "value": "technical",
+      "sources": [
+        [
+          "A",
+          "selected",
+          7
+        ],
+        [
+          "B",
+          "",
+          12
+        ]
+      ],
+      "derived": {
+        "D": [
+          "A",
+          "B"
+        ]
+      },
+      "selected": false
+    }
+  ],
+  "version": [
+    {
+      "id": "version-zero",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 5,
+      "code": 0,
+      "score": 0,
+      "expected": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "version-invalid",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 7,
+      "code": null,
+      "score": null,
+      "expected": [
+        -98,
+        0
+      ]
+    },
+    {
+      "id": "version-coding-error",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 9,
+      "code": null,
+      "score": null,
+      "expected": [
+        -97,
+        "NA"
+      ]
+    },
+    {
+      "id": "version-not-reached",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 1,
+      "code": null,
+      "score": null,
+      "expected": [
+        -96,
+        "NA"
+      ]
+    },
+    {
+      "id": "version-omitted",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 2,
+      "code": null,
+      "score": null,
+      "expected": [
+        -99,
+        0
+      ]
+    },
+    {
+      "id": "version-partly",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 10,
+      "code": null,
+      "score": null,
+      "expected": [
+        -99,
+        0
+      ]
+    },
+    {
+      "id": "version-unset",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 0,
+      "code": null,
+      "score": null,
+      "expected": [
+        -99,
+        0
+      ]
+    },
+    {
+      "id": "version-manual-mir",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 5,
+      "code": -3,
+      "score": null,
+      "expected": [
+        -98,
+        0
+      ]
+    },
+    {
+      "id": "version-manual-mci",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 5,
+      "code": -4,
+      "score": null,
+      "expected": [
+        -97,
+        "NA"
+      ]
+    },
+    {
+      "id": "version-pending",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 11,
+      "code": null,
+      "score": null,
+      "expected": [
+        "",
+        ""
+      ]
+    },
+    {
+      "id": "version-score-only",
+      "issues": [
+        741,
+        341,
+        777
+      ],
+      "status": 5,
+      "code": null,
+      "score": 0,
+      "expected": [
+        "",
+        0
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "id": "export-code-without-score",
+      "status": 5,
+      "code": 1,
+      "score": null,
+      "requested": "score",
+      "reason": "missing-score"
+    },
+    {
+      "id": "export-score-without-code",
+      "status": 5,
+      "code": null,
+      "score": 0,
+      "requested": "code",
+      "reason": "missing-code"
+    },
+    {
+      "id": "export-pending",
+      "status": 11,
+      "code": null,
+      "score": null,
+      "requested": "code",
+      "reason": "unresolved-status"
+    }
+  ],
+  "derived": [
+    {
+      "id": "derived-result-missing",
+      "issues": [
+        1014
+      ],
+      "sources": [
+        "A"
+      ],
+      "values": [
+        [
+          "A",
+          5,
+          1,
+          1
+        ]
+      ],
+      "reason": "derived-result-missing"
+    },
+    {
+      "id": "derived-source-unresolved",
+      "issues": [
+        1014
+      ],
+      "sources": [
+        "A"
+      ],
+      "values": [
+        [
+          "A",
+          11,
+          null,
+          null
+        ]
+      ],
+      "reason": "derived-source-unresolved"
+    },
+    {
+      "id": "derived-cycle",
+      "issues": [
+        1014
+      ],
+      "sources": [
+        "D"
+      ],
+      "values": [],
+      "reason": "derived-cycle"
+    }
+  ],
+  "primitives": [
+    {
+      "id": "primitive-null",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": null,
+      "code": 7,
+      "score": 2
+    },
+    {
+      "id": "primitive-empty",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": "",
+      "code": 0,
+      "score": 0
+    },
+    {
+      "id": "primitive-text-null",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": "null",
+      "code": 8,
+      "score": 3
+    },
+    {
+      "id": "primitive-empty-array",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": [],
+      "code": 0,
+      "score": 0
+    },
+    {
+      "id": "primitive-zero",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": 0,
+      "code": 0,
+      "score": 0
+    },
+    {
+      "id": "primitive-false",
+      "issues": [
+        1043,
+        433
+      ],
+      "value": false,
+      "code": 0,
+      "score": 0
+    }
+  ],
+  "aggregate": [
+    {
+      "id": "aggregate-mbi_mbo-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "mbi_mbo"
+      ],
+      "expected": "mbi_mbo"
+    },
+    {
+      "id": "aggregate-mbi_mbo-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "mnr"
+      ],
+      "expected": "mnr"
+    },
+    {
+      "id": "aggregate-mbi_mbo-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "mir"
+      ],
+      "expected": "mir"
+    },
+    {
+      "id": "aggregate-mbi_mbo-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "valid"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-mbi_mbo-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "mci"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mbi_mbo-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbi_mbo-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbi_mbo",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mnr-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "mbi_mbo"
+      ],
+      "expected": "mnr"
+    },
+    {
+      "id": "aggregate-mnr-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "mnr"
+      ],
+      "expected": "mnr"
+    },
+    {
+      "id": "aggregate-mnr-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "mir"
+      ],
+      "expected": "mir"
+    },
+    {
+      "id": "aggregate-mnr-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "valid"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-mnr-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "mci"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mnr-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mnr-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mnr",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mir-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "mbi_mbo"
+      ],
+      "expected": "mir"
+    },
+    {
+      "id": "aggregate-mir-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "mnr"
+      ],
+      "expected": "mir"
+    },
+    {
+      "id": "aggregate-mir-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "mir"
+      ],
+      "expected": "mir"
+    },
+    {
+      "id": "aggregate-mir-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "valid"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-mir-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "mci"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mir-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mir-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mir",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-valid-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "mbi_mbo"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-valid-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "mnr"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-valid-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "mir"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-valid-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "valid"
+      ],
+      "expected": "valid"
+    },
+    {
+      "id": "aggregate-valid-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "mci"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-valid-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-valid-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "valid",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mci-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "mbi_mbo"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mci-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "mnr"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mci-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "mir"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mci-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "valid"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mci-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "mci"
+      ],
+      "expected": "mci"
+    },
+    {
+      "id": "aggregate-mci-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mci-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mci",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "mbi_mbo"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "mnr"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "mir"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "valid"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "mci"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-mbd-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "mbd"
+      ],
+      "expected": "mbd"
+    },
+    {
+      "id": "aggregate-mbd-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "mbd",
+        "error"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-mbi_mbo",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "mbi_mbo"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-mnr",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "mnr"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-mir",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "mir"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-valid",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "valid"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-mci",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "mci"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-mbd",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "mbd"
+      ],
+      "expected": "error"
+    },
+    {
+      "id": "aggregate-error-error",
+      "issues": [
+        741
+      ],
+      "states": [
+        "error",
+        "error"
+      ],
+      "expected": "error"
+    }
+  ],
+  "persistence": [
+    {
+      "id": "duplicate-existing-id",
+      "issues": [
+        1012,
+        434
+      ],
+      "targets": [
+        {
+          "id": 10
+        },
+        {
+          "id": 10
+        }
+      ],
+      "duplicate": true
+    },
+    {
+      "id": "duplicate-generated-target",
+      "issues": [
+        1012
+      ],
+      "targets": [
+        {
+          "id": -1,
+          "isNew": true,
+          "unitid": 1,
+          "variableid": "D",
+          "subform": "S"
+        },
+        {
+          "id": -1,
+          "isNew": true,
+          "unitid": 1,
+          "variableid": "D",
+          "subform": "S"
+        }
+      ],
+      "duplicate": true
+    },
+    {
+      "id": "distinct-subforms",
+      "issues": [
+        1012
+      ],
+      "targets": [
+        {
+          "id": -1,
+          "isNew": true,
+          "unitid": 1,
+          "variableid": "D",
+          "subform": "S1"
+        },
+        {
+          "id": -1,
+          "isNew": true,
+          "unitid": 1,
+          "variableid": "D",
+          "subform": "S2"
+        }
+      ],
+      "duplicate": false
+    }
+  ],
+  "partial": [
+    {
+      "id": "partial-SUM_SCORE-DISPLAYED-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_SCORE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-SUM_SCORE-DISPLAYED-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_SCORE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": true,
+      "expectedValue": 3,
+      "expectedStatus": "NO_CODING"
+    },
+    {
+      "id": "partial-SUM_SCORE-INVALID-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_SCORE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-SUM_SCORE-INVALID-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_SCORE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": true,
+      "expectedValue": 3,
+      "expectedStatus": "NO_CODING"
+    },
+    {
+      "id": "partial-SUM_CODE-DISPLAYED-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_CODE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-SUM_CODE-DISPLAYED-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_CODE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": true,
+      "expectedValue": 2,
+      "expectedStatus": "NO_CODING"
+    },
+    {
+      "id": "partial-SUM_CODE-INVALID-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_CODE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-SUM_CODE-INVALID-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "SUM_CODE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": true,
+      "expectedValue": 2,
+      "expectedStatus": "NO_CODING"
+    },
+    {
+      "id": "partial-CONCAT_CODE-DISPLAYED-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "CONCAT_CODE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-CONCAT_CODE-DISPLAYED-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "CONCAT_CODE",
+      "option": "TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL",
+      "status": "DISPLAYED",
+      "enabled": true,
+      "expectedValue": "2_x",
+      "expectedStatus": "NO_CODING"
+    },
+    {
+      "id": "partial-CONCAT_CODE-INVALID-False",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "CONCAT_CODE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": false,
+      "expectedValue": null,
+      "expectedStatus": "INVALID"
+    },
+    {
+      "id": "partial-CONCAT_CODE-INVALID-True",
+      "issues": [
+        973,
+        1043
+      ],
+      "sourceType": "CONCAT_CODE",
+      "option": "TAKE_EMPTY_AS_ZERO_IF_PARTIAL",
+      "status": "INVALID",
+      "enabled": true,
+      "expectedValue": "2_x",
+      "expectedStatus": "NO_CODING"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "scope-unit-False",
+      "scope": "unit",
+      "sameTestlet": false,
+      "expected": -96
+    },
+    {
+      "id": "scope-unit-True",
+      "scope": "unit",
+      "sameTestlet": true,
+      "expected": -96
+    },
+    {
+      "id": "scope-testlet-False",
+      "scope": "testlet",
+      "sameTestlet": false,
+      "expected": -96
+    },
+    {
+      "id": "scope-testlet-True",
+      "scope": "testlet",
+      "sameTestlet": true,
+      "expected": -99
+    },
+    {
+      "id": "scope-booklet-False",
+      "scope": "booklet",
+      "sameTestlet": false,
+      "expected": -99
+    },
+    {
+      "id": "scope-booklet-True",
+      "scope": "booklet",
+      "sameTestlet": true,
+      "expected": -99
+    }
+  ],
+  "fleiss": {
+    "issues": [
+      426
+    ],
+    "ratings": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        1
+      ],
+      [
+        1,
+        2,
+        2
+      ],
+      [
+        2,
+        2,
+        2
+      ]
+    ],
+    "expected": 0.4953271028037383
+  }
+}

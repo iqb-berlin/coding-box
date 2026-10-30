@@ -1,0 +1,505 @@
+---
+title: "Missing-Szenarien: 9001, 9036 und neue Version"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+resource_files:
+  - missing-examples.csv
+  - fixtures/complete-design-9001.R
+  - fixtures/complete-design-9036.R
+vignette: >
+  %\VignetteIndexEntry{Missing-Szenarien: 9001, 9036 und neue Version}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r utf8-locale, include=FALSE}
+# Set this before knitr parses any chunks containing non-ASCII text.
+vignette_locale <- Sys.getlocale("LC_CTYPE")
+if (.Platform$OS.type == "windows" && !l10n_info()[["UTF-8"]]) {
+  Sys.setlocale("LC_CTYPE", ".UTF-8")
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, error = FALSE)
+library(eatPrepTBA)
+library(dplyr)
+
+inputs <- read.csv(
+  "missing-examples.csv", na.strings = "NA", stringsAsFactors = FALSE,
+  colClasses = c(value = "character", code_status = "character",
+                code_type = "character", legacy_code_status = "character",
+                legacy_code_type = "character")
+) |> tibble::as_tibble()
+stopifnot(sum(inputs$case_id <= 15L) == 62L,
+          identical(unique(inputs$case_id), seq_len(max(inputs$case_id))),
+          !anyDuplicated(inputs[c("case_id", "unit_key", "variable_id")]))
+
+# Original function bodies, evaluated against the same prepared unit metadata.
+historical_function <- function(version) {
+  env <- new.env(parent = asNamespace("eatPrepTBA"))
+  sys.source(paste0("fixtures/complete-design-", version, ".R"), envir = env)
+  env$complete_design
+}
+functions <- list(`9001` = historical_function("9001"),
+                  `9036` = historical_function("9036"),
+                  new = eatPrepTBA::complete_design)
+new_version <- as.character(packageVersion("eatPrepTBA"))
+column_labels <- c("9001", "9036", paste0("Neu ", sub("^0\\.9\\.8\\.", "", new_version)))
+new_modes <- expand.grid(recode_omissions_to_not_reached = c(FALSE, TRUE),
+                         preserve_not_reached = c(FALSE, TRUE))
+new_mode_labels <- paste0("O → NR: ", new_modes$recode_omissions_to_not_reached,
+                         " · NR behalten: ", new_modes$preserve_not_reached)
+
+make_fixture <- function(rows) {
+  design <- rows |>
+    select(unit_key, variable_id, testlet_no) |>
+    mutate(login_code = "P1", booklet_id = "B1", booklet_no = 1L,
+           unit_booklet_no = as.integer(sub("^U", "", unit_key)),
+           unit_alias = tolower(unit_key))
+  units <- bind_rows(lapply(unique(rows$unit_key), function(key) {
+    ids <- rows$variable_id[rows$unit_key == key]
+    codes <- tibble::tibble(
+      variable_id = ids, variable_ref = paste0("ref_", ids),
+      variable_source_type = "BASE", variable_level = 0L,
+      variable_page = 1L, variable_section = 0L,
+      variable_element = seq_along(ids) - 1L,
+      variable_page_always_visible = FALSE
+    )
+    if (rows$case_id[[1L]] == 14L) codes$variable_page <- seq_along(ids)
+    if (rows$case_id[[1L]] == 15L) {
+      codes$variable_page <- c(1L, 2L, NA_integer_)
+      codes$variable_source_type <- c("BASE", "BASE", "SUM_CODE")
+      codes$variable_level <- c(0L, 0L, 1L)
+      codes$derive_sources <- list(character(), character(), "ref_V01")
+    }
+    if (rows$case_id[[1L]] == 16L) codes$variable_section <- c(2L, 1L, 3L)
+    if (rows$case_id[[1L]] == 17L) {
+      codes$variable_source_type <- c("BASE", "BASE", "SUM_CODE", "BASE")
+      codes$variable_level <- c(0L, 0L, 1L, 0L)
+      codes$variable_section[[3L]] <- NA_integer_
+      codes$variable_sources <- list(
+        tibble::tibble(), tibble::tibble(),
+        tibble::tibble(variable_source_ref = c("ref_01a", "ref_01b"),
+                      variable_source_id = c("01a", "01b"),
+                      variable_source_direct = TRUE),
+        tibble::tibble()
+      )
+    }
+    if (rows$case_id[[1L]] == 18L) {
+      codes$variable_source_type <- c("BASE", "SUM_CODE", "SUM_CODE", "BASE", "SUM_CODE")
+      codes$variable_level <- c(0L, 1L, 2L, 0L, 1L)
+      codes$variable_page <- c(1L, NA_integer_, NA_integer_, 1L, 2L)
+      codes$derive_sources <- list(character(), "ref_01a", "ref_01b",
+                                  character(), "ref_fehlt")
+    }
+    item_ids <- ids
+    if (rows$case_id[[1L]] == 15L) item_ids <- setdiff(ids, "V01")
+    if (rows$case_id[[1L]] %in% c(17L, 18L)) {
+      item_ids <- setdiff(ids, c("01a", "01b"))
+    }
+    items <- tibble::tibble(variable_id = item_ids,
+      item_id = paste0(key, "_", item_ids), item_no = seq_along(item_ids))
+    if (rows$case_id[[1L]] == 14L) {
+      items <- tibble::tibble(variable_id = ids[c(2, 4, 1, 3)],
+        item_id = paste0(key, "_I", c("02", "03", "09", "11")),
+        item_no = seq_along(ids))
+    }
+    tibble::tibble(unit_key = key, unit_codes = list(codes), items_list = list(items))
+  }))
+  coded <- rows |> filter(response_present) |>
+    select(unit_key, variable_id, value, code_status, code_id, code_type, code_score) |>
+    mutate(login_code = "P1", booklet_id = "B1", unit_alias = tolower(unit_key))
+  missings <- if (rows$case_id[[1L]] == 11L) tibble::tribble(
+    ~code_type, ~code_id, ~code_status, ~code_score,
+    "MISSING_NOT_REACHED", -196, "CUSTOM_NOT_REACHED", 0.5,
+    "MISSING_BY_OMISSION", -199, "CUSTOM_OMISSION", 0
+  ) else NULL
+  list(coded = coded, units = units, design = design, missings = missings)
+}
+
+calculate <- function(rows) {
+  fixture <- make_fixture(rows)
+  lapply(names(functions), function(version) {
+    modes <- if (version == "9001") {
+      list(list())
+    } else if (version == "9036") {
+      lapply(c(FALSE, TRUE), function(x) list(recode_omissions_to_not_reached = x))
+    } else {
+      lapply(seq_len(nrow(new_modes)), function(i) as.list(new_modes[i, ]))
+    }
+    lapply(modes, function(mode) {
+      args <- c(fixture, mode)
+      result <- do.call(functions[[version]], args)
+      at <- match(paste(rows$unit_key, rows$variable_id),
+                  paste(result$unit_key, result$variable_id))
+      stopifnot(nrow(result) == nrow(rows), !anyNA(at), !anyDuplicated(at))
+      result$.comparison_position <- seq_len(nrow(result))
+      result <- result[at, ]
+      stopifnot(identical(result$value, rows$value),
+                all(result$id_used == (rows$case_id[[1L]] != 8L)))
+      if (version == "new") stopifnot(identical(result$code_status, rows$code_status),
+                                      is.integer(result$variable_position))
+      if (version == "9001") {
+        for (field in c("code_id", "code_type", "code_score", "code_status")) {
+          stopifnot(isTRUE(all.equal(result[[field]], rows[[paste0("legacy_", field)]])))
+        }
+      }
+      result
+    })
+  }) |> stats::setNames(names(functions))
+}
+cases <- split(inputs, inputs$case_id)
+results <- lapply(cases, calculate)
+
+# Guard the distinctions illustrated in the accompanying explanations.
+stopifnot(results[["1"]]$`9036`[[2]]$code_id[[2]] == -96,
+          results[["1"]]$new[[2]]$code_id[[2]] == -99,
+          results[["10"]]$`9001`[[1]]$code_id[[1]] == -94,
+          results[["10"]]$new[[1]]$code_id[[1]] == -93,
+          results[["11"]]$`9036`[[1]]$code_status[[3]] == "CUSTOM_NOT_REACHED",
+          is.na(results[["11"]]$new[[1]]$code_status[[3]]),
+          results[["15"]]$new[[1]]$code_id[[3]] == 1)
+for (case in c("2", "12", "14", "15")) {
+  for (mode in 1:2) stopifnot(results[[case]]$new[[mode]]$code_id[[1]] == -99)
+}
+expected_new <- list(`16` = c(1, -99, -96),
+                     `17` = c(-99, -99, 1, -96),
+                     `18` = c(-99, -99, 1, -96, -96))
+for (case in names(expected_new)) {
+  for (mode in 1:2) stopifnot(identical(results[[case]]$new[[mode]]$code_id,
+                                      expected_new[[case]]))
+}
+for (mode in 3:4) {
+  for (case in c("2", "7", "12", "14", "15")) {
+    stopifnot(results[[case]]$new[[mode]]$code_id[[1]] == -96,
+              is.na(results[[case]]$new[[mode]]$code_score[[1]]))
+  }
+  stopifnot(results[["3"]]$new[[mode]]$code_id[[3]] == -96,
+            results[["18"]]$new[[mode]]$code_id[[2]] == -96,
+            results[["18"]]$new[[mode]]$code_id[[3]] == 1)
+}
+
+escape <- function(x) as.character(htmltools::htmlEscape(x))
+number <- function(x) if (is.na(x)) "NA" else format(x, trim = TRUE, scientific = FALSE)
+fields <- function(row) {
+  c(if (is.na(row$code_status)) "NA" else row$code_status,
+    number(row$code_id),
+    if (is.na(row$code_type)) "NA" else row$code_type,
+    number(row$code_score))
+}
+result_cell <- function(output, input, labels, version) {
+  paste(vapply(seq_along(output), function(j) {
+    values <- fields(output[[j]])
+    changed <- values != fields(input)
+    values <- escape(values)
+    values[changed] <- paste0("<strong>", values[changed], "</strong>")
+    values <- paste0('<span class="missing-field">', values, '</span>')
+    mode_class <- if (labels[[j]] == "O → NR: TRUE · NR behalten: TRUE") {
+      "missing-mode missing-reference-mode"
+    } else "missing-mode"
+    issue <- if (version == "9036" && input$unit_key == "U1") {
+      if (input$case_id == 1L && input$variable_id == "V02" && j == 2L) {
+        "Fehlverhalten: Eine Auslassung vor einer späteren Antwort wird zu NR."
+      } else if (input$case_id == 2L && input$variable_id == "V01") {
+        "Inkonsistent zu Fall 3: NR bleibt innerhalb einer Unit erhalten, über Unitgrenzen hinweg nicht."
+      } else ""
+    } else ""
+    result_class <- if (nzchar(issue)) "missing-result missing-issue" else "missing-result"
+    paste0('<div class="', result_class, '"',
+      if (nzchar(issue)) paste0(' title="', escape(issue), '"') else "",
+      '><span class="', mode_class, '">', labels[[j]],
+      ':</span> <span class="missing-values">', paste(values, collapse = " /<wbr> "),
+      '</span></div>')
+  }, character(1)), collapse = "")
+}
+print_comparison <- function(rows, output) {
+  cat('\n```{=html}\n<table class="missing-comparison">\n',
+      '<caption>Fall ', rows$case_id[[1L]], ': Versionsvergleich</caption>\n<thead><tr>',
+      paste0('<th scope="col">', column_labels, '</th>', collapse = ""),
+      '</tr></thead>\n<tbody>\n', sep = "")
+  if (rows$case_id[[1L]] >= 14L) {
+    cat('<tr class="missing-order">')
+    for (version in names(output)) {
+      ordered <- output[[version]][[1L]] |> arrange(.comparison_position)
+      cat('<td><span class="missing-mode">Ausgabereihenfolge:</span>',
+          escape(paste(ordered$variable_id, collapse = " → ")), '</td>', sep = "")
+    }
+    cat('</tr>\n')
+  }
+  for (i in seq_len(nrow(rows))) {
+    input <- rows[i, ]
+    label <- paste0("T", input$testlet_no, " · ", input$unit_key, "/", input$variable_id)
+    incoming <- if (!input$response_present) "Keine Antwortzeile" else paste0(
+      "value: ", escape(if (is.na(input$value)) "NA" else paste0('"', input$value, '"')),
+      ' · Eingang: <strong class="missing-input-values">',
+      escape(paste(fields(input), collapse = " / ")), '</strong>')
+    cat('<tr class="missing-input"><th colspan="3">', escape(label),
+        '<span class="missing-input-details">', incoming, '</span></th></tr>\n<tr>', sep = "")
+    for (version in names(output)) {
+      cells <- lapply(output[[version]], function(x) x[i, ])
+      labels <- switch(version, `9001` = "Standard",
+                       `9036` = c("O → NR: FALSE", "O → NR: TRUE"),
+                       new = new_mode_labels)
+      cat('<td>')
+      if (version == "new") {
+        stopifnot(all(vapply(cells, function(x) {
+          identical(cells[[1L]]$variable_position, x$variable_position)
+        }, logical(1))))
+        cat('<span class="missing-position">variable_position: ',
+            number(cells[[1L]]$variable_position), '</span>', sep = "")
+      }
+      cat(result_cell(cells, input, labels, version), '</td>', sep = "")
+    }
+    cat('</tr>\n')
+  }
+  cat('</tbody>\n</table>\n```\n\n')
+}
+```
+
+<style>
+/* Widen this article's comparison tables while keeping the pkgdown sidebar. */
+@media (min-width: 1200px) {
+  .container.template-article { max-width: 1440px; }
+  .template-article .row > main { flex: 1; min-width: 0; max-width: none; }
+  .template-article .row > aside { flex: 0 0 20rem; margin-left: 0; }
+}
+.missing-comparison { width: 100%; table-layout: fixed; margin: 1em 0 1.5em; border-collapse: collapse; }
+.missing-comparison th, .missing-comparison td { padding: 0.55em 0.75em; vertical-align: top; overflow-wrap: anywhere; }
+.missing-comparison thead th { width: 33.333%; background: #eaf0f5; text-align: left; }
+.missing-comparison td { border-bottom: 1px solid #dce3e9; font-variant-numeric: tabular-nums; }
+.missing-comparison td + td { border-left: 1px solid #e2e8ee; }
+.missing-comparison .missing-input th { background: #f5f7f9; text-align: left; }
+.missing-input-details { display: block; margin-top: 0.2em; font-size: 0.87em; font-weight: normal; color: #475569; }
+.missing-input-values { background: #fef9c3; font-weight: 700; }
+.missing-result + .missing-result { margin-top: 0.6em; }
+.missing-mode { display: block; font-size: 0.88em; color: #475569; }
+.missing-reference-mode { color: #166534; background: #dcfce7; font-weight: 700; }
+.missing-position { display: block; margin-bottom: 0.45em; font-size: 0.88em; color: #475569; }
+.missing-values { font-family: Consolas, monospace; font-size: 0.92em; }
+.missing-field { display: inline-block; max-width: 100%; }
+.missing-result strong { color: #0645a5; background: #e6efff; font-weight: 750; }
+.missing-issue { background: #fff1f2; }
+.missing-result.missing-issue strong { background: transparent; }
+.missing-comparison caption { text-align: left; font-weight: bold; margin-bottom: 0.4em; }
+</style>
+
+**`r length(cases)` Beispiele, drei Versionen:** 9001, 9036 und neu `r new_version`.
+
+## Hinweise zum Vergleich
+
+Die **gelb markierten Eingangswerte** stehen jeweils über den Ergebnissen der
+drei Versionen. Eingabe und Ergebnisse zeigen diese vier Felder:
+
+**`code_status` / `code_id` / `code_type` / `code_score`**
+
+Die Felder enthalten Status, Code, Ergebnistyp und Punkte; `NA` steht für einen
+fehlenden Wert. **Blau und fett** kennzeichnet Änderungen gegenüber der Eingabe.
+**Hellrot** markiert die Probleme der 9036 in Fall 1 und 2; beim Überfahren mit
+dem Mauszeiger erscheint eine Erläuterung.
+In der neuen Version bleibt `code_status` unverändert.
+
+Für die MNR-Grenze zählen neu nur Items und die Variablen, aus denen sie
+berechnet werden. `NO_CODING` zählt nie. Missings werden weiterhin für alle
+Zeilen vergeben. Die Versionsbeispiele enthalten Items und ihre Quellen.
+So sind `01a` und `01b` Quellen für das Item `01`, keine eigenen Items.
+[Am Ende](#itemgrenze) stehen Beispiele mit unabhängigen Hilfsvariablen.
+
+**O** steht für Auslassung, **NR** für nicht erreicht. Die neue Version bietet
+zwei unabhängige Optionen (`TRUE` = aktiviert, `FALSE` = deaktiviert):
+
+- **O → NR** (`recode_omissions_to_not_reached`): Mit **TRUE** werden
+  Auslassungen am Ende eines Testlets zusätzlich zu NR. Mit **FALSE** bleiben sie O.
+- **NR behalten** (`preserve_not_reached`): Mit **TRUE** bleibt NR erhalten,
+  auch vor einer späteren Antwort. Mit **FALSE** kann NR dort zu O werden.
+  Der Schutz gilt auch für ergänzte Zeilen, NR aus fehlenden Statusangaben,
+  Ableitungen und früher aus O erzeugtes NR. Gültige Ergebnisse bleiben erhalten.
+
+**Grün und fett** kennzeichnet **TRUE / TRUE**, die Einstellung für die Referenzstudien.
+Die Voreinstellungen der Funktion bleiben **FALSE / FALSE**.
+9001 zeigt ein Ergebnis, 9036 zwei Einstellungen und die neue Version alle vier Kombinationen.
+
+`T1 · U2/V01` bedeutet: Testlet 1, Unit 2, Variable V01.
+**`variable_position`** zeigt die Reihenfolge innerhalb der Unit ab 1,
+einschließlich Ableitungen; sie ist bei allen Einstellungen gleich.
+Teildesigns können Lücken haben, ohne passende Metadaten steht `NA`.
+„Keine Antwortzeile“ bedeutet: im Design vorgesehen, aber im Eingang nicht vorhanden.
+
+> **Aktuell Vorsicht bei Kodierbox im Testlet-Modus:** – die NR-Grenze scheint
+> fehlerhaft bestimmt zu werden, wenn die Reihenfolge der Itemnamen in der Itemliste
+> nicht der vorgesehenen Bearbeitungsreihenfolge entspricht.
+> Der geprüfte Item-Matrix-Export folgt der Unit-Reihenfolge im Testheft und
+> der Itemliste. Seiten und Abschnitte der einzelnen Variablen werden dabei
+> nicht berücksichtigt.
+> Quellen: [Sortierung](https://github.com/iqb-berlin/coding-box/blob/39468e5a28a24dc9ec860aee46daf8d4ed5c8682/apps/backend/src/app/database/services/coding/item-dataset-cell-resolver.ts#L505-L523)
+> und [Itemliste](https://github.com/iqb-berlin/coding-box/blob/39468e5a28a24dc9ec860aee46daf8d4ed5c8682/apps/backend/src/app/database/services/coding/item-dataset-metadata.service.ts#L116-L158),
+> Quellstand vom 26.09.2026, geprüft am 12.10.2026.
+
+## Welche Sortierregeln gelten?
+
+Alle drei Fassungen prüfen die Units je Person, Testheft und Testlet **vom Ende
+her** (`unit_booklet_no` absteigend). Die Ausgabe läuft wieder von vorne nach
+hinten. Innerhalb einer Unit gilt:
+
+| Version | Reihenfolge für die Missing-Einstufung | Sortierung der ausgegebenen Zeilen |
+|:--|:--|:--|
+| **9001** | Die Unit wird als Ganzes betrachtet; die Position einer Variablen innerhalb der Unit hat keinen Einfluss. | `variable_page` → `variable_section` → `variable_level`, jeweils aufsteigend. |
+| **9036** | Wie 9001, auch mit `TRUE`. | Wie 9001. |
+| **Neu `r sub("^0\\.9\\.8\\.", "", new_version)`** | Seite → Abschnitt (beide numerisch) → natürlicher Variablenname. Ableitungen mit vollständig zugeordneten Quellen folgen direkt auf ihre letzte Quelle. | Dieselbe Reihenfolge wie für die Missing-Einstufung. |
+
+- **9001/9036:** Vorhandene Datentypen bestimmen die Sortierung; `NA` kommt
+  zuletzt. Bei Gleichstand bleibt die Reihenfolge nach dem Zusammenführen erhalten.
+- **Neu:** Natürliche Namen bedeuten etwa `V2` vor `V10`. Fehlende Abschnitte
+  folgen bekannten Abschnitten derselben Seite. Variablen ohne Seite kommen
+  zuletzt, untereinander nach Namen.
+- **Ableitungen:** Die Quellen bestimmen die Position, auch bei mehrstufigen
+  Ableitungen. Gleichzeitig mögliche Ableitungen folgen ihren Namen; dadurch
+  neu mögliche Ableitungen werden sofort eingefügt. Bei fehlenden, mehrdeutigen
+  oder zyklischen Quellen gelten eigene Seite, Abschnitt und Name.
+- **Alle drei:** Die Itemliste (`items_list$item_no`) ist kein Sortierkriterium
+  (siehe [Fall 14](#beispiel-14)).
+
+Die Tabellen behalten zum Vergleichen dieselbe Beispielreihenfolge bei.
+Ab Fall 14 steht die tatsächliche Ausgabereihenfolge zusätzlich darüber.
+
+**Ableitungen werden nicht neu berechnet.** Ein gültiges Ableitungsergebnis zählt
+als Bearbeitung, wenn es zu einem Item oder dessen Quellen gehört
+(oder die Ersatzregel für die Unit gilt). Davor liegende NR-Quellen werden mit
+**NR behalten: FALSE** zu Auslassungen mit 0 Punkten. Mit **TRUE** bleiben sie NR.
+
+```{r case-comparisons, results='asis'}
+titles <- c(
+  "Auslassung vor und nach der letzten Antwort",
+  "Nicht erreicht kodiert, danach Antwort in derselben Unit",
+  "Nicht erreicht kodiert, danach Antwort in einer anderen Unit",
+  "Nachfolgende Units enthalten nur Auslassungen",
+  "Das gesamte Testlet enthält nur Auslassungen",
+  "Spätere Antwort im nächsten Testlet",
+  "Einzelne Antwortzeilen fehlen",
+  "Alle Antwortzeilen fehlen",
+  "Ungültige Antwort und Kodierfehler",
+  "NO_CODING im Versionsvergleich",
+  "Eigenes Missing-Schema",
+  "NOT_REACHED ohne Code, danach Antwort in derselben Unit",
+  "NOT_REACHED ohne Code, danach Antwort in einer anderen Unit",
+  "Seitenfolge und Itemliste widersprechen sich",
+  "Abgeleitete Variable mit gültigem Ergebnis",
+  "Abschnitt vor Variablenname",
+  "Ableitung direkt nach ihren Quellen",
+  "Mehrstufige Ableitung und fehlende Quelle"
+)
+notes <- c(
+  "U1/V02 liegt vor einer späteren Antwort und bleibt neu auch mit O → NR: TRUE eine Auslassung. Die 9036 wertet U1/V02 damit fälschlich als nicht erreicht. Von den beiden Auslassungen liegt nur U1/V04 hinter der letzten Antwort. NR behalten ändert hier nichts.",
+  "Neu wird V01 wegen der späteren Antwort auf V02 zur Auslassung, solange NR behalten: FALSE gilt. Mit NR behalten: TRUE bleibt V01 nicht erreicht, ebenso wie in den älteren Versionen. Die 9036 behandelt NR damit innerhalb einer Unit anders als über Unitgrenzen hinweg (Fall 3). V03 bleibt überall nicht erreicht.",
+  "Die Antwort auf U2/V01 liegt in einer späteren Unit desselben Testlets. Deshalb wird U1/V03 zur Auslassung. Nur neu mit NR behalten: TRUE bleibt U1/V03 nicht erreicht.",
+  "Mit O → NR: FALSE wird U1/V02 wegen der späteren Auslassungen selbst zur Auslassung. Neu verhindert NR behalten: TRUE dies. Mit O → NR: TRUE werden alle Auslassungen als nicht erreicht gewertet; U1/V02 bleibt dann ebenfalls nicht erreicht.",
+  "O → NR: FALSE lässt alle Auslassungen bei 0 Punkten. O → NR: TRUE macht alle zu nicht erreicht – auch ohne eine einzige beantwortete Variable. NR behalten ändert hier nichts.",
+  "Die Antwort in T2 hat keinen Einfluss auf T1. Mit O → NR: TRUE werden in 9036 und neu die abschließenden Auslassungen jedes Testlets als nicht erreicht gewertet. NR behalten ändert hier nichts.",
+  "U1/V01 wird als Auslassung ergänzt, U2/V02 und U3/V01 als nicht erreicht. Neu mit NR behalten: TRUE bleibt auch die ergänzte Zeile U1/V01 nicht erreicht. Nur 9036 füllt dabei `code_status`; neu bleibt dieser bei `NA`.",
+  "Alle Zeilen werden als nicht erreicht ergänzt; `id_used = FALSE`. Nur 9036 setzt `code_status = NOT_REACHED`, die anderen erhalten `NA`.",
+  "Die ungültige Antwort auf U2/V01 und der Kodierfehler bei U2/V02 machen U1/V03 zur Auslassung. Neu mit NR behalten: TRUE bleibt U1/V03 nicht erreicht. Codes und Scores der ungültigen Antwort und des Kodierfehlers bleiben überall erhalten.",
+  "Für `NO_CODING` vergibt 9001 den Code -94, die neueren Versionen -93. `code_status` und `code_score` bleiben gleich.",
+  "9001 ignoriert das eigene Schema; 9036 und neu übernehmen es. Nur 9036 ergänzt bei U2/V01 `code_status = CUSTOM_NOT_REACHED`; neu bleibt er `NA`.",
+  "Wie Fall 2, aber der Code fehlt noch. Neu wird V01 wegen der späteren Antwort zur Auslassung. Mit NR behalten: TRUE bleibt V01 nicht erreicht, ebenso wie früher.",
+  "Wie Fall 3, aber bei den nicht erreichten Variablen fehlt der Code noch. U1/V03 wird zur Auslassung; neu verhindert NR behalten: TRUE dies. Die abschließenden U2/V02 und U3/V01 bleiben überall nicht erreicht.",
+  "V01 steht auf Seite 1, die Antwort auf V02 auf Seite 2; die Itemliste nennt V02 zuerst. Neu wird V01 zur Auslassung, außer mit NR behalten: TRUE. Früher bleibt es nicht erreicht. Die Itemliste spielt in keiner Version eine Rolle.",
+  "V03 ist aus V01 abgeleitet und bereits gültig kodiert: Dieses Ergebnis bleibt überall erhalten. Neu steht V03 direkt hinter V01 und vor V02. V01 wird wegen der späteren Bearbeitung zur Auslassung, außer mit NR behalten: TRUE.",
+  "Auf derselben Seite liegt V02 in Abschnitt 1, die Antwort V01 in Abschnitt 2 und V03 in Abschnitt 3. Neu wird V02 deshalb zur Auslassung, obwohl sein Name hinter V01 steht. NR behalten: TRUE verhindert dies. V03 bleibt nicht erreicht.",
+  "01 entsteht aus 01a und 01b und steht neu direkt hinter beiden. Sein gültiger Code bleibt erhalten. Mit NR behalten: FALSE werden die NR-Quellen deshalb Auslassungen mit 0 Punkten; mit TRUE bleiben sie NR. Das nachfolgende 02 bleibt NR. Es wird keine Ableitung neu berechnet.",
+  "Die Quellenkette lautet 01a → 01b → 01. Neu folgen die Ableitungen direkt ihren Quellen. Mit NR behalten: FALSE macht der gültige Code von 01 die Quelle 01a und die Ableitung 01b zu Auslassungen; mit TRUE bleiben beide NR. Für 03 fehlt die Quelle: Seine eigene Seite 2 bleibt maßgeblich. Wegen der unauflösbaren benötigten Quelle warnt die neue Version und verwendet für diese Unit alle Variablen außer NO_CODING zur Grenzbestimmung. 02 und 03 bleiben NR."
+)
+stopifnot(length(titles) == length(cases), length(notes) == length(cases))
+for (i in seq_along(titles)) {
+  rows <- cases[[as.character(i)]]
+  cat("\n\n## ", i, ". ", titles[[i]], " {#beispiel-", i, "}\n\n", sep = "")
+  if (i == 11L) {
+    cat("Eigenes Schema: nicht erreicht erhält **Code -196 / Score 0.5**, ",
+        "Auslassung **Code -199 / Score 0**.\n\n", sep = "")
+  }
+  print_comparison(rows, results[[as.character(i)]])
+  cat(notes[[i]], "\n\n")
+}
+```
+
+## Welche Variablen bestimmen die MNR-Grenze? {#itemgrenze}
+
+**A wurde ausgelassen, danach kommt B, dann das nicht erreichte Item C.**
+A und C sind mit Items verknüpft. B hat einen gültigen Antwortcode, sofern die
+Tabelle nichts anderes angibt. Es gilt **O → NR: TRUE / NR behalten: TRUE**;
+danach folgt keine Bearbeitung.
+
+```{r item-boundary-examples, results='asis'}
+boundary_example <- function(source = FALSE, no_coding = FALSE, metadata = TRUE,
+                             unlinked = FALSE) {
+  rows <- tibble::tribble(
+    ~variable_id, ~value, ~code_status, ~code_id, ~code_type, ~code_score,
+    "A", NA_character_, "DISPLAYED", -99, "MISSING_BY_OMISSION", 0,
+    "B", "1", "CODING_COMPLETE", 1, "FULL_CREDIT", 1,
+    "C", NA_character_, "NOT_REACHED", -96, "MISSING_NOT_REACHED", NA_real_
+  ) |> mutate(case_id = 0L, unit_key = "U1", testlet_no = 1L, response_present = TRUE)
+  if (no_coding) {
+    rows$code_status[2] <- rows$code_type[2] <- "NO_CODING"
+    rows$code_id[2] <- -93
+    rows$code_score[2] <- NA_real_
+  }
+  fixture <- make_fixture(rows)
+  fixture$units$items_list[[1]] <- filter(fixture$units$items_list[[1]], variable_id != "B")
+  if (unlinked) {
+    fixture$units$items_list[[1]] <- bind_rows(
+      fixture$units$items_list[[1]],
+      tibble::tibble(variable_id = c(NA_character_, "B"),
+                     item_id = c("unlinked_item", NA_character_)))
+  }
+  if (source) {
+    codes <- fixture$units$unit_codes[[1]]
+    codes$variable_source_type[3] <- "SUM_CODE"
+    codes$variable_level[3] <- 1L
+    codes$derive_sources <- list(character(), character(), "ref_B")
+    fixture$units$unit_codes[[1]] <- codes
+  }
+  if (!metadata) fixture$units$items_list <- NULL
+  fallback <- FALSE
+  result <- withCallingHandlers(
+    do.call(eatPrepTBA::complete_design, c(fixture, list(
+      recode_omissions_to_not_reached = TRUE, preserve_not_reached = TRUE))),
+    eatPrepTBA_item_boundary_fallback = function(w) {
+      fallback <<- TRUE
+      invokeRestart("muffleWarning")
+    })
+  tibble::tibble(`Code A` = result$code_id[result$variable_id == "A"],
+                 `Score A` = result$code_score[result$variable_id == "A"],
+                 Ersatzregel = fallback)
+}
+boundary_results <- bind_rows(
+  boundary_example(), boundary_example(source = TRUE),
+  boundary_example(source = TRUE, no_coding = TRUE), boundary_example(metadata = FALSE),
+  boundary_example(unlinked = TRUE)
+)
+stopifnot(identical(boundary_results$`Code A`, c(-96, -99, -96, -99, -96)),
+          identical(boundary_results$Ersatzregel, c(FALSE, FALSE, FALSE, TRUE, FALSE)))
+knitr::kable(tibble::tibble(
+  Fall = c("B ist eine unabhängige Hilfsvariable",
+           "B wird für die Berechnung von C benötigt",
+           "B wird für C benötigt, hat aber NO_CODING",
+           "Itemmetadaten fehlen: Ersatzregel mit Warnung",
+           "Wie Fall 1, zusätzlich unverknüpfte Einträge"),
+  `Ergebnis für A` = ifelse(boundary_results$`Code A` == -96,
+                           "Nicht erreicht / NA", "Auslassung / 0")
+))
+```
+
+**B hält A nur dann bei Auslassung, wenn B als Bearbeitung zählt.** Eine
+unabhängige Hilfsvariable zählt nicht, eine benötigte Quelle schon. C bleibt
+in allen Fällen nicht erreicht; es wird keine Ableitung neu berechnet.
+
+Unverknüpfte Einträge werden ohne Warnung übersprungen. Fehlen die Metadaten
+oder benötigte Quellen, warnt die Funktion und prüft für diese Unit alle
+Variablen außer `NO_CODING` auf Bearbeitung. Fehlende Positionsangaben
+(`variable_position = NA`) schränken die Prüfung der Reihenfolge ein.
+
+Der Ablauf mit eigenen Daten steht im [Standard-Workflow](standard-workflow.html).
+
+```{r restore-locale, include=FALSE}
+Sys.setlocale("LC_CTYPE", vignette_locale)
+```

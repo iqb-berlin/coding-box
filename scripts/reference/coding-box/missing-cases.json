@@ -1,0 +1,6216 @@
+[
+  {
+    "id": "missing-01-keep",
+    "sourceCase": 1,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V05",
+            "variable_ref": "ref_V05",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_V04",
+            "item_no": 4
+          },
+          {
+            "variable_id": "V05",
+            "item_id": "U1_V05",
+            "item_no": 5
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V04",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "PARTLY_DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V05",
+        "testlet": 1,
+        "position": 5,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-01-recode",
+    "sourceCase": 1,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V05",
+            "variable_ref": "ref_V05",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_V04",
+            "item_no": 4
+          },
+          {
+            "variable_id": "V05",
+            "item_id": "U1_V05",
+            "item_no": 5
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V04",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "PARTLY_DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V05",
+        "testlet": 1,
+        "position": 5,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-02-keep",
+    "sourceCase": 2,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-02-recode",
+    "sourceCase": 2,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-03-keep",
+    "sourceCase": 3,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-03-recode",
+    "sourceCase": 3,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-04-keep",
+    "sourceCase": 4,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-04-recode",
+    "sourceCase": 4,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-05-keep",
+    "sourceCase": 5,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      }
+    ]
+  },
+  {
+    "id": "missing-05-recode",
+    "sourceCase": 5,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-06-keep",
+    "sourceCase": 6,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 2,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 2,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      }
+    ]
+  },
+  {
+    "id": "missing-06-recode",
+    "sourceCase": 6,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 2,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 2,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-07-keep",
+    "sourceCase": 7,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-07-recode",
+    "sourceCase": 7,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-08-keep",
+    "sourceCase": 8,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-08-recode",
+    "sourceCase": 8,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-09-keep",
+    "sourceCase": 9,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "INVALID",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_ERROR",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mir",
+        "code": -98,
+        "score": 0
+      },
+      {
+        "state": "mci",
+        "code": -97,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-09-recode",
+    "sourceCase": 9,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "INVALID",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_ERROR",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mir",
+        "code": -98,
+        "score": 0
+      },
+      {
+        "state": "mci",
+        "code": -97,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-10-keep",
+    "sourceCase": 10,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NO_CODING",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "error",
+        "reason": "unresolved-status"
+      }
+    ]
+  },
+  {
+    "id": "missing-10-recode",
+    "sourceCase": 10,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NO_CODING",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "error",
+        "reason": "unresolved-status"
+      }
+    ]
+  },
+  {
+    "id": "missing-11-keep",
+    "sourceCase": 11,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -199,
+        0
+      ],
+      "mnr": [
+        -196,
+        0.5
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -199,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -196,
+        "score": 0.5
+      }
+    ]
+  },
+  {
+    "id": "missing-11-recode",
+    "sourceCase": 11,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -199,
+        0
+      ],
+      "mnr": [
+        -196,
+        0.5
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": false,
+        "status": null,
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -196,
+        "score": 0.5
+      },
+      {
+        "state": "mnr",
+        "code": -196,
+        "score": 0.5
+      }
+    ]
+  },
+  {
+    "id": "missing-12-keep",
+    "sourceCase": 12,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-12-recode",
+    "sourceCase": 12,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-13-keep",
+    "sourceCase": 13,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-13-recode",
+    "sourceCase": 13,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      },
+      {
+        "unit_key": "U2",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U2_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U2_V02",
+            "item_no": 2
+          }
+        ]
+      },
+      {
+        "unit_key": "U3",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U3_V01",
+            "item_no": 1
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "DISPLAYED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U2",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U2",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U3",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-14-keep",
+    "sourceCase": 14,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 3,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 4,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_I02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_I03",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V01",
+            "item_id": "U1_I09",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_I11",
+            "item_no": 4
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V04",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-14-recode",
+    "sourceCase": 14,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 3,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V04",
+            "variable_ref": "ref_V04",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 4,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_I02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V04",
+            "item_id": "U1_I03",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V01",
+            "item_id": "U1_I09",
+            "item_no": 3
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_I11",
+            "item_no": 4
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V04",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-15-keep",
+    "sourceCase": 15,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_V01"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      }
+    ]
+  },
+  {
+    "id": "missing-15-recode",
+    "sourceCase": 15,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_V01"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      }
+    ]
+  },
+  {
+    "id": "missing-16-keep",
+    "sourceCase": 16,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 2,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 1,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 3,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-16-recode",
+    "sourceCase": 16,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "V01",
+            "variable_ref": "ref_V01",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 2,
+            "variable_element": 0,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V02",
+            "variable_ref": "ref_V02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 1,
+            "variable_element": 1,
+            "variable_page_always_visible": false
+          },
+          {
+            "variable_id": "V03",
+            "variable_ref": "ref_V03",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 3,
+            "variable_element": 2,
+            "variable_page_always_visible": false
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "V01",
+            "item_id": "U1_V01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "V02",
+            "item_id": "U1_V02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "V03",
+            "item_id": "U1_V03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "V01",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "V02",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "V03",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-17-keep",
+    "sourceCase": 17,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 1,
+            "variable_section": null,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "variable_sources": [
+              {
+                "variable_source_ref": "ref_01a",
+                "variable_source_id": "01a",
+                "variable_source_direct": true
+              },
+              {
+                "variable_source_ref": "ref_01b",
+                "variable_source_id": "01b",
+                "variable_source_direct": true
+              }
+            ]
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "01a",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01b",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "02",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-17-recode",
+    "sourceCase": 17,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 1,
+            "variable_section": null,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "variable_sources": [
+              {
+                "variable_source_ref": "ref_01a",
+                "variable_source_id": "01a",
+                "variable_source_direct": true
+              },
+              {
+                "variable_source_ref": "ref_01b",
+                "variable_source_id": "01b",
+                "variable_source_direct": true
+              }
+            ]
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "variable_sources": []
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "01a",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01b",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "02",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-18-keep",
+    "sourceCase": 18,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": false,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01a"
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 2,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01b"
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "03",
+            "variable_ref": "ref_03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_fehlt"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "03",
+            "item_id": "U1_03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "01a",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01b",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "02",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "03",
+        "testlet": 1,
+        "position": 5,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  },
+  {
+    "id": "missing-18-recode",
+    "sourceCase": 18,
+    "issues": [
+      1116,
+      741
+    ],
+    "recode": true,
+    "profile": {
+      "mir": [
+        -98,
+        0
+      ],
+      "mci": [
+        -97,
+        null
+      ],
+      "mbi_mbo": [
+        -99,
+        0
+      ],
+      "mnr": [
+        -96,
+        null
+      ],
+      "mbd": [
+        -95,
+        null
+      ]
+    },
+    "metadata": [
+      {
+        "unit_key": "U1",
+        "unit_codes": [
+          {
+            "variable_id": "01a",
+            "variable_ref": "ref_01a",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 0,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "01b",
+            "variable_ref": "ref_01b",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 1,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01a"
+          },
+          {
+            "variable_id": "01",
+            "variable_ref": "ref_01",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 2,
+            "variable_page": null,
+            "variable_section": 0,
+            "variable_element": 2,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_01b"
+          },
+          {
+            "variable_id": "02",
+            "variable_ref": "ref_02",
+            "variable_source_type": "BASE",
+            "variable_level": 0,
+            "variable_page": 1,
+            "variable_section": 0,
+            "variable_element": 3,
+            "variable_page_always_visible": false,
+            "derive_sources": []
+          },
+          {
+            "variable_id": "03",
+            "variable_ref": "ref_03",
+            "variable_source_type": "SUM_CODE",
+            "variable_level": 1,
+            "variable_page": 2,
+            "variable_section": 0,
+            "variable_element": 4,
+            "variable_page_always_visible": false,
+            "derive_sources": "ref_fehlt"
+          }
+        ],
+        "items_list": [
+          {
+            "variable_id": "01",
+            "item_id": "U1_01",
+            "item_no": 1
+          },
+          {
+            "variable_id": "02",
+            "item_id": "U1_02",
+            "item_no": 2
+          },
+          {
+            "variable_id": "03",
+            "item_id": "U1_03",
+            "item_no": 3
+          }
+        ]
+      }
+    ],
+    "rows": [
+      {
+        "unit": "U1",
+        "variable": "01a",
+        "testlet": 1,
+        "position": 1,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01b",
+        "testlet": 1,
+        "position": 2,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "01",
+        "testlet": 1,
+        "position": 3,
+        "present": true,
+        "status": "CODING_COMPLETE",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "unit": "U1",
+        "variable": "02",
+        "testlet": 1,
+        "position": 4,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      },
+      {
+        "unit": "U1",
+        "variable": "03",
+        "testlet": 1,
+        "position": 5,
+        "present": true,
+        "status": "NOT_REACHED",
+        "code": null,
+        "score": null
+      }
+    ],
+    "expected": [
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "mbi_mbo",
+        "code": -99,
+        "score": 0
+      },
+      {
+        "state": "valid",
+        "code": 1,
+        "score": 1
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      },
+      {
+        "state": "mnr",
+        "code": -96,
+        "score": null
+      }
+    ]
+  }
+]

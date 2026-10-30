@@ -1,0 +1,40 @@
+group_id,login_name,login_code,booklet_id,unit_key,variable_id,value,code_id
+WS,P001,SYN001,B1,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P002,SYN002,B1,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P003,SYN003,B1,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P004,SYN004,B1,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P005,SYN005,B1,U4,TEXT,,-99
+WS,P006,SYN006,B1,U4,TEXT,Weil ich das vermute.,0
+WS,P007,SYN007,B1,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P008,SYN008,B1,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P009,SYN009,B1,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P010,SYN010,B1,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P011,SYN011,B1,U4,TEXT,Im Aushang steht: samstags von 10 bis 14 Uhr.,2
+WS,P012,SYN012,B1,U4,TEXT,Weil ich das vermute.,0
+WS,P013,SYN013,B1,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P014,SYN014,B1,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P015,SYN015,B1,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P016,SYN016,B1,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P017,SYN017,B1,U4,TEXT,Im Aushang steht: samstags von 10 bis 14 Uhr.,2
+WS,P018,SYN018,B1,U4,TEXT,Weil ich das vermute.,0
+WS,P019,SYN019,B1,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P020,SYN020,B1,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P021,SYN021,B2,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P022,SYN022,B2,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P023,SYN023,B2,U4,TEXT,Im Aushang steht: samstags von 10 bis 14 Uhr.,2
+WS,P024,SYN024,B2,U4,TEXT,Weil ich das vermute.,0
+WS,P025,SYN025,B2,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P026,SYN026,B2,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P027,SYN027,B2,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P028,SYN028,B2,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P029,SYN029,B2,U4,TEXT,Im Aushang steht: samstags von 10 bis 14 Uhr.,2
+WS,P030,SYN030,B2,U4,TEXT,Weil ich das vermute.,0
+WS,P031,SYN031,B2,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P032,SYN032,B2,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P033,SYN033,B2,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
+WS,P034,SYN034,B2,U4,TEXT,Samstags kann man in die Bibliothek gehen.,1
+WS,P035,SYN035,B2,U4,TEXT,Im Aushang steht: samstags von 10 bis 14 Uhr.,2
+WS,P036,SYN036,B2,U4,TEXT,Weil ich das vermute.,0
+WS,P037,SYN037,B2,U4,TEXT,Die Bibliothek ist am Samstag offen.,1
+WS,P038,SYN038,B2,U4,TEXT,"Ja, laut Aushang: Samstag 10 bis 14 Uhr.",2
+WS,P039,SYN039,B2,U4,TEXT,"Nein, am Wochenende ist immer geschlossen.",0
