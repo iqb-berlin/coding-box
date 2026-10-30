@@ -2,6 +2,7 @@ import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { SERVER_URL } from '../../../injection-tokens';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
@@ -51,7 +52,7 @@ export type VariableAnalysisSortBy =
 
 export type VariableAnalysisSortDirection = 'asc' | 'desc';
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;
@@ -82,7 +83,7 @@ export interface VariableAnalysisResultDto {
   total: number;
 }
 
-export interface VariableAnalysisTableRowDto extends VariableFrequencyDto {
+export interface VariableAnalysisTableRowDto extends VariableFrequencyDto, VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;
@@ -159,7 +160,8 @@ export class VariableAnalysisService implements OnDestroy {
   createAnalysisJob(
     workspaceId: number,
     unitId?: number,
-    variableId?: string
+    variableId?: string,
+    options: VariableAnalysisOptions = {}
   ): Observable<VariableAnalysisJobDto> {
     let params = new HttpParams();
 
@@ -170,6 +172,9 @@ export class VariableAnalysisService implements OnDestroy {
     if (variableId) {
       params = params.set('variableId', variableId);
     }
+
+    if (options.analysisMode) params = params.set('analysisMode', options.analysisMode);
+    if (options.codingVersion) params = params.set('codingVersion', options.codingVersion);
 
     return this.http.post<VariableAnalysisJobDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,

@@ -233,10 +233,10 @@ describe('VariableAnalysisProcessor', () => {
               type: 'string',
               sourceType: 'BASE',
               hasCodingScheme: true,
-              codes: [
-                { id: 'A', label: 'Alpha', score: 1 },
-                { id: 'B', label: 'Beta', score: 0 },
-                { id: 'C', label: 'Gamma', score: 0 }
+              values: [
+                { value: 'A', label: 'Alpha' },
+                { value: 'B', label: 'Beta' },
+                { value: 'C', label: 'Gamma' }
               ]
             },
             {
@@ -609,7 +609,7 @@ describe('VariableAnalysisProcessor', () => {
       ]
     });
 
-    const metadata = await processor.processWorkspaceJob(createJob());
+    const metadata = await processor.processWorkspaceJob(createJob({ analysisMode: 'codes' }));
 
     expect(metadata).toEqual(expect.objectContaining({
       cacheKey: 'variable-analysis:1:job-1',
@@ -898,7 +898,7 @@ describe('VariableAnalysisProcessor', () => {
       ]]
     ]);
     expect(String(responseRepository.query.mock.calls[0][0])).toContain(
-      'statusV1'
+      'analysisValid'
     );
     expect(String(responseRepository.query.mock.calls[1][0])).toContain(
       '"validCount"'
@@ -1058,8 +1058,8 @@ describe('VariableAnalysisProcessor', () => {
       expect.objectContaining({
         variableId: 'MULTI',
         totalCount: 3,
-        validCount: 1,
-        invalidCount: 2,
+        validCount: 2,
+        invalidCount: 1,
         emptyCount: 1,
         distinctValueCount: 2
       })
@@ -1075,7 +1075,7 @@ describe('VariableAnalysisProcessor', () => {
           value: 'B',
           label: 'Beta',
           count: 2,
-          validOccurrenceCount: 1,
+          validOccurrenceCount: 2,
           percentage: 66.66666666666666
         }),
         expect.objectContaining({
@@ -1258,6 +1258,168 @@ describe('VariableAnalysisProcessor', () => {
         expect.objectContaining({ value: 'B', label: 'Beta', count: 1 }),
         expect.objectContaining({ value: 'C', label: 'Gamma', count: 1 })
       ]]
+    ]);
+  });
+  it('preserves the text null in multiple responses while excluding actual null entries', async () => {
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', alias: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'MULTI', totalCount: 5, emptyCount: 0, distinctValueCount: 5
+        }],
+        [],
+        ['null', '["null",null,"NULL"]', null, '[null]', '[false,false]'].map((value, index) => ({
+          responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+        })),
+        [], []
+      ]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 2
+      })
+    ]);
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
+      ['1:MULTI', expect.arrayContaining([
+        expect.objectContaining({
+          value: 'null', count: 2, validOccurrenceCount: 2, percentageValid: 100
+        }),
+        expect.objectContaining({
+          value: 'NULL', count: 1, validOccurrenceCount: 1, percentageValid: 50
+        })
+      ])]
+    ]);
+  });
+
+  it.each(['v1', 'v2', 'v3'] as const)('counts assigned codes from %s with their schema metadata, independently of raw categories', async codingVersion => {
+    const { processor, cacheService, analysisQuery } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'VAR',
+          alias: 'VAR',
+          type: 'string',
+          hasCodingScheme: true,
+          multiple: true,
+          codes: [{ id: 0, label: 'Incorrect', score: 0 }, { id: 1, label: 'Correct' }, { id: 2, label: 'Unobserved' }],
+          values: [{ value: '0', label: 'Raw option zero' }]
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: '4', validCount: '3', emptyCount: '1', distinctValueCount: '3'
+        }],
+        [
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: '0', valueLength: 1, count: '2', validCount: '2'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: '1', valueLength: 1, count: '1', validCount: '1'
+          },
+          {
+            unitName: 'UNIT', variableId: 'VAR', value: '', valueLength: 0, count: '1', validCount: '0'
+          }
+        ],
+        [],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', status: '5', count: '3'
+        }, {
+          unitName: 'UNIT', variableId: 'VAR', status: '0', count: '1'
+        }]
+      ]
+    });
+    await processor.processWorkspaceJob(createJob({ analysisMode: 'codes', codingVersion }));
+    expect(analysisQuery.addSelect).toHaveBeenCalledWith(`CAST(response.code_${codingVersion} AS text)`, 'value');
+    expect(analysisQuery.addSelect).toHaveBeenCalledWith(`response.status_${codingVersion}`, 'status');
+    const validity = analysisQuery.addSelect.mock.calls.find(([, alias]) => alias === 'analysisValid')?.[0];
+    expect(validity).toContain(`response.code_${codingVersion} IS NOT NULL`);
+    expect(validity).toContain(`response.status_${codingVersion} IN (5, 12)`);
+    expect(validity).not.toContain('score');
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        analysisMode: 'codes', codingVersion, totalCount: 4, validCount: 3, invalidCount: 1, emptyCount: 1
+      })
+    ]);
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
+      ['1:VAR', [
+        expect.objectContaining({
+          value: '0', label: 'Incorrect', score: 0, count: 2, validOccurrenceCount: 2, percentageTotal: 50, percentageValid: (2 / 3) * 100
+        }),
+        expect.objectContaining({
+          value: '1', label: 'Correct', score: undefined, count: 1, validOccurrenceCount: 1, percentageTotal: 25, percentageValid: (1 / 3) * 100
+        }),
+        expect.objectContaining({
+          value: '', count: 1, validOccurrenceCount: 0, percentageValid: 0
+        }),
+        expect.objectContaining({
+          value: '2', label: 'Unobserved', count: 0, isSchemaOnly: true
+        })
+      ]]
+    ]);
+  });
+
+  it('uses raw value labels without borrowing metadata or validity from a matching code ID', async () => {
+    const { processor, cacheService, analysisQuery } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'VAR',
+          alias: 'VAR',
+          type: 'string',
+          hasCodingScheme: true,
+          values: [{ value: '1', label: 'Raw option' }],
+          codes: [{ id: 1, label: 'Unrelated code', score: 99 }, { id: 2, label: 'Unobserved code', score: 1 }]
+        }]
+      }],
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: 2, validCount: 1, emptyCount: 1, distinctValueCount: 2
+        }],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', value: '1', count: 1, validCount: 1, valueLength: 1
+        }, {
+          unitName: 'UNIT', variableId: 'VAR', value: '', count: 1, validCount: 0, valueLength: 0
+        }],
+        [], []
+      ]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const validity = analysisQuery.addSelect.mock.calls.find(([, alias]) => alias === 'analysisValid')?.[0];
+    expect(validity).toContain('response.status');
+    expect(validity).not.toContain('status_v1');
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
+      ['1:VAR', [
+        expect.objectContaining({ value: '1', label: 'Raw option', score: undefined }),
+        expect.objectContaining({ value: '', validOccurrenceCount: 0 })
+      ]]
+    ]);
+  });
+
+  it('leaves valid percentages undefined if all responses are invalid', async () => {
+    const { processor, cacheService } = createProcessor({
+      queryResults: [
+        [{
+          unitName: 'UNIT', variableId: 'VAR', totalCount: 1, validCount: 0, emptyCount: 1, distinctValueCount: 1
+        }],
+        [{
+          unitName: 'UNIT', variableId: 'VAR', value: '', count: 1, validCount: 0, valueLength: 0
+        }], []
+      ]
+    });
+    await processor.processWorkspaceJob(createJob({ analysisMode: 'codes' }));
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
+      ['1:VAR', expect.arrayContaining([expect.objectContaining({ value: '', percentageValid: null })])]
     ]);
   });
 });

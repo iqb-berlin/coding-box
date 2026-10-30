@@ -22,6 +22,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { VariableAnalysisMode, VariableAnalysisCodingVersion } from '../../../../../../api-dto/coding/variable-analysis-options';
 import { getErrorMessage } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
@@ -63,6 +64,12 @@ export class VariableAnalysisController {
     required: false,
     description: 'Optional variable ID to filter by'
   })
+  @ApiQuery({
+    name: 'analysisMode', enum: ['values', 'codes'], required: false, description: 'Analyze raw values (default) or assigned codes'
+  })
+  @ApiQuery({
+    name: 'codingVersion', enum: ['v1', 'v2', 'v3'], required: false, description: 'Coding run for code analysis (default: v1)'
+  })
   @ApiCreatedResponse({
     description: 'The variable analysis job has been successfully created.',
     type: VariableAnalysisJobDto
@@ -80,12 +87,15 @@ export class VariableAnalysisController {
   async createAnalysisJob(
     @WorkspaceId() workspaceId: number,
     @Query('unitId') unitId?: number,
-    @Query('variableId') variableId?: string
+    @Query('variableId') variableId?: string,
+    @Query('analysisMode') analysisMode?: VariableAnalysisMode,
+    @Query('codingVersion') codingVersion?: VariableAnalysisCodingVersion
   ): Promise<VariableAnalysisJobDto> {
     return this.variableAnalysisService.createAnalysisJob(
       workspaceId,
       unitId,
-      variableId
+      variableId,
+      { analysisMode, codingVersion }
     );
   }
 
