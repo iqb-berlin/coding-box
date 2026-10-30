@@ -111,7 +111,7 @@ const createService = (
   };
   const metadataService = new ItemDatasetMetadataService(
     (overrides.unitRepository || {}) as never,
-    (overrides.fileUploadRepository || {}) as never,
+    (overrides.fileUploadRepository || { find: jest.fn().mockResolvedValue([]) }) as never,
     workspaceFilesService as never,
     workspaceExclusionService as never,
     (overrides.metadataResolver || {}) as never
@@ -596,6 +596,81 @@ describe('CodingItemMatrixExportService', () => {
       null
     ]);
     expect(cells[5].unresolved).toBe(true);
+  });
+
+  it('exports the DLB004 regression with unchanged item columns in CSV and Excel', async () => {
+    const columns = [column('10', 'DLB004', '10'), column('12', 'DLB004', '01'), column('16', 'DLB004', '11')];
+    const unitQuery = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const fileRepository = {
+      find: jest.fn().mockImplementation(async ({ where }: { where: { file_type: string } }) => (
+        where.file_type === 'Booklet' ? [{
+          file_id: 'BOOKLET', data: '<Booklet><Testlet id="T1"><Unit id="DLB004" /></Testlet></Booklet>'
+        }] : [{
+          file_id: 'DLB004.VOUD',
+          data: JSON.stringify({
+            pages: [
+              { sections: [{ elements: [{ id: '01' }] }] },
+              { sections: [{ elements: [{ id: '10' }] }] },
+              { sections: [{ elements: [{ id: '11' }] }] }
+            ]
+          })
+        }]
+      ))
+    };
+    const service = createService({
+      unitRepository: { createQueryBuilder: jest.fn().mockReturnValue(unitQuery) },
+      fileUploadRepository: fileRepository,
+      missingsProfilesService: { getResolvedMissingsProfileForExport: jest.fn().mockResolvedValue(profile) },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: columns.map(item => ({ ...item, variable: { isDerived: false } })),
+          issues: [],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+    const internals = service as never as { getRows: jest.Mock; getResponseValuesForRows: jest.Mock };
+    internals.getRows = jest.fn().mockResolvedValue([{
+      bookletId: 1, bookletName: 'BOOKLET', personLogin: 'person', personCode: 'code', personGroup: 'group'
+    }]);
+    internals.getResponseValuesForRows = jest.fn().mockResolvedValue(new Map([[1, new Map([
+      [columns[0].key, { code: null, score: null, status: 1 }],
+      [columns[1].key, { code: 1, score: 1, status: 5 }],
+      [columns[2].key, { code: null, score: null, status: 1 }]
+    ])]]));
+    const csv = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v1', configuration));
+    expect(csv.split(/\r?\n/)).toEqual([
+      'person_login;person_code;person_group;booklet_name;DLB004_10;DLB004_12;DLB004_16',
+      'person;code;group;BOOKLET;-84;1;-84'
+    ]);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await service.exportItemMatrixAsExcel(7, 'code', 'v1', configuration) as never);
+    expect(workbook.worksheets[0].getRow(1).values).toEqual([
+      undefined, 'person_login', 'person_code', 'person_group', 'booklet_name', 'DLB004_10', 'DLB004_12', 'DLB004_16'
+    ]);
+    expect(workbook.worksheets[0].getRow(2).values).toEqual([
+      undefined, 'person', 'code', 'group', 'BOOKLET', -84, 1, -84
+    ]);
+
+    // Export selection must not hide later activity from MNR classification.
+    internals.getResponseValuesForRows.mockResolvedValue(new Map([[1, new Map([
+      [columns[0].key, { code: null, score: null, status: 1 }],
+      [columns[1].key, { code: 1, score: 1, status: 5 }],
+      [columns[2].key, { code: 1, score: 1, status: 5 }]
+    ])]]));
+    const selected = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v1', {
+      ...configuration, items: [{ unitId: 'DLB004', itemId: '10' }]
+    }));
+    expect(selected.split(/\r?\n/)[1]).toBe('person;code;group;BOOKLET;-83');
   });
 
   it('resolves mnr per unit and optionally recodes trailing omissions', async () => {
@@ -1455,7 +1530,9 @@ describe('CodingItemMatrixExportService', () => {
           responseValues: unknown,
           profileValue: unknown,
           derivedValue: unknown,
-          configValue: ItemMatrixExportConfiguration
+          configValue: ItemMatrixExportConfiguration,
+          cancellation?: () => Promise<void>,
+          variablePositions?: ReadonlyMap<string, number>
         ) => Promise<Array<{ code: number | null }>>;
       }
     ).resolveRowCells(
@@ -1464,7 +1541,9 @@ describe('CodingItemMatrixExportService', () => {
       values,
       profile,
       derivedSources,
-      configuration
+      configuration,
+      undefined,
+      new Map([[source.key, 1], [derived.key, 2], [laterActivity.key, 3]])
     );
 
     expect(cells.map(cellValue => cellValue.code)).toEqual([-83, 1, -83]);
@@ -1804,8 +1883,9 @@ describe('CodingItemMatrixExportService', () => {
     expect(withoutLaterActivity.map(cellValue => cellValue.code)).toEqual([
       -84, -84
     ]);
+    // With no layout metadata, the omission follows NR in natural variable order.
     expect(withSameItemOmission.map(cellValue => cellValue.code)).toEqual([
-      -84, -84
+      -83, -84
     ]);
   });
 
