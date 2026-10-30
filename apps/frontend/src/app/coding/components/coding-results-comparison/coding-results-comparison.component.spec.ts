@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import {
   MatDialog,
   MatDialogModule,
@@ -223,14 +224,13 @@ describe('CodingResultsComparisonComponent', () => {
           useValue: testPersonCodingService
         }
       ]
-    }).compileComponents();
+    }).overrideProvider(MatDialog, { useValue: matDialog }).compileComponents();
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('de', applicationTranslations);
     translate.use('de');
     fixture = TestBed.createComponent(CodingResultsComparisonComponent);
     component = fixture.componentInstance;
-    (component as unknown as { dialog: typeof matDialog }).dialog = matDialog;
     fixture.detectChanges();
   });
 
@@ -2493,7 +2493,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(row.discussionSource).toBe('auto_agreement');
   });
 
-  it('should preview and apply training discussion results with selected strategies', async () => {
+  it('applies the confirmed strategies even if the coder filter changes while previewing', async () => {
     matDialog.open.mockReturnValue({
       afterClosed: () => of({
         existingResultStrategy: 'overwrite',
@@ -2501,7 +2501,7 @@ describe('CodingResultsComparisonComponent', () => {
       })
     } as never);
     jest.spyOn(component, 'loadComparison').mockImplementation(() => undefined);
-    codingTrainingBackendService.previewApplyDiscussionResults.mockReturnValue(of({
+    const preview = {
       trainingId: 5,
       source: 'manual',
       totalTrainingResponses: 1,
@@ -2518,7 +2518,9 @@ describe('CodingResultsComparisonComponent', () => {
       affectedJobIds: [10],
       affectedJobDefinitionIds: [],
       canApply: true
-    }));
+    };
+    const delayedPreview = new Subject<unknown>();
+    codingTrainingBackendService.previewApplyDiscussionResults.mockReturnValue(delayedPreview);
     codingTrainingBackendService.applyDiscussionResults.mockReturnValue(of({
       success: true,
       trainingId: 5,
@@ -2549,6 +2551,9 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.openApplyTrainingDiscussionResults('manual');
+    fixture.debugElement.query(By.css('coding-box-training-comparison-selection'))
+      .triggerEventHandler('withinCodersChanged');
+    delayedPreview.next(preview);
     await fixture.whenStable();
 
     expect(codingTrainingBackendService.previewApplyDiscussionResults)

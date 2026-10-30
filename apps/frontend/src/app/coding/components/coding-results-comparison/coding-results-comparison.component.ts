@@ -5,7 +5,6 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
-  MatDialog,
   MatDialogModule,
   MatDialogRef
 } from '@angular/material/dialog';
@@ -55,7 +54,6 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 import type {
   TrainingKappaVariableDto as KappaVariable
 } from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
@@ -72,11 +70,7 @@ import {
   getTrainingOptionMeta,
   getTrainingOptionTitle
 } from '../../utils/coder-training-display';
-import {
-  ApplyTrainingDiscussionResultsDialogData,
-  ApplyTrainingDiscussionResultsDialogComponent,
-  ApplyTrainingDiscussionResultsDialogResult
-} from './apply-training-discussion-results-dialog.component';
+import { TrainingDiscussionApplyFacade } from './training-discussion-apply.facade';
 import { TrainingDiscussionApplySource } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 import {
   TrainingComparisonSummaryDto,
@@ -160,7 +154,7 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],
   standalone: true,
-  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingDiscussionRecovery],
+  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingDiscussionRecovery, TrainingDiscussionApplyFacade],
   imports: [
     TrainingComparisonTableComponent,
     TrainingComparisonSelectionComponent,
@@ -204,8 +198,6 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private postMessageService = inject(PostMessageService);
   private sessionRecoveryService = inject(SessionRecoveryService);
-  private dialog = inject(MatDialog);
-  private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
   private contextActive = true;
   private discussionContextId = 0;
@@ -221,7 +213,8 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   readonly isLoading = this.comparisons.isLoading;
   private readonly reliability = inject(TrainingReliabilityFacade);
   readonly isLoadingKappa = this.reliability.isLoading;
-  protected readonly isApplyingDiscussionResults = signal(false);
+  private readonly discussionApply = inject(TrainingDiscussionApplyFacade);
+  protected readonly isApplyingDiscussionResults = this.discussionApply.isApplyingDiscussionResults;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
   displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer', 'match'];
   protected dynamicCoderColumns: string[] = [];
@@ -1148,162 +1141,19 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
   openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
     if (!this.permissions.canApply) return;
-    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
+    const trainingId = this.selectedTrainingForWithin;
+    if (this.comparisonMode !== 'within-training' || !trainingId) {
       this.snackBar.open(this.translate.instant('coding.trainings.compare.training-required'), this.translate.instant('common.close'), { duration: 3000 });
       return;
     }
-
-    const trainingId = this.selectedTrainingForWithin;
-    this.isApplyingDiscussionResults.set(true);
-    this.codingTrainingBackendService.previewApplyDiscussionResults(
-      this.data.workspaceId,
+    this.discussionApply.open(source, {
+      workspaceId: this.data.workspaceId,
       trainingId,
-      source
-    ).pipe(takeUntil(this.ngUnsubscribe))
-      .subscribe({
-        next: preview => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isApplyingDiscussionResults.set(false);
-            return;
-          }
-          this.isApplyingDiscussionResults.set(false);
-          const dialogRef = this.dialog.open<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogData, ApplyTrainingDiscussionResultsDialogResult | undefined>(ApplyTrainingDiscussionResultsDialogComponent, {
-            width: '720px',
-            data: { preview, source }
-          });
-
-          dialogRef.afterClosed()
-            .pipe(takeUntil(this.ngUnsubscribe))
-            .subscribe(result => {
-              if (!result ||
-                this.comparisonMode !== 'within-training' ||
-                this.selectedTrainingForWithin !== trainingId) {
-                return;
-              }
-              this.applyTrainingDiscussionResults(source, result, trainingId);
-            });
-        },
-        error: error => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isApplyingDiscussionResults.set(false);
-            return;
-          }
-          this.isApplyingDiscussionResults.set(false);
-          this.snackBar.open(
-            this.getApplyDiscussionResultsErrorMessage(error),
-            this.translate.instant('common.close'),
-            { duration: 4000 }
-          );
-        }
-      });
-  }
-
-  private applyTrainingDiscussionResults(
-    source: TrainingDiscussionApplySource,
-    strategies: ApplyTrainingDiscussionResultsDialogResult,
-    trainingId = this.selectedTrainingForWithin
-  ): void {
-    if (!this.permissions.canApply) return;
-    if (!trainingId) {
-      return;
-    }
-
-    this.isApplyingDiscussionResults.set(true);
-    this.codingTrainingBackendService.applyDiscussionResults(
-      this.data.workspaceId,
-      trainingId,
-      {
-        source,
-        existingResultStrategy: strategies.existingResultStrategy,
-        jobConflictStrategy: strategies.jobConflictStrategy
-      }
-    ).pipe(takeUntil(this.ngUnsubscribe))
-      .subscribe({
-        next: result => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isApplyingDiscussionResults.set(false);
-            return;
-          }
-          this.isApplyingDiscussionResults.set(false);
-          this.snackBar.open(
-            this.getApplyDiscussionResultsMessage(result),
-            this.translate.instant('common.close'),
-            { duration: 5000 }
-          );
-          if (result.updatedResponsesCount > 0 || result.removedJobUnitCount > 0) {
-            this.testPersonCodingService.notifyTestResultsChanged({
-              workspaceId: this.data.workspaceId,
-              statisticsVersion: 'v2'
-            });
-          }
-          this.loadComparison();
-        },
-        error: error => {
-          if (this.comparisonMode !== 'within-training' ||
-            this.selectedTrainingForWithin !== trainingId) {
-            this.isApplyingDiscussionResults.set(false);
-            return;
-          }
-          this.isApplyingDiscussionResults.set(false);
-          this.snackBar.open(
-            this.getApplyDiscussionResultsErrorMessage(error),
-            this.translate.instant('common.close'),
-            { duration: 5000 }
-          );
-        }
-      });
-  }
-
-  private getApplyDiscussionResultsMessage(result: {
-    success: boolean;
-    updatedResponsesCount: number;
-    skippedExistingResultsCount: number;
-    overwrittenExistingResultsCount: number;
-    skippedJobConflictCount: number;
-    skippedMissingScoreCount: number;
-    removedJobUnitCount: number;
-  }): string {
-    if (!result.success) {
-      return this.translate.instant('coding.trainings.compare.apply-error');
-    }
-
-    const parts = [this.translate.instant('coding.trainings.compare.apply-updated', { count: result.updatedResponsesCount })];
-    if (result.overwrittenExistingResultsCount > 0) {
-      parts.push(this.translate.instant('coding.trainings.compare.apply-overwritten', { count: result.overwrittenExistingResultsCount }));
-    }
-    if (result.skippedExistingResultsCount > 0) {
-      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-existing', { count: result.skippedExistingResultsCount }));
-    }
-    if (result.skippedJobConflictCount > 0) {
-      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-conflicts', { count: result.skippedJobConflictCount }));
-    }
-    if (result.skippedMissingScoreCount > 0) {
-      parts.push(this.translate.instant('coding.trainings.compare.apply-skipped-scores', { count: result.skippedMissingScoreCount }));
-    }
-    if (result.removedJobUnitCount > 0) {
-      parts.push(this.translate.instant('coding.trainings.compare.apply-removed-jobs', { count: result.removedJobUnitCount }));
-    }
-
-    return `${parts.join(', ')}.`;
-  }
-
-  private getApplyDiscussionResultsErrorMessage(error: unknown): string {
-    const fallbackMessage = this.translate.instant('coding.trainings.compare.apply-error');
-    if (!(error instanceof HttpErrorResponse)) {
-      return fallbackMessage;
-    }
-
-    const responseMessage = error.error?.message;
-    const message = Array.isArray(responseMessage) ?
-      responseMessage.join(' ') :
-      responseMessage || error.message;
-
-    return typeof message === 'string' && message.trim() ?
-      message :
-      fallbackMessage;
+      canApply: () => this.permissions.canApply,
+      isCurrent: () => this.contextActive &&
+        this.comparisonMode === 'within-training' && this.selectedTrainingForWithin === trainingId,
+      reload: () => this.loadComparison()
+    });
   }
 
   private initDiscussionValues(data: WithinTrainingComparison[]): void {
