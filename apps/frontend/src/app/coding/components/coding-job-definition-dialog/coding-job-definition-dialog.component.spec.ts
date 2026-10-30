@@ -3,7 +3,7 @@ import { MAT_TABS_CONFIG } from '@angular/material/tabs';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatTabGroupHarness } from '@angular/material/tabs/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { EventEmitter, WritableSignal } from '@angular/core';
+import { EventEmitter } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
@@ -18,10 +18,10 @@ import { JobDistributionPreviewComponent } from './job-distribution-preview.comp
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
 import { JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
 import { JobBundleRow } from './job-bundle-selection.component';
-import { DistributionPreviewSummary } from './coding-workload';
+import { JobDistributionPreviewFacade } from './job-distribution-preview.facade';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
-import { DistributedCodingService } from '../../services/distributed-coding.service';
+import { DistributedCodingService, DistributionCalculationResponse } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
@@ -1780,27 +1780,60 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('does not run or invalidate the fallback estimate when authoritative previews change', () => {
-    createComponent();
-    const internals = component as unknown as {
-      distributionPreviewSummary: WritableSignal<DistributionPreviewSummary | null>;
-      getSelectedDistributionVariableCaseCountsAfterLimit(): number[];
-    };
-    const estimate = jest.spyOn(internals, 'getSelectedDistributionVariableCaseCountsAfterLimit');
-    component.selectedVariables().select({
-      unitName: 'Large unit', variableId: 'Large variable', responseCount: 100000, availableCases: 100000
-    });
-    internals.distributionPreviewSummary.set({ totalCases: 4, doubleCodedCases: 1, totalCodingTasks: 5 });
-    expect(component.getTotalCodingTasks()).toBe(5);
-    expect(estimate).not.toHaveBeenCalled();
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const preview = new Subject<DistributionCalculationResponse>();
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(preview);
+      createComponent();
+      const estimate = jest.spyOn(component as unknown as {
+        getSelectedDistributionVariableCaseCountsAfterLimit(): number[];
+      }, 'getSelectedDistributionVariableCaseCountsAfterLimit');
+      const variable = {
+        unitName: 'Large unit', variableId: 'Large variable', responseCount: 100000, availableCases: 100000
+      };
+      component.selectedVariables().select(variable);
+      component.selectedCoders.select(mockCoders[0]);
+      jest.advanceTimersByTime(300);
+      const callsBeforePreview = estimate.mock.calls.length;
+      preview.next({
+        ...emptyDistributionPreview,
+        doubleCodingInfo: {
+          item: {
+            totalCases: 4, distinctCases: 4, doubleCodedCases: 1, codingTasksTotal: 5, singleCodedCasesAssigned: 3, doubleCodedCasesPerCoder: {}
+          }
+        }
+      });
+      expect(component.getTotalCodingTasks()).toBe(5);
+      expect(estimate).toHaveBeenCalledTimes(callsBeforePreview);
 
-    internals.distributionPreviewSummary.set(null);
-    expect(component.getTotalCodingTasks()).toBe(100000);
-    expect(estimate).toHaveBeenCalledTimes(1);
-    internals.distributionPreviewSummary.set({ totalCases: 7, doubleCodedCases: 1, totalCodingTasks: 8 });
-    expect(component.getTotalCodingTasks()).toBe(8);
-    internals.distributionPreviewSummary.set(null);
-    expect(component.getTotalCodingTasks()).toBe(100000);
-    expect(estimate).toHaveBeenCalledTimes(1);
+      preview.error(new Error('offline'));
+      expect(component.getTotalCodingTasks()).toBe(100000);
+      expect(estimate).toHaveBeenCalledTimes(1);
+
+      const retry = new Subject<DistributionCalculationResponse>();
+      (mockDistributedCodingService.calculateDistribution as jest.Mock).mockReturnValue(retry);
+      fixture.debugElement.injector.get(JobDistributionPreviewFacade).refresh(1, () => ({
+        variables: [variable],
+        coders: [{ id: 1, name: 'Coder 1', username: 'Coder 1' }],
+        bundles: [],
+        distributionSeed: 'stable'
+      }));
+      jest.advanceTimersByTime(300);
+      retry.next({
+        ...emptyDistributionPreview,
+        doubleCodingInfo: {
+          item: {
+            totalCases: 7, distinctCases: 7, doubleCodedCases: 1, codingTasksTotal: 8, singleCodedCasesAssigned: 6, doubleCodedCasesPerCoder: {}
+          }
+        }
+      });
+      expect(component.getTotalCodingTasks()).toBe(8);
+      retry.error(new Error('offline'));
+      expect(component.getTotalCodingTasks()).toBe(100000);
+      expect(estimate).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('shares the fallback calculation across all summary bindings until inputs change', () => {

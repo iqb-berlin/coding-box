@@ -58,7 +58,8 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-views.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-replay.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-recovery.service.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-values.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-values.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/training-discussion-editor.facade.spec.ts"
       ]
     },
     {
