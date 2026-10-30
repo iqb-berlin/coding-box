@@ -56,8 +56,8 @@ describe('zoneless test-results deletion', () => {
       posts += 1; request.reply({ statusCode: 503, body: { message: 'enqueue response unavailable' } });
     }).as('create');
     openPreview(); confirm();
-    cy.contains('coding-box-test-results .delete-progress-container', 'konnte nicht bestätigt werden').should('be.visible');
-    cy.contains('coding-box-test-results .delete-progress-container', 'Hintergrund').should('be.visible');
+    cy.contains('coding-box-test-results .delete-progress-container', 'konnte nicht bestätigt werden').scrollIntoView().should('be.visible');
+    cy.contains('coding-box-test-results .delete-progress-container', 'Hintergrund').scrollIntoView().should('be.visible');
     cy.contains('coding-box-test-results button', 'Neue Löschvorschau').click(); cy.wait('@preview');
     cy.contains('coding-box-test-results-delete-preview-dialog button', 'Abbrechen').click();
     cy.then(() => { expect(posts).to.equal(1); expect(previews).to.equal(2); });
@@ -75,10 +75,10 @@ describe('zoneless test-results deletion', () => {
       request.reply(reports === 1 ? { statusCode: 503, body: { message: 'report temporarily unavailable' } } : { body: { ...preview(2), deletedTargetCount: 2 } });
     }).as('report');
     openPreview(); confirm(); cy.wait('@status');
-    cy.contains('coding-box-test-results .delete-progress-container', 'Hintergrund').should('be.visible');
+    cy.contains('coding-box-test-results .delete-progress-container', 'Hintergrund').scrollIntoView().should('be.visible');
     cy.contains('coding-box-test-results button', 'Ausgewählte Personen löschen').should('be.disabled');
     cy.contains('coding-box-test-results button', 'Fortschritt erneut laden').click(); cy.wait(['@status', '@report', '@persons']);
-    cy.contains('coding-box-test-results .delete-progress-container', 'Ergebnisbericht').should('be.visible');
+    cy.contains('coding-box-test-results .delete-progress-container', 'Ergebnisbericht').scrollIntoView().should('be.visible');
     cy.get('coding-box-test-results .persons-table mat-row').should('not.exist');
     cy.contains('coding-box-test-results .overview-metric', 'Testpersonen').find('.value').should('have.text', '0');
     cy.contains('coding-box-test-results button', 'Ergebnis erneut laden').click(); cy.wait('@report');
@@ -91,7 +91,7 @@ describe('zoneless test-results deletion', () => {
       persons = [originalPersons[1]]; request.reply({ body: { ...task('failed', 40), error: 'Stapel 2 fehlgeschlagen' } });
     }).as('status');
     openPreview(); confirm(); cy.wait(['@status', '@persons']);
-    cy.contains('coding-box-test-results .delete-progress-container', 'Teilschritte').should('be.visible');
+    cy.contains('coding-box-test-results .delete-progress-container', 'Teilschritte').scrollIntoView().should('be.visible');
     cy.get('coding-box-test-results .persons-table mat-row').should('have.length', 1).and('contain.text', 'P02');
     cy.get('coding-box-test-results .persons-table mat-row input[type="checkbox"]').should('not.be.checked');
     cy.contains('coding-box-test-results button', 'Neue Löschvorschau').click(); cy.wait('@preview');
