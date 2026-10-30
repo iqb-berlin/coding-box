@@ -79,6 +79,11 @@ inline templates. Warnings fail the Nx lint target. Angular classes resolve
 dependencies with `inject()`, enforced by lint. Constructors retain initialization
 logic, and optional dependencies use nullable `inject()` results. Ordinary model,
 error, and explicitly constructed factory classes retain their constructor APIs.
+Application components must explicitly use `OnPush`; inputs and queries use the
+signal APIs, and outputs use `output()`. Lint also requires signal properties to
+be readonly. Test hosts are exempt from these migration rules so they can exercise
+legacy integrations and change detection behavior. The quality-gate fixtures
+verify that legacy application declarations fail and modern declarations pass.
 Application components use the `coding-box-` selector prefix, enforced by lint.
 The duration editor retains `iqb-formly-duration` because the metadata library
 reads its numeric inputs through that host selector. Its lint exception is limited
