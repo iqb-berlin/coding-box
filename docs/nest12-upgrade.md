@@ -78,6 +78,13 @@ Für einen bereits vorhandenen lokalen Installationsbaum ist
 `npm rebuild libxmljs2` nötig; ein frischer CI-/Docker-Build erledigt das beim
 Installieren. PostgreSQL und Redis brauchen keine Datenmigration.
 
+Die Produktionsabhängigkeiten werden in einer separaten Stufe des vollständigen
+Bookworm-Builders installiert. Das `libxmljs2`-Prebuild für Node 24 verlangt
+eine neuere glibc; der Builder kann deshalb auf den Quellbuild ausweichen. Der
+fertige Produktionsbaum wird in Bookworm-Slim übernommen, mit derselben
+Node-ABI und Debian-Basis, ohne Compiler oder Entwicklungsabhängigkeiten im
+Runtime-Image. Der Linux-Containerjob prüft native Module nach diesem Kopieren.
+
 Prüfergebnisse und verbleibende Einschränkungen stehen im
 [Testbericht](qa/nest12-upgrade-2026-10-30.md).
 
