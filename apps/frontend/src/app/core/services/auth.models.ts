@@ -16,6 +16,7 @@ export interface DecodedToken {
     roles: string[];
   };
   exp?: number;
+  iat?: number;
 }
 
 export interface AuthExchangeResponse {

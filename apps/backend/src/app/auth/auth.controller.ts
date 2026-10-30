@@ -1,7 +1,7 @@
 import {
-  Controller, Post, Logger, HttpCode, HttpStatus, Get, Query, Res, Req,
-  UnauthorizedException
+  Controller, Post, Logger, HttpCode, HttpStatus, Get, Query, Res, Req, UnauthorizedException, UseGuards
 } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiQuery, ApiOperation, ApiResponse
 } from '@nestjs/swagger';
@@ -19,6 +19,8 @@ import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseGuards(ThrottlerGuard)
+@ApiResponse({ status: HttpStatus.TOO_MANY_REQUESTS, description: 'Authentication request limit exceeded; retry after the Retry-After interval' })
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 

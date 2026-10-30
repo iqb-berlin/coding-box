@@ -36,11 +36,12 @@ describe('AuthService', () => {
   };
   let originalCryptoDescriptor: PropertyDescriptor | undefined;
 
-  const createToken = (expiresInSeconds: number, subject = 'oidc-user-id'): string => {
+  const createToken = (expiresInSeconds: number, subject = 'oidc-user-id', issuedAt?: number): string => {
     const payload = {
       sub: subject,
       preferred_username: 'tester',
-      exp: Math.floor(Date.now() / 1000) + expiresInSeconds
+      exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
+      ...(issuedAt === undefined ? {} : { iat: issuedAt })
     };
     return `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`;
   };
@@ -229,6 +230,35 @@ describe('AuthService', () => {
     expect(storageMock.setItem).toHaveBeenCalledWith('auth_token', freshToken);
     expect(storageMock.setItem).toHaveBeenCalledWith('id_token', 'fresh-id-token');
     expect(storageMock.setItem).toHaveBeenCalledWith('refresh_token', 'rotated-refresh-token');
+  });
+
+  it('reuses a freshly refreshed short-lived token across sequential API calls', async () => {
+    storeSession();
+    const freshToken = createToken(30, 'oidc-user-id', Math.floor(Date.now() / 1000));
+    const pending = service.getValidToken();
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({
+      access_token: freshToken, refresh_token: 'rotated-refresh-token'
+    });
+    await expect(pending).resolves.toBe(freshToken);
+
+    for (let request = 0; request < 3; request++) {
+      const next = service.getValidToken();
+      httpMock.expectNone('http://localhost:3333/api/auth/refresh');
+      await expect(next).resolves.toBe(freshToken);
+    }
+  });
+
+  it.each([
+    { remaining: 2, lifetime: 30 },
+    { remaining: 20, lifetime: 3600 }
+  ])('refreshes near expiry with $remaining seconds remaining in a $lifetime second token', async ({ remaining, lifetime }) => {
+    const tokens = storeSession();
+    const issuedAt = Math.floor(Date.now() / 1000) + remaining - lifetime;
+    tokens.set('auth_token', createToken(remaining, 'oidc-user-id', issuedAt));
+    const pending = service.getValidToken();
+    const freshToken = createToken(300);
+    httpMock.expectOne('http://localhost:3333/api/auth/refresh').flush({ access_token: freshToken });
+    await expect(pending).resolves.toBe(freshToken);
   });
 
   it('should clear stored tokens and require reauthentication when refresh is rejected with 401', async () => {

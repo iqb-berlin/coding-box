@@ -591,6 +591,7 @@ test-main-pr-backend:
     - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
     - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:typecheck
+    - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:verify-runtime-package
     - docker network create backend-unit-${CI_JOB_ID}
     - docker run --detach --name backend-unit-redis-${CI_JOB_ID} --network backend-unit-${CI_JOB_ID} --network-alias bullmq-redis ${DOCKER_HUB_PROXY}redis:7.4-alpine --save '' --appendonly no
     - docker run --name backend-unit-${CI_JOB_ID} --network backend-unit-${CI_JOB_ID} --env BULLMQ_TEST_REDIS_HOST=bullmq-redis --env BULLMQ_TEST_REDIS_PORT=6379 ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend --configuration=ci --maxWorkers=2 --passWithNoTests=false

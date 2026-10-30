@@ -1,4 +1,4 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -8,14 +8,13 @@ import {
 } from '../../utils/response-status-converter';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   DERIVE_ERROR_STATUS,
   MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
@@ -91,10 +90,9 @@ export class CodingResponseFilterService {
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly fileCacheService: CodingFileCacheService,
-    private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
-    @Inject(forwardRef(() => WorkspaceFilesService))
-    private readonly workspaceFilesService: WorkspaceFilesService
+    @Inject(WORKSPACE_FILE_METADATA_READER)
+    private readonly workspaceFilesService: WorkspaceFileMetadataReader
   ) { }
 
   /**

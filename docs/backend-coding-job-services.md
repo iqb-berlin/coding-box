@@ -24,16 +24,28 @@ service directory:
 | Status | Coder status transitions, restart and result application | Access, Mutation, Query |
 
 The graph is acyclic. Feature providers do not depend on the facade.
-`DERIVED_VARIABLE_READER` binds to the existing `WorkspaceFilesService` with
-`useExisting`; coding providers depend only on its read contract. Query exclusions
+`DERIVED_VARIABLE_READER` and `WORKSPACE_FILE_METADATA_READER` bind to the shared
+`WorkspaceFileMetadataService` with `useExisting`; coding providers depend only
+on read contracts. Query exclusions
 read the workspace repository directly, avoiding a dependency back through the
 mutable workspace core. Missing-workspace handling is unchanged: the ordinary
 read raises the existing 404; a supplied transaction retains the empty result.
 
-`CodingModule` owns the feature providers. `WorkspaceModule` re-exports that
-module through `forwardRef` and uses its existing Validation, Analysis, Freshness
-and ItemMatrixExport instances rather than registering duplicate providers.
-Concrete imports keep the module evaluation order independent of service barrels.
+`CodingModule` owns the feature providers, response mutation and coding progress.
+`WorkspaceModule` imports and re-exports it through ordinary module imports and
+uses its existing Validation, Analysis, Freshness and ItemMatrixExport instances.
+Both import the lower `WorkspaceDataModule`, which owns file metadata, exclusions,
+player reads, journal access and workspace result-cache invalidation. That module
+does not depend on either application module or queue workers.
+
+`WorkspaceFilesService` retains its public metadata methods as delegates. Only the
+metadata provider owns refresh de-duplication, startup preload and Redis map state.
+Its read port preserves optional transaction managers. Workspace core and response
+mutations invalidate result caches through `WorkspaceStatsCacheService`; statistics
+interpret Bull job results through pure helpers rather than the job orchestrator.
+This removes the reciprocal module and provider dependencies without lazy service
+lookups. Composition tests verify shared instances, and dependency tests reject
+cycles through both concrete providers and port aliases.
 
 ## Transaction and compatibility checks
 

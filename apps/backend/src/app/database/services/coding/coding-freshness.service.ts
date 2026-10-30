@@ -1,10 +1,5 @@
 import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  Logger,
-  Optional,
-  forwardRef
+  BadRequestException, Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -118,7 +113,7 @@ export class CodingFreshnessService {
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly connection: DataSource,
     @Optional()
-    @Inject(forwardRef(() => WorkspaceExclusionService))
+    @Inject(WorkspaceExclusionService)
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
     private readonly missingsProfilesService?: MissingsProfilesService

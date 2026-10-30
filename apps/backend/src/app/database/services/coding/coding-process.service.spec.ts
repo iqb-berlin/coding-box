@@ -3,9 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import * as Autocoder from '@iqb/responses';
 import { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { Repository } from 'typeorm';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
@@ -291,7 +292,7 @@ describe('CodingProcessService', () => {
         },
         { provide: JobQueueService, useValue: mockJobQueueService },
         { provide: ResponseManagementService, useValue: mockResponseManagementService },
-        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: WORKSPACE_FILE_METADATA_READER, useValue: mockWorkspaceFilesService },
         { provide: CodingReadinessService, useValue: mockCodingReadinessService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
         { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },

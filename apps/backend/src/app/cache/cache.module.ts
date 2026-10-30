@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheClientModule } from './cache-client.module';
@@ -18,8 +18,8 @@ import { CodingModule } from '../coding/coding.module';
     CacheClientModule,
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Persons, Unit]),
-    forwardRef(() => WorkspaceModule),
-    forwardRef(() => CodingModule)
+    WorkspaceModule,
+    CodingModule
   ],
   providers: [
     ResponseCacheSchedulerService,

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -17,7 +18,6 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
@@ -156,7 +156,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
         { provide: getRepositoryToken(ChunkEntity), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
-        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: WORKSPACE_FILE_METADATA_READER, useValue: mockWorkspaceFilesService },
         { provide: MissingsProfilesService, useValue: missingsProfilesService },
         { provide: CodingStatisticsService, useValue: codingStatisticsService },
         {

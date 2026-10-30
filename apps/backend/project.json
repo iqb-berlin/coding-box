@@ -123,6 +123,13 @@
         ]
       }
     },
+    "verify-runtime-package": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/verify-backend-runtime-package.mjs"
+      }
+    },
     "verify-codebook-autocoder-live": {
       "executor": "nx:run-commands",
       "cache": false,

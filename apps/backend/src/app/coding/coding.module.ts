@@ -1,5 +1,6 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CodingProgressService } from '../database/services/coding/coding-progress.service';
 import { CodingJobAccessService } from '../database/services/coding/coding-job-access.service';
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobDistributionService } from '../database/services/coding/coding-job-distribution.service';
@@ -70,8 +71,9 @@ import { JobDefinitionService } from '../database/services/jobs';
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 
 import { CacheClientModule } from '../cache/cache-client.module';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceModule } from '../workspace/workspace.module';
+
+import { WorkspaceDataModule } from '../workspace/workspace-data.module';
+import { ResponseManagementService } from '../database/services/test-results/response-management.service';
 import { UserModule } from '../user/user.module';
 
 @Module({
@@ -102,10 +104,12 @@ import { UserModule } from '../user/user.module';
     ]),
     JobQueueClientModule,
     CacheClientModule,
-    forwardRef(() => WorkspaceModule),
+    WorkspaceDataModule,
     UserModule
   ],
   providers: [
+    CodingProgressService,
+    ResponseManagementService,
     CodingJobAccessService,
     CodingJobAggregationService,
     CodingJobDistributionService,
@@ -157,6 +161,9 @@ import { UserModule } from '../user/user.module';
     }
   ],
   exports: [
+    CodingProgressService,
+    WorkspaceDataModule,
+    ResponseManagementService,
     CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,

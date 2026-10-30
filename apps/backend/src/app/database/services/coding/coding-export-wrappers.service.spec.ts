@@ -23,15 +23,13 @@ const createService = () => {
   const workspaceExclusionService = {
     resolveExclusionsForQueries: jest.fn()
   };
-  const service = new CodingExportService(
-    repositories[0] as never,
+  const service = new CodingExportService(repositories[0] as never,
     repositories[1] as never,
     repositories[2] as never,
     repositories[3] as never,
     repositories[4] as never,
     repositories[5] as never,
     codingListService as never,
-    {} as never,
     workspaceExclusionService as never
   );
 
