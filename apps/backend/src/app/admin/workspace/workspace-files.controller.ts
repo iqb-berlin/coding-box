@@ -14,7 +14,8 @@ import {
   UseInterceptors,
   UploadedFiles,
   Put,
-  ParseIntPipe, Req
+  ParseIntPipe, Req,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -101,7 +102,7 @@ export class WorkspaceFilesController {
     @Query('fileType') fileType?: string,
     @Query('fileSize') fileSize?: string,
     @Query('searchText') searchText?: string,
-    @Query('regexSearch') regexSearch?: string
+    @Query('regexSearch', new ParseBoolPipe({ optional: true })) regexSearch?: boolean
   ): Promise<{
     data: FilesDto[];
     total: number;
@@ -115,7 +116,7 @@ export class WorkspaceFilesController {
       );
     }
     try {
-      const effectiveRegexSearch = regexSearch === 'true' &&
+      const effectiveRegexSearch = regexSearch === true &&
         await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
       const [files, total, fileTypes] =
         await this.workspaceFilesService.findFiles(workspace_id, {
@@ -282,7 +283,7 @@ export class WorkspaceFilesController {
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
-    @Query('overwriteExisting') overwriteExisting: string | undefined,
+    @Query('overwriteExisting', new ParseBoolPipe({ optional: true })) overwriteExisting: boolean | undefined,
     @Query('overwriteFileIds') overwriteFileIds: string | undefined,
     @UploadedFiles() files: Express.Multer.File[]
   ): Promise<TestFilesUploadResultDto> {
@@ -294,7 +295,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('At least one file must be uploaded.');
     }
 
-    const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+    const overwrite = overwriteExisting === true;
     const overwriteIds = (overwriteFileIds || '')
       .split(/[,;]/)
       .map(s => s.trim())

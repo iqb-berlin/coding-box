@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Param, Query, UseGuards
+  Controller, Get, Param, Query, UseGuards,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags
@@ -97,14 +98,14 @@ export class WorkspacePlayerController {
     @WorkspaceId() workspaceId: number,
     @Param('bookletId') bookletId: string,
     @Query('testPerson') testPerson?: string,
-    @Query('includeReplayStatus') includeReplayStatus?: string
+    @Query('includeReplayStatus', new ParseBoolPipe({ optional: true })) includeReplayStatus?: boolean
   ): Promise<BookletUnit[]> {
     return this.workspacePlayerService.getBookletUnits(
       workspaceId,
       bookletId,
       {
         testPerson,
-        includeReplayStatus: includeReplayStatus === 'true' || !!testPerson
+        includeReplayStatus: includeReplayStatus === true || !!testPerson
       }
     );
   }

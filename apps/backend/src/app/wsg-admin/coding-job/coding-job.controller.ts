@@ -14,7 +14,8 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
-  ValidationPipe
+  ValidationPipe,
+  ParseBoolPipe
 } from '@nestjs/common';
 import { Request } from 'express';
 
@@ -401,7 +402,7 @@ export class WsgCodingJobController {
                    @Query('sortBy') sortBy: string | undefined,
                    @Query('sortDirection') sortDirection: string | undefined,
                    @Query('trainingId') trainingIdParam: string | undefined,
-                   @Query('includeIssueSummary') includeIssueSummary: string | undefined,
+                   @Query('includeIssueSummary', new ParseBoolPipe({ optional: true })) includeIssueSummary: boolean | undefined,
                    @Req() req: Request
   ): Promise<{
     data: CodingJobDto[];
@@ -436,7 +437,7 @@ export class WsgCodingJobController {
         coderId: this.parseOptionalPositiveInt(coderIdParam, 'coderId'),
         jobName,
         trainingId,
-        includeIssueSummary: includeIssueSummary === 'true',
+        includeIssueSummary: includeIssueSummary === true,
         sortBy: this.normalizeSortBy(sortBy),
         sortDirection: this.normalizeSortDirection(sortDirection)
       }
@@ -1395,13 +1396,13 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
     @Param('id', ParseIntPipe) id: number,
     @Req() req: Request,
-    @Query('onlyOpen') onlyOpen?: string
+    @Query('onlyOpen', new ParseBoolPipe({ optional: true })) onlyOpen?: boolean
   ): Promise<ReplayCodingSessionDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.getCodingJobReplaySession(
       id,
       workspaceId,
-      onlyOpen === 'true'
+      onlyOpen === true
     );
   }
 
@@ -1488,7 +1489,7 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
     @Param('id', ParseIntPipe) id: number,
     @Req() req: Request,
-    @Query('onlyOpen') onlyOpen?: string
+    @Query('onlyOpen', new ParseBoolPipe({ optional: true })) onlyOpen?: boolean
   ): Promise<
     Array<{
       responseId: number;
@@ -1509,6 +1510,6 @@ export class WsgCodingJobController {
   > {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
-    return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');
+    return this.codingJobService.getCodingJobUnits(id, onlyOpen === true);
   }
 }

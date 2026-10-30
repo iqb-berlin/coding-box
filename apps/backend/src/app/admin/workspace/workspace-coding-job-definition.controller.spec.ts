@@ -20,7 +20,7 @@ describe('WorkspaceCodingJobDefinitionController', () => {
     };
     const controller = new WorkspaceCodingJobDefinitionController(jobDefinitionService as never);
 
-    await expect(controller.getJobDefinitions(5, 'true')).resolves.toEqual([]);
+    await expect(controller.getJobDefinitions(5, true)).resolves.toEqual([]);
 
     expect(jobDefinitionService.getJobDefinitions).toHaveBeenCalledWith(5, {
       includePlannedUsage: true

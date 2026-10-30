@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, NotFoundException, ParseEnumPipe, Res
+  Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, NotFoundException, ParseEnumPipe, Res,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiQuery, ApiTags
@@ -451,8 +452,8 @@ export class WorkspaceCodingStatisticsController {
   }
 
   private buildKappaOptionsFromQuery(query: {
-    weightedMean?: string;
-    excludeTrainings?: string;
+    weightedMean?: boolean;
+    excludeTrainings?: boolean;
     unitName?: string;
     variableId?: string;
     jobDefinitionIds?: string | string[];
@@ -463,8 +464,8 @@ export class WorkspaceCodingStatisticsController {
     const coderTrainingIds = this.parseIdArrayQuery(query.coderTrainingIds);
 
     return {
-      weightedMean: query.weightedMean !== 'false',
-      excludeTrainings: coderTrainingIds.length > 0 ? false : query.excludeTrainings !== 'false',
+      weightedMean: query.weightedMean !== false,
+      excludeTrainings: coderTrainingIds.length > 0 ? false : query.excludeTrainings !== false,
       unitName: query.unitName,
       variableId: query.variableId,
       jobDefinitionIds: this.parseIdArrayQuery(query.jobDefinitionIds),
@@ -1185,10 +1186,10 @@ export class WorkspaceCodingStatisticsController {
   })
   async getCohensKappaStatistics(
     @WorkspaceId() workspace_id: number,
-    @Query('weightedMean') weightedMean?: string,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean?: boolean,
     @Query('unitName') unitName?: string,
     @Query('variableId') variableId?: string,
-    @Query('excludeTrainings') excludeTrainings?: string,
+    @Query('excludeTrainings', new ParseBoolPipe({ optional: true })) excludeTrainings?: boolean,
     @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
     @Query('coderTrainingIds') coderTrainingIds?: string | string[],
     @Query('coderIds') coderIds?: string | string[],
@@ -1285,10 +1286,10 @@ export class WorkspaceCodingStatisticsController {
   })
   async exportCohensKappaStatisticsAsCsv(
     @WorkspaceId() workspace_id: number,
-    @Query('weightedMean') weightedMean: string | undefined,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean: boolean | undefined,
     @Query('unitName') unitName: string | undefined,
     @Query('variableId') variableId: string | undefined,
-    @Query('excludeTrainings') excludeTrainings: string | undefined,
+    @Query('excludeTrainings', new ParseBoolPipe({ optional: true })) excludeTrainings: boolean | undefined,
     @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
     @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
     @Query('coderIds') coderIds: string | string[] | undefined,
@@ -1394,10 +1395,10 @@ export class WorkspaceCodingStatisticsController {
   })
   async exportCohensKappaSummaryAsCsv(
     @WorkspaceId() workspace_id: number,
-    @Query('weightedMean') weightedMean: string | undefined,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean: boolean | undefined,
     @Query('unitName') unitName: string | undefined,
     @Query('variableId') variableId: string | undefined,
-    @Query('excludeTrainings') excludeTrainings: string | undefined,
+    @Query('excludeTrainings', new ParseBoolPipe({ optional: true })) excludeTrainings: boolean | undefined,
     @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
     @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
     @Query('coderIds') coderIds: string | string[] | undefined,
@@ -1510,10 +1511,10 @@ export class WorkspaceCodingStatisticsController {
   })
   async exportCohensKappaStatisticsAsXlsx(
     @WorkspaceId() workspace_id: number,
-    @Query('weightedMean') weightedMean: string | undefined,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean: boolean | undefined,
     @Query('unitName') unitName: string | undefined,
     @Query('variableId') variableId: string | undefined,
-    @Query('excludeTrainings') excludeTrainings: string | undefined,
+    @Query('excludeTrainings', new ParseBoolPipe({ optional: true })) excludeTrainings: boolean | undefined,
     @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
     @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
     @Query('coderIds') coderIds: string | string[] | undefined,
@@ -1675,8 +1676,8 @@ export class WorkspaceCodingStatisticsController {
   })
   async getWorkspaceCohensKappaSummary(
     @WorkspaceId() workspace_id: number,
-    @Query('weightedMean') weightedMean?: string,
-    @Query('excludeTrainings') excludeTrainings?: string,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean?: boolean,
+    @Query('excludeTrainings', new ParseBoolPipe({ optional: true })) excludeTrainings?: boolean,
     @Query('jobDefinitionIds') jobDefinitionIds?: string | string[],
     @Query('coderTrainingIds') coderTrainingIds?: string | string[],
     @Query('coderIds') coderIds?: string | string[]

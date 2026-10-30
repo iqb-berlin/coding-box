@@ -375,10 +375,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     const result = await controller.getCohensKappaStatistics(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'false',
+      false,
       '11,12',
       '21',
       ['31', '32']
@@ -481,10 +481,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     const result = await controller.getCohensKappaStatistics(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'false',
+      false,
       undefined,
       undefined,
       undefined,
@@ -514,10 +514,10 @@ describe('WorkspaceCodingStatisticsController', () => {
   ])('rejects ambiguous kappa calculation levels', async level => {
     await expect(controller.getCohensKappaStatistics(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'false',
+      false,
       undefined,
       undefined,
       undefined,
@@ -599,7 +599,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       }
     ]);
 
-    const result = await controller.getCohensKappaStatistics(5, 'false');
+    const result = await controller.getCohensKappaStatistics(5, false);
 
     expect(result.variables[0].meanKappa).toBe(0.75);
     expect(result.variables[0].meanAgreement).toBe(0.875);
@@ -662,10 +662,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsCsv(
       5,
-      'false',
+      false,
       'UNIT',
       'VAR',
-      'false',
+      false,
       undefined,
       undefined,
       undefined,
@@ -747,10 +747,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsCsv(
       5,
-      'true',
+      true,
       '=UNIT',
       '+VAR',
-      'true',
+      true,
       undefined,
       undefined,
       undefined,
@@ -840,10 +840,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaSummaryAsCsv(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'true',
+      true,
       undefined,
       undefined,
       undefined,
@@ -934,10 +934,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsXlsx(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'true',
+      true,
       undefined,
       undefined,
       undefined,
@@ -1060,10 +1060,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsXlsx(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'true',
+      true,
       undefined,
       undefined,
       undefined,
@@ -1134,10 +1134,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsXlsx(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'true',
+      true,
       undefined,
       undefined,
       undefined,
@@ -1244,10 +1244,10 @@ describe('WorkspaceCodingStatisticsController', () => {
 
     await controller.exportCohensKappaStatisticsAsXlsx(
       5,
-      'true',
+      true,
       undefined,
       undefined,
-      'true',
+      true,
       undefined,
       undefined,
       undefined,

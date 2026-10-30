@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Post, Query, Res, UseGuards
+  Controller, Get, Post, Query, Res, UseGuards,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiOkResponse, ApiParam, ApiQuery, ApiTags
@@ -93,7 +94,7 @@ export class WorkspaceCodingAnalysisController {
     @Query('unitId') unitId?: string,
     @Query('variableId') variableId?: string,
     @Query('derivation') derivation?: string,
-    @Query('regexSearch') regexSearch?: string
+    @Query('regexSearch', new ParseBoolPipe({ optional: true })) regexSearch?: boolean
   ): Promise<{
     data: VariableAnalysisItemDto[];
     total: number;
@@ -102,7 +103,7 @@ export class WorkspaceCodingAnalysisController {
   }> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
-    const effectiveRegexSearch = regexSearch === 'true' &&
+    const effectiveRegexSearch = regexSearch === true &&
       await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
@@ -261,8 +262,8 @@ export class WorkspaceCodingAnalysisController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
     @Query('unitName') unitName?: string,
-    @Query('trainingRequired') trainingRequired?: string,
-    @Query('includeDeriveErrorOnly') includeDeriveErrorOnly?: string,
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired?: boolean,
+    @Query('includeDeriveErrorOnly', new ParseBoolPipe({ optional: true })) includeDeriveErrorOnly?: boolean,
     @Query('excludeJobDefinitionId') excludeJobDefinitionId?: string
   ): Promise<
     {
@@ -278,12 +279,7 @@ export class WorkspaceCodingAnalysisController {
       isDerived: boolean;
     }[]
   > {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
     const parsedExcludeJobDefinitionId = Number(excludeJobDefinitionId);
     const excludeJobDefinitionIdParam =
       Number.isInteger(parsedExcludeJobDefinitionId) &&
@@ -294,7 +290,7 @@ export class WorkspaceCodingAnalysisController {
       workspace_id,
       unitName,
       trainingRequiredParam,
-      includeDeriveErrorOnly === 'true',
+      includeDeriveErrorOnly === true,
       excludeJobDefinitionIdParam
     );
   }
@@ -346,14 +342,9 @@ export class WorkspaceCodingAnalysisController {
   async getManualCodingScopeSummary(
     @WorkspaceId() workspace_id: number,
     @Query('unitName') unitName?: string,
-    @Query('trainingRequired') trainingRequired?: string
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired?: boolean
   ): Promise<Awaited<ReturnType<CodingValidationService['getManualCodingScopeSummary']>>> {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
     return this.codingValidationService.getManualCodingScopeSummary(
       workspace_id,
       unitName,
@@ -410,14 +401,9 @@ export class WorkspaceCodingAnalysisController {
   async validateManualCodeAvailability(
     @WorkspaceId() workspace_id: number,
     @Query('unitName') unitName?: string,
-    @Query('trainingRequired') trainingRequired?: string
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired?: boolean
   ): Promise<ManualCodeAvailabilityValidationDto> {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
 
     return this.codingValidationService.validateManualCodeAvailability(
       workspace_id,
