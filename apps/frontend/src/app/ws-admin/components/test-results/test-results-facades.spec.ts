@@ -1,8 +1,11 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, inject } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../../shared/services/test-result/test-result.service';
@@ -57,8 +60,9 @@ describe('test-results feature request and polling lifetimes', () => {
     coding = { notifyTestResultsChanged: jest.fn() };
     snack = { open: jest.fn().mockReturnValue({ onAction: () => of() }) };
     TestBed.configureTestingModule({
-      imports: [ResultsFacadeHost],
+      imports: [ResultsFacadeHost, TranslateModule.forRoot()],
       providers: [
+        { provide: UnitService, useValue: {} }, { provide: ResponseService, useValue: {} },
         { provide: AppService, useValue: app }, { provide: TestResultBackendService, useValue: backend },
         { provide: TestResultService, useValue: results }, { provide: TestPersonCodingService, useValue: coding },
         { provide: ValidationService, useValue: validation }, { provide: ValidationTaskStateService, useValue: { invalidateWorkspace: jest.fn() } },

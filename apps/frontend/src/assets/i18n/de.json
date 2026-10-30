@@ -7,7 +7,10 @@
   "charts": {
     "show-data-table": "Daten als Tabelle anzeigen"
   },
-  "metadata-duration": { "minutes": "Minuten", "seconds": "Sekunden" },
+  "metadata-duration": {
+    "minutes": "Minuten",
+    "seconds": "Sekunden"
+  },
   "next": "Weiter",
   "back": "Zurück",
   "continue": "Fortsetzen",
@@ -2587,7 +2590,32 @@
       "filtered-groups": "Alle gefilterten Gruppen löschen",
       "all-groups": "Alle Gruppen des Arbeitsbereichs löschen",
       "scope-hint": "Die Zeilenauswahl gilt für die aktuelle Seite. Gefilterte Löschaktionen erfassen alle Seiten. Bei Gruppen werden auch Mitglieder ohne eigenen Filtertreffer gelöscht.",
-      "groups": "Testgruppen"
+      "groups": "Testgruppen",
+      "preparing": "Löschung wird vorbereitet…",
+      "starting": "Löschung wird gestartet…",
+      "running": "Löschung läuft…",
+      "preview-error": "Die Löschvorschau konnte nicht berechnet werden.",
+      "start-error": "Der Start der Löschung konnte nicht bestätigt werden. Der Auftrag kann im Hintergrund weiterlaufen.",
+      "poll-error": "Der Fortschritt konnte nicht geladen werden. Der Löschauftrag kann im Hintergrund weiterlaufen.",
+      "result-error": "Die Löschung ist abgeschlossen. Der Ergebnisbericht konnte nicht geladen werden.",
+      "job-error": "Die Löschung ist fehlgeschlagen. Bereits abgeschlossene Teilschritte bleiben erhalten. Die Ansicht wurde aktualisiert. {{detail}}",
+      "completed": "Löschung abgeschlossen: {{count}} Datensätze verarbeitet. Betroffene Kodierungen wurden mit entfernt.",
+      "completed-with-warnings": "Löschung beendet: {{count}} Datensätze verarbeitet. Hinweise: {{warnings}}",
+      "retry-progress": "Fortschritt erneut laden",
+      "retry-result": "Ergebnis erneut laden",
+      "retry-preview": "Neue Löschvorschau",
+      "confirm": "Löschen",
+      "unnamed-unit": "Unbenannte Einheit",
+      "unit-no-id": "Diese Unit kann nicht gelöscht werden, da sie keine ID hat.",
+      "response-no-id": "Diese Antwort kann nicht gelöscht werden, da sie keine ID hat.",
+      "unit-title": "Unit löschen",
+      "response-title": "Antwort löschen",
+      "unit-confirmation": "Möchten Sie die Unit \"{{label}}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "response-confirmation": "Möchten Sie die Antwort für Variable \"{{label}}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "unit-completed": "Unit \"{{label}}\" wurde erfolgreich gelöscht. Betroffene Kodierungen wurden mit entfernt.",
+      "response-completed": "Antwort für Variable \"{{label}}\" wurde gelöscht. Kodierstatus wurde aktualisiert.",
+      "unit-error": "Fehler beim Löschen der Unit. Bitte prüfen Sie die aktualisierte Ansicht. {{warnings}}",
+      "response-error": "Fehler beim Löschen der Antwort. Bitte prüfen Sie die aktualisierte Ansicht. {{warnings}}"
     },
     "loading": "Testergebnisse werden geladen...",
     "retry": "Wiederholen",
@@ -2599,6 +2627,11 @@
     "flat-table": {
       "response-frequency-column": "Antwortwerthäufigkeit",
       "response-frequency-tooltip": "Aggregierte Häufigkeit dieses Antwortwerts über alle berücksichtigten Fälle. Der Wert wird in jeder passenden Fallzeile wiederholt."
+    },
+    "details": {
+      "load-error": "Fehler beim Laden der Testergebnisse. Bitte wählen Sie die Testperson erneut aus.",
+      "notes-error": "Fehler beim Laden der Notizen",
+      "invalid-target": "Dieser Treffer kann nicht im Ergebnisbrowser geöffnet werden."
     }
   },
   "coding-variables-dialog": {

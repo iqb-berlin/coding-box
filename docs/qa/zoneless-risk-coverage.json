@@ -166,7 +166,10 @@
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
         "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-facades.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation-view-model.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation-view-model.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-deletion.facade.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-details.facade.spec.ts",
+        "cypress/zoneless/test-results-deletion.cy.ts"
       ]
     },
     {
