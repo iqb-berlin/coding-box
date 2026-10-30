@@ -1,0 +1,9623 @@
+{
+  "units": [
+    {
+      "key": "U1",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Information finden",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Information finden",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Aussage erkennen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Aussage erkennen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        },
+        {
+          "item_no": 2,
+          "variable_id": "Q2",
+          "variable_ref": "Q2",
+          "item_id": "02"
+        }
+      ]
+    },
+    {
+      "key": "U2",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Ueberschrift auswaehlen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Ueberschrift auswaehlen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U3",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Erster Textbeleg",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Erster Textbeleg",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Zweiter Textbeleg",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Zweiter Textbeleg",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "TOTAL",
+          "alias": "TOTAL",
+          "label": "Textbelege zusammenfuehren",
+          "sourceType": "SUM_SCORE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [
+            "Q1",
+            "Q2"
+          ],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Textbelege zusammenfuehren",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 2,
+              "type": "FULL_CREDIT",
+              "label": "Beide Teilantworten richtig",
+              "score": 1,
+              "manualInstruction": "Beide Teilantworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "2"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Eine Teilantwort richtig",
+              "score": 0.5,
+              "manualInstruction": "Eine Teilantwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "1"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Keine Teilantwort richtig",
+              "score": 0,
+              "manualInstruction": "Keine Teilantwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "TOTAL",
+          "variable_ref": "TOTAL",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U4",
+      "scheme": [
+        {
+          "id": "TEXT",
+          "alias": "TEXT",
+          "label": "Begruendung",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Begruendung",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 2,
+              "type": "FULL_CREDIT",
+              "label": "Begruendung nennt den Textbeleg",
+              "score": 1,
+              "manualInstruction": "Begruendung nennt den Textbeleg",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            },
+            {
+              "id": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Passende Aussage ohne Textbeleg",
+              "score": 0.5,
+              "manualInstruction": "Passende Aussage ohne Textbeleg",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            },
+            {
+              "id": 0,
+              "type": "NO_CREDIT",
+              "label": "Unzutreffende Begruendung",
+              "score": 0,
+              "manualInstruction": "Unzutreffende Begruendung",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "TEXT",
+          "variable_ref": "TEXT",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U5",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Information vergleichen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Information vergleichen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Schluss ziehen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Schluss ziehen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        },
+        {
+          "item_no": 2,
+          "variable_id": "Q2",
+          "variable_ref": "Q2",
+          "item_id": "02"
+        }
+      ]
+    },
+    {
+      "key": "U6",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Alternative Schlussfolgerung",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Alternative Schlussfolgerung",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        }
+      ]
+    }
+  ],
+  "demoUnits": [
+    {
+      "key": "PC_RECHNEN",
+      "scheme": [
+        {
+          "id": "01a",
+          "alias": "01a",
+          "label": "10 + 11",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "10 + 11",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "21"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01b",
+          "alias": "01b",
+          "label": "11 + 101",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "11 + 101",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "112"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01c",
+          "alias": "01c",
+          "label": "101 + 1001",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "101 + 1001",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 11,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "1102"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01",
+          "alias": "01",
+          "label": "Rechenpaeckchen",
+          "sourceType": "SUM_SCORE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [
+            "01a",
+            "01b",
+            "01c"
+          ],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Rechenpaeckchen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 2,
+              "type": "FULL_CREDIT",
+              "label": "Drei Antworten richtig",
+              "manualInstruction": "Drei Antworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "3"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "score": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Zwei Antworten richtig",
+              "manualInstruction": "Zwei Antworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "2"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Hoechstens eine Antwort richtig",
+              "manualInstruction": "Hoechstens eine Antwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "01",
+          "variable_ref": "01",
+          "item_id": "RECHNEN_01"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "study-P001-U1",
+      "person": "P001",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P001-U2",
+      "person": "P001",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P001-U3",
+      "person": "P001",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P001-U4",
+      "person": "P001",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P001-U5",
+      "person": "P001",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P002-U1",
+      "person": "P002",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P002-U3",
+      "person": "P002",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P002-U4",
+      "person": "P002",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P002-U5",
+      "person": "P002",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P003-U1",
+      "person": "P003",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P003-U2",
+      "person": "P003",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P003-U3",
+      "person": "P003",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P003-U4",
+      "person": "P003",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P004-U1",
+      "person": "P004",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": null,
+          "status": "INVALID"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": null,
+          "score": null,
+          "status": "INVALID"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P004-U2",
+      "person": "P004",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P004-U3",
+      "person": "P004",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P004-U4",
+      "person": "P004",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P004-U5",
+      "person": "P004",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P005-U1",
+      "person": "P005",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P005-U2",
+      "person": "P005",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P005-U3",
+      "person": "P005",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P005-U4",
+      "person": "P005",
+      "manualCode": -99,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": -99,
+          "score": 0,
+          "status": "DISPLAYED"
+        }
+      ]
+    },
+    {
+      "id": "study-P005-U5",
+      "person": "P005",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P006-U1",
+      "person": "P006",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P006-U2",
+      "person": "P006",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P006-U3",
+      "person": "P006",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P006-U4",
+      "person": "P006",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P006-U5",
+      "person": "P006",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": null,
+          "status": "DISPLAYED"
+        },
+        {
+          "id": "Q2",
+          "value": null,
+          "status": "DISPLAYED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": null,
+          "score": null,
+          "status": "DISPLAYED"
+        },
+        {
+          "id": "Q2",
+          "code": null,
+          "score": null,
+          "status": "DISPLAYED"
+        }
+      ]
+    },
+    {
+      "id": "study-P007-U1",
+      "person": "P007",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P007-U2",
+      "person": "P007",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P007-U3",
+      "person": "P007",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P007-U4",
+      "person": "P007",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P007-U5",
+      "person": "P007",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P008-U1",
+      "person": "P008",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P008-U2",
+      "person": "P008",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P008-U3",
+      "person": "P008",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P008-U4",
+      "person": "P008",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P008-U5",
+      "person": "P008",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P009-U1",
+      "person": "P009",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P009-U2",
+      "person": "P009",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P009-U3",
+      "person": "P009",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P009-U4",
+      "person": "P009",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P009-U5",
+      "person": "P009",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P010-U1",
+      "person": "P010",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P010-U2",
+      "person": "P010",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P010-U3",
+      "person": "P010",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P010-U4",
+      "person": "P010",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P010-U5",
+      "person": "P010",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P011-U1",
+      "person": "P011",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P011-U2",
+      "person": "P011",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P011-U3",
+      "person": "P011",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P011-U4",
+      "person": "P011",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Im Aushang steht: samstags von 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P011-U5",
+      "person": "P011",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P012-U1",
+      "person": "P012",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P012-U2",
+      "person": "P012",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P012-U3",
+      "person": "P012",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P012-U4",
+      "person": "P012",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P012-U5",
+      "person": "P012",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P013-U1",
+      "person": "P013",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P013-U2",
+      "person": "P013",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P013-U3",
+      "person": "P013",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P013-U4",
+      "person": "P013",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P013-U5",
+      "person": "P013",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P014-U1",
+      "person": "P014",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P014-U2",
+      "person": "P014",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P014-U3",
+      "person": "P014",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P014-U4",
+      "person": "P014",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P014-U5",
+      "person": "P014",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P015-U1",
+      "person": "P015",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P015-U2",
+      "person": "P015",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P015-U3",
+      "person": "P015",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P015-U4",
+      "person": "P015",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P015-U5",
+      "person": "P015",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P016-U1",
+      "person": "P016",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P016-U2",
+      "person": "P016",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P016-U3",
+      "person": "P016",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P016-U4",
+      "person": "P016",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P016-U5",
+      "person": "P016",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P017-U1",
+      "person": "P017",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P017-U2",
+      "person": "P017",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P017-U3",
+      "person": "P017",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P017-U4",
+      "person": "P017",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Im Aushang steht: samstags von 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P017-U5",
+      "person": "P017",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P018-U1",
+      "person": "P018",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P018-U2",
+      "person": "P018",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P018-U3",
+      "person": "P018",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P018-U4",
+      "person": "P018",
+      "manualCode": 0,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P018-U5",
+      "person": "P018",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P019-U1",
+      "person": "P019",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P019-U2",
+      "person": "P019",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P019-U3",
+      "person": "P019",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P019-U4",
+      "person": "P019",
+      "manualCode": 1,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P019-U5",
+      "person": "P019",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P020-U1",
+      "person": "P020",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P020-U2",
+      "person": "P020",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P020-U3",
+      "person": "P020",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P020-U4",
+      "person": "P020",
+      "manualCode": 2,
+      "booklet": "B1",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P020-U5",
+      "person": "P020",
+      "manualCode": null,
+      "booklet": "B1",
+      "unit": "U5",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P021-U1",
+      "person": "P021",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P021-U2",
+      "person": "P021",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P021-U3",
+      "person": "P021",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P021-U4",
+      "person": "P021",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P021-U6",
+      "person": "P021",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P022-U1",
+      "person": "P022",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P022-U2",
+      "person": "P022",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P022-U3",
+      "person": "P022",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P022-U4",
+      "person": "P022",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P022-U6",
+      "person": "P022",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P023-U1",
+      "person": "P023",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P023-U2",
+      "person": "P023",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P023-U3",
+      "person": "P023",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P023-U4",
+      "person": "P023",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Im Aushang steht: samstags von 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P023-U6",
+      "person": "P023",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P024-U1",
+      "person": "P024",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P024-U2",
+      "person": "P024",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P024-U3",
+      "person": "P024",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P024-U4",
+      "person": "P024",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P024-U6",
+      "person": "P024",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P025-U1",
+      "person": "P025",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P025-U2",
+      "person": "P025",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P025-U3",
+      "person": "P025",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P025-U4",
+      "person": "P025",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P025-U6",
+      "person": "P025",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P026-U1",
+      "person": "P026",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P026-U2",
+      "person": "P026",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P026-U3",
+      "person": "P026",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P026-U4",
+      "person": "P026",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P026-U6",
+      "person": "P026",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P027-U1",
+      "person": "P027",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P027-U2",
+      "person": "P027",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P027-U3",
+      "person": "P027",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P027-U4",
+      "person": "P027",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P027-U6",
+      "person": "P027",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P028-U1",
+      "person": "P028",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P028-U2",
+      "person": "P028",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P028-U3",
+      "person": "P028",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P028-U4",
+      "person": "P028",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P028-U6",
+      "person": "P028",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P029-U1",
+      "person": "P029",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P029-U2",
+      "person": "P029",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P029-U3",
+      "person": "P029",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P029-U4",
+      "person": "P029",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Im Aushang steht: samstags von 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P029-U6",
+      "person": "P029",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P030-U1",
+      "person": "P030",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P030-U2",
+      "person": "P030",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P030-U3",
+      "person": "P030",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 0,
+          "score": 0.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P030-U4",
+      "person": "P030",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P030-U6",
+      "person": "P030",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P031-U1",
+      "person": "P031",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P031-U2",
+      "person": "P031",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P031-U3",
+      "person": "P031",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P031-U4",
+      "person": "P031",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P031-U6",
+      "person": "P031",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P032-U1",
+      "person": "P032",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P032-U2",
+      "person": "P032",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P032-U3",
+      "person": "P032",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P032-U4",
+      "person": "P032",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P032-U6",
+      "person": "P032",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P033-U1",
+      "person": "P033",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P033-U2",
+      "person": "P033",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P033-U3",
+      "person": "P033",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P033-U4",
+      "person": "P033",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P033-U6",
+      "person": "P033",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P034-U1",
+      "person": "P034",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P034-U2",
+      "person": "P034",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P034-U3",
+      "person": "P034",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P034-U4",
+      "person": "P034",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Samstags kann man in die Bibliothek gehen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P034-U6",
+      "person": "P034",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P035-U1",
+      "person": "P035",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P035-U2",
+      "person": "P035",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P035-U3",
+      "person": "P035",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P035-U4",
+      "person": "P035",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Im Aushang steht: samstags von 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P035-U6",
+      "person": "P035",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P036-U1",
+      "person": "P036",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P036-U2",
+      "person": "P036",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P036-U3",
+      "person": "P036",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P036-U4",
+      "person": "P036",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Weil ich das vermute.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P036-U6",
+      "person": "P036",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P037-U1",
+      "person": "P037",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P037-U2",
+      "person": "P037",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P037-U3",
+      "person": "P037",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P037-U4",
+      "person": "P037",
+      "manualCode": 1,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Die Bibliothek ist am Samstag offen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P037-U6",
+      "person": "P037",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P038-U1",
+      "person": "P038",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P038-U2",
+      "person": "P038",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P038-U3",
+      "person": "P038",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 2,
+          "score": 1.0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P038-U4",
+      "person": "P038",
+      "manualCode": 2,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Ja, laut Aushang: Samstag 10 bis 14 Uhr.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 2,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P038-U6",
+      "person": "P038",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P039-U1",
+      "person": "P039",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U1",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "B",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P039-U2",
+      "person": "P039",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U2",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P039-U3",
+      "person": "P039",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U3",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "Q2",
+          "value": "C",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "Q2",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        },
+        {
+          "id": "TOTAL",
+          "code": 1,
+          "score": 0.5,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P039-U4",
+      "person": "P039",
+      "manualCode": 0,
+      "booklet": "B2",
+      "unit": "U4",
+      "input": [
+        {
+          "id": "TEXT",
+          "value": "Nein, am Wochenende ist immer geschlossen.",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "TEXT",
+          "code": 0,
+          "score": 0,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    },
+    {
+      "id": "study-P039-U6",
+      "person": "P039",
+      "manualCode": null,
+      "booklet": "B2",
+      "unit": "U6",
+      "input": [
+        {
+          "id": "Q1",
+          "value": "A",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": [
+        {
+          "id": "Q1",
+          "code": 1,
+          "score": 1,
+          "status": "CODING_COMPLETE"
+        }
+      ]
+    }
+  ],
+  "demos": [
+    {
+      "id": "demo-D1",
+      "unit": "PC_RECHNEN",
+      "input": [
+        {
+          "id": "01a",
+          "value": "21",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01b",
+          "value": "112",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01c",
+          "value": "1102",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": {
+        "id": "01",
+        "code": 1,
+        "score": 2,
+        "status": "CODING_COMPLETE"
+      }
+    },
+    {
+      "id": "demo-D2",
+      "unit": "PC_RECHNEN",
+      "input": [
+        {
+          "id": "01a",
+          "value": "21",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01b",
+          "value": "112",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01c",
+          "value": "1103",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": {
+        "id": "01",
+        "code": 2,
+        "score": 1,
+        "status": "CODING_COMPLETE"
+      }
+    },
+    {
+      "id": "demo-D3",
+      "unit": "PC_RECHNEN",
+      "input": [
+        {
+          "id": "01a",
+          "value": "21",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01b",
+          "value": "113",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01c",
+          "value": "1103",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": {
+        "id": "01",
+        "code": 0,
+        "score": 0,
+        "status": "CODING_COMPLETE"
+      }
+    },
+    {
+      "id": "demo-D4",
+      "unit": "PC_RECHNEN",
+      "input": [
+        {
+          "id": "01a",
+          "value": "22",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01b",
+          "value": "113",
+          "status": "VALUE_CHANGED"
+        },
+        {
+          "id": "01c",
+          "value": "1103",
+          "status": "VALUE_CHANGED"
+        }
+      ],
+      "expected": {
+        "id": "01",
+        "code": 0,
+        "score": 0,
+        "status": "CODING_COMPLETE"
+      }
+    }
+  ],
+  "persons": [
+    {
+      "group_id": "WS",
+      "login_name": "P001",
+      "login_code": "SYN001",
+      "booklet_id": "B1",
+      "person_no": "1"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P002",
+      "login_code": "SYN002",
+      "booklet_id": "B1",
+      "person_no": "2"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P003",
+      "login_code": "SYN003",
+      "booklet_id": "B1",
+      "person_no": "3"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P004",
+      "login_code": "SYN004",
+      "booklet_id": "B1",
+      "person_no": "4"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P005",
+      "login_code": "SYN005",
+      "booklet_id": "B1",
+      "person_no": "5"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P006",
+      "login_code": "SYN006",
+      "booklet_id": "B1",
+      "person_no": "6"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P007",
+      "login_code": "SYN007",
+      "booklet_id": "B1",
+      "person_no": "7"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P008",
+      "login_code": "SYN008",
+      "booklet_id": "B1",
+      "person_no": "8"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P009",
+      "login_code": "SYN009",
+      "booklet_id": "B1",
+      "person_no": "9"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P010",
+      "login_code": "SYN010",
+      "booklet_id": "B1",
+      "person_no": "10"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P011",
+      "login_code": "SYN011",
+      "booklet_id": "B1",
+      "person_no": "11"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P012",
+      "login_code": "SYN012",
+      "booklet_id": "B1",
+      "person_no": "12"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P013",
+      "login_code": "SYN013",
+      "booklet_id": "B1",
+      "person_no": "13"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P014",
+      "login_code": "SYN014",
+      "booklet_id": "B1",
+      "person_no": "14"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P015",
+      "login_code": "SYN015",
+      "booklet_id": "B1",
+      "person_no": "15"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P016",
+      "login_code": "SYN016",
+      "booklet_id": "B1",
+      "person_no": "16"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P017",
+      "login_code": "SYN017",
+      "booklet_id": "B1",
+      "person_no": "17"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P018",
+      "login_code": "SYN018",
+      "booklet_id": "B1",
+      "person_no": "18"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P019",
+      "login_code": "SYN019",
+      "booklet_id": "B1",
+      "person_no": "19"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P020",
+      "login_code": "SYN020",
+      "booklet_id": "B1",
+      "person_no": "20"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P021",
+      "login_code": "SYN021",
+      "booklet_id": "B2",
+      "person_no": "21"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P022",
+      "login_code": "SYN022",
+      "booklet_id": "B2",
+      "person_no": "22"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P023",
+      "login_code": "SYN023",
+      "booklet_id": "B2",
+      "person_no": "23"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P024",
+      "login_code": "SYN024",
+      "booklet_id": "B2",
+      "person_no": "24"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P025",
+      "login_code": "SYN025",
+      "booklet_id": "B2",
+      "person_no": "25"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P026",
+      "login_code": "SYN026",
+      "booklet_id": "B2",
+      "person_no": "26"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P027",
+      "login_code": "SYN027",
+      "booklet_id": "B2",
+      "person_no": "27"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P028",
+      "login_code": "SYN028",
+      "booklet_id": "B2",
+      "person_no": "28"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P029",
+      "login_code": "SYN029",
+      "booklet_id": "B2",
+      "person_no": "29"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P030",
+      "login_code": "SYN030",
+      "booklet_id": "B2",
+      "person_no": "30"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P031",
+      "login_code": "SYN031",
+      "booklet_id": "B2",
+      "person_no": "31"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P032",
+      "login_code": "SYN032",
+      "booklet_id": "B2",
+      "person_no": "32"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P033",
+      "login_code": "SYN033",
+      "booklet_id": "B2",
+      "person_no": "33"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P034",
+      "login_code": "SYN034",
+      "booklet_id": "B2",
+      "person_no": "34"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P035",
+      "login_code": "SYN035",
+      "booklet_id": "B2",
+      "person_no": "35"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P036",
+      "login_code": "SYN036",
+      "booklet_id": "B2",
+      "person_no": "36"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P037",
+      "login_code": "SYN037",
+      "booklet_id": "B2",
+      "person_no": "37"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P038",
+      "login_code": "SYN038",
+      "booklet_id": "B2",
+      "person_no": "38"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P039",
+      "login_code": "SYN039",
+      "booklet_id": "B2",
+      "person_no": "39"
+    },
+    {
+      "group_id": "WS",
+      "login_name": "P040",
+      "login_code": "SYN040",
+      "booklet_id": "B2",
+      "person_no": "40"
+    }
+  ],
+  "booklets": [
+    {
+      "booklet_id": "B1",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "1",
+      "unit_key": "U1"
+    },
+    {
+      "booklet_id": "B1",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "2",
+      "unit_key": "U2"
+    },
+    {
+      "booklet_id": "B1",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "3",
+      "unit_key": "U3"
+    },
+    {
+      "booklet_id": "B1",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "4",
+      "unit_key": "U4"
+    },
+    {
+      "booklet_id": "B1",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "5",
+      "unit_key": "U5"
+    },
+    {
+      "booklet_id": "B2",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "1",
+      "unit_key": "U1"
+    },
+    {
+      "booklet_id": "B2",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "2",
+      "unit_key": "U2"
+    },
+    {
+      "booklet_id": "B2",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "3",
+      "unit_key": "U3"
+    },
+    {
+      "booklet_id": "B2",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "4",
+      "unit_key": "U4"
+    },
+    {
+      "booklet_id": "B2",
+      "booklet_no": "1",
+      "testlet_no": "1",
+      "unit_booklet_no": "5",
+      "unit_key": "U6"
+    }
+  ],
+  "columns": [
+    {
+      "unit": "U1",
+      "variable": "Q1",
+      "header": "U1_01"
+    },
+    {
+      "unit": "U1",
+      "variable": "Q2",
+      "header": "U1_02"
+    },
+    {
+      "unit": "U2",
+      "variable": "Q1",
+      "header": "U2_01"
+    },
+    {
+      "unit": "U3",
+      "variable": "TOTAL",
+      "header": "U3_01"
+    },
+    {
+      "unit": "U4",
+      "variable": "TEXT",
+      "header": "U4_01"
+    },
+    {
+      "unit": "U5",
+      "variable": "Q1",
+      "header": "U5_01"
+    },
+    {
+      "unit": "U5",
+      "variable": "Q2",
+      "header": "U5_02"
+    },
+    {
+      "unit": "U6",
+      "variable": "Q1",
+      "header": "U6_01"
+    }
+  ],
+  "matrices": [
+    {
+      "recode": false,
+      "rows": [
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": -98,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          }
+        ]
+      ]
+    },
+    {
+      "recode": true,
+      "rows": [
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": -98,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": -99,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 0,
+            "score": 0
+          }
+        ],
+        [
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 2,
+            "score": 1.0
+          },
+          {
+            "code": 2,
+            "score": 1
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 1
+          },
+          {
+            "code": 1,
+            "score": 0.5
+          },
+          {
+            "code": 0,
+            "score": 0
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": 1,
+            "score": 1
+          }
+        ],
+        [
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -95,
+            "score": null
+          },
+          {
+            "code": -96,
+            "score": null
+          }
+        ]
+      ]
+    }
+  ]
+}

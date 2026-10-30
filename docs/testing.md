@@ -1,5 +1,9 @@
 # Test strategy and required quality gates
 
+The versioned [Kodierbox reference corpus](../scripts/reference/coding-box/README.md)
+adds independently checked Python/R expectations to the required backend suite.
+Its [technical report](qa/coding-reference-dataset.md) records scope and evidence.
+
 ## Required checks
 
 Every pull request to `develop` or `main`, direct branch pipeline, and valid

@@ -1,0 +1,836 @@
+{
+  "units": [
+    {
+      "key": "U1",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Information finden",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Information finden",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Aussage erkennen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Aussage erkennen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        },
+        {
+          "item_no": 2,
+          "variable_id": "Q2",
+          "variable_ref": "Q2",
+          "item_id": "02"
+        }
+      ]
+    },
+    {
+      "key": "U2",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Ueberschrift auswaehlen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Ueberschrift auswaehlen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U3",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Erster Textbeleg",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Erster Textbeleg",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Zweiter Textbeleg",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Zweiter Textbeleg",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "TOTAL",
+          "alias": "TOTAL",
+          "label": "Textbelege zusammenfuehren",
+          "sourceType": "SUM_SCORE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [
+            "Q1",
+            "Q2"
+          ],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Textbelege zusammenfuehren",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 2,
+              "type": "FULL_CREDIT",
+              "label": "Beide Teilantworten richtig",
+              "score": 1,
+              "manualInstruction": "Beide Teilantworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "2"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Eine Teilantwort richtig",
+              "score": 0.5,
+              "manualInstruction": "Eine Teilantwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "1"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Keine Teilantwort richtig",
+              "score": 0,
+              "manualInstruction": "Keine Teilantwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "TOTAL",
+          "variable_ref": "TOTAL",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U4",
+      "scheme": [
+        {
+          "id": "TEXT",
+          "alias": "TEXT",
+          "label": "Begruendung",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Begruendung",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 2,
+              "type": "FULL_CREDIT",
+              "label": "Begruendung nennt den Textbeleg",
+              "score": 1,
+              "manualInstruction": "Begruendung nennt den Textbeleg",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            },
+            {
+              "id": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Passende Aussage ohne Textbeleg",
+              "score": 0.5,
+              "manualInstruction": "Passende Aussage ohne Textbeleg",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            },
+            {
+              "id": 0,
+              "type": "NO_CREDIT",
+              "label": "Unzutreffende Begruendung",
+              "score": 0,
+              "manualInstruction": "Unzutreffende Begruendung",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "TEXT",
+          "variable_ref": "TEXT",
+          "item_id": "01"
+        }
+      ]
+    },
+    {
+      "key": "U5",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Information vergleichen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Information vergleichen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "alias": "Q2",
+          "label": "Schluss ziehen",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Schluss ziehen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        },
+        {
+          "item_no": 2,
+          "variable_id": "Q2",
+          "variable_ref": "Q2",
+          "item_id": "02"
+        }
+      ]
+    },
+    {
+      "key": "U6",
+      "scheme": [
+        {
+          "id": "Q1",
+          "alias": "Q1",
+          "label": "Alternative Schlussfolgerung",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Alternative Schlussfolgerung",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Auswahl A",
+              "score": 1,
+              "manualInstruction": "Richtige Auswahl A",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "MATCH",
+                      "parameters": [
+                        "A"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Auswahl",
+              "score": 0,
+              "manualInstruction": "Andere Auswahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "Q1",
+          "variable_ref": "Q1",
+          "item_id": "01"
+        }
+      ]
+    }
+  ],
+  "demoUnits": [
+    {
+      "key": "PC_RECHNEN",
+      "scheme": [
+        {
+          "id": "01a",
+          "alias": "01a",
+          "label": "10 + 11",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "10 + 11",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "21"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01b",
+          "alias": "01b",
+          "label": "11 + 101",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "11 + 101",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "112"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01c",
+          "alias": "01c",
+          "label": "101 + 1001",
+          "sourceType": "BASE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [],
+          "processing": [
+            "TAKE_DISPLAYED_AS_VALUE_CHANGED",
+            "TAKE_EMPTY_AS_VALID"
+          ],
+          "fragmenting": "",
+          "manualInstruction": "101 + 1001",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 11,
+              "score": 1,
+              "type": "FULL_CREDIT",
+              "label": "Richtige Zahl",
+              "manualInstruction": "Richtige Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "1102"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Andere Zahl",
+              "manualInstruction": "Andere Zahl",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        },
+        {
+          "id": "01",
+          "alias": "01",
+          "label": "Rechenpaeckchen",
+          "sourceType": "SUM_SCORE",
+          "sourceParameters": {
+            "solverExpression": "",
+            "processing": []
+          },
+          "deriveSources": [
+            "01a",
+            "01b",
+            "01c"
+          ],
+          "processing": [],
+          "fragmenting": "",
+          "manualInstruction": "Rechenpaeckchen",
+          "codeModel": "NONE",
+          "page": "1",
+          "codes": [
+            {
+              "id": 1,
+              "score": 2,
+              "type": "FULL_CREDIT",
+              "label": "Drei Antworten richtig",
+              "manualInstruction": "Drei Antworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "3"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "score": 1,
+              "type": "PARTIAL_CREDIT",
+              "label": "Zwei Antworten richtig",
+              "manualInstruction": "Zwei Antworten richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": [
+                {
+                  "ruleOperatorAnd": true,
+                  "rules": [
+                    {
+                      "method": "NUMERIC_MATCH",
+                      "parameters": [
+                        "2"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": 0,
+              "score": 0,
+              "type": "RESIDUAL_AUTO",
+              "label": "Hoechstens eine Antwort richtig",
+              "manualInstruction": "Hoechstens eine Antwort richtig",
+              "ruleSetOperatorAnd": false,
+              "ruleSets": []
+            }
+          ]
+        }
+      ],
+      "items": [
+        {
+          "item_no": 1,
+          "variable_id": "01",
+          "variable_ref": "01",
+          "item_id": "RECHNEN_01"
+        }
+      ]
+    }
+  ]
+}

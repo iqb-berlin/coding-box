@@ -87,7 +87,8 @@
         { "env": "WORKSPACE_DELETION_TEST_DATABASE_URL" },
         { "env": "PSQL_BIN" },
         { "env": "KAPPA_QUERY_BENCHMARK" },
-        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
+        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" },
+        "{workspaceRoot}/scripts/reference/coding-box/**/*"
       ],
       "options": {
         "jestConfig": "apps/backend/jest.config.ts",
@@ -184,6 +185,24 @@
         "full": {
           "command": "node scripts/qa/run-bullmq-integration.mjs --all"
         }
+      }
+    },
+    "test-reference": {
+      "executor": "@nx/jest:jest",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/jest.config.ts",
+        "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/qa/**/*",
+        "{workspaceRoot}/scripts/reference/coding-box/**/*"
+      ],
+      "options": {
+        "jestConfig": "apps/backend/jest.config.ts",
+        "passWithNoTests": false,
+        "testFile": "apps/backend/src/app/database/services/coding/reference/coding-reference-dataset.spec.ts",
+        "runInBand": true
       }
     }
   }

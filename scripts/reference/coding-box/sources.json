@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "date": "2026-10-30",
+  "sources": [
+    {
+      "repository": "iqb-research/eatPrepTBA",
+      "commit": "ec12e07a35968b70a91ea344a25acf502e7f6a79",
+      "version": "0.9.8.9044",
+      "path": "vignettes/missing-examples.Rmd"
+    },
+    {
+      "repository": "sachseka/eatPrepTBAworkshop",
+      "commit": "a21069632fd795c7e7ed8df17bd04d3437924b2b",
+      "path": "Daten",
+      "seed": 20260923
+    }
+  ],
+  "issues": [
+    1116,
+    741,
+    777,
+    778,
+    970,
+    973,
+    972,
+    1043,
+    433,
+    341,
+    1012,
+    434,
+    1014,
+    506,
+    426
+  ],
+  "issueBaseUrl": "https://github.com/iqb-berlin/coding-box/issues/",
+  "rOptions": {
+    "preserve_not_reached": false,
+    "recode_omissions_to_not_reached": [
+      false,
+      true
+    ]
+  },
+  "expectationPolicy": "Independent Python arithmetic, separate R arithmetic and pinned R completion; no production-generated goldens"
+}

@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-30",
+  "base": "643e544a59b18af9ccc31f4e8c39f8295cdeb910",
+  "prerequisitePatch": "d3b9caaa8dfbf11b31d8fb4a8258902b61322c1e",
+  "reference": {
+    "passed": 356,
+    "failed": 0,
+    "skipped": 0
+  },
+  "backend": {
+    "passedSuites": 254,
+    "skippedSuites": 15,
+    "passedTests": 4420,
+    "failedTests": 0,
+    "skippedTests": 135
+  },
+  "independentVerification": {
+    "python": "passed",
+    "pinnedR": "passed",
+    "separateRArithmetic": "passed",
+    "missingCases": 18,
+    "modes": 2,
+    "matrixCells": 640,
+    "valuesPerCell": [
+      "code",
+      "score"
+    ],
+    "boundFiles": 37
+  },
+  "mutation": {
+    "change": "Restore itemOrder instead of metadata variable positions in resolver sorting",
+    "expectedFailure": true,
+    "failedTests": 10,
+    "passedTests": 346,
+    "detectedCases": [
+      "missing-14-keep",
+      "missing-14-recode"
+    ],
+    "restored": true
+  },
+  "lint": "passed",
+  "backendBuild": "passed",
+  "deployed": false,
+  "domainAccepted": false,
+  "environmentAdjustment": "Local @iqb/responses copy instead of symlink to preserve deterministic esbuild paths; no bundle regeneration"
+}

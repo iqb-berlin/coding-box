@@ -606,7 +606,7 @@ export class CodingItemMatrixExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>,
     diagnosticsCollector: ItemMatrixDiagnosticsCollector =
-    this.createDiagnosticsCollector()
+      this.createDiagnosticsCollector()
   ): AsyncGenerator<Record<string, string | number>> {
     const batchSize = 100;
     let written = 0;
