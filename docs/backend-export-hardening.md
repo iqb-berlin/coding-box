@@ -44,6 +44,32 @@ owner qualification, comments and formatting were normalized. All 22 public
 signatures and delegate argument lists were also compared. Existing golden-output,
 stream/file, filtering, missing-code and cancellation fixtures remain in place.
 
+### Detailed CSV file ownership
+
+After the extraction, detailed CSV output was hardened separately. File output
+creates a new file exclusively (`wx`) with mode `0600` and retains one open file
+handle for the header, batches and final training-discussion row. Existing files
+and symlinks are rejected without modifying their contents. Later batches never
+reopen the destination pathname. The handle is closed on success, cancellation
+and errors. Buffer output and CSV bytes remain unchanged.
+
+The private working directory alone does not protect the published file:
+`ExportArtifactService` moves it into the shared export directory. File ownership
+and mode must therefore remain restrictive after that rename. Worker and API use
+the same backend image and OS user; the guarded API streams the completed file.
+
+CodeQL alerts [149](https://github.com/iqb-berlin/coding-box/security/code-scanning/149)
+and [150](https://github.com/iqb-berlin/coding-box/security/code-scanning/150)
+identify intended CSV persistence, rather than an arbitrary upload destination.
+The file-output caller constructs a server-generated pathname in a fresh private
+working directory. Request fields are export options or CSV contents; they do not
+select the filesystem destination. The synchronous HTTP export returns a buffer.
+This does not establish a remote arbitrary-path exploit. Alert
+[148](https://github.com/iqb-berlin/coding-box/security/code-scanning/148)
+does identify missing file-level protection: default permissions can expose the
+published CSV to other OS users with directory access under a permissive umask.
+No live deployment permissions or ACLs were assumed or measured.
+
 ## Testcenter requests
 
 All six outgoing Testcenter request sites use the existing 120,000 ms Axios
