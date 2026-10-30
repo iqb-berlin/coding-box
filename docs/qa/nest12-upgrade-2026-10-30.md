@@ -44,7 +44,7 @@ Frontend-Prüfung lief nicht parallel zu einer Backend-Prüfung.
 | Frontend-Qualitätsgates | Bestanden | Alle 52 Prüfungen, einschließlich Weitergabe der CI-Konfiguration an den ESM-Teststarter |
 | Browser-Workflows | Bestanden | 10/10 Fälle, keine übersprungen; echte Rollen-Anmeldung, Upload/Kodierung/Export, Audit-Rollback und Queue-Isolation |
 | Vollständiger Linux-Containerbuild | Blockiert | Eigener Imagebau wegen weniger als 1 GiB freiem Hostspeicher kontrolliert abgebrochen; vor Browserstart, kein Erfolg behauptet |
-| Remote-CI | Ausstehend | Bei Abschluss kein erfolgreicher Gesamtnachweis für den aktuellen PR-Stand; Status im Entwurf-PR #1140 |
+| Remote-CI bei `95ec37a8` | Teilweise bestanden | Pipeline [106341](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106341): Backend, Datenbankintegration, Frontend, Lint, Audit und Datenbankprüfungen bestanden; vier CI-Startfehler, Details unten |
 
 Der geprüfte native Produktionsbuild hat SHA-256
 `ee335a4b4b49a4a2674d851d59484ecf2c09e41f3b0b13986aa412efe048ed58`.
@@ -146,6 +146,41 @@ der angepassten Produktions-Dockerfiles. Builder-/Runtime-Images und frische
 native Linux-Abhängigkeiten müssen in CI oder auf einem Rechner mit ausreichend
 Speicher geprüft werden. Bis zu einem grünen Ergebnis ist dieser Punkt offen.
 Ein Release oder eine fachliche Freigabe wird daraus nicht abgeleitet.
+
+### Review und CI-Korrektur
+
+Der Review gegen die unveränderte Basis `cc9cb297` ergab zwei belegte Fehler
+beim Start der CI-Jobs unter der neuen Werkzeugkette:
+
+1. `build-app` ([492068](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/492068))
+   konnte das neue Registry-Image `node:24.22.1-bookworm-git` nicht laden.
+   Ein Folgecommit kann den ersten Imagebau abbrechen; dessen `changes`-Regel
+   nimmt den Bau nicht automatisch in die Folgepipeline auf. Der App-Build
+   verwendet deshalb direkt das gepinnte offizielle Node-Image und installiert
+   Git bei Bedarf über apt, unabhängig von vorherigen Pipelines.
+2. Die drei Live-Browserjobs liefen eine Stunde bis zum Timeout in der
+   Docker-Bereitschaftsschleife, bevor ein Test begann (beispielsweise
+   [492076](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/492076)).
+   Das neue Cypress-Image verwendet Debian Trixie: Dort liegt der Client in
+   [`docker-cli`](https://packages.debian.org/trixie/docker-cli), einer mit
+   `--no-install-recommends` ausgelassenen Empfehlung von `docker.io`.
+   Installiert werden jetzt ausdrücklich Client, Buildx und Compose. Versionen
+   werden vorab geprüft; ein unerreichbarer Daemon scheitert innerhalb von
+   zwei Minuten mit sichtbarer Diagnose.
+
+Der neue blockierende Job `test-backend-container` baut auf Linux/amd64 den
+Root-Builder und das tatsächliche Backend-Produktionsimage. Er prüft danach
+Node, das Laden von Nest und nativen Modulen sowie die Ablehnung eines leeren
+JWT-Secrets. Seine Images werden nicht veröffentlicht. Dieser Job ersetzt
+keinen vollständigen API-/Worker-Lauf mit PostgreSQL und Redis. Dessen lokale
+Evidenz oben bleibt gültig; der vollständige Linux-Lauf bleibt gesondert offen.
+Die korrigierte Remote-Pipeline ist vor dem Aufheben des Entwurfsstatus
+einschließlich dieses Containerjobs erfolgreich abzuschließen.
+Lokal bestand nach der Korrektur `nx run frontend:test-quality-gates` mit
+allen 55 Prüfungen, einschließlich der drei neuen CI-Regressionen. Die
+Proxy-Anmeldung wird dabei sowohl mit Passwortargument als auch mit
+`--password-stdin` und ohne Proxy geprüft. Keine Anwendungssources wurden
+bei dieser CI-Korrektur verändert.
 
 Die noch offenen lokalen Imageprüfungen sind ausdrücklich **nicht ausgeführt**:
 
