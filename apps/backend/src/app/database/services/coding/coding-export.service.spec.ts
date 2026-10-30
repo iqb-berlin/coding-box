@@ -900,8 +900,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       const publishedPath = path.join(directory, 'published.csv');
       fs.renameSync(filePath, publishedPath);
 
-      expect(fs.statSync(publishedPath).mode % 0o1000).toBe(0o600);
-      expect(fs.readFileSync(publishedPath)).toEqual(expected);
+      const publishedFile = await fs.promises.open(publishedPath, 'r');
+      try {
+        expect((await publishedFile.stat()).mode % 0o1000).toBe(0o600);
+        expect(await publishedFile.readFile()).toEqual(expected);
+      } finally {
+        await publishedFile.close();
+      }
     });
 
     it('rejects an existing file without overwriting its contents', async () => {
