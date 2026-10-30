@@ -10,9 +10,9 @@ Eingaben, Sollmatrizen, Issue-Fälle, Quellen und unabhängig ausgeführte
 Python-/R-Prüfungen sind versioniert. Die Jest-Suite verwendet echte
 Produktfunktionen und simuliert ausschließlich die Repository-Transporte.
 
-Die Referenz integriert die bereits vorhandene lokale Reihenfolgekorrektur
-für #1116 (`d3b9caaa8dfbf11b31d8fb4a8258902b61322c1e`, im Arbeitsbranch separat
-übernommen). Ohne diese Korrektur kann die Kodierbox die erwartete tatsächliche
+Die Referenz baut auf dem separaten [PR #1139](https://github.com/iqb-berlin/coding-box/pull/1139)
+für #1116 auf (`d3b9caaa8dfbf11b31d8fb4a8258902b61322c1e`, Branch
+`correct-item-not-reached-order`). Ohne diese Korrektur kann die Kodierbox die erwartete tatsächliche
 Bearbeitungsreihenfolge nicht einhalten. Sichtbare Itemspalten bleiben erhalten.
 
 | Ebene | Status |
@@ -35,10 +35,13 @@ verwendet; das Projekt erhält dadurch keine neue Laufzeitabhängigkeit.
 | Externe Missing-Referenz | `Rscript scripts/reference/coding-box/verify-upstream.R --check` | Bestanden: 18 Fälle × zwei Modi |
 | Zweite Sollwertprüfung | `Rscript scripts/reference/coding-box/verify-independent.R` | Bestanden: Workshop, Partial Credit, Kappa, Auswahl-/Versionstabellen, Aggregation und 640 Matrixzellen mit Code und Score |
 | Reproduzierbarkeit und Prüfnachweis | `python3 scripts/reference/coding-box/verify.py` | Bestanden: 37 gebundene Dateien; deterministische Neuerzeugung bestätigt |
-| Gezielte Produktsuite | `npx nx run backend:test-reference --skipNxCache` | Bestanden: 356 Tests, keine übersprungenen Fälle |
+| Gezielte Produktsuite | `npx nx run backend:test-reference --skipNxCache` | Bestanden: 357 Jest-Tests einschließlich der Verpackungsprüfung, keine übersprungenen Fälle |
 | Backend-Lint | `npx nx lint backend` | Bestanden; automatische Formatkorrekturen ausschließlich im neuen Test und einer Einrückung der übernommenen Exportkorrektur |
-| Gesamte Backend-Suite | `npx nx test backend --runInBand --skipNxCache` | Bestanden: 254 Suites / 4.420 Tests; 15 bestehende Suites / insgesamt 135 Tests übersprungen |
-| Backend-Build | `npx nx build backend` | Bestanden: Webpack-Kompilierung |
+| Gesamte Backend-Suite | `npx nx test backend --runInBand --skipNxCache` | Bestanden: 254 Suites / 4.421 Tests; 15 bestehende Suites / insgesamt 135 Tests übersprungen |
+| Backend-Produktionsbuild | `npx nx build backend --configuration=production --skipNxCache` | Bestanden |
+| Frontend-Produktionsbuild | `npx nx build frontend --configuration=production --skipNxCache` | Bestanden |
+| CI-Qualitätsprüfungen | `npx nx run frontend:test-quality-gates` | Bestanden: 52 Tests |
+| Verpackungsprüfung | `npx nx run backend:verify-reference-packaging` | Bestanden: 8 Backend-, 135 Frontend-Dateien und 19 weitere Runtime-Eingaben |
 
 Die 135 übersprungenen Tests umfassen die bestehenden optionalen Integrations-
 prüfungen und sechs ausdrücklich mit `it.skip` markierte Unit-Fälle. Diese
@@ -65,6 +68,42 @@ Bundle-Reproduzierbarkeit an abweichenden Pfaden einer verlinkten
 geändert. Der Wiederholungslauf bestand vollständig.
 
 Maschinenlesbare Zusammenfassung: [Prüfevidenz](coding-reference-evidence.json).
+
+## Referenzdaten und Produktionsimages
+
+Die finalen Images erben nicht vom vollständigen Builder. Das Backend übernimmt
+nur `dist/apps/backend`, die Paket-Manifeste und `vendor` für die Installation
+der Produktionsabhängigkeiten. Das Frontend übernimmt `dist/apps/frontend` und
+drei festgelegte Nginx-/Fehlerseiten-Dateien. Die Referenz bleibt im Builder für
+Tests verfügbar; sie wird nicht als Anwendungs-Asset konfiguriert. Beide
+TypeScript-Anwendungsbuilds schließen `*.spec.ts` aus.
+
+`scripts/qa/verify-reference-packaging.mjs` prüft die tatsächlichen Build-
+Artefakte und weiteren Runtime-Eingaben anhand der Inhalts-Hashes sämtlicher
+Referenzdateien, eindeutiger eingebetteter Datensatzmerkmale sowie verbotener
+Testpfade. Eine zusätzliche Prüfung verfolgt die von `prod` geerbten Docker-
+Stages und erlaubt nur die genannten COPY-Eingaben und Runtime-Basisimages.
+
+Der Docker-Builder führt die Artefaktprüfung nach beiden Builds aus. Der
+Branch-/PR-Build führt sie ebenfalls aus; dort wird ein nicht betroffenes und
+daher nicht gebautes Backend zugelassen, das Frontend bleibt verpflichtend.
+Der Docker-Builder verlangt dagegen immer beide Artefaktverzeichnisse.
+Neun Node-Prüffälle sichern unter anderem umbenannte CSV-Kopien, eingebettete
+Testwerte, Symlinks und versehentlich kopierte oder geerbte Builder-Inhalte ab.
+Sie sind über die Referenzsuite Teil der normalen Backend-Prüfung.
+
+Lokal ausgeführt, nacheinander:
+
+```sh
+npx nx build backend --configuration=production --skipNxCache
+npx nx build frontend --configuration=production --skipNxCache
+npx nx run backend:verify-reference-packaging
+```
+
+Ergebnis: keine Referenzdaten in 8 Backend-Dateien, 135 Frontend-Dateien und
+19 weiteren Runtime-Eingaben. Das ist ein Nachweis für die gebauten Dateien
+und die Docker-Kopierpfade. Eine Inspektion tatsächlich gebauter Docker-Images
+wurde lokal nicht durchgeführt, weil der Docker-Daemon nicht aktiv ist.
 
 ## Grenzen und fachliche Nutzung
 

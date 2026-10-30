@@ -3,14 +3,14 @@
   "base": "643e544a59b18af9ccc31f4e8c39f8295cdeb910",
   "prerequisitePatch": "d3b9caaa8dfbf11b31d8fb4a8258902b61322c1e",
   "reference": {
-    "passed": 356,
+    "passed": 357,
     "failed": 0,
     "skipped": 0
   },
   "backend": {
     "passedSuites": 254,
     "skippedSuites": 15,
-    "passedTests": 4420,
+    "passedTests": 4421,
     "failedTests": 0,
     "skippedTests": 135
   },
@@ -42,5 +42,29 @@
   "backendBuild": "passed",
   "deployed": false,
   "domainAccepted": false,
-  "environmentAdjustment": "Local @iqb/responses copy instead of symlink to preserve deterministic esbuild paths; no bundle regeneration"
+  "environmentAdjustment": "Local @iqb/responses copy instead of symlink to preserve deterministic esbuild paths; no bundle regeneration",
+  "pullRequestBase": {
+    "number": 1139,
+    "branch": "correct-item-not-reached-order",
+    "sha": "d3b9caaa8dfbf11b31d8fb4a8258902b61322c1e"
+  },
+  "productionPackaging": {
+    "backendProductionBuild": "passed",
+    "frontendProductionBuild": "passed",
+    "artifactScan": "passed",
+    "dockerCopyPolicy": "passed",
+    "guardCases": 9,
+    "filesChecked": {
+      "backend": 8,
+      "frontend": 135,
+      "runtimeInputs": 19
+    },
+    "dockerImageInspection": "not-run: local Docker daemon unavailable",
+    "ciEnforced": true,
+    "builderEnforced": true,
+    "ciQualityGateTests": {
+      "passed": 52,
+      "failed": 0
+    }
+  }
 }

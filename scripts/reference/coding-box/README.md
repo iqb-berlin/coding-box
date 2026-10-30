@@ -110,6 +110,23 @@ Quelländerungen mit neuem Commit und Issue-Vertrag dokumentieren; die erzeugten
 CSV-/JSON-Diffs fachlich lesen. Das Aktualisieren von Sollwerten erteilt keine
 Ticket-Abnahme.
 
+## Ausschluss aus Produktionsimages
+
+Die Referenz bleibt im Builder und in der Testumgebung verfügbar. Die finalen
+Backend-/Frontend-Images übernehmen nur festgelegte Runtime-Eingaben und die
+Anwendungsbuilds. Eine Node-Prüfung vergleicht deren Inhalte mit den Referenz-
+Hashes und eindeutigen Datensatzmerkmalen. Sie läuft im Docker-Builder und im
+CI-Build; die Docker-Kopierpfade werden zusätzlich in der Backend-Suite geprüft.
+
+Nach getrennten Produktionsbuilds beider Anwendungen ausführen:
+
+```sh
+npx nx run backend:verify-reference-packaging
+```
+
+Methodik, Ergebnisse und die Grenze zur tatsächlichen Image-Inspektion stehen
+im [technischen Prüfbericht](../../../docs/qa/coding-reference-dataset.md).
+
 ## Issue-Abdeckung und Grenzen
 
 | Issues | Neue Daten-/Regressionsevidenz | Grenze |

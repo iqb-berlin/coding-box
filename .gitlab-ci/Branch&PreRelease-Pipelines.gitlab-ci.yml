@@ -356,6 +356,7 @@ build-app:
   script:
     - npx nx build frontend --configuration=production
     - npx nx affected --base=HEAD~1 --target=build --exclude=frontend --parallel=3
+    - npx nx run backend:verify-reference-packaging --configuration=ci
   artifacts:
     paths:
       - dist

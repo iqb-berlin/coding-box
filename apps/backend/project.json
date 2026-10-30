@@ -88,6 +88,9 @@
         { "env": "PSQL_BIN" },
         { "env": "KAPPA_QUERY_BENCHMARK" },
         { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" },
+        "{workspaceRoot}/.gitlab-ci/*.gitlab-ci.yml",
+        "{workspaceRoot}/Dockerfile",
+        "{workspaceRoot}/apps/*/Dockerfile",
         "{workspaceRoot}/scripts/reference/coding-box/**/*"
       ],
       "options": {
@@ -187,6 +190,18 @@
         }
       }
     },
+    "verify-reference-packaging": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/verify-reference-packaging.mjs --policy"
+      },
+      "configurations": {
+        "ci": {
+          "command": "node scripts/qa/verify-reference-packaging.mjs --policy --available"
+        }
+      }
+    },
     "test-reference": {
       "executor": "@nx/jest:jest",
       "cache": true,
@@ -196,6 +211,9 @@
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
         "{workspaceRoot}/scripts/qa/**/*",
+        "{workspaceRoot}/.gitlab-ci/*.gitlab-ci.yml",
+        "{workspaceRoot}/Dockerfile",
+        "{workspaceRoot}/apps/*/Dockerfile",
         "{workspaceRoot}/scripts/reference/coding-box/**/*"
       ],
       "options": {

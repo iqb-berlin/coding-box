@@ -22,3 +22,6 @@ RUN --mount=type=cache,target=/root/.npm \
 RUN npx nx --version
 RUN --mount=type=cache,target=./.nx/cache \
     npx nx run-many --target=build --all --parallel=1
+
+# Test-only reference inputs may stay in this builder, never in runtime artifacts.
+RUN node scripts/qa/verify-reference-packaging.mjs

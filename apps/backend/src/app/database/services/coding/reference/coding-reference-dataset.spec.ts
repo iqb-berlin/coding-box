@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { execFileSync } from 'child_process';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { Repository } from 'typeorm';
@@ -163,6 +164,11 @@ const missingInput = (fixture: MissingCase) => {
 };
 
 describe('Versioned Kodierbox reference corpus (independent Python/R expectations)', () => {
+  it('keeps reference data outside production artifact and Docker copy boundaries', () => {
+    execFileSync(process.execPath, ['--test', 'scripts/qa/verify-reference-packaging.test.mjs'], {
+      cwd: process.cwd(), stdio: 'pipe'
+    });
+  });
   it('binds every checked source, oracle and fixture to the independently verified artifact', () => {
     const proof = read<{ files: Record<string, string> }>('verification.json');
     expect(Object.keys(proof.files)).toEqual(expect.arrayContaining([
