@@ -1,7 +1,7 @@
 import { DataSource, EntityManager } from 'typeorm';
 import User from '../../entities/user.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
-import { CoderTrainingService } from '../coding/coder-training.service';
+import { CoderTrainingMutationService } from '../coding/coder-training-mutation.service';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingJobAccessService } from '../coding/coding-job-access.service';
 import { UsersService } from '../users/users.service';
@@ -80,12 +80,12 @@ describePostgres('Workspace mutation pool admission with PostgreSQL', () => {
         await db.query('SELECT 1');
         throw new Error('Profile validation rejected the fixture');
       });
-      const training = Object.assign(Object.create(CoderTrainingService.prototype), {
+      const training = Object.assign(Object.create(CoderTrainingMutationService.prototype), {
         coderTrainingRepository: { manager: db.manager },
         codingJobService: jobs,
         missingsProfilesService: { resolveMissingsProfileId: resolveProfile },
         logger: { log: () => undefined, error: () => undefined }
-      }) as CoderTrainingService;
+      }) as CoderTrainingMutationService;
       const transaction = db.manager.transaction.bind(db.manager);
       let active = 0;
       let peak = 0;

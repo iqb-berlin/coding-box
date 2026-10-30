@@ -1,6 +1,10 @@
 import { Repository, DataSource } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
+import { parseStoredResponseValue } from './test-results.util';
+import { responseMatchesChunkCondition } from './test-results-deletion.util';
+import { createWorkspaceTestResultsService } from './workspace-test-results-test.factory';
 import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { ResponseManagementService } from './response-management.service';
@@ -223,7 +227,7 @@ describe('WorkspaceTestResultsService', () => {
       transaction: jest.fn()
     } as unknown as DataSource;
 
-    service = new WorkspaceTestResultsService(personsRepository,
+    service = createWorkspaceTestResultsService(personsRepository,
       unitRepository,
       bookletRepository,
       responseRepository,
@@ -727,7 +731,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it('matches response cleanup chunks by exact variable list before using the subform fallback', () => {
-      const privateClass = WorkspaceTestResultsService as unknown as {
+      const privateClass = { responseMatchesChunkCondition } as unknown as {
         responseMatchesChunkCondition: (
           chunkAlias: string,
           responseAlias: string
@@ -867,7 +871,8 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {
+      const filterOptions = new TestResultsFilterOptionsService(responseRepository, dataSource, workspaceExclusionService);
+      const result = await filterOptions.findFlatResponseFilterOptions(1, {
         responseValue: 'needle'
       });
 
@@ -2928,8 +2933,7 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('parseStoredResponseValue', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parse = (value: string | null, variableId?: string) => (WorkspaceTestResultsService as any).parseStoredResponseValue(value, variableId);
+    const parse = (value: string | null, variableId?: string) => parseStoredResponseValue(value, variableId);
 
     it('should normalize flat marking tokens to nested arrays', () => {
       const parsed = parse('["2-2-#f9f871","4-4-#f9f871"]', 'marking-panel_1');

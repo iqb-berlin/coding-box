@@ -2,6 +2,17 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
+import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
+import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
+import { TestResultsFrequenciesService } from '../database/services/test-results/test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from '../database/services/test-results/test-results-filter-options.service';
+import { TestResultsResponsesService } from '../database/services/test-results/test-results-responses.service';
+import { TestResultsReplayService } from '../database/services/test-results/test-results-replay.service';
+import { TestResultsDeletionQueryService } from '../database/services/test-results/test-results-deletion-query.service';
+import { TestResultsMutationService } from '../database/services/test-results/test-results-mutation.service';
+import { TestResultsSearchService } from '../database/services/test-results/test-results-search.service';
+import { TestResultsExportService } from '../database/services/test-results/test-results-export.service';
 import { WorkspaceDataModule } from './workspace-data.module';
 import { WorkspaceDeletionService } from '../database/services/workspace/workspace-deletion.service';
 
@@ -116,6 +127,17 @@ import { CodingModule } from '../coding/coding.module';
     CodingModule
   ],
   providers: [
+    TestResultsAnomaliesService,
+    TestResultsCacheService,
+    TestResultsQueryService,
+    TestResultsFrequenciesService,
+    TestResultsFilterOptionsService,
+    TestResultsResponsesService,
+    TestResultsReplayService,
+    TestResultsDeletionQueryService,
+    TestResultsMutationService,
+    TestResultsSearchService,
+    TestResultsExportService,
     WorkspaceDeletionService,
     WorkspaceCoreService,
     WorkspaceFilesService,

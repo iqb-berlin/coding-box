@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource } from 'typeorm';
-import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { TestResultsExportService } from './test-results-export.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResolvedWorkspaceExclusions } from '../workspace/workspace-exclusion-query.util';
 import Persons from '../../entities/persons.entity';
@@ -38,7 +38,7 @@ const flattenPlan = (node: PlanNode): PlanNode[] => [node, ...(node.Plans || [])
 describePostgres('GeoGebra availability and partial index', () => {
   const schema = `geogebra_test_${process.pid}_${Date.now()}`;
   let source: DataSource;
-  let service: WorkspaceTestResultsService;
+  let service: TestResultsExportService;
   let exclusions: ResolvedWorkspaceExclusions;
   let queries: { sql: string; parameters: unknown[] }[];
 
@@ -110,13 +110,13 @@ describePostgres('GeoGebra availability and partial index', () => {
     const exclusionService = createMock<WorkspaceExclusionService>({
       resolveExclusionsForQueries: jest.fn().mockImplementation(async () => exclusions)
     });
-    const module = await Test.createTestingModule({ providers: [WorkspaceTestResultsService] })
+    const module = await Test.createTestingModule({ providers: [TestResultsExportService] })
       .useMocker(token => {
         if (token === getRepositoryToken(ResponseEntity)) return source.getRepository(ResponseEntity);
         if (token === WorkspaceExclusionService) return exclusionService;
         return createMock();
       }).compile();
-    service = module.get(WorkspaceTestResultsService);
+    service = module.get(TestResultsExportService);
     jest.spyOn(source.logger, 'logQuery').mockImplementation((sql, parameters) => {
       queries.push({ sql, parameters: parameters || [] });
     });
