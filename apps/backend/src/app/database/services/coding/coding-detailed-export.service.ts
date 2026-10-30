@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
+import type { FileHandle } from 'fs/promises';
 import { Request } from 'express';
 import { getErrorMessage, getErrorStack, toError } from '../../../utils/error.util';
 import { EXCLUDED_STATUSES } from '../../utils/response-status-converter';
@@ -65,6 +66,7 @@ export class CodingDetailedExportService {
     );
     if (checkCancellation) await checkCancellation();
 
+    let outputFile: FileHandle | undefined;
     try {
       let manualCodingVariableSet: Set<string> | null = null;
       if (excludeAutoCoded) {
@@ -129,7 +131,10 @@ export class CodingDetailedExportService {
       if (includeReplayUrl) headerColumns.push('"Replay URL"');
       const headerCsv = `${headerColumns.join(';')}\n`;
       if (outputFilePath) {
-        await fs.promises.writeFile(outputFilePath, headerCsv, 'utf-8');
+        // Create a private new file and keep its identity through every batch.
+        // The worker later publishes it outside its private working directory.
+        outputFile = await fs.promises.open(outputFilePath, 'wx', 0o600);
+        await outputFile.writeFile(headerCsv, 'utf-8');
       } else {
         chunks.push(Buffer.from(headerCsv, 'utf-8'));
       }
@@ -450,8 +455,8 @@ export class CodingDetailedExportService {
           exportedRowCount += 1;
         }
 
-        if (outputFilePath) {
-          await fs.promises.appendFile(outputFilePath, batchCsv, 'utf-8');
+        if (outputFile) {
+          await outputFile.writeFile(batchCsv, 'utf-8');
         } else {
           chunks.push(Buffer.from(batchCsv, 'utf-8'));
         }
@@ -462,8 +467,8 @@ export class CodingDetailedExportService {
       batchCsv = '';
       if (await flushManagerRowIfNeeded()) exportedRowCount += 1;
       if (batchCsv) {
-        if (outputFilePath) {
-          await fs.promises.appendFile(outputFilePath, batchCsv, 'utf-8');
+        if (outputFile) {
+          await outputFile.writeFile(batchCsv, 'utf-8');
         } else {
           chunks.push(Buffer.from(batchCsv, 'utf-8'));
         }
@@ -482,6 +487,8 @@ export class CodingDetailedExportService {
       }
       this.logger.error(`Error exporting detailed coding results: ${getErrorMessage(error)}`, getErrorStack(error));
       throw new Error(`Could not export detailed coding results: ${getErrorMessage(error)}`);
+    } finally {
+      await outputFile?.close();
     }
   }
 
