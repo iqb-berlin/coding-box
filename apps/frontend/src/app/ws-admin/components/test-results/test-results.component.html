@@ -278,6 +278,22 @@
     <p class="loading-text">{{ uploadingMessage() }}</p>
   </div>
   } @if(!isUploadingResults()){
+  @if (isDeleteJobRunning() || canRetryDeletion()) {
+  <div class="delete-progress-container" role="status" aria-live="polite">
+    <div class="delete-progress-header">
+      <mat-icon>delete_sweep</mat-icon>
+      <span>{{ deleteProgressMessage() }}</span>
+      <span class="delete-progress-value">{{ deleteProgress() }}%</span>
+    </div>
+    <mat-progress-bar mode="determinate" [value]="deleteProgress()"></mat-progress-bar>
+    @if (canRetryDeletion()) {
+    <button mat-stroked-button type="button" (click)="retryDeletion()">
+      <mat-icon>refresh</mat-icon>
+      {{ deletionRetryLabelKey() | translate }}
+    </button>
+    }
+  </div>
+  }
   @if (isTableView()) {
     @defer (on immediate) {
       <coding-box-test-results-flat-table
@@ -360,17 +376,6 @@
       </div>
       <p class="section-description">{{ 'test-results-page.deletion.scope-hint' | translate }}</p>
       <mat-divider></mat-divider>
-
-      @if (isDeleteJobRunning()) {
-      <div class="delete-progress-container">
-        <div class="delete-progress-header">
-          <mat-icon>delete_sweep</mat-icon>
-          <span>{{ deleteProgressMessage() || 'Löschung läuft...' }}</span>
-          <span class="delete-progress-value">{{ deleteProgress() }}%</span>
-        </div>
-        <mat-progress-bar mode="determinate" [value]="deleteProgress()"></mat-progress-bar>
-      </div>
-      }
 
       @if (isDeletingTestPersons()) {
       <div class="loading-container">

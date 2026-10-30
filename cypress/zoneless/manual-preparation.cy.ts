@@ -84,8 +84,18 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/coding/applied-results-overview', { body: null });
   }
 
-  function openManual(): void {
-    cy.visit('/');
+  function openManual(options: { reducedMotion?: boolean } = {}): void {
+    cy.visit('/', {
+      onBeforeLoad(window) {
+        if (!options.reducedMotion) return;
+        // Material reads this before opening its first dialog. Avoid depending on
+        // requestAnimationFrame delivery when verifying workspace ownership.
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion)');
+        Object.defineProperty(reducedMotion, 'matches', { value: true });
+        cy.stub(window, 'matchMedia').callThrough()
+          .withArgs('(prefers-reduced-motion)').returns(reducedMotion);
+      }
+    });
     cy.wait('@authData');
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
@@ -732,7 +742,7 @@ describe('Zoneless manual preparation workflows', () => {
       deletions += 1;
       request.reply({ body: { success: true } });
     });
-    openManual();
+    openManual({ reducedMotion: true });
     cy.title().should('equal', 'Manuelle Kodierung | IQB-Kodierbox');
     cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
     cy.contains('#manual-execution button', 'Aktualisieren').click();
