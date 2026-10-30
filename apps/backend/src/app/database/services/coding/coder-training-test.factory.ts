@@ -27,6 +27,7 @@ import { CoderTrainingFreshnessService } from './coder-training-freshness.servic
 import { CoderTrainingKappaService } from './coder-training-kappa.service';
 import { CoderTrainingMutationService } from './coder-training-mutation.service';
 import { CoderTrainingQueryService } from './coder-training-query.service';
+import { CoderTrainingSamplingService } from './coder-training-sampling.service';
 import { CoderTrainingSelectionService } from './coder-training-selection.service';
 import { CoderTrainingService } from './coder-training.service';
 import { CodingJobService } from './coding-job.service';
@@ -57,8 +58,9 @@ export function createCoderTrainingService(codingJobRepository: Repository<Codin
   workspaceExclusionService: WorkspaceExclusionService,
   codingStatisticsService: CodingStatisticsService): CoderTrainingService {
   const display = new CoderTrainingDisplayService(missingsProfilesService);
-  const selection = new CoderTrainingSelectionService(codingJobUnitRepository, responseRepository, variableBundleRepository, chunkRepository, codingJobService, workspaceFilesService, workspaceExclusionService);
-  const mutation = new CoderTrainingMutationService(codingJobUnitRepository, coderTrainingRepository, coderTrainingDiscussionResultRepository, codingJobService, missingsProfilesService, selection);
+  const sampling = new CoderTrainingSamplingService();
+  const selection = new CoderTrainingSelectionService(codingJobUnitRepository, responseRepository, variableBundleRepository, chunkRepository, codingJobService, workspaceFilesService, workspaceExclusionService, sampling);
+  const mutation = new CoderTrainingMutationService(codingJobUnitRepository, coderTrainingRepository, coderTrainingDiscussionResultRepository, codingJobService, missingsProfilesService, selection, sampling);
   const discussion = new CoderTrainingDiscussionService(coderTrainingRepository, codingJobService, missingsProfilesService, workspaceExclusionService, display);
   const comparisonQuery = new CoderTrainingComparisonQueryService(codingJobUnitRepository, coderTrainingDiscussionResultRepository, userRepository, display, discussion);
   const comparison = new CoderTrainingComparisonService(codingJobRepository, codingJobUnitRepository, coderTrainingRepository, coderTrainingDiscussionResultRepository, userRepository, workspaceExclusionService, display, comparisonQuery, discussion);
@@ -66,7 +68,7 @@ export function createCoderTrainingService(codingJobRepository: Repository<Codin
   const query = new CoderTrainingQueryService(coderTrainingRepository, workspaceExclusionService);
   const freshness = new CoderTrainingFreshnessService(codingJobRepository, codingJobUnitRepository, coderTrainingRepository, coderTrainingDiscussionResultRepository, workspaceExclusionService);
   const facade = new CoderTrainingService(selection, mutation, comparison, kappa, discussion, query, freshness);
-  const providers = [display, selection, mutation, comparison, comparisonQuery, kappa, discussion, query, freshness];
+  const providers = [display, sampling, selection, mutation, comparison, comparisonQuery, kappa, discussion, query, freshness];
   // Legacy behavioral fixtures probe private methods. Production uses explicit DI.
   const owners = new Map<string, object>();
   for (const provider of providers) {
