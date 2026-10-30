@@ -21,6 +21,7 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
+import { CoderTrainingSamplingService } from './coder-training-sampling.service';
 import { CoderTrainingSelectionService } from './coder-training-selection.service';
 import { CoderTrainingResponse, TrainingJob, TrainingVariableConfig } from './coder-training.types';
 import { CodingJobService } from './coding-job.service';
@@ -41,7 +42,8 @@ export class CoderTrainingMutationService {
     private coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>,
     private codingJobService: CodingJobService,
     private missingsProfilesService: MissingsProfilesService,
-    private readonly selection: CoderTrainingSelectionService
+    private readonly selection: CoderTrainingSelectionService,
+    private readonly sampling: CoderTrainingSamplingService
   ) {}
 
   private async hasCodingProgressForJobs(jobIds: number[]): Promise<boolean> {
@@ -313,8 +315,8 @@ export class CoderTrainingMutationService {
           this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
 
           // Sort each group with its respective mode
-          const sortedAlternating = this.selection.sortTrainingResponses(alternatingResponses, 'alternating');
-          const sortedContinuous = this.selection.sortTrainingResponses(continuousResponses, 'continuous');
+          const sortedAlternating = this.sampling.sortTrainingResponses(alternatingResponses, 'alternating');
+          const sortedContinuous = this.sampling.sortTrainingResponses(continuousResponses, 'continuous');
 
           // Combine: alternating first, then continuous
           const sortedResponses = [...sortedAlternating, ...sortedContinuous];
@@ -741,8 +743,8 @@ export class CoderTrainingMutationService {
             this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
 
             // Sort each group with its respective mode
-            const sortedAlternating = this.selection.sortTrainingResponses(alternatingResponses, 'alternating');
-            const sortedContinuous = this.selection.sortTrainingResponses(continuousResponses, 'continuous');
+            const sortedAlternating = this.sampling.sortTrainingResponses(alternatingResponses, 'alternating');
+            const sortedContinuous = this.sampling.sortTrainingResponses(continuousResponses, 'continuous');
 
             // Combine: alternating first, then continuous
             const sortedResponses = [...sortedAlternating, ...sortedContinuous];

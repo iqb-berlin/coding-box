@@ -11,6 +11,8 @@ import {
 import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
 import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
 import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
+import { TestResultsFrequenciesService } from '../database/services/test-results/test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from '../database/services/test-results/test-results-filter-options.service';
 import { TestResultsResponsesService } from '../database/services/test-results/test-results-responses.service';
 import { TestResultsReplayService } from '../database/services/test-results/test-results-replay.service';
 import { TestResultsDeletionQueryService } from '../database/services/test-results/test-results-deletion-query.service';
@@ -19,6 +21,7 @@ import { TestResultsSearchService } from '../database/services/test-results/test
 import { TestResultsExportService } from '../database/services/test-results/test-results-export.service';
 import { WorkspaceTestResultsService } from '../database/services/test-results/workspace-test-results.service';
 import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
+import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
 import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
 import { CoderTrainingMutationService } from '../database/services/coding/coder-training-mutation.service';
 import { CoderTrainingComparisonService } from '../database/services/coding/coder-training-comparison.service';
@@ -158,9 +161,9 @@ describe('CodingModule', () => {
       ];
       const useCaseProviders = [
         TestResultsAnomaliesService, TestResultsCacheService, TestResultsQueryService,
-        TestResultsResponsesService, TestResultsReplayService, TestResultsDeletionQueryService,
+        TestResultsFrequenciesService, TestResultsFilterOptionsService, TestResultsResponsesService, TestResultsReplayService, TestResultsDeletionQueryService,
         TestResultsMutationService, TestResultsSearchService, TestResultsExportService,
-        CoderTrainingDisplayService, CoderTrainingSelectionService, CoderTrainingMutationService,
+        CoderTrainingDisplayService, CoderTrainingSamplingService, CoderTrainingSelectionService, CoderTrainingMutationService,
         CoderTrainingComparisonService, CoderTrainingComparisonQueryService, CoderTrainingKappaService,
         CoderTrainingDiscussionService, CoderTrainingQueryService, CoderTrainingFreshnessService
       ];
@@ -170,6 +173,8 @@ describe('CodingModule', () => {
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'query')).toBe(module.get(TestResultsQueryService));
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'mutation')).toBe(module.get(TestResultsMutationService));
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'responses')).toBe(module.get(TestResultsResponsesService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'frequencies')).toBe(module.get(TestResultsFrequenciesService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'filterOptions')).toBe(module.get(TestResultsFilterOptionsService));
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'replay')).toBe(module.get(TestResultsReplayService));
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'search')).toBe(module.get(TestResultsSearchService));
       expect(Reflect.get(module.get(WorkspaceTestResultsService), 'exporter')).toBe(module.get(TestResultsExportService));
@@ -181,6 +186,9 @@ describe('CodingModule', () => {
       expect(Reflect.get(module.get(CoderTrainingService), 'freshness')).toBe(module.get(CoderTrainingFreshnessService));
       expect(Reflect.get(module.get(CoderTrainingService), 'kappa')).toBe(module.get(CoderTrainingKappaService));
       expect(Reflect.get(module.get(CoderTrainingSelectionService), 'workspaceFilesService')).toBe(module.get(WORKSPACE_FILE_METADATA_READER));
+      for (const provider of [CoderTrainingSelectionService, CoderTrainingMutationService]) {
+        expect(Reflect.get(module.get(provider), 'sampling')).toBe(module.get(CoderTrainingSamplingService));
+      }
       featureProviders.forEach(provider => expect(module.get(provider)).toBeInstanceOf(provider));
       const metadata = module.select(WorkspaceDataModule).get(WorkspaceFileMetadataService, { strict: true });
       expect(module.get(DERIVED_VARIABLE_READER)).toBe(metadata);

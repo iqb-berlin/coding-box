@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
+import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
 import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
 import { CoderTrainingMutationService } from '../database/services/coding/coder-training-mutation.service';
 import { CoderTrainingComparisonService } from '../database/services/coding/coder-training-comparison.service';
@@ -118,6 +119,7 @@ import { UserModule } from '../user/user.module';
   ],
   providers: [
     CoderTrainingDisplayService,
+    CoderTrainingSamplingService,
     CoderTrainingSelectionService,
     CoderTrainingMutationService,
     CoderTrainingComparisonService,
