@@ -195,6 +195,27 @@ Nach dem Rebase bestanden lokal alle 125 Tests aus den drei Suites für
 Export-Dateisicherheit, Boolean-Query-Verträge und Nest-ESM-Metadaten:
 `nx test backend --testPathPatterns='coding-export.service.spec.ts|nest-esm.spec.ts|boolean-query.integration.spec.ts' --coverage=false --maxWorkers=2`.
 
+### Linux-Runtime: native Abhängigkeiten
+
+Die erneute Pipeline [106571](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106571)
+auf `5a19c62b` baute den Root-Builder erfolgreich. Der neue Produktionsimage-Job
+[494148](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/494148) fand beim
+anschließenden `npm ci --omit=dev` im Slim-Image einen konkreten Fehler:
+Das Node-24-Prebuild von `libxmljs2` verlangt `GLIBC_2.38`; Bookworm bietet eine
+ältere Version. Der anschließende Quellbuild scheiterte an fehlendem Python.
+
+Die Produktionsinstallation erfolgt deshalb jetzt in einer eigenen
+`dependencies`-Stufe auf dem vollständigen Bookworm-Builder mit Python, Make
+und C++-Compiler. Nur der frisch installierte Produktionsbaum samt unveränderten
+Manifesten und Vendor-Dateien gelangt in das Bookworm-Slim-Image. Node-ABI und
+Debian-Basis bleiben identisch, Compiler und Entwicklungsabhängigkeiten sind
+kein Bestandteil der Runtime. Die bereits vorhandene native Modulprüfung im
+Containerjob prüft die Ladefähigkeit des kopierten Baums im tatsächlichen
+Slim-Image. Der Erfolg dieser Korrektur muss erneut in CI bestätigt werden.
+Lokal bestand danach `nx run backend:verify-runtime-package` unter macOS:
+frische Produktionsinstallation, unveränderte Manifeste und alle nativen
+Module erfolgreich geladen. Das ist kein Ersatz für den ausstehenden Linux-Lauf.
+
 Die noch offenen lokalen Imageprüfungen sind ausdrücklich **nicht ausgeführt**:
 
 ```sh
