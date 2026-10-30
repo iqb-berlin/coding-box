@@ -1,7 +1,7 @@
 # Nest-12-Upgrade: technischer Testbericht
 
 Stand: 30.10.2026. Basis ist PR #1138 bei
-`cc9cb2971072d403d613cc65f3fa4f21244a93da`; Arbeitsbranch `upgrade-nest-12`.
+`cc9cb2971072d403d613cc65f3fa4f21244a93da`; Arbeitsbranch `upgrade-nest-12`, [Entwurf-PR #1140](https://github.com/iqb-berlin/coding-box/pull/1140).
 Geprüft wurde die hier vorbereitete Änderung mit Nest 12.3.2 und Node 24.22.1,
 nicht der frühere Nest-11-Stand. Betriebssystem: macOS ARM64, PostgreSQL 14.24,
 Redis 7.4.2, npm 11.19.1, Nx 22.7.12, Jest 30.5.2, ts-jest 29.4.15.
@@ -29,6 +29,7 @@ Frontend-Prüfung lief nicht parallel zu einer Backend-Prüfung.
 | Prüfung | Ergebnis | Nachweis / Notiz |
 | --- | --- | --- |
 | Backend-Vollsuite mit eigenem Redis | Bestanden | 4.136 Tests in 255 ausgeführten Suites; 124 umgebungsabhängige Tests übersprungen |
+| Vollständiger Backend-CI-Modus mit V8-Coverage | Bestanden | Erneut 4.136 Tests; Statements/Zeilen 80,77 %, Branches 72,77 %, Funktionen 79,85 %; unveränderte Coverage-Grenzen bestanden |
 | PostgreSQL-/Redis-Integration | Bestanden | 129 Tests in 16 Suites; ausschließlich der optionale Kappa-Benchmark übersprungen |
 | ESM-/Upload-Regression im CI-Konfigurationspfad | Bestanden | 4 Tests; `--runInBand` und explizite Coverage-Überschreibung funktionieren |
 | Strikter Backend-Typecheck | Bestanden | 0 Diagnosen; Metadaten aller 43 PostgreSQL-Entities gültig |
@@ -43,7 +44,7 @@ Frontend-Prüfung lief nicht parallel zu einer Backend-Prüfung.
 | Frontend-Qualitätsgates | Bestanden | Alle 52 Prüfungen, einschließlich Weitergabe der CI-Konfiguration an den ESM-Teststarter |
 | Browser-Workflows | Bestanden | 10/10 Fälle, keine übersprungen; echte Rollen-Anmeldung, Upload/Kodierung/Export, Audit-Rollback und Queue-Isolation |
 | Vollständiger Linux-Containerbuild | Blockiert | Eigener Imagebau wegen weniger als 1 GiB freiem Hostspeicher kontrolliert abgebrochen; vor Browserstart, kein Erfolg behauptet |
-| Remote-CI | Noch nicht geprüft | Separat vom lokalen Nachweis zu bewerten |
+| Remote-CI | Ausstehend | Bei Abschluss kein erfolgreicher Gesamtnachweis für den aktuellen PR-Stand; Status im Entwurf-PR #1140 |
 
 Der geprüfte native Produktionsbuild hat SHA-256
 `ee335a4b4b49a4a2674d851d59484ecf2c09e41f3b0b13986aa412efe048ed58`.
@@ -86,7 +87,10 @@ npx nx build backend --configuration=production
 Der BullMQ-Runner benötigt `redis-server` auf PATH oder die Variable
 `BULLMQ_REDIS_SERVER=/pfad/zu/redis-server`. Er startet und beendet seinen
 eigenen Redis-Prozess. Erwartet: alle aktivierten Tests bestehen; keine
-ESM-Ladefehler und kein Heap-Abbruch.
+ESM-Ladefehler und kein Heap-Abbruch. Der zusätzlich ausgeführte vollständige
+CI-Lauf aktiviert mit `npx nx test backend --configuration=ci --maxWorkers=2`
+auch V8-Coverage; dafür `BULLMQ_TEST_REDIS_HOST` und `BULLMQ_TEST_REDIS_PORT`
+auf einen eigenen Test-Redis setzen.
 
 Für den vollständigen Datenbanklauf einen separaten PostgreSQL-Testserver mit
 Recht zum Erstellen/Löschen von Datenbanken und einen ausschließlich für Tests
@@ -142,3 +146,20 @@ der angepassten Produktions-Dockerfiles. Builder-/Runtime-Images und frische
 native Linux-Abhängigkeiten müssen in CI oder auf einem Rechner mit ausreichend
 Speicher geprüft werden. Bis zu einem grünen Ergebnis ist dieser Punkt offen.
 Ein Release oder eine fachliche Freigabe wird daraus nicht abgeleitet.
+
+Die noch offenen lokalen Imageprüfungen sind ausdrücklich **nicht ausgeführt**:
+
+```sh
+docker build --target builder -t coding-box-base:nest12-proof .
+docker build -f apps/backend/Dockerfile \
+  --build-arg BASE_IMAGE_NAME=coding-box-base:nest12-proof \
+  --build-arg PROJECT=backend --target prod \
+  -t coding-box-backend:nest12-proof .
+docker run --rm --entrypoint node coding-box-backend:nest12-proof --version
+```
+
+Erwartet: beide Builds erfolgreich, anschließend `v24.22.1`. Der Builder führt
+Backend- und Frontend-Build als getrennte, aufeinanderfolgende Nx-Aufrufe aus.
+Die Befehle veröffentlichen keine Images. Für die eigentliche Linux-Runtime-
+Freigabe müssen zusätzlich API und Export-Worker mit den dedizierten
+Testdiensten aus dem gebauten Runtime-Image gestartet werden.
