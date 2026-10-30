@@ -1,5 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CodingExportQueryService } from '../database/services/coding/coding-export-query.service';
+import { CodingExportFormattingService } from '../database/services/coding/coding-export-formatting.service';
+import { CodingExportReplayService } from '../database/services/coding/coding-export-replay.service';
+import { CodingExportDownloadService } from '../database/services/coding/coding-export-download.service';
+import { CodingAggregatedExportService } from '../database/services/coding/coding-aggregated-export.service';
+import { CodingAggregatedRowsExportService } from '../database/services/coding/coding-aggregated-rows-export.service';
+import { CodingAggregatedColumnsExportService } from '../database/services/coding/coding-aggregated-columns-export.service';
+import { CodingCoderExportService } from '../database/services/coding/coding-coder-export.service';
+import { CodingVariableExportService } from '../database/services/coding/coding-variable-export.service';
+import { CodingCompactExportService } from '../database/services/coding/coding-compact-export.service';
+import { CodingDetailedExportService } from '../database/services/coding/coding-detailed-export.service';
+import { CodingTimingReportExportService } from '../database/services/coding/coding-timing-report-export.service';
 import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
 import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
 import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
@@ -118,6 +130,18 @@ import { UserModule } from '../user/user.module';
     UserModule
   ],
   providers: [
+    CodingExportQueryService,
+    CodingExportFormattingService,
+    CodingExportReplayService,
+    CodingExportDownloadService,
+    CodingAggregatedExportService,
+    CodingAggregatedRowsExportService,
+    CodingAggregatedColumnsExportService,
+    CodingCoderExportService,
+    CodingVariableExportService,
+    CodingCompactExportService,
+    CodingDetailedExportService,
+    CodingTimingReportExportService,
     CoderTrainingDisplayService,
     CoderTrainingSamplingService,
     CoderTrainingSelectionService,

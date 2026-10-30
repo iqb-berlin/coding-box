@@ -4,7 +4,7 @@ import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CodingExportService } from './coding-export.service';
+import { createCodingExportService } from './coding-export-test.factory';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -226,7 +226,7 @@ function createServiceWithDetailedMocks(
     findBy: jest.fn().mockResolvedValue(overrides.users || [])
   };
 
-  const service = new CodingExportService({} as Repository<ResponseEntity>,
+  const service = createCodingExportService({} as Repository<ResponseEntity>,
     {} as Repository<CodingJob>,
     {} as Repository<CodingJobVariable>,
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -269,7 +269,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -325,7 +325,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -1123,7 +1123,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -1215,7 +1215,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       }
     ]);
 
-    const service = new CodingExportService({
+    const service = createCodingExportService({
       createQueryBuilder: jest.fn()
         .mockReturnValueOnce(autoVariablesQuery)
         .mockReturnValueOnce(personResultsQuery)
@@ -1344,7 +1344,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       ...markedResponseValues
     }]);
 
-    const service = new CodingExportService({
+    const service = createCodingExportService({
       createQueryBuilder: jest.fn()
         .mockReturnValueOnce(autoVariablesQuery)
         .mockReturnValueOnce(personResultsQuery)
@@ -1450,7 +1450,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     }]);
     const autoCodingQuery = createQueryBuilder([]);
 
-    const service = new CodingExportService({
+    const service = createCodingExportService({
       createQueryBuilder: jest.fn()
         .mockReturnValueOnce(autoVariablesQuery)
         .mockReturnValueOnce(personResultsQuery)
@@ -1579,7 +1579,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       codingJobRepository as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -1683,7 +1683,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       updated_at: new Date('2026-04-14T11:00:00.000Z')
     };
 
-    const service = new CodingExportService({ createQueryBuilder: jest.fn().mockReturnValue(personResultsQuery) } as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService({ createQueryBuilder: jest.fn().mockReturnValue(personResultsQuery) } as unknown as Repository<ResponseEntity>,
       { createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery) } as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {
@@ -1750,7 +1750,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       findBy: jest.fn().mockResolvedValue([])
     };
 
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {} as Repository<CodingJobUnit>,
@@ -1842,7 +1842,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -1914,7 +1914,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       {} as Repository<CodingJobUnit>,
@@ -2021,7 +2021,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2114,7 +2114,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       codingJobRepository as unknown as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2254,7 +2254,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2367,7 +2367,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
+    const service = createCodingExportService(responseRepository as unknown as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2433,7 +2433,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       })
     };
 
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2487,7 +2487,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
@@ -2546,7 +2546,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
         testletIgnoredUnits: []
       })
     };
-    const service = new CodingExportService({} as Repository<ResponseEntity>,
+    const service = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
