@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
+import { createCoderTrainingService } from './coder-training-test.factory';
 import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -140,7 +141,7 @@ describe('CoderTrainingService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        CoderTrainingService,
+        { provide: CoderTrainingService, useFactory: createCoderTrainingService, inject: [getRepositoryToken(CodingJob), getRepositoryToken(CodingJobCoder), getRepositoryToken(CodingJobVariable), getRepositoryToken(CodingJobUnit), getRepositoryToken(CoderTraining), getRepositoryToken(CoderTrainingVariable), getRepositoryToken(CoderTrainingBundle), getRepositoryToken(CoderTrainingCoder), getRepositoryToken(CoderTrainingDiscussionResult), getRepositoryToken(CodingJobVariableBundle), getRepositoryToken(User), getRepositoryToken(ResponseEntity), getRepositoryToken(VariableBundle), getRepositoryToken(ChunkEntity), CodingJobService, WORKSPACE_FILE_METADATA_READER, MissingsProfilesService, WorkspaceExclusionService, CodingStatisticsService] },
         { provide: getRepositoryToken(CodingJob), useValue: mockRepository },
         { provide: getRepositoryToken(CodingJobCoder), useValue: mockRepository },
         { provide: getRepositoryToken(CodingJobVariable), useValue: mockRepository },

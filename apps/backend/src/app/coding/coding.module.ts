@@ -1,5 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
+import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
+import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
+import { CoderTrainingMutationService } from '../database/services/coding/coder-training-mutation.service';
+import { CoderTrainingComparisonService } from '../database/services/coding/coder-training-comparison.service';
+import { CoderTrainingComparisonQueryService } from '../database/services/coding/coder-training-comparison-query.service';
+import { CoderTrainingKappaService } from '../database/services/coding/coder-training-kappa.service';
+import { CoderTrainingDiscussionService } from '../database/services/coding/coder-training-discussion.service';
+import { CoderTrainingQueryService } from '../database/services/coding/coder-training-query.service';
+import { CoderTrainingFreshnessService } from '../database/services/coding/coder-training-freshness.service';
 import { CodingProgressService } from '../database/services/coding/coding-progress.service';
 import { CodingJobAccessService } from '../database/services/coding/coding-job-access.service';
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
@@ -108,6 +118,16 @@ import { UserModule } from '../user/user.module';
     UserModule
   ],
   providers: [
+    CoderTrainingDisplayService,
+    CoderTrainingSamplingService,
+    CoderTrainingSelectionService,
+    CoderTrainingMutationService,
+    CoderTrainingComparisonService,
+    CoderTrainingComparisonQueryService,
+    CoderTrainingKappaService,
+    CoderTrainingDiscussionService,
+    CoderTrainingQueryService,
+    CoderTrainingFreshnessService,
     CodingProgressService,
     ResponseManagementService,
     CodingJobAccessService,

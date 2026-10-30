@@ -1,5 +1,6 @@
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource, Repository } from 'typeorm';
+import { createWorkspaceTestResultsService } from './workspace-test-results-test.factory';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import Persons from '../../entities/persons.entity';
@@ -61,7 +62,7 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
     await db.query(`INSERT INTO "${schema}".persons (code, login, "group", workspace_id, consider)
       SELECT 'review-' || n, 'login', 'Batch-' || n, 3, true FROM generate_series(1, 40) n`);
     persons = db.getRepository(Persons);
-    service = new WorkspaceTestResultsService(
+    service = createWorkspaceTestResultsService(
       persons,
       db.getRepository(Unit),
       db.getRepository(Booklet),
