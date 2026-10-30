@@ -2,7 +2,6 @@ import {
   Component, inject, OnInit, computed, signal, ChangeDetectionStrategy, OnDestroy
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -31,9 +30,8 @@ import {
 } from 'rxjs';
 import { variableKey } from '../../utils/variable-key.util';
 import { TrainingDiscussionRecovery, TrainingDiscussionRecoveryDraft } from './training-discussion-recovery.service';
-import {
-  discussionScoreFromKnownCodes, parseDiscussionCode, isUnchangedDiscussionValue, mapDiscussionCodeForDisplay
-} from './training-discussion-values';
+import { mapDiscussionCodeForDisplay } from './training-discussion-values';
+import { TrainingDiscussionEditorFacade, DiscussionEditContext } from './training-discussion-editor.facade';
 import {
   comparisonPresentation, selectedCodeSlots, ComparisonSelection, modalValueSummary, ModalValueSummary
 } from './training-comparison-presentation';
@@ -57,8 +55,6 @@ import type {
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
-import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
-import { getAuthProviderFailureCode } from '../../../core/interceptors/auth-provider-failure';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
@@ -154,7 +150,7 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],
   standalone: true,
-  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingDiscussionRecovery, TrainingDiscussionApplyFacade],
+  providers: [TrainingReliabilityFacade, TrainingComparisonDataFacade, TrainingDiscussionRecovery, TrainingDiscussionApplyFacade, TrainingDiscussionEditorFacade],
   imports: [
     TrainingComparisonTableComponent,
     TrainingComparisonSelectionComponent,
@@ -207,6 +203,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   private hasInitializedWithinCoderSelection = false;
   private unregisterRecoveryProvider: (() => void) | null = null;
   private readonly discussionRecovery = inject(TrainingDiscussionRecovery);
+  private readonly discussionEditor = inject(TrainingDiscussionEditorFacade);
   private readonly trainingDiscussionRecoveryKey = this.discussionRecovery.key;
 
   private readonly comparisons = inject(TrainingComparisonDataFacade);
@@ -357,13 +354,12 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
   readonly enableRegexSearch = signal(false);
 
-  readonly discussionManagerLabel = signal('');
-  readonly discussionCodeByResponseId = signal<Record<number, string>>({});
-  readonly discussionScoreByResponseId = signal<Record<number, number | null>>({});
-  readonly discussionNotesByResponseId = signal<Record<number, string>>({});
-  readonly discussionErrorByResponseId = signal<Record<number, string>>({});
-  readonly isSavingDiscussionByResponseId = signal<Record<number, boolean>>({});
-  private pendingDiscussionNotesByResponseId: Record<number, string> = {};
+  readonly discussionManagerLabel = this.discussionEditor.managerLabel;
+  readonly discussionCodeByResponseId = this.discussionEditor.codes;
+  readonly discussionScoreByResponseId = this.discussionEditor.scores;
+  readonly discussionNotesByResponseId = this.discussionEditor.notes;
+  readonly discussionErrorByResponseId = this.discussionEditor.errors;
+  readonly isSavingDiscussionByResponseId = this.discussionEditor.saving;
   protected readonly emptyModalValueDisplay: ModalValueDisplay = {
     valueText: '-',
     deviationText: '-',
@@ -454,6 +450,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
       this.cancelComparisonRequest();
       this.invalidateDiscussionContext();
       this.reliability.reset();
+      this.discussionEditor.stop();
       this.ngUnsubscribe.next();
       this.dialogRef.close();
     });
@@ -476,7 +473,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
 
     this.setupFilterPredicate();
     this.setupTableFilterChanges();
-    this.discussionManagerLabel.set(this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion');
+    this.discussionEditor.setManagerLabel(this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion');
     this.comparisonMode = this.data.initialMode || 'between-trainings';
 
     this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId)
@@ -518,6 +515,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     this.unregisterRecoveryProvider = null;
     this.cancelComparisonRequest();
     this.reliability.reset();
+    this.discussionEditor.stop();
     this.ngUnsubscribe.next();
     this.tableFilterChanges$.complete();
     this.ngUnsubscribe.complete();
@@ -930,213 +928,39 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     return mapDiscussionCodeForDisplay(code);
   }
 
-  private getDiscussionScoreFromKnownCodes(comparison: WithinTrainingComparison, codeAsNumber: number): number | null {
-    return discussionScoreFromKnownCodes(comparison, codeAsNumber);
-  }
-
   protected onDiscussionCodeInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
-    if (!this.canEditDiscussion) return;
-    if (this.comparisonMode !== 'within-training') {
-      return;
+    if (this.canEditDiscussion && this.comparisonMode === 'within-training') {
+      this.discussionEditor.inputCode(comparison as WithinTrainingComparison, value);
     }
-    const responseId = (comparison as WithinTrainingComparison).responseId;
-    this.discussionCodeByResponseId.update(current => ({ ...current, [responseId]: value }));
-    this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: '' }));
-
-    const codeAsNumber = parseInt(value, 10);
-    if (Number.isNaN(codeAsNumber)) {
-      this.discussionScoreByResponseId.update(current => ({ ...current, [responseId]: null }));
-      return;
-    }
-
-    this.discussionScoreByResponseId.update(current => ({
-      ...current,
-      [responseId]: this.getDiscussionScoreFromKnownCodes(
-        comparison as WithinTrainingComparison,
-        codeAsNumber
-      )
-    }));
   }
-
-  private parseDiscussionCode(value: string): number | null | undefined {
-    return parseDiscussionCode(value);
-  }
-
-  private isUnchangedDiscussionValue(
-    comparison: WithinTrainingComparison, code: number | null, score: number | null,
-    notes: string | null, scoreOverride?: number | null
-  ): boolean { return isUnchangedDiscussionValue(comparison, code, score, notes, scoreOverride); }
 
   protected onDiscussionNotesInput(comparison: TrainingComparison | WithinTrainingComparison, value: string): void {
-    if (!this.canEditDiscussion) return;
-    if (this.comparisonMode !== 'within-training') {
-      return;
+    if (this.canEditDiscussion && this.comparisonMode === 'within-training') {
+      this.discussionEditor.inputNotes(comparison as WithinTrainingComparison, value);
     }
-    const responseId = (comparison as WithinTrainingComparison).responseId;
-    this.discussionNotesByResponseId.update(current => ({ ...current, [responseId]: value }));
-    this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: '' }));
   }
 
   protected onDiscussionNotesBlur(comparison: TrainingComparison | WithinTrainingComparison): void {
     this.onDiscussionCodeBlur(comparison);
   }
 
-  onDiscussionCodeBlur(
-    comparison: TrainingComparison | WithinTrainingComparison,
-    scoreOverride?: number | null
-  ): void {
-    if (!this.contextActive || !this.canEditDiscussion) return;
-    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
-      return;
-    }
-
-    const withinComparison = comparison as WithinTrainingComparison;
-    const responseId = withinComparison.responseId;
-    const rawValue = this.discussionCodeByResponseId()[responseId] || '';
-    const parsedCode = this.parseDiscussionCode(rawValue);
-
-    if (parsedCode === undefined) {
-      this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: this.translate.instant('coding.trainings.compare.discussion-integer-required') }));
-      this.snackBar.open(this.translate.instant('coding.trainings.compare.discussion-integer-required'), this.translate.instant('common.close'), { duration: 3000 });
-      return;
-    }
-
-    const notes = (this.discussionNotesByResponseId()[responseId] || '').trim() || null;
-    const trainingId = this.selectedTrainingForWithin;
-    const contextId = this.discussionContextId;
-
-    let score: number | null = null;
-    if (parsedCode !== null) {
-      score = scoreOverride !== undefined ?
-        scoreOverride :
-        this.getDiscussionScoreFromKnownCodes(withinComparison, parsedCode);
-    }
-    this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: '' }));
-
-    if (this.isUnchangedDiscussionValue(withinComparison, parsedCode, score, notes, scoreOverride)) {
-      this.discussionCodeByResponseId.update(current => ({ ...current, [responseId]: parsedCode !== null ? parsedCode.toString() : '' }));
-      this.discussionScoreByResponseId.update(current => ({ ...current, [responseId]: withinComparison.discussionScore ?? null }));
-      this.discussionNotesByResponseId.update(current => ({ ...current, [responseId]: withinComparison.discussionNotes || '' }));
-      this.clearTrainingDiscussionRecoveryEntry(responseId);
-      return;
-    }
-
-    this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: true }));
-
-    this.codingTrainingBackendService.saveDiscussionResult(
-      this.data.workspaceId,
-      trainingId,
-      responseId,
-      parsedCode,
-      score,
-      notes
-    ).pipe(takeUntil(this.ngUnsubscribe))
-      .subscribe({
-        next: result => {
-          if (!this.contextActive || contextId !== this.discussionContextId ||
-            this.comparisonMode !== 'within-training' || this.selectedTrainingForWithin !== trainingId) {
-            return;
-          }
-          const hasPendingNotes = Object.prototype.hasOwnProperty.call(
-            this.pendingDiscussionNotesByResponseId,
-            responseId
-          );
-          const pendingNotes = hasPendingNotes ?
-            this.pendingDiscussionNotesByResponseId[responseId] :
-            '';
-
-          this.discussionCodeByResponseId.update(current => ({ ...current, [responseId]: result.code !== null ? result.code.toString() : '' }));
-          this.discussionScoreByResponseId.update(current => ({ ...current, [responseId]: result.score }));
-          this.discussionNotesByResponseId.update(current => ({ ...current, [responseId]: hasPendingNotes ? pendingNotes : result.notes || '' }));
-          withinComparison.discussionCode = result.code;
-          withinComparison.discussionScore = result.score;
-          withinComparison.discussionNotes = result.notes;
-          withinComparison.discussionManagerUserId = result.managerUserId;
-          withinComparison.discussionManagerName = result.managerName;
-          withinComparison.discussionSource = result.source;
-          this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: '' }));
-          if (result.managerName) {
-            this.discussionManagerLabel.set(result.managerName);
-          }
-          this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
-
-          if (hasPendingNotes) {
-            delete this.pendingDiscussionNotesByResponseId[responseId];
-            const normalizedPendingNotes = pendingNotes.trim() || null;
-            const normalizedSavedNotes = (result.notes || '').trim() || null;
-            if (normalizedPendingNotes !== normalizedSavedNotes) {
-              this.onDiscussionCodeBlur(withinComparison, result.score);
-              return;
-            }
-          }
-          this.clearTrainingDiscussionRecoveryEntry(responseId);
-        },
-        error: error => {
-          if (!this.contextActive || contextId !== this.discussionContextId ||
-            this.comparisonMode !== 'within-training' || this.selectedTrainingForWithin !== trainingId) {
-            return;
-          }
-          this.isSavingDiscussionByResponseId.update(current => ({ ...current, [responseId]: false }));
-          if (this.isRecoverableDiscussionAuthError(error)) {
-            const message = error instanceof AuthRefreshUnavailableError || getAuthProviderFailureCode(error) ?
-              this.translate.instant('error.auth_refresh_pending_save_message') :
-              this.translate.instant('coding.trainings.compare.discussion-requires-login');
-            this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: message }));
-            const draft = this.createTrainingDiscussionRecoveryDraft();
-            if (draft) {
-              this.saveTrainingDiscussionRecoveryDraft(draft);
-            }
-            this.snackBar.open(message, this.translate.instant('common.close'), { duration: 4000 });
-            return;
-          }
-          delete this.pendingDiscussionNotesByResponseId[responseId];
-          const message = this.getDiscussionSaveErrorMessage(error);
-          this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: message }));
-          this.snackBar.open(message, this.translate.instant('common.close'), { duration: 4000 });
-        }
-      });
+  onDiscussionCodeBlur(comparison: TrainingComparison | WithinTrainingComparison, scoreOverride?: number | null): void {
+    const context = this.discussionEditContext();
+    if (context) this.discussionEditor.save(comparison as WithinTrainingComparison, context, scoreOverride);
   }
 
-  private getDiscussionSaveErrorMessage(error: unknown): string {
-    const fallbackMessage = this.translate.instant('coding.trainings.compare.discussion-save-error');
-    if (!(error instanceof HttpErrorResponse)) {
-      return fallbackMessage;
-    }
-
-    const responseMessage = error.error?.message;
-    const message = Array.isArray(responseMessage) ?
-      responseMessage.join(' ') :
-      responseMessage || error.message;
-
-    if (typeof message !== 'string' || !message.trim()) {
-      return fallbackMessage;
-    }
-
-    if (message.includes('Unsupported code for variable')) {
-      return this.translate.instant('coding.trainings.compare.discussion-code-unknown');
-    }
-
-    if (message.includes('Unsupported missing code')) {
-      return this.translate.instant('coding.trainings.compare.discussion-missing-code-unknown');
-    }
-
-    if (message.includes('Conflicting missing profiles')) {
-      return this.translate.instant('coding.trainings.compare.discussion-conflicting-profiles');
-    }
-
-    if (message.includes('Missing profile') && message.includes('not found')) {
-      return this.translate.instant('coding.trainings.compare.discussion-profile-unavailable');
-    }
-
-    if (message.includes('Coding scheme not found') || message.includes('Coding scheme variable not found')) {
-      return this.translate.instant('coding.trainings.compare.discussion-score-unavailable');
-    }
-
-    if (message.includes('Discussion code must be an integer')) {
-      return this.translate.instant('coding.trainings.compare.discussion-integer-required');
-    }
-
-    return message;
+  private discussionEditContext(): DiscussionEditContext | null {
+    const trainingId = this.selectedTrainingForWithin;
+    if (!this.contextActive || this.comparisonMode !== 'within-training' || !trainingId) return null;
+    const contextId = this.discussionContextId;
+    return {
+      workspaceId: this.data.workspaceId,
+      trainingId,
+      canEdit: () => this.canEditDiscussion,
+      isCurrent: () => this.contextActive && contextId === this.discussionContextId &&
+        this.comparisonMode === 'within-training' && this.selectedTrainingForWithin === trainingId,
+      rows: () => this.withinTrainingData
+    };
   }
 
   openApplyTrainingDiscussionResults(source: TrainingDiscussionApplySource): void {
@@ -1157,37 +981,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   private initDiscussionValues(data: WithinTrainingComparison[]): void {
-    const codes: Record<number, string> = {};
-    const scores: Record<number, number | null> = {};
-    const notes: Record<number, string> = {};
-    this.discussionErrorByResponseId.set({});
-    this.isSavingDiscussionByResponseId.set({});
-    this.pendingDiscussionNotesByResponseId = {};
-
-    const persistedManager = data.find(item => !!item.discussionManagerName)?.discussionManagerName;
-    if (persistedManager) {
-      this.discussionManagerLabel.set(persistedManager);
-    }
-
-    data.forEach(item => {
-      if (item.discussionCode !== null && item.discussionCode !== undefined) {
-        codes[item.responseId] = this.mapCodeForDisplay(item.discussionCode.toString());
-        scores[item.responseId] = item.discussionScore ?? this.getDiscussionScoreFromKnownCodes(item, item.discussionCode);
-        notes[item.responseId] = item.discussionNotes || '';
-      } else {
-        codes[item.responseId] = '';
-        scores[item.responseId] = null;
-        notes[item.responseId] = '';
-      }
-    });
-    this.discussionCodeByResponseId.set(codes);
-    this.discussionScoreByResponseId.set(scores);
-    this.discussionNotesByResponseId.set(notes);
-  }
-
-  private isRecoverableDiscussionAuthError(error: unknown): boolean {
-    return error instanceof AuthRefreshUnavailableError || !!getAuthProviderFailureCode(error) || this.appService.needsReAuthentication ||
-      (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403));
+    this.discussionEditor.initialize(data);
   }
 
   openReplay(comparison: TrainingComparison | WithinTrainingComparison): void {
@@ -1331,8 +1125,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     // A -> B -> A is a different editing session. Accepted server writes may
     // finish, but their responses cannot replace drafts in the new cohort.
     this.discussionContextId += 1;
-    this.isSavingDiscussionByResponseId.set({});
-    this.pendingDiscussionNotesByResponseId = {};
+    this.discussionEditor.resetPending();
   }
 
   onModeChange(): void {
@@ -1844,24 +1637,13 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
     data: Pick<ReplayCodeSelectedMessage, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
   ): WithinTrainingComparison | null { return findReplayRow(this.withinTrainingData, data); }
 
-  private getDiscussionScoreOverride(responseId: number): number | null | undefined {
-    return Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId(), responseId) ?
-      this.discussionScoreByResponseId()[responseId] :
-      undefined;
-  }
-
   private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
     if (this.comparisonMode !== 'within-training') return;
 
     const row = this.findWithinTrainingReplayRow(data);
 
     if (row) {
-      this.discussionCodeByResponseId.update(current => ({ ...current, [row.responseId]: this.mapCodeForDisplay(data.code) }));
-      this.discussionScoreByResponseId.update(current => ({ ...current, [row.responseId]: data.score !== undefined ? data.score : this.getDiscussionScoreFromKnownCodes(row, parseInt(data.code, 10)) }));
-      if (Object.prototype.hasOwnProperty.call(data, 'notes')) {
-        this.discussionNotesByResponseId.update(current => ({ ...current, [row.responseId]: data.notes || '' }));
-      }
-      this.onDiscussionCodeBlur(row, data.score);
+      this.discussionEditor.selectReplayCode(row, data, this.discussionEditContext());
 
       this.snackBar.open(
         this.translate.instant('coding.trainings.compare.code-from-replay', { variable: data.variableId }),
@@ -1879,77 +1661,18 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const responseId = row.responseId;
-    const notes = data.notes || '';
-    this.discussionNotesByResponseId.update(current => ({ ...current, [responseId]: notes }));
-    this.discussionErrorByResponseId.update(current => ({ ...current, [responseId]: '' }));
-
-    const currentCode = (this.discussionCodeByResponseId()[responseId] || '').trim() ||
-      (row.discussionCode !== null && row.discussionCode !== undefined ? row.discussionCode.toString() : '');
-    if (!currentCode) {
-      return;
-    }
-
-    this.discussionCodeByResponseId.update(current => ({ ...current, [responseId]: currentCode }));
-    if (this.isSavingDiscussionByResponseId()[responseId]) {
-      this.pendingDiscussionNotesByResponseId[responseId] = notes;
-      return;
-    }
-
-    this.onDiscussionCodeBlur(row, this.getDiscussionScoreOverride(responseId));
+    this.discussionEditor.commitReplayNotes(row, data.notes || '', this.discussionEditContext());
   }
 
   private createTrainingDiscussionRecoveryDraft(): TrainingDiscussionRecoveryDraft | null {
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) return null;
-    return this.discussionRecovery.capture(this.data.workspaceId, this.selectedTrainingForWithin, this.withinTrainingData, {
-      codes: this.discussionCodeByResponseId(),
-      scores: this.discussionScoreByResponseId(),
-      notes: this.discussionNotesByResponseId(),
-      pendingNotes: this.pendingDiscussionNotesByResponseId,
-      saving: this.isSavingDiscussionByResponseId(),
-      errors: this.discussionErrorByResponseId()
-    });
+    return this.discussionEditor.capture(this.data.workspaceId, this.selectedTrainingForWithin, this.withinTrainingData);
   }
 
   private restoreTrainingDiscussionRecoveryDraft(): boolean {
-    const draft = this.discussionRecovery.peek();
-    if (!draft || !this.isTrainingDiscussionRecoveryDraftForCurrentContext(draft)) {
-      return false;
-    }
-    if (this.withinTrainingData.length === 0) {
-      return false;
-    }
-
-    let restoredAnyEntry = false;
-    draft.entries.forEach(entry => {
-      const row = this.withinTrainingData.find(item => item.responseId === entry.responseId);
-      if (!row) {
-        return;
-      }
-
-      restoredAnyEntry = true;
-      this.discussionCodeByResponseId.update(current => ({ ...current, [entry.responseId]: entry.codeValue }));
-      this.discussionScoreByResponseId.update(current => ({ ...current, [entry.responseId]: entry.score }));
-      this.discussionNotesByResponseId.update(current => ({ ...current, [entry.responseId]: entry.notes }));
-      this.discussionErrorByResponseId.update(current => ({ ...current, [entry.responseId]: '' }));
-      this.onDiscussionCodeBlur(row, entry.score);
-    });
-
-    return restoredAnyEntry;
-  }
-
-  private isTrainingDiscussionRecoveryDraftForCurrentContext(draft: TrainingDiscussionRecoveryDraft): boolean {
-    return this.comparisonMode === 'within-training' &&
-      this.discussionRecovery.matches(draft, this.data.workspaceId, this.selectedTrainingForWithin);
-  }
-
-  private saveTrainingDiscussionRecoveryDraft(draft: TrainingDiscussionRecoveryDraft): void {
-    this.discussionRecovery.save(draft);
-  }
-
-  private clearTrainingDiscussionRecoveryEntry(responseId: number): void {
-    if (this.comparisonMode === 'within-training') {
-      this.discussionRecovery.clearEntry(responseId, this.data.workspaceId, this.selectedTrainingForWithin);
-    }
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) return false;
+    return this.discussionEditor.restore(
+      this.data.workspaceId, this.selectedTrainingForWithin, this.withinTrainingData, this.discussionEditContext()
+    );
   }
 }

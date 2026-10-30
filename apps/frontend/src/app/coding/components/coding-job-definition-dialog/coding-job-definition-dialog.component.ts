@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule, FormControl } from '@angular/forms';
@@ -19,8 +19,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionChange, SelectionModel } from '@angular/cdk/collections';
 import {
-  catchError, firstValueFrom, merge, Observable, of, Subject, Subscription,
-  switchMap, takeUntil, timer
+  firstValueFrom, merge, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
 import { JobVariableSelectionComponent, JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
@@ -41,11 +40,9 @@ import {
   CodingJobBackendService
 } from '../../services/coding-job-backend.service';
 import {
-  DistributedCodingService,
-  DistributionCalculationResponse
+  DistributedCodingService
 } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
-import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
@@ -64,6 +61,8 @@ import {
   hasRecoverableDefinitionState, matchesDefinitionRecoveryContext, recoverBundle, recoverVariable
 } from './job-definition-recovery';
 import { JobVariableDataFacade } from './job-variable-data.facade';
+import { JobDefinitionCodersFacade } from './job-definition-coders.facade';
+import { JobDistributionPreviewFacade, JobDistributionPreviewRequest } from './job-distribution-preview.facade';
 import { JobVariableAvailability } from './job-variable-availability';
 import { JobVariableCasePolicy } from './job-variable-case-policy';
 import { reconcileVariableSelection, variableSelectionKey, variableUsageKey } from './job-variable-selection';
@@ -80,7 +79,7 @@ export {
   templateUrl: './coding-job-definition-dialog.component.html',
   styleUrls: ['./coding-job-definition-dialog.component.scss'],
   standalone: true,
-  providers: [CodingJobDefinitionPersistence, JobVariableDataFacade],
+  providers: [CodingJobDefinitionPersistence, JobVariableDataFacade, JobDefinitionCodersFacade, JobDistributionPreviewFacade],
   imports: [
     JobDistributionPreviewComponent,
     JobBundleSelectionComponent,
@@ -107,15 +106,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   private readonly destroyRef = inject(DestroyRef);
 
-  private changeDetectorRef = inject(ChangeDetectorRef);
   private codingJobBackendService = inject(CodingJobBackendService);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
-  private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
   private readonly codingJobService = inject(CodingJobService);
   private readonly persistence = inject(CodingJobDefinitionPersistence);
   private readonly variableData = inject(JobVariableDataFacade);
+  private readonly coderData = inject(JobDefinitionCodersFacade);
+  private readonly distributionPreview = inject(JobDistributionPreviewFacade);
   private readonly definitionRules = new CodingJobDefinitionRules();
   private testPersonCodingService = inject(TestPersonCodingService);
   private missingsProfileService = inject(MissingsProfileService);
@@ -167,11 +166,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private readonly visibleVariables = toSignal(this.dataSource.connect(), { requireSync: true });
 
   // Coders
-  readonly coders = signal<Coder[]>([]);
-  readonly isLoadingCoders = signal(false);
-  readonly availableCoders = signal<Coder[]>([]);
-  selectedCoders = this.createCoderSelectionModel();
-  protected readonly isLoadingAvailableCoders = signal(false);
+  readonly coders = this.coderData.assigned;
+  readonly isLoadingCoders = this.coderData.isLoadingAssigned;
+  readonly availableCoders = this.coderData.available;
+  protected readonly isLoadingAvailableCoders = this.coderData.isLoadingAvailable;
+
+  get selectedCoders(): SelectionModel<Coder> { return this.coderData.selection(); }
 
   // Variable bundles
   readonly variableBundles = signal<VariableBundle[]>([]);
@@ -204,7 +204,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private readonly variableAvailability = new JobVariableAvailability();
   private readonly variableCasePolicy = computed(() => new JobVariableCasePolicy(this.includeDeriveErrorInManualCoding()));
   private definitionDistributionSeed?: string;
-  private readonly distributionPreviewSummary = signal<DistributionPreviewSummary | null>(null);
+  private readonly distributionPreviewSummary = this.distributionPreview.summary;
   // Form and SelectionModel events invalidate one shared, memoized calculation.
   private readonly workloadRevision = signal(0);
   private readonly durationRevision = signal(0);
@@ -219,8 +219,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return new CodingWorkload(this.workloadInput(this.distributionPreviewSummary())).summarize(() => this.estimatedVariableCaseCounts());
   });
 
-  private readonly distributionPreviewRefresh$ = new Subject<void>();
-  private readonly distributionPreviewDebounceMs = 300;
   private selectionPreviewSubscription = new Subscription();
   readonly existingJobDefinitions = signal<JobDefinition[]>([]);
   protected readonly manualCodingScopeSummary = this.variableData.summary;
@@ -266,6 +264,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   });
 
   constructor() {
+    this.coderData.changed$.pipe(takeUntilDestroyed()).subscribe(() => this.queueDistributionPreviewRefresh());
+    this.coderData.availableFinished$.pipe(takeUntilDestroyed()).subscribe(() => {
+      this.availableCodersLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
+    });
     this.variableData.loaded$.pipe(takeUntilDestroyed()).subscribe(value => {
       this.variables.set(value);
       this.snapshotBaseAvailability(value);
@@ -308,17 +311,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     )
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.queueDistributionPreviewRefresh());
-    this.distributionPreviewRefresh$
-      .pipe(
-        switchMap(() => timer(this.distributionPreviewDebounceMs).pipe(
-          switchMap(() => this.loadDistributionPreview())
-        )),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(preview => {
-        this.distributionPreviewSummary.set(preview ? this.buildDistributionPreviewSummary(preview) : null);
-        this.changeDetectorRef.markForCheck();
-      });
     this.loadIncludeDeriveErrorSetting();
     this.loadVariableBundles();
     this.loadAvailableCoders();
@@ -490,16 +482,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   private restoreRecoveredCoders(coderConfigs: JobDefinitionCoderConfig[]): void {
-    const configByCoderId = new Map(
-      coderConfigs.map(config => [config.coderId, this.normalizeCoderCapacityPercent(config.capacityPercent)])
-    );
-    this.availableCoders.set(this.availableCoders().map(coder => ({
-      ...coder,
-      capacityPercent: configByCoderId.get(coder.id) ?? this.getCoderCapacityPercent(coder)
-    })));
-    this.selectedCoders = this.createCoderSelectionModel(
-      this.availableCoders().filter(coder => configByCoderId.has(coder.id))
-    );
+    this.coderData.restore(coderConfigs);
   }
 
   private findRecoveredVariable(savedVariable: CodingJobDefinitionRecoveryVariable): Variable {
@@ -537,9 +520,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.queueDistributionPreviewRefresh();
       })
     );
-    this.selectionPreviewSubscription.add(
-      this.selectedCoders.changed.subscribe(() => this.queueDistributionPreviewRefresh())
-    );
   }
 
   private queueDistributionPreviewRefresh(): void {
@@ -548,41 +528,30 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.distributionPreviewSummary.set(null);
-    this.changeDetectorRef.markForCheck();
-    this.distributionPreviewRefresh$.next();
+    this.distributionPreview.refresh(this.appService.selectedWorkspaceId, () => this.distributionPreviewRequest());
   }
 
-  private loadDistributionPreview(): Observable<DistributionCalculationResponse | null> {
+  private distributionPreviewRequest(): JobDistributionPreviewRequest | null {
     if (
       this.data.mode !== 'definition' ||
       this.hasInvalidDistributionPreviewControls() ||
       this.selectedCoders.selected.length === 0 ||
-      (
-        this.selectedVariableValues().length === 0 &&
-        this.selectedVariableBundles.selected.length === 0
-      )
+      (this.selectedVariableValues().length === 0 && this.selectedVariableBundles.selected.length === 0)
     ) {
-      return of(null);
+      return null;
     }
 
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return of(null);
-    }
-
-    return this.distributedCodingService.calculateDistribution(
-      workspaceId,
-      this.getSelectedDefinitionVariables(),
-      this.mapCodersForDistribution(this.getSelectedCodersForDistribution()),
-      this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingAbsolute),
-      this.sanitizeNumber(this.codingJobForm.getRawValue().doubleCodingPercentage),
-      this.getSelectedDefinitionVariableBundles(),
-      this.codingJobForm.getRawValue().caseOrderingMode,
-      this.sanitizeNumber(this.codingJobForm.getRawValue().maxCodingCases),
-      this.getDistributionSeed()
-    )
-      .pipe(catchError(() => of(null)));
+    const value = this.codingJobForm.getRawValue();
+    return {
+      variables: this.getSelectedDefinitionVariables(),
+      coders: this.coderData.distributionCoders(),
+      doubleCodingAbsolute: this.definitionRules.sanitizeNumber(value.doubleCodingAbsolute),
+      doubleCodingPercentage: this.definitionRules.sanitizeNumber(value.doubleCodingPercentage),
+      bundles: this.getSelectedDefinitionVariableBundles(),
+      caseOrderingMode: value.caseOrderingMode,
+      maxCodingCases: this.definitionRules.sanitizeNumber(value.maxCodingCases),
+      distributionSeed: this.getDistributionSeed()
+    };
   }
 
   private hasInvalidDistributionPreviewControls(): boolean {
@@ -592,36 +561,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       'caseOrderingMode',
       'maxCodingCases'
     ].some(controlName => this.codingJobForm.get(controlName)?.invalid);
-  }
-
-  private buildDistributionPreviewSummary(
-    preview: DistributionCalculationResponse
-  ): DistributionPreviewSummary {
-    return Object.values(preview.doubleCodingInfo || {}).reduce(
-      (summary, info) => {
-        const distinctCases = Number(info.distinctCases);
-        const doubleCodedCases = Number(info.doubleCodedCases || 0);
-        const singleCodedCasesAssigned = Number(info.singleCodedCasesAssigned);
-        const totalCases = Number.isFinite(distinctCases) ?
-          distinctCases :
-          doubleCodedCases + (Number.isFinite(singleCodedCasesAssigned) ? singleCodedCasesAssigned : 0);
-        const codingTasksTotal = Number(info.codingTasksTotal);
-
-        summary.totalCases += totalCases;
-        summary.doubleCodedCases += doubleCodedCases;
-        summary.totalCodingTasks += Number.isFinite(codingTasksTotal) ?
-          codingTasksTotal :
-          totalCases + doubleCodedCases;
-
-        return summary;
-      },
-      {
-        totalCases: 0,
-        doubleCodedCases: 0,
-        totalCodingTasks: 0,
-        tasksPerCoder: preview.tasksPerCoder
-      } as DistributionPreviewSummary
-    );
   }
 
   private loadIncludeDeriveErrorSetting(): void {
@@ -647,100 +586,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       });
   }
 
-  loadAvailableCoders(): void {
-    this.isLoadingAvailableCoders.set(true);
+  loadAvailableCoders(): void { this.coderData.loadAvailable(this.data); }
 
-    this.coderService.getCoders().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: coders => {
-        this.availableCoders.set(coders.map(coder => ({
-          ...coder,
-          capacityPercent: this.getInitialCoderCapacityPercent(coder.id)
-        })));
-        this.isLoadingAvailableCoders.set(false);
-        let assignedIds: number[] = [];
-        if (this.data.isEdit && this.data.codingJob?.assignedCoders) {
-          assignedIds = this.data.codingJob.assignedCoders;
-        } else if (this.coders() && this.coders().length > 0) {
-          assignedIds = this.coders().map(c => c.id);
-        }
-
-        if (assignedIds.length > 0) {
-          const preSelectedCoders = this.availableCoders().filter(c => assignedIds.includes(c.id));
-          this.selectedCoders = this.createCoderSelectionModel(preSelectedCoders);
-        } else {
-          this.selectedCoders = this.createCoderSelectionModel();
-        }
-        this.bindSelectionPreviewRefresh();
-        this.queueDistributionPreviewRefresh();
-        this.availableCodersLoadedForRecovery = true;
-        this.restoreDefinitionRecoveryDraft();
-      },
-      error: () => {
-        this.isLoadingAvailableCoders.set(false);
-        this.availableCodersLoadedForRecovery = true;
-        this.restoreDefinitionRecoveryDraft();
-      }
-    });
-  }
-
-  private getInitialCoderCapacityPercent(coderId: number): number {
-    const configuredCapacity = this.data.codingJob?.assignedCoderConfigs
-      ?.find(config => config.coderId === coderId)
-      ?.capacityPercent;
-
-    return this.normalizeCoderCapacityPercent(configuredCapacity);
-  }
-
-  private normalizeCoderCapacityPercent(value: unknown): number {
-    return this.definitionRules.normalizeCoderCapacityPercent(value);
-  }
-
-  getCoderCapacityPercent(coder: Coder): number {
-    return this.normalizeCoderCapacityPercent(coder.capacityPercent);
-  }
+  getCoderCapacityPercent(coder: Coder): number { return this.coderData.capacityPercent(coder); }
 
   updateCoderCapacityPercent(coder: Coder, value: unknown): void {
-    if (this.isReadOnly) {
-      return;
-    }
-
-    const capacityPercent = this.normalizeCoderCapacityPercent(value);
-    this.availableCoders.update(coders => coders.map(candidate => (candidate.id === coder.id ?
-      { ...candidate, capacityPercent } : candidate)));
-    const updatedCoder = this.availableCoders().find(candidate => candidate.id === coder.id);
-    this.selectedCoders = this.createCoderSelectionModel(this.selectedCoders.selected.map(candidate => (candidate.id === coder.id ?
-      updatedCoder || { ...candidate, capacityPercent } : candidate)));
-    this.bindSelectionPreviewRefresh();
-    this.queueDistributionPreviewRefresh();
+    if (!this.isReadOnly) this.coderData.updateCapacity(coder, value);
   }
 
-  getSelectedCoderConfigs(): JobDefinitionCoderConfig[] {
-    return this.selectedCoders.selected.map(coder => ({
-      coderId: coder.id,
-      capacityPercent: this.getCoderCapacityPercent(coder)
-    }));
-  }
-
-  private getSelectedCodersForDistribution(): Coder[] {
-    return this.selectedCoders.selected.map(coder => ({
-      ...coder,
-      capacityPercent: this.getCoderCapacityPercent(coder)
-    }));
-  }
-
-  private mapCodersForDistribution(coders: Coder[]): {
-    id: number;
-    name: string;
-    username: string;
-    capacityPercent: number;
-  }[] {
-    return coders.map(coder => ({
-      id: coder.id,
-      name: coder.name,
-      username: coder.name,
-      capacityPercent: this.normalizeCoderCapacityPercent(coder.capacityPercent)
-    }));
-  }
+  getSelectedCoderConfigs(): JobDefinitionCoderConfig[] { return this.coderData.selectedConfigs(); }
 
   loadExistingJobDefinitions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -780,24 +634,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.disabledVariableKeys.clear();
   }
 
-  loadCoders(jobId: number): void {
-    this.isLoadingCoders.set(true);
-
-    this.coderService.getCodersByJobId(jobId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: coders => {
-        this.coders.set(coders);
-        this.isLoadingCoders.set(false);
-        const assignedIds = coders.map(c => c.id);
-        const preSelectedCoders = this.availableCoders().filter(c => assignedIds.includes(c.id));
-        this.selectedCoders = this.createCoderSelectionModel(preSelectedCoders);
-        this.bindSelectionPreviewRefresh();
-        this.queueDistributionPreviewRefresh();
-      },
-      error: () => {
-        this.isLoadingCoders.set(false);
-      }
-    });
-  }
+  loadCoders(jobId: number): void { this.coderData.loadAssigned(jobId); }
 
   initForm(): void {
     this.codingJobForm = createCodingJobForm({
@@ -885,10 +722,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       true,
       (first, second) => this.getVariableSelectionKey(first) === this.getVariableSelectionKey(second)
     );
-  }
-
-  private createCoderSelectionModel(initiallySelectedValues: Coder[] = []): SelectionModel<Coder> {
-    return new SelectionModel<Coder>(true, initiallySelectedValues, true, (first, second) => first.id === second.id);
   }
 
   private createBundleSelectionModel(initiallySelectedValues: VariableBundle[] = []): SelectionModel<VariableBundle> {
@@ -1560,7 +1393,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const baseData: BulkCreationData = {
       selectedVariables: this.selectedVariableValues(),
       selectedVariableBundles: this.selectedVariableBundles.selected,
-      selectedCoders: this.getSelectedCodersForDistribution(),
+      selectedCoders: this.coderData.selectedCoders(),
       doubleCodingAbsolute: this.codingJobForm.getRawValue().doubleCodingAbsolute,
       doubleCodingPercentage: this.codingJobForm.getRawValue().doubleCodingPercentage,
       caseOrderingMode: this.codingJobForm.getRawValue().caseOrderingMode,
@@ -1619,7 +1452,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     try {
-      const mappedCoders = this.mapCodersForDistribution(data.selectedCoders);
+      const mappedCoders = this.coderData.distributionCoders(data.selectedCoders);
       const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
@@ -1994,10 +1827,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     this.clearDefinitionRecoveryDraft();
     this.dialogRef.close();
-  }
-
-  private sanitizeNumber(value: unknown): number | undefined {
-    return this.definitionRules.sanitizeNumber(value);
   }
 
   private getErrorMessage(error: unknown): string {

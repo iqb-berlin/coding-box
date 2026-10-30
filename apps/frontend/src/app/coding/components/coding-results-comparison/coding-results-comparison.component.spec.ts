@@ -27,6 +27,7 @@ import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-ref
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { TrainingReliabilityFacade } from './training-reliability.facade';
 import { KappaStatistics } from './training-reliability';
+import { TrainingDiscussionEditorFacade } from './training-discussion-editor.facade';
 
 describe('CodingResultsComparisonComponent', () => {
   const comparisonSummary = (visibleRows: number) => ({
@@ -80,6 +81,9 @@ describe('CodingResultsComparisonComponent', () => {
 
   let component: CodingResultsComparisonComponent;
   let fixture: ComponentFixture<CodingResultsComparisonComponent>;
+  const setDiscussionDraft = (responseId: number, patch: { codeValue?: string; score?: number | null; notes?: string }): void => {
+    fixture.debugElement.injector.get(TrainingDiscussionEditorFacade).patchDraft(responseId, patch);
+  };
   let codingTrainingBackendService: {
     getCoderTrainings: jest.Mock;
     compareTrainingCodingResults: jest.Mock;
@@ -936,7 +940,7 @@ describe('CodingResultsComparisonComponent', () => {
     component.selectedTrainingForWithin = 1;
     component.availableCoders = [{ jobId: 1, coderName: 'Coder1' }];
     component.codersFormControl.setValue([1]);
-    component.discussionManagerLabel.set('manager@example.invalid');
+    fixture.debugElement.injector.get(TrainingDiscussionEditorFacade).setManagerLabel('manager@example.invalid');
     component.withinTrainingData = [
       {
         responseId: 1,
@@ -1556,8 +1560,8 @@ describe('CodingResultsComparisonComponent', () => {
     ];
     component.dataSource.data = component.withinTrainingData;
     component.calculateStatistics();
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { score: 2 });
 
     (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
     fixture.detectChanges();
@@ -1593,8 +1597,8 @@ describe('CodingResultsComparisonComponent', () => {
     };
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { score: 2 });
 
     component.onDiscussionCodeBlur(row);
 
@@ -1690,8 +1694,8 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.withinTrainingData = [row];
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { score: 2 });
 
     (component as unknown as {
       handleReplayNotesCommitted: (data: {
@@ -1919,8 +1923,8 @@ describe('CodingResultsComparisonComponent', () => {
       error: { message: 'Unsupported code for variable Var1: 7' }
     }));
 
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionNotesByResponseId.update(current => ({ ...current, 1: '' }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { notes: '' });
     component.onDiscussionCodeBlur(row, 2);
 
     expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledTimes(2);
@@ -2021,7 +2025,7 @@ describe('CodingResultsComparisonComponent', () => {
     })));
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '999' }));
+    setDiscussionDraft(1, { codeValue: '999' });
 
     component.onDiscussionCodeBlur(row);
 
@@ -2053,9 +2057,9 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.withinTrainingData = [row];
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
-    component.discussionNotesByResponseId.update(current => ({ ...current, 1: 'Replay note' }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { score: 2 });
+    setDiscussionDraft(1, { notes: 'Replay note' });
 
     component.onDiscussionCodeBlur(row, 2);
 
@@ -2096,9 +2100,9 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.withinTrainingData = [row];
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '7' }));
-    component.discussionScoreByResponseId.update(current => ({ ...current, 1: 2 }));
-    component.discussionNotesByResponseId.update(current => ({ ...current, 1: 'Replay note' }));
+    setDiscussionDraft(1, { codeValue: '7' });
+    setDiscussionDraft(1, { score: 2 });
+    setDiscussionDraft(1, { notes: 'Replay note' });
 
     component.onDiscussionCodeBlur(row, 2);
 
@@ -2481,7 +2485,7 @@ describe('CodingResultsComparisonComponent', () => {
     };
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.discussionCodeByResponseId.update(current => ({ ...current, 1: '' }));
+    setDiscussionDraft(1, { codeValue: '' });
 
     component.onDiscussionCodeBlur(row);
 
@@ -3097,7 +3101,7 @@ describe('CodingResultsComparisonComponent', () => {
     const row = {
       responseId: 501, unitName: 'U', variableId: 'V', coders: []
     };
-    component.discussionCodeByResponseId.set({ 501: '1' });
+    setDiscussionDraft(501, { codeValue: '1' });
     component.onDiscussionCodeBlur(row);
     expect(component.isSavingDiscussionByResponseId()[501]).toBe(true);
 
@@ -3106,8 +3110,8 @@ describe('CodingResultsComparisonComponent', () => {
     owner.onTrainingForWithinChange();
     component.selectedTrainingForWithin = 5;
     owner.onTrainingForWithinChange();
-    component.discussionCodeByResponseId.set({ 501: '9' });
-    component.discussionNotesByResponseId.set({ 501: 'Current draft' });
+    setDiscussionDraft(501, { codeValue: '9' });
+    setDiscussionDraft(501, { notes: 'Current draft' });
     const feedback = snackBar.open.mock.calls.length;
     if (outcome === 'success') {
       delayed.next({
@@ -3131,7 +3135,7 @@ describe('CodingResultsComparisonComponent', () => {
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.loadComparison();
-    component.discussionCodeByResponseId.set({ 501: '1' });
+    setDiscussionDraft(501, { codeValue: '1' });
     component.onDiscussionCodeBlur({
       responseId: 501, unitName: 'U', variableId: 'V', coders: []
     });

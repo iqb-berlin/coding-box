@@ -166,6 +166,52 @@ describe('Zoneless training comparison', () => {
     });
   });
 
+  it('saves the latest replay notes after the pending code write without replacing the explicit score', () => {
+    const codeGate = createResponseGate();
+    const notesGate = createResponseGate();
+    const writes: Array<{ responseId: number; code: number; score: number; notes: string | null }> = [];
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', async request => {
+      writes.push(request.body);
+      request.alias = writes.length === 1 ? 'codeWrite' : 'notesWrite';
+      await (writes.length === 1 ? codeGate.wait : notesGate.wait);
+      request.reply({ body: {
+        success: true, code: request.body.code, score: request.body.score, notes: request.body.notes,
+        managerUserId: 2, managerName: 'Discussion manager', source: 'manual'
+      } });
+    });
+    openComparison();
+    const reference = { responseId: 501, testPerson: 'synthetic-person@P001@GROUP', unitId: 'UNIT', variableId: 'VAR' };
+    cy.window().then(win => {
+      win.postMessage({ type: 'replayCodeSelected', ...reference, code: '2', score: 4 }, win.location.origin);
+    });
+    cy.wrap(null).should(() => { expect(writes).to.have.length(1); });
+    cy.get('@dialog').find('.discussion-input input').should('have.value', '2');
+    cy.get('@dialog').find('.discussion-saving').scrollIntoView().should('be.visible');
+    cy.window().then(win => {
+      win.postMessage({ type: 'replayNotesCommitted', ...reference, notes: 'Earlier note' }, win.location.origin);
+      win.postMessage({ type: 'replayNotesCommitted', ...reference, notes: 'Latest replay note' }, win.location.origin);
+    });
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.then(() => {
+      expect(writes).to.deep.equal([{ responseId: 501, code: 2, score: 4, notes: null }]);
+      codeGate.release();
+    });
+    cy.wait('@codeWrite');
+    cy.wrap(null).should(() => { expect(writes).to.have.length(2); });
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.get('@dialog').find('.discussion-saving').scrollIntoView().should('be.visible');
+    cy.then(() => {
+      expect(writes[1]).to.deep.equal({ responseId: 501, code: 2, score: 4, notes: 'Latest replay note' });
+      notesGate.release();
+    });
+    cy.wait('@notesWrite');
+    cy.get('@dialog').find('.discussion-saving').should('not.exist');
+    cy.get('@dialog').find('.discussion-score').should('contain.text', '4');
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.get('@dialog').find('.discussion-error').should('not.exist');
+    cy.then(() => { expect(writes).to.have.length(2); });
+  });
+
   it('finishes a pending reliability export after changing the comparison page', () => {
     let exportId: string;
     let exportsStarted = 0;
