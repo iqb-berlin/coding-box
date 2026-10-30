@@ -13,7 +13,7 @@ Redis 7.4.2, npm 11.19.1, Nx 22.7.12, Jest 30.5.2, ts-jest 29.4.15.
 | Implementierung | Auf eigenständigem Branch vorbereitet |
 | Zusammenführung | Nicht erfolgt; #1138 ist die Voraussetzung |
 | Release / Deployment einer Testinstanz | Nicht erfolgt |
-| Technische Prüfung | Lokale Ergebnisse unten; Browser-/Containerprüfung noch in Arbeit |
+| Technische Prüfung | Native Builds, isolierter Produktionsstart und Browserfälle bestanden; Linux-Containerbuild lokal blockiert |
 | Fachliche Abnahme | Nicht erfolgt; dieser Bericht ist keine fachliche Freigabe |
 
 Es werden keine bestehenden Abnahmen aufgehoben und keine Tickets geschlossen.
@@ -40,12 +40,25 @@ Frontend-Prüfung lief nicht parallel zu einer Backend-Prüfung.
 | Nest-/Jest-Peer-Abhängigkeiten | Bestanden | `npm ls` ohne ungültige oder fehlende Peers |
 | Frontend-Vollsuite | Bestanden | 3.657 Tests in 324 Suites; keine übersprungenen Tests |
 | Frontend-Produktionsbuild | Bestanden | Angular 21 unverändert, Build unter Node 24.22.1 |
-| Frontend-Qualitätsgates | Noch nicht abgeschlossen | Laufende Prüfung |
-| Browser-/Containerprüfung | Noch nicht abgeschlossen | Ausstehend |
+| Frontend-Qualitätsgates | Bestanden | Alle 52 Prüfungen, einschließlich Weitergabe der CI-Konfiguration an den ESM-Teststarter |
+| Browser-Workflows | Bestanden | 10/10 Fälle, keine übersprungen; echte Rollen-Anmeldung, Upload/Kodierung/Export, Audit-Rollback und Queue-Isolation |
+| Vollständiger Linux-Containerbuild | Blockiert | Eigener Imagebau wegen weniger als 1 GiB freiem Hostspeicher kontrolliert abgebrochen; vor Browserstart, kein Erfolg behauptet |
 | Remote-CI | Noch nicht geprüft | Separat vom lokalen Nachweis zu bewerten |
 
 Der geprüfte native Produktionsbuild hat SHA-256
 `ee335a4b4b49a4a2674d851d59484ecf2c09e41f3b0b13986aa412efe048ed58`.
+Der Browserlauf verwendete den Implementierungscommit
+`57e9e31f3ef33665071a276f48fae99ac34eb463` und denselben Backend-Build.
+Ein temporärer Adapter startete die nativen Produktionsbuilds, einen lokalen
+Static-/API-Proxy sowie ausschließlich vorhandene PostgreSQL-/Redis-/Keycloak-
+Images. Die unveränderten Cypress-Fixtures und Assertions wurden mit Electron
+138 / Cypress 15.21.1 unter Node 24.22.1 ausgeführt. Die Schutzprüfungen der
+Fixtures blieben aktiv. Die erfolgreiche Wiederholung führte alle zehn Fälle
+erneut aus. Alle eigenen Container und Testprozesse wurden danach beendet;
+fremde Caches, Images und Volumes wurden nicht gelöscht.
+
+Der SHA-256 der unveränderten Workflow-Konfiguration lautet
+`6666295418fb1afa54c70c7cf61061d6eb266705aae6b64aa6ae4cd74608f899`.
 Die lokale Evidenz liegt im verwendeten Checkout unter `tmp/nest12-tools/`
 (Logs und `runtime-proof/report.json`); sie wird nicht als Quellcode eingecheckt.
 
@@ -118,3 +131,14 @@ Der letzte Aufruf benötigt Docker/Compose und erstellt eine eigene Umgebung
 mit PostgreSQL, Redis und Keycloak. Er verwendet synthetische Daten und entfernt
 anschließend nur die zu dieser Umgebung gehörenden Ressourcen. Erwartet:
 alle Browserfälle ausgeführt und bestanden, keine übersprungenen Fälle.
+
+## Offene technische Prüfung
+
+Der native Runtime-Nachweis ersetzt keinen Linux-Containerbuild. Der reguläre
+`frontend:e2e-workflows`-Aufruf wurde bereits beim Imagebau aus Speichergründen
+abgebrochen. Die erfolgreiche Browserprüfung verwendete deshalb den oben
+beschriebenen Adapter und die bestehenden Images; sie belegt nicht den Bau
+der angepassten Produktions-Dockerfiles. Builder-/Runtime-Images und frische
+native Linux-Abhängigkeiten müssen in CI oder auf einem Rechner mit ausreichend
+Speicher geprüft werden. Bis zu einem grünen Ergebnis ist dieser Punkt offen.
+Ein Release oder eine fachliche Freigabe wird daraus nicht abgeleitet.
