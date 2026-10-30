@@ -330,6 +330,7 @@ describe('TestResultsComponent', () => {
           provide: ValidationTaskStateService,
           useValue: {
             getValidationStatus: jest.fn().mockReturnValue(of({})),
+            invalidateWorkspace: jest.fn(),
             getAllTaskIds: jest.fn().mockReturnValue({}),
             getAllValidationResults: jest.fn().mockReturnValue({}),
             observeTaskIds: jest.fn().mockReturnValue(of({})),
@@ -1119,8 +1120,36 @@ describe('TestResultsComponent', () => {
 
     component.deleteResponse(response as never);
 
+    expect(component.responses()).toEqual([]);
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('clears selection without requesting workspace zero when the workspace is deselected', () => {
+    const service = TestBed.inject(TestResultService) as unknown as { getTestResults: jest.Mock };
+    service.getTestResults.mockClear(); appService.selectedWorkspaceId = 0; appService.selectedWorkspaceId$.next(0);
+    expect(service.getTestResults).not.toHaveBeenCalled(); expect(component.selection.selected).toEqual([]);
+    expect(component.dataSource.data).toEqual([]); expect(component.testPerson()).toBeNull();
+  });
+
+  it('clears old workspace rows and selection and blocks deletion until the new list is loaded', () => {
+    const service = TestBed.inject(TestResultService) as unknown as { getTestResults: jest.Mock; previewDeleteTestResults: jest.Mock };
+    const oldPerson = {
+      id: 7, code: 'OLD', group: 'G1', login: 'L1', uploaded_at: new Date()
+    };
+    const newPerson = { ...oldPerson, id: 99, code: 'NEW' };
+    service.getTestResults.mockReturnValueOnce(of({ data: [oldPerson], total: 1 }));
+    component.createTestResultsList(0, 50, 'old filter'); component.selection.select(component.dataSource.data[0]);
+    component.testPerson.set(oldPerson);
+    const pending = new Subject<{ data: typeof newPerson[]; total: number }>();
+    service.getTestResults.mockReturnValueOnce(pending); service.previewDeleteTestResults = jest.fn().mockReturnValue(of(null));
+    appService.selectedWorkspaceId = 2; appService.selectedWorkspaceId$.next(2);
+    expect(component.selection.selected).toEqual([]); expect(component.dataSource.data).toEqual([]); expect(component.testPerson()).toBeNull();
+    expect(service.getTestResults).toHaveBeenLastCalledWith(2, 0, 50, '');
+    const view = component as unknown as { deleteSelectedPersons(): void };
+    view.deleteSelectedPersons(); expect(service.previewDeleteTestResults).not.toHaveBeenCalled();
+    pending.next({ data: [newPerson], total: 1 }); pending.complete(); component.selection.select(component.dataSource.data[0]);
+    view.deleteSelectedPersons(); expect(service.previewDeleteTestResults).toHaveBeenCalledWith(2, { scope: 'persons', personIds: [99] });
   });
 
   it('should refresh overview and coding state after flat-table response deletion', () => {
@@ -1445,7 +1474,7 @@ describe('TestResultsComponent', () => {
   it.each(['destroy', 'workspace'])('cancels the initial Testcenter overview and never opens a late dialog on %s', async reason => {
     const reply = new Subject<unknown>();
     const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
-    service.getWorkspaceOverview.mockReturnValue(reply);
+    service.getWorkspaceOverview.mockReturnValueOnce(reply);
     const pending = component.testCenterImport();
     expect(reply.observed).toBe(true);
     if (reason === 'destroy') fixture.destroy();

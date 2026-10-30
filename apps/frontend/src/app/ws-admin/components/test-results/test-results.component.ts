@@ -51,9 +51,12 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   debounceTime, finalize,
-  Subject, Subscription,
-  takeUntil
+  Subject, Subscription
 } from 'rxjs';
+import {
+  Booklet, BookletLog, TestResultPerson as P, Response, Unit, UnitResult
+} from './test-results.models';
+import { TestResultsDetailsFacade } from './test-results-details.facade';
 import { TestResultsDeletionFacade } from './test-results-deletion.facade';
 import { TestResultsExportFacade } from './test-results-export.facade';
 import { TestResultsImportDialogComponent } from './test-results-import-dialog.component';
@@ -71,28 +74,20 @@ import {
   TestPersonCodingService
 } from '../../../coding/services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
-import { ResponseService } from '../../../shared/services/response/response.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import {
   LogAnomalyDetailRow,
-  PersonTestResult, QuickSearchResultItem,
+  QuickSearchResultItem,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
-import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
-import { UnitService } from '../../../shared/services/unit/unit.service';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
-import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import {
   UnitsReplay,
   UnitsReplayService
 } from '../../../replay/services/units-replay.service';
-import {
-  ConfirmDialogComponent,
-  ConfirmDialogData
-} from '../../../shared/dialogs/confirm-dialog.component';
 import {
   ValidationTaskStateService,
   ValidationType
@@ -129,90 +124,11 @@ import {
 } from '../../services/test-results-upload-state.service';
 import type { FlatResponseFilters } from './test-results-flat-table.component';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
-import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
 
-import { TestResultsDeleteRequestDto, TestResultsResponseCleanupRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import { TestResultsDeleteRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
-
-interface BookletLog {
-  id: number;
-  bookletid: number;
-  ts: string;
-  parameter: string;
-  key: string;
-}
-
-interface BookletSession {
-  id: number;
-  browser: string;
-  os: string;
-  screen: string;
-  ts: string;
-}
-
-interface UnitResult {
-  id: number;
-  unitid: number;
-  variableid: string;
-  status: string;
-  value: string;
-  subform: string;
-  code?: number;
-  score?: number;
-  codedstatus?: string;
-}
-
-interface UnitLog {
-  id: number;
-  unitid: number;
-  ts: string;
-  key: string;
-  parameter: string;
-}
-
-interface Unit {
-  id: number;
-  bookletid: number;
-  name: string;
-  alias: string | null;
-  results: UnitResult[];
-  logs: UnitLog[];
-  tags: UnitTagDto[];
-}
-
-interface Booklet {
-  id: number;
-  personid: number;
-  name: string;
-  title?: string;
-  size: number;
-  logs: BookletLog[];
-  sessions?: BookletSession[];
-  units: Unit[];
-}
-
-interface Response {
-  id: number;
-  unitid: number;
-  variableid: string;
-  status: string;
-  value: string;
-  subform: string;
-  code?: number;
-  score?: number;
-  codedstatus?: string;
-  expanded?: boolean;
-}
-
-interface P {
-  id: number;
-  code: string;
-  group: string;
-  login: string;
-  uploaded_at: Date;
-}
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -220,7 +136,7 @@ interface P {
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],
   standalone: true,
-  providers: [TestResultsSummaryFacade, TestResultsDeletionFacade, TestResultsStatisticsFacade, TestResultsImportFacade, TestResultsExportFacade,
+  providers: [TestResultsSummaryFacade, TestResultsDeletionFacade, TestResultsDetailsFacade, TestResultsStatisticsFacade, TestResultsImportFacade, TestResultsExportFacade,
     DatePipe,
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ],
@@ -264,19 +180,15 @@ interface P {
 export class TestResultsComponent implements OnInit, OnDestroy {
   private readonly statistics = inject(TestResultsStatisticsFacade);
   private readonly summary = inject(TestResultsSummaryFacade);
+  private readonly details = inject(TestResultsDetailsFacade);
   private readonly deletion = inject(TestResultsDeletionFacade);
   private readonly imports = inject(TestResultsImportFacade);
   private readonly exports = inject(TestResultsExportFacade);
-  private readonly selectedResultRequestsCancelled = new Subject<void>();
-  private unitNotesRequest?: Subscription;
 
   private dialog = inject(MatDialog);
 
   private validationService = inject(ValidationService);
-  private unitNoteService = inject(UnitNoteService);
   private fileService = inject(FileService);
-  private responseService = inject(ResponseService);
-  private unitService = inject(UnitService);
   private uploadStateService = inject(TestResultsUploadStateService);
   private statisticsService = inject(CodingStatisticsService);
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -314,20 +226,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly quickSearchTableFilters = signal<Partial<FlatResponseFilters> | null>(null);
   readonly forceShowLogAnomalyTableColumn = signal(false);
   data: P[] = [];
-  readonly booklets = signal<Booklet[]>([]);
+  readonly booklets = this.details.booklets;
   results: { [key: string]: unknown }[] = [];
-  readonly responses = signal<Response[]>([]);
-  readonly logs = signal<UnitLog[]>([]);
-  readonly bookletLogs = signal<{
-    [key: string]: unknown;
-  }[]>([]);
+  readonly responses = this.details.responses;
+  readonly logs = this.details.logs;
+  readonly bookletLogs = this.details.bookletLogs;
 
   protected readonly totalRecords = signal<number>(0);
   protected readonly pageSize = signal<number>(50);
   protected readonly pageIndex = signal<number>(0);
-  readonly selectedUnit = signal<Unit | undefined>(undefined);
-  readonly testPerson = signal<P | null>(null);
-  protected readonly selectedBooklet = signal<Booklet | string>('');
+  readonly selectedUnit = this.details.selectedUnit;
+  readonly testPerson = this.details.testPerson;
+  protected readonly selectedBooklet = this.details.selectedBooklet;
   protected readonly isLoading = signal<boolean>(true);
   protected readonly testResultsLoadFailed = signal(false);
   protected readonly isUploadingResults = this.imports.isUploadingResults;
@@ -335,15 +245,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   protected readonly isPersonListCurrent = computed(() => !this.isLoading() && !this.testResultsLoadFailed() &&
     this.personSearchText().trim() === this.appliedPersonSearchText());
 
-  readonly isLoadingBooklets = signal<boolean>(false);
+  readonly isLoadingBooklets = this.details.isLoadingBooklets;
   protected readonly isDeletingTestPersons = this.deletion.isDeletingTestPersons;
   readonly activeDeleteTask = this.deletion.activeDeleteTask;
+  protected readonly canRetryDeletion = this.deletion.canRetry;
+  protected readonly deletionRetryLabelKey = this.deletion.retryLabelKey;
+
+  protected retryDeletion(): void { this.deletion.retry(); }
   protected readonly deleteProgress = this.deletion.deleteProgress;
   protected readonly deleteProgressMessage = this.deletion.deleteProgressMessage;
-  readonly unitTags = signal<UnitTagDto[]>([]);
-  readonly unitTagsMap = signal<Map<number, UnitTagDto[]>>(new Map());
-  readonly unitNotes = signal<UnitNoteDto[]>([]);
-  readonly unitNotesMap = signal<Map<number, UnitNoteDto[]>>(new Map());
+  readonly unitTags = this.details.unitTags;
+  readonly unitTagsMap = this.details.unitTagsMap;
+  readonly unitNotes = this.details.unitNotes;
+  readonly unitNotesMap = this.details.unitNotesMap;
   readonly isVariableValidationRunning = signal<boolean>(false);
   readonly variableValidationResult = signal<VariableValidationDto | null>(null);
   readonly SHORT_PROCESSING_TIME_THRESHOLD_MS: number = 60000;
@@ -387,10 +301,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.deletion.resetDetails$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.resetSelectedResultDetails());
     this.deletion.selectionCleared$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.selection.clear());
-    this.deletion.changed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+    this.deletion.changed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(change => {
+      if (change.scope === 'unit') this.details.removeUnit(change.unitId, change.bookletId);
+      if (change.scope === 'response') this.details.removeResponse(change.responseId);
       this.loadWorkspaceOverview();
       this.refreshCodingFreshnessStatusAfterChange();
-      this.createTestResultsList(this.pageIndex(), this.pageSize(), this.getCurrentSearchText());
+      if (change.scope === 'workspace') this.createTestResultsList(this.pageIndex(), this.pageSize(), this.getCurrentSearchText());
     });
     this.imports.loadingChanged$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(value => this.isLoading.set(value));
     this.imports.imported$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
@@ -398,9 +314,31 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.refreshCodingFreshnessStatusAfterChange();
       this.createTestResultsList(this.pageIndex(), this.pageSize(), this.getCurrentSearchText());
     });
-    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+    let workspaceId = this.appService.selectedWorkspaceId;
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id === workspaceId) return;
+      workspaceId = id;
       this.resetSelectedResultDetails();
-      this.testPerson.set(null);
+      this.selection.clear();
+      this.data = [];
+      this.dataSource = new MatTableDataSource<P>([]);
+      this.quickSearchTableFilters.set(null);
+      this.forceShowLogAnomalyTableColumn.set(false);
+      this.totalRecords.set(0);
+      this.isSearching.set(false);
+      if (!id) {
+        this.testResultsRequestGeneration += 1;
+        this.personSearchText.set('');
+        this.appliedPersonSearchText.set(null);
+        this.isLoading.set(false);
+        return;
+      }
+      this.createTestResultsList(0, this.pageSize(), '');
+      this.loadRegexSearchSetting();
+      this.loadTestResultsLogAnomalySetting();
+      this.loadCodingStatusAutoRefreshSetting();
+      this.loadWorkspaceOverview();
+      this.exports.checkExistingExportJobs();
     });
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME))
@@ -587,132 +525,21 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return 'not-run';
   }
 
-  onRowClick(row: P): void {
-    this.resetSelectedResultDetails();
-    this.testPerson.set(row);
-    this.isLoadingBooklets.set(true);
-    this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id).pipe(
-        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
-      )
-      .subscribe({
-        next: (booklets: PersonTestResult[]) => {
-          this.selectedBooklet.set('');
-          this.booklets.set(booklets as unknown as Booklet[]);
-          this.sortBooklets();
-          this.sortBookletUnits();
-          this.loadAllUnitTags();
-          this.loadAllUnitNotes();
-          this.isLoadingBooklets.set(false);
-        },
-        error: () => {
-          this.isLoadingBooklets.set(false);
-        }
-      });
-  }
+  onRowClick(row: P): void { return this.details.onRowClick(row); }
 
-  sortBooklets(): void {
-    if (!this.booklets() || this.booklets().length === 0) {
-      return;
-    }
-    this.booklets.update(value => {
-      const next = [...value];
-      next.sort((a, b) => {
-        const nameA = a.name || '';
-        const nameB = b.name || '';
-        return nameA.localeCompare(nameB);
-      });
-      return next;
-    });
-  }
+  sortBooklets(): void { return this.details.sortBooklets(); }
 
-  sortBookletUnits(): void {
-    if (!this.booklets() || this.booklets().length === 0) {
-      return;
-    }
-
-    this.booklets.update(booklets => booklets.map(booklet => {
-      if (booklet.units && Array.isArray(booklet.units)) {
-        const units = [...booklet.units].sort((a, b) => {
-          const aliasA = a.alias || a.name || '';
-          const aliasB = b.alias || b.name || '';
-          return aliasA.localeCompare(aliasB);
-        });
-        return { ...booklet, units };
-      }
-      return booklet;
-    }));
-  }
+  sortBookletUnits(): void { return this.details.sortBookletUnits(); }
 
   protected getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap().get(unitId) || [];
   }
 
-  toggleResponseExpansion(responseId: number): void {
-    this.responses.update(responses => responses.map(response => (response.id === responseId ? {
-      ...response, expanded: !response.expanded
-    } : response)));
-  }
+  toggleResponseExpansion(responseId: number): void { return this.details.toggleResponseExpansion(responseId); }
 
-  loadAllUnitTags(): void {
-    if (!this.booklets() || this.booklets().length === 0) {
-      return;
-    }
-    const next = new Map<number, UnitTagDto[]>();
-    this.booklets().forEach(booklet => {
-      if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.forEach(unit => {
-          if (unit.id && unit.tags) {
-            next.set(unit.id, unit.tags);
-          }
-        });
-      }
-    });
-    this.unitTagsMap.set(next);
-  }
+  loadAllUnitTags(): void { return this.details.loadAllUnitTags(); }
 
-  loadAllUnitNotes(): void {
-    this.unitNotesRequest?.unsubscribe();
-    if (!this.booklets() || this.booklets().length === 0) {
-      return;
-    }
-    this.unitNotesMap.set(new Map());
-    const unitIds: number[] = [];
-    this.booklets().forEach(booklet => {
-      if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.forEach(unit => {
-          if (unit.id) {
-            unitIds.push(unit.id);
-          }
-        });
-      }
-    });
-
-    if (unitIds.length === 0) {
-      return;
-    }
-
-    this.unitNotesRequest = this.unitNoteService
-      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds).pipe(
-        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)
-      )
-      .subscribe({
-        next: notesByUnitId => {
-          this.unitNotesMap.update(value => {
-            const next = new Map(value);
-            Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-              next.set(Number(unitId), notes as UnitNoteDto[]);
-            });
-            return next;
-          });
-        },
-        error: () => {
-          this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
-            duration: 3000
-          });
-        }
-      });
-  }
+  loadAllUnitNotes(): void { return this.details.loadAllUnitNotes(); }
 
   replayBooklet(booklet: Booklet) {
     if (!booklet || !booklet.name) {
@@ -966,76 +793,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected onUnitClick(unit: Unit, booklet: Booklet): void {
-    const mappedResponses = unit.results.map((response: UnitResult) => ({
-      ...response,
-      status: response.status,
-      expanded: false
-    }));
-    this.responses.set(Array.from(mappedResponses));
-    this.selectedBooklet.set(booklet.name);
+  protected onUnitClick(unit: Unit, booklet: Booklet): void { return this.details.onUnitClick(unit, booklet); }
 
-    this.responses.update(value => {
-      const next = [...value];
-      next.sort((a: Response, b: Response) => {
-        if (a.status === 'VALUE_CHANGED' && b.status !== 'VALUE_CHANGED') {
-          return -1;
-        }
-        if (a.status !== 'VALUE_CHANGED' && b.status === 'VALUE_CHANGED') {
-          return 1;
-        }
-        return a.variableid.localeCompare(b.variableid);
-      });
-      return next;
-    });
+  loadUnitTags(): void { return this.details.loadUnitTags(); }
 
-    this.logs.set(unit.logs);
-    this.selectedUnit.set(unit);
-
-    this.loadUnitTags();
-    this.loadUnitNotes();
-  }
-
-  loadUnitTags(): void {
-    const selectedUnitSnapshot = this.selectedUnit();
-
-    if (selectedUnitSnapshot && selectedUnitSnapshot.id) {
-      this.unitTags.set(this.unitTagsMap().get(selectedUnitSnapshot.id as number) || []);
-    } else {
-      this.unitTags.set([]);
-    }
-  }
-
-  loadUnitNotes(): void {
-    const selectedUnitSnapshot = this.selectedUnit();
-
-    if (selectedUnitSnapshot && selectedUnitSnapshot.id) {
-      const unitId = selectedUnitSnapshot.id as number;
-      if (this.unitNotesMap().has(unitId)) {
-        this.unitNotes.set(this.unitNotesMap().get(unitId) || []);
-      } else {
-        this.unitNoteService
-          .getUnitNotes(this.appService.selectedWorkspaceId, unitId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: notes => {
-              this.unitNotes.set(notes);
-              this.unitNotesMap.update(value => {
-                const next = new Map(value);
-                next.set(unitId, notes);
-                return next;
-              });
-            },
-            error: () => {
-              this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
-                duration: 3000
-              });
-            }
-          });
-      }
-    } else {
-      this.unitNotes.set([]);
-    }
-  }
+  loadUnitNotes(): void { return this.details.loadUnitNotes(); }
 
   protected hasUnitNotes(unitId: number): boolean {
     if (!unitId || !this.unitNotesMap().has(unitId)) {
@@ -1045,9 +807,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return notes.length > 0;
   }
 
-  protected setSelectedBooklet(booklet: Booklet) {
-    this.selectedBooklet.set(booklet.name);
-  }
+  protected setSelectedBooklet(booklet: Booklet) { return this.details.setSelectedBooklet(booklet); }
 
   calculateBookletProcessingTime(booklet: Booklet): number | null {
     if (
@@ -1561,48 +1321,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected openResponseCleanupDialog(): void {
-    if (this.isDeleteJobRunning()) {
-      return;
-    }
-
-    const dialogRef = this.dialog.open(TestResultsResponseCleanupDialogComponent, {
-      width: '640px',
-      maxWidth: '95vw',
-      data: {
-        workspaceId: this.appService.selectedWorkspaceId
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(
-      (request: TestResultsResponseCleanupRequestDto | false | undefined) => {
-        if (request) {
-          this.confirmAndStartResponseCleanup(request);
-        }
-      }
-    );
-  }
+  protected openResponseCleanupDialog(): void { return this.deletion.openResponseCleanupDialog(); }
 
   protected isDeleteJobRunning(): boolean { return this.deletion.isDeleteJobRunning(); }
 
   private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void { return this.deletion.confirmAndStartDelete(request); }
 
-  private confirmAndStartResponseCleanup(
-    request: TestResultsResponseCleanupRequestDto
-  ): void { return this.deletion.confirmAndStartResponseCleanup(request); }
-
-  private resetSelectedResultDetails(): void {
-    this.selectedResultRequestsCancelled.next();
-    this.isLoadingBooklets.set(false);
-    this.booklets.set([]);
-    this.responses.set([]);
-    this.logs.set([]);
-    this.bookletLogs.set([]);
-    this.selectedUnit.set(undefined);
-    this.selectedBooklet.set('');
-    this.unitTagsMap.set(new Map());
-    this.unitNotesMap.set(new Map());
-  }
+  private resetSelectedResultDetails(): void { return this.details.resetSelectedResultDetails(); }
 
   protected openTestResultsSearchDialog(): void {
     const dialogRef = this.dialog.open(TestResultsSearchComponent, {
@@ -1629,246 +1354,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private openQuickSearchBrowserTarget(item: QuickSearchResultItem): void {
-    if (!item.personId || !this.appService.selectedWorkspaceId) {
-      this.snackBar.open(
-        'Dieser Treffer kann nicht im Ergebnisbrowser geöffnet werden.',
-        'Info',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    this.isTableView.set(false);
-    this.testPerson.set({
-      id: item.personId,
-      code: item.personCode || '',
-      group: item.personGroup || '',
-      login: item.personLogin || '',
-      uploaded_at: new Date()
-    });
-    this.resetSelectedResultDetails();
-    this.isLoadingBooklets.set(true);
-
-    this.testResultService
-      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId).pipe(
-        takeUntil(this.selectedResultRequestsCancelled), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) this.isLoadingBooklets.set(false); })
-      )
-      .subscribe({
-        next: (booklets: PersonTestResult[]) => {
-          this.booklets.set(booklets as unknown as Booklet[]);
-          this.sortBooklets();
-          this.sortBookletUnits();
-          this.loadAllUnitTags();
-          this.loadAllUnitNotes();
-          this.isLoadingBooklets.set(false);
-
-          const targetBooklet = this.findQuickSearchBooklet(item);
-          if (!targetBooklet) {
-            return;
-          }
-          this.setSelectedBooklet(targetBooklet);
-
-          const targetUnit = this.findQuickSearchUnit(targetBooklet, item);
-          if (!targetUnit) {
-            return;
-          }
-          this.onUnitClick(targetUnit, targetBooklet);
-
-          if (item.kind === 'response' && item.variableId) {
-            this.responses.set(this.responses().map(response => ({
-              ...response,
-              expanded: response.variableid === item.variableId
-            })));
-          }
-        },
-        error: () => {
-          this.isLoadingBooklets.set(false);
-          this.snackBar.open(
-            'Fehler beim Öffnen des Treffers im Ergebnisbrowser',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
-      });
+    if (item.personId && this.appService.selectedWorkspaceId) this.isTableView.set(false);
+    this.details.openQuickSearchBrowserTarget(item);
   }
 
-  private findQuickSearchBooklet(
-    item: QuickSearchResultItem
-  ): Booklet | undefined {
-    if (!this.booklets() || (!item.bookletId && !item.bookletName)) {
-      return undefined;
-    }
+  deleteUnit(unit: Unit, booklet: Booklet): void { return this.deletion.deleteUnit(unit, booklet); }
 
-    return this.booklets().find(booklet => {
-      if (item.bookletId && booklet.id === item.bookletId) {
-        return true;
-      }
-      return item.bookletName ? booklet.name === item.bookletName : false;
-    });
-  }
-
-  private findQuickSearchUnit(
-    booklet: Booklet,
-    item: QuickSearchResultItem
-  ): Unit | undefined {
-    if (!booklet.units || (!item.unitId && !item.unitName && !item.unitAlias)) {
-      return undefined;
-    }
-
-    return booklet.units.find(unit => {
-      if (item.unitId && unit.id === item.unitId) {
-        return true;
-      }
-      return (
-        (!!item.unitName && unit.name === item.unitName) ||
-        (!!item.unitAlias && unit.alias === item.unitAlias)
-      );
-    });
-  }
-
-  deleteUnit(unit: Unit, booklet: Booklet): void {
-    if (!unit.id) {
-      this.snackBar.open(
-        'Diese Unit kann nicht gelöscht werden, da sie keine ID hat.',
-        'Fehler',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: <ConfirmDialogData>{
-        title: 'Unit löschen',
-        content: `Möchten Sie die Unit "${
-          unit.alias || 'Unbenannte Einheit'
-        }" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
-        showCancel: true
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
-      if (confirmed) {
-        this.unitService
-          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: result => {
-              if (result.success) {
-                this.booklets.update(booklets => booklets.map(current => (
-                  current.id === booklet.id ? {
-                    ...current, units: current.units.filter(candidate => candidate.id !== unit.id)
-                  } : current
-                )));
-
-                if (this.selectedUnit()?.id === unit.id) {
-                  this.selectedUnit.set(undefined);
-                  this.responses.set([]);
-                  this.logs.set([]);
-                }
-
-                this.snackBar.open(
-                  `Unit "${
-                    unit.alias || 'Unbenannte Einheit'
-                  }" wurde erfolgreich gelöscht. Betroffene Kodierungen wurden mit entfernt.`,
-                  'Erfolg',
-                  { duration: 3000 }
-                );
-                this.loadWorkspaceOverview();
-                this.refreshCodingFreshnessStatusAfterChange();
-                this.testPersonCodingService.notifyTestResultsChanged();
-              } else {
-                this.snackBar.open(
-                  `Fehler beim Löschen der Unit: ${result.report.warnings.join(
-                    ', '
-                  )}`,
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
-                'Fehler',
-                { duration: 3000 }
-              );
-            }
-          });
-      }
-    });
-  }
-
-  deleteResponse(response: Response): void {
-    if (!response.id) {
-      this.snackBar.open(
-        'Diese Antwort kann nicht gelöscht werden, da sie keine ID hat.',
-        'Fehler',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: <ConfirmDialogData>{
-        title: 'Antwort löschen',
-        content: `Möchten Sie die Antwort für Variable "${response.variableid}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
-        showCancel: true
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
-      if (confirmed) {
-        this.responseService
-          .deleteResponse(
-            this.appService.selectedWorkspaceId,
-            response.id as number
-          ).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: result => {
-              if (result.success) {
-                const responseIndex = this.responses().findIndex(
-                  r => r.id === response.id
-                );
-                if (responseIndex !== -1) {
-                  this.responses.update(value => {
-                    const next = [...value];
-                    next.splice(responseIndex, 1);
-                    return next;
-                  });
-                }
-
-                this.snackBar.open(
-                  `Antwort für Variable "${response.variableid}" wurde gelöscht. Kodierstatus wurde aktualisiert.`,
-                  'Erfolg',
-                  { duration: 3000 }
-                );
-                this.loadWorkspaceOverview();
-                this.refreshCodingFreshnessStatusAfterChange();
-                this.testPersonCodingService.notifyTestResultsChanged();
-              } else {
-                this.snackBar.open(
-                  `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
-                    ', '
-                  )}`,
-                  'Fehler',
-                  { duration: 3000 }
-                );
-              }
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-                'Fehler',
-                { duration: 3000 }
-              );
-            }
-          });
-      }
-    });
-  }
+  deleteResponse(response: Response): void { return this.deletion.deleteResponse(response); }
 
   protected openValidationDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
