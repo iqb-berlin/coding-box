@@ -20,6 +20,8 @@ import { TestResultsExportService } from './test-results-export.service';
 import { TestResultsMutationService } from './test-results-mutation.service';
 import { TestResultsQueryService } from './test-results-query.service';
 import { TestResultsReplayService } from './test-results-replay.service';
+import { TestResultsFrequenciesService } from './test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsSearchService } from './test-results-search.service';
 import {
@@ -38,6 +40,8 @@ export class WorkspaceTestResultsService {
     private readonly cache: TestResultsCacheService,
     private readonly query: TestResultsQueryService,
     private readonly responses: TestResultsResponsesService,
+    private readonly frequencies: TestResultsFrequenciesService,
+    private readonly filterOptions: TestResultsFilterOptionsService,
     private readonly replay: TestResultsReplayService,
     private readonly mutation: TestResultsMutationService,
     private readonly search: TestResultsSearchService,
@@ -232,7 +236,7 @@ export class WorkspaceTestResultsService {
       }
     >
   > {
-    return this.responses.findFlatResponseFrequencies(workspaceId, combos);
+    return this.frequencies.findFlatResponseFrequencies(workspaceId, combos);
   }
 
   async findFlatResponseFilterOptions(
@@ -278,7 +282,7 @@ export class WorkspaceTestResultsService {
     sessionScreens: string[];
     sessionIds: string[];
   }> {
-    return this.responses.findFlatResponseFilterOptions(workspaceId, options);
+    return this.filterOptions.findFlatResponseFilterOptions(workspaceId, options);
   }
 
   async findUnitLogs(

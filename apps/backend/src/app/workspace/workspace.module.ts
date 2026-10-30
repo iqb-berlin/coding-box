@@ -5,6 +5,8 @@ import { JwtService } from '@nestjs/jwt';
 import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
 import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
 import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
+import { TestResultsFrequenciesService } from '../database/services/test-results/test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from '../database/services/test-results/test-results-filter-options.service';
 import { TestResultsResponsesService } from '../database/services/test-results/test-results-responses.service';
 import { TestResultsReplayService } from '../database/services/test-results/test-results-replay.service';
 import { TestResultsDeletionQueryService } from '../database/services/test-results/test-results-deletion-query.service';
@@ -128,6 +130,8 @@ import { CodingModule } from '../coding/coding.module';
     TestResultsAnomaliesService,
     TestResultsCacheService,
     TestResultsQueryService,
+    TestResultsFrequenciesService,
+    TestResultsFilterOptionsService,
     TestResultsResponsesService,
     TestResultsReplayService,
     TestResultsDeletionQueryService,

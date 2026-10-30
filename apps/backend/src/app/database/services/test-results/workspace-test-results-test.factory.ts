@@ -31,6 +31,8 @@ import { TestResultsExportService } from './test-results-export.service';
 import { TestResultsMutationService } from './test-results-mutation.service';
 import { TestResultsQueryService } from './test-results-query.service';
 import { TestResultsReplayService } from './test-results-replay.service';
+import { TestResultsFrequenciesService } from './test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsSearchService } from './test-results-search.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
@@ -59,14 +61,16 @@ export function createWorkspaceTestResultsService(personsRepository: Repository<
   const anomalies = new TestResultsAnomaliesService(unitRepository, bookletRepository, bookletLogRepository, sessionRepository, unitLogRepository, workspaceExclusionService);
   const cache = new TestResultsCacheService(codingValidationService, workspaceStatsCacheService, codingStatisticsService);
   const query = new TestResultsQueryService(personsRepository, unitRepository, bookletRepository, responseRepository, bookletLogRepository, sessionRepository, unitLogRepository, unitTagService, cacheService, workspaceExclusionService);
-  const responses = new TestResultsResponsesService(responseRepository, connection, cacheService, workspaceExclusionService, anomalies);
+  const responses = new TestResultsResponsesService(responseRepository, connection, workspaceExclusionService, anomalies);
+  const frequencies = new TestResultsFrequenciesService(responseRepository, cacheService, workspaceExclusionService);
+  const filterOptions = new TestResultsFilterOptionsService(responseRepository, connection, workspaceExclusionService);
   const replay = new TestResultsReplayService(personsRepository, unitRepository, bookletRepository, responseRepository, bookletInfoRepository, chunkRepository, cacheService, workspaceExclusionService);
   const deletionQuery = new TestResultsDeletionQueryService(personsRepository, unitRepository, bookletRepository, connection, workspaceExclusionService, codingFreshnessService);
   const mutation = new TestResultsMutationService(connection, journalService, codingValidationService, responseManagementService, cache, deletionQuery, codingFreshnessService);
   const search = new TestResultsSearchService(responseRepository, connection, codingListService, workspaceExclusionService);
   const exporter = new TestResultsExportService(personsRepository, unitRepository, bookletRepository, responseRepository, bookletLogRepository, sessionRepository, unitLogRepository, chunkRepository, connection, workspaceExclusionService, anomalies);
-  const facade = new WorkspaceTestResultsService(anomalies, cache, query, responses, replay, mutation, search, exporter);
-  const providers = [anomalies, cache, query, responses, replay, deletionQuery, mutation, search, exporter];
+  const facade = new WorkspaceTestResultsService(anomalies, cache, query, responses, frequencies, filterOptions, replay, mutation, search, exporter);
+  const providers = [anomalies, cache, query, responses, frequencies, filterOptions, replay, deletionQuery, mutation, search, exporter];
   // Legacy behavioral fixtures probe private methods. Production uses explicit DI.
   const owners = new Map<string, object>();
   for (const provider of providers) {
