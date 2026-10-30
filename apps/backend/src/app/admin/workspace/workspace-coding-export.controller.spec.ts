@@ -455,12 +455,12 @@ describe('WorkspaceCodingExportController', () => {
       5,
       response as never,
       request as never,
-      'true',
-      'true',
+      true,
+      true,
       'token',
-      'true',
-      'false',
-      'true'
+      true,
+      false,
+      true
     );
 
     expect(codingExportService.exportCodingResultsByCoder).toHaveBeenCalledWith(
@@ -496,9 +496,9 @@ describe('WorkspaceCodingExportController', () => {
     await controller.exportCodingTimesReport(
       5,
       response as never,
-      'true',
-      'false',
-      'true'
+      true,
+      false,
+      true
     );
 
     expect(codingExportService.exportCodingTimesReport).toHaveBeenCalledWith(
