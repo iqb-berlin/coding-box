@@ -1,5 +1,7 @@
+import { createMock } from '@golevelup/ts-jest';
 import { DataSource, Repository } from 'typeorm';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import Persons from '../../entities/persons.entity';
 import Workspace from '../../entities/workspace.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -60,7 +62,25 @@ describePostgres('Page-independent deletion with PostgreSQL', () => {
       SELECT 'review-' || n, 'login', 'Batch-' || n, 3, true FROM generate_series(1, 40) n`);
     persons = db.getRepository(Persons);
     service = new WorkspaceTestResultsService(
-      persons, db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(ResponseEntity), db.getRepository(BookletInfo), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), db.getRepository(ChunkEntity), db, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, { resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }) } as never
+      persons,
+      db.getRepository(Unit),
+      db.getRepository(Booklet),
+      db.getRepository(ResponseEntity),
+      db.getRepository(BookletInfo),
+      db.getRepository(BookletLog),
+      db.getRepository(Session),
+      db.getRepository(UnitLog),
+      db.getRepository(ChunkEntity),
+      db,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }) } as never,
+      createMock<WorkspaceStatsCacheService>()
     );
   });
 

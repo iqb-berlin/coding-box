@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Injectable, Logger, Optional
+  Inject, BadRequestException, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,7 +10,7 @@ import archiver = require('archiver');
 import { PassThrough, Writable } from 'stream';
 import { Repository } from 'typeorm';
 import { getErrorMessage, toError } from '../../../utils/error.util';
-// eslint-disable-next-line import/no-cycle
+
 import {
   CodingResponseFilterService,
   ResponseFilterOptions
@@ -24,7 +24,7 @@ import {
 } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   buildGeoGebraFileName,
   decodeGeoGebraValue
@@ -85,7 +85,7 @@ export class CodingListStreamService {
     private readonly responseFilterService: CodingResponseFilterService,
     private readonly itemBuilderService: CodingItemBuilderService,
     private readonly fileCacheService: CodingFileCacheService,
-    private readonly workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader,
     @Optional() private readonly configService?: ConfigService,
     @Optional() private readonly replayAnchorService?: CodingReplayAnchorService,
     @Optional() private readonly missingsProfilesService?: MissingsProfilesService,

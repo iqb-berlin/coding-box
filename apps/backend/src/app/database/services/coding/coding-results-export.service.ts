@@ -27,7 +27,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -86,7 +86,6 @@ export class CodingResultsExportService {
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private codingListService: CodingListService,
-    private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService,

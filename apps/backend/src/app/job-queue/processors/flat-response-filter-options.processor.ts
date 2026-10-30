@@ -1,7 +1,5 @@
 import { Processor } from '@nestjs/bullmq';
-import {
-  Injectable, Logger, Inject, forwardRef
-} from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { CacheService } from '../../cache/cache.service';
@@ -19,7 +17,7 @@ export class FlatResponseFilterOptionsProcessor extends WorkspaceWorkerHost {
 
   constructor(
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    @Inject(WorkspaceTestResultsService)
     private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) {
     super();

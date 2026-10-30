@@ -5,17 +5,17 @@ ARG REGISTRY_PATH=""
 
 FROM ${REGISTRY_PATH}node:22-bookworm AS builder
 
-# Update npm to latest version
+# Use the same npm version for build and runtime dependency installation.
 RUN npm --version
-RUN --mount=type=cache,target=~/.npm \
-    npm install -g --no-fund npm
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --no-fund npm@11.18.0
 RUN npm --version
 
 WORKDIR /usr/src/coding-box-base
 COPY . .
 
 # Install dependencies
-RUN --mount=type=cache,target=~/.npm \
+RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-fund
 
 # Build project

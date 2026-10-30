@@ -1352,11 +1352,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
           { statusValue: 5, isDerived: false, count: '2' }
         ])
       };
-      const codingStatisticsAfterImportService = new CodingStatisticsService(
-        statisticsRepository as never,
+      const codingStatisticsAfterImportService = new CodingStatisticsService(statisticsRepository as never,
         statisticsCacheService as never,
-        {} as never,
-        {} as never,
         {} as never,
         {
           resolveExclusionsForQueries: jest.fn().mockResolvedValue({

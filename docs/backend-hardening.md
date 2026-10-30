@@ -59,6 +59,58 @@ Invalid credentials remain HTTP 401; network/server failures and invalid provide
 responses receive HTTP 503 with safe error codes and request IDs. Provider payloads
 and credentials are not included in diagnostics.
 
+## Authentication rate limits
+
+All routes on `AuthController` use Nest's controller-scoped throttler, including
+login redirects, callbacks, token exchange, refresh, validation and logout.
+The default is **120 requests per client and route in 60 seconds**. Set
+`AUTH_RATE_LIMIT_LIMIT` and `AUTH_RATE_LIMIT_TTL_MS` to tune this for shared-NAT
+deployments. Invalid settings fail API startup. IPv6 addresses share a `/64`
+tracker, and route keys are based on handlers rather than user-controlled URLs.
+For tokens with an issued-at claim, the browser caps proactive renewal at 10%
+of the token lifetime, up to 30 seconds. Fresh short-lived tokens can therefore
+serve API requests without triggering a refresh for every request.
+
+The counter and block interval live in one expiring Redis hash below
+`${REDIS_PREFIX}:auth-rate-limit:`. A Lua script uses Redis time and updates them
+atomically, so replicas share the same limit. Requests beyond the limit receive
+HTTP 429 with `Retry-After`; repeated blocked requests do not extend the block.
+Redis failures return HTTP 503 before contacting the identity provider. The
+dedicated Redis connection has one-second connect/command timeouts and does not
+queue requests while disconnected. Health checks and coding routes are unaffected.
+
+Forwarded client addresses are ignored unless `HTTP_TRUSTED_PROXIES` explicitly
+lists proxy IPs, CIDR subnets or Express aliases (`loopback`, `linklocal`,
+`uniquelocal`). The value `1` explicitly trusts a single ingress hop; unrestricted
+trust and other numeric hop counts are rejected. Production Compose uses that
+single-ingress contract: its API exposes no public host port, and each API request
+arrives through one proxy. If the deployment changes, configure the actual proxy
+addresses/subnets instead. In single-hop mode only the rightmost forwarded
+address is used, including for private-network clients; forged earlier entries
+cannot select a different rate-limit bucket. With address/subnet trust, Express
+resolves the nearest untrusted address.
+
+The mandatory backend integration gate also runs the real Redis counter tests.
+Its fixture is shared only with the test Redis service, using a unique key prefix;
+it never flushes application data.
+
+## Reproducible backend runtime dependencies
+
+Nest's core, common, Express adapter and testing packages use the 11.2.8 patch
+line. Build and runtime Docker stages use npm 11.18.0. The runtime installs from
+the unchanged workspace `package.json`, `package-lock.json` and local `vendor`
+targets using `npm ci --omit=dev`. This preserves the locked dependency locations;
+Nx's reduced lockfile can incorrectly relocate incompatible nested packages such
+as Express 4 and 5. The image retains the manifests used for installation when
+copying the compiled application. It includes all workspace production dependencies,
+but omits development dependencies. The PostgreSQL driver and overrides come from
+the workspace lockfile; no packages are added or resolved separately in Docker.
+
+`npx nx run backend:verify-runtime-package` repeats the fresh production installation
+with the Docker npm version in a temporary directory. It verifies unchanged
+manifests and loads the HTTP adapter, queue, database and native XML/SQLite modules
+without access to the workspace's `node_modules`. Both backend CI gates run it.
+
 ## BullMQ queues and cutover
 
 All twelve queues use `@nestjs/bullmq` and BullMQ 6. Producers enqueue named jobs;
@@ -150,6 +202,7 @@ Run frontend and backend tasks separately and sequentially:
 ```sh
 npx nx lint backend
 npx nx run backend:typecheck
+npx nx run backend:verify-runtime-package
 npx nx test backend --configuration=ci --maxWorkers=2
 npx nx build backend --configuration=production
 npx nx run frontend:test-quality-gates

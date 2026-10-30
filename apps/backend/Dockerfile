@@ -27,15 +27,13 @@ USER node
 WORKDIR /usr/src/coding-box-${PROJECT}
 RUN mkdir packages
 
-# Install the published runtime dependencies generated from the root package pins.
-COPY --chown=node:node --from=base /usr/src/coding-box-base/dist/apps/${PROJECT}/package.json .
-RUN --mount=type=cache,target=~/.npm \
-    npm pkg set overrides.image-size=2.0.3 && \
-    npm install --omit=dev --no-fund
-
-# Install PostgreSQL client (missing in dist/apps/backend/package.json - nx bug?)
-RUN --mount=type=cache,target=~/.npm \
-    npm install pg --save --no-fund
+# Preserve the workspace lockfile's dependency locations. Nx's pruned lockfile
+# can relocate incompatible nested dependencies (for example Express 4 and 5).
+COPY --chown=node:node --from=base /usr/src/coding-box-base/package.json /usr/src/coding-box-base/package-lock.json ./
+# npm validates local override/link targets even when dev dependencies are omitted.
+COPY --chown=node:node --from=base /usr/src/coding-box-base/vendor ./vendor
+RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 \
+    npm ci --omit=dev --no-fund
 
 EXPOSE 3333
 
@@ -45,6 +43,8 @@ ARG PROJECT
 
 # Copy the build artifacts from the previous stage
 COPY --chown=node:node --from=base /usr/src/coding-box-base/dist/apps/${PROJECT} .
+# Keep the installed tree's manifest and lockfile, rather than Nx's pruned copies.
+COPY --chown=node:node --from=build /usr/src/coding-box-${PROJECT}/package.json /usr/src/coding-box-${PROJECT}/package-lock.json ./
 
 
 FROM source AS prod

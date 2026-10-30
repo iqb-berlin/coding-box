@@ -6,9 +6,11 @@ import { ResponseEntity } from '../../entities/response.entity';
 
 describe('ResponseManagementService', () => {
   let loggerErrorSpy: jest.SpyInstance;
-  const workspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
-    invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
+  const workspaceStatsCacheService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true)
+  };
+  const codingStatisticsService = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined)
   };
 
   const createQueryBuilder = (
@@ -22,10 +24,10 @@ describe('ResponseManagementService', () => {
     execute: jest.fn().mockResolvedValue(executeResult)
   });
 
-  const createService = (codingFreshnessService?: unknown) => new ResponseManagementService(
+  const createService = (codingFreshnessService?: unknown) => new ResponseManagementService({} as never,
     {} as never,
-    {} as never,
-    workspaceTestResultsService as never,
+    workspaceStatsCacheService as never,
+    codingStatisticsService as never,
     codingFreshnessService as never
   );
 
@@ -191,7 +193,7 @@ describe('ResponseManagementService', () => {
     expect(codingFreshnessService.markVersionCurrent.mock.invocationCallOrder[0])
       .toBeLessThan(release.mock.invocationCallOrder[0]);
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
-    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(workspaceStatsCacheService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 
   it('clears database defaults for generated results created only by run 2', async () => {
@@ -666,10 +668,10 @@ describe('ResponseManagementService', () => {
       markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
       markCodingJobsStaleForResponseIds: jest.fn().mockResolvedValue(undefined)
     };
-    const service = new ResponseManagementService(
-      connection as never,
+    const service = new ResponseManagementService(connection as never,
       journalService as never,
-      workspaceTestResultsService as never,
+      workspaceStatsCacheService as never,
+      codingStatisticsService as never,
       codingFreshnessService as never
     );
 
@@ -680,9 +682,9 @@ describe('ResponseManagementService', () => {
       .toHaveBeenCalledWith(1, [50], 'RESULT_DELETED', 'stale_source', manager);
     expect(codingFreshnessService.markUnitsStaleAfterResultChange)
       .toHaveBeenCalledWith(1, [7], 'RESULT_DELETED');
-    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)
+    expect(workspaceStatsCacheService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
-    expect(workspaceTestResultsService.invalidateCodingStatisticsCache)
+    expect(codingStatisticsService.invalidateCache)
       .toHaveBeenCalledWith(1);
     expect(journalService.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -734,10 +736,10 @@ describe('ResponseManagementService', () => {
       markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
       markCodingJobsStaleForResponseIds: jest.fn().mockResolvedValue(undefined)
     };
-    const service = new ResponseManagementService(
-      connection as never,
+    const service = new ResponseManagementService(connection as never,
       journalService as never,
-      workspaceTestResultsService as never,
+      workspaceStatsCacheService as never,
+      codingStatisticsService as never,
       codingFreshnessService as never
     );
     const key = [
@@ -795,7 +797,7 @@ describe('ResponseManagementService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).not.toHaveBeenCalled();
-    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)
+    expect(workspaceStatsCacheService.invalidateWorkspaceStatsCache)
       .not.toHaveBeenCalled();
   });
 });

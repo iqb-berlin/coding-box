@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
-import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace';
 import { CodingListService } from './coding-list.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingListQueryService } from './coding-list-query.service';
@@ -24,11 +24,9 @@ describe('CodingListService', () => {
     // Create the dependencies
     const fileCacheService = new CodingFileCacheService(fileUploadRepository);
     const itemBuilderService = new CodingItemBuilderService(fileCacheService);
-    const queryService = new CodingListQueryService(
-      responseRepository,
+    const queryService = new CodingListQueryService(responseRepository,
       fileCacheService,
       workspaceFilesService,
-      {} as unknown as WorkspaceCoreService,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
       } as unknown as WorkspaceExclusionService

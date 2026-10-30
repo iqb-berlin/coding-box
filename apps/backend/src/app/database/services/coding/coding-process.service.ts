@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, BadRequestException, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, EntityManager, In, Repository, QueryRunner
@@ -28,7 +30,7 @@ import {
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
@@ -39,7 +41,7 @@ import {
   AutocoderOutputShadow,
   createAutocoderOutputShadows
 } from './autocoder-output-shadow.util';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   lockWorkspaceTestResultsMutation,
   unlockWorkspaceTestResultsMutation
@@ -186,10 +188,10 @@ export class CodingProcessService {
     private responseRepository: Repository<ResponseEntity>,
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
-    private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingReadinessService: CodingReadinessService,
-    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER)
+    private workspaceFilesService: WorkspaceFileMetadataReader,
     private runtimeConfigService: RuntimeConfigService
   ) { }
 

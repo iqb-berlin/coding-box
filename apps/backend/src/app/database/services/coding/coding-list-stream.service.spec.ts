@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import AdmZip = require('adm-zip');
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { CodingItemBuilderService, CodingItemVersionRow } from './coding-item-builder.service';
@@ -164,7 +165,7 @@ describe('CodingListStreamService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: CodingReplayAnchorService, useValue: mockReplayAnchorService },
         {
-          provide: WorkspaceFilesService,
+          provide: WORKSPACE_FILE_METADATA_READER,
           useValue: mockWorkspaceFilesService
         },
         { provide: getRepositoryToken(Setting), useValue: mockSettingRepository }
