@@ -44,6 +44,8 @@
             <h3>{{ 'variable-analysis.info-title' | translate }}</h3>
           </div>
           <p class="info-desc">{{ 'variable-analysis.info-description' | translate }}</p>
+          <p>{{ 'variable-analysis.info-schema-values' | translate }}</p>
+          <p>{{ 'variable-analysis.info-valid-count' | translate }}</p>
           <div class="info-grid">
             <div class="info-item">
               <strong>{{ 'variable-analysis.info-feature-frequencies-title' | translate }}</strong>
@@ -153,7 +155,7 @@
                     } @else {
                     <span>{{ row.value | slice:0:100 }}{{ row.value.length > 100 ? '...' : '' }}</span>
                     }
-                    @if (row.isSchemaOnly) {
+                    @if (row.isFromSchema) {
                     <span class="schema-chip">{{ 'variable-analysis.schema-only' | translate }}</span>
                     }
                   </div>

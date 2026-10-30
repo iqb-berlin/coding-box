@@ -14,6 +14,7 @@ export class VariableAnalysisTableRowDto {
   label?: string;
   score?: number;
   schemaOrder?: number;
+  isFromSchema?: boolean;
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;

@@ -10,6 +10,7 @@ const createJob = (
       unitId?: number;
       variableId?: string;
       cacheKey?: string;
+      resultVersion?: number;
     };
     state: string;
     progress: number;
@@ -17,11 +18,14 @@ const createJob = (
   }> = {}
 ) => ({
   id: overrides.id || 'job-1',
-  data: overrides.data || {
-    workspaceId: 1,
-    unitId: 2,
-    variableId: 'VAR',
-    cacheKey: 'variable-analysis:1:job-1'
+  data: {
+    resultVersion: 2,
+    ...(overrides.data || {
+      workspaceId: 1,
+      unitId: 2,
+      variableId: 'VAR',
+      cacheKey: 'variable-analysis:1:job-1'
+    })
   },
   getState: jest.fn().mockResolvedValue(overrides.state || 'completed'),
   progress: overrides.progress ?? 100,
@@ -74,6 +78,74 @@ describe('VariableAnalysisService', () => {
     await expect(service.getAnalysisResults('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.getAnalysisResultsPage('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
     expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'getAnalysisResults', 'getAnalysisResultsPage', 'exportAnalysisResultsAsCsv', 'exportAnalysisResultsAsXlsx'
+  ] as const)('%s requires recalculation of results from the old evaluation', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ data: { workspaceId: 1, resultVersion: undefined } }));
+    await expect(service[method]('job-1', 1)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'VARIABLE_ANALYSIS_OUTDATED' })
+    });
+    expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each(['direct', 'chunked'])('preserves animal answer counts, scores and schema origin in %s results and exports', async storage => {
+    const result = {
+      variableCombos: [{
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        totalCount: 3,
+        validCount: 3,
+        emptyCount: 0,
+        distinctValueCount: 2
+      }],
+      frequencies: {
+        '1:VAR': [
+          {
+            variableId: 'VAR', value: 'Hai', count: 2, validOccurrenceCount: 2, percentage: 200 / 3, score: 1, schemaOrder: 0, isFromSchema: true
+          },
+          {
+            variableId: 'VAR', value: 'Elefant', count: 1, validOccurrenceCount: 1, percentage: 100 / 3, score: 0, schemaOrder: 1, isFromSchema: true, isSchemaSupplemental: true
+          },
+          {
+            variableId: 'VAR', value: 'Zebra', count: 0, validOccurrenceCount: 0, percentage: 0, score: 0, schemaOrder: 1, isFromSchema: true, isSchemaOnly: true, isSchemaSupplemental: true
+          }
+        ]
+      },
+      total: 1
+    };
+    const manifest = {
+      storage: 'chunked', workspaceId: 1, total: 1, variableComboChunks: 1, frequencyChunks: 1
+    };
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockImplementation((key: string) => {
+      if (key.endsWith(':variable-combos:0')) return Promise.resolve(result.variableCombos);
+      if (key.endsWith(':frequencies:0')) return Promise.resolve(Object.entries(result.frequencies));
+      return Promise.resolve(storage === 'chunked' ? manifest : result);
+    });
+
+    const page = await service.getAnalysisResultsPage('job-1', 1);
+    expect(page.rows?.map(row => row.value)).toEqual(['Hai', 'Elefant']);
+    expect(page.rows?.find(row => row.value === 'Elefant')).toMatchObject({
+      count: 1, validOccurrenceCount: 1, score: 0, isFromSchema: true
+    });
+    const withMissing = await service.getAnalysisResultsPage('job-1', 1, { includeSchemaCodes: true });
+    expect(withMissing.rows?.find(row => row.value === 'Zebra')).toMatchObject({ count: 0, score: 0, isFromSchema: true });
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    expect(csv).not.toContain('Zebra');
+    expect(csv).toContain('Elefant');
+    expect(csv).toContain('Score;Zuordnung aus Kodierschema');
+    expect(csv.split(/\r?\n/).find(line => line.includes('Elefant'))).toMatch(/;0;ja$/);
+    const buffer = await service.exportAnalysisResultsAsXlsx('job-1', 1, { includeSchemaCodes: true });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    const sheet = workbook.getWorksheet('Antwortwerte');
+    const zebra = sheet?.getRows(2, 3)?.find(row => row.getCell(4).value === 'Zebra');
+    expect(zebra?.getCell(7).value).toBe(0);
+    expect(zebra?.getCell(22).value).toBe(0);
+    expect(zebra?.getCell(23).value).toBe('ja');
   });
 
   it.each([

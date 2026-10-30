@@ -62,7 +62,7 @@ describe('Domain errors at the HTTP boundary', () => {
   it.each(['results', 'results/page', 'results/export/csv', 'results/export/xlsx'])(
     'returns 400 for expired analysis results through %s', async endpoint => {
       jobQueueService.getVariableAnalysisJob.mockResolvedValueOnce({
-        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12' },
+        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12', resultVersion: 2 },
         getState: async () => 'completed'
       } as never);
       const res = await fetch(`${url}/api/admin/workspace/47/variable-analysis/jobs/12/${endpoint}`);
@@ -70,6 +70,15 @@ describe('Domain errors at the HTTP boundary', () => {
       expect((await res.json()).message).toContain('has no cached results');
     }
   );
+  it('returns a recognizable error for analysis results that need recalculation', async () => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValueOnce({
+      data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12' },
+      getState: async () => 'completed'
+    } as never);
+    const res = await fetch(`${url}/api/admin/workspace/47/variable-analysis/jobs/12/results/page`);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'VARIABLE_ANALYSIS_OUTDATED' });
+  });
   it('keeps unexpected failures as a safe 500 response', async () => {
     const log = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     codingService.updateCodingJob.mockRejectedValueOnce(new Error('Internal database detail'));

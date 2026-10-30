@@ -1,5 +1,7 @@
 import { VariableFrequencyDto } from './variable-frequency.dto';
 
+export const VARIABLE_ANALYSIS_RESULT_VERSION = 2;
+
 export interface VariableCombo {
   unitId: number;
   unitName: string;

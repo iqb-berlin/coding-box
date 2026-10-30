@@ -91,6 +91,7 @@ export interface VariableAnalysisData {
         label?: string;
         score?: number;
         schemaOrder?: number;
+        isFromSchema?: boolean;
         isSchemaOnly?: boolean;
         isSchemaSupplemental?: boolean;
         count: number;
@@ -125,6 +126,7 @@ export interface VariableFrequency {
   label?: string;
   score?: number;
   schemaOrder?: number;
+  isFromSchema?: boolean;
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
@@ -425,6 +427,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 label: freq.label,
                 score: freq.score,
                 schemaOrder: freq.schemaOrder,
+                isFromSchema: freq.isFromSchema,
                 isSchemaOnly: freq.isSchemaOnly,
                 isSchemaSupplemental: freq.isSchemaSupplemental,
                 count: freq.count,
@@ -1200,7 +1203,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.currentPage.set(Math.max(0, results.page - 1));
           this.analyzeVariables();
         },
-        error: () => {
+        error: (error: { error?: { code?: string } }) => {
           if (requestId !== this.latestResultsRequestId) {
             this.dismissResultsLoadingSnackBar(loadingSnackBar);
             return;
@@ -1208,8 +1211,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
           this.isLoading.set(false);
+          const isOutdated = error?.error?.code === 'VARIABLE_ANALYSIS_OUTDATED';
+          if (isOutdated) {
+            this.clearCurrentAnalysisResults();
+          }
           this.snackBar.open(
-            this.translate.instant('variable-analysis.error-loading-results'),
+            this.translate.instant(isOutdated ?
+              'variable-analysis.results-outdated' :
+              'variable-analysis.error-loading-results'),
             this.translate.instant('error'),
             { duration: 3000 }
           );
@@ -1342,6 +1351,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           label: frequency.label,
           score: frequency.score,
           schemaOrder: frequency.schemaOrder,
+          isFromSchema: frequency.isFromSchema,
           isSchemaOnly: frequency.isSchemaOnly,
           isSchemaSupplemental: frequency.isSchemaSupplemental,
           count: frequency.count,

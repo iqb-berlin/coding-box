@@ -1,5 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -21,15 +22,15 @@ import {
 } from '../../database/services/workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { VariableDetailDto } from '../../models/unit-variable-details.dto';
+import {
+  getExplicitSchemaValues, resolveSchemaValue, SchemaValueDefinition
+} from './variable-analysis-schema.util';
 
-interface SchemaCodeInfo {
-  value: string;
-  label?: string;
-  score?: number;
-  order: number;
-}
+type SchemaCodeInfo = SchemaValueDefinition;
 
 interface VariableAnalysisMetadata {
+  coding?: VariableDetailDto['coding'];
+  type: VariableDetailDto['type'];
   multiple: boolean;
   categoryDefinitions: SchemaCodeInfo[];
   valuesByPosition: SchemaCodeInfo[];
@@ -41,6 +42,7 @@ interface SchemaValueCountRow {
   value: string | null;
   count: string | number;
   validCount: string | number;
+  nullCount: string | number;
 }
 
 interface MultipleResponseRow {
@@ -54,18 +56,27 @@ interface MultipleResponseRow {
   scoreV1: string | number | null;
 }
 
-interface AnalyzedVariableScopeEntry {
+interface AnalyzedVariableScopeEntry extends VariableAnalysisMetadata {
   combo: VariableCombo;
   comboKey: string;
   logicalKey: string;
-  multiple: boolean;
-  categoryDefinitions: SchemaCodeInfo[];
-  valuesByPosition: SchemaCodeInfo[];
 }
 
 interface AnalysisSql {
   sql: string;
   parameters: unknown[];
+}
+
+interface AnalysisValueRow {
+  unitName: string;
+  variableId: string;
+  value: string;
+  valueLength: string | number;
+  valueHash?: string;
+  responseId: string | number;
+  count: string | number;
+  validCount: string | number;
+  nullCount: string | number;
 }
 
 interface VariableAnalysisScopeOptions {
@@ -92,6 +103,7 @@ interface MultipleResponseSummary {
 interface FrequencyCounts {
   count: number;
   validCount: number;
+  nullCount: number;
 }
 
 interface MultipleResponseObservedCounts {
@@ -105,6 +117,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private readonly MAX_VALUES_PER_VARIABLE = 20;
   private readonly MAX_VALUE_PREVIEW_LENGTH = 500;
+  private readonly SCHEMA_VALUE_ROW_BATCH_SIZE = 20;
   private readonly RESULT_CACHE_TTL_SECONDS = 86400;
   private readonly RESULT_CACHE_CHUNK_SIZE = 100;
   private readonly MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE = 100;
@@ -232,7 +245,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
       const maxValuesParameter = `$${analysisSql.parameters.length + 1}`;
       const maxValuePreviewLengthParameter = `$${analysisSql.parameters.length + 2}`;
-      const valueRows = await this.responseRepository.query(
+      const valueRows: AnalysisValueRow[] = await this.responseRepository.query(
         `
           SELECT
             ranked_values."unitName",
@@ -240,6 +253,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             LEFT(ranked_values."value", ${maxValuePreviewLengthParameter}) AS "value",
             LENGTH(ranked_values."value") AS "valueLength",
             md5(ranked_values."value") AS "valueHash",
+            ranked_values."responseId",
+            ranked_values."nullCount",
             ranked_values."count",
             ranked_values."validCount",
             ranked_values."rank"
@@ -255,6 +270,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
                 analysis_rows."unitName" AS "unitName",
                 analysis_rows."variableId" AS "variableId",
                 COALESCE(analysis_rows."value", '') AS "value",
+                MIN(analysis_rows."responseId") AS "responseId",
+                COUNT(*) FILTER (WHERE analysis_rows."value" IS NULL) AS "nullCount",
                 COUNT(*) AS "count",
                 SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount"
               FROM (${analysisSql.sql}) analysis_rows
@@ -270,32 +287,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         [...analysisSql.parameters, this.MAX_VALUES_PER_VARIABLE, this.MAX_VALUE_PREVIEW_LENGTH]
       );
 
-      for (const row of valueRows) {
-        const scopeEntry = this.getScopeEntryForRow(
-          scopeByLogicalKey,
-          row.unitName,
-          row.variableId
-        );
-        const combo = scopeEntry ? comboByKey.get(scopeEntry.comboKey) : undefined;
-
-        if (combo && scopeEntry) {
-          const count = this.parseCount(row.count);
-          const validOccurrenceCount = this.parseCount(row.validCount);
-          frequencies[scopeEntry.comboKey].push({
-            unitId: combo.unitId,
-            unitName: row.unitName,
-            variableId: row.variableId,
-            value: this.formatValuePreview(
-              row.value || '',
-              this.parseCount(row.valueLength),
-              row.valueHash
-            ),
-            count,
-            validOccurrenceCount,
-            percentage: 0
-          });
-        }
-      }
+      await this.addObservedValueFrequencies(valueRows, scopeByLogicalKey, frequencies);
 
       const multipleObservedCounts =
         await this.recalculateMultipleVariableFrequencies(
@@ -495,6 +487,76 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     return `${value}... [truncated ${valueLength} chars, md5:${valueHash || 'unknown'}]`;
   }
 
+  private async addObservedValueFrequencies(
+    valueRows: AnalysisValueRow[],
+    scopeByLogicalKey: Map<string, AnalyzedVariableScopeEntry>,
+    frequencies: Record<string, VariableFrequencyDto[]>
+  ): Promise<void> {
+    for (let index = 0; index < valueRows.length; index += this.SCHEMA_VALUE_ROW_BATCH_SIZE) {
+      const batch = valueRows.slice(index, index + this.SCHEMA_VALUE_ROW_BATCH_SIZE);
+      const longResponseIds = batch.filter(row => {
+        const entry = this.getScopeEntryForRow(scopeByLogicalKey, row.unitName, row.variableId);
+        return this.parseCount(row.valueLength) > this.MAX_VALUE_PREVIEW_LENGTH &&
+          entry?.coding?.codes?.length && !entry.multiple && !['json', 'attachment'].includes(entry.type);
+      }).map(row => row.responseId);
+      // Only fetch complete answers that require coding, then discard them after this batch.
+      const longRows: { responseId: number; value: string | null }[] = longResponseIds.length > 0 ?
+        await this.responseRepository.query(
+          'SELECT id AS "responseId", value FROM response WHERE id = ANY($1::int[])',
+          [longResponseIds]
+        ) : [];
+      const longValues = new Map(longRows.map(row => [String(row.responseId), row.value]));
+
+      batch.forEach(row => {
+        const entry = this.getScopeEntryForRow(scopeByLogicalKey, row.unitName, row.variableId);
+        if (!entry) return;
+        const count = this.parseCount(row.count);
+        const rawValue = this.parseCount(row.valueLength) > this.MAX_VALUE_PREVIEW_LENGTH ?
+          longValues.get(String(row.responseId)) : row.value;
+        const definition = this.resolveObservedSchemaValue(rawValue, count, this.parseCount(row.nullCount), entry);
+        frequencies[entry.comboKey].push({
+          unitId: entry.combo.unitId,
+          unitName: row.unitName,
+          variableId: row.variableId,
+          value: this.formatValuePreview(row.value || '', this.parseCount(row.valueLength), row.valueHash),
+          label: definition?.label,
+          score: definition?.score,
+          schemaOrder: definition?.order,
+          isFromSchema: definition?.isFromSchema,
+          count,
+          validOccurrenceCount: this.parseCount(row.validCount),
+          percentage: 0
+        });
+      });
+    }
+  }
+
+  private resolveObservedSchemaValue(
+    value: string | null | undefined,
+    count: number,
+    nullCount: number,
+    variable: VariableAnalysisMetadata
+  ): SchemaValueDefinition | undefined {
+    // NULL and empty strings share a display row, but may match different coding rules.
+    if (value === undefined || (value === '' && nullCount > 0 && nullCount < count)) {
+      return undefined;
+    }
+    return resolveSchemaValue(value === '' && nullCount > 0 ? null : value, variable);
+  }
+
+  private formatSchemaValuePreview(value: string): string {
+    if (value.length <= this.MAX_VALUE_PREVIEW_LENGTH) {
+      return value;
+    }
+    // PostgreSQL LEFT/LENGTH count Unicode code points, rather than UTF-16 units.
+    const characters = Array.from(value);
+    return this.formatValuePreview(
+      characters.slice(0, this.MAX_VALUE_PREVIEW_LENGTH).join(''),
+      characters.length,
+      createHash('md5').update(value).digest('hex')
+    );
+  }
+
   private parseCount(value: unknown): number {
     const parsed = parseInt(String(value), 10);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -594,7 +656,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     options: VariableAnalysisScopeOptions
   ): Promise<AnalyzedVariableScopeEntry[]> {
     const unitVariableDetails =
-      await this.workspaceFilesService.getUnitVariableDetails(workspaceId);
+      await this.workspaceFilesService.getUnitVariableDetails(workspaceId, { includeCodingRules: true });
 
     if (unitVariableDetails.length === 0) {
       return [];
@@ -694,6 +756,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           combo,
           comboKey: this.getComboKey(combo),
           logicalKey,
+          coding: metadata.coding,
+          type: metadata.type,
           multiple: metadata.multiple,
           categoryDefinitions: metadata.categoryDefinitions,
           valuesByPosition: metadata.valuesByPosition
@@ -736,24 +800,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   private getVariableMetadata(
     variable: VariableDetailDto
   ): VariableAnalysisMetadata {
-    const seenValues = new Set<string>();
-    const categoryDefinitions = (variable.codes || []).reduce<SchemaCodeInfo[]>(
-      (items, code) => {
-        const value = String(code.id);
-        if (seenValues.has(value)) {
-          return items;
-        }
-        seenValues.add(value);
-        items.push({
-          value,
-          label: code.label,
-          score: code.score,
-          order: items.length
-        });
-        return items;
-      },
-      []
-    );
+    const categoryDefinitions = getExplicitSchemaValues(variable);
+    const seenValues = new Set(categoryDefinitions.map(definition => definition.value));
 
     (variable.values || []).forEach(valueInfo => {
       const value = String(valueInfo.value);
@@ -802,6 +850,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     });
 
     return {
+      coding: variable.coding,
+      type: variable.type,
       multiple: variable.multiple === true,
       categoryDefinitions,
       valuesByPosition
@@ -815,6 +865,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       scopeEntries.map(entry => [
         entry.comboKey,
         {
+          coding: entry.coding,
+          type: entry.type,
           multiple: entry.multiple,
           categoryDefinitions: entry.categoryDefinitions,
           valuesByPosition: entry.valuesByPosition
@@ -1290,12 +1342,25 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       const observedValidCountsForCombo =
         observedCountsOverride.validCountsByComboKey.get(entry.comboKey);
 
-      schemaCodes.forEach(schemaCode => {
-        const existingRow = rowsByValue.get(schemaCode.value);
-        const observedCounts = observedCountsForCombo.get(schemaCode.value);
+      schemaCodes.forEach(schemaValue => {
+        const observedCounts = observedCountsForCombo.get(schemaValue.value);
         const count = typeof observedCounts === 'number' ?
           observedCounts :
           observedCounts?.count || 0;
+        const definition = this.resolveObservedSchemaValue(
+          schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
+        );
+        const schemaCode = entry.multiple ? schemaValue : {
+          ...schemaValue,
+          label: definition?.label ?? schemaValue.label,
+          score: definition?.score,
+          order: definition?.order ?? schemaValue.order,
+          isFromSchema: definition?.isFromSchema
+        };
+        const valuePreview = entry.multiple ?
+          this.formatDirectValuePreview(schemaCode.value) :
+          this.formatSchemaValuePreview(schemaCode.value);
+        const existingRow = rowsByValue.get(valuePreview);
         let validOccurrenceCount = 0;
         if (observedValidCountsForCombo) {
           validOccurrenceCount =
@@ -1305,9 +1370,12 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         }
 
         if (existingRow) {
-          existingRow.label = schemaCode.label;
-          existingRow.score = schemaCode.score;
-          existingRow.schemaOrder = schemaCode.order;
+          existingRow.label = existingRow.label ?? schemaCode.label;
+          if (valuePreview !== '') {
+            existingRow.score = existingRow.score ?? schemaCode.score;
+            existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
+          }
+          existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
           existingRow.validOccurrenceCount =
             existingRow.validOccurrenceCount ?? validOccurrenceCount;
           return;
@@ -1317,10 +1385,11 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           unitId: combo.unitId,
           unitName: combo.unitName,
           variableId: combo.variableId,
-          value: schemaCode.value,
+          value: valuePreview,
           label: schemaCode.label,
           score: schemaCode.score,
           schemaOrder: schemaCode.order,
+          isFromSchema: schemaCode.isFromSchema,
           isSchemaOnly: count === 0,
           isSchemaSupplemental: true,
           count,
@@ -1368,6 +1437,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             analysis_rows."unitName" AS "unitName",
             analysis_rows."variableId" AS "variableId",
             COALESCE(analysis_rows."value", '') AS "value",
+            COUNT(*) FILTER (WHERE analysis_rows."value" IS NULL) AS "nullCount",
             COUNT(*) AS "count",
             SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount"
           FROM (${analysisSql.sql}) analysis_rows
@@ -1409,7 +1479,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           new Map<string, FrequencyCounts>();
         valueCounts.set(value, {
           count: this.parseCount(row.count),
-          validCount: this.parseCount(row.validCount)
+          validCount: this.parseCount(row.validCount),
+          nullCount: this.parseCount(row.nullCount)
         });
         countsByComboKey.set(entry.comboKey, valueCounts);
       });
