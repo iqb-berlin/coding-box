@@ -1,7 +1,7 @@
 import { Inject, BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as cheerio from 'cheerio';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   ItemDatasetMappingIssueDto,
   ItemDatasetMappingWarningDto,
@@ -26,6 +26,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
 
 const fixedHeaders = [
   'person_login',
@@ -339,6 +340,44 @@ export class ItemDatasetMetadataService {
         result.set(derivedKey, sources);
       });
     });
+    return result;
+  }
+
+  async getVariablePositions(
+    workspaceId: number,
+    columns: ItemDatasetColumn[],
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, number>> {
+    const units = new Map<string, ItemDatasetColumn[]>();
+    for (const column of columns) {
+      const unitColumns = units.get(column.unitName) || [];
+      unitColumns.push(column);
+      units.set(column.unitName, unitColumns);
+    }
+    const fileIds = [...units.keys()].flatMap(unit => [`${unit}.VOUD`, `${unit}.VOCS`]);
+    const files = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In(fileIds) },
+      select: ['file_id', 'data']
+    });
+    const byId = new Map(files.map(file => [file.file_id, file.data]));
+    const result = new Map<string, number>();
+    for (const [unitName, unitColumns] of units) {
+      await checkCancellation?.();
+      try {
+        const positions = buildItemDatasetVariablePositions(
+          unitName,
+          unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId })),
+          byId.get(`${unitName}.VOUD`),
+          byId.get(`${unitName}.VOCS`)
+        );
+        positions.forEach((position, key) => result.set(key, position));
+      } catch (error) {
+        throw new BadRequestException(
+          `Variablenreihenfolge für '${unitName}' konnte nicht gelesen werden: ${(error as Error).message}`
+        );
+      }
+      await this.yieldToEventLoop();
+    }
     return result;
   }
 
