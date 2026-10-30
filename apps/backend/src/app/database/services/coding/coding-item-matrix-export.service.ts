@@ -110,6 +110,7 @@ interface MatrixContext {
   bookletDesigns: Map<string, BookletDesign>;
   profile: ProfileDefinitions;
   derivedSources: Map<string, string[]>;
+  variablePositions: Map<string, number>;
 }
 
 interface ItemMatrixDiagnosticsCollector {
@@ -466,7 +467,12 @@ export class CodingItemMatrixExportService {
       analysisColumns: orderedColumns,
       bookletDesigns,
       profile,
-      derivedSources
+      derivedSources,
+      variablePositions: await this.metadataService.getVariablePositions(
+        workspaceId,
+        orderedColumns,
+        checkCancellation
+      )
     };
   }
 
@@ -600,7 +606,7 @@ export class CodingItemMatrixExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>,
     diagnosticsCollector: ItemMatrixDiagnosticsCollector =
-      this.createDiagnosticsCollector()
+    this.createDiagnosticsCollector()
   ): AsyncGenerator<Record<string, string | number>> {
     const batchSize = 100;
     let written = 0;
@@ -633,7 +639,8 @@ export class CodingItemMatrixExportService {
           context.profile,
           context.derivedSources,
           configuration,
-          checkCancellation
+          checkCancellation,
+          context.variablePositions
         );
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
@@ -753,7 +760,8 @@ export class CodingItemMatrixExportService {
     profile: ProfileDefinitions,
     derivedSources: Map<string, string[]>,
     configuration: ItemMatrixExportConfiguration,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    variablePositions?: ReadonlyMap<string, number>
   ): Promise<ResolvedCell[]> {
     await checkCancellation?.();
     const resolution = this.cellResolver.resolveIncrementally(
@@ -762,7 +770,7 @@ export class CodingItemMatrixExportService {
       responseValues,
       profile,
       derivedSources,
-      configuration
+      { ...configuration, variablePositions }
     );
     let step = resolution.next();
     while (!step.done) {
