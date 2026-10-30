@@ -1,6 +1,7 @@
 import { Repository, DataSource } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { parseStoredResponseValue } from './test-results.util';
 import { responseMatchesChunkCondition } from './test-results-deletion.util';
 import { createWorkspaceTestResultsService } from './workspace-test-results-test.factory';
@@ -870,7 +871,8 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {
+      const filterOptions = new TestResultsFilterOptionsService(responseRepository, dataSource, workspaceExclusionService);
+      const result = await filterOptions.findFlatResponseFilterOptions(1, {
         responseValue: 'needle'
       });
 
