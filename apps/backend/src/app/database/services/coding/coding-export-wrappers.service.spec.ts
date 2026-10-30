@@ -1,5 +1,6 @@
 import { PassThrough, Readable, Writable } from 'stream';
 import { finished } from 'stream/promises';
+import { createCodingExportService } from './coding-export-test.factory';
 import { CodingExportService } from './coding-export.service';
 
 jest.mock('./coding-list.service', () => ({
@@ -23,7 +24,7 @@ const createService = () => {
   const workspaceExclusionService = {
     resolveExclusionsForQueries: jest.fn()
   };
-  const service = new CodingExportService(repositories[0] as never,
+  const service = createCodingExportService(repositories[0] as never,
     repositories[1] as never,
     repositories[2] as never,
     repositories[3] as never,
