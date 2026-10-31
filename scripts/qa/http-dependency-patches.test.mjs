@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const { packages } = require('./package-lock.json');
 const corrected = {
+  'follow-redirects': { 1: '1.16.2' },
   'body-parser': { 1: '1.20.9', 2: '2.4.0' },
   multer: { 2: '2.5.0' },
   undici: { 6: '6.29.1', 7: '7.30.1' }
@@ -37,6 +38,50 @@ function probe(source, location, ...args) {
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), 'ok');
+}
+
+const redirectProbe = `
+const assert = require('node:assert/strict');
+const http = require('node:http');
+const vm = require('node:vm');
+const redirects = require(process.argv[1]);
+const crossRealm = process.argv[2] === 'cross-realm';
+const arrayHeaders = process.argv[3] === 'array';
+const sensitiveHeaders = crossRealm ? vm.runInNewContext("['X-API-Key']") : ['X-API-Key'];
+const target = http.createServer((req, res) => res.end(JSON.stringify(req.headers)));
+target.listen(0, '127.0.0.1', () => {
+  const origin = http.createServer((req, res) => {
+    assert.equal(req.headers['x-api-key'], 'fixture-secret');
+    res.writeHead(302, { Location: 'http://127.0.0.1:' + target.address().port + '/' });
+    res.end();
+  });
+  origin.listen(0, '127.0.0.1', () => {
+    const headers = arrayHeaders
+      ? ['X-API-Key', 'fixture-secret', 'X-Harmless', 'preserved']
+      : { 'X-API-Key': 'fixture-secret', 'X-Harmless': 'preserved' };
+    redirects.http.get({ hostname: '127.0.0.1', port: origin.address().port, path: '/',
+      headers, sensitiveHeaders, agent: false }, response => {
+      let body = '';
+      response.setEncoding('utf8').on('data', chunk => { body += chunk; });
+      response.on('end', () => {
+        const received = JSON.parse(body);
+        assert.equal(received['x-api-key'], undefined);
+        assert.equal(received['x-harmless'], 'preserved');
+        origin.close(() => target.close(() => console.log('ok')));
+      });
+    }).on('error', error => { throw error; });
+  });
+});
+`;
+
+for (const [location] of installations('follow-redirects')) {
+  for (const realm of ['same-realm', 'cross-realm']) {
+    for (const headers of ['object', 'array']) {
+      test(`${location} strips custom credentials across origins with ${realm} ${headers} headers`, () => {
+        probe(redirectProbe, location, realm, headers);
+      });
+    }
+  }
 }
 
 const parserProbe = `
