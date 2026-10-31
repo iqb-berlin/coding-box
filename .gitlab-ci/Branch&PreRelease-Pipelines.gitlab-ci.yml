@@ -194,7 +194,7 @@ check-pre-release-rules:
 
 install-dependencies:
   stage: build
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   rules:
     - !reference [ .quality_gate_rules, rules ]
@@ -352,13 +352,57 @@ build-app:
   extends: .distributed
   rules:
     - !reference [ .default_rules, rules ]
-  image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
+  # A documentation-only follow-up can cancel the pipeline which first builds
+  # a new CICD_BASE_IMAGE tag. Do not depend on that tag already being published.
+  image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
+  before_script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends git
   script:
     - npx nx build frontend --configuration=production
     - npx nx affected --base=HEAD~1 --target=build --exclude=frontend --parallel=3
   artifacts:
     paths:
       - dist
+
+test-backend-container:
+  stage: test
+  interruptible: true
+  allow_failure: false
+  rules:
+    - !reference [ .default_rules, rules ]
+  needs: []
+  image: ${DOCKER_IMAGE}
+  services:
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
+      alias: docker
+  before_script:
+    - docker --version
+    - timeout 120 sh -c 'until docker info; do sleep 2; done'
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then echo "${CI_DEPENDENCY_PROXY_PASSWORD}" | docker login -u "${CI_DEPENDENCY_PROXY_USER}" --password-stdin "${CI_DEPENDENCY_PROXY_SERVER}"; fi
+  script:
+    # Build the actual production Dockerfiles; keep both images in this job.
+    - docker build --progress plain --pull --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
+    - docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    - docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} --version
+    - >-
+      docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} -e
+      "const assert = require('node:assert/strict');
+      for (const name of ['@nestjs/core', '@nestjs/common', '@nestjs/platform-express', '@nestjs/typeorm', '@nestjs/bullmq', '@nestjs-modules/ioredis', 'pg']) require(name);
+      assert.equal(require('libxmljs2').parseXml('<runtime/>').root().name(), 'runtime');
+      assert.ok(require('sqlite3').Database);
+      console.log('Linux production dependencies loaded successfully');"
+    - >-
+      if docker run --rm -e APP_ROLE=api -e JWT_SECRET= coding-box-backend:ci-${CI_JOB_ID} > container-startup.log 2>&1;
+      then cat container-startup.log; echo 'Invalid production configuration unexpectedly started'; exit 1; fi
+    - cat container-startup.log
+    - grep -F 'JWT_SECRET must be a non-empty string' container-startup.log
+  artifacts:
+    when: always
+    paths:
+      - container-startup.log
 
 test-db:
   stage: test-db
@@ -459,7 +503,7 @@ test-db:
 
 test-backend:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   services:
     - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
       alias: bullmq-redis
@@ -500,7 +544,7 @@ test-backend:
 
 test-backend-integration:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   extends: .distributed
   interruptible: true
   allow_failure: false
@@ -533,7 +577,7 @@ test-backend-integration:
 
 test-frontend:
   stage: test-units
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   allow_failure: false
   needs:
@@ -610,8 +654,12 @@ test-replay-live:
     - !reference [ .quality_gate_rules, rules ]
   before_script:
     - apt-get update
-    - apt-get install --yes --no-install-recommends docker.io docker-compose
-    - until docker info > /dev/null 2>&1; do sleep 1; done
+    # Trixie splits the CLI out of docker.io; the daemon runs in the service.
+    - apt-get install --yes --no-install-recommends docker-cli docker-buildx docker-compose
+    - docker --version
+    - docker compose version
+    - docker buildx version
+    - timeout 120 sh -c 'until docker info; do sleep 2; done'
     - npx cypress install
     - npx cypress verify
   script:
@@ -638,7 +686,7 @@ test-workflows-live:
 
 lint-app:
   stage: lint
-  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   extends: .distributed
   interruptible: true
   allow_failure: false

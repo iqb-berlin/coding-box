@@ -11,16 +11,11 @@ FROM base AS dev
 ENTRYPOINT ["npx", "nx"]
 
 
-FROM ${REGISTRY_PATH}node:22-bookworm-slim AS build
+# The full builder supplies Python/make/g++ when a native prebuild requires a
+# newer glibc. Compile against Bookworm and keep the toolchain out of runtime.
+FROM base AS dependencies
 ARG PROJECT
 ENV NODE_ENV=production
-
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt update && \
-    apt install -y --no-install-recommends tini
-
-RUN --mount=type=cache,target=/root/.npm \
-    npm install -g --no-fund npm@11.18.0
 
 USER node
 
@@ -34,6 +29,22 @@ COPY --chown=node:node --from=base /usr/src/coding-box-base/package.json /usr/sr
 COPY --chown=node:node --from=base /usr/src/coding-box-base/vendor ./vendor
 RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 \
     npm ci --omit=dev --no-fund
+
+
+FROM ${REGISTRY_PATH}node:24.22.1-bookworm-slim AS build
+ARG PROJECT
+ENV NODE_ENV=production
+
+RUN --mount=type=cache,target=/var/cache/apt \
+    apt update && \
+    apt install -y --no-install-recommends tini
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --no-fund npm@11.19.1
+
+USER node
+WORKDIR /usr/src/coding-box-${PROJECT}
+COPY --chown=node:node --from=dependencies /usr/src/coding-box-${PROJECT}/ ./
 
 EXPOSE 3333
 

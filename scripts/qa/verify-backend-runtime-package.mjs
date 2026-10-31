@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const workspace = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const smoke = process.argv.includes('--smoke');
+if (smoke) {
+  assert.equal(process.env.BACKEND_HARDENING_FIXTURE, 'true',
+    'Runtime smoke checks require the dedicated disposable PostgreSQL/Redis fixture');
+}
 const dockerfile = readFileSync(join(workspace, 'apps/backend/Dockerfile'), 'utf8');
 const npmVersion = dockerfile.match(/npm install -g --no-fund npm@(\d+\.\d+\.\d+)/)?.[1];
 assert.ok(npmVersion, 'The backend Docker npm version must be pinned');
@@ -47,6 +52,9 @@ try {
     const lock = local('./package-lock.json');
     const modules = [
       'express', '@nestjs/core', '@nestjs/platform-express', '@nestjs/bullmq',
+      '@nestjs/common', '@nestjs/config', '@nestjs/axios', '@nestjs/jwt',
+      '@nestjs/passport', '@nestjs/schedule', '@nestjs/swagger', '@nestjs/typeorm',
+      '@nestjs-modules/ioredis',
       '@nestjs/throttler', 'bullmq', 'ioredis', 'pg', 'libxmljs2', 'sqlite3'
     ];
     for (const name of modules) {
@@ -61,6 +69,16 @@ try {
     assert.ok(local('sqlite3').Database);
     console.log('Fresh production dependencies loaded successfully; manifests unchanged.');
   `]);
+  if (smoke) {
+    // Match Docker's source stage, retaining the installed workspace manifests.
+    const artifact = join(workspace, 'dist/apps/backend');
+    for (const entry of readdirSync(artifact)) {
+      if (!manifests.includes(entry)) cpSync(join(artifact, entry), join(directory, entry), { recursive: true });
+    }
+    run(process.execPath, [join(workspace, 'scripts/e2e/backend-hardening/verify-runtime.mjs')], {
+      env: { ...env, BACKEND_HARDENING_RUNTIME_DIR: directory }
+    });
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }

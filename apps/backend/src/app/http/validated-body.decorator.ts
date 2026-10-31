@@ -1,6 +1,5 @@
 import { Body } from '@nestjs/common';
-import { ApiBody } from '@nestjs/swagger';
-import { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
+import { ApiBody, SchemaObject } from '@nestjs/swagger';
 import { requestBodySchemas, RequestBodyName } from '../../../../../api-dto/request-contracts';
 import { RequestSchema } from '../../../../../api-dto/request-schema';
 import { JsonSchemaValidationPipe } from './json-schema-validation.pipe';

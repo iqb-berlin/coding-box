@@ -172,9 +172,9 @@ progress/results, namespace isolation, pause, prioritized work, ownership,
 conflicts, cancellation and retries. The domain autocoder is mocked in these
 queue tests; PostgreSQL workflows remain covered by their existing gates.
 
-The Nest BullMQ 12 adapter supports Nest 11 but is ESM-only. The Node 22 Jest
-configuration transforms only this adapter and its shared helpers to CommonJS;
-the production dependency is used directly.
+Nest 12 and the BullMQ adapter are ESM-only. The CommonJS application loads
+them directly on Node 24.22.1. The Nx backend test entry enables Jest VM modules;
+no Nest package is transformed to CommonJS. See [the upgrade notes](nest12-upgrade.md).
 
 ## Strict diagnostics
 
