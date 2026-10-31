@@ -1,5 +1,6 @@
 import {
-  BadRequestException, Controller, Get, Param, Query, Req, UseGuards
+  BadRequestException, Controller, Get, Param, Query, Req, UseGuards,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -172,7 +173,7 @@ export class WorkspaceTestCenterController {
     @Query('booklets') booklets: string,
     @Query('metadata') metadata: string,
     @Query('overwriteFileIds') overwriteFileIds: string,
-    @Query('overwriteExistingLogs') overwriteExistingLogs: string,
+    @Query('overwriteExistingLogs', new ParseBoolPipe({ optional: true })) overwriteExistingLogs: boolean | undefined,
     @Query('importRunId') importRunId: string,
     @Query('responseOverwriteMode') responseOverwriteMode: string,
     @Req() request?: { user: { id: number } }
@@ -189,7 +190,7 @@ export class WorkspaceTestCenterController {
       metadata: metadata
     };
 
-    const overwriteLogs = overwriteExistingLogs === 'true';
+    const overwriteLogs = overwriteExistingLogs === true;
     const overwriteIds = (overwriteFileIds || '')
       .split(';')
       .map(s => s.trim())

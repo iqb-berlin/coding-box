@@ -1,5 +1,6 @@
 import {
-  BadRequestException, Controller, Get, Param, Post, Put, Query, UseGuards, Delete, Req, Res
+  BadRequestException, Controller, Get, Param, Post, Put, Query, UseGuards, Delete, Req, Res,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiOkResponse, ApiParam, ApiQuery, ApiTags
@@ -1088,7 +1089,7 @@ export class WorkspaceCoderTrainingController {
   async getTrainingCohensKappa(
     @WorkspaceId() workspace_id: number,
     @Param('trainingId') trainingId: number,
-    @Query('weightedMean') weightedMean?: string,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean?: boolean,
     @Query('level') level?: 'code' | 'score',
     @Query('jobIds') jobIds?: string
   ): Promise<TrainingCohensKappaStatistics> {
@@ -1096,7 +1097,7 @@ export class WorkspaceCoderTrainingController {
       throw new Error('Valid training ID must be provided');
     }
 
-    const useWeightedMean = weightedMean !== 'false'; // Default true
+    const useWeightedMean = weightedMean !== false; // Default true
     const calculationLevel = level || 'code'; // Default to code level
     const selectedJobIds = this.parsePositiveIntCsv(jobIds, 'jobIds');
 
@@ -1194,7 +1195,7 @@ export class WorkspaceCoderTrainingController {
   async exportTrainingReliabilityAsCsv(
     @WorkspaceId() workspace_id: number,
     @Param('trainingId') trainingId: number,
-    @Query('weightedMean') weightedMean: string | undefined,
+    @Query('weightedMean', new ParseBoolPipe({ optional: true })) weightedMean: boolean | undefined,
     @Query('level') level: 'code' | 'score' | undefined,
     @Query('jobIds') jobIds: string | undefined,
     @Res() res: Response
@@ -1207,7 +1208,7 @@ export class WorkspaceCoderTrainingController {
       workspace_id,
       trainingId,
       {
-        weightedMean: weightedMean !== 'false',
+        weightedMean: weightedMean !== false,
         level: level || 'code',
         selectedJobIds: this.parsePositiveIntCsv(jobIds, 'jobIds')
       }

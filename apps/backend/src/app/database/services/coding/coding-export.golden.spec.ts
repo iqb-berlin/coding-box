@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import * as path from 'path';
 import { Repository } from 'typeorm';
-import { CodingExportService } from './coding-export.service';
+import { createCodingExportService } from './coding-export-test.factory';
 import { CodingResultsExportService } from './coding-results-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -205,7 +205,7 @@ describe('CodingExportService golden dataset: minimal-valid', () => {
       get: jest.fn((name: string) => (name === 'host' ? 'localhost:4200' : undefined))
     };
 
-    const monolithicService = new CodingExportService({} as Repository<ResponseEntity>,
+    const monolithicService = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       createCodingJobUnitRepository(goldenCodingJobUnit),

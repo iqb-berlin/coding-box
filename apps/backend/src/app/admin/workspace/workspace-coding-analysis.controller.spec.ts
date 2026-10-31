@@ -45,8 +45,8 @@ describe('WorkspaceCodingAnalysisController', () => {
       controller.getCodingIncompleteVariables(
         7,
         undefined,
-        'false',
-        'true',
+        false,
+        true,
         '55'
       )
     ).resolves.toEqual([]);

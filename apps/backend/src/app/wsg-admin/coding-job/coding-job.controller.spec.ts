@@ -190,7 +190,7 @@ describe('WsgCodingJobController', () => {
   });
 
   it('passes onlyOpen=true to the coding job service when requested', async () => {
-    await controller.getCodingJobUnits(47, 123, req, 'true');
+    await controller.getCodingJobUnits(47, 123, req, true);
 
     expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(
       123,
@@ -212,7 +212,7 @@ describe('WsgCodingJobController', () => {
       47,
       123,
       req,
-      'true'
+      true
     );
 
     expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(
@@ -642,7 +642,7 @@ describe('WsgCodingJobController', () => {
       'updatedAt',
       'asc',
       'none',
-      'true',
+      true,
       req
     );
 

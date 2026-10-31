@@ -578,6 +578,7 @@ test-browser:
     - !reference [ .default_rules, rules ]
   script:
     - npx cypress install
+    - npx cypress verify
     - npx nx run frontend:component-test --browser=electron
     - npx nx run frontend:e2e --configuration=ci --browser=electron
   artifacts:
@@ -612,6 +613,7 @@ test-replay-live:
     - apt-get install --yes --no-install-recommends docker.io docker-compose
     - until docker info > /dev/null 2>&1; do sleep 1; done
     - npx cypress install
+    - npx cypress verify
   script:
     - npx nx run frontend:e2e-replay-live --configuration=production
   artifacts:

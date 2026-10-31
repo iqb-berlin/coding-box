@@ -191,7 +191,7 @@ describe('WorkspaceCoderTrainingController', () => {
     };
     coderTrainingService.getWithinTrainingCohensKappa.mockResolvedValue(kappaStatistics);
 
-    const result = await controller.getTrainingCohensKappa(12, 5, 'false', 'score', '11,12');
+    const result = await controller.getTrainingCohensKappa(12, 5, false, 'score', '11,12');
 
     expect(result).toBe(kappaStatistics);
     expect(coderTrainingService.getWithinTrainingCohensKappa).toHaveBeenCalledWith(12, 5, {
@@ -238,7 +238,7 @@ describe('WorkspaceCoderTrainingController', () => {
     await controller.exportTrainingReliabilityAsCsv(
       12,
       5,
-      'true',
+      true,
       'code',
       '11,12,13',
       response as never
