@@ -232,3 +232,49 @@ Backend- und Frontend-Build als getrennte, aufeinanderfolgende Nx-Aufrufe aus.
 Die Befehle veröffentlichen keine Images. Für die eigentliche Linux-Runtime-
 Freigabe müssen zusätzlich API und Export-Worker mit den dedizierten
 Testdiensten aus dem gebauten Runtime-Image gestartet werden.
+
+
+### Nachprüfung am 1. November 2026 und Aktualisierung auf develop
+
+Die Pipeline [106613](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106613)
+für exakt `cebed211ec6e0ad9318c5d587d49c48d373bfbc6` hat 17 von 18 Jobs bestanden.
+Insbesondere bestand [test-backend-container / 494588](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/494588):
+Root-Builder und Backend-Produktionsimage wurden unter Linux/amd64 gebaut;
+Node meldete `v24.22.1`, die Nest-/PostgreSQL-Module sowie libxmljs2 und sqlite3
+luden erfolgreich im Slim-Image. Der Start mit ungültiger Konfiguration
+scheiterte erwartungsgemäß mit `JWT_SECRET must be a non-empty string`.
+Damit ist die oben beschriebene native Abhängigkeitskorrektur auf diesem Head
+in Linux bestätigt. Ein vollständiger API-/Worker-Start mit Testdiensten im
+Produktionsimage ist durch diesen Job weiterhin nicht nachgewiesen.
+
+Der einzige fehlgeschlagene Job war
+[test-auth-live / 494595](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/494595).
+Compose, Keycloak, Backend, Frontend und JWT-Authentifizierung waren bereit.
+Cypress 15.21.1 brach anschließend bei seiner Binärprüfung nach rund 30 Sekunden
+mit `Cypress verification timed out` ab; die Auth-Tests wurden nicht ausgeführt.
+Die übrigen Browser-, Replay- und Workflow-Jobs sowie Backend-, Integrations-,
+Frontend-, Build-, Lint-, Audit- und Datenbankprüfungen bestanden.
+
+Auf ausdrücklichen Auftrag wurde der Upgrade-Branch konfliktfrei auf den frisch
+abgerufenen `origin/develop` bei `dfb70f25db082442ed9abc72cae1a910bfb4952f`
+rebasiert. Dieser enthält bereits die passende CI-Korrektur aus `296aa5adf`:
+`CYPRESS_VERIFY_TIMEOUT=120000` sowie eine explizite Cypress-Prüfung vor dem
+Start der Live-Umgebung. Außerdem wurden das Redirect-Paketupdate auf 1.16.2
+und die Brotli-Aktualisierung im Frontend-Dockerfile übernommen.
+`git range-diff` zeigt ausschließlich Anpassungen des CI-Patchkontexts an die
+neue Basis; die Upgrade- und Runtime-Korrekturen bleiben inhaltlich erhalten.
+
+Die bisherige grüne Linux-Evidenz gilt ausschließlich für den alten Head.
+Die neue Pipeline muss den rebasierten Head vollständig einschließlich
+`test-auth-live` und `test-backend-container` prüfen. Bis dahin bleibt der PR
+Entwurf; Auto-Merge ist aus. Es wurde nichts gemergt oder veröffentlicht.
+
+Lokale Nachprüfung des rebasierten Stands unter Node 24.22.1: 55/55
+Qualitätsprüfungen (`nx run frontend:test-quality-gates`), 23/23
+HTTP-Abhängigkeitsprüfungen (`nx exec -- node --test` mit absolutem Pfad zu
+`scripts/qa/http-dependency-patches.test.mjs`) sowie 160/160 Backend-Tests
+in sechs Suites (Export-Dateisicherheit, Nest-ESM, Boolean-Queries,
+Multipart-Uploads und Request-Verträge) bestanden. Backend und Frontend wurden
+anschließend mit `nx build <projekt> --configuration=production` getrennt
+und nacheinander erfolgreich gebaut. Die vollständigen Suites und der neue
+Linux-Containerlauf bleiben Aufgabe der aktuellen Remote-Pipeline.
