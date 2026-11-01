@@ -278,3 +278,32 @@ Multipart-Uploads und Request-Verträge) bestanden. Backend und Frontend wurden
 anschließend mit `nx build <projekt> --configuration=production` getrennt
 und nacheinander erfolgreich gebaut. Die vollständigen Suites und der neue
 Linux-Containerlauf bleiben Aufgabe der aktuellen Remote-Pipeline.
+
+
+### Browser-Nachprüfung auf dem rebasierten Head
+
+Pipeline [106767](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106767)
+für `152b1bb3740664518cd1d2ac97bd68b5ac24f589` bestand 18 von 19 Jobs.
+Insbesondere bestanden `test-auth-live`, `test-replay-live`, `test-workflows-live`
+und der Linux-Produktionscontainercheck `495874`; CodeQL bestand ebenfalls.
+Damit ist der Cypress-Verifikationsfehler auf diesem Head behoben.
+
+Einzig [test-browser / 495879](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/495879)
+scheiterte: 198 von 199 E2E-Fällen bestanden. In `manual-preparation.cy.ts`
+fehlte nach dem zweiten Export-Klick der erwartete Exportdialog (Zeile 339).
+Der Test nahm an, dass beim ersten Klick die Jobdefinitionen noch laden.
+Die feste 300-ms-Antwortverzögerung stellt diesen Zustand auf einem ausgelasteten
+Runner nicht sicher: Sind die Definitionen bereits da, kann der erste Klick den
+Dialog öffnen und der zweite den Hintergrund treffen und ihn schließen.
+
+Die Fixture gibt die Definitionen nun erst ausdrücklich nach dem ersten Klick
+frei. Der Test prüft vorher, dass kein Dialog existiert, und wartet zusätzlich
+auf die Kodiererliste. Erst nach abgeschlossener Definitionenantwort folgt der
+Klick zum Öffnen. Schätzung, Scope, kompakter Export und Fehlerbehandlung bleiben
+unverändert geprüft; Produktionscode und globale Timeouts wurden nicht geändert.
+
+Lokal bestand anschließend die vollständige betroffene Cypress-Suite:
+`nx e2e frontend --configuration=ci --browser=electron --spec=cypress/zoneless/manual-preparation.cy.ts`,
+26/26 Tests ohne übersprungene Fälle unter Node 24.22.1 und Cypress 15.21.1.
+Die neue Remote-Pipeline muss diese Testkorrektur und alle anderen blockierenden
+Jobs auf dem neuen Head erneut bestätigen.

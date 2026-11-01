@@ -317,7 +317,14 @@ describe('Zoneless manual preparation workflows', () => {
   it('estimates a scoped manual export, offers the compact format and releases startup after failure', () => {
     setup();
     let attempts = 0;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', { delay: 300, body: [definition] }).as('exportDefinitions');
+    const definitionsGate = gate();
+    // Keep scope loading until the first click has exercised the readiness guard.
+    // A fixed delay can expire before that click on a busy CI runner.
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', request =>
+      definitionsGate.wait.then(() => { request.reply({ body: [definition] }); }))
+      .as('exportDefinitions');
+    cy.intercept('GET', '**/api/admin/workspace/5/coders', { body: { data: coders, total: 2 } })
+      .as('exportCoders');
     cy.intercept('POST', '**/api/admin/workspace/5/coding/export/estimate', request => {
       expect(request.body.exportType).to.equal('by-variable');
       expect(request.body.jobDefinitionIds).to.deep.equal([99]);
@@ -333,7 +340,10 @@ describe('Zoneless manual preparation workflows', () => {
     }).as('startManualExport');
     openManual();
     cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.wait('@exportCoders');
     cy.get('#manual-execution').contains('button', 'Export').as('exportButton').should('be.enabled').click();
+    cy.get('coding-box-manual-coding-export-dialog').should('not.exist');
+    cy.then(() => definitionsGate.release());
     cy.wait('@exportDefinitions');
     cy.get('@exportButton').click();
     cy.get('coding-box-manual-coding-export-dialog').as('exportDialog');
