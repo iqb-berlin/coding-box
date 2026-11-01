@@ -413,6 +413,22 @@ unter Chrome bestand 37/37 Fälle in elf Specs ohne Retries oder übersprungene
 Fälle. Ein vorheriger lokaler Gesamtlauf war nach dem erfolgreichen Tabellenfall
 mit `ENOSPC` beim Schreiben von Screenshots abgebrochen.
 
+Die Folgepipeline [#106836](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106836)
+bestand 17 von 18 Jobs einschließlich der Komponenten-Browsertests. Im
+E2E-Teil von `test-browser` bestanden 198 von 201 Fällen; drei Testcenter-Fälle
+scheiterten am 5-Sekunden-Budget für den Auth-Start beziehungsweise an einer
+in Electron bei `opacity: 0` stehenden Einblendanimation des Importformulars.
+Der Test wartet nun bis zu 30 Sekunden auf den Auth-Request und beendet nur
+endliche Animationen am Formular und seinen Vorfahren, entsprechend dem
+vorhandenen Harness der manuellen Vorbereitung. Der erste Importfall hält
+eine Einblendanimation ausdrücklich bei `opacity: 0` an und prüft damit diese
+Absicherung. Netzwerkverzögerungen, Fortschrittsanzeige, Fehler und erneuter
+Upload werden weiterhin ohne Retries geprüft. Der gezielte lokale Lauf mit
+Node 24.22.1 und Electron bestand 12/12 Fälle ohne Retries oder übersprungene
+Fälle gegen das vorhandene Produktionsartefakt (`frontend:e2e --configuration=ci
+--browser=electron --spec=cypress/zoneless/testcenter-import.cy.ts --skip-nx-cache`).
+Ein neuer Remote-Lauf steht aus.
+
 Remote-CI, Deployment und fachliche Abnahme sind separate Nachweise. Die
 Browserprüfungen dieses Pakets verwenden synthetische API-Fixtures; sie belegen
 keine reale Backend-Persistenz oder Verbindung zu Keycloak beziehungsweise
