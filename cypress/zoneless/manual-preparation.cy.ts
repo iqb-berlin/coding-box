@@ -275,6 +275,62 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Workload draft');
   });
 
+  it('keeps a coder selected while changing capacity and saves the same preview context', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [{ id: 1, label: 'IQB-Standard' }] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/calculate-distribution', {
+      delay: 150,
+      body: {
+        distribution: {}, aggregationInfo: {}, matchingFlags: [], warnings: [], tasksPerCoder: { 11: 8 },
+        doubleCodingInfo: {
+          'UNIT_A::VAR_2': {
+            totalCases: 8, distinctCases: 8, doubleCodedCases: 0,
+            singleCodedCasesAssigned: 8, codingTasksTotal: 8, doubleCodedCasesPerCoder: {}
+          }
+        }
+      }
+    }).as('capacityPreview');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/job-definitions', request => {
+      request.reply({ body: { ...request.body, id: 101 } });
+    }).as('saveCapacityDefinition');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').find('[formControlName="name"]').type('Capacity workflow');
+    cy.get('@definitionDialog').find('[formControlName="durationSeconds"]').type('{selectall}30');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').click();
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Kodierer').click();
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').click();
+    let seed: string;
+    cy.wait('@capacityPreview').then(({ request }) => {
+      expect(request.body.selectedCoders).to.deep.equal([{ id: 11, name: 'Coder A', username: 'Coder A', capacityPercent: 100 }]);
+      seed = request.body.distributionSeed;
+      expect(seed).to.match(/^job-definition:5:/);
+    });
+    cy.get('@definitionDialog').contains('.count-item', 'Für neue Jobs verfügbar:').find('.count-value').should('have.text', '8');
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').find('input[type="number"]').type('{selectall}150').blur();
+    cy.wait('@capacityPreview').then(({ request }) => {
+      expect(request.body.selectedCoders[0].capacityPercent).to.equal(150);
+      expect(request.body.distributionSeed).to.equal(seed);
+    });
+    cy.get('@definitionDialog').find('.coder-card.selected').should('have.length', 1);
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').find('input[type="number"]').should('have.value', '150');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '4:00');
+    cy.get('@definitionDialog').contains('button', 'Definition erstellen').click();
+    cy.wait('@saveCapacityDefinition').then(({ request }) => {
+      expect(request.body.name).to.equal('Capacity workflow');
+      expect(request.body.assignedCoders).to.deep.equal([11]);
+      expect(request.body.assignedCoderConfigs).to.deep.equal([{ coderId: 11, capacityPercent: 150 }]);
+      expect(request.body.assignedVariables).to.deep.equal([{ unitName: 'UNIT_A', variableId: 'VAR_2' }]);
+      expect(request.body.distributionSeed).to.equal(seed);
+    });
+    cy.get('coding-box-coding-job-definition-dialog').should('not.exist');
+  });
+
   it('restores a definition draft after catalog loading and preserves selection across variable reloads', () => {
     setup();
     cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });

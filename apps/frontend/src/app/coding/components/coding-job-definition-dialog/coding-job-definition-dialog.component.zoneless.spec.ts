@@ -210,7 +210,10 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
     const component = fixture.componentInstance;
     const previousCoder = component.availableCoders()[0];
     const otherCoder = { id: 2, name: 'Other coder', capacityPercent: 150 };
-    component.availableCoders.update(coders => [...coders, { ...otherCoder, capacityPercent: 100 }]);
+    jest.spyOn(TestBed.inject(CoderService), 'getCoders').mockReturnValue(of([
+      previousCoder, { ...otherCoder, capacityPercent: 100 }
+    ]));
+    component.loadAvailableCoders();
     component.selectedCoders.select(previousCoder, otherCoder);
     const capacity = computed(() => component.availableCoders()[0].capacityPercent);
     expect(capacity()).toBe(100);
@@ -229,6 +232,34 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
     expect(component.selectedCoders.selected).toHaveLength(2);
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('#capacity').textContent).toBe('50');
+  });
+
+  it('keeps coder selections and capacities independent between dialog instances', async () => {
+    const secondFixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
+    try {
+      secondFixture.autoDetectChanges();
+      await secondFixture.whenStable();
+      const first = fixture.componentInstance;
+      const second = secondFixture.componentInstance;
+      first.selectedCoders.select(first.availableCoders()[0]);
+      first.updateCoderCapacityPercent(first.availableCoders()[0], 150);
+      await fixture.whenStable();
+      await secondFixture.whenStable();
+
+      expect(first.getSelectedCoderConfigs()).toEqual([{ coderId: 1, capacityPercent: 150 }]);
+      expect(second.selectedCoders.selected).toEqual([]);
+      expect(second.availableCoders()[0].capacityPercent).toBe(100);
+      expect(secondFixture.nativeElement.querySelector('#capacity').textContent).toBe('100');
+
+      fixture.destroy();
+      second.selectedCoders.select(second.availableCoders()[0]);
+      second.updateCoderCapacityPercent(second.availableCoders()[0], 50);
+      await secondFixture.whenStable();
+      expect(second.getSelectedCoderConfigs()).toEqual([{ coderId: 1, capacityPercent: 50 }]);
+      expect(secondFixture.nativeElement.querySelector('#capacity').textContent).toBe('50');
+    } finally {
+      secondFixture.destroy();
+    }
   });
 
   it('retains bundle selection across ordering and backend updates with current row identities', async () => {
