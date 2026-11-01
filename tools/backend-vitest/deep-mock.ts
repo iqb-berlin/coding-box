@@ -45,7 +45,12 @@ function createProxy(name: string, base?: object): any {
     },
     getOwnPropertyDescriptor(object, key) {
       const descriptor = Reflect.getOwnPropertyDescriptor(object, key);
-      if (descriptor || isProbe(key)) return descriptor;
+      if (isProbe(key)) return descriptor;
+      if (descriptor) {
+        if (!('value' in descriptor) || (!descriptor.configurable && !descriptor.writable)) return descriptor;
+        // Spies must see the same cached mock as ordinary property access.
+        return { ...descriptor, value: get(object, key, object) };
+      }
       return { configurable: true, enumerable: true, writable: true, value: get(object, key, object) };
     }
   };

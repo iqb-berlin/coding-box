@@ -34,7 +34,7 @@ Für den Unitlauf bleiben `POSTGRES_INTEGRATION_TESTS=false` und
 allgemeinen PostgreSQL-/Redis-Werte selbst. Beide Runner verwenden das vollständige
 SQL-Changelog; TypeORM-Synchronisierung wird nicht als Ersatz verwendet.
 
-## Ausgeführte Prüfungen
+## Erstqualifikation vor der P2-Korrektur
 
 | Prüfung / reproduzierbarer Nx-Aufruf | Ergebnis |
 | --- | --- |
@@ -112,6 +112,38 @@ müssen Installation der separaten Werkzeuge, Typprüfung, Serverbereitstellung,
 Schemaaufbau, Tests, Cleanup und sämtliche Reportformate auf vergleichbaren
 Linux-Runnern mitgemessen werden. Kindprozess-Coverage wird von keinem der
 Elternberichte automatisch zusammengeführt.
+
+## Korrektur des P2-Findings: vorbelegte Methoden und `mockRestore`
+
+Der Deep-Mock-Descriptor verwendet für konfigurierbare oder schreibbare
+Dateneigenschaften jetzt denselben gecachten Wert wie der normale Property-Zugriff. Dadurch greift
+`spyOn` auch nach vorheriger Mock-Konfiguration auf die tatsächlich aufgerufene
+Funktion zu. Accessor-Deskriptoren sowie zugleich nicht konfigurierbare und nicht
+schreibbare Dateneigenschaften werden unverändert weitergegeben; bestehende
+Property-Flags bleiben erhalten.
+
+Sechs zusätzliche Regressionstests prüfen vorbelegte normale Funktionen und
+native Vitest-Mocks, die Identität von Descriptor und Property-Zugriff, Spies
+nach vorheriger Konfiguration sowie `mockRestore` vor dem ersten Property-Zugriff.
+Nach dem Restore bleibt die Mock-API verwendbar; die Implementierung wird wie
+beim bisherigen Jest-Helfer zu einer leeren Funktion zurückgesetzt. Zusätzlich
+werden Descriptor-Flags, schreibbare nicht konfigurierbare Methoden, unveränderbare
+Datenfelder und die Inspektion ohne Ausführung von Gettern geprüft.
+
+Die neuen Fälle scheiterten jeweils vor ihrer Korrektur, während die bisherigen
+17 Vertragstests bestanden. Im abschließenden Vollauf bestehen alle 23
+Vertragstests; die separate Pilot-Typprüfung meldet 0 Diagnosen bei 293 Root-Dateien.
+
+| Erneute Prüfung des Korrekturstands | Ergebnis |
+| --- | --- |
+| `npx nx run backend:test-vitest --coverage --skip-nx-cache` | Bestanden: 4.217 Tests (4.194 Anwendung + 23 Adapter), 107 vorgesehene Skips; keine Ladefehler |
+| `npx nx run backend:test-vitest:integration --skip-nx-cache` | Bestanden: 135 Tests, ausschließlich der optionale Benchmark übersprungen; unveränderte Pflichtprüfung erfolgreich |
+| `npx nx lint backend --skip-nx-cache` | Bestanden |
+
+Anzahl und Status der Testfälle stimmen für alle 271 Anwendungsdateien weiterhin
+mit dem qualifizierten Jest-Bericht überein. Die Korrektur ändert ausschließlich
+den Pilotadapter, seine Regressionstests und diesen Bericht. Bestehende
+Backendquellen, Jest, Validierung, Abhängigkeiten und CI-Gates bleiben unverändert.
 
 ## Artefakte und Grenzen
 
