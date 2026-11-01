@@ -78,10 +78,11 @@ describe('Resource package multipart upload over HTTP', () => {
 
   it('streams ZIP downloads without changing the response bytes or content type', async () => {
     const bytes = Buffer.from([0, 1, 255, 128]);
-    packages.getZippedResourcePackage.mockResolvedValueOnce(Readable.from([bytes]));
+    packages.getZippedResourcePackage.mockResolvedValueOnce({ stream: Readable.from([bytes]), size: bytes.length });
     const response = await fetch(`${baseUrl}/admin/workspace/7/resource-packages/Example`);
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/zip');
+    expect(response.headers.get('content-length')).toBe(String(bytes.length));
     expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
   });
 });

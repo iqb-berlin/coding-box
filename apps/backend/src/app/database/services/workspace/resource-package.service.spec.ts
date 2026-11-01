@@ -233,10 +233,11 @@ describe('ResourcePackageService', () => {
     it('accepts entries at the byte limits and streams the original ZIP back', async () => {
       const buffer = createZip({ a: 'a'.repeat(2048), b: 'b'.repeat(2048) });
       await service.create(7, createUpload('Boundary.itcr.zip', buffer));
-      const stream = await service.getZippedResourcePackage(7, 'Boundary');
+      const { stream, size } = await service.getZippedResourcePackage(7, 'Boundary');
       const chunks: Buffer[] = [];
       for await (const chunk of stream) chunks.push(Buffer.from(chunk));
       expect(Buffer.concat(chunks)).toEqual(buffer);
+      expect(size).toBe(buffer.length);
       expect(packages).toHaveLength(1);
     });
   });
@@ -249,7 +250,7 @@ describe('ResourcePackageService', () => {
       id: 1, name: 'Legacy', workspaceId: 7, scope: 'workspace'
     } as ResourcePackage);
 
-    const stream = await service.getZippedResourcePackage(7, 'Legacy');
+    const { stream } = await service.getZippedResourcePackage(7, 'Legacy');
     const chunks: Buffer[] = [];
     for await (const chunk of stream) chunks.push(Buffer.from(chunk));
     expect(Buffer.concat(chunks)).toEqual(buffer);

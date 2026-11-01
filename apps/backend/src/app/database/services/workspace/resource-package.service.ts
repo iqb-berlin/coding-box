@@ -26,6 +26,11 @@ type SafeZipEntry = {
   entryName: string;
 };
 
+type ResourcePackageDownload = {
+  stream: fs.ReadStream;
+  size: number;
+};
+
 type GeoGebraPackageLayout = {
   bundleRoot: string;
   packageFiles: string[];
@@ -160,7 +165,7 @@ export class ResourcePackageService {
     });
   }
 
-  async getZippedResourcePackage(workspaceId: number, name: string): Promise<fs.ReadStream> {
+  async getZippedResourcePackage(workspaceId: number, name: string): Promise<ResourcePackageDownload> {
     this.logger.log(`Returning zipped resource package ${name} for workspace ${workspaceId}.`);
 
     // Check if the resource package exists for the given workspace
@@ -181,7 +186,13 @@ export class ResourcePackageService {
     }
     // Open before returning so missing files fail through the HTTP exception filter.
     const file = await fs.promises.open(zipPath, 'r');
-    return file.createReadStream();
+    try {
+      const { size } = await file.stat();
+      return { stream: file.createReadStream(), size };
+    } catch (error) {
+      await file.close();
+      throw error;
+    }
   }
 
   async installGeoGebraBundle(): Promise<ResourcePackageDto> {

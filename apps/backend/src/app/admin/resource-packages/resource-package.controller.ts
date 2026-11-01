@@ -134,8 +134,8 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Param('name') name: string
   ): Promise<StreamableFile> {
-    const file = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
-    return new StreamableFile(file);
+    const { stream, size } = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
+    return new StreamableFile(stream, { length: size });
   }
 
   @Post(':workspace_id/resource-packages')

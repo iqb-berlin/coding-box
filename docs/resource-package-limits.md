@@ -24,7 +24,8 @@ Dekodieren der Eintragsnamen begrenzt, bevor `adm-zip` die impliziten Verzeichni
 CRC- und Pfadprüfungen bleiben aktiv. Fehlerhafte Archive werden vor der Veröffentlichung des Pakets verworfen;
 temporär entpackte Dateien werden entfernt.
 
-Dateisystemzugriffe erfolgen asynchron. ZIP-Downloads werden gestreamt; bestehende ZIP-Namen und
+Dateisystemzugriffe erfolgen asynchron. ZIP-Downloads werden mit `Content-Length` gestreamt, damit die
+bestehende Fortschrittsanzeige die Gesamtgröße erhält. Bestehende ZIP-Namen und
 Groß-/Kleinschreibungsvarianten bleiben lesbar. Die Dekompression verwendet den asynchronen Leser von
 `adm-zip`; begrenzte Kopier-, Hash- und CRC-Arbeiten laufen weiterhin im API-Prozess.
 
