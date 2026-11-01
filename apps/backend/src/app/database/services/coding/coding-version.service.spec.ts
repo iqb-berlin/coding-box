@@ -2,6 +2,8 @@ import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import { CodingJobFreshnessService } from './coding-job-freshness.service';
+import { CodingFreshnessQueryService } from './coding-freshness-query.service';
 import { CodingVersionService } from './coding-version.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
@@ -262,8 +264,11 @@ describe('CodingVersionService', () => {
         audits: 0
       };
       const staged = new Map<EntityManager, typeof committed>();
+      const freshnessRepository = {} as Repository<CodingUnitFreshness>;
+      const responseRepository = {} as Repository<ResponseEntity>;
+      const connection = {} as DataSource;
       const realFreshnessService = new CodingFreshnessService(
-        {} as Repository<CodingUnitFreshness>, {} as Repository<ResponseEntity>, {} as DataSource
+        freshnessRepository, responseRepository, connection, new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection), new CodingJobFreshnessService(connection)
       );
       let transactionCount = 0;
       Object.assign(mockResponseRepository, {

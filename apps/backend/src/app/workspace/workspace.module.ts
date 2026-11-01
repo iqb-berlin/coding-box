@@ -46,7 +46,6 @@ import { CodingJob } from '../database/entities/coding-job.entity';
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
-import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import { DoubleCodingReviewDecision } from '../database/entities/double-coding-review-decision.entity';
 import {
   WorkspaceCoreService, WorkspaceFilesService, WorkspaceXmlSchemaValidationService, WorkspaceFileStorageService, WorkspaceFileParsingService, WorkspaceCodingService, WorkspaceUsersService, ResourcePackageService, UnitInfoService, UnitTagService, UnitNoteService, BookletInfoService
@@ -118,7 +117,6 @@ import { CodingModule } from '../coding/coding.module';
       CodingJobUnit,
       CodingJobVariable,
       JobDefinition,
-      CodingUnitFreshness,
       DoubleCodingReviewDecision
     ]),
     HttpModule,

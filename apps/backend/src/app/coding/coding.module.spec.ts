@@ -46,6 +46,9 @@ import { CodingAggregationPeerService } from '../database/services/coding/coding
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
 import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
 import { CodingFreshnessService } from '../database/services/coding/coding-freshness.service';
+import { CodingFreshnessQueryService } from '../database/services/coding/coding-freshness-query.service';
+import { CodingJobFreshnessService } from '../database/services/coding/coding-job-freshness.service';
+import { CodingFreshnessModule } from './coding-freshness.module';
 import { CodingItemMatrixExportService } from '../database/services/coding/coding-item-matrix-export.service';
 import { CodingJobMutationService } from '../database/services/coding/coding-job-mutation.service';
 import { CodingJobResponsesService } from '../database/services/coding/coding-job-responses.service';
@@ -160,6 +163,16 @@ describe('CodingModule', () => {
 
     const module = await createApplication();
     try {
+      const freshness = module.select(CodingFreshnessModule);
+      const freshnessFacade = freshness.get(CodingFreshnessService, { strict: true });
+      const freshnessQueries = freshness.get(CodingFreshnessQueryService, { strict: true });
+      const jobFreshness = freshness.get(CodingJobFreshnessService, { strict: true });
+      expect(Reflect.get(freshnessFacade, 'queries')).toBe(freshnessQueries);
+      expect(Reflect.get(freshnessFacade, 'jobs')).toBe(jobFreshness);
+      expect(Reflect.get(freshnessQueries, 'workspaceExclusionService')).toBe(module.get(WorkspaceExclusionService));
+      expect(Reflect.get(jobFreshness, 'connection')).toBe(module.get(DataSource));
+      expect(Reflect.getMetadata(MODULE_METADATA.EXPORTS, CodingFreshnessModule)).toEqual([CodingFreshnessService]);
+      expect(() => module.select(CodingModule).get(CodingFreshnessQueryService, { strict: true })).toThrow();
       const settings = module.select(WorkspaceSettingsModule).get(WorkspaceSettingsService, { strict: true });
       expect((module.get(WorkspaceSettingsController) as unknown as { settings: WorkspaceSettingsService }).settings).toBe(settings);
       expect((module.get(WorkspaceFilesController) as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
