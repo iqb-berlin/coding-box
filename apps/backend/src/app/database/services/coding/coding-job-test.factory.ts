@@ -1,4 +1,5 @@
 import { Repository, Connection } from 'typeorm';
+import { createFacadeTestProxy } from '../shared/facade-test.factory';
 import { CodingJobService } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -64,39 +65,8 @@ export function createCodingJobService(codingJobRepository: Repository<CodingJob
   const replay = new CodingJobReplayService(codingJobRepository, codingJobVariableBundleRepository, codingJobUnitRepository, variableBundleRepository, responseRepository, workspaceExclusionService, query, scheme);
   const status = new CodingJobStatusService(access, mutation, query);
   const facade = new CodingJobService(access, aggregation, distribution, mutation, progress, query, replay, responses, scheme, status);
-  // Existing behavioral tests probe/stub private methods; redirect those probes to
-  // their owning provider while production callers use the explicit facade.
-  const owners = new Map<string, object>();
   const providers = {
     mutation, responses, access, query, distribution, status, progress, scheme, replay, aggregation
   };
-  for (const provider of Object.values(providers)) {
-    for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(provider))) {
-      if (name !== 'constructor') owners.set(name, provider);
-    }
-  }
-  return new Proxy(facade, {
-    get(target, key) {
-      const owner = (typeof key === 'string' ? owners.get(key) : undefined) || Object.values(providers).find(provider => Reflect.has(provider, key));
-      const value = Reflect.get(owner || target, key);
-      if (owner && typeof value === 'function' && !Reflect.get(value, '_isMockFunction')) return value.bind(owner);
-      return value;
-    },
-    set(target, key, value) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) return Reflect.set(owner, key, value);
-      const matching = Object.values(providers).filter(provider => Reflect.has(provider, key));
-      if (matching.length) { matching.forEach(provider => Reflect.set(provider, key, value)); return true; }
-      return Reflect.set(target, key, value);
-    },
-    getOwnPropertyDescriptor(target, key) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) {
-        return {
-          configurable: true, enumerable: true, writable: true, value: Reflect.get(owner, key)
-        };
-      }
-      return Reflect.getOwnPropertyDescriptor(target, key);
-    }
-  });
+  return createFacadeTestProxy(facade, Object.values(providers));
 }

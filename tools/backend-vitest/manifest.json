@@ -1,0 +1,14 @@
+{
+  "unit": [
+    "apps/backend/src/app/admin/system-notifications/system-notification.service.spec.ts",
+    "apps/backend/src/app/admin/resource-packages/resource-package.controller.spec.ts",
+    "apps/backend/src/app/app.controller.spec.ts",
+    "apps/backend/src/app/http/request-validation.integration.spec.ts",
+    "apps/backend/src/app/job-queue/workspace-worker-host.spec.ts",
+    "apps/backend/src/app/job-queue/processors/test-person-coding.processor.spec.ts",
+    "apps/backend/src/app/job-queue/processors/export-job.processor.spec.ts",
+    "apps/backend/src/app/config/environment.validation.spec.ts",
+    "apps/backend/src/app/config/shutdown.spec.ts",
+    "apps/backend/src/app/config/nest-esm.spec.ts"
+  ]
+}
