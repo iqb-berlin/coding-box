@@ -58,7 +58,7 @@
       }
     },
     "test": {
-      "executor": "@nx/jest:jest",
+      "executor": "nx:run-commands",
       "outputs": [
         "{workspaceRoot}/coverage/apps/backend"
       ],
@@ -90,13 +90,11 @@
         { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
       ],
       "options": {
-        "jestConfig": "apps/backend/jest.config.ts",
-        "passWithNoTests": false
+        "command": "node scripts/qa/run-backend-jest.mjs"
       },
       "configurations": {
         "ci": {
-          "ci": true,
-          "codeCoverage": true
+          "command": "node scripts/qa/run-backend-jest.mjs --configuration=ci"
         }
       }
     },
@@ -128,6 +126,11 @@
       "cache": false,
       "options": {
         "command": "node scripts/qa/verify-backend-runtime-package.mjs"
+      },
+      "configurations": {
+        "smoke": {
+          "command": "node scripts/qa/verify-backend-runtime-package.mjs --smoke"
+        }
       }
     },
     "verify-codebook-autocoder-live": {
@@ -183,6 +186,20 @@
       "configurations": {
         "full": {
           "command": "node scripts/qa/run-bullmq-integration.mjs --all"
+        }
+      }
+    },
+    "test-jest": {
+      "executor": "@nx/jest:jest",
+      "cache": false,
+      "options": {
+        "jestConfig": "apps/backend/jest.config.ts",
+        "passWithNoTests": false
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
         }
       }
     }

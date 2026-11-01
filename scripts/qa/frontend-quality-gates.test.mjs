@@ -299,7 +299,7 @@ test('image builds authenticate with the Dependency Proxy only when it is used',
   for (const command of logins) {
     for (const proxy of ['', 'proxy.example/containers/']) {
       const result = spawnSync('sh', ['-eu', '-c',
-        `docker() { printf '%s\\n' "$*"; }\n${command}`], {
+        `docker() { printf '%s\\n' "$*"; case " $* " in *" --password-stdin "*) cat;; esac; }\n${command}`], {
         encoding: 'utf8',
         env: {
           PATH: process.env.PATH,
@@ -312,7 +312,10 @@ test('image builds authenticate with the Dependency Proxy only when it is used',
         }
       });
       assert.equal(result.status, 0, result.stderr);
-      assert.equal(result.stdout, proxy ? 'login -u probe-user -p probe-password proxy.example\n' : '');
+      const login = command.includes('--password-stdin') ?
+        'login -u probe-user --password-stdin proxy.example\nprobe-password\n' :
+        'login -u probe-user -p probe-password proxy.example\n';
+      assert.equal(result.stdout, proxy ? login : '');
     }
   }
 });

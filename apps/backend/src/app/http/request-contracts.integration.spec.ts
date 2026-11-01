@@ -1,7 +1,6 @@
 import { ExecutionContext, INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { SchemaObject } from '@nestjs/swagger/dist/interfaces/open-api-spec.interface';
+import { DocumentBuilder, SchemaObject, SwaggerModule } from '@nestjs/swagger';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { WorkspaceController } from '../admin/workspace/workspace.controller';
