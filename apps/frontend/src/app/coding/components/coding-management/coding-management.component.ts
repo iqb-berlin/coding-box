@@ -40,7 +40,6 @@ import {
   TestPersonCodingDialogResult
 } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import {
-  AppliedResultsOverview,
   TestPersonCodingService,
   TestResultsChangedEvent
 } from '../../services/test-person-coding.service';
@@ -60,6 +59,9 @@ import {
   CodingResultsExportFormat
 } from '../../services/coding-management.service';
 import { CodingManagementUiService } from './services/coding-management-ui.service';
+import { CodingStatusDataFacade } from './services/coding-status-data.facade';
+import { CodingFreshnessPollingFacade } from './services/coding-freshness-polling.facade';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { StatisticsCardComponent } from './components/statistics-card/statistics-card.component';
 import { ResponseFiltersComponent } from './components/response-filters/response-filters.component';
 import { ResponseTableComponent } from './components/response-table/response-table.component';
@@ -71,12 +73,9 @@ import {
 import { ItemListDialogComponent } from '../../../shared/dialogs/item-list-dialog/item-list-dialog.component';
 import { ReviewListDialogComponent } from './components/review-list-dialog/review-list-dialog.component';
 import {
-  CodingFreshnessScopeDto,
   CodingFreshnessState,
-  CodingFreshnessSummaryDto,
   CodingFreshnessSummaryItemDto
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
-import { AutocodingReadinessDto } from '../../../../../../../api-dto/coding/autocoding-readiness.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
@@ -90,10 +89,7 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
-  getSecondAutocodingFreshnessWarnings,
-  hasOnlyManualCodingFreshnessWarnings,
-  isCodingFreshnessOpenWarning,
-  isSecondAutocodingWaitingForManualCoding
+  hasOnlyManualCodingFreshnessWarnings
 } from '../../../shared/utils/coding-freshness-text.util';
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
@@ -116,6 +112,7 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
     ResponseTableComponent,
     MatProgressSpinnerModule
   ],
+  providers: [CodingStatusDataFacade, CodingFreshnessPollingFacade],
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
@@ -125,6 +122,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   readonly hideActionButtons = input(false);
 
   private appService = inject(AppService);
+  private readonly statusData = inject(CodingStatusDataFacade);
+  private readonly freshnessPolling = inject(CodingFreshnessPollingFacade);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -178,22 +177,22 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   readonly sortDirection = signal<CodingResponseSortDirection | ''>('');
 
   readonly selectedStatisticsVersion = signal<'v1' | 'v2' | 'v3'>('v1');
-  readonly codingFreshnessSummary = signal<CodingFreshnessSummaryDto | null>(null);
-  readonly codingFreshnessScope = signal<CodingFreshnessScopeDto | null>(null);
-  readonly isLoadingCodingFreshness = signal(false);
-  readonly autocodingReadiness = signal<AutocodingReadinessDto | null>(null);
-  protected readonly isLoadingAutocodingReadiness = signal(false);
-  readonly autocodingReadinessLoadFailed = signal(false);
-  readonly manualAppliedResultsOverview = signal<AppliedResultsOverview | null>(null);
-  protected readonly isLoadingManualAppliedResultsOverview = signal(false);
-  readonly manualAppliedResultsOverviewLoadFailed = signal(false);
+  readonly codingFreshnessSummary = this.statusData.codingFreshnessSummary;
+  readonly codingFreshnessScope = this.statusData.codingFreshnessScope;
+  readonly isLoadingCodingFreshness = this.statusData.isLoadingCodingFreshness;
+  readonly autocodingReadiness = this.statusData.autocodingReadiness;
+  protected readonly isLoadingAutocodingReadiness = this.statusData.isLoadingAutocodingReadiness;
+  readonly autocodingReadinessLoadFailed = this.statusData.autocodingReadinessLoadFailed;
+  readonly manualAppliedResultsOverview = this.statusData.manualAppliedResultsOverview;
+  protected readonly isLoadingManualAppliedResultsOverview = this.statusData.isLoadingManualAppliedResultsOverview;
+  readonly manualAppliedResultsOverviewLoadFailed = this.statusData.manualAppliedResultsOverviewLoadFailed;
   readonly evaluationMode = signal(false);
   protected readonly enableRegexSearch = signal(false);
   readonly autoRefreshManualCodingJobs = signal(true);
-  readonly hasLoadedFullCodingStatusOverview = signal(false);
+  readonly hasLoadedFullCodingStatusOverview = this.statusData.hasLoadedFullCodingStatusOverview;
   protected readonly isStartingFreshnessCoding = signal(false);
-  readonly activeFreshnessJobId = signal<string | null>(null);
-  readonly activeFreshnessJobProgress = signal<number | null>(null);
+  readonly activeFreshnessJobId = computed(() => this.freshnessPolling.jobId);
+  readonly activeFreshnessJobProgress = this.freshnessPolling.progress;
 
   readonly filterParams = signal<FilterParams>({
     value: '',
@@ -212,8 +211,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   });
 
   private destroy$ = new Subject<void>();
-  private freshnessJobPollingInterval: number | null = null;
-  private activeFreshnessJobWorkspaceId: number | null = null;
   private lastResetProgress: number | null | undefined;
   private hasLoadedManualCodingJobRefreshSetting = false;
   private pendingAutomaticCodingStatusRefreshAfterBackgroundJob = false;
@@ -221,12 +218,29 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private scheduledAutomaticCodingStatusRefresh: number | null = null;
   private freshnessJobCompletionRefreshHandledIds = new Set<string>();
   private resetCompletionRefreshHandledAfterGuardClear = false;
-  private hasShownFreshnessJobStatusPollingError = false;
   private readonly responseTableRequestCancel$ = new Subject<void>();
   private responseTableRequestId = 0;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
+    this.statusData.deferredRefresh$.pipe(takeUntil(this.destroy$)).subscribe(force => {
+      this.deferCodingStatusRefreshIfBackgroundJobIsRunning(force);
+    });
+    this.freshnessPolling.errors$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+      this.snackBar.open(error, 'Schließen', { duration: 5000 });
+    });
+    this.freshnessPolling.completed$.pipe(takeUntil(this.destroy$)).subscribe(({ jobId, status }) => {
+      const pendingRefreshHandled = this.finishFreshnessCodingJob(jobId);
+      this.stopFreshnessJobPolling();
+      if (status.status === 'completed') {
+        this.freshnessJobCompletionRefreshHandledIds.add(jobId);
+        this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
+        this.snackBar.open('Betroffene Ergebnisse wurden kodiert.', 'Schließen', { duration: 4000 });
+      } else if (status.status === 'failed') {
+        this.snackBar.open(status.error || 'Auto-Coding für betroffene Ergebnisse fehlgeschlagen.', 'Schließen', { duration: 6000 });
+      }
+      if (!pendingRefreshHandled) this.performCodingStatusOverviewRefresh(true);
+    });
     if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     const workspaceId = this.appService.selectedWorkspaceId;
     let pendingStatisticsVersion: StatisticsVersion | null = null;
@@ -383,13 +397,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.activeFreshnessJobId()) {
-      this.testPersonCodingService.trackFreshnessCodingGuardUntilComplete(
-        this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId,
-        this.activeFreshnessJobId()
-      );
-    }
-    this.stopFreshnessJobPolling();
+    this.freshnessPolling.dispose();
+    this.statusData.dispose();
     this.clearScheduledAutomaticCodingStatusRefresh();
     this.codingManagementService.cancelViewBoundStatisticsFetches(this.appService.selectedWorkspaceId);
     this.responseTableRequestCancel$.next();
@@ -444,139 +453,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   loadCodingFreshness(loadScopeOnWarnings = true): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
-      return;
-    }
-
-    this.isLoadingCodingFreshness.set(true);
-    this.testPersonCodingService.getCodingFreshness(workspaceId)
-      .pipe(
-        finalize(() => {
-          this.isLoadingCodingFreshness.set(false);
-        }),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(summary => {
-        this.codingFreshnessSummary.set(summary);
-        if (loadScopeOnWarnings && this.hasCodingFreshnessWarnings()) {
-          this.loadCodingFreshnessScope();
-        } else {
-          this.codingFreshnessScope.set(null);
-        }
-        if (!loadScopeOnWarnings && this.hasSecondAutocodingFreshnessWarnings()) {
-          this.loadManualAppliedResultsOverview();
-        }
-      });
+    this.statusData.loadCodingFreshness(loadScopeOnWarnings);
   }
 
   loadCodingFreshnessScope(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    this.testPersonCodingService.getCodingFreshnessScope(workspaceId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(scope => {
-        this.codingFreshnessScope.set(scope);
-      });
+    this.statusData.loadCodingFreshnessScope();
   }
 
   loadManualAppliedResultsOverview(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.manualAppliedResultsOverview.set(null);
-      this.manualAppliedResultsOverviewLoadFailed.set(false);
-      return;
-    }
-
-    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
-      return;
-    }
-
-    this.isLoadingManualAppliedResultsOverview.set(true);
-    this.manualAppliedResultsOverviewLoadFailed.set(false);
-    this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
-      .pipe(
-        finalize(() => {
-          this.isLoadingManualAppliedResultsOverview.set(false);
-        }),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(overview => {
-        this.manualAppliedResultsOverview.set(overview);
-        this.manualAppliedResultsOverviewLoadFailed.set(overview === null);
-      });
+    this.statusData.loadManualAppliedResultsOverview();
   }
 
   loadAutocodingReadiness(forceRefresh = false): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(forceRefresh)) {
-      return;
-    }
-
-    this.isLoadingAutocodingReadiness.set(true);
-    this.autocodingReadinessLoadFailed.set(false);
-    this.testPersonCodingService.getAutocodingReadiness(workspaceId, 1, forceRefresh)
-      .pipe(
-        finalize(() => {
-          this.isLoadingAutocodingReadiness.set(false);
-        }),
-        takeUntil(this.destroy$)
-      )
-      .subscribe({
-        next: readiness => {
-          this.autocodingReadiness.set(readiness);
-          this.hasLoadedFullCodingStatusOverview.set(true);
-        },
-        error: () => {
-          this.autocodingReadiness.set(null);
-          this.autocodingReadinessLoadFailed.set(true);
-        }
-      });
+    this.statusData.loadAutocodingReadiness(forceRefresh);
   }
 
   private loadCachedAutocodingReadiness(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
-      return;
-    }
-
-    const cachedOverview =
-      this.testPersonCodingService.getCachedCodingStatusOverview(workspaceId, 1);
-    if (cachedOverview) {
-      this.codingFreshnessSummary.set(cachedOverview.codingFreshness);
-      this.autocodingReadiness.set(cachedOverview.autocodingReadiness);
-      this.manualAppliedResultsOverview.set(cachedOverview.appliedResultsOverview);
-      this.autocodingReadinessLoadFailed.set(false);
-      this.manualAppliedResultsOverviewLoadFailed.set(false);
-      this.hasLoadedFullCodingStatusOverview.set(true);
-      return;
-    }
-
-    this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(readiness => {
-        if (!readiness) {
-          return;
-        }
-
-        this.autocodingReadiness.set(readiness);
-        this.autocodingReadinessLoadFailed.set(false);
-      });
+    this.statusData.loadCachedAutocodingReadiness();
   }
 
   refreshAutocodingReadiness(): void {
@@ -755,6 +648,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       states: ['PENDING', 'STALE']
     })
       .pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
         finalize(() => {
           this.isStartingFreshnessCoding.set(false);
         }),
@@ -778,9 +672,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           true,
           result.jobId
         );
-        this.activeFreshnessJobId.set(result.jobId);
-        this.activeFreshnessJobWorkspaceId = workspaceId;
-        this.activeFreshnessJobProgress.set(0);
+        this.freshnessPolling.track(result.jobId, workspaceId);
         const dialogRef = this.openTestPersonCodingDialog({
           initialJobId: result.jobId,
           initialAutoCoderRun: version === 'v3' ? 2 : 1
@@ -1047,23 +939,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  readonly codingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => this.allCodingFreshnessWarnings()
-    .filter(item => !(item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding())));
-
-  readonly hasCodingFreshnessWarnings = computed<boolean>(() => this.codingFreshnessWarnings().length > 0 ||
-      this.shouldShowSecondAutocodingWaitingState());
-
-  readonly codingFreshnessChipWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => {
-    if (this.codingFreshnessWarnings().length > 0) {
-      return this.codingFreshnessWarnings();
-    }
-
-    if (this.shouldShowSecondAutocodingWaitingState()) {
-      return this.secondAutocodingFreshnessWarnings();
-    }
-
-    return [];
-  });
+  readonly codingFreshnessWarnings = this.statusData.warnings;
+  readonly hasCodingFreshnessWarnings = this.statusData.hasWarnings;
+  readonly codingFreshnessChipWarnings = this.statusData.chipWarnings;
 
   protected readonly hasImportedResultsWithoutCoding = computed<boolean>(() => this.statisticsLoaded() &&
       !this.hasCodingFreshnessWarnings() &&
@@ -1291,59 +1169,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private startFreshnessJobPolling(
     jobId: string,
-    workspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId
+    workspaceId = this.freshnessPolling.workspaceId || this.appService.selectedWorkspaceId
   ): void {
-    this.stopFreshnessJobPolling();
-    this.activeFreshnessJobId.set(jobId);
-    this.activeFreshnessJobWorkspaceId = workspaceId;
-    this.freshnessJobPollingInterval = window.setInterval(() => {
-      const currentWorkspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId;
-      if (!currentWorkspaceId) {
-        this.stopFreshnessJobPolling();
-        return;
-      }
-
-      this.testPersonCodingService.getJobStatus(currentWorkspaceId, jobId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(status => {
-          if (!('status' in status)) {
-            if (!this.hasShownFreshnessJobStatusPollingError) {
-              this.hasShownFreshnessJobStatusPollingError = true;
-              this.snackBar.open(status.error, 'Schließen', { duration: 5000 });
-            }
-            return;
-          }
-
-          this.hasShownFreshnessJobStatusPollingError = false;
-          this.activeFreshnessJobProgress.set(status.progress);
-          if (['completed', 'failed', 'cancelled', 'paused'].includes(status.status)) {
-            const pendingRefreshHandled = this.finishFreshnessCodingJob(jobId);
-            this.stopFreshnessJobPolling();
-            if (status.status === 'completed') {
-              this.freshnessJobCompletionRefreshHandledIds.add(jobId);
-              this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
-              this.snackBar.open(
-                'Betroffene Ergebnisse wurden kodiert.',
-                'Schließen',
-                { duration: 4000 }
-              );
-            } else if (status.status === 'failed') {
-              this.snackBar.open(
-                status.error || 'Auto-Coding für betroffene Ergebnisse fehlgeschlagen.',
-                'Schließen',
-                { duration: 6000 }
-              );
-            }
-            if (!pendingRefreshHandled) {
-              this.performCodingStatusOverviewRefresh(true);
-            }
-          }
-        });
-    }, 2000);
+    this.freshnessPolling.start(jobId, workspaceId);
   }
 
   private finishFreshnessCodingJob(jobId: string): boolean {
-    const workspaceId = this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId;
+    const workspaceId = this.freshnessPolling.workspaceId || this.appService.selectedWorkspaceId;
     const hadPendingRefresh = this.hasPendingCodingStatusOverviewRefreshAfterBackgroundJob();
     this.codingBackgroundJobsService.setJobRunning(
       workspaceId,
@@ -1355,30 +1187,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       !this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId);
   }
 
-  private readonly allCodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => (this.codingFreshnessSummary()?.items || [])
-    .filter(isCodingFreshnessOpenWarning));
-
-  private readonly secondAutocodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings()));
-
-  private readonly hasSecondAutocodingFreshnessWarnings = computed<boolean>(() => this.secondAutocodingFreshnessWarnings().length > 0);
-
-  private readonly isSecondAutocodingWaitingForManualCoding = computed<boolean>(() => isSecondAutocodingWaitingForManualCoding(
-    this.allCodingFreshnessWarnings(),
-    this.manualAppliedResultsOverview(),
-    this.manualAppliedResultsOverviewLoadFailed()
-  ));
-
-  private readonly shouldShowSecondAutocodingWaitingState = computed<boolean>(() => this.isSecondAutocodingWaitingForManualCoding() &&
-      this.codingFreshnessWarnings().length === 0);
+  private readonly isSecondAutocodingWaitingForManualCoding = this.statusData.isSecondAutocodingWaiting;
+  private readonly shouldShowSecondAutocodingWaitingState = this.statusData.shouldShowSecondAutocodingWaiting;
 
   private stopFreshnessJobPolling(): void {
-    if (this.freshnessJobPollingInterval) {
-      clearInterval(this.freshnessJobPollingInterval);
-      this.freshnessJobPollingInterval = null;
-    }
-    this.activeFreshnessJobId.set(null);
-    this.activeFreshnessJobWorkspaceId = null;
-    this.activeFreshnessJobProgress.set(null);
+    this.freshnessPolling.stop();
   }
 
   private startResponseTableRequest(): number {
