@@ -403,6 +403,16 @@ prüfen die Integration und Payloads weiterhin.
 | `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/info-dialogs.cy.ts --skipNxCache` | 4/4 Fälle bestanden; insgesamt 37 Browserfälle ohne Retries oder übersprungene Fälle. |
 | `npx nx run frontend:zoneless-approval --skipNxCache` | Bestanden; 422 Quelldateien und 9.450 Einträge. |
 
+Die erste Remote-Pipeline #106791 zeigte eine fehlende Übersetzungsinitialisierung
+im isolierten Komponenten-Browsertest der flachen Ergebnistabelle. Der Test lädt
+nun die echte deutsche Übersetzungsdatei und aktiviert `de`, wie die übrigen
+übersetzten Komponentenfälle. Die Prüfung des sichtbaren Labels „Antwortstatus“
+und des daraus entstehenden Filterrequests bleibt erhalten.
+Der anschließende vollständige lokale Lauf von `frontend:component-test`
+unter Chrome bestand 37/37 Fälle in elf Specs ohne Retries oder übersprungene
+Fälle. Ein vorheriger lokaler Gesamtlauf war nach dem erfolgreichen Tabellenfall
+mit `ENOSPC` beim Schreiben von Screenshots abgebrochen.
+
 Remote-CI, Deployment und fachliche Abnahme sind separate Nachweise. Die
 Browserprüfungen dieses Pakets verwenden synthetische API-Fixtures; sie belegen
 keine reale Backend-Persistenz oder Verbindung zu Keycloak beziehungsweise
