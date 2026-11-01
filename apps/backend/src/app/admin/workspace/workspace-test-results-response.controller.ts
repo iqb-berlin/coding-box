@@ -1,5 +1,6 @@
 import {
-  BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, Logger
+  BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, Logger,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -259,13 +260,13 @@ export class WorkspaceTestResultsResponseController {
     @Query('codingCode') codingCode?: string,
     @Query('score') score?: string,
     @Query('version') version?: 'v1' | 'v2' | 'v3',
-    @Query('geogebra') geogebra?: string,
-    @Query('derivedOnly') derivedOnly?: string,
+    @Query('geogebra', new ParseBoolPipe({ optional: true })) geogebra?: boolean,
+    @Query('derivedOnly', new ParseBoolPipe({ optional: true })) derivedOnly?: boolean,
     @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
     @Query('personLogin') personLogin?: string,
     @Query('sortBy') sortBy?: ResponseSearchSortBy,
     @Query('sortDirection') sortDirection?: ResponseSearchSortDirection,
-    @Query('regexSearch') regexSearch?: string,
+    @Query('regexSearch', new ParseBoolPipe({ optional: true })) regexSearch?: boolean,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
@@ -274,7 +275,7 @@ export class WorkspaceTestResultsResponseController {
     }
 
     try {
-      const effectiveRegexSearch = regexSearch === 'true' &&
+      const effectiveRegexSearch = regexSearch === true &&
         await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
@@ -290,8 +291,8 @@ export class WorkspaceTestResultsResponseController {
           codingCode,
           score,
           version,
-          geogebra: geogebra === 'true',
-          derivedOnly: derivedOnly === 'true',
+          geogebra: geogebra === true,
+          derivedOnly: derivedOnly === true,
           responseSource,
           personLogin,
           regexSearch: effectiveRegexSearch

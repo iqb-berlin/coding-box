@@ -75,7 +75,22 @@ import { CodingJobCoder } from '../database/entities/coding-job-coder.entity';
 import { JournalEntry } from '../database/entities/journal-entry.entity';
 import { UsersService } from '../database/services/users/users.service';
 
+import { CodingExportService } from '../database/services/coding/coding-export.service';
+import { CodingExportQueryService } from '../database/services/coding/coding-export-query.service';
+import { CodingExportFormattingService } from '../database/services/coding/coding-export-formatting.service';
+import { CodingExportReplayService } from '../database/services/coding/coding-export-replay.service';
+import { CodingExportDownloadService } from '../database/services/coding/coding-export-download.service';
+import { CodingAggregatedExportService } from '../database/services/coding/coding-aggregated-export.service';
+import { CodingAggregatedRowsExportService } from '../database/services/coding/coding-aggregated-rows-export.service';
+import { CodingAggregatedColumnsExportService } from '../database/services/coding/coding-aggregated-columns-export.service';
+import { CodingCoderExportService } from '../database/services/coding/coding-coder-export.service';
+import { CodingVariableExportService } from '../database/services/coding/coding-variable-export.service';
+import { CodingCompactExportService } from '../database/services/coding/coding-compact-export.service';
+import { CodingDetailedExportService } from '../database/services/coding/coding-detailed-export.service';
+import { CodingTimingReportExportService } from '../database/services/coding/coding-timing-report-export.service';
+
 const sharedCodingProviders = [
+  CodingExportService,
   CodingJobService,
   CodingValidationService,
   CodingAnalysisService,
@@ -152,6 +167,20 @@ describe('CodingModule', () => {
       for (const controller of [module.get(WorkspaceCodingAnalysisController), module.get(WorkspaceTestResultsResponseController)]) {
         expect((controller as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
       }
+      const exportFacade = module.get(CodingExportService);
+      for (const [field, provider] of [
+        ['downloads', CodingExportDownloadService], ['aggregated', CodingAggregatedExportService],
+        ['byCoder', CodingCoderExportService], ['byVariable', CodingVariableExportService],
+        ['compact', CodingCompactExportService], ['detailed', CodingDetailedExportService],
+        ['times', CodingTimingReportExportService]
+      ] as const) expect(Reflect.get(exportFacade, field)).toBe(module.get(provider));
+      for (const provider of [CodingAggregatedExportService, CodingAggregatedRowsExportService, CodingCoderExportService,
+        CodingVariableExportService, CodingCompactExportService, CodingDetailedExportService]) {
+        expect(Reflect.get(module.get(provider), 'replay')).toBe(module.get(CodingExportReplayService));
+        expect(Reflect.get(module.get(provider), 'formatting')).toBe(module.get(CodingExportFormattingService));
+        expect(Reflect.get(module.get(provider), 'query')).toBe(module.get(CodingExportQueryService));
+      }
+      expect(Reflect.get(module.get(CodingAggregatedColumnsExportService), 'query')).toBe(module.get(CodingExportQueryService));
       const facade = module.get(CodingJobService);
       const featureProviders = [
         CodingJobMutationService, CodingJobResponsesService, CodingJobAccessService,

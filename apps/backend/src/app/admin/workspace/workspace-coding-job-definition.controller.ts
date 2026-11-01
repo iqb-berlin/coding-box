@@ -11,7 +11,8 @@ import {
   ParseIntPipe,
   Res,
   Query,
-  Req
+  Req,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -258,10 +259,10 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async getJobDefinitions(
     @WorkspaceId() workspace_id: number,
-    @Query('includePlannedUsage') includePlannedUsage?: string
+    @Query('includePlannedUsage', new ParseBoolPipe({ optional: true })) includePlannedUsage?: boolean
   ): Promise<JobDefinitionWithCreatedJobsCount[]> {
     return this.jobDefinitionService.getJobDefinitions(workspace_id, {
-      includePlannedUsage: includePlannedUsage === 'true'
+      includePlannedUsage: includePlannedUsage === true
     });
   }
 

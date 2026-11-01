@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Param, Post, Query, UseGuards, ParseIntPipe, ParseFloatPipe, DefaultValuePipe
+  Controller, Get, Param, Post, Query, UseGuards, ParseIntPipe, ParseFloatPipe, DefaultValuePipe,
+  ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -63,7 +64,7 @@ export class WorkspaceTestResultsAnalysisController {
     @Query('booklet') booklet?: string,
     @Query('unit') unit?: string,
     @Query('response') response?: string,
-    @Query('regexSearch') regexSearch?: string,
+    @Query('regexSearch', new ParseBoolPipe({ optional: true })) regexSearch?: boolean,
     @Query('responseStatus') responseStatus?: string,
     @Query('responseValue') responseValue?: string,
     @Query('tags') tags?: string,
@@ -91,7 +92,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
-    const effectiveRegexSearch = regexSearch === 'true' &&
+    const effectiveRegexSearch = regexSearch === true &&
       await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {

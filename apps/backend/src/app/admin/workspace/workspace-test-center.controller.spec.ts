@@ -13,7 +13,7 @@ describe('WorkspaceTestCenterController import completion', () => {
     };
     const controller = new WorkspaceTestCenterController(service as never, cache as never, {} as never);
     const actual = await controller.importWorkspaceFiles(
-      '1', '1', '', 'tc', 'token', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'g1', 'false', 'false', '', 'true', 'run', 'skip'
+      '1', '1', '', 'tc', 'token', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'g1', 'false', 'false', '', true, 'run', 'skip'
     );
     expect(actual.success).toBe(success);
     expect(cache.incr).toHaveBeenCalled();

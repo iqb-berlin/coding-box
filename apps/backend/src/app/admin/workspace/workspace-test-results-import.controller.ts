@@ -1,5 +1,6 @@
 import {
-  BadRequestException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException
+  BadRequestException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException,
+  ParseBoolPipe
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
@@ -157,7 +158,7 @@ export class WorkspaceTestResultsImportController {
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
     @Param('resultType') resultType: 'logs' | 'responses',
     @UploadedFiles() files: Express.Multer.File[],
-    @Query('overwriteExisting') overwriteExisting?: string,
+    @Query('overwriteExisting', new ParseBoolPipe({ optional: true })) overwriteExisting?: boolean,
     @Query('personMatchMode') personMatchMode?: string,
     @Query('overwriteMode') overwriteMode?: string,
     @Query('scope') scope?: string,
@@ -177,7 +178,7 @@ export class WorkspaceTestResultsImportController {
     if (!files || files.length === 0) {
       throw new BadRequestException('No files were uploaded.');
     }
-    const shouldOverwrite = overwriteExisting !== 'false';
+    const shouldOverwrite = overwriteExisting !== false;
 
     this.logger.log(
       `Uploading ${files.length} test results file(s) with overwriteExisting=${shouldOverwrite}`

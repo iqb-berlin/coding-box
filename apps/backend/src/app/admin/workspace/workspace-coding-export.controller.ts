@@ -1,5 +1,6 @@
 import {
-  Controller, Get, Query, Res, Req, UseGuards, Post, Param, Delete, Logger, BadRequestException, ForbiddenException, NotFoundException
+  Controller, Get, Query, Res, Req, UseGuards, Post, Param, Delete, Logger, BadRequestException, ForbiddenException, NotFoundException,
+  ParseBoolPipe, DefaultValuePipe
 } from '@nestjs/common';
 import {
   ApiOkResponse, ApiBadRequestResponse, ApiParam, ApiQuery, ApiTags
@@ -276,15 +277,10 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Query('authToken') authToken: string,
     @Query('serverUrl') serverUrl: string,
-    @Query('trainingRequired') trainingRequired: string,
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired: boolean | undefined,
     @Res() res: Response
   ): Promise<void> {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
     return this.codingListExportService.exportCodingListAsCsv(
       workspace_id,
       authToken,
@@ -331,15 +327,10 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Query('authToken') authToken: string,
     @Query('serverUrl') serverUrl: string,
-    @Query('trainingRequired') trainingRequired: string,
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired: boolean | undefined,
     @Res() res: Response
   ): Promise<void> {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
     return this.codingListExportService.exportCodingListAsExcel(
       workspace_id,
       authToken,
@@ -400,15 +391,10 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Query('authToken') authToken: string,
     @Query('serverUrl') serverUrl: string,
-    @Query('trainingRequired') trainingRequired: string,
+    @Query('trainingRequired', new ParseBoolPipe({ optional: true })) trainingRequired: boolean | undefined,
     @Res() res: Response
   ): Promise<void> {
-    let trainingRequiredParam: boolean | undefined;
-    if (trainingRequired === 'true') {
-      trainingRequiredParam = true;
-    } else if (trainingRequired === 'false') {
-      trainingRequiredParam = false;
-    }
+    const trainingRequiredParam = trainingRequired;
     return this.codingListExportService.exportCodingListAsJson(
       workspace_id,
       authToken,
@@ -481,13 +467,11 @@ export class WorkspaceCodingExportController {
     @Query('version') version: 'v1' | 'v2' | 'v3',
     @Query('authToken') authToken: string,
     @Query('serverUrl') serverUrl: string,
-    @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('includeReplayUrls', new DefaultValuePipe(false), ParseBoolPipe)
                    includeReplayUrls: boolean,
-    @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', new DefaultValuePipe(true), ParseBoolPipe)
                    includeResponseValues: boolean,
-    @Query('includeGeoGebraResponseValues', {
-      transform: value => value === 'true'
-    })
+    @Query('includeGeoGebraResponseValues', new DefaultValuePipe(false), ParseBoolPipe)
                    includeGeoGebraResponseValues: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -619,15 +603,13 @@ export class WorkspaceCodingExportController {
     @Query('version') version: 'v1' | 'v2' | 'v3',
     @Query('authToken') authToken: string,
     @Query('serverUrl') serverUrl: string,
-    @Query('includeReplayUrls', { transform: value => value === 'true' })
+    @Query('includeReplayUrls', new DefaultValuePipe(false), ParseBoolPipe)
                    includeReplayUrls: boolean,
-    @Query('includeResponseValues', { transform: value => value !== 'false' })
+    @Query('includeResponseValues', new DefaultValuePipe(true), ParseBoolPipe)
                    includeResponseValues: boolean,
-    @Query('includeGeoGebraResponseValues', {
-      transform: value => value === 'true'
-    })
+    @Query('includeGeoGebraResponseValues', new DefaultValuePipe(false), ParseBoolPipe)
                    includeGeoGebraResponseValues: boolean,
-    @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
+    @Query('includeGeoGebraFiles', new DefaultValuePipe(false), ParseBoolPipe)
                    includeGeoGebraFiles: boolean,
                    @Res() res: Response,
                    @Query('missingsProfileId') missingsProfileId?: string
@@ -747,29 +729,29 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Res() res: Response,
     @Req() req: Request,
-    @Query('outputCommentsInsteadOfCodes')
-                   outputCommentsInsteadOfCodes?: string,
-                   @Query('includeReplayUrl') includeReplayUrl?: string,
+    @Query('outputCommentsInsteadOfCodes', new ParseBoolPipe({ optional: true }))
+                   outputCommentsInsteadOfCodes?: boolean,
+                   @Query('includeReplayUrl', new ParseBoolPipe({ optional: true })) includeReplayUrl?: boolean,
                    @Query('authToken') authToken?: string,
-                   @Query('anonymizeCoders') anonymizeCoders?: string,
-                   @Query('usePseudoCoders') usePseudoCoders?: string,
+                   @Query('anonymizeCoders', new ParseBoolPipe({ optional: true })) anonymizeCoders?: boolean,
+                   @Query('usePseudoCoders', new ParseBoolPipe({ optional: true })) usePseudoCoders?: boolean,
                    @Query('doubleCodingMethod') doubleCodingMethod?: string,
-                   @Query('includeComments') includeComments?: string,
-                   @Query('includeModalValue') includeModalValue?: string,
-                   @Query('excludeAutoCoded') excludeAutoCoded?: string
+                   @Query('includeComments', new ParseBoolPipe({ optional: true })) includeComments?: boolean,
+                   @Query('includeModalValue', new ParseBoolPipe({ optional: true })) includeModalValue?: boolean,
+                   @Query('excludeAutoCoded', new ParseBoolPipe({ optional: true })) excludeAutoCoded?: boolean
   ): Promise<void> {
     try {
-      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const includeReplayUrlParam = includeReplayUrl === 'true';
-      const anonymizeCodersParam = anonymizeCoders === 'true';
-      const usePseudoCodersParam = usePseudoCoders === 'true';
+      const outputCommentsParam = outputCommentsInsteadOfCodes === true;
+      const includeReplayUrlParam = includeReplayUrl === true;
+      const anonymizeCodersParam = anonymizeCoders === true;
+      const usePseudoCodersParam = usePseudoCoders === true;
       const doubleCodingMethodParam =
         (doubleCodingMethod as
           'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') ||
         'most-frequent';
-      const includeCommentsParam = includeComments === 'true';
-      const includeModalValueParam = includeModalValue === 'true';
-      const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
+      const includeCommentsParam = includeComments === true;
+      const includeModalValueParam = includeModalValue === true;
+      const excludeAutoCodedParam = excludeAutoCoded === true; // Default false
 
       const buffer =
         await this.codingExportService.exportCodingResultsAggregated(
@@ -859,20 +841,20 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Res() res: Response,
     @Req() req: Request,
-    @Query('outputCommentsInsteadOfCodes')
-                   outputCommentsInsteadOfCodes?: string,
-                   @Query('includeReplayUrl') includeReplayUrl?: string,
+    @Query('outputCommentsInsteadOfCodes', new ParseBoolPipe({ optional: true }))
+                   outputCommentsInsteadOfCodes?: boolean,
+                   @Query('includeReplayUrl', new ParseBoolPipe({ optional: true })) includeReplayUrl?: boolean,
                    @Query('authToken') authToken?: string,
-                   @Query('anonymizeCoders') anonymizeCoders?: string,
-                   @Query('usePseudoCoders') usePseudoCoders?: string,
-                   @Query('excludeAutoCoded') excludeAutoCoded?: string
+                   @Query('anonymizeCoders', new ParseBoolPipe({ optional: true })) anonymizeCoders?: boolean,
+                   @Query('usePseudoCoders', new ParseBoolPipe({ optional: true })) usePseudoCoders?: boolean,
+                   @Query('excludeAutoCoded', new ParseBoolPipe({ optional: true })) excludeAutoCoded?: boolean
   ): Promise<void> {
     try {
-      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const includeReplayUrlParam = includeReplayUrl === 'true';
-      const anonymizeCodersParam = anonymizeCoders === 'true';
-      const usePseudoCodersParam = usePseudoCoders === 'true';
-      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const outputCommentsParam = outputCommentsInsteadOfCodes === true;
+      const includeReplayUrlParam = includeReplayUrl === true;
+      const anonymizeCodersParam = anonymizeCoders === true;
+      const usePseudoCodersParam = usePseudoCoders === true;
+      const excludeAutoCodedParam = excludeAutoCoded === true;
       const buffer = await this.codingExportService.exportCodingResultsByCoder(
         workspace_id,
         outputCommentsParam,
@@ -976,26 +958,26 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Res() res: Response,
     @Req() req: Request,
-    @Query('includeModalValue') includeModalValue?: string,
-    @Query('includeDoubleCoded') includeDoubleCoded?: string,
-    @Query('includeComments') includeComments?: string,
-    @Query('outputCommentsInsteadOfCodes')
-                   outputCommentsInsteadOfCodes?: string,
-                   @Query('includeReplayUrl') includeReplayUrl?: string,
+    @Query('includeModalValue', new ParseBoolPipe({ optional: true })) includeModalValue?: boolean,
+    @Query('includeDoubleCoded', new ParseBoolPipe({ optional: true })) includeDoubleCoded?: boolean,
+    @Query('includeComments', new ParseBoolPipe({ optional: true })) includeComments?: boolean,
+    @Query('outputCommentsInsteadOfCodes', new ParseBoolPipe({ optional: true }))
+                   outputCommentsInsteadOfCodes?: boolean,
+                   @Query('includeReplayUrl', new ParseBoolPipe({ optional: true })) includeReplayUrl?: boolean,
                    @Query('authToken') authToken?: string,
-                   @Query('anonymizeCoders') anonymizeCoders?: string,
-                   @Query('usePseudoCoders') usePseudoCoders?: string,
-                   @Query('excludeAutoCoded') excludeAutoCoded?: string
+                   @Query('anonymizeCoders', new ParseBoolPipe({ optional: true })) anonymizeCoders?: boolean,
+                   @Query('usePseudoCoders', new ParseBoolPipe({ optional: true })) usePseudoCoders?: boolean,
+                   @Query('excludeAutoCoded', new ParseBoolPipe({ optional: true })) excludeAutoCoded?: boolean
   ): Promise<void> {
     try {
-      const includeModal = includeModalValue === 'true';
-      const includeDouble = includeDoubleCoded === 'true';
-      const includeCommentsParam = includeComments === 'true';
-      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const includeReplayUrlParam = includeReplayUrl === 'true';
-      const anonymizeCodersParam = anonymizeCoders === 'true';
-      const usePseudoCodersParam = usePseudoCoders === 'true';
-      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const includeModal = includeModalValue === true;
+      const includeDouble = includeDoubleCoded === true;
+      const includeCommentsParam = includeComments === true;
+      const outputCommentsParam = outputCommentsInsteadOfCodes === true;
+      const includeReplayUrlParam = includeReplayUrl === true;
+      const anonymizeCodersParam = anonymizeCoders === true;
+      const usePseudoCodersParam = usePseudoCoders === true;
+      const excludeAutoCodedParam = excludeAutoCoded === true;
       const buffer =
         await this.codingExportService.exportCodingResultsByVariable(
           workspace_id,
@@ -1083,20 +1065,20 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
     @Res() res: Response,
     @Req() req: Request,
-    @Query('outputCommentsInsteadOfCodes')
-                   outputCommentsInsteadOfCodes?: string,
-                   @Query('includeReplayUrl') includeReplayUrl?: string,
+    @Query('outputCommentsInsteadOfCodes', new ParseBoolPipe({ optional: true }))
+                   outputCommentsInsteadOfCodes?: boolean,
+                   @Query('includeReplayUrl', new ParseBoolPipe({ optional: true })) includeReplayUrl?: boolean,
                    @Query('authToken') authToken?: string,
-                   @Query('anonymizeCoders') anonymizeCoders?: string,
-                   @Query('usePseudoCoders') usePseudoCoders?: string,
-                   @Query('excludeAutoCoded') excludeAutoCoded?: string
+                   @Query('anonymizeCoders', new ParseBoolPipe({ optional: true })) anonymizeCoders?: boolean,
+                   @Query('usePseudoCoders', new ParseBoolPipe({ optional: true })) usePseudoCoders?: boolean,
+                   @Query('excludeAutoCoded', new ParseBoolPipe({ optional: true })) excludeAutoCoded?: boolean
   ): Promise<void> {
     try {
-      const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
-      const includeReplayUrlParam = includeReplayUrl === 'true';
-      const anonymizeCodersParam = anonymizeCoders === 'true';
-      const usePseudoCodersParam = usePseudoCoders === 'true';
-      const excludeAutoCodedParam = excludeAutoCoded === 'true';
+      const outputCommentsParam = outputCommentsInsteadOfCodes === true;
+      const includeReplayUrlParam = includeReplayUrl === true;
+      const anonymizeCodersParam = anonymizeCoders === true;
+      const usePseudoCodersParam = usePseudoCoders === true;
+      const excludeAutoCodedParam = excludeAutoCoded === true;
       const buffer = await this.codingExportOrchestratorService.exportDetailed({
         workspaceId: workspace_id,
         outputCommentsInsteadOfCodes: outputCommentsParam,
@@ -1159,13 +1141,13 @@ export class WorkspaceCodingExportController {
   async exportCodingTimesReport(
     @WorkspaceId() workspace_id: number,
     @Res() res: Response,
-    @Query('anonymizeCoders') anonymizeCoders?: string,
-    @Query('usePseudoCoders') usePseudoCoders?: string,
-    @Query('excludeAutoCoded') excludeAutoCoded?: string
+    @Query('anonymizeCoders', new ParseBoolPipe({ optional: true })) anonymizeCoders?: boolean,
+    @Query('usePseudoCoders', new ParseBoolPipe({ optional: true })) usePseudoCoders?: boolean,
+    @Query('excludeAutoCoded', new ParseBoolPipe({ optional: true })) excludeAutoCoded?: boolean
   ): Promise<void> {
-    const anonymizeCodersParam = anonymizeCoders === 'true';
-    const usePseudoCodersParam = usePseudoCoders === 'true';
-    const excludeAutoCodedParam = excludeAutoCoded === 'true';
+    const anonymizeCodersParam = anonymizeCoders === true;
+    const usePseudoCodersParam = usePseudoCoders === true;
+    const excludeAutoCodedParam = excludeAutoCoded === true;
     const buffer = await this.codingExportService.exportCodingTimesReport(
       workspace_id,
       anonymizeCodersParam,
