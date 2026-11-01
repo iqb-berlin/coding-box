@@ -5,6 +5,7 @@ import {
   Index,
   PrimaryGeneratedColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 
 /**
@@ -18,7 +19,7 @@ import Workspace from './workspace.entity';
 export class MissingsProfile {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;

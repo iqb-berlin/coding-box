@@ -9,6 +9,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 import Workspace from './workspace.entity';
@@ -111,7 +112,7 @@ export class JobDefinition {
 
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace: Workspace;
+  workspace: Relation<Workspace>;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.jobDefinition, { cascade: false })
   codingJobs: CodingJob[];
@@ -121,7 +122,7 @@ export class JobDefinition {
 
   @ManyToOne(() => MissingsProfile)
   @JoinColumn({ name: 'missings_profile_id' })
-  missingsProfile?: MissingsProfile;
+  missingsProfile?: Relation<MissingsProfile>;
 
   @Column({
     type: 'enum',

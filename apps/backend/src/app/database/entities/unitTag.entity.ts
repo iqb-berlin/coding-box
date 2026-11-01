@@ -7,6 +7,7 @@ import {
   Index,
   CreateDateColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
 
@@ -34,5 +35,5 @@ export class UnitTag {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'unitId' })
-  unit: Unit;
+  unit: Relation<Unit>;
 }

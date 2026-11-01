@@ -1,13 +1,14 @@
 import {
   JoinColumn, ManyToOne, Column, Entity, PrimaryColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 
 @Entity()
 class WorkspaceUser {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryColumn({
     name: 'workspace_id'

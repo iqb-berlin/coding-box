@@ -6,6 +6,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
 import User from './user.entity';
@@ -24,9 +25,9 @@ export class CoderTrainingCoder {
 
   @ManyToOne(() => CoderTraining, training => training.coders, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-  training: CoderTraining;
+  training: Relation<CoderTraining>;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user: Relation<User>;
 }

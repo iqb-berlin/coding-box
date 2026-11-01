@@ -1,4 +1,4 @@
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import type { QueryDeepPartialEntity } from 'typeorm';
 import {
   Inject, Injectable, Logger, Optional, NotFoundException
 } from '@nestjs/common';
@@ -49,10 +49,8 @@ import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
 
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
-import {
-  CODING_PROCESS_CACHE_INVALIDATOR,
-  CodingProcessCacheInvalidator
-} from '../coding/coding-process-cache-invalidator.token';
+import { CODING_PROCESS_CACHE_INVALIDATOR } from '../coding/coding-process-cache-invalidator.token';
+import type { CodingProcessCacheInvalidator } from '../coding/coding-process-cache-invalidator.token';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';

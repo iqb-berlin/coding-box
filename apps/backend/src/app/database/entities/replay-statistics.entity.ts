@@ -5,6 +5,7 @@ import {
   Entity,
   PrimaryGeneratedColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 
 export type ReplayStatisticsSource = 'internal' | 'external';
@@ -20,7 +21,7 @@ export const REPLAY_STATISTICS_SOURCE_EXTERNAL: ReplayStatisticsSource = 'extern
 export class ReplayStatistics {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;

@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
@@ -23,7 +24,7 @@ import { ResponseEntity } from './response.entity';
 export class CodingJobUnit {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;
@@ -92,9 +93,9 @@ export class CodingJobUnit {
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-  coding_job: CodingJob;
+  coding_job: Relation<CodingJob>;
 
   @ManyToOne(() => ResponseEntity)
   @JoinColumn({ name: 'response_id' })
-  response: ResponseEntity;
+  response: Relation<ResponseEntity>;
 }

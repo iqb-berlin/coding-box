@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 import { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding/double-coded-review.dto';
 
@@ -17,7 +18,7 @@ import { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding
 export class DoubleCodingReviewDecision {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;

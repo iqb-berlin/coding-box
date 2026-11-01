@@ -6,6 +6,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
 
@@ -32,5 +33,5 @@ export class CoderTrainingVariable {
 
   @ManyToOne(() => CoderTraining, training => training.variables, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-  training: CoderTraining;
+  training: Relation<CoderTraining>;
 }
