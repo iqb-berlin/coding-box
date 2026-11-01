@@ -37,11 +37,14 @@ export class CodingStatusDataFacade {
   readonly isSecondAutocodingWaiting = computed(() => isSecondAutocodingWaitingForManualCoding(
     this.allWarnings(), this.manualAppliedResultsOverview(), this.manualAppliedResultsOverviewLoadFailed()
   ));
+
   readonly warnings = computed(() => this.allWarnings().filter(item => !(item.version === 'v3' && this.isSecondAutocodingWaiting())));
   readonly shouldShowSecondAutocodingWaiting = computed(() => this.isSecondAutocodingWaiting() && this.warnings().length === 0);
   readonly hasWarnings = computed(() => this.warnings().length > 0 || this.shouldShowSecondAutocodingWaiting());
-  readonly chipWarnings = computed(() => (this.warnings().length > 0 ? this.warnings() :
-    (this.shouldShowSecondAutocodingWaiting() ? this.secondAutocodingWarnings() : [])));
+  readonly chipWarnings = computed(() => {
+    if (this.warnings().length > 0) return this.warnings();
+    return this.shouldShowSecondAutocodingWaiting() ? this.secondAutocodingWarnings() : [];
+  });
 
   private readonly app = inject(AppService);
   private readonly backend = inject(TestPersonCodingService);

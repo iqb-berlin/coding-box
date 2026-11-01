@@ -9,14 +9,36 @@ import { CodingStatusDataFacade } from './coding-status-data.facade';
 
 const summary = (revision: number): CodingFreshnessSummaryDto => ({ workspaceId: 1, currentRevision: revision, items: [] });
 const scope: CodingFreshnessScopeDto = {
-  ...summary(1), versions: [], states: [], unitCount: 1, personCount: 1, groupCount: 1,
-  affectedResponseCount: 1, unitIds: [1], personIds: [1], groupNames: ['GROUP'], groups: []
+  ...summary(1),
+  versions: [],
+  states: [],
+  unitCount: 1,
+  personCount: 1,
+  groupCount: 1,
+  affectedResponseCount: 1,
+  unitIds: [1],
+  personIds: [1],
+  groupNames: ['GROUP'],
+  groups: []
 };
 const readiness: AutocodingReadinessDto = {
-  workspaceId: 1, autoCoderRun: 1, readiness: 'READY', blockers: [], rawResponsesTotal: 0,
-  rawResponsesWithRelevantStatus: 0, resultUnitsTotal: 0, resultUnitKeysTotal: 0, matchedUnitFiles: 0,
-  missingUnitFiles: [], matchedCodingSchemes: 0, missingCodingSchemes: [], invalidCodingSchemes: [],
-  validVariablePairs: 0, validResponses: 0, codeableResponses: 0, invalidVariableSamples: []
+  workspaceId: 1,
+  autoCoderRun: 1,
+  readiness: 'READY',
+  blockers: [],
+  rawResponsesTotal: 0,
+  rawResponsesWithRelevantStatus: 0,
+  resultUnitsTotal: 0,
+  resultUnitKeysTotal: 0,
+  matchedUnitFiles: 0,
+  missingUnitFiles: [],
+  matchedCodingSchemes: 0,
+  missingCodingSchemes: [],
+  invalidCodingSchemes: [],
+  validVariablePairs: 0,
+  validResponses: 0,
+  codeableResponses: 0,
+  invalidVariableSamples: []
 };
 
 describe('CodingStatusDataFacade', () => {
@@ -37,12 +59,14 @@ describe('CodingStatusDataFacade', () => {
       getCachedCodingStatusOverview: jest.fn().mockReturnValue(null),
       getCachedAutocodingReadiness: jest.fn().mockReturnValue(of(null))
     };
-    TestBed.configureTestingModule({ providers: [
-      CodingStatusDataFacade,
-      { provide: AppService, useValue: app },
-      { provide: TestPersonCodingService, useValue: backend },
-      { provide: CodingBackgroundJobsService, useValue: jobs }
-    ] });
+    TestBed.configureTestingModule({
+      providers: [
+        CodingStatusDataFacade,
+        { provide: AppService, useValue: app },
+        { provide: TestPersonCodingService, useValue: backend },
+        { provide: CodingBackgroundJobsService, useValue: jobs }
+      ]
+    });
     facade = TestBed.inject(CodingStatusDataFacade);
   });
 
@@ -56,9 +80,14 @@ describe('CodingStatusDataFacade', () => {
   });
 
   it('loads affected groups only when freshness warnings need them', () => {
-    backend.getCodingFreshness.mockReturnValue(of({ ...summary(1), items: [
-      { version: 'v1', state: 'PENDING', unitCount: 1, affectedResponseCount: 1 }
-    ] }));
+    backend.getCodingFreshness.mockReturnValue(of({
+      ...summary(1),
+      items: [
+        {
+          version: 'v1', state: 'PENDING', unitCount: 1, affectedResponseCount: 1
+        }
+      ]
+    }));
     facade.loadCodingFreshness();
     expect(backend.getCodingFreshnessScope).toHaveBeenCalledWith(1);
     expect(facade.codingFreshnessScope()).toEqual(scope);

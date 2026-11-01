@@ -1,4 +1,6 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import {
+  DestroyRef, Injectable, inject, signal
+} from '@angular/core';
 import {
   EMPTY, Subject, Subscription, catchError, exhaustMap, timer
 } from 'rxjs';

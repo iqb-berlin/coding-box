@@ -16,11 +16,13 @@ describe('CodingFreshnessPollingFacade', () => {
       trackFreshnessCodingGuardUntilComplete: jest.fn()
     };
     app = { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>() };
-    TestBed.configureTestingModule({ providers: [
-      CodingFreshnessPollingFacade,
-      { provide: TestPersonCodingService, useValue: backend },
-      { provide: AppService, useValue: app }
-    ] });
+    TestBed.configureTestingModule({
+      providers: [
+        CodingFreshnessPollingFacade,
+        { provide: TestPersonCodingService, useValue: backend },
+        { provide: AppService, useValue: app }
+      ]
+    });
     facade = TestBed.inject(CodingFreshnessPollingFacade);
   });
 
