@@ -2,7 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger
+  Logger,
+  PayloadTooLargeException
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +14,7 @@ import * as AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { RESOURCE_PACKAGE_LIMITS } from './resource-package-limits';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { withResourcePackageLock } from '../shared/resource-package-lock.util';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
@@ -96,14 +98,14 @@ export class ResourcePackageService {
       await withResourcePackageLock(this.resourcePackageRepository.manager.connection, resourcePackage.name, async () => {
         if (resourcePackage.scope === 'global') {
           await this.deleteGlobalPackageReferences(resourcePackage.name);
-          this.removePackageDirectory(resourcePackage.name);
+          await this.removePackageDirectory(resourcePackage.name);
           return;
         }
 
         await this.resourcePackageRepository.delete(resourcePackage.id);
         const remainingReferences = await this.countPackageReferences(resourcePackage.name);
         if (remainingReferences === 0) {
-          this.removePackageDirectory(resourcePackage.name);
+          await this.removePackageDirectory(resourcePackage.name);
         }
       });
     } else {
@@ -113,8 +115,8 @@ export class ResourcePackageService {
 
   async create(workspaceId: number, zippedResourcePackage: Express.Multer.File): Promise<number> {
     this.logger.log(`Creating resource package for workspace ${workspaceId}.`);
-    this.ensurePackagesDirectoryExists();
-    const preparedUpload = this.prepareResourcePackageUpload(zippedResourcePackage);
+    const preparedUpload = await this.prepareResourcePackageUpload(zippedResourcePackage);
+    await this.ensurePackagesDirectoryExists();
 
     return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
       const existingPackages = await this.findPackagesByName(preparedUpload.packageName);
@@ -158,7 +160,7 @@ export class ResourcePackageService {
     });
   }
 
-  async getZippedResourcePackage(workspaceId: number, name: string): Promise<Buffer> {
+  async getZippedResourcePackage(workspaceId: number, name: string): Promise<fs.ReadStream> {
     this.logger.log(`Returning zipped resource package ${name} for workspace ${workspaceId}.`);
 
     // Check if the resource package exists for the given workspace
@@ -173,17 +175,19 @@ export class ResourcePackageService {
       throw new ResourcePackageNotFoundException(0, 'GET', `Resource package ${name} not found in workspace ${workspaceId}`);
     }
 
-    const zipPath = this.findStoredZipPath(resourcePackage);
+    const zipPath = await this.findStoredZipPath(resourcePackage);
     if (!zipPath) {
       throw new ResourcePackageNotFoundException(0, 'GET', `ZIP file for resource package ${name} not found`);
     }
-    return fs.readFileSync(zipPath);
+    // Open before returning so missing files fail through the HTTP exception filter.
+    const file = await fs.promises.open(zipPath, 'r');
+    return file.createReadStream();
   }
 
   async installGeoGebraBundle(): Promise<ResourcePackageDto> {
     const existingGeoGebraPackage = await this.findGlobalGeoGebraPackage();
     if (existingGeoGebraPackage) {
-      const existingErrors = this.validateGeoGebraPackageReference(existingGeoGebraPackage);
+      const existingErrors = await this.validateGeoGebraPackageReference(existingGeoGebraPackage);
       if (existingErrors.length === 0) {
         return existingGeoGebraPackage;
       }
@@ -213,6 +217,7 @@ export class ResourcePackageService {
         downloadUrl,
         {
           responseType: 'arraybuffer',
+          maxContentLength: RESOURCE_PACKAGE_LIMITS.maxArchiveBytes,
           timeout: 120000
         }
       );
@@ -272,10 +277,10 @@ export class ResourcePackageService {
       };
     }
 
-    const evaluatedPackages = packages.map(resourcePackage => {
-      const errors = this.validateGeoGebraPackageReference(resourcePackage);
+    const evaluatedPackages = await Promise.all(packages.map(async resourcePackage => {
+      const errors = await this.validateGeoGebraPackageReference(resourcePackage);
       return { resourcePackage, errors };
-    });
+    }));
 
     const validPackage = evaluatedPackages.find(pkg => pkg.errors.length === 0);
     const selected = validPackage || evaluatedPackages[0];
@@ -353,9 +358,13 @@ export class ResourcePackageService {
     return this.resourcePackageRepository.save(newResourcePackage);
   }
 
-  private prepareResourcePackageUpload(
+  private async prepareResourcePackageUpload(
     zippedResourcePackage: Express.Multer.File
-  ): PreparedResourcePackageUpload {
+  ): Promise<PreparedResourcePackageUpload> {
+    // Direct callers and remote downloads must obey the same limit as Multer.
+    if (zippedResourcePackage.buffer.length > RESOURCE_PACKAGE_LIMITS.maxArchiveBytes) {
+      throw new PayloadTooLargeException('Das Ressourcenpaket überschreitet die maximale ZIP-Größe.');
+    }
     const zip = this.readZip(zippedResourcePackage.buffer);
     const packageName = this.getPackageNameFromFilename(zippedResourcePackage.originalname);
     this.assertSafePackageName(packageName);
@@ -370,7 +379,7 @@ export class ResourcePackageService {
       this.assertGeoGebraPackage(geoGebraPackageLayout, originalPackageFiles);
     }
     const detectedVersion = packageType === 'geogebra' ?
-      this.detectGeoGebraVersion(zip, geoGebraPackageLayout) :
+      await this.detectGeoGebraVersion(zip, geoGebraPackageLayout) :
       null;
     const packageFiles = normalizedGeoGebraPackageLayout ?
       normalizedGeoGebraPackageLayout.packageFiles :
@@ -392,11 +401,11 @@ export class ResourcePackageService {
   private async replaceGlobalGeoGebraPackage(
     zippedResourcePackage: Express.Multer.File
   ): Promise<ResourcePackageDto> {
-    this.ensurePackagesDirectoryExists();
-    const preparedUpload = this.prepareResourcePackageUpload(zippedResourcePackage);
+    const preparedUpload = await this.prepareResourcePackageUpload(zippedResourcePackage);
     if (preparedUpload.scope !== 'global') {
       throw new BadRequestException('Das GeoGebra Math Apps Bundle muss als globales GeoGebra-Paket installiert werden.');
     }
+    await this.ensurePackagesDirectoryExists();
 
     return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
       await this.extractAndStorePackage(
@@ -431,11 +440,11 @@ export class ResourcePackageService {
   ): Promise<void> {
     const packageDirectoryPath = this.getPackageDirectoryPath(packageName);
     const tempPackageDirectoryPath = `${packageDirectoryPath}.tmp-${process.pid}-${Date.now()}`;
-    fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
+    await fs.promises.rm(tempPackageDirectoryPath, { recursive: true, force: true });
 
     try {
       if (geoGebraPackageLayout) {
-        this.extractNormalizedGeoGebraPackage(
+        await this.extractNormalizedGeoGebraPackage(
           tempPackageDirectoryPath,
           safeZipEntries,
           geoGebraPackageLayout
@@ -443,20 +452,21 @@ export class ResourcePackageService {
       } else {
         await this.extractPackageEntries(tempPackageDirectoryPath, safeZipEntries);
       }
-      fs.writeFileSync(
+      await fs.promises.writeFile(
         path.join(tempPackageDirectoryPath, `${packageName}.itcr.zip`),
         zippedResourcePackage.buffer
       );
-      fs.rmSync(packageDirectoryPath, { recursive: true, force: true });
-      fs.renameSync(tempPackageDirectoryPath, packageDirectoryPath);
+      await fs.promises.rm(packageDirectoryPath, { recursive: true, force: true });
+      await fs.promises.rename(tempPackageDirectoryPath, packageDirectoryPath);
     } catch (error) {
-      fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
+      await fs.promises.rm(tempPackageDirectoryPath, { recursive: true, force: true });
       throw error;
     }
   }
 
   private async extractPackageEntries(directoryPath: string, entries: SafeZipEntry[]): Promise<void> {
     const directories: { targetPath: string; entry: AdmZip.IZipEntry }[] = [];
+    let extractedBytes = 0;
     for (const { entry, entryName } of entries) {
       const targetPath = path.join(directoryPath, entryName);
       this.assertPathIsInsideDirectory(directoryPath, targetPath);
@@ -464,14 +474,11 @@ export class ResourcePackageService {
         await fs.promises.mkdir(targetPath, { recursive: true });
         directories.push({ targetPath, entry });
       } else {
-        // Calling each reader inside its own Promise also catches synchronous
-        // CRC errors; adm-zip's chained extraction can throw on a later fs tick.
-        const content = await new Promise<Buffer>((resolve, reject) => {
-          entry.getDataAsync((data, error) => {
-            if (error) reject(error);
-            else resolve(data);
-          });
-        });
+        const content = await this.readEntry(entry);
+        extractedBytes += content.length;
+        if (extractedBytes > RESOURCE_PACKAGE_LIMITS.maxExtractedBytes) {
+          throw new PayloadTooLargeException('Das entpackte Ressourcenpaket ist zu groß.');
+        }
         await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
         const mode = Math.floor(entry.attr / 65536) % 512;
         await fs.promises.writeFile(targetPath, content, { mode: mode || 0o666 });
@@ -511,11 +518,14 @@ export class ResourcePackageService {
     if (resourcePackage.contentHash) {
       return resourcePackage.contentHash;
     }
-    const zipPath = this.findStoredZipPath(resourcePackage);
+    const zipPath = await this.findStoredZipPath(resourcePackage);
     if (!zipPath) {
       return null;
     }
-    const contentHash = this.getContentHash(fs.readFileSync(zipPath));
+    const hash = crypto.createHash('sha256');
+    const file = await fs.promises.open(zipPath, 'r');
+    for await (const chunk of file.createReadStream()) hash.update(chunk);
+    const contentHash = hash.digest('hex');
     resourcePackage.contentHash = contentHash;
     await this.resourcePackageRepository.save(resourcePackage);
     return contentHash;
@@ -536,22 +546,88 @@ export class ResourcePackageService {
   }
 
   private readZip(buffer: Buffer): AdmZip {
+    const names = new Set<string>();
+    const rawPaths = new Set<string>();
+    const normalizedPaths = new Set<string>();
+    const countPaths = (name: string, paths: Set<string>) => {
+      paths.add(name);
+      for (let index = name.indexOf('/'); index !== -1; index = name.indexOf('/', index + 1)) {
+        paths.add(name.slice(0, index + 1));
+      }
+      if (paths.size > RESOURCE_PACKAGE_LIMITS.maxEntries) {
+        throw new PayloadTooLargeException('Das ZIP enthält zu viele Einträge einschließlich Verzeichnissen.');
+      }
+    };
+    // adm-zip expands implicit directory prefixes before getEntries() returns.
+    // Validate names as the parser decodes them, before that allocation occurs.
+    // Encoding matches adm-zip's default UTF-8 decoder; comments are not read.
+    const options = {
+      decoder: {
+        efs: true,
+        encode: (value: string) => Buffer.from(value, 'utf8'),
+        decode: (value: Buffer) => {
+          if (value.length > RESOURCE_PACKAGE_LIMITS.maxEntryNameBytes) {
+            throw new PayloadTooLargeException('Ein Dateipfad im ZIP ist zu lang.');
+          }
+          const name = value.toString('utf8');
+          if (!names.has(name)) {
+            const normalizedName = name.replace(/\\/g, '/');
+            const depth = normalizedName.split('/').length - (normalizedName.endsWith('/') ? 1 : 0);
+            if (depth > RESOURCE_PACKAGE_LIMITS.maxPathDepth) {
+              throw new PayloadTooLargeException('Ein Dateipfad im ZIP ist zu tief verschachtelt.');
+            }
+            countPaths(name, rawPaths);
+            countPaths(normalizedName, normalizedPaths);
+            names.add(name);
+          }
+          return name;
+        }
+      },
+      readEntries: false
+    };
     try {
-      return new AdmZip(buffer);
-    } catch {
+      return new AdmZip(buffer, options);
+    } catch (error) {
+      if (error instanceof PayloadTooLargeException) throw error;
       throw new BadRequestException('Die hochgeladene Datei ist kein lesbares ZIP-Archiv.');
     }
   }
 
   private getSafeZipEntries(zip: AdmZip): SafeZipEntry[] {
+    if (zip.getEntryCount() > RESOURCE_PACKAGE_LIMITS.maxEntries) {
+      throw new PayloadTooLargeException('Das ZIP enthält zu viele Einträge.');
+    }
     let zipEntries: AdmZip.IZipEntry[];
     try {
       zipEntries = zip.getEntries();
-    } catch {
+    } catch (error) {
+      if (error instanceof PayloadTooLargeException) throw error;
       throw new BadRequestException('Die hochgeladene Datei ist kein lesbares ZIP-Archiv.');
     }
     if (zipEntries.length === 0) {
       throw new BadRequestException('Das ZIP-Archiv enthält keine Dateien.');
+    }
+    if (zipEntries.length > RESOURCE_PACKAGE_LIMITS.maxEntries) {
+      throw new PayloadTooLargeException('Das ZIP enthält zu viele Einträge.');
+    }
+    let extractedBytes = 0;
+    for (const entry of zipEntries) {
+      const { size, compressedSize, method } = entry.header;
+      if (!Number.isSafeInteger(size) || size < 0 || !Number.isSafeInteger(compressedSize) || compressedSize < 0) {
+        throw new BadRequestException('Das ZIP enthält ungültige Größenangaben.');
+      }
+      // STORED entries allocate from compressedSize, unlike DEFLATED entries.
+      if (size > RESOURCE_PACKAGE_LIMITS.maxEntryBytes ||
+          (method === 0 && compressedSize > RESOURCE_PACKAGE_LIMITS.maxEntryBytes)) {
+        throw new PayloadTooLargeException('Eine Datei im Ressourcenpaket ist zu groß.');
+      }
+      if (method === 0 && compressedSize !== size) {
+        throw new BadRequestException('Das ZIP enthält widersprüchliche Größenangaben.');
+      }
+      extractedBytes += size;
+      if (extractedBytes > RESOURCE_PACKAGE_LIMITS.maxExtractedBytes) {
+        throw new PayloadTooLargeException('Das entpackte Ressourcenpaket ist zu groß.');
+      }
     }
     return zipEntries
       .map(entry => ({
@@ -592,10 +668,10 @@ export class ResourcePackageService {
     }
   }
 
-  private detectGeoGebraVersion(
+  private async detectGeoGebraVersion(
     zip: AdmZip,
     geoGebraPackageLayout: GeoGebraPackageLayout | null
-  ): string | null {
+  ): Promise<string | null> {
     if (!geoGebraPackageLayout) {
       return null;
     }
@@ -603,7 +679,7 @@ export class ResourcePackageService {
     if (!geoGebraHtml) {
       return null;
     }
-    const htmlContent = geoGebraHtml.getData().toString('utf8');
+    const htmlContent = (await this.readEntry(geoGebraHtml)).toString('utf8');
     const versionMatch = htmlContent.match(/latestVersion\s*=\s*["']([^"']+)["']/);
     return versionMatch?.[1] || null;
   }
@@ -636,27 +712,39 @@ export class ResourcePackageService {
     return Array.from(new Set(normalizedPackageFiles));
   }
 
-  private extractNormalizedGeoGebraPackage(
+  private async extractNormalizedGeoGebraPackage(
     packageDirectoryPath: string,
     safeZipEntries: SafeZipEntry[],
     geoGebraPackageLayout: GeoGebraPackageLayout
-  ): void {
-    safeZipEntries
+  ): Promise<void> {
+    const normalizedEntries = safeZipEntries
       .filter(safeZipEntry => !safeZipEntry.entry.isDirectory)
       .filter(safeZipEntry => this.isInsideBundleRoot(
         safeZipEntry.entryName,
         geoGebraPackageLayout.bundleRoot
       ))
-      .forEach(safeZipEntry => {
-        const normalizedEntryName = this.toGeoGebraPackagePath(
-          safeZipEntry.entryName,
-          geoGebraPackageLayout.bundleRoot
-        );
-        const targetPath = path.join(packageDirectoryPath, normalizedEntryName);
-        this.assertPathIsInsideDirectory(packageDirectoryPath, targetPath);
-        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-        fs.writeFileSync(targetPath, safeZipEntry.entry.getData());
+      .map(({ entry, entryName }) => ({
+        entry,
+        entryName: this.toGeoGebraPackagePath(entryName, geoGebraPackageLayout.bundleRoot)
+      }));
+    await this.extractPackageEntries(packageDirectoryPath, normalizedEntries);
+  }
+
+  private async readEntry(entry: AdmZip.IZipEntry): Promise<Buffer> {
+    // The Promise executor also catches adm-zip's synchronous STORED CRC errors.
+    const content = await new Promise<Buffer>((resolve, reject) => {
+      entry.getDataAsync((data, error) => {
+        if (error) reject(error);
+        else resolve(data);
       });
+    });
+    if (content.length > RESOURCE_PACKAGE_LIMITS.maxEntryBytes) {
+      throw new PayloadTooLargeException('Eine Datei im Ressourcenpaket ist zu groß.');
+    }
+    if (content.length !== entry.header.size) {
+      throw new BadRequestException('Das ZIP enthält widersprüchliche Größenangaben.');
+    }
+    return content;
   }
 
   private toGeoGebraPackagePath(packageFile: string, bundleRoot: string): string {
@@ -698,9 +786,9 @@ export class ResourcePackageService {
     }
   }
 
-  private validateGeoGebraPackageReference(
+  private async validateGeoGebraPackageReference(
     resourcePackage: ResourcePackageDto
-  ): string[] {
+  ): Promise<string[]> {
     const errors: string[] = [];
 
     if (resourcePackage.packageType !== 'geogebra') {
@@ -714,15 +802,15 @@ export class ResourcePackageService {
       }
     });
 
-    const packageDirectoryPath = this.getExistingPackageDirectoryPath(
+    const packageDirectoryPath = await this.getExistingPackageDirectoryPath(
       resourcePackage.name
     );
-    ResourcePackageService.requiredGeoGebraPackageFiles.forEach(requiredFile => {
+    for (const requiredFile of ResourcePackageService.requiredGeoGebraPackageFiles) {
       const absolutePath = path.join(packageDirectoryPath, requiredFile);
-      if (!fs.existsSync(absolutePath)) {
+      if (!await this.pathExists(absolutePath)) {
         errors.push(`Im entpackten GeoGebra-Paket fehlt ${requiredFile}.`);
       }
-    });
+    }
 
     return Array.from(new Set(errors));
   }
@@ -731,21 +819,21 @@ export class ResourcePackageService {
     return packageName.toLowerCase() === ResourcePackageService.geogebraPackageName.toLowerCase();
   }
 
-  private findStoredZipPath(resourcePackage: ResourcePackage): string | null {
-    const packageDirectoryPath = this.getExistingPackageDirectoryPath(resourcePackage.name);
+  private async findStoredZipPath(resourcePackage: ResourcePackage): Promise<string | null> {
+    const packageDirectoryPath = await this.getExistingPackageDirectoryPath(resourcePackage.name);
     const preferredFilename = resourcePackage.originalFilename || `${resourcePackage.name}.itcr.zip`;
     const preferredZipPath = path.join(packageDirectoryPath, preferredFilename);
-    if (fs.existsSync(preferredZipPath)) {
+    if (await this.pathExists(preferredZipPath)) {
       return preferredZipPath;
     }
     const legacyZipPath = path.join(packageDirectoryPath, `${resourcePackage.name}.itcs.zip`);
-    if (fs.existsSync(legacyZipPath)) {
+    if (await this.pathExists(legacyZipPath)) {
       return legacyZipPath;
     }
-    if (!fs.existsSync(packageDirectoryPath)) {
+    if (!await this.pathExists(packageDirectoryPath)) {
       return null;
     }
-    const matchingZipFile = fs.readdirSync(packageDirectoryPath)
+    const matchingZipFile = (await fs.promises.readdir(packageDirectoryPath))
       .find(file => file.toLowerCase().endsWith('.itcr.zip'));
     return matchingZipFile ? path.join(packageDirectoryPath, matchingZipFile) : null;
   }
@@ -781,11 +869,9 @@ export class ResourcePackageService {
       .getCount();
   }
 
-  private removePackageDirectory(packageName: string): void {
-    const elementPath = this.getExistingPackageDirectoryPath(packageName);
-    if (fs.existsSync(elementPath)) {
-      fs.rmSync(elementPath, { recursive: true, force: true });
-    }
+  private async removePackageDirectory(packageName: string): Promise<void> {
+    const elementPath = await this.getExistingPackageDirectoryPath(packageName);
+    await fs.promises.rm(elementPath, { recursive: true, force: true });
   }
 
   private getContentHash(buffer: Buffer): string {
@@ -806,20 +892,30 @@ export class ResourcePackageService {
     return path.join(this.resourcePackagesPath, packageName);
   }
 
-  private getExistingPackageDirectoryPath(packageName: string): string {
+  private async getExistingPackageDirectoryPath(packageName: string): Promise<string> {
     const exactPackageDirectoryPath = this.getPackageDirectoryPath(packageName);
-    if (fs.existsSync(exactPackageDirectoryPath) || !fs.existsSync(this.resourcePackagesPath)) {
+    if (await this.pathExists(exactPackageDirectoryPath) || !await this.pathExists(this.resourcePackagesPath)) {
       return exactPackageDirectoryPath;
     }
-    const matchingDirectory = fs.readdirSync(this.resourcePackagesPath, { withFileTypes: true })
+    const matchingDirectory = (await fs.promises.readdir(this.resourcePackagesPath, { withFileTypes: true }))
       .find(entry => entry.isDirectory() && entry.name.toLowerCase() === packageName.toLowerCase());
     return matchingDirectory ?
       path.join(this.resourcePackagesPath, matchingDirectory.name) :
       exactPackageDirectoryPath;
   }
 
-  private ensurePackagesDirectoryExists(): void {
-    fs.mkdirSync(this.resourcePackagesPath, { recursive: true });
+  private async ensurePackagesDirectoryExists(): Promise<void> {
+    await fs.promises.mkdir(this.resourcePackagesPath, { recursive: true });
+  }
+
+  private async pathExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(filePath);
+      return true;
+    } catch (error) {
+      if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code || '')) return false;
+      throw error;
+    }
   }
 
   private deduplicateGlobalPackages(resourcePackages: ResourcePackage[]): ResourcePackageDto[] {

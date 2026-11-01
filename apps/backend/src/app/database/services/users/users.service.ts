@@ -246,11 +246,11 @@ export class UsersService {
   }
 
   async findUserByIdentity(id: string): Promise<UserFullDto | null> {
-    this.logger.log(`Searching for user with identity: ${id}`);
+    this.logger.log('Searching for user by identity');
     const user = await this.usersRepository.findOne({ where: { identity: id } });
 
     if (!user) {
-      this.logger.warn(`User with identity ${id} not found.`);
+      this.logger.warn('User not found by identity');
       return null;
     }
     this.logger.log(`Returning user with id: ${user.id}`);
@@ -407,10 +407,10 @@ export class UsersService {
       select: ['id', 'username'] // Fetch only the needed fields for validation
     });
 
-    this.logger.log(`Attempting to create user with username: ${user.username}`);
+    this.logger.log('Attempting to create user');
 
     if (existingUser) {
-      this.logger.warn(`User with username '${user.username}' already exists with ID: ${existingUser.id}`);
+      this.logger.warn({ event: 'user.already-exists', userId: existingUser.id });
       return existingUser.id;
     }
 
@@ -527,16 +527,17 @@ export class UsersService {
 
       if (Object.keys(updatedFields).length > 0) {
         await this.usersRepository.update({ id: existingUser.id }, updatedFields);
-        this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
+        this.logger.log({ event: 'user.oidc.updated', userId: existingUser.id });
       }
 
       return existingUser.id;
     }
-    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
     const newUser = this.usersRepository.create({
       username, identity, issuer, isAdmin, ...this.getProfileNames(oidcPdUser)
     });
     await this.usersRepository.save(newUser);
+
+    this.logger.log({ event: 'user.oidc.created', userId: newUser.id });
 
     return newUser.id;
   }
@@ -577,12 +578,11 @@ export class UsersService {
 
       if (Object.keys(updatedFields).length > 0) {
         await this.usersRepository.update({ id: existingUser.id }, updatedFields);
-        this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
+        this.logger.log({ event: 'user.keycloak.updated', userId: existingUser.id });
       }
 
       return existingUser.id;
     }
-    this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
     const newUser = this.usersRepository.create({
       username,
       identity,
@@ -591,6 +591,8 @@ export class UsersService {
       ...this.getProfileNames(keycloakUser)
     });
     await this.usersRepository.save(newUser);
+
+    this.logger.log({ event: 'user.keycloak.created', userId: newUser.id });
 
     return newUser.id;
   }

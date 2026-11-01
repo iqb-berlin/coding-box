@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
@@ -6,9 +6,13 @@ import * as AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { createHash } from 'crypto';
+import { createServer } from 'http';
+import { AddressInfo } from 'net';
 import { spawnSync } from 'child_process';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { ResourcePackageService } from './resource-package.service';
+import { RESOURCE_PACKAGE_LIMITS } from './resource-package-limits';
 
 // PostgreSQL integration tests exercise the actual cross-process package lease.
 jest.mock('../shared/resource-package-lock.util', () => ({
@@ -87,6 +91,171 @@ describe('ResourcePackageService', () => {
     expect(fs.statSync(path.join(directory, 'data/ä.txt')).mode % 4096).toBe(0o600);
     expect(fs.readFileSync(path.join(directory, 'Ordinary.itcr.zip'))).toEqual(buffer);
     expect(packages[0]).toMatchObject({ name: 'Ordinary', workspaceId: 7, scope: 'workspace' });
+  });
+
+  describe('archive limits', () => {
+    beforeEach(() => {
+      // Exercise real archive parsing and decompression with small fixtures.
+      jest.replaceProperty(RESOURCE_PACKAGE_LIMITS, 'maxArchiveBytes', 4096);
+      jest.replaceProperty(RESOURCE_PACKAGE_LIMITS, 'maxEntryBytes', 2048);
+      jest.replaceProperty(RESOURCE_PACKAGE_LIMITS, 'maxExtractedBytes', 4096);
+      jest.replaceProperty(RESOURCE_PACKAGE_LIMITS, 'maxEntries', 12);
+    });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('rejects an oversized buffer even when the upload reports a small size', async () => {
+      const upload = createUpload('Large.itcr.zip', Buffer.alloc(4097));
+      upload.size = 0;
+      await expect(service.create(7, upload)).rejects.toBeInstanceOf(PayloadTooLargeException);
+      expect(repository.save).not.toHaveBeenCalled();
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('rejects the declared entry count before parsing missing directory entries', async () => {
+      const buffer = createZip({ 'a.txt': 'a' });
+      const end = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+      buffer.writeUInt16LE(13, end + 8);
+      buffer.writeUInt16LE(13, end + 10);
+      await expect(service.create(7, createUpload('Entries.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(PayloadTooLargeException);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('rejects a real archive with too many entries', async () => {
+      const buffer = createZip(Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`${i}.txt`, 'a'])));
+      await expect(service.create(7, createUpload('Entries.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(PayloadTooLargeException);
+    });
+
+    it.each([
+      'a'.repeat(1025),
+      'ä'.repeat(513),
+      `${'dir/'.repeat(32)}file.txt`,
+      `${'dir\\'.repeat(32)}file.txt`
+    ])('bounds path metadata before implicit directory expansion: %s', async entryName => {
+      const buffer = createZip({ [entryName]: 'a' });
+      await expect(service.create(7, createUpload('Paths.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(PayloadTooLargeException);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('counts implicit directory prefixes before adm-zip allocates them', () => {
+      const buffer = createZip({
+        'a/a/a/a/a/a/file.txt': 'a',
+        'b/b/b/b/b/b/file.txt': 'b'
+      });
+      const zip = (service as unknown as { readZip: (value: Buffer) => AdmZip }).readZip(buffer);
+      expect(zip.getEntryCount()).toBe(2);
+      expect(() => zip.getEntries()).toThrow(PayloadTooLargeException);
+      // A post-expansion guard would leave 14 internally allocated entries.
+      expect(zip.getEntryCount()).toBe(2);
+    });
+
+    it('bounds a chunked remote GeoGebra response before buffering it completely', async () => {
+      const server = createServer((_request, response) => {
+        response.write(Buffer.alloc(2048));
+        response.end(Buffer.alloc(2049));
+      });
+      await new Promise<void>(resolve => { server.listen(0, '127.0.0.1', resolve); });
+      const address = server.address() as AddressInfo;
+      configService.get.mockReturnValue(`http://127.0.0.1:${address.port}/bundle.zip`);
+      const remoteService = new ResourcePackageService(repository, new HttpService(), configService as unknown as ConfigService);
+      (remoteService as unknown as { resourcePackagesPath: string }).resourcePackagesPath = packagesPath;
+      try {
+        await expect(remoteService.installGeoGebraBundle()).rejects.toBeInstanceOf(BadRequestException);
+        expect(repository.save).not.toHaveBeenCalled();
+        expect(fs.readdirSync(packagesPath)).toEqual([]);
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          server.close(error => { if (error) reject(error); else resolve(); });
+        });
+      }
+    });
+
+    it('rejects a highly compressed oversized entry before extraction', async () => {
+      const buffer = createZip({ 'large.txt': 'a'.repeat(2049) });
+      await expect(service.create(7, createUpload('Large.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(PayloadTooLargeException);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('rejects excessive total uncompressed size across individually valid entries', async () => {
+      const buffer = createZip({ a: 'a'.repeat(2048), b: 'b'.repeat(2048), c: 'c' });
+      await expect(service.create(7, createUpload('Total.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(PayloadTooLargeException);
+      expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects a STORED entry whose compressed extent disagrees with its declared size', async () => {
+      const zip = new AdmZip();
+      zip.addFile('stored.txt', Buffer.from('content'));
+      zip.getEntry('stored.txt')!.header.method = 0;
+      const buffer = zip.toBuffer();
+      const central = buffer.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+      buffer.writeUInt32LE(0, central + 24);
+      await expect(service.create(7, createUpload('Stored.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('rejects DEFLATED output exceeding a forged declared size without leaving files', async () => {
+      const buffer = createZip({ 'deflated.txt': 'a'.repeat(2048) });
+      const central = buffer.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+      buffer.writeUInt32LE(1, central + 24);
+      await expect(service.create(7, createUpload('Forged.itcr.zip', buffer))).rejects.toThrow();
+      expect(packages).toHaveLength(0);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('rejects actual output shorter than its declared size', async () => {
+      const buffer = createZip({ 'short.txt': 'short' });
+      const central = buffer.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+      buffer.writeUInt32LE(20, central + 24);
+      await expect(service.create(7, createUpload('Short.itcr.zip', buffer)))
+        .rejects.toBeInstanceOf(BadRequestException);
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('bounds GeoGebra version HTML and every entry excluded from global normalization', async () => {
+      for (const oversizedName of ['GeoGebra/HTML5/5.0/GeoGebra.html', 'outside.txt']) {
+        const buffer = createZip({
+          'GeoGebra/deployggb.js': 'deploy',
+          'GeoGebra/HTML5/5.0/GeoGebra.html': 'latestVersion = "1.0"',
+          [oversizedName]: 'x'.repeat(2049)
+        });
+        await expect(service.create(7, createUpload('Geogebra.itcr.zip', buffer)))
+          .rejects.toBeInstanceOf(PayloadTooLargeException);
+      }
+      expect(fs.readdirSync(packagesPath)).toEqual([]);
+    });
+
+    it('accepts entries at the byte limits and streams the original ZIP back', async () => {
+      const buffer = createZip({ a: 'a'.repeat(2048), b: 'b'.repeat(2048) });
+      await service.create(7, createUpload('Boundary.itcr.zip', buffer));
+      const stream = await service.getZippedResourcePackage(7, 'Boundary');
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+      expect(Buffer.concat(chunks)).toEqual(buffer);
+      expect(packages).toHaveLength(1);
+    });
+  });
+
+  it.each(['Legacy.itcs.zip', 'OTHER.ITCR.ZIP'])('streams and hashes legacy ZIP %s with case-insensitive directory lookup', async filename => {
+    const buffer = createZip({ a: 'content' });
+    fs.mkdirSync(path.join(packagesPath, 'legacy'));
+    fs.writeFileSync(path.join(packagesPath, 'legacy', filename), buffer);
+    packages.push({
+      id: 1, name: 'Legacy', workspaceId: 7, scope: 'workspace'
+    } as ResourcePackage);
+
+    const stream = await service.getZippedResourcePackage(7, 'Legacy');
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks)).toEqual(buffer);
+    await service.create(7, createUpload('Legacy.itcr.zip', buffer));
+    expect(packages).toHaveLength(1);
+    expect(packages[0].contentHash).toBe(createHash('sha256').update(buffer).digest('hex'));
   });
 
   it('should install the current GeoGebra bundle ZIP layout', async () => {
@@ -194,6 +363,7 @@ describe('ResourcePackageService', () => {
       'https://mirror.example/geogebra.zip',
       {
         responseType: 'arraybuffer',
+        maxContentLength: RESOURCE_PACKAGE_LIMITS.maxArchiveBytes,
         timeout: 120000
       }
     );
