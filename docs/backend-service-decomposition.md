@@ -197,3 +197,10 @@ Both browser stacks and their volumes were removed cleanly. Native integration
 PostgreSQL and Redis were stopped after their gate. Docker Desktop used 6 GiB RAM
 for these runs; its original 12,032 MiB setting was restored afterwards.
 The only later commit updates this document; tested production sources are unchanged.
+
+## Next domain boundary: coding freshness
+
+The follow-up [coding freshness decomposition](backend-freshness-decomposition.md) starts from the merged
+PR #1143 base on 1 November 2026. It defines an independent module for unit/version transitions,
+freshness queries and manual-job effects, with the existing facade as its only Nest export.
+It also records the remaining file-import, validation, autocoder, job, training and export module cuts.

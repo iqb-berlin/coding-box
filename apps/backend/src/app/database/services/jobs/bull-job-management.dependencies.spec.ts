@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { InjectionToken, Type } from '@nestjs/common';
 import { MODULE_METADATA, PARAMTYPES_METADATA, SELF_DECLARED_DEPS_METADATA } from '@nestjs/common/constants';
 import { CodingModule } from '../../../coding/coding.module';
+import { CodingFreshnessModule } from '../../../coding/coding-freshness.module';
 import { WorkspaceModule } from '../../../workspace/workspace.module';
 import { WorkspaceDataModule } from '../../../workspace/workspace-data.module';
 
@@ -20,13 +21,17 @@ function assertAcyclic<T>(nodes: T[], dependencies: (node: T) => T[], label: (no
 }
 
 describe('workspace and coding dependency direction', () => {
-  const modules = [WorkspaceModule, CodingModule, WorkspaceDataModule];
+  const modules = [WorkspaceModule, CodingModule, CodingFreshnessModule, WorkspaceDataModule];
 
   it('keeps workspace data below coding and workspace workflows in the module graph', () => {
     const imports = (module: Type<unknown>) => Reflect.getMetadata(MODULE_METADATA.IMPORTS, module) as Type<unknown>[];
     expect(imports(WorkspaceModule)).toContain(CodingModule);
     expect(imports(CodingModule)).toContain(WorkspaceDataModule);
     expect(imports(CodingModule)).not.toContain(WorkspaceModule);
+    expect(imports(CodingModule)).toContain(CodingFreshnessModule);
+    expect(imports(CodingFreshnessModule)).toContain(WorkspaceDataModule);
+    expect(imports(CodingFreshnessModule)).not.toContain(CodingModule);
+    expect(imports(CodingFreshnessModule)).not.toContain(WorkspaceModule);
     expect(imports(WorkspaceDataModule)).not.toContain(CodingModule);
     expect(imports(WorkspaceDataModule)).not.toContain(WorkspaceModule);
     assertAcyclic<Type<unknown>>(modules, imports, module => module.name);

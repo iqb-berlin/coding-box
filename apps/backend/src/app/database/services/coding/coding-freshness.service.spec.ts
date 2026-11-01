@@ -1,5 +1,7 @@
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { CodingFreshnessQueryService } from './coding-freshness-query.service';
+import { CodingJobFreshnessService } from './coding-job-freshness.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -27,6 +29,12 @@ describe('CodingFreshnessService', () => {
   let responseRepository: Repository<ResponseEntity>;
   let connection: DataSource;
   let service: CodingFreshnessService;
+  let queries: CodingFreshnessQueryService;
+
+  const createService = (exclusions?: WorkspaceExclusionService): CodingFreshnessService => {
+    queries = new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection, exclusions);
+    return new CodingFreshnessService(freshnessRepository, responseRepository, connection, queries, new CodingJobFreshnessService(connection));
+  };
 
   beforeEach(() => {
     freshnessRepository = {
@@ -44,11 +52,7 @@ describe('CodingFreshnessService', () => {
       createQueryBuilder: jest.fn()
     } as unknown as DataSource;
 
-    service = new CodingFreshnessService(
-      freshnessRepository,
-      responseRepository,
-      connection
-    );
+    service = createService();
   });
 
   const mockCodingSchemeChangeQueries = (
@@ -115,12 +119,7 @@ describe('CodingFreshnessService', () => {
         testletIgnoredUnits: []
       })
     } as unknown as WorkspaceExclusionService;
-    service = new CodingFreshnessService(
-      freshnessRepository,
-      responseRepository,
-      connection,
-      workspaceExclusionService
-    );
+    service = createService(workspaceExclusionService);
 
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
     const summaryQb = queryBuilder({
@@ -398,12 +397,7 @@ describe('CodingFreshnessService', () => {
         testletIgnoredUnits: []
       })
     } as unknown as WorkspaceExclusionService;
-    service = new CodingFreshnessService(
-      freshnessRepository,
-      responseRepository,
-      connection,
-      workspaceExclusionService
-    );
+    service = createService(workspaceExclusionService);
     const scopedQueryBuilder = queryBuilder();
     const scopedResponseRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(scopedQueryBuilder)
@@ -413,7 +407,7 @@ describe('CodingFreshnessService', () => {
     };
 
     await (
-      service as unknown as {
+      queries as unknown as {
         getResponseCountsByUnit: (
           workspaceId: number,
           unitIds: number[],
@@ -432,7 +426,7 @@ describe('CodingFreshnessService', () => {
     (connection.query as jest.Mock).mockResolvedValue([]);
 
     await (
-      service as unknown as {
+      queries as unknown as {
         getUnitIdsByCodingSchemeRefs: (
           workspaceId: number,
           codingSchemeRefs: string[]
@@ -463,7 +457,7 @@ describe('CodingFreshnessService', () => {
       .mockResolvedValueOnce([{ hasLegacy: false }]);
 
     await expect((
-      service as unknown as {
+      queries as unknown as {
         getUnitIdsByCodingSchemeRefs: (
           workspaceId: number,
           codingSchemeRefs: string[]
@@ -485,7 +479,7 @@ describe('CodingFreshnessService', () => {
       .mockResolvedValueOnce([{ id: 11 }]);
 
     await expect((
-      service as unknown as {
+      queries as unknown as {
         getUnitIdsByCodingSchemeRefs: (
           workspaceId: number,
           codingSchemeRefs: string[]
@@ -560,12 +554,7 @@ describe('CodingFreshnessService', () => {
         testletIgnoredUnits: []
       })
     } as unknown as WorkspaceExclusionService;
-    service = new CodingFreshnessService(
-      freshnessRepository,
-      responseRepository,
-      connection,
-      workspaceExclusionService
-    );
+    service = createService(workspaceExclusionService);
 
     const includedUnitsQb = queryBuilder({
       getRawMany: jest.fn().mockResolvedValue([{ id: 10 }])
@@ -691,7 +680,7 @@ describe('CodingFreshnessService', () => {
     const workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue(exclusions)
     } as unknown as WorkspaceExclusionService;
-    service = new CodingFreshnessService(freshnessRepository, responseRepository, connection, workspaceExclusionService);
+    service = createService(workspaceExclusionService);
     const unitQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ id: 10 }]) });
     const countsQb = queryBuilder({ getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }]) });
     const manager = {
