@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SimpleChange } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
@@ -48,6 +48,18 @@ describe('UnitPlayerComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('updates the accessible frame title when the language changes', async () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { replay: { 'unit-player-title': 'Aufgabenplayer' } });
+    translate.setTranslation('probe', { replay: { 'unit-player-title': 'Task player' } });
+    translate.use('de');
+    await fixture.whenStable();
+    expect(component.hostingIframe()!.nativeElement.title).toBe('Aufgabenplayer');
+    translate.use('probe');
+    await fixture.whenStable();
+    expect(component.hostingIframe()!.nativeElement.title).toBe('Task player');
   });
 
   it('keeps the JSON input unchanged, sends one encoding and clears the parsed definition on reset', async () => {

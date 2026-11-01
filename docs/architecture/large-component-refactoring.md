@@ -352,3 +352,58 @@ Anfrage nun erneut geprüft. Weitere Tests prüfen Abbruch zwischen 404 und
 Legacy-Rückfall sowie verspätete beziehungsweise entprellte Opener-Nachrichten
 nach Workspace-Wechseln. Das abschließende Eigenreview hat keine offenen
 Befunde. Remote-CI und fachliche Abnahme bleiben separat am PR zu prüfen.
+
+## Speicherabläufe, Übersetzungen und Frame-Namen (01.11.2026)
+
+Basis ist `origin/develop` bei `a4de123ca949e2a3215ad11f15f1e720dd2e9675`.
+Der Jobdefinitionsdialog delegiert Einzeljob-Speicherung, Definitionsanlage,
+Review-Einreichung, Änderungen mit Refresh-Vorschau und Bulk-Erstellung an
+`JobDefinitionSaveFacade`. Formularaufbau, Auswahl und Payload-Ableitung bleiben
+in ihren bisherigen Besitzern. Die bestehende Persistence-Schicht übernimmt
+weiterhin die Job-Speicherung mit anschließender Kodiererzuweisung und deren
+Teilfehlerrückgabe.
+
+Die Fassade gehört zur Lebensdauer des Dialogs und stellt ihren Speicherzustand
+als schreibgeschütztes Signal bereit. Ausstehende Requests enden bei Zerstörung
+oder Arbeitsbereichswechsel; asynchrone Fortsetzungen prüfen zusätzlich den
+aktuellen Kontext einschließlich A → B → A. Eigene Bestätigungsdialoge werden
+bei Kontextabbruch geschlossen. Recovery-Daten werden nach erfolgreichem
+Definitionsabschluss entfernt und bleiben bei Fehler oder Abbruch erhalten.
+
+Die flache Testergebnistabelle verwendet für Beschriftungen, Hilfetexte,
+Dialogtitel und Rückmeldungen die deutsche Übersetzungsdatei. Platzhalter wie
+Antwortname, Aufgabennummer und Backend-Warnungen werden als Parameter
+übergeben. Der Auth-Interceptor nutzt dieselbe Übersetzungslösung für
+Berechtigungs- und Verfügbarkeitsmeldungen. Er löst den Übersetzungsdienst erst
+im Fehlerfall auf, damit dessen eigener HTTP-Ladevorgang beim Initialisieren
+der Standardsprache keine zyklische Abhängigkeit erzeugt.
+
+Aufgabenplayer und Review-Vorschau haben übersetzte Frame-Titel; mehrere
+Review-Vorschauen erhalten unterscheidbare Nummern. Eine Template-Lintregel
+verlangt für Frames eine zugängliche Bezeichnung. Ihre Regressionen prüfen
+externe und Inline-Templates mit fehlenden, leeren, statischen und gebundenen
+Bezeichnungen. Der Player-Test prüft den Titel auch nach einem Sprachwechsel.
+
+### Validierung dieses Pakets
+
+Alle lokalen Prüfungen laufen nacheinander unter Node 24.22.1 über die lokale
+Nx-Installation. Der neue Fassadentest prüft insbesondere doppelte Saves,
+Teilfehlerrückgaben bei Kodiererzuweisung, Fehler mit Retry, direkte gegenüber
+strukturellen Definitionsänderungen, Bestätigung/Abbruch, Kontextwechsel und
+Zerstörung sowie die Parameter der Bulk-Erstellung. Bestehende Komponententests
+prüfen die Integration und Payloads weiterhin.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx run frontend:test-quality-gates` | 56 Prüfungen bestanden. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | 328 Suites, 3.714 Tests bestanden; 83,15 % Zeilen und 81,08 % Branches. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/manual-preparation.cy.ts,cypress/zoneless/test-results-view.cy.ts,cypress/zoneless/replay-lifecycle.cy.ts,cypress/zoneless/app.cy.ts --skipNxCache` | 33/33 Fälle in vier Suites bestanden. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/info-dialogs.cy.ts --skipNxCache` | 4/4 Fälle bestanden; insgesamt 37 Browserfälle ohne Retries oder übersprungene Fälle. |
+| `npx nx run frontend:zoneless-approval --skipNxCache` | Bestanden; 422 Quelldateien und 9.450 Einträge. |
+
+Remote-CI, Deployment und fachliche Abnahme sind separate Nachweise. Die
+Browserprüfungen dieses Pakets verwenden synthetische API-Fixtures; sie belegen
+keine reale Backend-Persistenz oder Verbindung zu Keycloak beziehungsweise
+Testcenter. Bereits dokumentierte fachliche Abnahmen bleiben erhalten.

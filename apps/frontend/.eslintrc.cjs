@@ -80,7 +80,11 @@ module.exports = {
         'plugin:@angular-eslint/template/accessibility'
       ],
       rules: {
-        '@angular-eslint/template/prefer-class-binding': 'error'
+        '@angular-eslint/template/prefer-class-binding': 'error',
+        'no-restricted-syntax': ['error', {
+          selector: 'Element[name="iframe"]:not(:has(TextAttribute[name=/^(title|aria-label|aria-labelledby)$/][value=/\\S/])):not(:has(BoundAttribute[name=/^(title|aria-label|aria-labelledby)$/]))',
+          message: 'Give embedded frames a descriptive accessible name, preferably a translated title.'
+        }]
       }
     }
   ]

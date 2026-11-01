@@ -1,4 +1,4 @@
-import { inject } from '@angular/core';
+import { Injector, inject } from '@angular/core';
 import {
   HttpEvent,
   HttpHandlerFn,
@@ -17,6 +17,7 @@ import {
   throwError
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { AppHttpError } from './app-http-error.class';
 import { AuthRequestCancelledError } from './auth-request-cancelled.error';
 import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
@@ -44,6 +45,9 @@ export const authInterceptor: HttpInterceptorFn = (
   const appService = inject(AppService);
   const authService = inject(AuthService);
   const snackBar = inject(MatSnackBar);
+  const injector = inject(Injector);
+  // The translation loader also uses HttpClient while TranslateService is constructed.
+  const translate = (key: string): string => injector.get(TranslateService).instant(key);
   const router = inject(Router);
   const serverUrl = inject(SERVER_URL);
   let httpErrorInfo: AppHttpError | null = null;
@@ -96,8 +100,8 @@ export const authInterceptor: HttpInterceptorFn = (
                   !req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)) {
                   appService.setBackendUnavailable(true);
                   snackBar.open(
-                    'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
-                    'Schließen',
+                    translate('errors.backend-unavailable'),
+                    translate('common.close'),
                     {
                       duration: 0,
                       panelClass: ['error-snackbar']
@@ -112,8 +116,8 @@ export const authInterceptor: HttpInterceptorFn = (
 
                   if (errorMessage.includes('Access level')) {
                     snackBar.open(
-                      'Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion',
-                      'Schließen',
+                      translate('error-insufficient-access'),
+                      translate('common.close'),
                       {
                         duration: 5000,
                         panelClass: ['error-snackbar']
@@ -123,8 +127,8 @@ export const authInterceptor: HttpInterceptorFn = (
                     appService.requireReAuthentication(router.url);
                   } else {
                     snackBar.open(
-                      'Sie haben keine Berechtigung für diese Aktion',
-                      'Schließen',
+                      translate('error-forbidden'),
+                      translate('common.close'),
                       {
                         duration: 5000,
                         panelClass: ['error-snackbar']
