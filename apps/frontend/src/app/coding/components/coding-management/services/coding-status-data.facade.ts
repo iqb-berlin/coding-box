@@ -2,7 +2,7 @@ import {
   DestroyRef, Injectable, WritableSignal, computed, inject, signal
 } from '@angular/core';
 import {
-  Observable, Subject, Subscription, finalize, takeUntil
+  Observable, Subject, Subscription, defer, finalize, takeUntil
 } from 'rxjs';
 import { AppService } from '../../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../../shared/utils/workspace-request.operator';
@@ -64,7 +64,7 @@ export class CodingStatusDataFacade {
     const workspaceId = this.workspace(false);
     if (!workspaceId) return;
     this.requests.get('scope')?.unsubscribe();
-    this.request('freshness', workspaceId, this.backend.getCodingFreshness(workspaceId), summary => {
+    this.request('freshness', workspaceId, () => this.backend.getCodingFreshness(workspaceId), summary => {
       this.codingFreshnessSummary.set(summary);
       if (loadScopeOnWarnings && this.hasWarnings()) this.loadCodingFreshnessScope();
       else this.codingFreshnessScope.set(null);
@@ -75,7 +75,7 @@ export class CodingStatusDataFacade {
   loadCodingFreshnessScope(): void {
     const workspaceId = this.workspace();
     if (!workspaceId) return;
-    this.request('scope', workspaceId, this.backend.getCodingFreshnessScope(workspaceId), scope => this.codingFreshnessScope.set(scope));
+    this.request('scope', workspaceId, () => this.backend.getCodingFreshnessScope(workspaceId), scope => this.codingFreshnessScope.set(scope));
   }
 
   loadManualAppliedResultsOverview(): void {
@@ -88,7 +88,7 @@ export class CodingStatusDataFacade {
     const workspaceId = this.workspace(false);
     if (!workspaceId) return;
     this.manualAppliedResultsOverviewLoadFailed.set(false);
-    this.request('applied', workspaceId, this.backend.getAppliedResultsOverview(workspaceId), overview => {
+    this.request('applied', workspaceId, () => this.backend.getAppliedResultsOverview(workspaceId), overview => {
       this.manualAppliedResultsOverview.set(overview);
       this.manualAppliedResultsOverviewLoadFailed.set(overview === null);
     }, this.isLoadingManualAppliedResultsOverview);
@@ -98,7 +98,7 @@ export class CodingStatusDataFacade {
     const workspaceId = this.workspace(forceRefresh);
     if (!workspaceId) return;
     this.autocodingReadinessLoadFailed.set(false);
-    this.request('readiness', workspaceId, this.backend.getAutocodingReadiness(workspaceId, 1, forceRefresh), readiness => {
+    this.request('readiness', workspaceId, () => this.backend.getAutocodingReadiness(workspaceId, 1, forceRefresh), readiness => {
       this.autocodingReadiness.set(readiness);
       this.hasLoadedFullCodingStatusOverview.set(true);
     }, this.isLoadingAutocodingReadiness, () => {
@@ -121,7 +121,7 @@ export class CodingStatusDataFacade {
       this.hasLoadedFullCodingStatusOverview.set(true);
       return;
     }
-    this.request('readiness', workspaceId, this.backend.getCachedAutocodingReadiness(workspaceId, 1), readiness => {
+    this.request('readiness', workspaceId, () => this.backend.getCachedAutocodingReadiness(workspaceId, 1), readiness => {
       if (readiness) {
         this.autocodingReadiness.set(readiness);
         this.autocodingReadinessLoadFailed.set(false);
@@ -151,15 +151,15 @@ export class CodingStatusDataFacade {
   private request<T>(
     slot: RequestSlot,
     workspaceId: number,
-    source: Observable<T>,
+    source: () => Observable<T>,
     next: (value: T) => void,
     loading?: WritableSignal<boolean>,
     error?: (failure: unknown) => void
   ): void {
-    // Release the old request before marking its replacement as loading.
+    // Release the old request before requesting a replacement from the service's shared HTTP cache.
     this.requests.get(slot)?.unsubscribe();
     loading?.set(true);
-    const subscription = source.pipe(
+    const subscription = defer(source).pipe(
       takeUntilWorkspaceChanged(this.app, workspaceId),
       takeUntil(this.destroyed),
       finalize(() => loading?.set(false))

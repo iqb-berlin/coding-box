@@ -352,3 +352,61 @@ Anfrage nun erneut geprüft. Weitere Tests prüfen Abbruch zwischen 404 und
 Legacy-Rückfall sowie verspätete beziehungsweise entprellte Opener-Nachrichten
 nach Workspace-Wechseln. Das abschließende Eigenreview hat keine offenen
 Befunde. Remote-CI und fachliche Abnahme bleiben separat am PR zu prüfen.
+
+## Statusabfragen und Hintergrundjobs der Kodierverwaltung (01.11.2026)
+
+Basis ist `origin/develop` bei `d28ab3485`. Dieses Paket ist unabhängig von
+PR #1144. `CodingManagementComponent` sinkt von 1.842 auf 1.655 physische Zeilen.
+Die fachlichen Grenzen sind wichtiger als diese Zählung:
+
+- `CodingStatusDataFacade` besitzt Freshness, betroffene Gruppen, Readiness und
+  die Übernahmeübersicht manueller Ergebnisse samt Lade-/Fehlerzuständen und
+  daraus abgeleiteten Warnungen. Der leichte Erstaufruf und die Wiederverwendung
+  eines vollständigen Cache-Snapshots bleiben erhalten. Ersetzte Abfragen sowie
+  Antworten nach Arbeitsbereichswechsel A → B → A oder Zerstörung werden
+  verworfen. Eine ausstehende Cache-Abfrage überschreibt keinen erzwungenen
+  Readiness-Check; alte Gruppenabfragen überleben keine neuere Freshness-Abfrage.
+- `CodingFreshnessPollingFacade` besitzt den lokalen Auftragskontext,
+  Fortschritt und die Abfragelebensdauer. Während der Auftragsdialog offen ist,
+  bleibt dessen Polling zuständig. Nach dessen Schließen fragt die Fassade im
+  bisherigen Zwei-Sekunden-Takt ab. Langsame Antworten überlappen sich nicht
+  mehr. Zusammenhängende Abfragefehler erzeugen nur eine Meldung; nach Erholung
+  ist erneutes Fehlerfeedback möglich. Beim Verlassen des Arbeitsbereichs oder
+  der Ansicht geht der laufende Auftrag an die vorhandene persistente
+  Guard-Verfolgung über. Alte Antworten und Timer enden dabei.
+
+Die Komponente behält Dialogaktionen, Rechte, Snackbar-Texte und die bestehende
+Koordination entprellter beziehungsweise aufgeschobener Aktualisierungen von
+Statistik, Tabelle und Status. Die Fassaden sind komponentenlokale Provider;
+es entsteht kein zweiter globaler Daten- oder Job-Store. Ihre Tests prüfen die
+Abfrage- und Lebensdauerverträge ohne das große Komponententemplate. Bestehende
+Komponententests sichern Abschluss-/Refresh-Reihenfolge und Dialogübernahme;
+zusätzliche Fälle verwerfen verspätete Startantworten nach Kontextende.
+
+Zwei zusätzliche HTTP-Vertragstests verwenden den echten `TestPersonCodingService`
+mit dem Angular-Testbackend. Sie reproduzierten zunächst einen verlorenen
+Readiness-Cache nach Anfrageersetzung: Das vorzeitig angeforderte Observable war
+noch die geteilte alte Anfrage. Die Fassade erstellt den Nachfolger jetzt erst
+nach deren Abonnementende. Beide Fälle (Cache-Abfrage und reguläre Readiness)
+bestehen danach und verlangen bei der nächsten Abfrage keinen weiteren
+HTTP-Request. Auch die übrigen 152 fokussierten Fälle bestehen.
+
+### Validierung der Status-/Polling-Aufteilung
+
+Lokal unter Node 24.22.1, jeweils nacheinander über die lokale Nx-Installation
+mit `NX_DAEMON=false`:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --fix --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --cache=false --skipNxCache` | 329 Suites, 3.727 Tests bestanden; 83,15 % Zeilen und 81,14 % Branches. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/async-coding-dialogs.cy.ts,cypress/zoneless/test-person-coding-feedback.cy.ts --skipNxCache` | 10/10 Fälle gegen den frischen Produktionsbuild bestanden, ohne Retries oder übersprungene Fälle. |
+| `npx nx run frontend:zoneless-inventory --args=--update --skipNxCache` und `npx nx run frontend:zoneless-approval --skipNxCache` | Inventar regeneriert und Risikoreferenzen geprüft; 423 Quelldateien, 9.385 Einträge. |
+| `npx nx run frontend:zoneless-inventory-test --skipNxCache` | Beide Inventar-/Risikomatrix-Regressionen bestanden. |
+| `git diff --check` | Bestanden. |
+
+Die Browserfälle verwenden synthetische API-Fixtures. Remote-CI am endgültigen
+PR-Head, Deployment und fachliche Abnahme bleiben eigenständige Nachweise. Die
+Inventarprüfung ist eine risikobezogene Referenzprüfung und keine vollständige
+Einzelabnahme aller Inventarszenarien.

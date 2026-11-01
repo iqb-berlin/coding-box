@@ -32,6 +32,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { CodingFreshnessJobResultDto } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -1115,6 +1116,31 @@ describe('CodingManagementComponent', () => {
       expect(status?.textContent).toContain('Auto-Coding wird gestartet...');
       expect(status?.querySelector('mat-spinner')).toBeTruthy();
       expect(fixture.nativeElement.querySelector('.coding-freshness-actions')).toBeNull();
+    });
+
+    it.each(['workspace-return', 'destroy'])('ignores a delayed freshness start after %s', end => {
+      const pending = new Subject<CodingFreshnessJobResultDto>();
+      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(pending);
+      (mockDialog.open as jest.Mock).mockClear();
+      (mockSnackBar.open as jest.Mock).mockClear();
+      (mockCodingBackgroundJobsService.setJobRunning as jest.Mock).mockClear();
+      component.startFreshnessCoding('v1');
+
+      if (end === 'destroy') fixture.destroy();
+      else {
+        mockAppService.selectedWorkspaceId = 2;
+        (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
+        mockAppService.selectedWorkspaceId = 1;
+        (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
+      }
+      pending.next({
+        jobId: 'late-job', totalResponses: 42, statusCounts: {}, unitCount: 7, personCount: 3, groupNames: ['TG1']
+      });
+
+      expect(pending.observed).toBe(false);
+      expect(mockDialog.open).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+      expect(mockCodingBackgroundJobsService.setJobRunning).not.toHaveBeenCalled();
     });
 
     it('should open the test person coding dialog with the started freshness job', () => {

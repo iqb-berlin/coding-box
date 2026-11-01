@@ -26,6 +26,8 @@
         "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
         "cypress/zoneless/cohens-kappa.cy.ts",
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management/services/coding-status-data.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management/services/coding-freshness-polling.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-jobs-refresh.facade.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-refresh-workflow.facade.spec.ts",

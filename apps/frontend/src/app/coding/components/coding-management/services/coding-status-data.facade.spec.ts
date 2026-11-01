@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { AppService } from '../../../../core/services/app.service';
 import { TestPersonCodingService } from '../../../services/test-person-coding.service';
@@ -6,6 +8,9 @@ import { CodingBackgroundJobsService } from '../../../services/coding-background
 import { CodingFreshnessSummaryDto, CodingFreshnessScopeDto } from '../../../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { CodingStatusDataFacade } from './coding-status-data.facade';
+import { AuthService } from '../../../../core/services/auth.service';
+import { CodingReliabilityService } from '../../../services/coding-reliability.service';
+import { SERVER_URL } from '../../../../injection-tokens';
 
 const summary = (revision: number): CodingFreshnessSummaryDto => ({ workspaceId: 1, currentRevision: revision, items: [] });
 const scope: CodingFreshnessScopeDto = {
@@ -199,5 +204,52 @@ describe('CodingStatusDataFacade', () => {
     app.selectedWorkspaceId = 1;
     facade.loadCodingFreshness();
     expect(backend.getCodingFreshness).not.toHaveBeenCalled();
+  });
+});
+
+describe('CodingStatusDataFacade with shared HTTP caching', () => {
+  let facade: CodingStatusDataFacade;
+  let http: HttpTestingController;
+  const url = '/api/admin/workspace/1/coding/readiness';
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        CodingStatusDataFacade,
+        TestPersonCodingService,
+        { provide: SERVER_URL, useValue: '/api/' },
+        { provide: AuthService, useValue: {} },
+        { provide: CodingReliabilityService, useValue: {} },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>() } },
+        { provide: CodingBackgroundJobsService, useValue: { isStatusCheckGuardActive: () => false } }
+      ]
+    });
+    facade = TestBed.inject(CodingStatusDataFacade);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    facade.dispose();
+    http.verify();
+  });
+
+  it.each(['cached', 'live'])('retains the service cache after replacing an unfinished %s readiness read', kind => {
+    const load = () => {
+      if (kind === 'cached') facade.loadCachedAutocodingReadiness();
+      else facade.loadAutocodingReadiness();
+    };
+    load();
+    const old = http.expectOne(request => request.url === url);
+    load();
+    expect(old.cancelled).toBe(true);
+    const replacement = http.expectOne(request => request.url === url);
+    replacement.flush(readiness);
+    expect(facade.autocodingReadiness()).toEqual(readiness);
+
+    load();
+    http.expectNone(request => request.url === url);
+    expect(facade.autocodingReadiness()).toEqual(readiness);
   });
 });
