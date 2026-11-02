@@ -3,7 +3,7 @@
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
-      [title]="'ui-text.response-status-validation-panel.antwortstatus-pruefung' | translate"
+      [title]="'ui-text.response-status-validation-panel.title' | translate"
       [status]="status"
       [errorCount]="errorCount()">
     </coding-box-validation-panel-header>
@@ -17,7 +17,7 @@
 
   <div class="validation-actions">
     <button mat-button (click)="onValidate()" [disabled]="isRunning() || disabled()">
-      {{ 'ui-text.response-status-validation-panel.antwortstatus-pruefen' | translate }}
+      {{ 'ui-text.response-status-validation-panel.run' | translate }}
     </button>
   </div>
 
@@ -25,7 +25,7 @@
       <div class="loading-container">
         <mat-spinner class="mat-spinner" diameter="30" [mode]="activeTaskValue?.progress ? 'determinate' : 'indeterminate'" [value]="activeTaskValue?.progress"></mat-spinner>
         <p class="loading-text">
-          {{ 'ui-text.response-status-validation-panel.antwortstatus-werden-geprueft' | translate }}
+          {{ 'ui-text.response-status-validation-panel.running' | translate }}
           @if (activeTaskValue?.progress) {
             ({{ activeTaskValue?.progress }}%)
           }
@@ -36,14 +36,14 @@
   @if (errorMessageValue) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>{{ 'ui-text.duplicate-responses-validation-panel.fehler-bei-der-validierung' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
+      <span>{{ 'ui-text.duplicate-responses-validation-panel.validation-error' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
     </div>
   }
 
   @if (invalidStatusVariables().length > 0 || totalInvalid() > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>{{ 'ui-text.response-status-validation-panel.pruefung-fehlgeschlagen-ungueltige-antwortstatus-gefunden' | translate: { value1: (totalInvalid()) } }}</span>
+      <span>{{ 'ui-text.response-status-validation-panel.invalid-statuses-found' | translate: { value1: (totalInvalid()) } }}</span>
     </div>
 
     @if (invalidStatusVariables().length > 0) {
@@ -57,9 +57,9 @@
           [disabled]="isExporting() || isLoadingPage()"
         >
           @if (isExporting()) {
-            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.export' | translate }}
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.exporting' | translate }}
           } @else {
-            {{ 'ui-text.duplicate-responses-validation-panel.csv-exportieren' | translate }}
+            {{ 'ui-text.duplicate-responses-validation-panel.export-csv' | translate }}
           }
         </button>
         <button mat-button (click)="selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
@@ -68,18 +68,18 @@
                 (click)="deleteSelected()" 
                 [disabled]="isDeletingResponses() || selectedResponses().size === 0">
           @if (isDeletingResponses()) {
-            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.loeschen' | translate }}
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.deleting' | translate }}
           } @else {
-            {{ 'ui-text.response-status-validation-panel.ausgewaehlte-loeschen' | translate: { value1: (selectedResponses().size) } }}
+            {{ 'ui-text.response-status-validation-panel.delete-selection' | translate: { value1: (selectedResponses().size) } }}
           }
         </button>
         <button mat-button color="warn" 
                 (click)="deleteAll()" 
                 [disabled]="isDeletingResponses() || invalidStatusVariables().length === 0">
           @if (isDeletingResponses()) {
-            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.loeschen' | translate }}
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.deleting' | translate }}
           } @else {
-            {{ 'ui-text.response-status-validation-panel.alle-loeschen' | translate: { value1: (totalInvalid()) } }}
+            {{ 'ui-text.response-status-validation-panel.delete-all' | translate: { value1: (totalInvalid()) } }}
           }
         </button>
       </div>
@@ -103,7 +103,7 @@
   } @else if (!isRunning() && invalidStatusVariables().length === 0 && totalInvalid() === 0 && wasRun()) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
-      <span>{{ 'ui-text.response-status-validation-panel.pruefung-bestanden-keine-ungueltigen-antwortstatus-gefunden' | translate }}</span>
+      <span>{{ 'ui-text.response-status-validation-panel.no-invalid-statuses' | translate }}</span>
     </div>
   }
 </mat-expansion-panel>

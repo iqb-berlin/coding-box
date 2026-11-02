@@ -149,16 +149,16 @@ export class HomeComponent implements OnInit {
 
     switch (errorCode) {
       case 'token_missing':
-        message = this.uiTranslate('ui-text.replay.kein-authorisierungs-token-angegeben');
+        message = this.uiTranslate('ui-text.replay.token-missing');
         break;
       case 'token_expired':
-        message = this.uiTranslate('ui-text.home.authentisierungs-token-ist-abgelaufen');
+        message = this.uiTranslate('ui-text.home.token-expired');
         break;
       case 'token_invalid':
-        message = this.uiTranslate('ui-text.replay.authentisierungs-token-ist-ungueltig');
+        message = this.uiTranslate('ui-text.replay.invalid-auth-token');
         break;
       default:
-        message = this.uiTranslate('ui-text.home.ein-fehler-ist-aufgetreten');
+        message = this.uiTranslate('ui-text.home.error');
         break;
     }
 
@@ -187,7 +187,7 @@ export class HomeComponent implements OnInit {
       case AUTH_QUERY_PARAM_ACCESS_DENIED:
         this.resetAuthDataFailedQueryParamState();
         this.snackBar.open(
-          this.uiTranslate('ui-text.home.sie-haben-keinen-zugriff-auf-diesen-bereich'),
+          this.uiTranslate('ui-text.home.access-denied'),
           this.uiTranslate('deferred-view.close'),
           {
             duration: 5000,
@@ -214,7 +214,7 @@ export class HomeComponent implements OnInit {
     if (this.authBootstrapStatus() === 'auth-data-failed' && !this.authDataFailedMessageShown) {
       this.authDataFailedMessageShown = true;
       this.snackBar.open(
-        this.uiTranslate('ui-text.app.ihre-anmeldung-wurde-erkannt-aber-die-sitzungsdaten-konnten-nicht-geladen-werden-bitte-lad'),
+        this.uiTranslate('ui-text.app.session-data-load-failed'),
         this.uiTranslate('deferred-view.close'),
         {
           duration: 8000,

@@ -33,9 +33,9 @@ export type TestFilesZipExportOptionsDialogData = {
     FormsModule
   ],
   template: `
-    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.export-optionen' | translate }}</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.title' | translate }}</h1>
     <div mat-dialog-content>
-      <p>{{ 'ui-text.test-files-zip-export-options-dialog.waehlen-sie-aus-welche-dateitypen-im-zip-enthalten-sein-sollen' | translate }}</p>
+      <p>{{ 'ui-text.test-files-zip-export-options-dialog.description' | translate }}</p>
 
       <div class="selection-actions">
         <button mat-button (click)="selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>

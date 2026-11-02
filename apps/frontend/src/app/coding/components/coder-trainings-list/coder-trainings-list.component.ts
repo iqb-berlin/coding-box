@@ -311,11 +311,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       case 'details':
         return `Details anzeigen: ${target}`;
       case 'compare':
-        return this.uiTranslate('ui-text.coder-trainings-list.ergebnisse-vergleichen', { target: target });
+        return this.uiTranslate('ui-text.coder-trainings-list.compare-results', { target: target });
       case 'edit':
-        return this.uiTranslate('ui-text.coder-trainings-list.schulung-bearbeiten', { target: target });
+        return this.uiTranslate('ui-text.coder-trainings-list.edit-training', { target: target });
       case 'delete':
-        return this.uiTranslate('ui-text.coder-trainings-list.schulung-loeschen', { target: target });
+        return this.uiTranslate('ui-text.coder-trainings-list.delete-training', { target: target });
       case 'more':
         return `Weitere Aktionen: ${target}`;
       default:
@@ -326,34 +326,34 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.coder-trainings-list.aelteste-zuerst');
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first');
       case 'newest_first':
-        return this.uiTranslate('ui-text.coder-trainings-list.neueste-zuerst');
+        return this.uiTranslate('ui-text.coder-trainings-list.newest-first');
       case 'random':
-        return this.uiTranslate('ui-text.coder-trainings-list.zufaellig');
+        return this.uiTranslate('ui-text.coder-trainings-list.random');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.coder-training.zufaellig-je-testgruppe');
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.coder-training.zufaellige-testgruppen');
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return this.uiTranslate('ui-text.coder-trainings-list.aelteste-zuerst');
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.coder-trainings-list.aelteste-verfuegbare-faelle-pro-variable');
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first-hint');
       case 'newest_first':
-        return this.uiTranslate('ui-text.coder-trainings-list.neueste-verfuegbare-faelle-pro-variable');
+        return this.uiTranslate('ui-text.coder-trainings-list.newest-first-hint');
       case 'random':
-        return this.uiTranslate('ui-text.coder-trainings-list.zufaellig-aus-allen-verfuegbaren-faellen');
+        return this.uiTranslate('ui-text.coder-trainings-list.random-cases-hint');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.coder-trainings-list.moeglichst-gleichmaessig-ueber-testgruppen');
+        return this.uiTranslate('ui-text.coder-trainings-list.random-per-group-hint');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.coder-trainings-list.erst-testgruppen-dann-faelle-zufaellig');
+        return this.uiTranslate('ui-text.coder-trainings-list.random-groups-hint');
       default:
-        return this.uiTranslate('ui-text.coder-trainings-list.aelteste-verfuegbare-faelle-pro-variable');
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first-hint');
     }
   }
 

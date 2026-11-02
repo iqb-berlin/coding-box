@@ -693,7 +693,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.die-schulungen-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
   }
 
   openTrainingDiscussion(): void {
@@ -704,7 +704,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const coderTrainings = this.getCoderTrainingsForExport();
 
     if (coderTrainings.length === 0) {
-      this.showError(this.uiTranslate('ui-text.coding-management-manual.die-schulungen-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
       return;
     }
 
@@ -726,12 +726,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.die-schulungen-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
   }
 
   openExecutionTransferCases(): void {
     if (!this.canManageManualCodingJobs()) {
-      this.showError(this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'));
+      this.showError(this.uiTranslate('ui-text.coding-jobs.manage-permission-required'));
       return;
     }
 
@@ -741,7 +741,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.die-kodierjobs-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.jobs-loading'));
   }
 
   openExecutionReliability(): void {
@@ -770,7 +770,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const coderTrainingIds = this.getCoderTrainingIds();
 
     if (coderTrainingIds.length === 0) {
-      this.showError(this.uiTranslate('ui-text.coding-management-manual.die-schulungen-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
       return;
     }
 
@@ -821,14 +821,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.showError(this.uiTranslate('ui-text.coding-management-manual.kein-arbeitsbereich-ausgewaehlt'));
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.no-workspace'));
       return;
     }
 
     const config = createManualCodingExportConfig(context, result, this.appService.userId, context === 'training' ? this.getCoderTrainingIds() : this.getJobDefinitionIds());
     this.exports.start(workspaceId, config, warning => this.confirmLargeExport(warning))
       .subscribe(outcome => {
-        if (outcome === 'started') this.showSuccess(this.uiTranslate('ui-text.coding-management-manual.exportjob-wurde-gestartet'));
+        if (outcome === 'started') this.showSuccess(this.uiTranslate('ui-text.coding-management-manual.export-started'));
         if (outcome === 'estimate-failed') this.showError(this.translateService.instant('manual-coding-export.worksheet-estimate-failed'));
       });
   }
@@ -876,7 +876,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
         return {
           id: jobDefinition.id as number,
-          label: this.uiTranslate('ui-text.coding-management-manual.variablen-buendel', {
+          label: this.uiTranslate('ui-text.coding-management-manual.variable-bundle-summary', {
             value1: getJobDefinitionDisplayLabel(jobDefinition), status: status, variableCount: variableCount, bundleCount: bundleCount
           })
         };
@@ -889,13 +889,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private ensureExecutionJobDefinitionScopeReady(): boolean {
     if (this.exportScope.ensureDefinitionsReady(!!this.codingJobDefinitionsComponent())) return true;
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.die-jobdefinitionen-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.definitions-loading'));
     return false;
   }
 
   private ensureCoderScopeReady(): boolean {
     if (this.exportScope.ensureCodersReady()) return true;
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.die-kodierer-werden-noch-geladen-bitte-versuchen-sie-es-gleich-erneut'));
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.coders-loading'));
     return false;
   }
 
@@ -1135,10 +1135,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const codedUnits = job.codedUnits ?? 0;
 
     if (totalUnits > 0) {
-      return this.uiTranslate('ui-text.coding-management-manual.ergebnisse-kodiert', { codedUnits: codedUnits, totalUnits: totalUnits });
+      return this.uiTranslate('ui-text.coding-management-manual.coded-results', { codedUnits: codedUnits, totalUnits: totalUnits });
     }
 
-    return this.uiTranslate('ui-text.coding-management-manual.kodierergebnisse-vorhanden');
+    return this.uiTranslate('ui-text.coding-management-manual.results-available');
   }
 
   protected isApplyingJobResults(jobId: number): boolean {
@@ -1723,14 +1723,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           );
 
           this.showSuccess(
-            this.uiTranslate('ui-text.coding-management-manual.schulung-erfolgreich-generiert-kodierer-pakete-mit-insgesamt-antworten-erstellt', { length: packages.length, totalResponses: totalResponses })
+            this.uiTranslate('ui-text.coding-management-manual.training-generated', { length: packages.length, totalResponses: totalResponses })
           );
           this.closeCoderTraining();
           this.refreshAllStatistics();
           this.refreshCodingJobsAfterDataChange('training');
         },
         error: () => {
-          this.showError(this.uiTranslate('ui-text.coding-management-manual.fehler-beim-generieren-der-kodierer-schulungspakete'));
+          this.showError(this.uiTranslate('ui-text.coding-management-manual.training-generation-failed'));
         }
       });
   }

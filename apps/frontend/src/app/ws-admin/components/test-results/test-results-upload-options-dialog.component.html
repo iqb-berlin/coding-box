@@ -1,65 +1,65 @@
 <h2 mat-dialog-title>
-  {{ 'ui-text.test-results-upload-options-dialog.upload-optionen' | translate: { value1: (data.resultType === 'logs' ? 'Logs' : 'Responses') } }}
+  {{ 'ui-text.test-results-upload-options-dialog.title' | translate: { value1: (data.resultType === 'logs' ? 'Logs' : 'Responses') } }}
 </h2>
 
 <div mat-dialog-content>
   <mat-form-field appearance="outline" style="width: 100%;">
-    <mat-label>{{ 'ui-text.test-results-upload-options-dialog.geltungsbereich-scope' | translate }}</mat-label>
+    <mat-label>{{ 'ui-text.test-results-upload-options-dialog.scope' | translate }}</mat-label>
     <mat-select [(ngModel)]="scope">
-      <mat-option value="person">{{ 'ui-text.test-results-upload-options-dialog.person-standard-sicher' | translate }}</mat-option>
+      <mat-option value="person">{{ 'ui-text.test-results-upload-options-dialog.person-default' | translate }}</mat-option>
       <mat-option value="workspace">{{ 'ui-text.test-results-upload-options-dialog.workspace' | translate }}</mat-option>
       <mat-option value="group">{{ 'ui-text.test-results-upload-options-dialog.group' | translate }}</mat-option>
       <mat-option value="booklet">{{ 'ui-text.test-results-upload-options-dialog.booklet' | translate }}</mat-option>
       <mat-option value="unit">{{ 'ui-text.test-results-upload-options-dialog.unit' | translate }}</mat-option>
-      <mat-option value="response">{{ 'ui-text.test-results-upload-options-dialog.response-variableid-subform' | translate }}</mat-option>
+      <mat-option value="response">{{ 'ui-text.test-results-upload-options-dialog.response-scope' | translate }}</mat-option>
     </mat-select>
   </mat-form-field>
 
   <div class="help">
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.person' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.es-werden-nur-die-testpersonen-verarbeitet-die-in-der-upload-datei-vorkommen-andere-person' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.person-scope-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.workspace' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.der-import-kann-sich-auf-den-gesamten-workspace-auswirken-potenziell-riskanter' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.workspace-scope-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.group' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.nur-testpersonen-in-der-angegebenen-gruppe-werden-verarbeitet' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.group-scope-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.booklet' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.nur-das-angegebene-booklet-wird-verarbeitet-innerhalb-der-betroffenen-personen' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.booklet-scope-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.unit' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.nur-die-angegebene-unit-name-oder-alias-wird-verarbeitet' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.unit-scope-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.response' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.nur-antworten-fuer-variableid-subform-werden-verarbeitet-maximal-spezifisch' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.response-scope-hint' | translate }}</div>
     </div>
   </div>
 
   @if (scope === 'group') {
     <mat-form-field appearance="outline" style="width: 100%;">
-      <mat-label>{{ 'ui-text.test-center-groups-step.gruppenname' | translate }}</mat-label>
-      <input matInput [(ngModel)]="groupName" [placeholder]="'ui-text.test-results-upload-options-dialog.z-b-gruppea' | translate" />
+      <mat-label>{{ 'ui-text.test-center-groups-step.group-name' | translate }}</mat-label>
+      <input matInput [(ngModel)]="groupName" [placeholder]="'ui-text.test-results-upload-options-dialog.group-example' | translate" />
     </mat-form-field>
   }
 
   @if (scope === 'booklet') {
     <mat-form-field appearance="outline" style="width: 100%;">
       <mat-label>{{ 'export-toast.item-matrix-diagnostics.booklet' | translate }}</mat-label>
-      <input matInput [(ngModel)]="bookletName" [placeholder]="'ui-text.test-results-upload-options-dialog.z-b-booklet-01' | translate" />
+      <input matInput [(ngModel)]="bookletName" [placeholder]="'ui-text.test-results-upload-options-dialog.booklet-example' | translate" />
     </mat-form-field>
   }
 
   @if (scope === 'unit') {
     <mat-form-field appearance="outline" style="width: 100%;">
-      <mat-label>{{ 'ui-text.test-results-upload-options-dialog.unit-name-oder-alias' | translate }}</mat-label>
-      <input matInput [(ngModel)]="unitNameOrAlias" [placeholder]="'ui-text.test-results-upload-options-dialog.z-b-unit-01' | translate" />
+      <mat-label>{{ 'ui-text.test-results-upload-options-dialog.unit-name-or-alias' | translate }}</mat-label>
+      <input matInput [(ngModel)]="unitNameOrAlias" [placeholder]="'ui-text.test-results-upload-options-dialog.unit-example' | translate" />
     </mat-form-field>
   }
 
@@ -75,9 +75,9 @@
   }
 
   <mat-form-field appearance="outline" style="width: 100%;">
-    <mat-label>{{ 'ui-text.test-results-upload-options-dialog.umgang-mit-bestehenden-daten' | translate }}</mat-label>
+    <mat-label>{{ 'ui-text.test-results-upload-options-dialog.existing-data' | translate }}</mat-label>
     <mat-select [(ngModel)]="overwriteMode">
-      <mat-option value="skip">{{ 'ui-text.test-results-upload-options-dialog.skip-standard' | translate }}</mat-option>
+      <mat-option value="skip">{{ 'ui-text.test-results-upload-options-dialog.skip-default' | translate }}</mat-option>
       <mat-option value="merge">{{ 'ui-text.test-results-upload-options-dialog.merge' | translate }}</mat-option>
       <mat-option value="replace">{{ 'ui-text.test-results-upload-options-dialog.replace' | translate }}</mat-option>
     </mat-select>
@@ -86,20 +86,20 @@
   <div class="help">
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.skip' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.wenn-eine-unit-bereits-existiert-wird-diese-unit-vollstaendig-uebersprungen-es-werden-kein' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.skip-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.merge' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.nur-fehlende-eintraege-werden-ergaenzt-keine-ueberschreibung' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.merge-hint' | translate }}</div>
     </div>
     <div class="help-row">
       <div class="mode">{{ 'ui-text.test-results-upload-options-dialog.replace' | translate }}</div>
-      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.bestehende-eintraege-werden-im-betroffenen-bereich-geloescht-und-durch-den-upload-ersetzt' | translate }}</div>
+      <div class="desc">{{ 'ui-text.test-results-upload-options-dialog.replace-hint' | translate }}</div>
     </div>
   </div>
 </div>
 
 <div mat-dialog-actions align="end">
   <button mat-button type="button" (click)="close()">{{ 'cancel' | translate }}</button>
-  <button mat-raised-button color="primary" type="button" (click)="confirm()">{{ 'ui-text.test-results-upload-options-dialog.upload-starten' | translate }}</button>
+  <button mat-raised-button color="primary" type="button" (click)="confirm()">{{ 'ui-text.test-results-upload-options-dialog.start-upload' | translate }}</button>
 </div>

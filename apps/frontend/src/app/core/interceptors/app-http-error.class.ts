@@ -9,10 +9,10 @@ export interface AppHttpErrorRequest {
 export type AppHttpErrorUserMessage = { readonly key: string } | { readonly text: string };
 
 export const BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY =
-  'ui-text.http-errors.der-server-antwortet-gerade-nicht-einige-daten-konnten-nicht-geladen-werden-bitt';
+  'ui-text.http-errors.backend-unavailable';
 
 export const GENERIC_HTTP_ERROR_MESSAGE_KEY =
-  'ui-text.http-errors.die-anfrage-konnte-nicht-ausgefuehrt-werden-bitte-versuchen-sie-es-erneut';
+  'ui-text.http-errors.request-failed';
 
 export const SERVER_ERROR_MESSAGE_KEY =
   'journal.load-error-message';
@@ -104,18 +104,18 @@ export class AppHttpError {
       case 400:
         return this.toUserSafeClientErrorMessage(
           technicalMessage,
-          'ui-text.http-errors.die-anfrage-konnte-nicht-verarbeitet-werden-bitte-pruefen-sie-die-eingaben'
+          'ui-text.http-errors.invalid-input'
         );
       case 401:
-        return { key: 'ui-text.http-errors.ihre-sitzung-ist-abgelaufen-oder-sie-sind-nicht-angemeldet-bitte-melden-sie-sich' };
+        return { key: 'ui-text.http-errors.session-expired' };
       case 403:
-        return { key: 'ui-text.http-errors.sie-haben-keine-berechtigung-fuer-diese-aktion' };
+        return { key: 'ui-text.http-errors.forbidden' };
       case 404:
-        return { key: 'ui-text.http-errors.die-angeforderten-daten-wurden-nicht-gefunden' };
+        return { key: 'ui-text.http-errors.not-found' };
       case 409:
         return this.toUserSafeClientErrorMessage(
           technicalMessage,
-          'ui-text.http-errors.die-aktion-konnte-wegen-eines-konflikts-nicht-abgeschlossen-werden'
+          'ui-text.http-errors.conflict'
         );
       default:
         return this.toUserSafeClientErrorMessage(technicalMessage, GENERIC_HTTP_ERROR_MESSAGE_KEY);

@@ -316,7 +316,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isLoadingPage.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-laden-der-seite'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.page-load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -416,7 +416,7 @@ implements OnInit, OnDestroy {
     if (statuses.size > 1) parts.push('Status');
 
     return parts.length === 0 ?
-      this.uiTranslate('ui-text.duplicate-responses-validation-panel.duplikate-sind-identisch') :
+      this.uiTranslate('ui-text.duplicate-responses-validation-panel.identical-duplicates') :
       `Unterschiede: ${parts.join(', ')}`;
   }
 
@@ -475,7 +475,7 @@ implements OnInit, OnDestroy {
             next.delete(duplicate.key);
             return next;
           });
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.duplikate-wurden-aufgeloest'), 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.resolved'), 'OK', {
             duration: 3000
           });
           this.onValidate();
@@ -483,7 +483,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isResolvingDuplicates.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-aufloesen'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.resolve-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -503,7 +503,7 @@ implements OnInit, OnDestroy {
         this.duplicateResponseSelections.set(new Map());
         this.duplicateResponseTouchedKeys.set(new Set());
         this.snackBar.open(
-          this.uiTranslate('ui-text.duplicate-responses-validation-panel.alle-duplikate-wurden-automatisch-aufgeloest'),
+          this.uiTranslate('ui-text.duplicate-responses-validation-panel.all-resolved'),
           'OK',
           { duration: 3000 }
         );
@@ -512,7 +512,7 @@ implements OnInit, OnDestroy {
       error: () => {
         this.isResolvingDuplicates.set(false);
 
-        this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-aufloesen'), this.uiTranslate('deferred-view.close'), {
+        this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.resolve-failed'), this.uiTranslate('deferred-view.close'), {
           duration: 5000
         });
       }
@@ -564,7 +564,7 @@ implements OnInit, OnDestroy {
           });
         });
         this.snackBar.open(
-          this.uiTranslate('ui-text.duplicate-responses-validation-panel.duplikatgruppen-wurden-aufgeloest', { length: resolvedKeys.length }),
+          this.uiTranslate('ui-text.duplicate-responses-validation-panel.resolved-group-count', { length: resolvedKeys.length }),
           'OK',
           { duration: 3000 }
         );
@@ -573,7 +573,7 @@ implements OnInit, OnDestroy {
       error: () => {
         this.isResolvingDuplicates.set(false);
 
-        this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-aufloesen'), this.uiTranslate('deferred-view.close'), {
+        this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.resolve-failed'), this.uiTranslate('deferred-view.close'), {
           duration: 5000
         });
       }
@@ -619,7 +619,7 @@ implements OnInit, OnDestroy {
           ]);
 
           downloadCsvFile('validierung-duplikate.csv', csvContent);
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.csv-export-erfolgreich-erstellt'), 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-success'), 'OK', {
             duration: 3000
           });
           this.isExporting.set(false);
@@ -627,7 +627,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isExporting.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-csv-export'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }

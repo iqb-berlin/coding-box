@@ -111,13 +111,13 @@ export class ManualCodingSummaryFacade {
 
     const difference = statusPoolCount - effectiveCaseCount;
     const reason = difference > 0 ?
-      this.uiTranslate('ui-text.manual-coding-summary.rohantworten-werden-durch-abgeleitete-variablen-vorverarbeitung-oder-aggregation-nicht-sep', { difference: difference }) :
-      this.uiTranslate('ui-text.manual-coding-summary.die-effektive-fallzahl-kann-durch-mehrfachkodierung-oder-manuelle-nacharbeit-abweichen');
+      this.uiTranslate('ui-text.manual-coding-summary.raw-responses-hint', { difference: difference }) :
+      this.uiTranslate('ui-text.manual-coding-summary.effective-case-count-hint');
     const openCaseHint = openCaseCount !== effectiveCaseCount ?
-      this.uiTranslate('ui-text.manual-coding-summary.davon-offen', { openCaseCount: openCaseCount }) :
+      this.uiTranslate('ui-text.manual-coding-summary.open-count', { openCaseCount: openCaseCount }) :
       '';
 
-    return this.uiTranslate('ui-text.manual-coding-summary.rohantworten-im-statuspool-effektive-arbeitsfaelle', {
+    return this.uiTranslate('ui-text.manual-coding-summary.status-pool-summary', {
       statusPoolCount: statusPoolCount, effectiveCaseCount: effectiveCaseCount, openCaseHint: openCaseHint, reason: reason
     });
   });

@@ -15,7 +15,7 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1 mat-dialog-title>{{ 'ui-text.impressum-dialog.iqb-kodierbox-impressum-datenschutz' | translate }}</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.impressum-dialog.title' | translate }}</h1>
     <mat-dialog-content>
       <div class="legal-notice-content" [innerHTML]="legalNoticeHtml()"></div>
     </mat-dialog-content>

@@ -9,7 +9,7 @@
       @if (permissions.canCreate) {
       <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()">
         <mat-icon>add</mat-icon>
-        {{ 'ui-text.variable-bundle-manager.variablenbuendel-erstellen' | translate }}
+        {{ 'ui-text.variable-bundle-manager.create' | translate }}
       </button>
       }
 
@@ -46,7 +46,7 @@
       </ng-container>
 
       <ng-container matColumnDef="variableCount">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.variable-bundle-manager.anzahl-variablen' | translate }}</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.variable-bundle-manager.variable-count' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{getVariableCount(element)}}
         </mat-cell>
@@ -109,7 +109,7 @@
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
-        <p>{{ 'ui-text.variable-bundle-manager.keine-variablenbuendel-vorhanden-erstellen-sie-ein-neues-variablenbuendel-mit-dem-button-o' | translate }}</p>
+        <p>{{ 'ui-text.variable-bundle-manager.empty' | translate }}</p>
       </div>
     }
   }

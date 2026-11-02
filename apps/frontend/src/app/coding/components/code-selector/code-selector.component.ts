@@ -247,12 +247,12 @@ export class CodeSelectorComponent implements OnChanges {
         },
         {
           id: -3,
-          label: this.uiTranslate('ui-text.code-selector.mir', { value1: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer') }),
+          label: this.uiTranslate('ui-text.code-selector.mir-label', { value1: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer') }),
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: this.uiTranslate('ui-text.code-selector.mci', { value1: this.translateService.instant('code-selector.coding-issue-options.technical-problems') }),
+          label: this.uiTranslate('ui-text.code-selector.mci-label', { value1: this.translateService.instant('code-selector.coding-issue-options.technical-problems') }),
           type: 'codingIssueOption'
         },
         {
@@ -809,7 +809,7 @@ export class CodeSelectorComponent implements OnChanges {
           result.push({
             key,
             type: 'variable',
-            label: this.uiTranslate('ui-text.code-selector.text', { unitName: unitName, variableId: unit.variableId }),
+            label: this.uiTranslate('ui-text.code-selector.variable-location', { unitName: unitName, variableId: unit.variableId }),
             variableId: unit.variableId,
             unitName
           });
@@ -881,7 +881,7 @@ export class CodeSelectorComponent implements OnChanges {
 
       return {
         key,
-        label: this.uiTranslate('ui-text.code-selector.text', { unitName: unitName, variableId: variable.variableId }),
+        label: this.uiTranslate('ui-text.code-selector.variable-location', { unitName: unitName, variableId: variable.variableId }),
         variableId: variable.variableId,
         unitName,
         targetUnit,

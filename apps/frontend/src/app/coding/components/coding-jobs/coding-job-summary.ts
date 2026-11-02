@@ -8,7 +8,7 @@ export function codingJobVariableSummary(job: CodingJob, cachedDetails: Pick<Par
       const variableId = v.variableId || translate('ws-admin.unknown');
       return `${unitName}_${variableId}`;
     });
-    return translate('ui-text.coding-jobs.variablen', { length: job.assignedVariables.length, value2: variableNames.join(', ') });
+    return translate('ui-text.coding-jobs.variable-summary', { length: job.assignedVariables.length, value2: variableNames.join(', ') });
   }
   if (job.variables && job.variables.length > 0) {
     return job.variables
@@ -33,7 +33,7 @@ export function codingJobVariableSummary(job: CodingJob, cachedDetails: Pick<Par
       .join(', ');
   }
 
-  return translate('ui-text.coding-jobs.keine-variablen-zugewiesen');
+  return translate('ui-text.coding-jobs.no-variables');
 }
 
 export function codingJobIssueSummary(job: CodingJob, translate: UiTranslator): string {

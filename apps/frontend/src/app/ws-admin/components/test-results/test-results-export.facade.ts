@@ -135,7 +135,7 @@ export class TestResultsExportFacade {
             this.exportJobIdState.set(response.jobId);
             this.exportJobStatusState.set('active');
             this.snackBar.open(
-              this.uiTranslate('ui-text.test-results-export.export-gestartet-sie-werden-benachrichtigt-wenn-der-download-bereitsteht'),
+              this.uiTranslate('ui-text.test-results-export.started'),
               'OK',
               { duration: 3000 }
             );
@@ -145,7 +145,7 @@ export class TestResultsExportFacade {
             if (generation !== this.exportGeneration) return;
             this.isExportingState.set(false);
             this.exportTypeInProgressState.set(null);
-            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.fehler-beim-starten-des-exports'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.start-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
               duration: 3000
             });
           }
@@ -202,7 +202,7 @@ export class TestResultsExportFacade {
         this.exportJobProgressState.set(job.progress);
         if (job.status === 'completed') {
           this.isExportingState.set(false);
-          const ref = this.snackBar.open(this.uiTranslate('ui-text.test-results-export.export-abgeschlossen'), 'Herunterladen', { duration: 10000 });
+          const ref = this.snackBar.open(this.uiTranslate('ui-text.test-results-export.completed'), 'Herunterladen', { duration: 10000 });
           ref.onAction().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
             .subscribe(() => this.downloadExportResult(jobId));
         } else if (job.status === 'failed') {
@@ -210,7 +210,7 @@ export class TestResultsExportFacade {
           this.snackBar.open(this.uiTranslate('export-toast.errors.generic-title'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 5000 });
         } else if (job.status === 'cancelled') {
           this.resetExportState();
-          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.export-abgebrochen'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', { duration: 3000 });
         }
       },
       error: () => this.resetExportState()
@@ -228,18 +228,18 @@ export class TestResultsExportFacade {
         next: response => {
           if (response.success) {
             if (!this.exportJobId() || jobId === this.exportJobId()) this.resetExportState();
-            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.export-abgebrochen'), 'OK', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', {
               duration: 3000
             });
             return;
           }
 
-          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.export-konnte-nicht-abgebrochen-werden'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancel-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 5000
           });
         },
         error: () => {
-          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.export-konnte-nicht-abgebrochen-werden'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancel-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 5000
           });
         }
@@ -291,7 +291,7 @@ export class TestResultsExportFacade {
         },
         error: () => {
           this.snackBar.open(
-            this.uiTranslate('ui-text.test-results-export.fehler-beim-herunterladen-der-ergebnisse'),
+            this.uiTranslate('ui-text.test-results-export.download-failed'),
             this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );

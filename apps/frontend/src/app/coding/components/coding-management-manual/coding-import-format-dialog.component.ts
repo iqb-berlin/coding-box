@@ -78,7 +78,7 @@ export interface CodingImportFormatDialogResult {
           <span class="value">{{ data.fileName }}</span>
         </div>
         <div>
-          <span class="label">{{ 'ui-text.coding-import-format-dialog.erkanntes-format' | translate }}</span>
+          <span class="label">{{ 'ui-text.coding-import-format-dialog.detected-format' | translate }}</span>
           <span class="value">{{ getFormatLabel() }}</span>
         </div>
       </div>
@@ -86,7 +86,7 @@ export interface CodingImportFormatDialogResult {
       @if (data.canImport) {
         <div class="target-box">
           <mat-icon>input</mat-icon>
-          <span>{{ 'ui-text.coding-import-format-dialog.importziel-manuelle-kodierung-v2-mit-status-code-und-score-aus-der-datei' | translate }}</span>
+          <span>{{ 'ui-text.coding-import-format-dialog.import-target' | translate }}</span>
         </div>
       }
 
@@ -95,7 +95,7 @@ export interface CodingImportFormatDialogResult {
           appearance="outline"
           class="version-field"
           >
-          <mat-label>{{ 'ui-text.coding-import-format-dialog.version-aus-datei' | translate }}</mat-label>
+          <mat-label>{{ 'ui-text.coding-import-format-dialog.file-version' | translate }}</mat-label>
           <mat-select [(ngModel)]="selectedVersion">
             @for (version of data.availableVersions; track version) {
               <mat-option [value]="version">
@@ -108,24 +108,24 @@ export interface CodingImportFormatDialogResult {
 
       @if (data.canImport) {
         <section class="mode-section">
-          <h3>{{ 'ui-text.coding-import-format-dialog.vorhandene-kodierungen' | translate }}</h3>
+          <h3>{{ 'ui-text.coding-import-format-dialog.existing-codings' | translate }}</h3>
           <mat-radio-group class="mode-options" [(ngModel)]="existingCodingMode">
             <mat-radio-button value="skip-conflicts">
-              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.konflikte-ueberspringen' | translate }}</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.skip-conflicts' | translate }}</span>
               <span class="mode-description">
-                {{ 'ui-text.coding-import-format-dialog.leere-kodierungen-werden-gefuellt-abweichende-vorhandene-manuelle-kodierungen-bleiben-unve' | translate }}
+                {{ 'ui-text.coding-import-format-dialog.skip-conflicts-hint' | translate }}
               </span>
             </mat-radio-button>
             <mat-radio-button value="fill-empty">
-              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.nur-leere-kodierungen-fuellen' | translate }}</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.fill-empty-only' | translate }}</span>
               <span class="mode-description">
-                {{ 'ui-text.coding-import-format-dialog.sobald-in-v2-bereits-status-code-oder-score-vorhanden-ist-wird-der-fall-uebersprungen' | translate }}
+                {{ 'ui-text.coding-import-format-dialog.fill-empty-hint' | translate }}
               </span>
             </mat-radio-button>
             <mat-radio-button value="overwrite">
-              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.bestehende-kodierungen-ueberschreiben' | translate }}</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.overwrite' | translate }}</span>
               <span class="mode-description">
-                {{ 'ui-text.coding-import-format-dialog.vorhandene-manuelle-kodierungen-in-v2-werden-durch-die-werte-aus-der-datei-ersetzt' | translate }}
+                {{ 'ui-text.coding-import-format-dialog.overwrite-hint' | translate }}
               </span>
             </mat-radio-button>
           </mat-radio-group>
@@ -146,10 +146,10 @@ export interface CodingImportFormatDialogResult {
       <mat-divider></mat-divider>
 
       <section class="headers-section">
-        <h3>{{ 'ui-text.coding-import-format-dialog.erkannte-spalten' | translate }}</h3>
+        <h3>{{ 'ui-text.coding-import-format-dialog.detected-columns' | translate }}</h3>
         @if (data.headers.length === 0) {
           <p class="muted">
-            {{ 'ui-text.coding-import-format-dialog.keine-spaltenueberschriften-gefunden' | translate }}
+            {{ 'ui-text.coding-import-format-dialog.no-headers' | translate }}
           </p>
         }
         @if (data.headers.length > 0) {
@@ -169,7 +169,7 @@ export interface CodingImportFormatDialogResult {
       @if (data.canImport) {
         <button mat-raised-button color="primary" (click)="confirm()">
           <mat-icon>preview</mat-icon>
-          {{ 'ui-text.coding-import-format-dialog.vorschau-starten' | translate }}
+          {{ 'ui-text.coding-import-format-dialog.start-preview' | translate }}
         </button>
       }
     </mat-dialog-actions>
@@ -331,7 +331,7 @@ export class CodingImportFormatDialogComponent {
   protected getFormatLabel(): string {
     switch (this.data.detectedFormat) {
       case 'external-coding':
-        return this.uiTranslate('ui-text.coding-import-format-dialog.kodierungen-aus-datei');
+        return this.uiTranslate('ui-text.coding-import-format-dialog.file-codings');
       case 'coding-list':
         return this.uiTranslate('coding-management.buttons.coding-list');
       case 'coding-results':
@@ -347,9 +347,9 @@ export class CodingImportFormatDialogComponent {
 
   protected getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
     const labels = {
-      v1: this.uiTranslate('ui-text.coding-import-format-dialog.v1-erster-autocoder-lauf'),
-      v2: this.uiTranslate('ui-text.coding-import-format-dialog.v2-manuelle-kodierung'),
-      v3: this.uiTranslate('ui-text.coding-import-format-dialog.v3-zweiter-autocoder-lauf')
+      v1: this.uiTranslate('ui-text.coding-import-format-dialog.first-auto-version'),
+      v2: this.uiTranslate('ui-text.coding-import-format-dialog.manual-version'),
+      v3: this.uiTranslate('ui-text.coding-import-format-dialog.second-auto-version')
     };
     return labels[version];
   }

@@ -253,7 +253,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isLoadingPage.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-laden-der-seite'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.page-load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -289,13 +289,13 @@ implements OnInit, OnDestroy {
           const csvContent = buildCsv(groupsWithoutResponses, [
             { header: this.uiTranslate('test-results-search.search-field.group'), value: row => row.group },
             {
-              header: this.uiTranslate('ui-text.group-responses-validation-panel.hat-antwort'),
+              header: this.uiTranslate('ui-text.group-responses-validation-panel.has-response'),
               value: row => (row.hasResponse ? this.uiTranslate('process-overview.values.yes') : this.uiTranslate('process-overview.values.no'))
             }
           ]);
 
           downloadCsvFile('validierung-gruppenantworten.csv', csvContent);
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.csv-export-erfolgreich-erstellt'), 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-success'), 'OK', {
             duration: 3000
           });
           this.isExporting.set(false);
@@ -303,7 +303,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isExporting.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-csv-export'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }

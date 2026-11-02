@@ -23,25 +23,25 @@ export type TestResultsImportDialogResult = {
     MatListModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ 'ui-text.test-results-import-dialog.testergebnisse-importieren' | translate }}</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.test-results-import-dialog.title' | translate }}</h2>
     <mat-dialog-content>
       <mat-list>
         <mat-list-item (click)="selectImportType('testcenter')">
           <mat-icon matListItemIcon>cloud_download</mat-icon>
-          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.testcenter-import' | translate }}</div>
-          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.aus-dem-testcenter-importieren' | translate }}</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.test-center' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.test-center-hint' | translate }}</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('responses')">
           <mat-icon matListItemIcon>upload</mat-icon>
-          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.antworten-hochladen' | translate }}</div>
-          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.antworten-aus-datei-hochladen' | translate }}</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.upload-responses' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.responses-hint' | translate }}</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('logs')">
           <mat-icon matListItemIcon>upload</mat-icon>
-          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.logs-hochladen' | translate }}</div>
-          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.logs-aus-datei-hochladen' | translate }}</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.upload-logs' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.logs-hint' | translate }}</div>
         </mat-list-item>
       </mat-list>
     </mat-dialog-content>

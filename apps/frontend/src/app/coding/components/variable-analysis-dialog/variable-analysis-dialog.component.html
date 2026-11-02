@@ -45,7 +45,7 @@
     @if (isLoadingVariableAnalysis) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">{{ 'ui-text.variable-analysis-dialog.lade-code-score-verteilung' | translate }}</p>
+        <p class="loading-text">{{ 'ui-text.variable-analysis-dialog.loading-distribution' | translate }}</p>
       </div>
     }
 
@@ -53,11 +53,11 @@
       <div class="result-context" role="note">
         <div class="result-context-main">
           <span class="result-context-number">{{ totalVariableAnalysisRecords }}</span>
-          <span>{{ 'ui-text.variable-analysis-dialog.verteilungszeilen-gefunden' | translate }}</span>
+          <span>{{ 'ui-text.variable-analysis-dialog.distribution-row-count' | translate }}</span>
           <mat-icon class="context-help" [matTooltip]="distributionRowsTooltip">info</mat-icon>
         </div>
         <div class="result-context-detail">
-          {{ 'ui-text.variable-analysis-dialog.eine-zeile-aufgaben-id-variablen-id-code-die-spalte-antworten-gesamt-bezieht-sich-auf-aufg' | translate }}
+          {{ 'ui-text.variable-analysis-dialog.distribution-description' | translate }}
         </div>
       </div>
 
@@ -105,7 +105,7 @@
           <ng-container matColumnDef="occurrenceCount">
             <th mat-header-cell *matHeaderCellDef mat-sort-header>
               <span class="header-with-help" [matTooltip]="occurrenceCountTooltip">
-                {{ 'ui-text.variable-analysis-dialog.vorkommen' | translate }}
+                {{ 'ui-text.variable-analysis-dialog.occurrences' | translate }}
                 <mat-icon>help_outline</mat-icon>
               </span>
             </th>
@@ -116,7 +116,7 @@
           <ng-container matColumnDef="totalCount">
             <th mat-header-cell *matHeaderCellDef mat-sort-header>
               <span class="header-with-help" [matTooltip]="totalCountTooltip">
-                {{ 'ui-text.variable-analysis-dialog.antworten-gesamt' | translate }}
+                {{ 'ui-text.variable-analysis-dialog.total-responses' | translate }}
                 <mat-icon>help_outline</mat-icon>
               </span>
             </th>
@@ -127,7 +127,7 @@
           <ng-container matColumnDef="relativeOccurrence">
             <th mat-header-cell *matHeaderCellDef mat-sort-header>
               <span class="header-with-help" [matTooltip]="relativeOccurrenceTooltip">
-                {{ 'ui-text.variable-analysis-dialog.anteil' | translate }}
+                {{ 'ui-text.variable-analysis-dialog.proportion' | translate }}
                 <mat-icon>help_outline</mat-icon>
               </span>
             </th>
@@ -161,8 +161,8 @@
     @if (!isLoadingVariableAnalysis && variableAnalysisData.length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">analytics</mat-icon>
-        <h3>{{ 'ui-text.variable-analysis-dialog.keine-code-score-daten-verfuegbar' | translate }}</h3>
-        <p class="empty-text">{{ 'ui-text.variable-analysis-dialog.es-wurden-keine-daten-fuer-die-code-score-verteilung-gefunden' | translate }}</p>
+        <h3>{{ 'ui-text.variable-analysis-dialog.empty-title' | translate }}</h3>
+        <p class="empty-text">{{ 'ui-text.variable-analysis-dialog.empty-description' | translate }}</p>
       </div>
     }
   </div>

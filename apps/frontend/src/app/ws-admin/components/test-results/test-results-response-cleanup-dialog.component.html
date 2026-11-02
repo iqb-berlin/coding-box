@@ -14,7 +14,7 @@
   @if (!isLoading() && loadFailed()) {
   <div class="message-state">
     <mat-icon color="warn">warning</mat-icon>
-    <span>{{ 'ui-text.test-results-response-cleanup-dialog.auswahldaten-konnten-nicht-geladen-werden' | translate }}</span>
+    <span>{{ 'ui-text.test-results-response-cleanup-dialog.options-load-failed' | translate }}</span>
   </div>
   }
 
@@ -39,7 +39,7 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>{{ 'ui-text.test-results-response-cleanup-dialog.vor' | translate }}</mat-label>
+      <mat-label>{{ 'ui-text.test-results-response-cleanup-dialog.before' | translate }}</mat-label>
       <input matInput type="datetime-local" [(ngModel)]="answeredBefore" required>
     </mat-form-field>
   </div>

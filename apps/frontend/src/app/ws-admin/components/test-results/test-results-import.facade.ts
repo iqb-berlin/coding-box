@@ -40,7 +40,7 @@ export class TestResultsImportFacade {
   private readonly isUploadingResultsState = signal<boolean>(false);
   readonly isUploadingResults = this.isUploadingResultsState.asReadonly();
 
-  private readonly uploadingMessageState = signal(this.uiTranslate('ui-text.test-results-import.ergebnisse-werden-hochgeladen'));
+  private readonly uploadingMessageState = signal(this.uiTranslate('ui-text.test-results-import.uploading'));
   readonly uploadingMessage = this.uploadingMessageState.asReadonly();
   private readonly overview = this.statistics.overview;
   private readonly manualAppliedResultsOverview = this.statistics.manualAppliedResultsOverview;
@@ -154,8 +154,8 @@ export class TestResultsImportFacade {
             title: 'Testcenter-Import',
             icon: 'upload_file',
             phase: 'refreshingOverview',
-            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.uebersicht-wird-aktualisiert'),
-            message: this.uiTranslate('ui-text.test-results-import.der-import-ist-abgeschlossen-lade-die-aktualisierten-ergebniszahlen'),
+            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.refreshing-overview'),
+            message: this.uiTranslate('ui-text.test-results-import.completed-refreshing'),
             mode: 'indeterminate'
           });
 
@@ -204,8 +204,8 @@ export class TestResultsImportFacade {
             title: 'Testcenter-Import',
             icon: 'upload_file',
             phase: 'refreshingOverview',
-            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.uebersicht-wird-aktualisiert'),
-            message: this.uiTranslate('ui-text.test-results-import.der-import-ist-abgeschlossen-lade-die-aktualisierten-ergebniszahlen'),
+            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.refreshing-overview'),
+            message: this.uiTranslate('ui-text.test-results-import.completed-refreshing'),
             mode: 'indeterminate'
           });
           const progressDialogRef = this.dialog.open(
@@ -237,8 +237,8 @@ export class TestResultsImportFacade {
               title: 'Testcenter-Import',
               icon: 'upload_file',
               phase: 'completed',
-              phaseLabel: this.uiTranslate('ui-text.test-results-import.ergebnis-bereit'),
-              message: this.uiTranslate('ui-text.test-results-import.die-ergebnisuebersicht-wurde-geladen'),
+              phaseLabel: this.uiTranslate('ui-text.test-results-import.ready'),
+              message: this.uiTranslate('ui-text.test-results-import.overview-loaded'),
               percent: 100,
               mode: 'determinate'
             });
@@ -415,7 +415,7 @@ export class TestResultsImportFacade {
               this.loadingChanged$.next(true);
               this.isUploadingResultsState.set(true);
               this.uploadingMessageState.set(resultType === 'responses' ?
-                this.uiTranslate('ui-text.test-results-import.importiere-antworten-0') : this.uiTranslate('ui-text.test-results-import.importiere-logs-0'));
+                this.uiTranslate('ui-text.test-results-import.importing-responses') : this.uiTranslate('ui-text.test-results-import.importing-logs'));
               this.uploadStateService.startChunkedUpload(
                 workspaceId,
                 inputElement.files![0],

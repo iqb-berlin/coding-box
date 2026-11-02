@@ -30,7 +30,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Tags' }}</h1>
       <div class="header-info">
-        <span class="tag-count">{{ 'ui-text.tag-dialog.tags' | translate: { length: (tags.length) } }}</span>
+        <span class="tag-count">{{ 'ui-text.tag-dialog.count' | translate: { length: (tags.length) } }}</span>
       </div>
     </div>
 
@@ -55,12 +55,12 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
           </div>
           <div class="add-tag-form">
             <mat-form-field appearance="outline" class="tag-input">
-              <mat-label>{{ 'ui-text.tag-dialog.neuer-tag' | translate }}</mat-label>
-              <input matInput [(ngModel)]="newTagText" [placeholder]="'ui-text.tag-dialog.tag-eingeben' | translate">
+              <mat-label>{{ 'ui-text.tag-dialog.new-tag' | translate }}</mat-label>
+              <input matInput [(ngModel)]="newTagText" [placeholder]="'ui-text.tag-dialog.placeholder' | translate">
             </mat-form-field>
             <button mat-raised-button color="primary" (click)="addTag()" class="add-tag-button">
               <mat-icon>add</mat-icon>
-              {{ 'ui-text.note-dialog.hinzufuegen' | translate }}
+              {{ 'ui-text.note-dialog.add' | translate }}
             </button>
           </div>
         </div>
@@ -256,7 +256,7 @@ export class TagDialogComponent implements OnInit {
   protected addTag(): void {
     if (!this.newTagText.trim()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.tag-dialog.bitte-geben-sie-einen-tag-text-ein'),
+        this.uiTranslate('ui-text.tag-dialog.text-required'),
         this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
         { duration: 3000 }
       );
@@ -278,14 +278,14 @@ export class TagDialogComponent implements OnInit {
         this.cdr.markForCheck();
 
         this.snackBar.open(
-          this.uiTranslate('ui-text.tag-dialog.tag-erfolgreich-hinzugefuegt'),
+          this.uiTranslate('ui-text.tag-dialog.add-success'),
           'Erfolg',
           { duration: 3000 }
         );
       },
       error: () => {
         this.snackBar.open(
-          this.uiTranslate('ui-text.tag-dialog.fehler-beim-hinzufuegen-des-tags'),
+          this.uiTranslate('ui-text.tag-dialog.add-failed'),
           this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
@@ -308,13 +308,13 @@ export class TagDialogComponent implements OnInit {
           this.cdr.markForCheck();
 
           this.snackBar.open(
-            this.uiTranslate('ui-text.tag-dialog.tag-erfolgreich-geloescht'),
+            this.uiTranslate('ui-text.tag-dialog.delete-success'),
             'Erfolg',
             { duration: 3000 }
           );
         } else {
           this.snackBar.open(
-            this.uiTranslate('ui-text.tag-dialog.fehler-beim-loeschen-des-tags'),
+            this.uiTranslate('ui-text.tag-dialog.delete-failed'),
             this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
@@ -322,7 +322,7 @@ export class TagDialogComponent implements OnInit {
       },
       error: () => {
         this.snackBar.open(
-          this.uiTranslate('ui-text.tag-dialog.fehler-beim-loeschen-des-tags'),
+          this.uiTranslate('ui-text.tag-dialog.delete-failed'),
           this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );

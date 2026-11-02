@@ -203,7 +203,7 @@ export class ManualCodingAggregationFacade {
       .subscribe({
         next: () => {
           this.setResponseAnalysisGuardActive(true);
-          this.snackBar.open(this.uiTranslate('ui-text.manual-coding-aggregation.antwortanalyse-wurde-gestartet'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.manual-coding-aggregation.analysis-started'), 'OK', { duration: 3000 });
           if (shouldRefreshAggregationDependentViews) {
             this.refreshRequested.next({ scope: 'aggregation', includeResponseAnalysis: false });
           }
@@ -214,7 +214,7 @@ export class ManualCodingAggregationFacade {
           this.analysis.analysisStartFailed();
           if (settingsReadyForAnalysis) {
             this.snackBar.open(
-              this.uiTranslate('ui-text.manual-coding-aggregation.fehler-beim-starten-der-antwortanalyse', { value1: error.message || error }),
+              this.uiTranslate('ui-text.manual-coding-aggregation.analysis-start-failed', { value1: error.message || error }),
               'OK',
               { duration: 3000 }
             );
@@ -442,7 +442,7 @@ export class ManualCodingAggregationFacade {
           },
           error: () => {
             this.applyingAggregation.set(false);
-            this.showError(this.uiTranslate('ui-text.manual-coding-aggregation.fehler-beim-deaktivieren-der-aggregation'));
+            this.showError(this.uiTranslate('ui-text.manual-coding-aggregation.disable-failed'));
           }
         });
     });

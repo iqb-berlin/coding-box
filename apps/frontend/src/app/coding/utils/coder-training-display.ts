@@ -24,7 +24,7 @@ export function getDuplicateTrainingLabelMatches(
 export function getTrainingCreatedAtLabel(translate: UiTranslator, training: Pick<CoderTraining, 'created_at'>): string {
   const date = training.created_at ? new Date(training.created_at) : null;
   if (!date || Number.isNaN(date.getTime())) {
-    return translate('ui-text.coder-training-display.datum-unbekannt');
+    return translate('ui-text.coder-training-display.unknown-date');
   }
 
   return new Intl.DateTimeFormat('de-DE', {

@@ -105,19 +105,19 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
           this.hasLoadedAcps.set(true);
           this.acps.set(response.acps || []);
           if (this.acps().length === 0) {
-            this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.keine-acps-gefunden-oder-kein-zugriff-vorhanden'));
+            this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.no-packages'));
           }
         },
         error: error => {
           this.isLoadingAcps.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.acp-liste-konnte-nicht-aus-dem-content-pool-geladen-werden')));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.packages-load-failed')));
         }
       });
   }
 
   protected importAcp(): void {
     if (!this.selectedAcpId()) {
-      this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.bitte-ein-acp-auswaehlen'));
+      this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.package-required'));
       return;
     }
 
@@ -127,7 +127,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       jobId: '',
       status: 'pending',
       phase: 'queued',
-      message: this.uiTranslate('ui-text.content-pool-import-dialog.import-wird-vorbereitet'),
+      message: this.uiTranslate('ui-text.content-pool-import-dialog.preparing-import'),
       processedFiles: 0,
       totalFiles: 0,
       progress: 0,
@@ -147,7 +147,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
           if (progress.status === 'failed') {
             this.isImporting.set(false);
             this.errorMessage.set(progress.error ||
-    this.uiTranslate('ui-text.content-pool-import-dialog.acp-konnte-nicht-importiert-werden'));
+    this.uiTranslate('ui-text.content-pool-import-dialog.import-failed'));
             return;
           }
 
@@ -162,7 +162,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
         },
         error: error => {
           this.isImporting.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.acp-konnte-nicht-importiert-werden')));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.import-failed')));
         }
       });
   }
@@ -192,7 +192,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       const currentFile = importProgressSnapshot.currentFileName ?
         `: ${importProgressSnapshot.currentFileName}` :
         '';
-      return this.uiTranslate('ui-text.content-pool-import-dialog.datei-von', { processedFiles: importProgressSnapshot.processedFiles, totalFiles: importProgressSnapshot.totalFiles, currentFile: currentFile });
+      return this.uiTranslate('ui-text.content-pool-import-dialog.file-progress', { processedFiles: importProgressSnapshot.processedFiles, totalFiles: importProgressSnapshot.totalFiles, currentFile: currentFile });
     }
 
     return importProgressSnapshot.message;

@@ -55,7 +55,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     if (this.data.workspaceId && this.data.unitId) {
       this.loadUnitData();
     } else {
-      this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.ungueltige-parameter-fuer-die-aufgabendefinition'));
+      this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.invalid-parameters'));
       this.isLoading.set(false);
     }
   }
@@ -71,7 +71,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     this.fileService.getUnit(workspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
-          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.aufgabe-wurde-nicht-gefunden', { unitId: unitId }));
+          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.unit-not-found', { unitId: unitId }));
           this.isLoading.set(false);
           return;
         }
@@ -92,7 +92,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         }
 
         if (!playerRef) {
-          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.kein-player-in-der-aufgabendefinition-gefunden'));
+          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.player-missing'));
           this.isLoading.set(false);
           return;
         }
@@ -104,7 +104,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           player: this.fileService.getPlayer(workspaceId, normalizedPlayerId)
         }).pipe(
           catchError(() => {
-            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.fehler-beim-laden-der-aufgabendefinition'));
+            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.definition-load-failed'));
             this.isLoading.set(false);
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
@@ -117,7 +117,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           const playerFile = result.player[0];
 
           if (!defFile || !playerFile) {
-            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.aufgabendefinition-oder-player-konnten-nicht-geladen-werden'));
+            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.definition-or-player-load-failed'));
             this.isLoading.set(false);
             return;
           }
@@ -128,7 +128,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         });
       },
       error: () => {
-        this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.fehler-beim-laden-der-aufgabendaten'));
+        this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.unit-data-load-failed'));
         this.isLoading.set(false);
       }
     });

@@ -5,23 +5,23 @@
         <mat-expansion-panel-header>
           <mat-panel-title>
             <mat-icon class="info-icon">info</mat-icon>
-            <span class="info-title">{{ 'ui-text.files-validation.hinweise-zur-validierung' | translate }}</span>
+            <span class="info-title">{{ 'ui-text.files-validation.guidance-title' | translate }}</span>
           </mat-panel-title>
         </mat-expansion-panel-header>
 
         <div class="info-content">
           <p>
-            {{ 'ui-text.files-validation.die-validierung-arbeitet-in-schritten-zuerst-werden-testtakers-dateien-gelesen-und-die-dar' | translate }}
+            {{ 'ui-text.files-validation.validation-process' | translate }}
           </p>
           <p>
-            {{ 'ui-text.files-validation.zusaetzlich-werden-schemas-geprueft' | translate }}
+            {{ 'ui-text.files-validation.schema-checks-title' | translate }}
           </p>
           <ul>
-            <li>{{ 'ui-text.files-validation.xml-dateien-testtakers-booklet-unit-werden-gegen-das-in-der-datei-angegebene-xsd-validiert' | translate }}</li>
-            <li>{{ 'ui-text.files-validation.kodierschemata-schemer-werden-anhand-der-eingebetteten-json-ld-metadaten-gegen-das-json-sc' | translate }}</li>
+            <li>{{ 'ui-text.files-validation.xml-schema-hint' | translate }}</li>
+            <li>{{ 'ui-text.files-validation.coding-schema-hint' | translate }}</li>
           </ul>
           <p>
-            {{ 'ui-text.files-validation.dateien-die-von-keinem-testtaker-aus-erreichbar-sind-werden-als-nicht-verwendete-dateien-a' | translate }}
+            {{ 'ui-text.files-validation.unused-files-hint' | translate }}
           </p>
         </div>
       </mat-expansion-panel>
@@ -32,7 +32,7 @@
       <div class="validation-refresh-header">
         <mat-spinner diameter="24"></mat-spinner>
         <div class="validation-refresh-text">
-          <strong>{{ 'ui-text.files-validation.validierung-wird-aktualisiert' | translate }}</strong>
+          <strong>{{ 'ui-text.files-validation.refreshing' | translate }}</strong>
           <p>{{ refreshValidationProgressMessage() }}</p>
         </div>
         <span class="validation-refresh-percent">{{ refreshValidationProgress() }}%</span>
@@ -49,10 +49,10 @@
           <mat-panel-title>
             <mat-icon class="geogebra-status-icon">{{ geogebra()?.packageStatus?.valid ? 'check_circle' : 'warning'
               }}</mat-icon>
-            <span class="geogebra-status-title">{{ 'ui-text.files-validation.geogebra-aufgaben-gefunden' | translate }}</span>
+            <span class="geogebra-status-title">{{ 'ui-text.files-validation.geogebra-units-found' | translate }}</span>
           </mat-panel-title>
           <mat-panel-description>
-            {{ 'ui-text.files-validation.aufgabe-n' | translate: { value1: (geogebra()?.units?.length || 0) } }}
+            {{ 'ui-text.files-validation.unit-count' | translate: { value1: (geogebra()?.units?.length || 0) } }}
           </mat-panel-description>
         </mat-expansion-panel-header>
 
@@ -60,26 +60,26 @@
           @if (geogebra()?.packageStatus?.valid) {
           @if (geogebra()?.packageStatus?.detectedVersion) {
           <p class="geogebra-status-message">
-            {{ 'ui-text.files-validation.das-geogebra-math-apps-bundle-ist-installiert' | translate: { value1: (geogebra()?.packageStatus?.detectedVersion) } }}
+            {{ 'ui-text.files-validation.geogebra-installed-title' | translate: { value1: (geogebra()?.packageStatus?.detectedVersion) } }}
           </p>
           } @else {
           <p class="geogebra-status-message">
-            {{ 'ui-text.files-validation.das-geogebra-math-apps-bundle-ist-installiert-3a0b86' | translate }}
+            {{ 'ui-text.files-validation.geogebra-installed-hint' | translate }}
           </p>
           }
           <p class="geogebra-support-note">
             <mat-icon>check_circle</mat-icon>
-            {{ 'ui-text.files-validation.die-benoetigte-geogebra-unterstuetzung-ist-verfuegbar' | translate }}
+            {{ 'ui-text.files-validation.geogebra-available' | translate }}
           </p>
           } @else {
           <p class="geogebra-status-message">
-            {{ 'ui-text.files-validation.fuer-diese-testdateien-werden-geogebra-aufgaben-erkannt-aber-es-ist-kein-gueltiges-geogebr' | translate }}
+            {{ 'ui-text.files-validation.geogebra-missing' | translate }}
           </p>
           @if (data.workspaceId) {
           <button mat-raised-button color="primary" class="geogebra-resource-action"
             [disabled]="isRefreshingValidation()" (click)="openGeoGebraResourcePackagesDialog()">
             <mat-icon>archive</mat-icon>
-            {{ 'ui-text.files-validation.geogebra-ressourcenpakete-oeffnen' | translate }}
+            {{ 'ui-text.files-validation.open-geogebra-packages' | translate }}
           </button>
           }
           @if (geogebra()?.packageStatus?.errors?.length) {
@@ -93,10 +93,10 @@
 
           <div class="geogebra-unit-section">
             <div class="geogebra-unit-header">
-              <span>{{ 'ui-text.files-validation.betroffene-aufgaben-unit-ids' | translate }}</span>
+              <span>{{ 'ui-text.files-validation.affected-unit-ids' | translate }}</span>
               <span class="geogebra-unit-count">{{ geogebra()?.units?.length || 0 }}</span>
             </div>
-            <div class="geogebra-unit-list" [attr.aria-label]="'ui-text.files-validation.betroffene-geogebra-unit-ids' | translate">
+            <div class="geogebra-unit-list" [attr.aria-label]="'ui-text.files-validation.affected-geogebra-units' | translate">
               @for (unit of geogebra()?.units || []; track unit) {
               <span class="geogebra-unit-chip">{{ unit }}</span>
               }
@@ -166,12 +166,12 @@
         <mat-expansion-panel-header>
           <mat-panel-title>
             <mat-icon class="warning-icon">error</mat-icon>
-            <span class="warning-title">{{ 'ui-text.files-validation.doppelte-testtaker-gefunden' | translate }}</span>
+            <span class="warning-title">{{ 'ui-text.files-validation.duplicate-test-takers-title' | translate }}</span>
           </mat-panel-title>
         </mat-expansion-panel-header>
 
         <div class="warning-content">
-          <p>{{ 'ui-text.files-validation.die-folgenden-login-namen-wurden-in-mehreren-testtaker-dateien-gefunden-bitte-waehlen-sie' | translate }}</p>
+          <p>{{ 'ui-text.files-validation.duplicate-test-takers-hint' | translate }}</p>
 
           @for (duplicate of duplicateTestTakers(); track duplicate.login) {
           <div class="duplicate-item">
@@ -194,9 +194,9 @@
               [disabled]="isResolvingDuplicates()">
               <mat-icon>{{ isResolvingDuplicates() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
               @if (isResolvingDuplicates()) {
-              {{ 'ui-text.files-validation.wird-bearbeitet' | translate }}
+              {{ 'ui-text.files-validation.resolving-duplicates' | translate }}
               } @else {
-              {{ 'ui-text.files-validation.doppelte-testtaker-aufloesen' | translate }}
+              {{ 'ui-text.files-validation.resolve-duplicates' | translate }}
               }
             </button>
           </div>
@@ -211,7 +211,7 @@
         <mat-expansion-panel-header>
           <mat-panel-title>
             <mat-icon class="warning-icon">warning</mat-icon>
-            <span class="warning-title">{{ 'ui-text.files-validation.testtaker-zum-filtern' | translate }}</span>
+            <span class="warning-title">{{ 'ui-text.files-validation.excluded-test-takers-title' | translate }}</span>
           </mat-panel-title>
           <mat-panel-description>
             {{ filteredExcludedCount() }} / {{ filteredTotalCount() }}
@@ -220,7 +220,7 @@
 
         <div class="warning-content">
           <p>
-            {{ 'ui-text.files-validation.hier-werden-login-namen-aus-testtaker-dateien-angezeigt-deren-modus-nicht-zu-den-erlaubten' | translate }}
+            {{ 'ui-text.files-validation.excluded-test-takers-hint' | translate }}
           </p>
 
           <div class="mode-selection">
@@ -260,9 +260,9 @@
               [disabled]="isConsidering() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isConsidering() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
               @if (isConsidering()) {
-              {{ 'ui-text.files-validation.wird-bearbeitet-2dd7ab' | translate: { value1: (consideringProgress()) } }}
+              {{ 'ui-text.files-validation.updating-exclusions' | translate: { value1: (consideringProgress()) } }}
               } @else {
-              {{ 'ui-text.files-validation.ausgewaehlte-testtaker-beruecksichtigen' | translate: { value1: (selectedTestTakerCount()) } }}
+              {{ 'ui-text.files-validation.include-selected-test-takers' | translate: { value1: (selectedTestTakerCount()) } }}
               }
             </button>
 
@@ -270,9 +270,9 @@
               [disabled]="isExcluding() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isExcluding() ? 'hourglass_empty' : 'block' }}</mat-icon>
               @if (isExcluding()) {
-              {{ 'ui-text.files-validation.wird-bearbeitet-2dd7ab' | translate: { value1: (excludingProgress()) } }}
+              {{ 'ui-text.files-validation.updating-exclusions' | translate: { value1: (excludingProgress()) } }}
               } @else {
-              {{ 'ui-text.files-validation.ausgewaehlte-testtaker-ausschliessen' | translate: { value1: (selectedTestTakerCount()) } }}
+              {{ 'ui-text.files-validation.exclude-selected-test-takers' | translate: { value1: (selectedTestTakerCount()) } }}
               }
             </button>
 
@@ -299,7 +299,7 @@
         <mat-expansion-panel-header>
           <mat-panel-title>
             <mat-icon class="warning-icon">warning</mat-icon>
-            <span class="warning-title">{{ 'ui-text.files-validation.nicht-verwendete-dateien' | translate }}</span>
+            <span class="warning-title">{{ 'ui-text.files-validation.unused-files' | translate }}</span>
           </mat-panel-title>
           <mat-panel-description>
             {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles().length }}
@@ -332,9 +332,9 @@
               [disabled]="isDeletingUnusedFiles() || unusedFilesSelection.selected.length === 0">
               <mat-icon>{{ isDeletingUnusedFiles() ? 'hourglass_empty' : 'delete' }}</mat-icon>
               @if (isDeletingUnusedFiles()) {
-              {{ 'ui-text.files-validation.wird-geloescht' | translate }}
+              {{ 'ui-text.files-validation.deleting' | translate }}
               } @else {
-              {{ 'ui-text.files-validation.ausgewaehlte-dateien-loeschen' | translate: { length: (unusedFilesSelection.selected.length) } }}
+              {{ 'ui-text.files-validation.delete-selected-files' | translate: { length: (unusedFilesSelection.selected.length) } }}
               }
             </button>
           </div>
@@ -346,24 +346,24 @@
     @if (validationResults().length > 0) {
     <mat-tab-group [(selectedIndex)]="selectedTabIndex">
       @if (validationResults().length > 1) {
-      <mat-tab [label]="'ui-text.files-validation.uebersicht' | translate">
+      <mat-tab [label]="'ui-text.files-validation.details' | translate">
         <div class="summary-container">
           <div class="summary-header">
-            <h4>{{ 'ui-text.files-validation.validierungs-uebersicht' | translate }}</h4>
+            <h4>{{ 'ui-text.files-validation.overview' | translate }}</h4>
             <div class="summary-stats">
               <div class="stat-item">
-                <span class="stat-label">{{ 'ui-text.files-validation.gesamtanzahl-testtaker' | translate }}</span>
+                <span class="stat-label">{{ 'ui-text.files-validation.total-test-takers' | translate }}</span>
                 <span class="stat-value">{{ summary().totalTestTakers }}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">{{ 'ui-text.files-validation.valide-testtaker-xmls' | translate }}</span>
+                <span class="stat-label">{{ 'ui-text.files-validation.valid-test-taker-xml' | translate }}</span>
                 <span class="stat-value success">
                   <mat-icon class="inline-icon">check_circle</mat-icon> {{ summary().validTestTakerXmls }}
                 </span>
               </div>
               @if (summary().invalidTestTakerXmls > 0) {
               <div class="stat-item">
-                <span class="stat-label">{{ 'ui-text.files-validation.invalide-testtaker-xmls' | translate }}</span>
+                <span class="stat-label">{{ 'ui-text.files-validation.invalid-test-taker-xml' | translate }}</span>
                 <span class="stat-value error">
                   <mat-icon class="inline-icon">error</mat-icon> {{ summary().invalidTestTakerXmls }}
                 </span>
@@ -377,11 +377,11 @@
             <div class="summary-card">
               <div class="card-header">
                 <mat-icon class="section-icon">book</mat-icon>
-                <span>{{ 'ui-text.files-validation.testhefte' | translate }}</span>
+                <span>{{ 'ui-text.files-validation.booklets' | translate }}</span>
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().booklets.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().booklets.missingFiles > 0"
@@ -390,7 +390,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().booklets.missingFiles > 0">{{ summary().booklets.missingFiles
                     }}</span>
                   @if (summary().booklets.missingFiles > 0) {
@@ -418,7 +418,7 @@
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().units.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().units.missingFiles > 0"
@@ -427,7 +427,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().units.missingFiles > 0">{{ summary().units.missingFiles
                     }}</span>
                   @if (summary().units.missingFiles > 0) {
@@ -451,11 +451,11 @@
             <div class="summary-card">
               <div class="card-header">
                 <mat-icon class="section-icon">schema</mat-icon>
-                <span>{{ 'ui-text.files-validation.kodierschemata' | translate }}</span>
+                <span>{{ 'ui-text.files-validation.coding-schemes' | translate }}</span>
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().schemes.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().schemes.missingFiles > 0"
@@ -464,7 +464,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().schemes.missingFiles > 0">{{ summary().schemes.missingFiles
                     }}</span>
                   @if (summary().schemes.missingFiles > 0) {
@@ -492,7 +492,7 @@
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().schemer.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().schemer.missingFiles > 0"
@@ -501,7 +501,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().schemer.missingFiles > 0">{{ summary().schemer.missingFiles
                     }}</span>
                   @if (summary().schemer.missingFiles > 0) {
@@ -525,11 +525,11 @@
             <div class="summary-card">
               <div class="card-header">
                 <mat-icon class="section-icon">description</mat-icon>
-                <span>{{ 'ui-text.files-validation.definitionen' | translate }}</span>
+                <span>{{ 'ui-text.files-validation.definitions' | translate }}</span>
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().definitions.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().definitions.missingFiles > 0"
@@ -538,7 +538,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().definitions.missingFiles > 0">{{
                     summary().definitions.missingFiles }}</span>
                   @if (summary().definitions.missingFiles > 0) {
@@ -562,11 +562,11 @@
             <div class="summary-card">
               <div class="card-header">
                 <mat-icon class="section-icon">play_circle</mat-icon>
-                <span>{{ 'ui-text.files-validation.player' | translate }}</span>
+                <span>{{ 'ui-text.files-validation.players' | translate }}</span>
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().player.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().player.missingFiles > 0"
@@ -575,7 +575,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().player.missingFiles > 0">{{ summary().player.missingFiles
                     }}</span>
                   @if (summary().player.missingFiles > 0) {
@@ -599,11 +599,11 @@
             <div class="summary-card">
               <div class="card-header">
                 <mat-icon class="section-icon">description</mat-icon>
-                <span>{{ 'ui-text.booklet-info-dialog.metadaten' | translate }}</span>
+                <span>{{ 'ui-text.booklet-info-dialog.metadata' | translate }}</span>
               </div>
               <div class="card-content">
                 <div class="card-stat">
-                  <span class="label">{{ 'ui-text.files-validation.vollstaendig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.complete-count' | translate }}</span>
                   <span class="value success">{{ summary().metadata.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().metadata.missingFiles > 0"
@@ -612,7 +612,7 @@
                   tabindex="0"
                   (keydown.enter)="onActionKeydown($event)"
                   (keydown.space)="onActionKeydown($event)">
-                  <span class="label">{{ 'ui-text.files-validation.so-viele-fehlen-einzigartig' | translate }}</span>
+                  <span class="label">{{ 'ui-text.files-validation.unique-missing-count' | translate }}</span>
                   <span class="value" [class.error]="summary().metadata.missingFiles > 0">{{ summary().metadata.missingFiles
                     }}</span>
                   @if (summary().metadata.missingFiles > 0) {
@@ -647,7 +647,7 @@
           </mat-icon>
           }
           <button mat-icon-button class="test-taker-xml-button" (click)="showTestTakerXml(val.testTaker)"
-            [matTooltip]="'ui-text.files-validation.testtaker-xml-anzeigen' | translate" [attr.aria-label]="('ui-text.files-validation.testtaker-xml-anzeigen' | translate)">
+            [matTooltip]="'ui-text.files-validation.show-test-taker-xml' | translate" [attr.aria-label]="('ui-text.files-validation.show-test-taker-xml' | translate)">
             <mat-icon>code</mat-icon>
           </button>
         </h4>
@@ -656,7 +656,7 @@
         <div class="missing-units-warning">
           <mat-icon class="warning-icon">warning</mat-icon>
           <div class="warning-content">
-            <p class="warning-title">{{ 'ui-text.files-validation.fehlende-testhefte' | translate }}</p>
+            <p class="warning-title">{{ 'ui-text.files-validation.missing-booklets' | translate }}</p>
             <ul>
               @for (booklet of val.booklets.missing; track booklet) {
               <li>{{ booklet }}</li>
@@ -671,21 +671,21 @@
           <div class="validation-card">
             <h3>
               <mat-icon class="section-icon">book</mat-icon>
-              {{ 'ui-text.files-validation.testhefte' | translate }}
+              {{ 'ui-text.files-validation.booklets' | translate }}
             </h3>
             <p class="status-row">
               {{ 'error.details_status' | translate }}
               @if (val.booklets.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
               </span>
               }
               @if (!val.booklets.complete) {
               <span class="status-incomplete">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.booklets.missing && val.booklets.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-testhefte-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-booklets-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -700,7 +700,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.booklets.files.length), existingCount: (val.booklets.existingCount), missingCount: (val.booklets.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.booklets.files.length), existingCount: (val.booklets.existingCount), missingCount: (val.booklets.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'booklets') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -737,7 +737,7 @@
                       }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
-                        [matTooltip]="'ui-text.files-validation.testheft-anzeigen' | translate" [attr.aria-label]="('ui-text.files-validation.testheft-anzeigen' | translate)">
+                        [matTooltip]="'ui-text.files-validation.show-booklet' | translate" [attr.aria-label]="('ui-text.files-validation.show-booklet' | translate)">
                         <mat-icon>info</mat-icon>
                       </button>
                       }
@@ -773,7 +773,7 @@
                           </li>
                           }
                           @if (!(bookletData().get(file.filename.toUpperCase())?.testlets?.length)) {
-                            <li class="no-testlets">{{ 'ui-text.files-validation.keine-testlets-gefunden' | translate }}</li>
+                            <li class="no-testlets">{{ 'ui-text.files-validation.no-testlets' | translate }}</li>
                           }
                         </ul>
                         }
@@ -796,14 +796,14 @@
               @if (val.units.isCompleteForView) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
               </span>
               }
               @if (!val.units.isCompleteForView) {
               <span class="status-incomplete">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.units.missing && val.units.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-aufgaben-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-units-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -818,7 +818,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend-7612a2' | translate: { length: (val.units.files.length), existingCount: (val.units.existingCount), filteredMissingCount: (val.units.filteredMissingCount) } }}
+                  {{ 'ui-text.files-validation.unit-file-status' | translate: { length: (val.units.files.length), existingCount: (val.units.existingCount), filteredMissingCount: (val.units.filteredMissingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'units') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -848,7 +848,7 @@
                                         relatedBooklets.all,
                                         openBookletInfo.bind(this)
                                       )">
-                          {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedBooklets.remaining) } }}
+                          {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedBooklets.remaining) } }}
                         </button>
                         }
                         )
@@ -867,7 +867,7 @@
                       }
                       @if (file.exists) {
                       <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
-                        [matTooltip]="'ui-text.files-validation.aufgabe-anzeigen' | translate" [attr.aria-label]="('ui-text.files-validation.aufgabe-anzeigen' | translate)">
+                        [matTooltip]="'ui-text.files-validation.show-unit' | translate" [attr.aria-label]="('ui-text.files-validation.show-unit' | translate)">
                         <mat-icon>info</mat-icon>
                       </button>
                       }
@@ -887,16 +887,16 @@
           <div class="validation-card">
             <h3>
               <mat-icon class="section-icon">schema</mat-icon>
-              {{ 'ui-text.files-validation.kodierschemata' | translate }}
+              {{ 'ui-text.files-validation.coding-schemes' | translate }}
             </h3>
             <p class="status-row">
               {{ 'error.details_status' | translate }}
               @if (val.schemes.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
                 @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.fuer-vorhandene-aufgaben' | translate }}</span>
+                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                 }
               </span>
               }
@@ -905,7 +905,7 @@
                 [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.schemes.missing && val.schemes.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-kodierschemata-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-coding-schemes-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -920,7 +920,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.schemes.files.length), existingCount: (val.schemes.existingCount), missingCount: (val.schemes.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.schemes.files.length), existingCount: (val.schemes.existingCount), missingCount: (val.schemes.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemes') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -946,7 +946,7 @@
                                       relatedUnits.all,
                                       openUnitInfo.bind(this)
                                     )">
-                        {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedUnits.remaining) } }}
+                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
                       </button>
                       }
                       )
@@ -987,9 +987,9 @@
               @if (val.schemer.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
                 @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.fuer-vorhandene-aufgaben' | translate }}</span>
+                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                 }
               </span>
               }
@@ -998,7 +998,7 @@
                 [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.schemer.missing && val.schemer.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-schemer-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-schemer-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -1013,7 +1013,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.schemer.files.length), existingCount: (val.schemer.existingCount), missingCount: (val.schemer.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.schemer.files.length), existingCount: (val.schemer.existingCount), missingCount: (val.schemer.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemer') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -1039,7 +1039,7 @@
                                       relatedUnits.all,
                                       openUnitInfo.bind(this)
                                     )">
-                        {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedUnits.remaining) } }}
+                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
                       </button>
                       }
                       )
@@ -1067,16 +1067,16 @@
           <div class="validation-card">
             <h3>
               <mat-icon class="section-icon">description</mat-icon>
-              {{ 'ui-text.files-validation.aufgabendefinitionen' | translate }}
+              {{ 'ui-text.files-validation.unit-definitions' | translate }}
             </h3>
             <p class="status-row">
               {{ 'error.details_status' | translate }}
               @if (val.definitions.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
                 @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.fuer-vorhandene-aufgaben' | translate }}</span>
+                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                 }
               </span>
               }
@@ -1085,7 +1085,7 @@
                 [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.definitions.missing && val.definitions.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-definitionen-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-definitions-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -1100,7 +1100,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.definitions.files.length), existingCount: (val.definitions.existingCount), missingCount: (val.definitions.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.definitions.files.length), existingCount: (val.definitions.existingCount), missingCount: (val.definitions.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'definitions') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -1126,7 +1126,7 @@
                                       relatedUnits.all,
                                       openUnitInfo.bind(this)
                                     )">
-                        {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedUnits.remaining) } }}
+                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
                       </button>
                       }
                       )
@@ -1145,7 +1145,7 @@
                     }
                     @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openDefinitionFile(file.filename)"
-                      [matTooltip]="'ui-text.files-validation.aufgabendefinition-anzeigen' | translate" [attr.aria-label]="('ui-text.files-validation.aufgabendefinition-anzeigen' | translate)">
+                      [matTooltip]="'ui-text.files-validation.show-definition' | translate" [attr.aria-label]="('ui-text.files-validation.show-definition' | translate)">
                       <mat-icon>description</mat-icon>
                     </button>
                     }
@@ -1160,16 +1160,16 @@
           <div class="validation-card">
             <h3>
               <mat-icon class="section-icon">play_circle</mat-icon>
-              {{ 'ui-text.files-validation.player' | translate }}
+              {{ 'ui-text.files-validation.players' | translate }}
             </h3>
             <p class="status-row">
               {{ 'error.details_status' | translate }}
               @if (val.player.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
                 @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.fuer-vorhandene-aufgaben' | translate }}</span>
+                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                 }
               </span>
               }
@@ -1178,7 +1178,7 @@
                 [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.player.missing && val.player.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-player-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-players-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -1193,7 +1193,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.player.files.length), existingCount: (val.player.existingCount), missingCount: (val.player.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.player.files.length), existingCount: (val.player.existingCount), missingCount: (val.player.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'player') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -1219,7 +1219,7 @@
                                       relatedUnits.all,
                                       openUnitInfo.bind(this)
                                     )">
-                        {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedUnits.remaining) } }}
+                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
                       </button>
                       }
                       )
@@ -1247,16 +1247,16 @@
           <div class="validation-card">
             <h3>
               <mat-icon class="section-icon">description</mat-icon>
-              {{ 'ui-text.booklet-info-dialog.metadaten' | translate }}
+              {{ 'ui-text.booklet-info-dialog.metadata' | translate }}
             </h3>
             <p class="status-row">
               {{ 'error.details_status' | translate }}
               @if (val.metadata.complete) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.vollstaendig-25181d' | translate }}
+                {{ 'ui-text.files-validation.complete' | translate }}
                 @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.fuer-vorhandene-aufgaben' | translate }}</span>
+                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                 }
               </span>
               }
@@ -1265,7 +1265,7 @@
                 [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.metadata.missing && val.metadata.missing.length > 0) {
-                {{ 'ui-text.files-validation.unvollstaendig-metadaten-fehlen' | translate }}
+                {{ 'ui-text.files-validation.missing-metadata-status' | translate }}
                 } @else {
                 {{ 'double-coded-review.decision.status-incomplete' | translate }}
                 }
@@ -1280,7 +1280,7 @@
                 (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
-                  {{ 'ui-text.files-validation.alle-dateien-vorhanden-fehlend' | translate: { length: (val.metadata.files.length), existingCount: (val.metadata.existingCount), missingCount: (val.metadata.missingCount) } }}
+                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.metadata.files.length), existingCount: (val.metadata.existingCount), missingCount: (val.metadata.missingCount) } }}
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'metadata') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -1306,7 +1306,7 @@
                                           relatedUnits.all,
                                           openUnitInfo.bind(this)
                                         )">
-                        {{ 'ui-text.files-validation.mehr' | translate: { remaining: (relatedUnits.remaining) } }}
+                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
                       </button>
                       }
                       )
@@ -1325,7 +1325,7 @@
                     }
                     @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openMetadataFile(file.filename)"
-                      [matTooltip]="'ui-text.files-validation.metadaten-anzeigen' | translate" [attr.aria-label]="('ui-text.files-validation.metadaten-anzeigen' | translate)">
+                      [matTooltip]="'ui-text.files-validation.show-metadata' | translate" [attr.aria-label]="('ui-text.files-validation.show-metadata' | translate)">
                       <mat-icon>description</mat-icon>
                     </button>
                     }

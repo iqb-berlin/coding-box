@@ -33,18 +33,18 @@ export interface ApplyCodingResultsDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>fact_check</mat-icon>
-      {{ 'ui-text.apply-coding-results-dialog.kodierergebnisse-anwenden' | translate }}
+      {{ 'ui-text.apply-coding-results-dialog.title' | translate }}
     </h2>
 
     <mat-dialog-content>
       <p>
-        {{ 'ui-text.apply-coding-results-dialog.die-ergebnisse-des-kodierjobs-werden-auf-die-antwortdaten-uebertragen' | translate: { jobName: (data.jobName) } }}
+        {{ 'ui-text.apply-coding-results-dialog.description' | translate: { jobName: (data.jobName) } }}
       </p>
 
       <div class="info-box">
         <mat-icon>info</mat-icon>
         <span>
-          {{ 'ui-text.apply-coding-results-dialog.bestehende-v2-kodierungen-bleiben-standardmaessig-erhalten-aggregierte-ergebnisse-werden-n' | translate }}
+          {{ 'ui-text.apply-coding-results-dialog.preserve-existing-hint' | translate }}
         </span>
       </div>
 
@@ -52,15 +52,15 @@ export interface ApplyCodingResultsDialogResult {
         <div class="summary-grid">
           <div>
             <strong>{{ data.totalResults ?? '-' }}</strong>
-            <span>{{ 'ui-text.apply-coding-results-dialog.ergebnisse' | translate }}</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.results' | translate }}</span>
           </div>
           <div>
             <strong>{{ data.codedResults ?? '-' }}</strong>
-            <span>{{ 'ui-text.apply-coding-results-dialog.kodiert' | translate }}</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.coded' | translate }}</span>
           </div>
           <div>
             <strong>{{ data.reviewIssues ?? (data.hasReviewIssues ? 'vorhanden' : 0) }}</strong>
-            <span>{{ 'ui-text.apply-coding-results-dialog.mit-pruefung' | translate }}</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.with-review' | translate }}</span>
           </div>
         </div>
       }
@@ -69,20 +69,20 @@ export interface ApplyCodingResultsDialogResult {
         <div class="warning-box">
           <mat-icon>rule</mat-icon>
           <span>
-            {{ 'ui-text.apply-coding-results-dialog.ergebnisse-mit-kodierungshinweis-werden-beim-anwenden-uebersprungen-bis-sie-manuell-geprue' | translate }}
+            {{ 'ui-text.apply-coding-results-dialog.review-skipped-hint' | translate }}
           </span>
         </div>
       }
 
       <mat-checkbox [(ngModel)]="overwriteExisting" color="warn">
-        {{ 'ui-text.apply-coding-results-dialog.bestehende-v2-kodierungen-ueberschreiben' | translate }}
+        {{ 'ui-text.apply-coding-results-dialog.overwrite-existing' | translate }}
       </mat-checkbox>
 
       @if (overwriteExisting) {
         <div class="warning-box">
           <mat-icon>warning</mat-icon>
           <span>
-            {{ 'ui-text.apply-coding-results-dialog.vorhandene-v2-kodierungen-fuer-direkte-ergebnisse-und-passende-aggregationsgruppen-werden' | translate }}
+            {{ 'ui-text.apply-coding-results-dialog.overwrite-warning' | translate }}
           </span>
         </div>
       }

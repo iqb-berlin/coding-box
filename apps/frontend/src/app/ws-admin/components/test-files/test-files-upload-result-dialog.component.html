@@ -1,17 +1,17 @@
-<h2 mat-dialog-title>{{ 'ui-text.test-files-upload-result-dialog.upload-ergebnis' | translate }}</h2>
+<h2 mat-dialog-title>{{ 'ui-text.test-files-upload-result-dialog.title' | translate }}</h2>
 
 <div mat-dialog-content>
   <p class="summary">
-    {{ 'ui-text.test-files-upload-result-dialog.versuch' | translate: { attempted: (attempted) } }}
+    {{ 'ui-text.test-files-upload-result-dialog.attempt' | translate: { attempted: (attempted) } }}
     <span class="sep">|</span>
-    {{ 'ui-text.test-files-upload-result-dialog.erfolgreich' | translate: { uploadedCount: (uploadedCount) } }}
+    {{ 'ui-text.test-files-upload-result-dialog.uploaded-count' | translate: { uploadedCount: (uploadedCount) } }}
     <span class="sep">|</span>
-    {{ 'ui-text.test-files-upload-result-dialog.fehlgeschlagen' | translate: { failedCount: (failedCount) } }}
+    {{ 'ui-text.test-files-upload-result-dialog.failed-count' | translate: { failedCount: (failedCount) } }}
     <span class="sep">|</span>
-    {{ 'ui-text.test-files-upload-result-dialog.nicht-ueberschrieben' | translate: { remainingConflictsCount: (remainingConflictsCount) } }}
+    {{ 'ui-text.test-files-upload-result-dialog.kept-count' | translate: { remainingConflictsCount: (remainingConflictsCount) } }}
     @if (overwriteSelectedCount && overwriteSelectedCount > 0) {
       <span class="sep">|</span>
-      {{ 'ui-text.test-files-upload-result-dialog.ausgewaehlt-zum-ueberschreiben' | translate: { overwriteSelectedCount: (overwriteSelectedCount) } }}
+      {{ 'ui-text.test-files-upload-result-dialog.overwrite-selected' | translate: { overwriteSelectedCount: (overwriteSelectedCount) } }}
     }
   </p>
 
@@ -20,13 +20,13 @@
     <input
       matInput
       [(ngModel)]="filterText"
-      [placeholder]="'ui-text.test-files-upload-result-dialog.dateiname-id-typ-oder-grund' | translate"
+      [placeholder]="'ui-text.test-files-upload-result-dialog.filter-placeholder' | translate"
       />
     <mat-icon matSuffix>search</mat-icon>
   </mat-form-field>
 
   <mat-tab-group>
-    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.erfolgreich-214290' | translate: { uploadedCount: (uploadedCount) }">
+    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.uploaded-tab' | translate: { uploadedCount: (uploadedCount) }">
       <cdk-virtual-scroll-viewport itemSize="68" class="viewport">
         <div
           *cdkVirtualFor="
@@ -39,14 +39,14 @@
             <div class="title">{{ f.filename }}</div>
             <div class="meta">
               @if (f.fileId) { <span>{{ 'ui-text.test-files-upload-conflicts-dialog.id' | translate: { fileId: (f.fileId) } }}</span> } @if
-              (f.fileType) { <span>{{ 'ui-text.test-files-upload-conflicts-dialog.typ' | translate: { fileType: (f.fileType) } }}</span> }
+              (f.fileType) { <span>{{ 'ui-text.test-files-upload-conflicts-dialog.type' | translate: { fileType: (f.fileType) } }}</span> }
             </div>
           </div>
         </div>
       </cdk-virtual-scroll-viewport>
     </mat-tab>
 
-    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.fehlgeschlagen-dee51d' | translate: { failedCount: (failedCount) }">
+    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.failed-tab' | translate: { failedCount: (failedCount) }">
       <div class="viewport failed-viewport">
         @for (f of filteredFailedFiles; track trackByFailed($index, f)) {
           <div
@@ -82,7 +82,7 @@
       </div>
     </mat-tab>
 
-    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.nicht-ueberschrieben-d93027' | translate: { remainingConflictsCount: (remainingConflictsCount) }">
+    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.kept-tab' | translate: { remainingConflictsCount: (remainingConflictsCount) }">
       <cdk-virtual-scroll-viewport itemSize="68" class="viewport">
         <div
           *cdkVirtualFor="
@@ -95,7 +95,7 @@
             <div class="title">{{ f.filename }}</div>
             <div class="meta">
               <span>{{ 'ui-text.test-files-upload-conflicts-dialog.id' | translate: { fileId: (f.fileId) } }}</span>
-              @if (f.fileType) { <span>{{ 'ui-text.test-files-upload-conflicts-dialog.typ' | translate: { fileType: (f.fileType) } }}</span> }
+              @if (f.fileType) { <span>{{ 'ui-text.test-files-upload-conflicts-dialog.type' | translate: { fileType: (f.fileType) } }}</span> }
             </div>
           </div>
         </div>
@@ -103,10 +103,10 @@
     </mat-tab>
 
     @if (issues.length > 0) {
-      <mat-tab [label]="'ui-text.test-files-upload-result-dialog.probleme' | translate: { length: (issues.length) }">
+      <mat-tab [label]="'ui-text.test-files-upload-result-dialog.issues-tab' | translate: { length: (issues.length) }">
         <div class="tab-pad">
           @if (filteredIssues.length === 0) {
-            <div class="empty">{{ 'ui-text.test-files-upload-result-dialog.keine-probleme-gefunden' | translate }}</div>
+            <div class="empty">{{ 'ui-text.test-files-upload-result-dialog.no-issues' | translate }}</div>
           } @else {
             <cdk-virtual-scroll-viewport itemSize="60" class="viewport">
               <div *cdkVirtualFor="let i of filteredIssues; trackBy: trackByIssue" class="row issue-row" [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">
@@ -116,8 +116,8 @@
                     <span class="msg">{{ i.message }}</span>
                   </div>
                   <div class="meta issue-meta">
-                    @if (i.fileName) { <span>{{ 'ui-text.test-files-upload-result-dialog.datei' | translate: { fileName: (i.fileName) } }}</span> }
-                    @if (i.rowIndex !== null && i.rowIndex !== undefined) { <span>{{ 'ui-text.test-files-upload-result-dialog.zeile' | translate: { rowIndex: (i.rowIndex) } }}</span> }
+                    @if (i.fileName) { <span>{{ 'ui-text.test-files-upload-result-dialog.file' | translate: { fileName: (i.fileName) } }}</span> }
+                    @if (i.rowIndex !== null && i.rowIndex !== undefined) { <span>{{ 'ui-text.test-files-upload-result-dialog.line' | translate: { rowIndex: (i.rowIndex) } }}</span> }
                   </div>
                 </div>
               </div>

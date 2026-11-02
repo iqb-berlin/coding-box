@@ -162,7 +162,7 @@ export class ManualCodingImportFacade {
           if (!isCurrent()) return;
           this.ownsValidation = false;
           this.validationStateService.setValidationError(
-            this.uiTranslate('ui-text.manual-coding-import.import-fehlgeschlagen', { error: error })
+            this.uiTranslate('ui-text.manual-coding-import.failed', { error: error })
           );
           this.showError(
             this.translateService.instant(

@@ -140,7 +140,7 @@ implements OnInit, OnDestroy {
     { key: 'fileName', label: this.uiTranslate('file-upload.filename'), type: 'link' },
     { key: 'variableId', label: this.uiTranslate('coding-management.filters.variable-id') },
     { key: 'value', label: this.uiTranslate('coding.value') },
-    { key: 'errorReason', label: this.uiTranslate('ui-text.response-status-validation-panel.fehlergrund') }
+    { key: 'errorReason', label: this.uiTranslate('ui-text.response-status-validation-panel.error-reason') }
   ]));
 
   protected get tableColumns(): ValidationTableColumn[] { return this.localizedTableColumns(); }
@@ -239,7 +239,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isLoadingPage.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-laden-der-seite'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.page-load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -283,7 +283,7 @@ implements OnInit, OnDestroy {
           this.isDeletingResponses.set(false);
 
           this.selectedResponses.set(new Set());
-          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.ausgewaehlte-antworten-wurden-geloescht'), 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.selected-deleted'), 'OK', {
             duration: 3000
           });
           this.onValidate();
@@ -291,7 +291,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingResponses.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.fehler-beim-loeschen'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.delete-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -309,7 +309,7 @@ implements OnInit, OnDestroy {
         this.isDeletingResponses.set(false);
 
         this.selectedResponses.set(new Set());
-        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.alle-ungueltigen-antworten-wurden-geloescht'), 'OK', {
+        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.all-deleted'), 'OK', {
           duration: 3000
         });
         this.onValidate();
@@ -317,7 +317,7 @@ implements OnInit, OnDestroy {
       error: () => {
         this.isDeletingResponses.set(false);
 
-        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.fehler-beim-loeschen'), this.uiTranslate('deferred-view.close'), {
+        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.delete-failed'), this.uiTranslate('deferred-view.close'), {
           duration: 5000
         });
       }
@@ -344,7 +344,7 @@ implements OnInit, OnDestroy {
           ]);
 
           downloadCsvFile('validierung-antwortstatus.csv', csvContent);
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.csv-export-erfolgreich-erstellt'), 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-success'), 'OK', {
             duration: 3000
           });
           this.isExporting.set(false);
@@ -352,7 +352,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isExporting.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.fehler-beim-csv-export'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }

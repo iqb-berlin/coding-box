@@ -54,13 +54,13 @@
               appearance="outline"
               class="filter-field"
               >
-              <mat-label>{{ 'ui-text.coding-jobs.nach-training-filtern' | translate }}</mat-label>
+              <mat-label>{{ 'ui-text.coding-jobs.filter-training' | translate }}</mat-label>
               <mat-select
                 [(value)]="selectedTrainingId"
                 (selectionChange)="onTrainingFilterChange()"
                 >
-                <mat-option [value]="null">{{ 'ui-text.coding-jobs.alle-trainings' | translate }}</mat-option>
-                <mat-option value="none">{{ 'ui-text.coding-jobs.ohne-training' | translate }}</mat-option>
+                <mat-option [value]="null">{{ 'ui-text.coding-jobs.all-trainings' | translate }}</mat-option>
+                <mat-option value="none">{{ 'ui-text.coding-jobs.without-training' | translate }}</mat-option>
                 @for (training of coderTrainings(); track training.id) {
                   <mat-option
                     [value]="training.id"
@@ -82,19 +82,19 @@
                 class="bulk-apply-button"
                 >
                 <mat-icon>rule</mat-icon>
-                {{ 'ui-text.coding-jobs.alle-ergebnisse-anwenden' | translate }}
+                {{ 'ui-text.coding-jobs.apply-all' | translate }}
               </button>
             }
             @if (canManageCodingJobs() && showTransferAction()) {
               <button mat-button (click)="openTransferCodingCasesDialog()">
                 <mat-icon>swap_horiz</mat-icon>
-                {{ 'ui-text.coding-jobs.faelle-uebertragen' | translate }}
+                {{ 'ui-text.coding-jobs.transfer-cases' | translate }}
               </button>
             }
             @if (showComparisonActions()) {
               <button mat-button (click)="openDoubleCodedReviewDialog()">
                 <mat-icon>compare</mat-icon>
-                {{ 'ui-text.coding-jobs.doppelkodierungsreview' | translate }}
+                {{ 'ui-text.coding-jobs.double-coding-review' | translate }}
               </button>
               <button mat-button (click)="openCohensKappaStatisticsDialog()">
                 <mat-icon>analytics</mat-icon>
@@ -119,7 +119,7 @@
                 class="bulk-delete-button"
                 >
                 <mat-icon>delete_sweep</mat-icon>
-                {{ 'ui-text.coding-jobs.loeschen' | translate: { length: (selection.selected.length) } }}
+                {{ 'ui-text.coding-jobs.delete-count' | translate: { length: (selection.selected.length) } }}
               </button>
             }
           </div>
@@ -309,7 +309,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('restart', element)"
                     >
                     <mat-icon>restart_alt</mat-icon>
-                    <span>{{ 'ui-text.coding-jobs.offene-faelle-ansehen' | translate }}</span>
+                    <span>{{ 'ui-text.coding-jobs.view-open-cases' | translate }}</span>
                   </button>
                 }
                 @if (
@@ -325,7 +325,7 @@
                     [disabled]="!canApplyCodingResults(element)"
                     >
                     <mat-icon>check_circle</mat-icon>
-                    <span>{{ 'ui-text.coding-job-result-dialog.ergebnisse-anwenden' | translate }}</span>
+                    <span>{{ 'ui-text.coding-job-result-dialog.apply-results' | translate }}</span>
                   </button>
                 }
                 @if (canManageCodingJobs() && showBulkDeleteAction()) {
@@ -338,7 +338,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('delete', element)"
                     >
                     <mat-icon>delete</mat-icon>
-                    <span>{{ 'ui-text.coding-jobs.kodierjob-loeschen' | translate }}</span>
+                    <span>{{ 'ui-text.coding-jobs.delete-job' | translate }}</span>
                   </button>
                 }
               </mat-menu>
@@ -381,7 +381,7 @@
               </ng-container>
 
               <ng-container matColumnDef="assignedCoders">
-                <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.zugewiesene-kodierer' | translate }}</mat-header-cell>
+                <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.assigned-coders' | translate }}</mat-header-cell>
                 <mat-cell
                   *matCellDef="let element"
                   class="assigned-coders-cell"
@@ -439,7 +439,7 @@
                   </ng-container>
 
                   <ng-container matColumnDef="hasIssues">
-                    <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.probleme' | translate }}</mat-header-cell>
+                    <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.issues' | translate }}</mat-header-cell>
                     <mat-cell
                       *matCellDef="let element"
                       [class.has-issues]="element.hasIssues"
@@ -482,7 +482,7 @@
                   @if (dataSource.data.length === 0) {
                     <div class="no-data-message">
                       <p>
-                        {{ 'ui-text.coding-jobs.keine-kodierjobs-vorhanden-erstellen-sie-eine-neue-kodierjob-definition-mit-dem-button-obe' | translate }}
+                        {{ 'ui-text.coding-jobs.empty' | translate }}
                       </p>
                     </div>
                   }

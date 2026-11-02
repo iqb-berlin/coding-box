@@ -1,8 +1,8 @@
 <div class="app-info">
   <div class="content">
     <p>
-      {{ 'ui-text.app-info.das' | translate }} <a href="https://www.iqb.hu-berlin.de/" target="_blank">{{ 'ui-text.app-info.institut-zur-qualitaetsentwicklung-im-bildungswesen-iqb' | translate }}</a>
-      {{ 'ui-text.app-info.betreibt-auf-diesen-seiten-eine-anwendung-fuer-die-kodierung-von-antworten-aus-testungen' | translate }}
+      {{ 'ui-text.app-info.intro-prefix' | translate }} <a href="https://www.iqb.hu-berlin.de/" target="_blank">{{ 'ui-text.app-info.institute-name' | translate }}</a>
+      {{ 'ui-text.app-info.application-description' | translate }}
     </p>
 
     <div class="info-card">
@@ -13,7 +13,7 @@
         </li>
         @if (isUserLoggedIn()) {
           <li>
-            <span class="info-label">{{ 'ui-text.app-info.benutzer' | translate }}</span>
+            <span class="info-label">{{ 'ui-text.app-info.user' | translate }}</span>
             <span class="info-value">{{ userName() }}</span>
           </li>
         }

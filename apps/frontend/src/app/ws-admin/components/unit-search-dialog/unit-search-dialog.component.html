@@ -5,7 +5,7 @@
     <div class="search-mode-toggle">
       <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">{{ 'test-results-search.search-units' | translate }}</button>
       <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">{{ 'test-results-search.search-responses' | translate }}</button>
-      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">{{ 'ui-text.unit-search-dialog.booklets-suchen' | translate }}</button>
+      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">{{ 'ui-text.unit-search-dialog.booklets-title' | translate }}</button>
     </div>
 
     <!-- Unit Search -->
@@ -70,8 +70,8 @@
     @if (searchMode === 'booklet') {
       <div class="search-container">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>{{ 'ui-text.unit-search-dialog.booklet-suchen' | translate }}</mat-label>
-          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" [placeholder]="'ui-text.unit-search-dialog.geben-sie-den-namen-des-booklets-ein' | translate">
+          <mat-label>{{ 'ui-text.unit-search-dialog.search-booklet' | translate }}</mat-label>
+          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" [placeholder]="'ui-text.unit-search-dialog.booklet-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -131,7 +131,7 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllUnits()">
                 <mat-icon>delete_sweep</mat-icon>
-                {{ 'ui-text.unit-search-dialog.alle-gefilterten-aufgaben-loeschen' | translate: { value1: (unitSearchResults().length) } }}
+                {{ 'ui-text.unit-search-dialog.delete-filtered-units' | translate: { value1: (unitSearchResults().length) } }}
               </button>
             </div>
           }
@@ -202,7 +202,7 @@
                       </div>
                     }
                     @if (unit.responses.length > 1) {
-                      <span class="more-responses">{{ 'ui-text.job-bundle-selection.weitere' | translate: { value1: (unit.responses.length - 1) } }}</span>
+                      <span class="more-responses">{{ 'ui-text.job-bundle-selection.more-variables' | translate: { value1: (unit.responses.length - 1) } }}</span>
                     }
                   </div>
                 } @else {
@@ -236,7 +236,7 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllResponses()">
                 <mat-icon>delete_sweep</mat-icon>
-                {{ 'ui-text.unit-search-dialog.alle-gefilterten-antworten-loeschen' | translate: { value1: (responseSearchResults().length) } }}
+                {{ 'ui-text.unit-search-dialog.delete-filtered-responses' | translate: { value1: (responseSearchResults().length) } }}
               </button>
             </div>
           }
@@ -328,7 +328,7 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllBooklets()">
                 <mat-icon>delete_sweep</mat-icon>
-                {{ 'ui-text.unit-search-dialog.alle-gefilterten-booklets-loeschen' | translate: { value1: (bookletSearchResults().length) } }}
+                {{ 'ui-text.unit-search-dialog.delete-filtered-booklets' | translate: { value1: (bookletSearchResults().length) } }}
               </button>
             </div>
           }

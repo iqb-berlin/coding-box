@@ -13,8 +13,8 @@ export async function detectCodingImportFormat(translate: UiTranslator, file: Fi
       'unknown',
       [],
       [
-        translate('ui-text.coding-import-file.die-datei-konnte-nicht-gelesen-werden-bitte-pruefen-sie-ob-die-datei-beschaedigt-ist'),
-        translate('ui-text.coding-import-file.unterstuetzt-werden-csv-dateien-sowie-excel-dateien-im-format-xlsx-oder-xls')
+        translate('ui-text.coding-import-file.read-failed'),
+        translate('ui-text.coding-import-file.supported-formats')
       ]
     );
   }
@@ -104,7 +104,7 @@ export function buildFormatDialogData(translate: UiTranslator,
 ): CodingImportFormatDialogData {
   const availableVersions = getAvailableCodingVersions(headers);
   const sharedDescription =
-    translate('ui-text.coding-import-file.fuer-testfaelle-die-ausserhalb-der-kodierbox-bereits-mit-code-und-score-kodiert-wurde');
+    translate('ui-text.coding-import-file.external-coding-hint');
 
   if (detectedFormat === 'external-coding') {
     return {
@@ -115,8 +115,8 @@ export function buildFormatDialogData(translate: UiTranslator,
       canImport: true,
       headers,
       helpItems: [
-        translate('ui-text.coding-import-file.erwartet-werden-unit-key-oder-unit-alias-variable-id-und-mindestens-eine-spalte-code'),
-        translate('ui-text.coding-import-file.optionale-zuordnungsspalten-wie-person-code-person-login-person-group-und-booklet-nam')
+        translate('ui-text.coding-import-file.required-columns'),
+        translate('ui-text.coding-import-file.optional-matching-columns')
       ]
     };
   }
@@ -132,12 +132,12 @@ export function buildFormatDialogData(translate: UiTranslator,
       headers,
       helpItems: hasCodingValues ?
         [
-          translate('ui-text.coding-import-file.die-datei-sieht-nach-einer-kodierliste-aus-dem-coding-management-aus'),
-          translate('ui-text.coding-import-file.die-ergaenzten-spalten-code-score-und-status-werden-als-manuelle-kodierung-importiert')
+          translate('ui-text.coding-import-file.coding-list-detected'),
+          translate('ui-text.coding-import-file.manual-columns-hint')
         ] :
         [
-          translate('ui-text.coding-import-file.die-datei-sieht-nach-einer-kodierliste-aus-enthaelt-aber-noch-keine-kodierungsspalten'),
-          translate('ui-text.coding-import-file.bitte-ergaenzen-sie-mindestens-code-und-score-optional-auch-status-und-waehlen-sie-di')
+          translate('ui-text.coding-import-file.coding-list-without-codes'),
+          translate('ui-text.coding-import-file.add-coding-columns-hint')
         ]
     };
   }
@@ -147,14 +147,14 @@ export function buildFormatDialogData(translate: UiTranslator,
       fileName,
       detectedFormat,
       title: translate('coding-management-manual.import.tooltip'),
-      description: translate('ui-text.coding-import-file.die-datei-sieht-nach-einem-kodierergebnis-export-aus-dem-coding-management-aus'),
+      description: translate('ui-text.coding-import-file.results-export-detected'),
       canImport: availableVersions.length > 0,
       headers,
       availableVersions,
       selectedVersion: availableVersions.includes('v2') ? 'v2' : availableVersions[0],
       helpItems: [
-        translate('ui-text.coding-import-file.waehlen-sie-aus-welche-version-aus-der-datei-uebernommen-werden-soll'),
-        translate('ui-text.coding-import-file.die-ausgewaehlten-werte-werden-als-manuelle-kodierung-v2-importiert')
+        translate('ui-text.coding-import-file.select-version-hint'),
+        translate('ui-text.coding-import-file.manual-import-target')
       ]
     };
   }
@@ -163,13 +163,13 @@ export function buildFormatDialogData(translate: UiTranslator,
     return {
       fileName,
       detectedFormat,
-      title: translate('ui-text.coding-import-file.testergebnisse-export-erkannt'),
-      description: translate('ui-text.coding-import-file.diese-datei-enthaelt-vollstaendige-testergebnisse-mit-antworten-und-zustaenden-nicht'),
+      title: translate('ui-text.coding-import-file.test-results-detected'),
+      description: translate('ui-text.coding-import-file.test-results-description'),
       canImport: false,
       headers,
       helpItems: [
-        translate('ui-text.coding-import-file.bitte-wechseln-sie-zu-testergebnisse-import-antworten-hochladen'),
-        translate('ui-text.coding-import-file.fuer-den-kodierungsimport-wird-eine-flache-datei-mit-unit-key-oder-unit-alias-variabl')
+        translate('ui-text.coding-import-file.import-responses-hint'),
+        translate('ui-text.coding-import-file.flat-format-hint')
       ]
     };
   }
@@ -178,13 +178,13 @@ export function buildFormatDialogData(translate: UiTranslator,
     return {
       fileName,
       detectedFormat,
-      title: translate('ui-text.coding-import-file.testlogs-export-erkannt'),
-      description: translate('ui-text.coding-import-file.diese-datei-enthaelt-testlogs-und-kann-nicht-als-code-score-kodierung-uebernommen-wer'),
+      title: translate('ui-text.coding-import-file.logs-detected'),
+      description: translate('ui-text.coding-import-file.logs-description'),
       canImport: false,
       headers,
       helpItems: [
-        translate('ui-text.coding-import-file.bitte-wechseln-sie-zu-testergebnisse-import-logs-hochladen'),
-        translate('ui-text.coding-import-file.fuer-den-kodierungsimport-wird-eine-flache-datei-mit-unit-key-oder-unit-alias-variabl')
+        translate('ui-text.coding-import-file.import-logs-hint'),
+        translate('ui-text.coding-import-file.flat-format-hint')
       ]
     };
   }
@@ -192,15 +192,15 @@ export function buildFormatDialogData(translate: UiTranslator,
   return {
     fileName,
     detectedFormat,
-    title: translate('ui-text.coding-import-file.datei-konnte-nicht-erkannt-werden'),
-    description: translate('ui-text.coding-import-file.die-datei-passt-zu-keinem-unterstuetzten-kodierungsimport'),
+    title: translate('ui-text.coding-import-file.unknown-format-title'),
+    description: translate('ui-text.coding-import-file.unknown-format-description'),
     canImport: false,
     headers,
     helpItems: fallbackHelpItems || [
-      translate('ui-text.coding-import-file.pruefen-sie-ob-die-erste-zeile-spaltenueberschriften-enthaelt'),
-      translate('ui-text.coding-import-file.fuer-kodierungen-aus-anderer-quelle-werden-unit-key-oder-unit-alias-variable-id-code'),
-      translate('ui-text.coding-import-file.kodierergebnis-exporte-muessen-spalten-wie-status-v2-code-v2-und-score-v2-enthalten'),
-      translate('ui-text.coding-import-file.testergebnisse-und-log-exporte-bitte-ueber-den-bereich-testergebnisse-importieren')
+      translate('ui-text.coding-import-file.header-row-hint'),
+      translate('ui-text.coding-import-file.external-columns-hint'),
+      translate('ui-text.coding-import-file.result-version-columns-hint'),
+      translate('ui-text.coding-import-file.test-results-import-hint')
     ]
   };
 }

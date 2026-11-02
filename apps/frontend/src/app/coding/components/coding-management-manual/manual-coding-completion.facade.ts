@@ -55,7 +55,7 @@ export class ManualCodingCompletionFacade {
     }
 
     if (!canApply()) {
-      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-berechtigung-zum-anwenden-von-job-ergebnissen'));
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.apply-permission-required'));
       return;
     }
 
@@ -76,7 +76,7 @@ export class ManualCodingCompletionFacade {
 
       this.applyingJobIds.update(ids => new Set(ids).add(job.id));
       const loadingSnack = this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-kodierjob-an', { name: job.name }),
+        this.uiTranslate('ui-text.coding-jobs.applying-results', { name: job.name }),
         '',
         { duration: 3000 }
       );
@@ -102,7 +102,7 @@ export class ManualCodingCompletionFacade {
             }
 
             this.showError(
-              this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', {
+              this.uiTranslate('ui-text.coding-jobs.apply-failed', {
                 value1: this.translateService.instant(
                   result.messageKey,
                   result.messageParams || {}
@@ -112,7 +112,7 @@ export class ManualCodingCompletionFacade {
           },
           error: error => {
             this.showError(
-              this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: error.message || this.uiTranslate('error.unknown') })
+              this.uiTranslate('ui-text.coding-jobs.apply-failed', { value1: error.message || this.uiTranslate('error.unknown') })
             );
           }
         });
@@ -127,23 +127,23 @@ export class ManualCodingCompletionFacade {
     }
 
     if (!canApply()) {
-      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-berechtigung-zum-anwenden-von-job-ergebnissen'));
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.apply-permission-required'));
       return;
     }
 
     if (!this.hasCompletedJobsReadyForApply()) {
-      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-abgeschlossenen-kodierjobs-zum-anwenden-gefunden'));
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.no-completed-jobs'));
       return;
     }
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: this.uiTranslate('ui-text.manual-coding-completion.alle-abgeschlossenen-ergebnisse-anwenden'),
+        title: this.uiTranslate('ui-text.manual-coding-completion.apply-all'),
         message: [
-          this.uiTranslate('ui-text.manual-coding-completion.moechten-sie-die-ergebnisse-fuer-abgeschlossene-kodierjob-s-anwenden', { value1: this.completedJobsReadyForApply().length }),
-          this.uiTranslate('ui-text.coding-jobs.bei-jobs-mit-offenen-kodierungshinweisen-werden-gueltige-antworten-angewendet'),
-          this.uiTranslate('ui-text.coding-jobs.offene-hinweise-bleiben-zur-manuellen-pruefung-bestehen')
+          this.uiTranslate('ui-text.manual-coding-completion.apply-confirmation', { value1: this.completedJobsReadyForApply().length }),
+          this.uiTranslate('ui-text.coding-jobs.bulk-apply-valid-results'),
+          this.uiTranslate('ui-text.coding-jobs.bulk-apply-review-hint')
         ].join(' '),
         confirmButtonText: this.uiTranslate('coding.trainings.compare.apply-dialog.apply'),
         cancelButtonText: this.uiTranslate('cancel')
@@ -160,7 +160,7 @@ export class ManualCodingCompletionFacade {
   private performBulkApplyCompletedJobResults(workspaceId: number): void {
     this.isApplyingBulk.set(true);
     const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.manual-coding-completion.wende-ergebnisse-fuer-alle-abgeschlossenen-kodierjobs-an'),
+      this.uiTranslate('ui-text.manual-coding-completion.applying-results'),
       '',
       { duration: 3000 }
     );
@@ -183,11 +183,11 @@ export class ManualCodingCompletionFacade {
             return;
           }
 
-          this.showError(this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung', { message: result.message }));
+          this.showError(this.uiTranslate('ui-text.coding-jobs.bulk-apply-failed', { message: result.message }));
         },
         error: error => {
           this.showError(
-            this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung-473110', { value1: error.message || this.uiTranslate('error.unknown') })
+            this.uiTranslate('ui-text.coding-jobs.bulk-apply-request-failed', { value1: error.message || this.uiTranslate('error.unknown') })
           );
         }
       });
@@ -197,24 +197,24 @@ export class ManualCodingCompletionFacade {
     result: ApplyCodingResultsResponse
   ): string {
     const parts = [
-      this.uiTranslate('ui-text.coding-jobs.ergebnisse-erfolgreich-angewendet-antworten-aktualisiert', { updatedResponsesCount: result.updatedResponsesCount })
+      this.uiTranslate('ui-text.coding-jobs.apply-success', { updatedResponsesCount: result.updatedResponsesCount })
     ];
 
     if (result.skippedAlreadyCodedCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.bereits-vorhandene-kodierungen-nicht-ueberschrieben-antworten', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
+        this.uiTranslate('ui-text.coding-jobs.preserved-responses', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
       );
     }
 
     if (result.overwrittenExistingCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-ueberschrieben-antworten', { overwrittenExistingCount: result.overwrittenExistingCount })
+        this.uiTranslate('ui-text.coding-jobs.overwritten-responses', { overwrittenExistingCount: result.overwrittenExistingCount })
       );
     }
 
     if (result.skippedReviewCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.uebersprungen-manuelle-pruefung-benoetigt-antworten', { skippedReviewCount: result.skippedReviewCount })
+        this.uiTranslate('ui-text.coding-jobs.review-skipped-responses', { skippedReviewCount: result.skippedReviewCount })
       );
     }
 
@@ -229,34 +229,34 @@ export class ManualCodingCompletionFacade {
       item => item.result && !item.result.success
     ).length;
     const parts = [
-      this.uiTranslate('ui-text.manual-coding-completion.massenanwendung-abgeschlossen-jobs-verarbeitet', { jobsProcessed: result.jobsProcessed }),
-      this.uiTranslate('ui-text.manual-coding-completion.antworten-aktualisiert', { totalUpdatedResponses: result.totalUpdatedResponses })
+      this.uiTranslate('ui-text.manual-coding-completion.apply-summary', { jobsProcessed: result.jobsProcessed }),
+      this.uiTranslate('ui-text.manual-coding-completion.updated-responses', { totalUpdatedResponses: result.totalUpdatedResponses })
     ];
 
     if (result.totalSkippedAlreadyCoded > 0) {
       parts.push(
-        this.uiTranslate('ui-text.manual-coding-completion.vorhandene-kodierungen-beibehalten', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded })
+        this.uiTranslate('ui-text.manual-coding-completion.preserved-codings', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded })
       );
     }
 
     if (result.totalOverwrittenExisting > 0) {
       parts.push(
-        this.uiTranslate('ui-text.manual-coding-completion.vorhandene-kodierungen-ueberschrieben', { totalOverwrittenExisting: result.totalOverwrittenExisting })
+        this.uiTranslate('ui-text.manual-coding-completion.overwritten-codings', { totalOverwrittenExisting: result.totalOverwrittenExisting })
       );
     }
 
     if (result.totalSkippedReview > 0) {
       parts.push(
-        this.uiTranslate('ui-text.manual-coding-completion.ergebnisse-zur-manuellen-pruefung-uebersprungen', { totalSkippedReview: result.totalSkippedReview })
+        this.uiTranslate('ui-text.manual-coding-completion.review-skipped-results', { totalSkippedReview: result.totalSkippedReview })
       );
     }
 
     if (skippedCount > 0) {
-      parts.push(this.uiTranslate('ui-text.manual-coding-completion.jobs-uebersprungen', { skippedCount: skippedCount }));
+      parts.push(this.uiTranslate('ui-text.manual-coding-completion.skipped-jobs', { skippedCount: skippedCount }));
     }
 
     if (failedCount > 0) {
-      parts.push(this.uiTranslate('ui-text.manual-coding-completion.jobs-mit-konflikten-fehlern-nicht-angewendet', { failedCount: failedCount }));
+      parts.push(this.uiTranslate('ui-text.manual-coding-completion.failed-jobs', { failedCount: failedCount }));
     }
 
     return parts.join(', ');

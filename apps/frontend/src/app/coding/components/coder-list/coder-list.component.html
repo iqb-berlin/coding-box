@@ -2,15 +2,15 @@
   <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
     <button type="button" mat-raised-button color="primary" (click)="createCoder()">
       <mat-icon>add</mat-icon>
-      {{ 'ui-text.coder-list.kodierer-erstellen' | translate }}
+      {{ 'ui-text.coder-list.create' | translate }}
     </button>
     <button type="button" mat-raised-button color="primary" (click)="startEditCoder(selection.selected[0])" [disabled]="selection.selected.length !== 1">
       <mat-icon>edit</mat-icon>
-      {{ 'ui-text.coder-list.kodierer-bearbeiten' | translate }}
+      {{ 'ui-text.coder-list.edit' | translate }}
     </button>
     <button type="button" mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCoders()">
       <mat-icon>delete</mat-icon>
-      {{ 'ui-text.coder-list.kodierer-loeschen' | translate }}
+      {{ 'ui-text.coder-list.delete' | translate }}
     </button>
   </div>
 
@@ -52,7 +52,7 @@
       </ng-container>
 
       <ng-container matColumnDef="displayName">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coder-list.anzeigename' | translate }}</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coder-list.display-name' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.displayName || '-'}}
         </mat-cell>
@@ -66,7 +66,7 @@
       </ng-container>
 
       <ng-container matColumnDef="assignedJobs">
-        <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coder-list.zugewiesene-jobs' | translate }}</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coder-list.assigned-jobs' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{getAssignedJobsText(element)}}
         </mat-cell>
@@ -75,7 +75,7 @@
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
-        <p>{{ 'ui-text.coder-list.keine-kodierer-vorhanden-erstellen-sie-einen-neuen-kodierer-mit-dem-button-oben' | translate }}</p>
+        <p>{{ 'ui-text.coder-list.empty' | translate }}</p>
       </div>
     }
   }

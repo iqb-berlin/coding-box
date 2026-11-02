@@ -23,13 +23,13 @@ import { MatIconModule } from '@angular/material/icon';
         @if (whyText()) {
           <div class="info-banner">
             <mat-icon>help</mat-icon>
-            <span><strong>{{ 'ui-text.validation-guidance.warum-ist-das-wichtig' | translate }}</strong> {{ whyText() }}</span>
+            <span><strong>{{ 'ui-text.validation-guidance.purpose' | translate }}</strong> {{ whyText() }}</span>
           </div>
         }
         @if (fixHint()) {
           <div class="info-banner">
             <mat-icon>build</mat-icon>
-            <span><strong>{{ 'ui-text.validation-guidance.so-beheben-sie-es' | translate }}</strong> {{ fixHint() }}</span>
+            <span><strong>{{ 'ui-text.validation-guidance.remediation' | translate }}</strong> {{ fixHint() }}</span>
           </div>
         }
       </div>

@@ -130,13 +130,13 @@ export class ValidationPanelHeaderComponent {
     const errorCount = this.errorCount();
     switch (this.status()) {
       case 'running':
-        return this.uiTranslate('ui-text.validation-panel-header.laeuft');
+        return this.uiTranslate('ui-text.validation-panel-header.running');
       case 'failed':
-        return errorCount !== undefined ? this.uiTranslate('ui-text.validation-panel-header.fehler', { errorCount: errorCount }) : this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error');
+        return errorCount !== undefined ? this.uiTranslate('ui-text.validation-panel-header.failed', { errorCount: errorCount }) : this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error');
       case 'success':
         return 'OK';
       default:
-        return this.uiTranslate('ui-text.validation-panel-header.nicht-ausgefuehrt');
+        return this.uiTranslate('ui-text.validation-panel-header.not-run');
     }
   }
 }

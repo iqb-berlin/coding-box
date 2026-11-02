@@ -572,7 +572,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.isLoadingVariables.set(false);
         },
         error: () => {
-          this.showError(this.uiTranslate('ui-text.coder-training.fehler-beim-laden-der-verfuegbaren-variablen'));
+          this.showError(this.uiTranslate('ui-text.coder-training.variables-load-failed'));
           this.availableVariablesLoaded = true;
           this.availableVariables.set([]);
           this.restoreLoadedTrainingSelections();
@@ -603,15 +603,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getDialogTitle(): string {
-    return this.isEditMode ? this.uiTranslate('ui-text.coder-training.kodierer-schulung-bearbeiten') : this.uiTranslate('ui-text.coder-training.kodierer-schulung-erstellen');
+    return this.isEditMode ? this.uiTranslate('ui-text.coder-training.edit-title') : this.uiTranslate('ui-text.coder-training.create-title');
   }
 
   getPrimaryActionLabel(): string {
     if (this.isLoading()) {
-      return this.isEditMode ? this.uiTranslate('ui-text.coder-training.schulung-wird-aktualisiert') : this.uiTranslate('ui-text.coder-training.kodierungsauftraege-werden-erstellt');
+      return this.isEditMode ? this.uiTranslate('ui-text.coder-training.updating') : this.uiTranslate('ui-text.coder-training.creating-jobs');
     }
 
-    return this.isEditMode ? this.uiTranslate('coding-management-manual.buttons.refresh-training-aria') : this.uiTranslate('ui-text.coder-training.kodierungsauftraege-erstellen');
+    return this.isEditMode ? this.uiTranslate('coding-management-manual.buttons.refresh-training-aria') : this.uiTranslate('ui-text.coder-training.create-jobs');
   }
 
   getDuplicateTrainingLabelMatches(): CoderTraining[] {
@@ -633,8 +633,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     const ids = matches.slice(0, 3).map(training => `ID ${training.id}`).join(', ');
-    const suffix = matches.length > 3 ? this.uiTranslate('ui-text.coder-training.und-weitere', { value1: matches.length - 3 }) : '';
-    return this.uiTranslate('ui-text.coder-training.diese-bezeichnung-existiert-bereits-die-schulung-kann-trotzdem-erstellt-werden', { ids: ids, suffix: suffix });
+    const suffix = matches.length > 3 ? this.uiTranslate('ui-text.coder-training.more-trainings', { value1: matches.length - 3 }) : '';
+    return this.uiTranslate('ui-text.coder-training.duplicate-label-warning', { ids: ids, suffix: suffix });
   }
 
   getTrainingOptionTitle(training: CoderTraining): string {
@@ -682,34 +682,34 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.coder-training.aelteste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
       case 'newest_first':
-        return this.uiTranslate('ui-text.coder-training.neueste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.newest-first');
       case 'random':
-        return this.uiTranslate('ui-text.coder-training.zufaellige-faelle');
+        return this.uiTranslate('ui-text.coder-training.random-cases');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.coder-training.zufaellig-je-testgruppe');
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.coder-training.zufaellige-testgruppen');
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return this.uiTranslate('ui-text.coder-training.aelteste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.coder-training.nimmt-pro-variable-die-aeltesten-verfuegbaren-faelle-nach-erfassungsreihenfolge');
+        return this.uiTranslate('ui-text.coder-training.oldest-first-description');
       case 'newest_first':
-        return this.uiTranslate('ui-text.coder-training.nimmt-pro-variable-die-neuesten-verfuegbaren-faelle-nach-erfassungsreihenfolge');
+        return this.uiTranslate('ui-text.coder-training.newest-first-description');
       case 'random':
-        return this.uiTranslate('ui-text.coder-training.zieht-die-gewuenschte-anzahl-zufaellig-aus-allen-verfuegbaren-faellen-der-variable');
+        return this.uiTranslate('ui-text.coder-training.random-cases-description');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.coder-training.zieht-zufaellig-und-verteilt-die-auswahl-moeglichst-gleichmaessig-ueber-vorhandene-testgru');
+        return this.uiTranslate('ui-text.coder-training.random-per-group-description');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.coder-training.waehlt-zunaechst-zufaellige-testgruppen-und-zieht-faelle-innerhalb-dieser-gruppen');
+        return this.uiTranslate('ui-text.coder-training.random-groups-description');
       default:
-        return this.uiTranslate('ui-text.coder-training.nimmt-pro-variable-die-aeltesten-verfuegbaren-faelle-nach-erfassungsreihenfolge');
+        return this.uiTranslate('ui-text.coder-training.oldest-first-description');
     }
   }
 
@@ -725,7 +725,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const removedCount = this.removeSelectedDerivedVariables();
     if (removedCount > 0) {
-      this.showSuccess(this.uiTranslate('ui-text.coder-training.abgeleitete-variable-n-aus-der-auswahl-entfernt', { removedCount: removedCount }));
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.derived-variables-removed', { removedCount: removedCount }));
     }
   }
 
@@ -906,7 +906,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.coders.set(coders);
         },
         error: () => {
-          this.showError(this.uiTranslate('ui-text.coder-list.fehler-beim-laden-der-kodierer'));
+          this.showError(this.uiTranslate('ui-text.coder-list.load-failed'));
         }
       });
   }
@@ -914,18 +914,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
     const bundle = this.availableBundles().find(b => b.id === bundleId);
     if (!bundle) {
-      this.showError(this.uiTranslate('ui-text.coder-training.variablenbuendel-nicht-gefunden'));
+      this.showError(this.uiTranslate('ui-text.coder-training.bundle-not-found'));
       return;
     }
 
     if (bundle.variables.length === 0) {
-      this.showError(this.uiTranslate('ui-text.coder-training.das-gewaehlte-variablenbuendel-enthaelt-keine-variablen'));
+      this.showError(this.uiTranslate('ui-text.coder-training.empty-bundle'));
       return;
     }
 
     const sampleCountNum = sampleCount !== undefined ? Number(sampleCount) : undefined;
     if (sampleCountNum !== undefined && (Number.isNaN(sampleCountNum) || sampleCountNum < 1 || sampleCountNum > 1000)) {
-      this.showError(this.uiTranslate('ui-text.coder-training.ungueltige-stichprobenanzahl-muss-zwischen-1-und-1000-liegen'));
+      this.showError(this.uiTranslate('ui-text.coder-training.invalid-sample-count'));
       return;
     }
 
@@ -939,7 +939,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const skippedDerivedCount = bundle.variables.length - variablesToAdd.length;
 
     if (variablesToAdd.length === 0) {
-      this.showError(this.uiTranslate('ui-text.coder-training.das-variablenbuendel-enthaelt-nur-abgeleitete-variablen-aktivieren-sie-abgeleitete-variabl', { name: bundle.name }));
+      this.showError(this.uiTranslate('ui-text.coder-training.derived-only-bundle', { name: bundle.name }));
       return;
     }
 
@@ -963,11 +963,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (addedCount > 0 && !silent) {
       const skippedText = skippedDerivedCount > 0 ? ` (${skippedDerivedCount} abgeleitete ausgelassen)` : '';
-      this.showSuccess(this.uiTranslate('ui-text.coder-training.variable-n-aus-variablenbuendel-hinzugefuegt', { addedCount: addedCount, name: bundle.name, skippedText: skippedText }));
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.bundle-variables-added', { addedCount: addedCount, name: bundle.name, skippedText: skippedText }));
     }
 
     if (duplicateVariables.length > 0 && !silent) {
-      this.showError(this.uiTranslate('ui-text.coder-training.variable-n-waren-bereits-hinzugefuegt', { length: duplicateVariables.length, value2: duplicateVariables.join(', ') }));
+      this.showError(this.uiTranslate('ui-text.coder-training.duplicate-variables', { length: duplicateVariables.length, value2: duplicateVariables.join(', ') }));
     }
 
     this.setAvailableBundleCaseOrderingMode(bundleId, effectiveCaseOrderingMode);
@@ -1090,7 +1090,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     this.updateGroupedVariables();
-    this.showSuccess(this.uiTranslate('ui-text.coder-training.variablenbuendel-entfernt', { name: bundle.name }));
+    this.showSuccess(this.uiTranslate('ui-text.coder-training.bundle-removed', { name: bundle.name }));
     this.checkForOverlaps();
   }
 
@@ -1165,17 +1165,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   protected getValidationItems(): ValidationItem[] {
     return [
-      { id: 'label', label: this.uiTranslate('ui-text.coder-training.schulungs-bezeichnung-ausgefuellt'), valid: this.hasTrainingLabel() },
-      { id: 'coders', label: this.uiTranslate('ui-text.coder-training.mindestens-ein-kodierer-ausgewaehlt'), valid: this.hasSelectedCoders() },
-      { id: 'variables', label: this.uiTranslate('ui-text.coder-training.mindestens-eine-variable-ausgewaehlt'), valid: this.hasVariableSelection() },
-      { id: 'reference-mode', label: this.uiTranslate('ui-text.coder-training.vergleichsmodus-gewaehlt-wenn-vergleichsschulungen-gesetzt-sind'), valid: this.hasValidReferenceMode() },
-      { id: 'case-counts', label: this.uiTranslate('ui-text.coder-training.stichproben-pro-variable-liegen-innerhalb-verfuegbarer-faelle'), valid: this.hasValidCaseCounts() }
+      { id: 'label', label: this.uiTranslate('ui-text.coder-training.label-valid'), valid: this.hasTrainingLabel() },
+      { id: 'coders', label: this.uiTranslate('ui-text.coder-training.coder-selection-valid'), valid: this.hasSelectedCoders() },
+      { id: 'variables', label: this.uiTranslate('ui-text.coder-training.variable-selection-valid'), valid: this.hasVariableSelection() },
+      { id: 'reference-mode', label: this.uiTranslate('ui-text.coder-training.reference-mode-valid'), valid: this.hasValidReferenceMode() },
+      { id: 'case-counts', label: this.uiTranslate('ui-text.coder-training.sample-counts-valid'), valid: this.hasValidCaseCounts() }
     ];
   }
 
   getFirstValidationMessage(): string {
     const firstInvalidItem = this.getValidationItems().find(item => !item.valid);
-    return firstInvalidItem ? firstInvalidItem.label : this.uiTranslate('ui-text.coder-training.bitte-pruefen-sie-die-schulungseinstellungen');
+    return firstInvalidItem ? firstInvalidItem.label : this.uiTranslate('ui-text.coder-training.invalid-settings');
   }
 
   hasAtLeastOneVariableSelected(): boolean {
@@ -1241,7 +1241,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!this.canEditTraining) return;
     const parsedSampleCount = Number(newSampleCount);
     if (Number.isNaN(parsedSampleCount) || parsedSampleCount < 1 || parsedSampleCount > 1000) {
-      this.showError(this.uiTranslate('ui-text.coder-training.ungueltige-stichprobenanzahl-muss-zwischen-1-und-1000-liegen'));
+      this.showError(this.uiTranslate('ui-text.coder-training.invalid-sample-count'));
       return;
     }
 
@@ -1512,9 +1512,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           if (result.message) {
             translatedMessage = this.backendMessageTranslator.translateMessage(result.message);
           } else if (this.isEditMode) {
-            translatedMessage = this.uiTranslate('ui-text.coder-training.training-erfolgreich-aktualisiert');
+            translatedMessage = this.uiTranslate('ui-text.coder-training.update-success');
           } else {
-            translatedMessage = this.uiTranslate('ui-text.coder-training.erfolgreich-kodierungsauftraege-fuer-kodierer-erstellt', { jobsCreated: result.jobsCreated, length: selectedCoders.length });
+            translatedMessage = this.uiTranslate('ui-text.coder-training.jobs-created', { jobsCreated: result.jobsCreated, length: selectedCoders.length });
           }
 
           this.showSuccess(translatedMessage);
@@ -1524,14 +1524,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         } else {
           const translatedError = result.message ?
             this.backendMessageTranslator.translateMessage(result.message) :
-            this.uiTranslate('ui-text.coder-training.fehler-beim-speichern-der-kodierungsauftraege');
+            this.uiTranslate('ui-text.coder-training.save-failed');
           this.showError(translatedError);
         }
       },
       error: () => {
         this.isLoading.set(false);
 
-        this.showError(this.uiTranslate('ui-text.coder-training.fehler-beim-speichern-der-kodierungsauftraege'));
+        this.showError(this.uiTranslate('ui-text.coder-training.save-failed'));
       }
     });
   }
@@ -1618,9 +1618,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.checkForOverlaps();
 
     if (varsAdded > 0 || bundlesAdded > 0) {
-      this.showSuccess(this.uiTranslate('ui-text.coder-training.variable-n-und-buendel-hinzugefuegt', { varsAdded: varsAdded, bundlesAdded: bundlesAdded }));
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.variables-and-bundles-added', { varsAdded: varsAdded, bundlesAdded: bundlesAdded }));
     } else {
-      this.showSuccess(this.uiTranslate('ui-text.coder-training.alle-variablen-und-buendel-waren-bereits-vorhanden'));
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.selections-already-present'));
     }
   }
 

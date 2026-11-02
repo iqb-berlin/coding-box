@@ -47,12 +47,12 @@
               </div>
 
               <div class="filter-row availability-filter-row">
-                <span class="filter-label">{{ 'ui-text.job-variable-selection.verfuegbarkeit' | translate }}</span>
+                <span class="filter-label">{{ 'ui-text.job-variable-selection.availability' | translate }}</span>
                 <mat-button-toggle-group [value]="filters().availability" (change)="availabilityChanged.emit($event.value)">
                   <mat-button-toggle value="all">{{ 'coding.trainings.compare.all' | translate }}</mat-button-toggle>
-                  <mat-button-toggle value="full">{{ 'ui-text.job-variable-selection.vollstaendig-verfuegbar' | translate }}</mat-button-toggle>
-                  <mat-button-toggle value="partial">{{ 'ui-text.job-variable-selection.teilweise-verfuegbar' | translate }}</mat-button-toggle>
-                  <mat-button-toggle value="none">{{ 'ui-text.job-variable-selection.nicht-verfuegbar' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="full">{{ 'ui-text.job-variable-selection.fully-available' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="partial">{{ 'ui-text.job-variable-selection.partially-available' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="none">{{ 'ui-text.job-variable-selection.unavailable' | translate }}</mat-button-toggle>
                 </mat-button-toggle-group>
               </div>
             </div>
@@ -84,7 +84,7 @@
                 {{ allSelected() ? ('manual-coding-export.deselect-all' | translate) : ('manual-coding-export.select-all' | translate) }}
               </button>
               <div class="selection-count">
-                {{ 'ui-text.job-variable-selection.von-variablen-ausgewaehlt' | translate: { value1: (selectedCount()), value2: (rows().length) } }}
+                {{ 'ui-text.job-variable-selection.selected-count' | translate: { value1: (selectedCount()), value2: (rows().length) } }}
               </div>
             </div>
 
@@ -105,7 +105,7 @@
                         <span class="variable-id-text">{{ variable.unitName }}_{{ variable.variableId }}</span>
                         @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
                         <mat-chip class="availability-chip" [class]="row.availabilityClass">
-                          {{ 'ui-text.job-variable-selection.verfuegbar' | translate: { availabilityText: (row.availabilityText) } }}
+                          {{ 'ui-text.job-variable-selection.available' | translate: { availabilityText: (row.availabilityText) } }}
                         </mat-chip>
                         } @else if (variable.responseCount !== null && variable.responseCount !== undefined) {
                         <span class="response-count">({{ variable.responseCount }})</span>
@@ -125,9 +125,9 @@
                         </mat-chip>
                         }
                         @if (variable.isDerived) {
-                        <mat-chip class="derived-chip" [matTooltip]="'ui-text.training-sample-editor.abgeleitete-variable' | translate" matTooltipPosition="above">
+                        <mat-chip class="derived-chip" [matTooltip]="'ui-text.training-sample-editor.derived-variable' | translate" matTooltipPosition="above">
                           <mat-icon class="derived-chip-icon">merge_type</mat-icon>
-                          {{ 'ui-text.job-variable-selection.abgeleitet' | translate }}
+                          {{ 'ui-text.job-variable-selection.derived' | translate }}
                         </mat-chip>
                         }
 	                      </div>
@@ -138,7 +138,7 @@
                             [checked]="row.includeDeriveError"
                             [disabled]="readOnly() || row.disabled || !row.selected"
                             (change)="deriveErrorChanged.emit({variable, included: $event.checked})">
-                            {{ 'ui-text.job-variable-selection.derive-error-einbeziehen' | translate }}
+                            {{ 'ui-text.job-variable-selection.include-derive-errors' | translate }}
                           </mat-checkbox>
                         </div>
                         }

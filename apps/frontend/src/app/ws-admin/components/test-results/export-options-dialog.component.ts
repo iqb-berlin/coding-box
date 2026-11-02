@@ -37,14 +37,14 @@ export interface ExportOptions {
     MatCheckboxModule
   ],
   template: `
-    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.export-optionen' | translate }}</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.title' | translate }}</h1>
     <div mat-dialog-content>
-      <p>{{ 'ui-text.export-options-dialog.waehlen-sie-die-daten-aus-die-exportiert-werden-sollen' | translate }}</p>
+      <p>{{ 'ui-text.export-options-dialog.description' | translate }}</p>
 
       @if (dialogData?.exportType === 'results') {
         <div class="export-extra-options">
           <mat-checkbox [(ngModel)]="data.includeLogAnomalies">
-            {{ 'ui-text.export-options-dialog.log-auffaelligkeiten-als-zusatzspalten-exportieren' | translate }}
+            {{ 'ui-text.export-options-dialog.include-log-anomalies' | translate }}
           </mat-checkbox>
         </div>
       }
@@ -82,7 +82,7 @@ export interface ExportOptions {
           </div>
         </mat-tab>
 
-        <mat-tab [label]="'ui-text.files-validation.testhefte' | translate">
+        <mat-tab [label]="'ui-text.files-validation.booklets' | translate">
           <div class="selection-actions">
             <button mat-button (click)="bookletsList.selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
             <button mat-button (click)="bookletsList.deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>

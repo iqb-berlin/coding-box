@@ -74,7 +74,7 @@ export class GithubReleasesDialogComponent implements OnInit {
         },
         error: () => {
           this.isLoading.set(false);
-          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.fehler-beim-laden-der-releases-von-github'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.load-failed'), 'OK', { duration: 3000 });
         }
       });
   }
@@ -86,15 +86,15 @@ export class GithubReleasesDialogComponent implements OnInit {
         next: success => {
           this.isLoading.set(false);
           if (success) {
-            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.erfolgreich-installiert', { name: release.name }), 'OK', { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-success', { name: release.name }), 'OK', { duration: 3000 });
             this.dialogRef.close(true);
           } else {
-            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.installation-fehlgeschlagen'), 'OK', { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-failed'), 'OK', { duration: 3000 });
           }
         },
         error: () => {
           this.isLoading.set(false);
-          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.fehler-bei-der-installation'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-error'), 'OK', { duration: 3000 });
         }
       });
   }

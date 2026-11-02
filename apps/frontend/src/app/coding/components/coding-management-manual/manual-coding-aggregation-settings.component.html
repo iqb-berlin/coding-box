@@ -21,10 +21,10 @@
                                     </mat-form-field>
                                     <div class="threshold-help">
                                       <small>
-                                        {{ 'ui-text.manual-coding-aggregation-settings.niedriger-weniger-kodierfaelle-mehr-automatische-uebertragung-hoeher-mehr-einzelfaelle' | translate }}
+                                        {{ 'ui-text.manual-coding-aggregation-settings.threshold-hint' | translate }}
                                       </small>
                                       <small>
-                                        {{ 'ui-text.manual-coding-aggregation-settings.aenderungen-gelten-fuer-neue-analysen-und-neu-erstellte-kodierjobs-bestehende-kodierjobs-b' | translate }}
+                                        {{ 'ui-text.manual-coding-aggregation-settings.new-jobs-only-hint' | translate }}
                                       </small>
                                     </div>
                                     @if (isApplyingDuplicateAggregation()) {
@@ -32,7 +32,7 @@
                                         class="saving-indicator"
                                         >
                                         <mat-spinner diameter="20"></mat-spinner>
-                                        <span>{{ 'ui-text.manual-coding-aggregation-settings.speichern' | translate }}</span>
+                                        <span>{{ 'ui-text.manual-coding-aggregation-settings.saving' | translate }}</span>
                                       </div>
                                     }
                                   </div>

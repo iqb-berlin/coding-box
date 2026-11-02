@@ -2,20 +2,20 @@
     <!-- Variable Basis Section -->
     <div class="section">
       <div class="section-header">
-        <h3 class="section-subtitle">{{ 'ui-text.training-sample-editor.variablenbasis' | translate }}</h3>
+        <h3 class="section-subtitle">{{ 'ui-text.training-sample-editor.variable-source' | translate }}</h3>
       </div>
 
       <div class="variable-basis-panel">
         <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
-          {{ 'ui-text.training-sample-editor.abgeleitete-variablen-einbeziehen' | translate }}
+          {{ 'ui-text.training-sample-editor.include-derived' | translate }}
           @if (view().derivedCount > 0) {
             <span class="derived-count">
-              {{ 'ui-text.training-sample-editor.verfuegbar' | translate: { value1: (view().derivedCount) } }}
+              {{ 'ui-text.training-sample-editor.available-count' | translate: { value1: (view().derivedCount) } }}
             </span>
           }
         </mat-checkbox>
         <span class="basis-meta">
-          {{ 'ui-text.training-sample-editor.standard-einbezogen' | translate }}
+          {{ 'ui-text.training-sample-editor.included-by-default' | translate }}
         </span>
       </div>
     </div>
@@ -36,7 +36,7 @@
           }
           @if (!loadingBundles() && view().bundleCount > 0) {
             <span class="bundle-count">
-              {{ 'ui-text.training-sample-editor.verfuegbare-variablenbuendel' | translate: { value1: (view().bundleCount) } }}
+              {{ 'ui-text.training-sample-editor.available-bundles' | translate: { value1: (view().bundleCount) } }}
             </span>
           }
         </h3>
@@ -44,7 +44,7 @@
           <button mat-stroked-button color="primary" type="button" (click)="importRequested.emit()"
             [disabled]="!editable() || loadingVariables() || loadingBundles()">
             <mat-icon>download</mat-icon>
-            {{ 'ui-text.training-sample-editor.aus-jobdefinition-importieren' | translate }}
+            {{ 'ui-text.training-sample-editor.import-definition' | translate }}
           </button>
         </div>
       </div>
@@ -53,13 +53,13 @@
         <div class="bundle-selection">
           <div class="bundle-select-container">
             <mat-form-field appearance="outline" class="bundle-select-field">
-              <mat-label>{{ 'ui-text.training-sample-editor.variablenbuendel-auswaehlen' | translate }}</mat-label>
-              <mat-select [placeholder]="'ui-text.training-sample-editor.variablenbuendel-auswaehlen' | translate" multiple [value]="view().selectedBundleIds" [disabled]="!editable()"
+              <mat-label>{{ 'ui-text.training-sample-editor.select-bundles' | translate }}</mat-label>
+              <mat-select [placeholder]="'ui-text.training-sample-editor.select-bundles' | translate" multiple [value]="view().selectedBundleIds" [disabled]="!editable()"
                 (selectionChange)="bundlesChanged.emit($event.value)">
                 <div class="select-search-container">
                   <mat-form-field appearance="fill" class="select-search-field">
                     <mat-icon matPrefix>search</mat-icon>
-                    <input matInput [formControl]="bundleFilterCtrl()" [placeholder]="'ui-text.training-sample-editor.suchen' | translate"
+                    <input matInput [formControl]="bundleFilterCtrl()" [placeholder]="'ui-text.training-sample-editor.search' | translate"
                       (keydown)="$event.stopPropagation()">
                   </mat-form-field>
                 </div>
@@ -69,13 +69,13 @@
                     [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                     {{bundle.name}}
                     <span class="bundle-variable-count">
-                      {{ 'ui-text.training-sample-editor.variablen' | translate: { effectiveCount: (option.effectiveCount), value2: (form().controls.includeDerivedVariables.value ? '' : ' von ' + bundle.variables.length) } }}
+                      {{ 'ui-text.training-sample-editor.variable-summary' | translate: { effectiveCount: (option.effectiveCount), value2: (form().controls.includeDerivedVariables.value ? '' : ' von ' + bundle.variables.length) } }}
                     </span>
                     @if (option.derivedCount > 0) {
                       <span
                         class="derived-chip compact"
-                        [matTooltip]="'ui-text.training-sample-editor.dieses-variablenbuendel-enthaelt-abgeleitete-variablen' | translate">
-                        {{ 'ui-text.training-sample-editor.abgeleitet' | translate: { derivedCount: (option.derivedCount) } }}
+                        [matTooltip]="'ui-text.training-sample-editor.bundle-has-derived' | translate">
+                        {{ 'ui-text.training-sample-editor.derived-count' | translate: { derivedCount: (option.derivedCount) } }}
                       </span>
                     }
                   </mat-option>
@@ -90,13 +90,13 @@
                 <div class="bundle-header">
                   <h4 class="bundle-title">
                     <mat-icon>inventory_2</mat-icon>
-                    {{ 'ui-text.training-sample-editor.variablenbuendel' | translate: { name: (bundleGroup.bundle.name) } }}
-                    <span class="bundle-variable-count-badge">{{ 'ui-text.training-sample-editor.variablen-2b11ae' | translate: { length: (bundleGroup.variables.length) } }}</span>
+                    {{ 'ui-text.training-sample-editor.bundle-name' | translate: { name: (bundleGroup.bundle.name) } }}
+                    <span class="bundle-variable-count-badge">{{ 'ui-text.training-sample-editor.bundle-variable-count' | translate: { length: (bundleGroup.variables.length) } }}</span>
                     @if (bundleGroup.derivedCount > 0) {
                       <span
                         class="derived-chip"
-                        [matTooltip]="'ui-text.training-sample-editor.abgeleitete-variablen-im-buendel-werden-standardmaessig-einbezogen' | translate">
-                        {{ 'ui-text.training-sample-editor.abgeleitet-enthalten' | translate }}
+                        [matTooltip]="'ui-text.training-sample-editor.derived-included-hint' | translate">
+                        {{ 'ui-text.training-sample-editor.derived-included' | translate }}
                       </span>
                     }
                   </h4>
@@ -104,12 +104,12 @@
                     <!-- Case Count Validation Warning for Bundle -->
                     @if (bundleGroup.insufficient) {
                       <div class="insufficient-cases-warning"
-                        [matTooltip]="'ui-text.training-sample-editor.dieses-variablenbuendel-enthaelt-variablen-mit-weniger-als-verfuegbaren-faellen' | translate: { sampleCount: (bundleGroup.sampleCount) }">
+                        [matTooltip]="'ui-text.training-sample-editor.bundle-insufficient-cases' | translate: { sampleCount: (bundleGroup.sampleCount) }">
                         <mat-icon color="warn">warning</mat-icon>
                       </div>
                     }
                     <mat-form-field appearance="outline" class="bundle-sample-field">
-                      <mat-label>{{ 'ui-text.training-sample-editor.stichproben-pro-variable' | translate }}</mat-label>
+                      <mat-label>{{ 'ui-text.training-sample-editor.samples-per-variable' | translate }}</mat-label>
                       <input matInput #bundleSampleInput type="number" [value]="bundleGroup.sampleCount" [disabled]="!editable()"
                         (input)="bundleSampleChanged.emit({id: bundleGroup.bundle.id, value: bundleSampleInput.value})" min="1"
                         max="1000">
@@ -134,7 +134,7 @@
                 <div class="bundle-ordering-note">
                   <mat-icon>swap_vert</mat-icon>
                   <span>
-                    {{ 'ui-text.training-sample-editor.reihenfolge' | translate: { orderingLabel: (bundleGroup.orderingLabel) } }}
+                    {{ 'ui-text.training-sample-editor.ordering' | translate: { orderingLabel: (bundleGroup.orderingLabel) } }}
                   </span>
                 </div>
                 @if (bundleGroup.variables.length && bundleGroup.deriveErrorRows.length > 0) {
@@ -144,7 +144,7 @@
                       <mat-checkbox
                         [checked]="variableItem.control.controls.includeDeriveError.value" [disabled]="!editable()"
                         (change)="deriveErrorChanged.emit({control: variableItem.control, included: $event.checked})"
-                        [matTooltip]="'ui-text.training-sample-editor.derive-error-faelle-dieser-buendelvariable-zusaetzlich-in-die-schulungsstichprobe-aufnehme' | translate">
+                        [matTooltip]="'ui-text.training-sample-editor.bundle-derive-errors-hint' | translate">
                         {{variableItem.control.get('unitId')?.value}} - {{variableItem.control.get('variableId')?.value}}
                         @if (variableItem.deriveErrorCount > 0) {
                           <span>
@@ -180,12 +180,12 @@
             <span class="loading-text">
               <mat-progress-spinner mode="indeterminate" diameter="16"
               style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
-              {{ 'ui-text.training-sample-editor.lade-verfuegbare-variablen' | translate }}
+              {{ 'ui-text.training-sample-editor.loading-variables' | translate }}
             </span>
           }
           @if (!loadingVariables() && view().variableCount > 0) {
             <span class="variable-count">
-              {{ 'ui-text.training-sample-editor.verfuegbare-variablen' | translate: { value1: (view().variableCount) } }}
+              {{ 'ui-text.training-sample-editor.available-variables' | translate: { value1: (view().variableCount) } }}
             </span>
           }
         </h3>
@@ -194,13 +194,13 @@
       <div class="variable-selection-controls">
         <div class="variable-selection-row">
           <mat-form-field appearance="outline" class="variable-multiselect-field">
-            <mat-label>{{ 'ui-text.training-sample-editor.variablen-auswaehlen' | translate }}</mat-label>
-            <mat-select [placeholder]="'ui-text.training-sample-editor.variable-n-auswaehlen' | translate" multiple [value]="view().manualKeys" [disabled]="!editable()"
+            <mat-label>{{ 'ui-text.training-sample-editor.select-variables' | translate }}</mat-label>
+            <mat-select [placeholder]="'ui-text.training-sample-editor.select-variable' | translate" multiple [value]="view().manualKeys" [disabled]="!editable()"
               (selectionChange)="variablesChanged.emit($event.value)">
               <div class="select-search-container">
                 <mat-form-field appearance="fill" class="select-search-field">
                   <mat-icon matPrefix>search</mat-icon>
-                  <input matInput [formControl]="variableFilterCtrl()" [placeholder]="'ui-text.training-sample-editor.suchen' | translate"
+                  <input matInput [formControl]="variableFilterCtrl()" [placeholder]="'ui-text.training-sample-editor.search' | translate"
                     (keydown)="$event.stopPropagation()">
                 </mat-form-field>
               </div>
@@ -208,14 +208,14 @@
                 @let variable = option.variable;
                 <mat-option
                   [value]="variable.unitName + '::' + variable.variableId">
-                  {{ 'ui-text.training-sample-editor.faelle' | translate: { unitName: (variable.unitName), variableId: (variable.variableId), responseCount: (variable.responseCount) } }}
+                  {{ 'ui-text.training-sample-editor.variable-case-count' | translate: { unitName: (variable.unitName), variableId: (variable.variableId), responseCount: (variable.responseCount) } }}
                   @if ((variable.deriveErrorResponseCount || 0) > 0) {
                     <span class="derive-error-chip compact">
-                      {{ 'ui-text.training-sample-editor.derive-error' | translate: { deriveErrorResponseCount: (variable.deriveErrorResponseCount) } }}
+                      {{ 'ui-text.training-sample-editor.derive-error-count' | translate: { deriveErrorResponseCount: (variable.deriveErrorResponseCount) } }}
                     </span>
                   }
                   @if (option.derived) {
-                    <span class="derived-chip compact">{{ 'ui-text.training-sample-editor.abgeleitet-a7087b' | translate }}</span>
+                    <span class="derived-chip compact">{{ 'ui-text.training-sample-editor.derived-label' | translate }}</span>
                   }
                 </mat-option>
               }
@@ -229,7 +229,7 @@
               color="primary"
               (click)="selectAllVariables.emit()"
               [disabled]="!editable() || !view().hasSelectableVariables"
-              [matTooltip]="'ui-text.training-sample-editor.waehlt-alle-aktuell-gefilterten-manuell-auswaehlbaren-variablen-aus-variablenbuendel-bleib' | translate">
+              [matTooltip]="'ui-text.training-sample-editor.select-all-hint' | translate">
               <mat-icon>select_all</mat-icon>
               {{ 'manual-coding-export.select-all' | translate }}
             </button>
@@ -238,7 +238,7 @@
               type="button"
               (click)="clearVariables.emit()"
               [disabled]="!editable() || !view().hasManualVariables"
-              [matTooltip]="'ui-text.training-sample-editor.entfernt-nur-die-manuell-ausgewaehlten-variablen-variablen-aus-variablenbuendeln-bleiben-e' | translate">
+              [matTooltip]="'ui-text.training-sample-editor.clear-manual-selection-hint' | translate">
               <mat-icon>clear_all</mat-icon>
               {{ 'manual-coding-export.deselect-all' | translate }}
             </button>
@@ -250,7 +250,7 @@
         <!-- Manual Variables -->
         @if (view().manual.length > 0) {
           <div>
-            <h4 class="variable-section-title">{{ 'ui-text.training-sample-editor.hinzugefuegte-variablen' | translate }}</h4>
+            <h4 class="variable-section-title">{{ 'ui-text.training-sample-editor.added-variables' | translate }}</h4>
             <div class="variable-list">
               @for (item of view().manual; track item.control) {
                 <div class="variable-item" [formGroup]="item.control"
@@ -264,18 +264,18 @@
                     @if (item.derived) {
                       <span
                         class="derived-chip"
-                        [matTooltip]="'ui-text.training-sample-editor.abgeleitete-variable' | translate">
-                        {{ 'ui-text.training-sample-editor.abgeleitet-a7087b' | translate }}
+                        [matTooltip]="'ui-text.training-sample-editor.derived-variable' | translate">
+                        {{ 'ui-text.training-sample-editor.derived-label' | translate }}
                       </span>
                     }
                   </div>
                   <mat-form-field appearance="outline" class="sample-count-field density-compact"
                     [class.insufficient-input]="item.insufficient">
-                    <mat-label>{{ 'ui-text.training-sample-editor.stichproben-pro-variable' | translate }}</mat-label>
+                    <mat-label>{{ 'ui-text.training-sample-editor.samples-per-variable' | translate }}</mat-label>
                     <input matInput type="number" formControlName="sampleCount" min="1" [max]="item.availableCount">
                     @if (item.insufficient) {
                       <mat-hint class="warn-text">
-                        {{ 'ui-text.training-sample-editor.max-faelle-verfuegbar' | translate: { availableCount: (item.availableCount) } }}
+                        {{ 'ui-text.training-sample-editor.available-case-limit' | translate: { availableCount: (item.availableCount) } }}
                       </mat-hint>
                     }
                   </mat-form-field>
@@ -284,8 +284,8 @@
                       class="derive-error-checkbox"
                       [checked]="item.control.controls.includeDeriveError.value" [disabled]="!editable()"
                       (change)="deriveErrorChanged.emit({control: item.control, included: $event.checked})"
-                      [matTooltip]="'ui-text.training-sample-editor.derive-error-faelle-dieser-variable-zusaetzlich-in-die-schulungsstichprobe-aufnehmen' | translate">
-                      {{ 'ui-text.training-sample-editor.derive-error-debd8a' | translate }}
+                      [matTooltip]="'ui-text.training-sample-editor.derive-errors-hint' | translate">
+                      {{ 'ui-text.training-sample-editor.derive-error-label' | translate }}
                       @if (item.deriveErrorCount > 0) {
                         <span>
                           ({{item.deriveErrorCount}})
@@ -297,14 +297,14 @@
                   <div class="warning-container">
                     @if (item.control.get('overlapWarning')?.value) {
                       <div class="overlap-warning"
-                        [matTooltip]="'ui-text.training-sample-editor.diese-variable-ist-auch-in-einem-ausgewaehlten-variablenbuendel-enthalten' | translate">
+                        [matTooltip]="'ui-text.training-sample-editor.overlap-warning' | translate">
                         <mat-icon>warning</mat-icon>
-                        <span>{{ 'ui-text.training-sample-editor.doppelt' | translate }}</span>
+                        <span>{{ 'ui-text.training-sample-editor.duplicate' | translate }}</span>
                       </div>
                     }
                     @if (item.insufficient) {
                       <div class="insufficient-cases-warning"
-                        [matTooltip]="('ui-text.training-sample-editor.ungueltige-stichprobenanzahl-nur' | translate) + item.availableCount + ('ui-text.training-sample-editor.faelle-verfuegbar' | translate)">
+                        [matTooltip]="('ui-text.training-sample-editor.insufficient-cases-prefix' | translate) + item.availableCount + ('ui-text.training-sample-editor.available-cases-suffix' | translate)">
                         <mat-icon color="warn">warning</mat-icon>
                       </div>
                     }

@@ -73,49 +73,49 @@ export class ManualCodingCompletionViewComponent {
 
   protected getCompletionActionTitle(): string {
     if (this.isCompletionComplete()) {
-      return this.uiTranslate('ui-text.coding-management-manual.alle-ergebnisse-sind-uebernommen');
+      return this.uiTranslate('ui-text.coding-management-manual.results-applied');
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
       if (this.hasCompletedJobsBlockedForReview()) {
-        return this.uiTranslate('ui-text.coding-management-manual.abgeschlossene-kodierjob-s-bereit-zum-anwenden-mit-offenen-hinweisen', { value1: this.completedJobsReadyForApply().length, value2: this.completedJobsBlockedForReview().length });
+        return this.uiTranslate('ui-text.coding-management-manual.ready-jobs-with-issues', { value1: this.completedJobsReadyForApply().length, value2: this.completedJobsBlockedForReview().length });
       }
-      return this.uiTranslate('ui-text.coding-management-manual.abgeschlossene-kodierjob-s-bereit-zum-anwenden', { value1: this.completedJobsReadyForApply().length });
+      return this.uiTranslate('ui-text.coding-management-manual.ready-jobs', { value1: this.completedJobsReadyForApply().length });
     }
 
     if (this.hasCompletedJobsBlockedForReview()) {
-      return this.uiTranslate('ui-text.coding-management-manual.abgeschlossene-kodierjob-s-benoetigen-review', { value1: this.completedJobsBlockedForReview().length });
+      return this.uiTranslate('ui-text.coding-management-manual.jobs-require-review', { value1: this.completedJobsBlockedForReview().length });
     }
 
     if (this.hasExecutionOpenWork()) {
-      return this.uiTranslate('ui-text.coding-management-manual.noch-nicht-alle-kodierfaelle-sind-abgeschlossen');
+      return this.uiTranslate('ui-text.coding-management-manual.execution-incomplete');
     }
 
-    return this.uiTranslate('ui-text.coding-management-manual.keine-uebernahmebereiten-kodierjobs-gefunden');
+    return this.uiTranslate('ui-text.coding-management-manual.no-ready-jobs');
   }
 
   protected getCompletionActionDescription(): string {
     if (this.isCompletionComplete()) {
-      return this.uiTranslate('ui-text.manual-coding-completion-view.die-manuelle-kodierung-ist-abgeschlossen-und-die-ergebnisse-sind-final-in-den-datenbestand');
+      return this.uiTranslate('ui-text.manual-coding-completion-view.completion-hint');
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
       if (!this.canApplyCompletedJobResults()) {
-        return this.uiTranslate('ui-text.manual-coding-completion-view.fuer-das-anwenden-der-job-ergebnisse-ist-eine-hoehere-berechtigung-erforderlich');
+        return this.uiTranslate('ui-text.manual-coding-completion-view.apply-permission-required');
       }
 
-      return this.uiTranslate('ui-text.manual-coding-completion-view.uebernehmen-sie-die-abgeschlossenen-job-ergebnisse-hier-direkt-in-die-antwortdaten');
+      return this.uiTranslate('ui-text.manual-coding-completion-view.apply-ready-hint');
     }
 
     if (this.hasCompletedJobsBlockedForReview()) {
-      return this.uiTranslate('ui-text.manual-coding-completion-view.mindestens-ein-abgeschlossener-job-enthaelt-markierungen-wie-code-vergabe-unsicher-oder-ne');
+      return this.uiTranslate('ui-text.manual-coding-completion-view.review-jobs-hint');
     }
 
     if (this.hasExecutionOpenWork()) {
-      return this.uiTranslate('ui-text.manual-coding-completion-view.schliessen-sie-die-offenen-kodierfaelle-ab-danach-koennen-die-ergebnisse-hier-uebernommen');
+      return this.uiTranslate('ui-text.manual-coding-completion-view.finish-cases-hint');
     }
 
-    return this.uiTranslate('ui-text.manual-coding-completion-view.aktualisieren-sie-die-ansicht-oder-pruefen-sie-die-kodierjobs-falls-sie-gerade-einen-job-a');
+    return this.uiTranslate('ui-text.manual-coding-completion-view.refresh-jobs-hint');
   }
 
   protected canShowCompletedJobApplyActions(): boolean {
@@ -134,10 +134,10 @@ export class ManualCodingCompletionViewComponent {
     const codedUnits = job.codedUnits ?? 0;
 
     if (totalUnits > 0) {
-      return this.uiTranslate('ui-text.coding-management-manual.ergebnisse-kodiert', { codedUnits: codedUnits, totalUnits: totalUnits });
+      return this.uiTranslate('ui-text.coding-management-manual.coded-results', { codedUnits: codedUnits, totalUnits: totalUnits });
     }
 
-    return this.uiTranslate('ui-text.coding-management-manual.kodierergebnisse-vorhanden');
+    return this.uiTranslate('ui-text.coding-management-manual.results-available');
   }
 
   protected isApplyingJobResults(jobId: number): boolean {

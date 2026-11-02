@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ data.readOnly ? data.bundleGroup?.name : (data.isEdit ? ('ui-text.variable-bundle-dialog.variablenbuendel-bearbeiten' | translate) : ('ui-text.variable-bundle-dialog.neues-variablenbuendel-erstellen' | translate)) }}</h2>
+  <h2 class="dialog-title">{{ data.readOnly ? data.bundleGroup?.name : (data.isEdit ? ('ui-text.variable-bundle-dialog.edit-title' | translate) : ('ui-text.variable-bundle-dialog.create-title' | translate)) }}</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -9,22 +9,22 @@
 
         <mat-form-field appearance="fill" class="full-width">
           <mat-label>{{ 'user.full-name' | translate }}</mat-label>
-          <input matInput formControlName="name" [placeholder]="'ui-text.variable-bundle-dialog.name-des-variablenbuendels' | translate" required>
+          <input matInput formControlName="name" [placeholder]="'ui-text.variable-bundle-dialog.name-placeholder' | translate" required>
           @if (bundleGroupForm.get('name')?.invalid && bundleGroupForm.get('name')?.touched) {
-            <mat-error>{{ 'ui-text.variable-bundle-dialog.name-ist-erforderlich' | translate }}</mat-error>
+            <mat-error>{{ 'ui-text.variable-bundle-dialog.name-required' | translate }}</mat-error>
           }
         </mat-form-field>
 
         <mat-form-field appearance="fill" class="full-width">
           <mat-label>{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-label>
-          <textarea matInput formControlName="description" [placeholder]="'ui-text.variable-bundle-dialog.beschreibung-des-variablenbuendels' | translate"
+          <textarea matInput formControlName="description" [placeholder]="'ui-text.variable-bundle-dialog.description-placeholder' | translate"
           rows="3"></textarea>
         </mat-form-field>
       </div>
 
       <div class="form-section">
-        <h3>{{ 'ui-text.variable-bundle-dialog.variablen-im-buendel' | translate }}</h3>
-        <p class="section-description">{{ 'ui-text.variable-bundle-dialog.waehlen-sie-die-variablen-aus-die-diesem-buendel-zugewiesen-werden-sollen' | translate }}</p>
+        <h3>{{ 'ui-text.variable-bundle-dialog.variables' | translate }}</h3>
+        <p class="section-description">{{ 'ui-text.variable-bundle-dialog.selection-hint' | translate }}</p>
 
         <!-- Filter controls -->
         <div class="filter-container">
@@ -76,7 +76,7 @@
         @if (!isLoadingVariableAnalysis() && availableVariables().length > 0) {
           <div class="quick-selection-tools">
             <div class="selection-count">
-              {{ 'ui-text.variable-bundle-dialog.von-variablen-ausgewaehlt' | translate: { length: (selectedVariables.selected.length), value2: (filteredVariables().length) } }}
+              {{ 'ui-text.variable-bundle-dialog.selected-count' | translate: { length: (selectedVariables.selected.length), value2: (filteredVariables().length) } }}
             </div>
             <div class="selection-actions">
               <button mat-button color="primary" type="button" (click)="selectAll()" [disabled]="!!data.readOnly">

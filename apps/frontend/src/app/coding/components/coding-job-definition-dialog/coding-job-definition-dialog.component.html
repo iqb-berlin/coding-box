@@ -215,7 +215,7 @@
               (capacityChanged)="updateCoderCapacityPercent($event.coder, $event.value)" />
           </mat-tab>
 
-          <mat-tab [label]="'ui-text.coding-job-definition-dialog.einzelne-variablen' | translate">
+          <mat-tab [label]="'ui-text.coding-job-definition-dialog.individual-variables' | translate">
             <coding-box-job-variable-selection [rows]="variableSelectionRows()" [filters]="variableSelectionFilters()"
               [totalVariables]="variables().length" [selectedCount]="selectedVariableValues().length"
               [allSelected]="isAllSelected()" [loading]="isLoadingVariableAnalysis()" [readOnly]="isReadOnly"

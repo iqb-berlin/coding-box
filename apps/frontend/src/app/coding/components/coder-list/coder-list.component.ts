@@ -106,7 +106,7 @@ export class CoderListComponent implements OnInit {
         this.isLoading.set(false);
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coder-list.fehler-beim-laden-der-kodierer'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.isLoading.set(false);
       }
     });
@@ -140,7 +140,7 @@ export class CoderListComponent implements OnInit {
 
   createCoder(): void {
     if (this.coderForm.invalid) {
-      this.snackBar.open(this.uiTranslate('ui-text.coder-list.bitte-fuellen-sie-alle-erforderlichen-felder-aus'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.required-fields'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -148,12 +148,12 @@ export class CoderListComponent implements OnInit {
 
     this.coderService.createCoder(newCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coder-list.kodierer-erfolgreich-erstellt'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.create-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.loadCoders();
         this.coderForm.reset();
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coder-list.fehler-beim-erstellen-des-kodierers'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.create-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -176,7 +176,7 @@ export class CoderListComponent implements OnInit {
 
   updateCoder(): void {
     if (this.coderForm.invalid || !this.editingCoderId) {
-      this.snackBar.open(this.uiTranslate('ui-text.coder-list.bitte-fuellen-sie-alle-erforderlichen-felder-aus'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.required-fields'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -184,32 +184,32 @@ export class CoderListComponent implements OnInit {
 
     this.coderService.updateCoder(this.editingCoderId, updatedCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coder-list.kodierer-erfolgreich-aktualisiert'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.update-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.loadCoders();
         this.isEditing = false;
         this.editingCoderId = null;
         this.coderForm.reset();
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coder-list.fehler-beim-aktualisieren-des-kodierers'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.update-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
 
   deleteCoders(): void {
     if (this.selection.selected.length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.coder-list.bitte-waehlen-sie-mindestens-einen-kodierer-aus'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.selection-required'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
     const deletePromises = this.selection.selected.map(coder => this.coderService.deleteCoder(coder.id));
 
     Promise.all(deletePromises).then(() => {
-      this.snackBar.open(this.uiTranslate('ui-text.coder-list.kodierer-erfolgreich-geloescht'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.delete-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       this.loadCoders();
       this.selection.clear();
     }).catch(() => {
-      this.snackBar.open(this.uiTranslate('ui-text.coder-list.fehler-beim-loeschen-der-kodierer'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.delete-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
     });
   }
 

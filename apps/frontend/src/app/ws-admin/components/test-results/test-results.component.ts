@@ -361,7 +361,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
         );
         if (myBatch) {
-          this.imports.updateUploadProgress(true, this.uiTranslate('ui-text.test-results.verarbeite-dateien', { progress: myBatch.progress, completedCount: myBatch.completedCount, totalJobs: myBatch.totalJobs }));
+          this.imports.updateUploadProgress(true, this.uiTranslate('ui-text.test-results.processing-files', { progress: myBatch.progress, completedCount: myBatch.completedCount, totalJobs: myBatch.totalJobs }));
           this.isLoading.set(true);
         } else {
           this.imports.updateUploadProgress(false);
@@ -549,19 +549,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   replayBooklet(booklet: Booklet) {
     if (!booklet || !booklet.name) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.ungueltiges-testheft'), 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.invalid-booklet'), 'Info', { duration: 3000 });
       return;
     }
 
     const testPerson = this.buildReplayTestPerson(booklet.name);
     if (!testPerson) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-gueltige-testperson-ausgewaehlt'), 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.invalid-person'), 'Info', {
         duration: 3000
       });
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.lade-testheft'), '', {
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.loading-booklet'), '', {
       duration: 3000
     });
 
@@ -580,7 +580,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             !bookletReplay.units ||
             bookletReplay.units.length === 0
           ) {
-            this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-units-im-testheft-vorhanden'), 'Info', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results.no-booklet-units'), 'Info', {
               duration: 3000
             });
             return;
@@ -610,7 +610,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             bookletReplay.skippedUnits > 0
           ) {
             this.snackBar.open(
-              this.uiTranslate('ui-text.test-results.nicht-replaybare-booklet-units-wurden-uebersprungen', { skippedUnits: bookletReplay.skippedUnits }),
+              this.uiTranslate('ui-text.test-results.skipped-unreplayable-units', { skippedUnits: bookletReplay.skippedUnits }),
               'Info',
               { duration: 5000 }
             );
@@ -618,7 +618,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           loadingSnackBar.dismiss();
-          this.snackBar.open(this.uiTranslate('ui-text.test-results.fehler-beim-laden-des-testhefts'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results.booklet-load-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 3000
           });
         }
@@ -650,7 +650,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       !this.appService.selectedWorkspaceId
     ) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.test-results.keine-gueltige-unit-oder-testperson-ausgewaehlt'),
+        this.uiTranslate('ui-text.test-results.invalid-unit-or-person'),
         'Info',
         { duration: 3000 }
       );
@@ -658,7 +658,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     if (!this.responses() || this.responses().length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-antworten-fuer-diese-unit-vorhanden'), 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-responses'), 'Info', {
         duration: 3000
       });
       return;
@@ -720,7 +720,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !this.logs() || this.logs().length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-logs-fuer-diese-unit-vorhanden'), 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-logs'), 'Info', {
         duration: 3000
       });
       return;
@@ -730,7 +730,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '700px',
       data: {
         logs: this.logs(),
-        title: this.uiTranslate('ui-text.test-results.logs-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
+        title: this.uiTranslate('ui-text.test-results.unit-logs-title', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
   }
@@ -739,7 +739,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-selected'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -748,7 +748,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: selectedUnitSnapshot.id as number,
         tags: this.unitTags(),
-        title: this.uiTranslate('ui-text.test-results.tags-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
+        title: this.uiTranslate('ui-text.test-results.unit-tags-title', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
 
@@ -768,7 +768,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-selected'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -777,7 +777,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: selectedUnitSnapshot.id as number,
         notes: this.unitNotes(),
-        title: this.uiTranslate('ui-text.test-results.notizen-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
+        title: this.uiTranslate('ui-text.test-results.unit-notes-title', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
 
@@ -929,7 +929,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     const loadingSnackBar = this.snackBar.open(
-      this.uiTranslate('ui-text.test-results.lade-log-auffaelligkeiten'),
+      this.uiTranslate('ui-text.test-results.loading-log-anomalies'),
       '',
       { duration: undefined }
     );
@@ -940,7 +940,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           loadingSnackBar.dismiss();
           if (!details.data.length) {
             this.snackBar.open(
-              this.uiTranslate('ui-text.test-results.keine-log-auffaelligkeiten-gefunden'),
+              this.uiTranslate('ui-text.test-results.no-log-anomaly-details'),
               'OK',
               { duration: 4000 }
             );
@@ -975,7 +975,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            this.uiTranslate('ui-text.test-results.log-auffaelligkeiten-konnten-nicht-geladen-werden'),
+            this.uiTranslate('ui-text.test-results.log-anomalies-load-failed'),
             'OK',
             { duration: 4000 }
           );
@@ -1199,7 +1199,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     if (groups.length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-testgruppe-ausgewaehlt'), 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-test-group'), 'Info', {
         duration: 3000
       });
       return;
@@ -1246,7 +1246,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
-        title: this.uiTranslate('ui-text.test-results.testergebnisse-schnell-finden')
+        title: this.uiTranslate('ui-text.test-results.quick-search-hint')
       }
     });
 
@@ -1313,7 +1313,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   protected openVariableAnalysisDialog(): void {
-    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.lade-analyse-auftraege'), '', {
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.loading-analysis-jobs'), '', {
       duration: 3000
     });
 
@@ -1332,7 +1332,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             maxWidth: '96vw',
             data: {
               unitId: this.selectedUnit()?.id,
-              title: this.uiTranslate('ui-text.test-results.antwortwertanalyse'),
+              title: this.uiTranslate('ui-text.test-results.response-analysis'),
               workspaceId: this.appService.selectedWorkspaceId,
               jobs: variableAnalysisJobs
             }
@@ -1393,7 +1393,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.name) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-selected'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -1401,12 +1401,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .trim()
       .toUpperCase();
     if (!unitFileId) {
-      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.no-unit-selected'), 'Info', { duration: 3000 });
       return;
     }
 
     const loadingSnackBar = this.snackBar.open(
-      this.uiTranslate('ui-text.test-results.lade-unit-informationen'),
+      this.uiTranslate('ui-text.test-results.loading-unit-info'),
       '',
       { duration: 3000 }
     );
@@ -1434,7 +1434,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            this.uiTranslate('ui-text.test-results.fehler-beim-laden-der-unit-informationen'),
+            this.uiTranslate('ui-text.test-results.unit-info-load-failed'),
             this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );

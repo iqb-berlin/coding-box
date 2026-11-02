@@ -421,7 +421,7 @@ export class CodingManagementService {
     return this.responseService.searchResponses(workspaceId, backendParams, page, limit)
       .pipe(
         catchError(() => {
-          this.showErrorSnackbar(this.uiTranslate('ui-text.coding-management.fehler-beim-filtern-der-kodierdaten'), false);
+          this.showErrorSnackbar(this.uiTranslate('ui-text.coding-management.filter-failed'), false);
           return of({ data: [], total: 0 });
         })
       );
@@ -511,7 +511,7 @@ export class CodingManagementService {
             cascadeText = ` (+ ${status.result.cascadeResetVersions.join(', ')})`;
           }
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-management.antworten-zurueckgesetzt', { affectedResponseCount: status.result.affectedResponseCount, cascadeText: cascadeText }),
+            this.uiTranslate('ui-text.coding-management.responses-reset', { affectedResponseCount: status.result.affectedResponseCount, cascadeText: cascadeText }),
             this.uiTranslate('deferred-view.close'),
             { duration: 5000, panelClass: ['success-snackbar'] }
           );

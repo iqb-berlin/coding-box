@@ -3,18 +3,18 @@
 
   <div mat-dialog-content>
     <mat-form-field appearance="outline" class="quick-search-field">
-      <mat-label>{{ 'ui-text.test-results.schnellsuche' | translate }}</mat-label>
+      <mat-label>{{ 'ui-text.test-results.quick-search' | translate }}</mat-label>
       <input
         matInput
         [(ngModel)]="searchText"
         (ngModelChange)="onSearchChange()"
-        [placeholder]="'ui-text.test-results-search.code-login-testheft-aufgabe-variable-oder-antwortwert' | translate"
+        [placeholder]="'ui-text.test-results-search.search-placeholder' | translate"
         autocomplete="off"
       />
       <mat-icon matSuffix>search</mat-icon>
     </mat-form-field>
 
-    <div class="type-filter-bar" [attr.aria-label]="'ui-text.test-results-search.suchbereiche' | translate">
+    <div class="type-filter-bar" [attr.aria-label]="'ui-text.test-results-search.search-scopes' | translate">
       @for (option of typeOptions; track option.kind) {
       <button
         mat-stroked-button
@@ -40,12 +40,12 @@
       } @else if (searchText.trim().length < MIN_SEARCH_LENGTH) {
       <div class="state-container">
         <mat-icon>manage_search</mat-icon>
-        <p>{{ 'ui-text.test-results-search.geben-sie-mindestens-zeichen-ein' | translate: { MIN_SEARCH_LENGTH: (MIN_SEARCH_LENGTH) } }}</p>
+        <p>{{ 'ui-text.test-results-search.minimum-search-length' | translate: { MIN_SEARCH_LENGTH: (MIN_SEARCH_LENGTH) } }}</p>
       </div>
       } @else if (hasSearched && getVisibleCount() === 0) {
       <div class="state-container">
         <mat-icon>search_off</mat-icon>
-        <p>{{ 'ui-text.test-results-search.keine-treffer-gefunden' | translate }}</p>
+        <p>{{ 'ui-text.test-results-search.no-matches' | translate }}</p>
       </div>
       } @else {
       @for (option of typeOptions; track option.kind) {
@@ -57,7 +57,7 @@
             <span>{{ option.label }}</span>
           </div>
           <span>
-            {{ 'ui-text.test-results-search.von' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
+            {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
           </span>
         </div>
 
@@ -79,8 +79,8 @@
                 mat-icon-button
                 type="button"
                 (click)="openInTable(item)"
-                [matTooltip]="'ui-text.test-results.in-tabelle-anzeigen' | translate"
-                [attr.aria-label]="'ui-text.test-results.in-tabelle-anzeigen' | translate"
+                [matTooltip]="'ui-text.test-results.show-in-table' | translate"
+                [attr.aria-label]="'ui-text.test-results.show-in-table' | translate"
               >
                 <mat-icon>table_chart</mat-icon>
               </button>
@@ -88,8 +88,8 @@
                 mat-icon-button
                 type="button"
                 (click)="openInBrowser(item)"
-                [matTooltip]="'ui-text.test-results-search.im-ergebnisbrowser-oeffnen' | translate"
-                [attr.aria-label]="'ui-text.test-results-search.im-ergebnisbrowser-oeffnen' | translate"
+                [matTooltip]="'ui-text.test-results-search.open-browser' | translate"
+                [attr.aria-label]="'ui-text.test-results-search.open-browser' | translate"
               >
                 <mat-icon>account_tree</mat-icon>
               </button>
@@ -98,8 +98,8 @@
                 mat-icon-button
                 type="button"
                 (click)="replay(item)"
-                [matTooltip]="'ui-text.test-results-search.replay-starten' | translate"
-                [attr.aria-label]="'ui-text.test-results-search.replay-starten' | translate"
+                [matTooltip]="'ui-text.test-results-search.start-replay' | translate"
+                [attr.aria-label]="'ui-text.test-results-search.start-replay' | translate"
               >
                 <mat-icon>play_arrow</mat-icon>
               </button>

@@ -17,17 +17,17 @@ import { MatButton } from '@angular/material/button';
   selector: 'coding-box-log-dialog',
   template: `
     <div class="dialog-header">
-      <h1 mat-dialog-title>{{ 'ui-text.log-dialog.booklet-logs' | translate }}</h1>
+      <h1 mat-dialog-title>{{ 'ui-text.log-dialog.title' | translate }}</h1>
       <div class="header-info">
-        <span class="log-count">{{ 'ui-text.log-dialog.eintraege' | translate: { length: (data.logs.length) } }}</span>
+        <span class="log-count">{{ 'ui-text.log-dialog.entry-count' | translate: { length: (data.logs.length) } }}</span>
         @if (processingDuration) {
         <span class="processing-duration">
-          <span class="duration-label">{{ 'ui-text.log-dialog.bearbeitungsdauer' | translate }}</span>
+          <span class="duration-label">{{ 'ui-text.log-dialog.processing-duration' | translate }}</span>
           <span class="duration-value">{{ processingDuration }}</span>
         </span>
         } @if (data.units && data.units.length > 0) {
         <span class="unit-progress">
-          <span class="progress-label">{{ 'ui-text.log-dialog.unit-fortschritt' | translate }}</span>
+          <span class="progress-label">{{ 'ui-text.log-dialog.unit-progress' | translate }}</span>
           <span
             class="progress-value"
             [class]="{
@@ -35,7 +35,7 @@ import { MatButton } from '@angular/material/button';
               incomplete: !unitProgressComplete
             }"
           >
-            {{ unitProgressComplete ? ('ui-text.files-validation.vollstaendig-25181d' | translate) : ('double-coded-review.decision.status-incomplete' | translate) }}
+            {{ unitProgressComplete ? ('ui-text.files-validation.complete' | translate) : ('double-coded-review.decision.status-incomplete' | translate) }}
           </span>
         </span>
         }
@@ -47,7 +47,7 @@ import { MatButton } from '@angular/material/button';
       @if (data.sessions && data.sessions.length > 0) {
       <div class="session-section">
         <div class="section-header">
-          <h2>{{ 'ui-text.log-dialog.session-information' | translate }}</h2>
+          <h2>{{ 'ui-text.log-dialog.session-info' | translate }}</h2>
           <span class="session-count">{{ 'ui-text.log-dialog.sessions' | translate: { length: (data.sessions.length) } }}</span>
         </div>
         <div class="session-list">
@@ -66,7 +66,7 @@ import { MatButton } from '@angular/material/button';
                 }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">{{ 'ui-text.log-dialog.os' | translate }}</span>
+                <span class="detail-label">{{ 'ui-text.log-dialog.operating-system' | translate }}</span>
                 <span class="detail-value">{{ session.os || 'Unknown' }}</span>
               </div>
               <div class="detail-item">
@@ -85,11 +85,11 @@ import { MatButton } from '@angular/material/button';
       <!-- Logs Section -->
       <div class="logs-section">
         <div class="section-header">
-          <h2>{{ 'ui-text.log-dialog.booklet-logs' | translate }}</h2>
+          <h2>{{ 'ui-text.log-dialog.title' | translate }}</h2>
           <div class="search-box">
             <input
               type="text"
-              [placeholder]="'ui-text.training-sample-editor.suchen' | translate"
+              [placeholder]="'ui-text.training-sample-editor.search' | translate"
               (input)="filterLogs($event)"
             />
           </div>

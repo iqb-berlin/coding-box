@@ -1,9 +1,9 @@
 <mat-dialog-content class="dialog-content">
   <div class="dialog-header">
-    <h2 class="dialog-title">{{ 'ui-text.test-center-import.test-center-import' | translate }}</h2>
+    <h2 class="dialog-title">{{ 'ui-text.test-center-import.title' | translate }}</h2>
     <p class="dialog-description">
-      @if (data.importType === 'testFiles') { {{ 'ui-text.test-center-import.importieren-sie-testdateien-aufgaben-testhefte-player-kodierschemata-testteilnehmer-aus-ei' | translate }} } @else if (data.importType ===
-      'testResults') { {{ 'ui-text.test-center-import.importieren-sie-testergebnisse-antworten-und-logs-aus-einem-testcenter-in-diesen-arbeitsbe' | translate }} } @else { {{ 'ui-text.test-center-import.importieren-sie-daten-aus-einem-testcenter-in-ihren-arbeitsbereich' | translate }} }
+      @if (data.importType === 'testFiles') { {{ 'ui-text.test-center-import.files-description' | translate }} } @else if (data.importType ===
+      'testResults') { {{ 'ui-text.test-center-import.results-description' | translate }} } @else { {{ 'ui-text.test-center-import.description' | translate }} }
     </p>
   </div>
 
@@ -16,7 +16,7 @@
     <div class="user-info">
       <mat-icon>account_circle</mat-icon>
       <h3>
-        {{ 'ui-text.test-center-import.angemeldet-in' | translate: { value1: (this.testCenterInstance()[0]?.label ||
+        {{ 'ui-text.test-center-import.logged-in-at' | translate: { value1: (this.testCenterInstance()[0]?.label ||
             loginForm.controls.testCenterIndividual.value) } }}
       </h3>
     </div>
@@ -45,7 +45,7 @@
   } } @else{
   <div class="error-message">
     <mat-icon>error</mat-icon>
-    <span>{{ 'ui-text.test-center-import.keine-arbeitsbereiche-auswaehlbar' | translate }}</span>
+    <span>{{ 'ui-text.test-center-import.no-workspaces' | translate }}</span>
   </div>
   } }
 </mat-dialog-content>
@@ -59,7 +59,7 @@
     color="primary"
   >
     <mat-icon>cloud_download</mat-icon>
-    {{ 'ui-text.coding-job-definitions.importieren' | translate }}
+    {{ 'ui-text.coding-job-definitions.import' | translate }}
   </button>
   }
   <button

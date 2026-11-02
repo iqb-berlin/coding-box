@@ -328,7 +328,7 @@ export class ManualCodingAnalysisFacade {
 
           this.isLoadingResponseAnalysisState.set(false);
           this.viewUpdatedSubject.next();
-          const responseAnalysisError = this.uiTranslate('ui-text.manual-coding-analysis.fehler-beim-laden-der-antwortanalyse', { value1: error.message || error });
+          const responseAnalysisError = this.uiTranslate('ui-text.manual-coding-analysis.load-failed', { value1: error.message || error });
           if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
             if (!this.hasShownResponseAnalysisPollingError) {
               this.hasShownResponseAnalysisPollingError = true;

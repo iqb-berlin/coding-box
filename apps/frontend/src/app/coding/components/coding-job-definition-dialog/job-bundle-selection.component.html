@@ -52,7 +52,7 @@
                   <div class="bundle-card-content">
                     <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
                     <div class="bundle-stats">
-                      <span class="variable-count">{{ 'ui-text.job-bundle-selection.variablen' | translate: { length: (bundle.variables.length) } }}</span>
+                      <span class="variable-count">{{ 'ui-text.job-bundle-selection.variable-list' | translate: { length: (bundle.variables.length) } }}</span>
                     </div>
                     <div class="bundle-variables-preview">
                       @if (bundle.variables.length > 0) {
@@ -69,14 +69,14 @@
                             [disabled]="readOnly()"
                             (click)="$event.stopPropagation()"
                             (change)="deriveErrorChanged.emit({bundle, variable, included: $event.checked})">
-                            {{ 'ui-text.training-sample-editor.derive-error-debd8a' | translate }}
+                            {{ 'ui-text.training-sample-editor.derive-error-label' | translate }}
                           </mat-checkbox>
                           }
                         </div>
                         }
                         @if (!row.selected && bundle.variables.length > 3) {
                         <div class="variable-preview-more">
-                          {{ 'ui-text.job-bundle-selection.weitere' | translate: { value1: (bundle.variables.length - 3) } }}
+                          {{ 'ui-text.job-bundle-selection.more-variables' | translate: { value1: (bundle.variables.length - 3) } }}
                         </div>
                         }
                       </div>
@@ -108,7 +108,7 @@
             </div>
 
             <div class="selection-summary">
-              <p>{{ 'ui-text.job-bundle-selection.variablenbuendel-ausgewaehlt' | translate: { value1: (selectedCount()) } }}</p>
+              <p>{{ 'ui-text.job-bundle-selection.selected-count' | translate: { value1: (selectedCount()) } }}</p>
             </div>
             }
 

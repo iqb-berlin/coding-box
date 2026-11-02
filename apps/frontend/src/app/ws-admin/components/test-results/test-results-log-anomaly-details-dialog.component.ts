@@ -37,21 +37,21 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>troubleshoot</mat-icon>
-      {{ 'ui-text.test-results-log-anomaly-details-dialog.log-auffaelligkeiten' | translate }}
+      {{ 'ui-text.test-results-log-anomaly-details-dialog.title' | translate }}
     </h2>
 
     <div mat-dialog-content class="anomaly-dialog-content">
       <p class="summary">
-        {{ 'ui-text.test-results-log-anomaly-details-dialog.auffaellige-testhefte-erkannt' | translate: { affectedBooklets: (data.affectedBooklets) } }}
+        {{ 'ui-text.test-results-log-anomaly-details-dialog.affected-booklets' | translate: { affectedBooklets: (data.affectedBooklets) } }}
         @if (data.truncated) {
-          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.es-werden-die-ersten-angezeigt' | translate: { length: (data.rows.length) } }}</span>
+          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.visible-limit' | translate: { length: (data.rows.length) } }}</span>
         }
       </p>
 
       @if (data.rows.length === 0) {
         <div class="empty-state">
           <mat-icon>check_circle</mat-icon>
-          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.keine-auffaelligen-testhefte-gefunden' | translate }}</span>
+          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.empty' | translate }}</span>
         </div>
       }
 
@@ -105,7 +105,7 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
         type="button"
         [mat-dialog-close]="{ showTable: true }"
       >
-        {{ 'ui-text.test-results.in-tabelle-anzeigen' | translate }}
+        {{ 'ui-text.test-results.show-in-table' | translate }}
       </button>
     </div>
   `,

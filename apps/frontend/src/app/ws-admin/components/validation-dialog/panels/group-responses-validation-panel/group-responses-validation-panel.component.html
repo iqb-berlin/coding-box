@@ -4,7 +4,7 @@
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
-      [title]="'ui-text.group-responses-validation-panel.gruppenantworten-pruefung' | translate"
+      [title]="'ui-text.group-responses-validation-panel.title' | translate"
       [status]="status"
       [errorCount]="errorCount()"
     >
@@ -24,7 +24,7 @@
       (click)="onValidate()"
       [disabled]="isRunning() || disabled()"
     >
-      {{ 'ui-text.group-responses-validation-panel.gruppenantworten-pruefen' | translate }}
+      {{ 'ui-text.group-responses-validation-panel.run' | translate }}
     </button>
   </div>
 
@@ -45,7 +45,7 @@
           [value]="activeTaskValue?.progress"
         ></mat-spinner>
         <p class="loading-text">
-          {{ 'ui-text.group-responses-validation-panel.gruppen-antworten-werden-geprueft' | translate }}
+          {{ 'ui-text.group-responses-validation-panel.running' | translate }}
           @if (activeTaskValue?.progress) {
             ({{ activeTaskValue?.progress }}%)
           }
@@ -56,19 +56,19 @@
     @if (errorMessageValue) {
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
-        <span>{{ 'ui-text.duplicate-responses-validation-panel.fehler-bei-der-validierung' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
+        <span>{{ 'ui-text.duplicate-responses-validation-panel.validation-error' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
       </div>
     }
 
     @if (resultValue) {
       <div>
         @if (resultValue.testTakersFound) {
-          <p>{{ 'ui-text.group-responses-validation-panel.testpersonen-datei-gefunden-und-analysiert' | translate }}</p>
+          <p>{{ 'ui-text.group-responses-validation-panel.test-takers-analyzed' | translate }}</p>
         } @else {
           <div class="validation-result validation-error">
             <mat-icon>error</mat-icon>
             <span
-              >{{ 'ui-text.group-responses-validation-panel.pruefung-fehlgeschlagen-keine-testpersonen-datei-testtakers-gefunden' | translate }}</span
+              >{{ 'ui-text.group-responses-validation-panel.test-takers-missing' | translate }}</span
             >
           </div>
         }
@@ -78,14 +78,14 @@
             <div class="validation-result validation-success">
               <mat-icon>check_circle</mat-icon>
               <span
-                >{{ 'ui-text.group-responses-validation-panel.pruefung-bestanden-alle-gruppen-haben-mindestens-eine-antwort' | translate }}</span
+                >{{ 'ui-text.group-responses-validation-panel.all-groups-valid' | translate }}</span
               >
             </div>
           } @else {
             <div class="validation-result validation-error">
               <mat-icon>error</mat-icon>
               <span
-                >{{ 'ui-text.group-responses-validation-panel.pruefung-fehlgeschlagen-einige-gruppen-haben-keine-antworten' | translate }}</span
+                >{{ 'ui-text.group-responses-validation-panel.groups-without-responses' | translate }}</span
               >
             </div>
           }
@@ -100,9 +100,9 @@
               [disabled]="isExporting() || isLoadingPage()"
             >
               @if (isExporting()) {
-                <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.export' | translate }}
+                <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.exporting' | translate }}
               } @else {
-                {{ 'ui-text.duplicate-responses-validation-panel.csv-exportieren' | translate }}
+                {{ 'ui-text.duplicate-responses-validation-panel.export-csv' | translate }}
               }
             </button>
           </div>

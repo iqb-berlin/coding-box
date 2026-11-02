@@ -36,7 +36,7 @@ export class CodingManagementUiService {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!response.id) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-management-ui.fehlende-response-id-fuer-replay'), this.uiTranslate('deferred-view.close'), {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-management-ui.replay-response-id-missing'), this.uiTranslate('deferred-view.close'), {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
@@ -47,7 +47,7 @@ export class CodingManagementUiService {
       switchMap(result => {
         if (!result.replayUrl) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+            this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
             this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
@@ -60,7 +60,7 @@ export class CodingManagementUiService {
       }),
       catchError(() => {
         this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+          this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
           this.uiTranslate('deferred-view.close'),
           {
             duration: 5000,
@@ -154,7 +154,7 @@ export class CodingManagementUiService {
         takeUntilDestroyed(owner),
         catchError(() => {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-management-ui.fehler-beim-abrufen-des-kodierschemas', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('ui-text.coding-management-ui.schema-fetch-failed', { codingSchemeRef: codingSchemeRef }),
             this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
@@ -167,7 +167,7 @@ export class CodingManagementUiService {
       .subscribe(fileData => {
         if (!fileData || !fileData.base64Data) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-management-ui.kodierschema-in-kodierdaten-nicht-gefunden', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('ui-text.coding-management-ui.schema-not-found', { codingSchemeRef: codingSchemeRef }),
             this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
@@ -194,7 +194,7 @@ export class CodingManagementUiService {
           });
         } catch (error) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-management-ui.fehler-beim-verarbeiten-des-kodierschemas', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('ui-text.coding-management-ui.schema-parse-failed', { codingSchemeRef: codingSchemeRef }),
             this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,

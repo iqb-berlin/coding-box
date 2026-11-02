@@ -25,7 +25,7 @@ export type SessionDistributionsDialogData = {
     MatTooltipModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ 'ui-text.session-distributions-dialog.sitzungen-browser-os-screen' | translate }}</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.session-distributions-dialog.title' | translate }}</h2>
     <mat-dialog-content>
       <div class="dist-grid">
         <div class="dist-card">
@@ -52,12 +52,12 @@ export type SessionDistributionsDialogData = {
                 </div>
               }
             } @else {
-              <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
+              <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.no-data' | translate }}</div>
             }
           </div>
 
           <div class="dist-card">
-            <div class="dist-title">{{ 'ui-text.test-results-flat-table-settings-dialog.os' | translate }}</div>
+            <div class="dist-title">{{ 'ui-text.test-results-flat-table-settings-dialog.operating-system' | translate }}</div>
             @if (osItems.length > 0) {
               @for (it of osItems; track it) {
                 <div
@@ -80,7 +80,7 @@ export type SessionDistributionsDialogData = {
                   </div>
                 }
               } @else {
-                <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
+                <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.no-data' | translate }}</div>
               }
             </div>
 
@@ -108,7 +108,7 @@ export type SessionDistributionsDialogData = {
                     </div>
                   }
                 } @else {
-                  <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
+                  <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.no-data' | translate }}</div>
                 }
               </div>
             </div>

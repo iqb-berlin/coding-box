@@ -40,7 +40,7 @@ export interface ExportSelectionDialogResult {
     MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ 'ui-text.export-selection-dialog.filter-auswaehlen' | translate }}</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.export-selection-dialog.title' | translate }}</h2>
 
     <mat-dialog-content class="dialog-content">
       <mat-tab-group>
@@ -83,13 +83,13 @@ export interface ExportSelectionDialogResult {
               }
 
               @if (!data.jobDefinitions?.length) {
-                <div class="empty">{{ 'ui-text.export-selection-dialog.keine-jobdefinitionen-vorhanden' | translate }}</div>
+                <div class="empty">{{ 'ui-text.export-selection-dialog.no-definitions' | translate }}</div>
               }
             </div>
           </div>
         </mat-tab>
 
-        <mat-tab [label]="'ui-text.export-selection-dialog.coder-trainings' | translate">
+        <mat-tab [label]="'ui-text.export-selection-dialog.trainings' | translate">
           <div class="section">
             <div class="list">
               @for (training of data.coderTrainings; track training.id) {
@@ -102,7 +102,7 @@ export interface ExportSelectionDialogResult {
               </div>
               }
               @if (!data.coderTrainings?.length) {
-                <div class="empty">{{ 'ui-text.export-selection-dialog.keine-coder-trainings-vorhanden' | translate }}</div>
+                <div class="empty">{{ 'ui-text.export-selection-dialog.no-trainings' | translate }}</div>
               }
             </div>
           </div>
@@ -111,10 +111,10 @@ export interface ExportSelectionDialogResult {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="clear()">{{ 'ui-text.export-selection-dialog.zuruecksetzen' | translate }}</button>
+      <button mat-button (click)="clear()">{{ 'ui-text.export-selection-dialog.reset' | translate }}</button>
       <button mat-button (click)="cancel()">{{ 'cancel' | translate }}</button>
       <button mat-raised-button color="primary" (click)="apply()">
-        {{ 'ui-text.export-selection-dialog.uebernehmen' | translate }}
+        {{ 'ui-text.export-selection-dialog.apply' | translate }}
       </button>
     </mat-dialog-actions>
   `,
@@ -233,7 +233,7 @@ export class ExportSelectionDialogComponent {
     const varsCount = def.assignedVariables?.length ?? 0;
     const bundlesCount = def.assignedVariableBundles?.length ?? 0;
     const codersCount = def.assignedCoders?.length ?? 0;
-    return this.uiTranslate('ui-text.export-selection-dialog.variablen-buendel-kodierer', { varsCount: varsCount, bundlesCount: bundlesCount, codersCount: codersCount });
+    return this.uiTranslate('ui-text.export-selection-dialog.selection-summary', { varsCount: varsCount, bundlesCount: bundlesCount, codersCount: codersCount });
   }
 
   protected getDefinitionVariables(def: JobDefinition): string {

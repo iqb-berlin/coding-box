@@ -139,7 +139,7 @@ export class VariableBundleManagerComponent implements OnInit {
       },
       error: () => {
         this.isLoading.set(false);
-        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-variablenbuendel'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -182,17 +182,17 @@ export class VariableBundleManagerComponent implements OnInit {
             this.variableBundleGroupService.createBundle(result).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
               next: newBundleGroup => {
                 this.loadVariableBundleGroups();
-                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-erstellt', { name: newBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.create-success', { name: newBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               },
               error: () => {
-                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-erstellen-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.create-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               }
             });
           }
         });
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-manuell-zu-kodierenden-variablen'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variables-load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -223,18 +223,18 @@ export class VariableBundleManagerComponent implements OnInit {
               next: updatedBundleGroup => {
                 if (updatedBundleGroup) {
                   this.loadVariableBundleGroups();
-                  this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-aktualisiert', { name: updatedBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+                  this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.update-success', { name: updatedBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
                 }
               },
               error: () => {
-                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-aktualisieren-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.update-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               }
             });
           }
         });
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-manuell-zu-kodierenden-variablen'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variables-load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -245,8 +245,8 @@ export class VariableBundleManagerComponent implements OnInit {
     if (!workspaceId) return;
     const dialogRef = this.ownDialog(this.dialog.open(ConfirmDialogComponent, {
       data: {
-        title: this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-loeschen'),
-        content: this.uiTranslate('ui-text.variable-bundle-manager.sind-sie-sicher-dass-sie-das-variablenbuendel-loeschen-moechten', { name: bundleGroup.name }),
+        title: this.uiTranslate('ui-text.variable-bundle-manager.delete-title'),
+        content: this.uiTranslate('ui-text.variable-bundle-manager.delete-confirmation', { name: bundleGroup.name }),
         confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
@@ -258,11 +258,11 @@ export class VariableBundleManagerComponent implements OnInit {
           next: success => {
             if (success) {
               this.loadVariableBundleGroups();
-              this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-geloescht', { name: bundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+              this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.delete-success', { name: bundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
             }
           },
           error: () => {
-            this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-loeschen-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.delete-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
           }
         });
       }
@@ -276,9 +276,9 @@ export class VariableBundleManagerComponent implements OnInit {
   getVariableBundleActionAriaLabel(action: 'edit' | 'delete' | 'more', bundleGroup: VariableBundle): string {
     switch (action) {
       case 'edit':
-        return this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-bearbeiten', { name: bundleGroup.name });
+        return this.uiTranslate('ui-text.variable-bundle-manager.edit-aria', { name: bundleGroup.name });
       case 'delete':
-        return this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-loeschen-bd59bd', { name: bundleGroup.name });
+        return this.uiTranslate('ui-text.variable-bundle-manager.delete-aria', { name: bundleGroup.name });
       case 'more':
         return `Weitere Aktionen: ${bundleGroup.name}`;
       default:

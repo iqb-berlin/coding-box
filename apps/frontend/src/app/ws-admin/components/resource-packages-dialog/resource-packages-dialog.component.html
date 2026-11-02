@@ -1,24 +1,24 @@
 <div class="dialog-container">
-  <h2 mat-dialog-title>{{ 'ui-text.resource-packages-dialog.ressourcenpakete' | translate }}</h2>
+  <h2 mat-dialog-title>{{ 'ui-text.resource-packages-dialog.title' | translate }}</h2>
 
   <div mat-dialog-content>
     <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
       <button type="button" mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive()"
         (click)="resourcePackageInput.click()">
         <mat-icon>upload</mat-icon>
-        {{ 'ui-text.resource-packages-dialog.ressourcenpaket-hochladen' | translate }}
+        {{ 'ui-text.resource-packages-dialog.upload' | translate }}
       </button>
       <button type="button" mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive()"
         (click)="installGeoGebraPackage()"
-        [matTooltip]="'ui-text.resource-packages-dialog.laedt-das-geogebra-math-apps-bundle-herunter-und-installiert-oder-repariert-es-global' | translate">
+        [matTooltip]="'ui-text.resource-packages-dialog.geogebra-download-hint' | translate">
         <mat-icon>add_circle</mat-icon>
-        {{ hasGeoGebraPackage() ? ('ui-text.resource-packages-dialog.geogebra-pruefen-reparieren' | translate) : 'GeoGebra installieren' }}
+        {{ hasGeoGebraPackage() ? ('ui-text.resource-packages-dialog.repair-geogebra' | translate) : 'GeoGebra installieren' }}
       </button>
       <button type="button" mat-raised-button color="primary"
         [disabled]="isResourcePackageOperationActive() || resourcePackageSelection.selected.length === 0"
         (click)="deleteResourcePackages()">
         <mat-icon>delete</mat-icon>
-        {{ 'ui-text.resource-packages-dialog.ressourcenpaket-e-loeschen' | translate }}
+        {{ 'ui-text.resource-packages-dialog.delete' | translate }}
       </button>
     </div>
 
@@ -52,7 +52,7 @@
     @if (isLoadingResourcePackages()) {
     <div class="loading-container">
       <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">{{ 'ui-text.resource-packages-dialog.ressourcenpakete-werden-geladen' | translate }}</p>
+      <p class="loading-text">{{ 'ui-text.resource-packages-dialog.loading' | translate }}</p>
     </div>
     }
 
@@ -113,7 +113,7 @@
           </ng-container>
 
           <ng-container matColumnDef="scope">
-            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.geltung' | translate }}</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.scope' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let element">
               <span class="scope-badge" [class.global]="element.scope === 'global'">
                 {{ getPackageScopeLabel(element) }}
@@ -129,14 +129,14 @@
           </ng-container>
 
           <ng-container matColumnDef="elements">
-            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.elemente' | translate }}</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.entries' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let element">
-              <span class="elements-count">{{ 'ui-text.resource-packages-dialog.elemente-949063' | translate: { length: (element.elements.length) } }}</span>
+              <span class="elements-count">{{ 'ui-text.resource-packages-dialog.entry-count' | translate: { length: (element.elements.length) } }}</span>
             </mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="packageSize">
-            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.paketgroesse' | translate }}</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef>{{ 'ui-text.resource-packages-dialog.package-size' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let element">
               <span class="package-size">
                 {{element.packageSize > 1024 * 1024 ?
@@ -157,10 +157,10 @@
             <mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let element">
               <button mat-icon-button type="button" class="download-action-button"
-                [attr.aria-label]="'ui-text.resource-packages-dialog.ressourcenpaket-herunterladen' | translate"
+                [attr.aria-label]="'ui-text.resource-packages-dialog.download' | translate"
                 [disabled]="isResourcePackageOperationActive()"
                 (click)="downloadResourcePackage(element); $event.stopPropagation()"
-                [matTooltip]="'ui-text.resource-packages-dialog.ressourcenpaket-herunterladen' | translate">
+                [matTooltip]="'ui-text.resource-packages-dialog.download' | translate">
                 @if (isResourcePackageDownloading(element)) {
                 <mat-spinner diameter="20" class="button-spinner"></mat-spinner>
                 } @else {
@@ -175,7 +175,7 @@
       @if (resourcePackageDataSource.data.length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">folder_zip</mat-icon>
-        <p class="empty-text">{{ 'ui-text.resource-packages-dialog.keine-ressourcenpakete-vorhanden' | translate }}</p>
+        <p class="empty-text">{{ 'ui-text.resource-packages-dialog.empty' | translate }}</p>
       </div>
       }
     </div>

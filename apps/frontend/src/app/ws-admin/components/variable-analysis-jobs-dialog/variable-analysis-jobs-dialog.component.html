@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ 'ui-text.variable-analysis-jobs-dialog.antwortwertanalyse-auftraege' | translate }}</h2>
+  <h2 class="dialog-title">{{ 'ui-text.variable-analysis-jobs-dialog.title' | translate }}</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -75,7 +75,7 @@
 
               <!-- Error indicator for failed jobs -->
               @if (job.status === 'failed') {
-                <button mat-icon-button color="accent" [matTooltip]="'ui-text.variable-analysis-jobs-dialog.fehler' | translate: { value1: (job.error || ('error.unknown' | translate)) }" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
+                <button mat-icon-button color="accent" [matTooltip]="'ui-text.variable-analysis-jobs-dialog.error-detail' | translate: { value1: (job.error || ('error.unknown' | translate)) }" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
                   <mat-icon>error</mat-icon>
                 </button>
               }

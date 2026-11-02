@@ -123,7 +123,7 @@ export class ManualCodingSettingsFacade {
             this.thresholdSavedSubject.next();
           }),
           catchError(() => {
-            if (this.isCurrentThresholdChange(change)) this.showError(this.uiTranslate('ui-text.manual-coding-settings.fehler-beim-speichern-der-aggregationseinstellungen'));
+            if (this.isCurrentThresholdChange(change)) this.showError(this.uiTranslate('ui-text.manual-coding-settings.aggregation-save-failed'));
             return EMPTY;
           }),
           finalize(() => {

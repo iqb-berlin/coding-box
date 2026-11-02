@@ -158,7 +158,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
       error: () => {
         this.isLoading = false;
         this.changeDetectorRef.markForCheck();
-        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.fehler-beim-laden-der-validierungsergebnisse'), this.uiTranslate('deferred-view.close'), {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.load-failed'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
@@ -170,7 +170,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     const workspaceId = this.workspaceId;
 
     if (!workspaceId || !this.validationCacheKey) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.keine-daten-zum-herunterladen-verfuegbar'), this.uiTranslate('deferred-view.close'), {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.no-download-data'), this.uiTranslate('deferred-view.close'), {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
@@ -195,7 +195,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
 
-        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.excel-datei-wurde-erfolgreich-heruntergeladen'), this.uiTranslate('deferred-view.close'), {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.excel-download-success'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['success-snackbar']
         });
@@ -213,7 +213,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
         } else if (error.status === 0) {
           errorMessage = this.uiTranslate('coding-management-manual.errors.network-error');
         } else if (error.message && error.message.includes('cache')) {
-          errorMessage = this.uiTranslate('ui-text.coding-validation-results-dialog.die-validierungsdaten-sind-nicht-mehr-verfuegbar-bitte-fuehren-sie-eine-neue-validierung-d');
+          errorMessage = this.uiTranslate('ui-text.coding-validation-results-dialog.results-expired');
         }
 
         this.snackBar.open(errorMessage, this.uiTranslate('deferred-view.close'), {

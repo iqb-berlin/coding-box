@@ -47,11 +47,11 @@ export class MessageDialogComponent implements OnInit {
     if ((typeof this.messageData.title === 'undefined') || (this.messageData.title.length === 0)) {
       switch (this.messageData.type) {
         case MessageType.error: {
-          this.messageData.title = this.uiTranslate('ui-text.message-dialog.achtung-fehler');
+          this.messageData.title = this.uiTranslate('ui-text.message-dialog.error-title');
           break;
         }
         case MessageType.warning: {
-          this.messageData.title = this.uiTranslate('ui-text.message-dialog.achtung-warnung');
+          this.messageData.title = this.uiTranslate('ui-text.message-dialog.warning-title');
           break;
         }
         default: {

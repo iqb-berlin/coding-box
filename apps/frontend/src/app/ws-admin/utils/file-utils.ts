@@ -48,16 +48,16 @@ export function getFileTypeLabel(translate: UiTranslator, fileType: string): str
   const normalized = (fileType || '').trim();
   const resourceSubtypeMatch = normalized.match(/^Resource\s*\(\s*(\.[^)]+?)\s*\)$/i);
   if (resourceSubtypeMatch) {
-    return translate('ui-text.file-utils.ressource', { value1: resourceSubtypeMatch[1].trim().toLowerCase() });
+    return translate('ui-text.file-utils.resource-subtype', { value1: resourceSubtypeMatch[1].trim().toLowerCase() });
   }
   const mapping: Record<string, string> = {
-    Resource: translate('ui-text.file-utils.ressource-23ef58'),
+    Resource: translate('ui-text.file-utils.resource'),
     Unit: translate('coding.jobs.table.units'),
-    Booklet: translate('ui-text.files-validation.testhefte'),
-    TestTakers: translate('ui-text.file-utils.testteilnehmer'),
-    Testtakers: translate('ui-text.file-utils.testteilnehmer'),
+    Booklet: translate('ui-text.files-validation.booklets'),
+    TestTakers: translate('ui-text.file-utils.test-takers'),
+    Testtakers: translate('ui-text.file-utils.test-takers'),
     Schemer: translate('ui-text.files-validation.schemer'),
-    SysCheck: translate('ui-text.file-utils.systemcheck')
+    SysCheck: translate('ui-text.file-utils.system-check')
   };
   return mapping[normalized] ?? normalized;
 }

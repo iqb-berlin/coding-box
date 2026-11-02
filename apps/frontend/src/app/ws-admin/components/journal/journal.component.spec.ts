@@ -124,7 +124,7 @@ describe('JournalComponent', () => {
     fixture.detectChanges();
 
     expect(component.loadError()).toBe(true);
-    expect(component.loadErrorMessage()).toBe(translateGerman('ui-text.http-errors.die-angeforderten-daten-wurden-nicht-gefunden'));
+    expect(component.loadErrorMessage()).toBe(translateGerman('ui-text.http-errors.not-found'));
     expect(fixture.nativeElement.textContent).toContain('Die angeforderten Daten wurden nicht gefunden.');
   });
 });

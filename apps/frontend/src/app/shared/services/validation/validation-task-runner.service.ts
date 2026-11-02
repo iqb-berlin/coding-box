@@ -63,7 +63,7 @@ export class ValidationTaskRunnerService {
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unbekannter-task-status')));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(
@@ -92,7 +92,7 @@ export class ValidationTaskRunnerService {
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unbekannter-task-status')));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(
@@ -121,7 +121,7 @@ export class ValidationTaskRunnerService {
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unbekannter-task-status')));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(

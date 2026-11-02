@@ -49,12 +49,12 @@ interface DialogData {
           <p><strong>{{ 'coding.trainings.table.created' | translate }}:</strong> {{ formatDate(data.training.created_at) }}</p>
           <p><strong>{{ 'coding.trainings.table.jobs' | translate }}:</strong> {{ data.jobs.length }}</p>
           <p>
-            <strong>{{ 'ui-text.coder-training.fallauswahl' | translate }}</strong>
+            <strong>{{ 'ui-text.coder-training.case-selection' | translate }}</strong>
             {{ getCaseSelectionModeLabel(data.training.case_selection_mode) }}
             <span class="info-subline">{{ getCaseSelectionModeDescription(data.training.case_selection_mode) }}</span>
           </p>
           <p>
-            <strong>{{ 'ui-text.coder-training.reihenfolge' | translate }}</strong>
+            <strong>{{ 'ui-text.coder-training.case-ordering' | translate }}</strong>
             {{ getCaseOrderingModeLabel(data.training.case_ordering_mode) }}
           </p>
         </div>
@@ -252,34 +252,34 @@ export class TrainingJobsDialogComponent {
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.coder-training.aelteste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
       case 'newest_first':
-        return this.uiTranslate('ui-text.coder-training.neueste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.newest-first');
       case 'random':
-        return this.uiTranslate('ui-text.coder-training.zufaellige-faelle');
+        return this.uiTranslate('ui-text.coder-training.random-cases');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.coder-training.zufaellig-je-testgruppe');
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.coder-training.zufaellige-testgruppen');
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return this.uiTranslate('ui-text.coder-training.aelteste-faelle-zuerst');
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return this.uiTranslate('ui-text.training-jobs-dialog.nimmt-pro-variable-die-aeltesten-verfuegbaren-faelle');
+        return this.uiTranslate('ui-text.training-jobs-dialog.oldest-first-description');
       case 'newest_first':
-        return this.uiTranslate('ui-text.training-jobs-dialog.nimmt-pro-variable-die-neuesten-verfuegbaren-faelle');
+        return this.uiTranslate('ui-text.training-jobs-dialog.newest-first-description');
       case 'random':
-        return this.uiTranslate('ui-text.training-jobs-dialog.zieht-zufaellig-aus-allen-verfuegbaren-faellen');
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-cases-description');
       case 'random_per_testgroup':
-        return this.uiTranslate('ui-text.training-jobs-dialog.verteilt-die-auswahl-moeglichst-gleichmaessig-ueber-testgruppen');
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-per-group-description');
       case 'random_testgroups':
-        return this.uiTranslate('ui-text.training-jobs-dialog.waehlt-zufaellige-testgruppen-und-zieht-faelle-innerhalb-dieser-gruppen');
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-groups-description');
       default:
-        return this.uiTranslate('ui-text.training-jobs-dialog.nimmt-pro-variable-die-aeltesten-verfuegbaren-faelle');
+        return this.uiTranslate('ui-text.training-jobs-dialog.oldest-first-description');
     }
   }
 

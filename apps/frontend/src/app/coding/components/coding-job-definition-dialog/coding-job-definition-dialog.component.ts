@@ -930,7 +930,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   protected getVariableDisabledReason(variable: Variable): string {
     if (this.variableCasePolicy().getVariableSelectableAvailableCases(variable) === 0) {
       const effectiveTotal = this.variableCasePolicy().getVariableSelectableEffectiveCases(variable);
-      return this.uiTranslate('ui-text.coding-job-definition-dialog.alle-faelle-bereits-verteilt', { effectiveTotal: effectiveTotal });
+      return this.uiTranslate('ui-text.coding-job-definition-dialog.all-cases-distributed', { effectiveTotal: effectiveTotal });
     }
 
     // Check if variable is included in currently selected variable bundle
@@ -939,10 +939,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     );
 
     if (selectedBundle) {
-      return this.uiTranslate('ui-text.coding-job-definition-dialog.bereits-in-variablenbuendel-enthalten', { name: selectedBundle.name });
+      return this.uiTranslate('ui-text.coding-job-definition-dialog.already-in-bundle', { name: selectedBundle.name });
     }
 
-    return this.uiTranslate('ui-text.coding-job-definition-dialog.bereits-in-anderen-definitionen-verwendet');
+    return this.uiTranslate('ui-text.coding-job-definition-dialog.used-by-other-definitions');
   }
 
   protected getVariableCount(bundle: VariableBundle): number {

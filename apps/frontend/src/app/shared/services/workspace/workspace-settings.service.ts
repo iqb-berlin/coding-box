@@ -290,19 +290,19 @@ export class WorkspaceSettingsService {
         key: 'evaluation-mode',
         value: JSON.stringify({ enabled }),
         description:
-          this.uiTranslate('ui-text.workspace-settings.controls-whether-expensive-automatic-coding-refreshes-are-disabled-for-evaluation-sessions')
+          this.uiTranslate('ui-text.workspace-settings.disable-autocoding-refresh-hint')
       },
       {
         key: 'auto-fetch-coding-statistics',
         value: JSON.stringify({ enabled: autoFetchEnabled }),
         description:
-          this.uiTranslate('ui-text.workspace-settings.controls-whether-coding-statistics-are-automatically-fetched-in-the-coding-management-comp')
+          this.uiTranslate('ui-text.workspace-settings.auto-statistics-hint')
       },
       {
         key: 'auto-refresh-manual-coding-jobs',
         value: JSON.stringify({ enabled: autoRefreshEnabled }),
         description:
-          this.uiTranslate('ui-text.workspace-settings.controls-whether-coding-status-and-manual-coding-views-refresh-automatically')
+          this.uiTranslate('ui-text.workspace-settings.auto-status-refresh-hint')
       }
     ]);
   }

@@ -17,7 +17,7 @@
               }
               @for (group of availableGroups(); track group) {
                 <mat-option [value]="group.groupName">
-                  {{ 'ui-text.test-person-coding.testpersonen-antworten' | translate: { groupName: (group.groupName), testPersonCount: (group.testPersonCount), responsesToCode: (group.responsesToCode) } }}
+                  {{ 'ui-text.test-person-coding.group-summary' | translate: { groupName: (group.groupName), testPersonCount: (group.testPersonCount), responsesToCode: (group.responsesToCode) } }}
                 </mat-option>
               }
             </mat-select>

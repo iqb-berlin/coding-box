@@ -94,7 +94,7 @@ export class ItemListDialogComponent implements OnInit {
     this.itemsRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.error.set(this.uiTranslate('ui-text.item-list-dialog.kein-workspace-ausgewaehlt'));
+      this.error.set(this.uiTranslate('ui-text.item-list-dialog.no-workspace'));
       this.isLoading.set(false);
       return;
     }
@@ -122,7 +122,7 @@ export class ItemListDialogComponent implements OnInit {
     const requestId = this.metadataRequestId;
     const isCurrent = (): boolean => !this.destroyRef.destroyed && requestId === this.metadataRequestId &&
       workspaceId === this.appService.selectedWorkspaceId;
-    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.lade-metadaten'), '', { duration: 3000 });
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.loading-metadata'), '', { duration: 3000 });
     this.metadataLoadingSnackBar = loadingSnackBar;
 
     try {
@@ -152,7 +152,7 @@ export class ItemListDialogComponent implements OnInit {
       const unitProfile = vomdData.profiles?.[0];
       if (!unitProfile) {
         loadingSnackBar.dismiss();
-        this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.keine-metadaten-profile-in-der-datei-gefunden'), this.uiTranslate('deferred-view.close'), { duration: 5000 });
+        this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.no-profiles'), this.uiTranslate('deferred-view.close'), { duration: 5000 });
         return;
       }
 
@@ -198,7 +198,7 @@ export class ItemListDialogComponent implements OnInit {
         } as unknown as MetadataDialogData
       });
     } catch (error) {
-      if (isCurrent()) this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.fehler-beim-oeffnen-der-metadaten-datei'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+      if (isCurrent()) this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.metadata-open-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
     } finally {
       loadingSnackBar.dismiss();
     }

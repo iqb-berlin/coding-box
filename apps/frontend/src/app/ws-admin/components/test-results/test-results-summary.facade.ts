@@ -66,21 +66,21 @@ export class TestResultsSummaryFacade {
 
   getLogAnomalyCodeLabel(code: string): string {
     const labels: Record<string, string> = {
-      controller_error: this.uiTranslate('ui-text.test-results-summary.controller-fehler'),
-      missing_termination: this.uiTranslate('ui-text.test-results-summary.kein-abschluss'),
-      connection_lost: this.uiTranslate('ui-text.test-results-summary.verbindung-verloren'),
-      timestamp_zero: this.uiTranslate('ui-text.test-results-summary.timestamp-0'),
-      player_stuck_loading: this.uiTranslate('ui-text.test-results-summary.player-haengt'),
-      repeated_start: this.uiTranslate('ui-text.test-results-summary.mehrfach-gestartet'),
+      controller_error: this.uiTranslate('ui-text.test-results-summary.controller-error'),
+      missing_termination: this.uiTranslate('ui-text.test-results-summary.no-completion'),
+      connection_lost: this.uiTranslate('ui-text.test-results-summary.connection-lost'),
+      timestamp_zero: this.uiTranslate('ui-text.test-results-summary.zero-timestamp'),
+      player_stuck_loading: this.uiTranslate('ui-text.test-results-summary.player-stuck'),
+      repeated_start: this.uiTranslate('ui-text.test-results-summary.repeated-start'),
       long_loading: this.uiTranslate('test-results-table.long-loading'),
-      timer_left_on_exit: this.uiTranslate('ui-text.test-results-summary.restzeit-am-ende'),
-      timer_never_finished: this.uiTranslate('ui-text.test-results-summary.timer-nicht-beendet'),
-      focus_lost_long: this.uiTranslate('ui-text.test-results-summary.langer-fokusverlust'),
-      unit_progress_incomplete: this.uiTranslate('ui-text.test-results-summary.units-fehlen'),
-      progress_incomplete: this.uiTranslate('ui-text.test-results-summary.progress-unvollstaendig'),
-      debug_command: this.uiTranslate('ui-text.test-results-summary.debug-befehl'),
-      session_span_long: this.uiTranslate('ui-text.test-results-summary.lange-zeitspanne'),
-      orphan_logs: this.uiTranslate('ui-text.test-results-summary.logs-ohne-start')
+      timer_left_on_exit: this.uiTranslate('ui-text.test-results-summary.remaining-time'),
+      timer_never_finished: this.uiTranslate('ui-text.test-results-summary.timer-not-ended'),
+      focus_lost_long: this.uiTranslate('ui-text.test-results-summary.focus-loss'),
+      unit_progress_incomplete: this.uiTranslate('ui-text.test-results-summary.missing-units'),
+      progress_incomplete: this.uiTranslate('ui-text.test-results-summary.progress-incomplete'),
+      debug_command: this.uiTranslate('ui-text.test-results-summary.debug-command'),
+      session_span_long: this.uiTranslate('ui-text.test-results-summary.long-session'),
+      orphan_logs: this.uiTranslate('ui-text.test-results-summary.logs-without-start')
     };
     return labels[code] || code;
   }
@@ -181,8 +181,8 @@ export class TestResultsSummaryFacade {
     }
 
     return this.autoCodingFreshnessWarnings().length > 0 ?
-      this.uiTranslate('ui-text.test-results-summary.auto-coding-oeffnen') :
-      this.uiTranslate('ui-text.test-results-summary.kodierung-oeffnen');
+      this.uiTranslate('ui-text.test-results-summary.open-autocoding') :
+      this.uiTranslate('ui-text.test-results-summary.open-coding');
   });
 
   readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?

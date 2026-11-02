@@ -283,13 +283,13 @@ export class FilesValidationDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     this.isRefreshingValidation.set(true);
     this.refreshValidationProgress.set(0);
-    this.refreshValidationProgressMessage.set(this.uiTranslate('ui-text.files-validation.testdateien-werden-auf-aenderungen-geprueft'));
+    this.refreshValidationProgressMessage.set(this.uiTranslate('ui-text.files-validation.checking-changes'));
 
     this.validationService.createValidationTask(workspaceId, 'testFiles').pipe(
       switchMap(task => this.waitForValidationTask(workspaceId, task)),
       switchMap(task => {
         if (task.status === 'failed') {
-          throw new Error(task.error || this.uiTranslate('ui-text.files-validation.validierung-fehlgeschlagen'));
+          throw new Error(task.error || this.uiTranslate('ui-text.files-validation.validation-failed'));
         }
         this.refreshValidationProgress.set(100);
         this.refreshValidationProgressMessage.set(task.progress_message || this.uiTranslate('test-files.validation.loading-result'));
@@ -302,7 +302,7 @@ export class FilesValidationDialogComponent implements OnInit {
     ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (typeof response === 'boolean') {
-          this.snackBar.open(this.uiTranslate('ui-text.files-validation.validierungsergebnisse-konnten-nicht-aktualisiert-werden'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.files-validation.refresh-unavailable'), 'OK', { duration: 3000 });
           return;
         }
 
@@ -312,7 +312,7 @@ export class FilesValidationDialogComponent implements OnInit {
         }
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-aktualisieren-der-validierungsergebnisse'), 'OK', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.files-validation.refresh-failed'), 'OK', { duration: 3000 });
       }
     });
   }
@@ -342,13 +342,13 @@ export class FilesValidationDialogComponent implements OnInit {
     } else {
       this.refreshValidationProgressMessage.set(this.refreshValidationProgress() >= 100 ?
         this.uiTranslate('test-files.validation.loading-result') :
-        this.uiTranslate('ui-text.files-validation.validierung-wird-durchgefuehrt', { value1: this.refreshValidationProgress() }));
+        this.uiTranslate('ui-text.files-validation.progress', { value1: this.refreshValidationProgress() }));
     }
   }
 
   protected openGeoGebraResourcePackagesDialog(): void {
     if (!this.data.workspaceId) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-management.fehler-kein-workspace-ausgewaehlt'), 'OK', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coding-management.no-workspace'), 'OK', { duration: 3000 });
       return;
     }
 
@@ -363,7 +363,7 @@ export class FilesValidationDialogComponent implements OnInit {
 
     dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result === true) {
-        this.refreshValidationData(this.uiTranslate('ui-text.files-validation.geogebra-ressourcenpakete-wurden-aktualisiert'));
+        this.refreshValidationData(this.uiTranslate('ui-text.files-validation.geogebra-updated'));
       }
     });
   }
@@ -647,15 +647,15 @@ export class FilesValidationDialogComponent implements OnInit {
             this.testResultService.invalidateCache(this.data.workspaceId);
           }
           onSuccess(this.uiTranslate('ws-admin.workspace-settings-changed'));
-          this.refreshValidationData(this.uiTranslate('ui-text.files-validation.validierungsergebnisse-wurden-aktualisiert'));
+          this.refreshValidationData(this.uiTranslate('ui-text.files-validation.results-updated'));
         } else {
           onRevert();
-          this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-speichern'), 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.files-validation.save-failed'), 'OK', { duration: 3000 });
         }
       },
       error: () => {
         onRevert();
-        this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-speichern'), 'OK', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.files-validation.save-failed'), 'OK', { duration: 3000 });
       }
     });
   }
@@ -670,7 +670,7 @@ export class FilesValidationDialogComponent implements OnInit {
         next.delete(normalized);
         return next;
       });
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.aufgabe-wiederhergestellt'), 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.unit-restored'), 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
         const next = new Set(value);
         next.add(normalized);
         return next;
@@ -681,7 +681,7 @@ export class FilesValidationDialogComponent implements OnInit {
         next.add(normalized);
         return next;
       });
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.aufgabe-ignoriert'), 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.unit-ignored'), 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
         const next = new Set(value);
         next.delete(normalized);
         return next;
@@ -699,7 +699,7 @@ export class FilesValidationDialogComponent implements OnInit {
         next.delete(normalized);
         return next;
       });
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testheft-wiederhergestellt'), 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.booklet-restored'), 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
         const next = new Set(value);
         next.add(normalized);
         return next;
@@ -710,7 +710,7 @@ export class FilesValidationDialogComponent implements OnInit {
         next.add(normalized);
         return next;
       });
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testheft-ignoriert'), 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open(this.uiTranslate('ui-text.files-validation.booklet-ignored'), 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
         const next = new Set(value);
         next.delete(normalized);
         return next;
@@ -732,13 +732,13 @@ export class FilesValidationDialogComponent implements OnInit {
         return next;
       });
       this.saveCurrentWorkspaceSettings(
-        () => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-wiederhergestellt'), 'OK', { duration: 3000 }),
+        () => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-restored'), 'OK', { duration: 3000 }),
         () => this.ignoredTestlets.update(value => [...value, { bookletId: normBooklet, testletId: normTestlet }])
       );
     } else {
       this.ignoredTestlets.update(value => [...value, { bookletId: normBooklet, testletId: normTestlet }]);
       this.saveCurrentWorkspaceSettings(
-        () => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-ignoriert'), 'OK', { duration: 3000 }),
+        () => this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-ignored'), 'OK', { duration: 3000 }),
         () => this.ignoredTestlets.update(value => {
           const next = [...value];
           next.splice(this.ignoredTestlets().findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1);
@@ -762,7 +762,7 @@ export class FilesValidationDialogComponent implements OnInit {
     try {
       const matchingBooklets = await this.findBookletsWithTestlet(normalizedTestletId);
       if (matchingBooklets.length === 0) {
-        this.snackBar.open(this.uiTranslate('ui-text.files-validation.keine-passenden-testhefte-mit-diesem-testlet-gefunden'), 'OK', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.files-validation.no-matching-booklets'), 'OK', { duration: 3000 });
         return;
       }
 
@@ -775,8 +775,8 @@ export class FilesValidationDialogComponent implements OnInit {
 
       if (changedCount === 0) {
         const unchangedMessage = shouldIgnore ?
-          this.uiTranslate('ui-text.files-validation.testlet-ist-bereits-in-allen-betroffenen-testheften-ignoriert') :
-          this.uiTranslate('ui-text.files-validation.testlet-ist-bereits-in-allen-betroffenen-testheften-wiederhergestellt');
+          this.uiTranslate('ui-text.files-validation.testlet-already-ignored') :
+          this.uiTranslate('ui-text.files-validation.testlet-already-restored');
         this.snackBar.open(unchangedMessage, 'OK', { duration: 3000 });
         return;
       }
@@ -784,9 +784,9 @@ export class FilesValidationDialogComponent implements OnInit {
       this.ignoredTestlets.set(nextIgnoredTestlets);
       this.saveCurrentWorkspaceSettings(
         () => {
-          const bookletLabel = changedCount === 1 ? this.uiTranslate('ui-text.files-validation.1-testheft') : this.uiTranslate('ui-text.files-validation.testhefte-46afcb', { changedCount: changedCount });
-          const actionLabel = shouldIgnore ? this.uiTranslate('ui-text.files-validation.ignoriert') : this.uiTranslate('ui-text.files-validation.wiederhergestellt');
-          this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-in', { bookletLabel: bookletLabel, actionLabel: actionLabel }), 'OK', { duration: 3000 });
+          const bookletLabel = changedCount === 1 ? this.uiTranslate('ui-text.files-validation.one-booklet') : this.uiTranslate('ui-text.files-validation.booklet-count', { changedCount: changedCount });
+          const actionLabel = shouldIgnore ? this.uiTranslate('ui-text.files-validation.ignored') : this.uiTranslate('ui-text.files-validation.restored');
+          this.snackBar.open(this.uiTranslate('ui-text.files-validation.testlet-bulk-result', { bookletLabel: bookletLabel, actionLabel: actionLabel }), 'OK', { duration: 3000 });
         },
         () => {
           this.ignoredTestlets.set(previousIgnoredTestlets);
@@ -836,8 +836,8 @@ export class FilesValidationDialogComponent implements OnInit {
             this.unusedTestFiles.set(this.unusedTestFiles().filter(f => !idsToDelete.includes(f.id)));
             this.unusedFilesSelection.clear();
             this.checkIfAllUnusedFilesSelected();
-            this.refreshValidationData(this.uiTranslate('ui-text.files-validation.validierungsergebnisse-wurden-aktualisiert'));
-            this.snackBar.open(this.uiTranslate('ui-text.files-validation.dateien-erfolgreich-geloescht'), 'OK', { duration: 3000 });
+            this.refreshValidationData(this.uiTranslate('ui-text.files-validation.results-updated'));
+            this.snackBar.open(this.uiTranslate('ui-text.files-validation.files-deleted'), 'OK', { duration: 3000 });
           } else {
             if (result.requestHandled) {
               this.filesDeleted.set(true);
@@ -845,12 +845,12 @@ export class FilesValidationDialogComponent implements OnInit {
               this.checkIfAllUnusedFilesSelected();
               this.refreshValidationData();
             }
-            this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-loeschen-der-dateien'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.files-validation.files-delete-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
           }
         },
         error: () => {
           this.isDeletingUnusedFiles.set(false);
-          this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-loeschen-der-dateien'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.files-validation.files-delete-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         }
       });
   }
@@ -1304,7 +1304,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
 
     const loadingSnackBar = this.snackBar.open(
-      this.uiTranslate('ui-text.files-validation.lade-ressourcendatei'),
+      this.uiTranslate('ui-text.files-validation.loading-resource'),
       '',
       { duration: 3000 }
     );
@@ -1322,7 +1322,7 @@ export class FilesValidationDialogComponent implements OnInit {
 
         if (!fileDownload) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.files-validation.ressourcendatei-nicht-gefunden'),
+            this.uiTranslate('ui-text.files-validation.resource-missing'),
             this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
@@ -1345,7 +1345,7 @@ export class FilesValidationDialogComponent implements OnInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          this.uiTranslate('ui-text.files-validation.fehler-beim-laden-der-ressourcendatei'),
+          this.uiTranslate('ui-text.files-validation.resource-load-failed'),
           this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
@@ -1383,14 +1383,14 @@ export class FilesValidationDialogComponent implements OnInit {
           this.dialog.open(ContentDialogComponent, {
             width: '80%',
             data: {
-              title: this.uiTranslate('ui-text.files-validation.testtakers-xml', { testTakerId: testTakerId }),
+              title: this.uiTranslate('ui-text.files-validation.test-taker-xml-title', { testTakerId: testTakerId }),
               content: xmlContent,
               isXml: true
             }
           });
         } else {
           this.snackBar.open(
-            this.uiTranslate('ui-text.files-validation.keine-xml-daten-fuer-testtaker-datei-gefunden', { testTakerId: testTakerId }),
+            this.uiTranslate('ui-text.files-validation.test-taker-xml-missing', { testTakerId: testTakerId }),
             this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
@@ -1404,7 +1404,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
 
     const workspaceId = this.data.workspaceId;
-    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.lade-metadaten'), '', { duration: 3000 });
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.loading-metadata'), '', { duration: 3000 });
     const canceled$ = new Subject<void>();
     let canceled = false;
     const cancel = () => {
@@ -1454,7 +1454,7 @@ export class FilesValidationDialogComponent implements OnInit {
         }
 
         loadingSnackBar.dismiss();
-        this.snackBar.open(this.uiTranslate('ui-text.files-validation.datei-nicht-gefunden', { filename: filename }), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.files-validation.file-not-found', { filename: filename }), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         return;
       }
 
@@ -1466,7 +1466,7 @@ export class FilesValidationDialogComponent implements OnInit {
       if (canceled) return;
       if (!fileDownload) {
         loadingSnackBar.dismiss();
-        this.snackBar.open(this.uiTranslate('ui-text.files-validation.fehler-beim-laden-der-datei'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.files-validation.file-load-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         return;
       }
 
@@ -1479,7 +1479,7 @@ export class FilesValidationDialogComponent implements OnInit {
       const unitProfile = vomdData.profiles?.[0];
       if (!unitProfile) {
         loadingSnackBar.dismiss();
-        this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.keine-metadaten-profile-in-der-datei-gefunden'), this.uiTranslate('deferred-view.close'), { duration: 5000 });
+        this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.no-profiles'), this.uiTranslate('deferred-view.close'), { duration: 5000 });
         return;
       }
 
@@ -1521,7 +1521,7 @@ export class FilesValidationDialogComponent implements OnInit {
       // eslint-disable-next-line no-console
       console.error('Error opening metadata file:', error);
       loadingSnackBar.dismiss();
-      this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.fehler-beim-oeffnen-der-metadaten-datei'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.metadata-open-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
     } finally {
       closingSubscription.unsubscribe();
       unregisterDestroy();

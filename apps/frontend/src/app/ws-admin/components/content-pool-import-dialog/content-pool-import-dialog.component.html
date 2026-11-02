@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>{{ 'ui-text.content-pool-import-dialog.acp-aus-content-pool-importieren' | translate }}</h2>
+<h2 mat-dialog-title>{{ 'ui-text.content-pool-import-dialog.title' | translate }}</h2>
 
 <mat-dialog-content class="dialog-content">
   <p class="info-text">
@@ -21,7 +21,7 @@
 
   @if (hasLoadedAcps()) {
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>{{ 'ui-text.content-pool-import-dialog.acp-auswaehlen' | translate }}</mat-label>
+      <mat-label>{{ 'ui-text.content-pool-import-dialog.select-package' | translate }}</mat-label>
       <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting()">
         @for (acp of acps(); track acp.id) {
           <mat-option [value]="acp.id">

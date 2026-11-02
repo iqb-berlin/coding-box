@@ -16,7 +16,7 @@
                   {{ isAllCodersSelected() ? ('manual-coding-export.deselect-all' | translate) : ('manual-coding-export.select-all' | translate) }}
                 </button>
                 <div class="selection-count">
-                  {{ 'ui-text.job-coder-capacity.von-kodierern-ausgewaehlt' | translate: { value1: (selected().length), value2: (coders().length) } }}
+                  {{ 'ui-text.job-coder-capacity.selected-count' | translate: { value1: (selected().length), value2: (coders().length) } }}
                 </div>
               </div>
 
@@ -44,11 +44,11 @@
                       @if (mode() === 'definition' && isSelected(coder)) {
                       <mat-form-field appearance="outline" class="coder-capacity-field"
                         (click)="$event.stopPropagation()">
-                        <mat-label>{{ 'ui-text.job-coder-capacity.kapazitaet' | translate }}</mat-label>
+                        <mat-label>{{ 'ui-text.job-coder-capacity.capacity' | translate }}</mat-label>
                         <input #coderCapacityInput matInput type="number" min="10" max="300" step="10"
                           [ngModel]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
                           [disabled]="readOnly()" (blur)="capacityChanged.emit({coder, value: coderCapacityInput.value})"
-                          [matTooltip]="'ui-text.job-coder-capacity.100-normale-last' | translate">
+                          [matTooltip]="'ui-text.job-coder-capacity.normal-capacity-hint' | translate">
                         <span matSuffix>%</span>
                       </mat-form-field>
                       }

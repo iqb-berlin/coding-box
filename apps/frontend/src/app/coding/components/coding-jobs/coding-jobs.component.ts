@@ -584,7 +584,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       const bundleNames = job.assignedVariableBundles.map(
         b => b.name || this.uiTranslate('ws-admin.unknown')
       );
-      return this.uiTranslate('ui-text.coding-jobs.variablen-buendel', { length: job.assignedVariableBundles.length, value2: bundleNames.join(', ') });
+      return this.uiTranslate('ui-text.coding-jobs.bundle-summary', { length: job.assignedVariableBundles.length, value2: bundleNames.join(', ') });
     }
 
     if (job.variableBundles && job.variableBundles.length > 0) {
@@ -602,7 +602,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         .join(', ');
     }
 
-    return this.uiTranslate('ui-text.coding-jobs.keine-variablen-buendel-zugewiesen');
+    return this.uiTranslate('ui-text.coding-jobs.no-bundles');
   }
 
   createCodingJob(): void {
@@ -629,7 +629,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.fehler-beim-laden-der-kodierpflichtigen-variablen'),
+            this.uiTranslate('ui-text.coding-jobs.variables-load-failed'),
             this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
@@ -664,7 +664,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         const currentData = this.dataSource.data;
         this.dataSource.data = [...currentData, newCodingJob];
         this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.kodierjob-wurde-erstellt', { name: newCodingJob.name }),
+          this.uiTranslate('ui-text.coding-jobs.created', { name: newCodingJob.name }),
           this.uiTranslate('deferred-view.close'),
           { duration: 3000 }
         );
@@ -682,7 +682,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!this.permissions.canEdit(job)) return;
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('ui-text.coding-jobs.manage-permission-required'),
         this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
@@ -692,7 +692,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-den-kodierjob-wirklich-loeschen', { name: job.name });
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.delete-confirmation', { name: job.name });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
@@ -712,7 +712,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             next: response => {
               if (response.success) {
                 this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.kodierjob-wurde-erfolgreich-geloescht', { name: job.name }),
+                  this.uiTranslate('ui-text.coding-jobs.delete-success', { name: job.name }),
                   this.uiTranslate('deferred-view.close'),
                   { duration: 3000 }
                 );
@@ -720,7 +720,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-von-kodierjob', { name: job.name }),
+                  this.uiTranslate('ui-text.coding-jobs.delete-failed', { name: job.name }),
                   this.uiTranslate('deferred-view.close'),
                   { duration: 3000 }
                 );
@@ -728,7 +728,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-von-kodierjob', { name: job.name }),
+                this.uiTranslate('ui-text.coding-jobs.delete-failed', { name: job.name }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
@@ -740,7 +740,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   getProgress(job: CodingJob): string {
     if (!job) {
-      return this.uiTranslate('ui-text.coding-jobs.keine-daten');
+      return this.uiTranslate('ui-text.coding-jobs.no-data');
     }
 
     const totalUnits = job.totalUnits ?? 0;
@@ -753,7 +753,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     if (openUnits > 0) {
-      return this.uiTranslate('ui-text.coding-jobs.offen', {
+      return this.uiTranslate('ui-text.coding-jobs.progress-with-open-cases', {
         progress: progress, codedUnits: codedUnits, totalUnits: totalUnits, openUnits: openUnits
       });
     }
@@ -851,15 +851,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       case 'review':
         return `${this.getReviewCodingJobLabel()}: ${jobName}`;
       case 'results':
-        return this.uiTranslate('ui-text.coding-jobs.ergebnisse-anzeigen', { jobName: jobName });
+        return this.uiTranslate('ui-text.coding-jobs.show-results-aria', { jobName: jobName });
       case 'restart':
-        return this.uiTranslate('ui-text.coding-jobs.offene-faelle-ansehen-91e22f', { jobName: jobName });
+        return this.uiTranslate('ui-text.coding-jobs.view-open-cases-aria', { jobName: jobName });
       case 'apply':
-        return this.uiTranslate('ui-text.coding-jobs.ergebnisse-anwenden', { jobName: jobName });
+        return this.uiTranslate('ui-text.coding-jobs.apply-results-aria', { jobName: jobName });
       case 'notAssigned':
-        return this.uiTranslate('ui-text.coding-jobs.kodierjob-nicht-zugewiesen', { jobName: jobName });
+        return this.uiTranslate('ui-text.coding-jobs.not-assigned-aria', { jobName: jobName });
       case 'delete':
-        return this.uiTranslate('ui-text.coding-jobs.kodierjob-loeschen-1ab107', { jobName: jobName });
+        return this.uiTranslate('ui-text.coding-jobs.delete-job-aria', { jobName: jobName });
       case 'more':
         return `Weitere Aktionen: ${jobName}`;
       default:
@@ -880,7 +880,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     if (!this.canStartCodingJob(selectedJob)) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.dieser-kodierjob-ist-ihnen-nicht-als-kodierer-zugewiesen'),
+        this.uiTranslate('ui-text.coding-jobs.not-assigned'),
         this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
@@ -907,7 +907,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           if (!startResult.firstReplayUrl) {
             this.snackBar.open(
-              this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+              this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
               this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
@@ -925,7 +925,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           window.open(replayUrl, '_blank');
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.kodierjob-gestartet', { name: selectedJob.name }),
+            this.uiTranslate('ui-text.coding-jobs.started', { name: selectedJob.name }),
             this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
@@ -934,7 +934,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           loadingSnack.dismiss();
           const message =
             error?.status === 403 ?
-              this.uiTranslate('ui-text.coding-jobs.dieser-kodierjob-ist-ihnen-nicht-als-kodierer-zugewiesen') :
+              this.uiTranslate('ui-text.coding-jobs.not-assigned') :
               this.uiTranslate('coding.my-coding-jobs.error-starting-job');
           this.snackBar.open(message, this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         }
@@ -953,7 +953,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.coding-jobs.oeffne-review-fuer-kodierjob', { name: selectedJob.name }),
+      this.uiTranslate('ui-text.coding-jobs.opening-review', { name: selectedJob.name }),
       '',
       { duration: 3000 }
     );
@@ -972,7 +972,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           if (!reviewResult.firstReplayUrl) {
             this.snackBar.open(
-              this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+              this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
               this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
@@ -990,7 +990,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           window.open(replayUrl, '_blank');
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.review-fuer-kodierjob-geoeffnet', { name: selectedJob.name }),
+            this.uiTranslate('ui-text.coding-jobs.review-opened', { name: selectedJob.name }),
             this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
@@ -999,8 +999,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           loadingSnack.dismiss();
           const message =
             error?.status === 403 ?
-              this.uiTranslate('ui-text.coding-jobs.sie-haben-keinen-zugriff-auf-diesen-kodierjob') :
-              this.uiTranslate('ui-text.coding-jobs.fehler-beim-oeffnen-des-reviews');
+              this.uiTranslate('ui-text.coding-jobs.access-denied') :
+              this.uiTranslate('ui-text.coding-jobs.review-open-failed');
           this.snackBar.open(message, this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         }
       });
@@ -1065,21 +1065,21 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return this.uiTranslate('coding.trainings.compare.none');
     }
 
-    return this.uiTranslate('ui-text.coding-jobs.kodierer', { length: job.assignedCoders.length });
+    return this.uiTranslate('ui-text.coding-jobs.coder-count', { length: job.assignedCoders.length });
   }
 
   protected getFullCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
       const full = this.coderNamesByJobId.get(job.id)!;
-      return full === 'Keine' ? this.uiTranslate('ui-text.coding-jobs.keine-kodierer-zugewiesen') : full;
+      return full === 'Keine' ? this.uiTranslate('ui-text.coding-jobs.no-coders') : full;
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
-      return this.uiTranslate('ui-text.coding-jobs.keine-kodierer-zugewiesen');
+      return this.uiTranslate('ui-text.coding-jobs.no-coders');
     }
 
     // Fallback
-    return this.uiTranslate('ui-text.coding-jobs.kodierer', { length: job.assignedCoders.length });
+    return this.uiTranslate('ui-text.coding-jobs.coder-count', { length: job.assignedCoders.length });
   }
 
   protected getDisplayName(job: CodingJob): string {
@@ -1110,7 +1110,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         .map(c => c.displayName || c.name || `Coder ${c.id}`);
 
       if (names.length === 0) {
-        this.coderNamesByJobId.set(job.id, this.uiTranslate('ui-text.coding-jobs.kodierer', { length: ids.length }));
+        this.coderNamesByJobId.set(job.id, this.uiTranslate('ui-text.coding-jobs.coder-count', { length: ids.length }));
       } else {
         this.coderNamesByJobId.set(job.id, names.join(', '));
       }
@@ -1161,14 +1161,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-den-kodierjob-wirklich-neu-starten-alle-einheiten-werden-fuer-eine-aktualisie', { name: job.name });
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.restart-confirmation', { name: job.name });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: this.uiTranslate('ui-text.coding-jobs.neustart-bestaetigen'),
+        title: this.uiTranslate('ui-text.coding-jobs.restart-title'),
         message: confirmMessage,
-        confirmButtonText: this.uiTranslate('ui-text.coding-jobs.neustart'),
+        confirmButtonText: this.uiTranslate('ui-text.coding-jobs.restart'),
         cancelButtonText: this.uiTranslate('cancel')
       }
     });
@@ -1180,7 +1180,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           .subscribe({
             next: restartedJob => {
               const loadingSnack = this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.neustart-von-kodierjob-mit-offenen-einheiten', { name: restartedJob.name }),
+                this.uiTranslate('ui-text.coding-jobs.restarting-open-job', { name: restartedJob.name }),
                 '',
                 { duration: 3000 }
               );
@@ -1192,7 +1192,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                     loadingSnack.dismiss();
                     if (!restartResult || restartResult.total === 0) {
                       this.snackBar.open(
-                        this.uiTranslate('ui-text.coding-jobs.keine-offenen-einheiten-gefunden'),
+                        this.uiTranslate('ui-text.coding-jobs.no-open-cases'),
                         'Info',
                         { duration: 3000 }
                       );
@@ -1201,7 +1201,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
                     if (!restartResult.firstReplayUrl) {
                       this.snackBar.open(
-                        this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+                        this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
                         this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                         { duration: 3000 }
                       );
@@ -1220,7 +1220,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
                     window.open(replayUrl, '_blank');
                     this.snackBar.open(
-                      this.uiTranslate('ui-text.coding-jobs.offene-einheiten-fuer-replay-vorbereitet', { total: restartResult.total }),
+                      this.uiTranslate('ui-text.coding-jobs.open-cases-prepared', { total: restartResult.total }),
                       this.uiTranslate('deferred-view.close'),
                       { duration: 3000 }
                     );
@@ -1228,7 +1228,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                   error: () => {
                     loadingSnack.dismiss();
                     this.snackBar.open(
-                      this.uiTranslate('ui-text.coding-jobs.fehler-beim-starten-des-neu-gestarteten-kodierjobs', { name: restartedJob.name }),
+                      this.uiTranslate('ui-text.coding-jobs.restarted-job-start-failed', { name: restartedJob.name }),
                       this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                       { duration: 3000 }
                     );
@@ -1237,7 +1237,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.fehler-beim-neustart-des-kodierjobs', { name: job.name }),
+                this.uiTranslate('ui-text.coding-jobs.restart-failed', { name: job.name }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
@@ -1327,7 +1327,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   openTransferCodingCasesDialog(): void {
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('ui-text.coding-jobs.manage-permission-required'),
         this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
@@ -1370,7 +1370,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           .subscribe({
             next: transferResult => {
               this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.uebertragung-erfolgreich-faelle-in-job-s-angepasst', { transferredCases: transferResult.transferredCases, affectedJobs: transferResult.affectedJobs }),
+                this.uiTranslate('ui-text.coding-jobs.transfer-success', { transferredCases: transferResult.transferredCases, affectedJobs: transferResult.affectedJobs }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 4000 }
               );
@@ -1380,7 +1380,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             error: error => {
               const apiMessage = error?.error?.message;
               this.snackBar.open(
-                apiMessage || this.uiTranslate('ui-text.coding-jobs.fehler-beim-uebertragen-der-kodierfaelle'),
+                apiMessage || this.uiTranslate('ui-text.coding-jobs.transfer-failed'),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 5000 }
               );
@@ -1407,7 +1407,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!this.canDeleteSelectedJobs()) return;
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('ui-text.coding-jobs.manage-permission-required'),
         this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
@@ -1418,7 +1418,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!workspaceId) return;
     const selectedJobs = [...this.selection.selected];
     if (selectedJobs.length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-jobs.keine-kodierjobs-ausgewaehlt'), this.uiTranslate('deferred-view.close'), {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-jobs.no-selection'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1427,12 +1427,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const jobNamesHTML = selectedJobs
       .map(job => `"${job.name}"`)
       .join('<br>');
-    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-wirklich-kodierjob-s-loeschen-br-br', { length: selectedJobs.length, jobNamesHTML: jobNamesHTML });
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.bulk-delete-confirmation', { length: selectedJobs.length, jobNamesHTML: jobNamesHTML });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: this.uiTranslate('ui-text.coding-jobs.massenloeschung-bestaetigen'),
+        title: this.uiTranslate('ui-text.coding-jobs.bulk-delete-title'),
         message: confirmMessage,
         confirmButtonText: this.uiTranslate('export-toast.clear-all'),
         cancelButtonText: this.uiTranslate('cancel')
@@ -1457,7 +1457,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.coding-jobs.loesche-kodierjob-s', { length: jobs.length }),
+      this.uiTranslate('ui-text.coding-jobs.deleting-count', { length: jobs.length }),
       '',
       { duration: 3000 }
     );
@@ -1487,19 +1487,19 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     if (failureCount === 0) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.kodierjob-s-erfolgreich-geloescht', { successCount: successCount }),
+        this.uiTranslate('ui-text.coding-jobs.bulk-delete-success', { successCount: successCount }),
         this.uiTranslate('deferred-view.close'),
         { duration: 3000 }
       );
     } else if (successCount === 0) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-aller-kodierjob-s', { failureCount: failureCount }),
+        this.uiTranslate('ui-text.coding-jobs.bulk-delete-failed', { failureCount: failureCount }),
         this.uiTranslate('deferred-view.close'),
         { duration: 5000 }
       );
     } else {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.kodierjob-s-erfolgreich-geloescht-fehlgeschlagen', { successCount: successCount, failureCount: failureCount, value3: failedJobs.join(', ') }),
+        this.uiTranslate('ui-text.coding-jobs.bulk-delete-partial', { successCount: successCount, failureCount: failureCount, value3: failedJobs.join(', ') }),
         this.uiTranslate('deferred-view.close'),
         { duration: 5000 }
       );
@@ -1537,7 +1537,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         }
 
         const loadingSnack = this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-kodierjob-an', { name: job.name }),
+          this.uiTranslate('ui-text.coding-jobs.applying-results', { name: job.name }),
           '',
           { duration: 3000 }
         );
@@ -1560,7 +1560,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: this.translateService.instant(result.messageKey, result.messageParams || {}) }),
+                  this.uiTranslate('ui-text.coding-jobs.apply-failed', { value1: this.translateService.instant(result.messageKey, result.messageParams || {}) }),
                   this.uiTranslate('deferred-view.close'),
                   { duration: 5000 }
                 );
@@ -1569,7 +1569,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             error: error => {
               loadingSnack.dismiss();
               this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: error.message || this.uiTranslate('error.unknown') }),
+                this.uiTranslate('ui-text.coding-jobs.apply-failed', { value1: error.message || this.uiTranslate('error.unknown') }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 5000 }
               );
@@ -1582,24 +1582,24 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     result: ApplyCodingResultsResponse
   ): string {
     const parts = [
-      this.uiTranslate('ui-text.coding-jobs.ergebnisse-erfolgreich-angewendet-antworten-aktualisiert', { updatedResponsesCount: result.updatedResponsesCount })
+      this.uiTranslate('ui-text.coding-jobs.apply-success', { updatedResponsesCount: result.updatedResponsesCount })
     ];
 
     if (result.skippedAlreadyCodedCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.bereits-vorhandene-kodierungen-nicht-ueberschrieben-antworten', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
+        this.uiTranslate('ui-text.coding-jobs.preserved-responses', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
       );
     }
 
     if (result.overwrittenExistingCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-ueberschrieben-antworten', { overwrittenExistingCount: result.overwrittenExistingCount })
+        this.uiTranslate('ui-text.coding-jobs.overwritten-responses', { overwrittenExistingCount: result.overwrittenExistingCount })
       );
     }
 
     if (result.skippedReviewCount > 0) {
       parts.push(
-        this.uiTranslate('ui-text.coding-jobs.uebersprungen-manuelle-pruefung-benoetigt-antworten', { skippedReviewCount: result.skippedReviewCount })
+        this.uiTranslate('ui-text.coding-jobs.review-skipped-responses', { skippedReviewCount: result.skippedReviewCount })
       );
     }
 
@@ -1608,7 +1608,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   protected getAggregationSettingsText(job: CodingJob): string {
     if (!job.aggregationSettingsVersion) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-aeltere-jobs-nutzen-aktuelle-workspace-einstellungen');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.legacy-aggregation-hint');
     }
 
     if (
@@ -1616,7 +1616,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       job.aggregationThreshold === null ||
       job.aggregationThreshold === undefined
     ) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-beim-erstellen-aus');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-disabled');
     }
 
     const flags = job.responseMatchingFlags || [];
@@ -1625,7 +1625,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         flags
           .map(flag => this.getResponseMatchingFlagLabel(flag))
           .join(', ') :
-        this.uiTranslate('ui-text.coding-job-result-dialog.exakte-uebereinstimmung');
+        this.uiTranslate('ui-text.coding-job-result-dialog.exact-match');
 
     return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
   }
@@ -1633,11 +1633,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private getResponseMatchingFlagLabel(flag: string): string {
     switch (flag) {
       case 'IGNORE_CASE':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.gross-kleinschreibung-ignoriert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.ignore-case');
       case 'IGNORE_WHITESPACE':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.leerzeichen-ignoriert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.ignore-whitespace');
       case 'NO_AGGREGATION':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.nicht-aggregiert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.not-aggregated');
       default:
         return flag;
     }
@@ -1660,15 +1660,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     const confirmMessage = [
-      this.uiTranslate('ui-text.coding-jobs.moechten-sie-die-ergebnisse-fuer-alle-geeigneten-kodierjobs-anwenden'),
-      this.uiTranslate('ui-text.coding-jobs.bei-jobs-mit-offenen-kodierungshinweisen-werden-gueltige-antworten-angewendet'),
-      this.uiTranslate('ui-text.coding-jobs.offene-hinweise-bleiben-zur-manuellen-pruefung-bestehen')
+      this.uiTranslate('ui-text.coding-jobs.bulk-apply-question'),
+      this.uiTranslate('ui-text.coding-jobs.bulk-apply-valid-results'),
+      this.uiTranslate('ui-text.coding-jobs.bulk-apply-review-hint')
     ].join(' ');
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: this.uiTranslate('ui-text.coding-jobs.massenanwendung-bestaetigen'),
+        title: this.uiTranslate('ui-text.coding-jobs.bulk-apply-title'),
         message: confirmMessage,
         confirmButtonText: this.uiTranslate('coding.trainings.compare.apply-dialog.apply'),
         cancelButtonText: this.uiTranslate('cancel')
@@ -1691,7 +1691,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-alle-geeigneten-kodierjobs-an'),
+      this.uiTranslate('ui-text.coding-jobs.applying-all-results'),
       '',
       { duration: 3000 }
     );
@@ -1709,19 +1709,19 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           const processedCount = result.jobsProcessed;
           const alreadyCodedInfo =
             result.totalSkippedAlreadyCoded > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-beibehalten', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded }) :
+              this.uiTranslate('ui-text.coding-jobs.preserved-results-info', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded }) :
               '';
           const failedInfo =
             failedCount > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.jobs-mit-konflikten-fehlern-nicht-angewendet', { failedCount: failedCount }) :
+              this.uiTranslate('ui-text.coding-jobs.failed-jobs-info', { failedCount: failedCount }) :
               '';
           const reviewInfo =
             result.totalSkippedReview > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.ergebnisse-zur-manuellen-pruefung-offen', { totalSkippedReview: result.totalSkippedReview }) :
+              this.uiTranslate('ui-text.coding-jobs.pending-review-info', { totalSkippedReview: result.totalSkippedReview }) :
               '';
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.massenanwendung-abgeschlossen-jobs-verarbeitet-antworten-aktualisiert', {
-              processedCount: processedCount, totalUpdatedResponses: result.totalUpdatedResponses, alreadyCodedInfo: alreadyCodedInfo, reviewInfo: reviewInfo, value5: skippedCount > 0 ? this.uiTranslate('ui-text.coding-jobs.jobs-uebersprungen', { skippedCount: skippedCount }) : '', failedInfo: failedInfo
+            this.uiTranslate('ui-text.coding-jobs.bulk-apply-success', {
+              processedCount: processedCount, totalUpdatedResponses: result.totalUpdatedResponses, alreadyCodedInfo: alreadyCodedInfo, reviewInfo: reviewInfo, value5: skippedCount > 0 ? this.uiTranslate('ui-text.coding-jobs.skipped-jobs-info', { skippedCount: skippedCount }) : '', failedInfo: failedInfo
             }),
             this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
@@ -1731,7 +1731,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.jobsChanged.emit();
         } else {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung', { message: result.message }),
+            this.uiTranslate('ui-text.coding-jobs.bulk-apply-failed', { message: result.message }),
             this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
@@ -1740,7 +1740,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       error: error => {
         loadingSnack.dismiss();
         this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung-473110', { value1: error.message || this.uiTranslate('error.unknown') }),
+          this.uiTranslate('ui-text.coding-jobs.bulk-apply-request-failed', { value1: error.message || this.uiTranslate('error.unknown') }),
           this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );

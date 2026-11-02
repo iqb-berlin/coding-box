@@ -85,22 +85,22 @@ export interface ImportComparisonData {
       <mat-dialog-content class="dialog-content">
         <div class="summary-info">
           <p>{{data.message}}</p>
-          <p>{{ 'ui-text.import-comparison-dialog.betroffene-zeilen' | translate: { length: (data.affectedRows.length) } }}</p>
-          <p>{{ 'ui-text.import-comparison-dialog.verarbeitete-zeilen' | translate: { processedRows: (data.processedRows) } }}</p>
-          <p>{{ 'ui-text.import-comparison-dialog.zu-aktualisierende-zeilen' | translate: { updatedRows: (data.updatedRows) } }}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.affected-rows' | translate: { length: (data.affectedRows.length) } }}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.processed-rows' | translate: { processedRows: (data.processedRows) } }}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.rows-to-update' | translate: { updatedRows: (data.updatedRows) } }}</p>
           <div class="matched-indicator">
             <mat-icon class="matched-icon">{{data.isPreview ? 'preview' : 'check_circle'}}</mat-icon>
-            <span>{{ 'ui-text.import-comparison-dialog.zeilen-werden' | translate: { updatedRows: (data.updatedRows), value2: (data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert') } }}</span>
+            <span>{{ 'ui-text.import-comparison-dialog.row-action' | translate: { updatedRows: (data.updatedRows), value2: (data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert') } }}</span>
           </div>
           @if (data.isPreview) {
             <div class="preview-notice">
               <mat-icon class="warning-icon">info</mat-icon>
-              <span>{{ 'ui-text.import-comparison-dialog.dies-ist-eine-vorschau-die-aenderungen-wurden-noch-nicht-angewendet' | translate }}</span>
+              <span>{{ 'ui-text.import-comparison-dialog.preview-hint' | translate }}</span>
             </div>
           }
           @if (applyProgress() >= 0) {
             <div class="apply-progress">
-              <p>{{ 'ui-text.import-comparison-dialog.import-laeuft' | translate: { value1: (applyProgress()) } }}</p>
+              <p>{{ 'ui-text.import-comparison-dialog.importing' | translate: { value1: (applyProgress()) } }}</p>
               <mat-progress-bar mode="determinate" [value]="applyProgress()"></mat-progress-bar>
             </div>
           }
@@ -109,7 +109,7 @@ export interface ImportComparisonData {
         @if (data.affectedRows.length > 0) {
           <div class="table-container">
             <mat-form-field appearance="outline" class="page-size-field">
-              <mat-label>{{ 'ui-text.import-comparison-dialog.eintraege-pro-seite' | translate }}</mat-label>
+              <mat-label>{{ 'ui-text.import-comparison-dialog.items-per-page' | translate }}</mat-label>
               <mat-select [(value)]="pageSize" (selectionChange)="onPageSizeChange()">
                 <mat-option value="50">50</mat-option>
                 <mat-option value="100">100</mat-option>
@@ -248,23 +248,23 @@ export interface ImportComparisonData {
 
         <!-- Preview mode buttons -->
         @if (data.isPreview) {
-          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.import-comparison-dialog.vorschau-abbrechen' | translate">
+          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.import-comparison-dialog.cancel-preview' | translate">
             <mat-icon>cancel</mat-icon>
             {{ 'cancel' | translate }}
           </button>
           @if (canApplyImport) {
           <button mat-raised-button color="primary" (click)="applyImport()"
             [disabled]="isLoading() || data.updatedRows === 0"
-            [matTooltip]="'ui-text.import-comparison-dialog.aenderungen-anwenden' | translate">
+            [matTooltip]="'ui-text.import-comparison-dialog.apply-changes' | translate">
             <mat-icon>check_circle</mat-icon>
-            {{ 'ui-text.import-comparison-dialog.aenderungen-anwenden' | translate }}
+            {{ 'ui-text.import-comparison-dialog.apply-changes' | translate }}
           </button>
           }
         }
 
         <!-- Normal mode button -->
         @if (!data.isPreview) {
-          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.coding-job-result-dialog.dialog-schliessen' | translate">
+          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.coding-job-result-dialog.close' | translate">
             <mat-icon>close</mat-icon>
             {{ 'deferred-view.close' | translate }}
           </button>
@@ -527,18 +527,18 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
 
   protected getActionLabel(row: ImportComparisonRow): string {
     if (row.importAction === 'skip') {
-      return row.hasConflict ? this.uiTranslate('ui-text.import-comparison-dialog.konflikt-uebersprungen') : this.uiTranslate('ui-text.import-comparison-dialog.uebersprungen');
+      return row.hasConflict ? this.uiTranslate('ui-text.import-comparison-dialog.conflict-skipped') : this.uiTranslate('ui-text.import-comparison-dialog.skipped');
     }
 
     if (row.importAction === 'unchanged') {
-      return this.uiTranslate('ui-text.import-comparison-dialog.unveraendert');
+      return this.uiTranslate('ui-text.import-comparison-dialog.unchanged');
     }
 
     if (!row.hasExistingCoding) {
-      return this.uiTranslate('ui-text.import-comparison-dialog.wird-importiert');
+      return this.uiTranslate('ui-text.import-comparison-dialog.import-action-outcome');
     }
 
-    return this.data.existingCodingMode === 'overwrite' ? this.uiTranslate('ui-text.import-comparison-dialog.wird-ueberschrieben') : this.uiTranslate('ui-text.import-comparison-dialog.wird-ergaenzt');
+    return this.data.existingCodingMode === 'overwrite' ? this.uiTranslate('ui-text.import-comparison-dialog.overwritten') : this.uiTranslate('ui-text.import-comparison-dialog.added');
   }
 
   private updateDataSource(): void {
@@ -557,7 +557,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
       const { default: ExcelJS } = await import('exceljs');
       if (this.destroyRef.destroyed) return;
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(this.uiTranslate('ui-text.import-comparison-dialog.import-vergleich'));
+      const worksheet = workbook.addWorksheet(this.uiTranslate('ui-text.import-comparison-dialog.export-sheet'));
 
       const headers = [
         'Unit Alias',
@@ -566,8 +566,8 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         'Person Code',
         'Person Group',
         'Booklet Name',
-        this.uiTranslate('ui-text.import-comparison-dialog.import-aktion'),
-        this.uiTranslate('ui-text.import-comparison-dialog.import-hinweis'),
+        this.uiTranslate('ui-text.import-comparison-dialog.import-action'),
+        this.uiTranslate('ui-text.import-comparison-dialog.import-note'),
         'Original Status',
         'Original Code',
         'Original Score',
@@ -672,13 +672,13 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.applyProgress.set(-1);
         if (error.status === 409) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.import-comparison-dialog.ein-import-laeuft-bereits-fuer-diesen-workspace'),
+            this.uiTranslate('ui-text.import-comparison-dialog.already-running'),
             '',
             { duration: 5000 }
           );
         } else {
           this.snackBar.open(
-            this.uiTranslate('ui-text.import-comparison-dialog.import-fehlgeschlagen', { value1: error.error?.message || error.message || this.uiTranslate('error.unknown') }),
+            this.uiTranslate('ui-text.import-comparison-dialog.import-failed', { value1: error.error?.message || error.message || this.uiTranslate('error.unknown') }),
             '',
             { duration: 5000 }
           );
@@ -701,7 +701,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
           this.isLoading.set(false);
           this.applyProgress.set(-1);
           this.snackBar.open(
-            this.uiTranslate('ui-text.import-comparison-dialog.import-fehlgeschlagen', { value1: status.error || this.uiTranslate('error.unknown') }),
+            this.uiTranslate('ui-text.import-comparison-dialog.import-failed', { value1: status.error || this.uiTranslate('error.unknown') }),
             '',
             { duration: 5000 }
           );
@@ -711,7 +711,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
         this.applyProgress.set(-1);
         this.snackBar.open(
-          this.uiTranslate('ui-text.import-comparison-dialog.fehler-beim-abfragen-des-import-status'),
+          this.uiTranslate('ui-text.import-comparison-dialog.status-query-failed'),
           '',
           { duration: 5000 }
         );
@@ -732,7 +732,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.applyProgress.set(-1);
         this.notifyImportApplied(workspaceId);
         this.snackBar.open(
-          this.uiTranslate('ui-text.import-comparison-dialog.import-abgeschlossen-aber-ergebnis-konnte-nicht-geladen-werden'),
+          this.uiTranslate('ui-text.import-comparison-dialog.result-load-failed'),
           '',
           { duration: 5000 }
         );

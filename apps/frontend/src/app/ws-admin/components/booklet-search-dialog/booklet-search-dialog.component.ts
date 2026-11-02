@@ -225,7 +225,7 @@ export class BookletSearchDialogComponent implements OnInit {
               );
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.booklet-search-dialog.fehler-beim-loeschen-des-booklets', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ui-text.booklet-search-dialog.delete-failed', { value1: response.report.warnings.join(', ') }),
                 'OK',
                 { duration: 5000 }
               );
@@ -253,8 +253,8 @@ export class BookletSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: this.uiTranslate('ui-text.booklet-search-dialog.alle-booklets-loeschen'),
-        content: this.uiTranslate('ui-text.booklet-search-dialog.sind-sie-sicher-dass-sie-alle-gefundenen-booklets-loeschen-moechten-diese-aktion-kann-nich', { value1: this.bookletSearchResults().length }),
+        title: this.uiTranslate('ui-text.booklet-search-dialog.delete-all-title'),
+        content: this.uiTranslate('ui-text.booklet-search-dialog.delete-all-confirmation', { value1: this.bookletSearchResults().length }),
         confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData

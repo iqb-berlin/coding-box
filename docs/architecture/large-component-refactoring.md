@@ -83,10 +83,38 @@ nach der Korrektur: beide Reihenfolgen von Standard-/Servermeldung sowie
 Servertext mit dem Namen einer Kataloggruppe einschließlich Detailanzeige.
 Ein weiterer Journal-Test prüft die unveränderte Wiedergabe dieses Servertexts.
 
-### Aktuelle technische Prüfung
+### Schlüsselpflege nach dem Review
 
-Lokal im isolierten Worktree auf `harden-frontend-workflows` mit Node 24.22.1
-geprüft. Alle Nx-Aufrufe verwenden die lokale Installation sowie
+Die mit diesem Umbau eingeführten UI-Texte verwenden kurze, kontextbezogene
+englische IDs, zum Beispiel `ui-text.coder-list.load-failed`. 1.541 IDs wurden
+umbenannt; 78 bereits passende IDs bleiben erhalten. Sechs unbenutzte,
+doppelt vorgehaltene Texte für Validierungsschritte wurden entfernt. Die
+verwendeten deutschen Texte und ihre Interpolationsparameter bleiben gleich.
+Der Bereich `coding-freshness-text` ist als verschachteltes JSON-Objekt
+abgelegt; sein Objektname enthält keinen Punkt mehr.
+
+`frontend:test-quality-gates` prüft zusätzlich die Katalogpflege:
+
+- Doppelte JSON-Eigenschaften und mehrdeutige flache/verschachtelte IDs werden
+  abgewiesen. Neue IDs unter `ui-text` verwenden kurze Namen ohne Hashsuffixe.
+- Literale `ui-text`-Referenzen in TypeScript sowie externen und eingebetteten
+  Angular-Templates müssen im Katalog vorhanden sein. Bei direkt angegebenen
+  Parameterobjekten werden fehlende Interpolationsparameter gemeldet.
+- Weitere Anwendungssprachen müssen dieselben IDs und Platzhalter wie der
+  deutsche Katalog enthalten; die Wortreihenfolge darf abweichen. Vor dem
+  Anlegen eines weiteren Sprachkatalogs wird keine zweite Sprache verlangt.
+
+Die Prüfung wertet dynamisch ermittelte IDs und Parameterobjekte nicht aus.
+Diese Fälle bleiben durch gezielte Integrations- und Browsertests abzusichern.
+Die Konventionen stehen in `apps/frontend/AGENTS.md`. ngx-translate,
+`GermanTranslationsTestingModule` und die deutsche Standardsprache bleiben
+erhalten; eine englische Oberfläche ist damit noch nicht eingeführt.
+
+### Technische Prüfung des ursprünglichen Umbaus
+
+Stand `5fc6d8383960800d349958d868a7fcb539c1255c`, lokal im isolierten Worktree
+auf `harden-frontend-workflows` mit Node 24.22.1 geprüft.
+Alle Nx-Aufrufe verwenden die lokale Installation sowie
 `NX_DAEMON=false NX_NO_CLOUD=true`; Validierungen liefen nacheinander.
 
 | Prüfung | Ergebnis |
@@ -112,6 +140,31 @@ Testausführung an einem lokalen Nx-Schreibfehler bei fast vollem Datenträger;
 nach Entfernung ausschließlich des neu erzeugten Angular-Caches dieses
 Worktrees startete der Lauf.
 Entfernte CI, Merge, Release, Deployment und fachliche Abnahme stehen separat aus.
+
+### Technische Prüfung der Schlüsselpflege
+
+Nachlauf vom 02.11.2026 mit Node 24.22.1 im isolierten Worktree,
+`NX_DAEMON=false NX_NO_CLOUD=true`; alle Nx-Prüfungen liefen nacheinander.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. Nach der abschließenden MIR/MCI-Benennung zusätzlich mit `--lintFilePatterns=apps/frontend/src/app/coding/components/code-selector/code-selector.component.ts` bestanden. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | Alle 3.790 Tests in 349 Suiten bestanden. Unveränderte Coverage: 83,73 % Statements/Zeilen, 81,80 % Branches, 81,41 % Functions. |
+| `npx nx test frontend --testPathPatterns=code-selector.component --maxWorkers=2 --skipNxCache` | Alle 51 Fälle nach der abschließenden MIR/MCI-Benennung bestanden. |
+| `npx nx run frontend:test-quality-gates` | Alle 63 Prüfungen bestanden, einschließlich sieben Prüfungen zur Katalogpflege. |
+| `npx nx run frontend:zoneless-inventory --args=--update`, danach `npx nx run frontend:zoneless-approval` und `npx nx run frontend:zoneless-inventory-test` | Inventar mit 10.759 Einträgen aktualisiert; Risikoreferenzen und beide Inventartests bestanden. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,23 kB, keine Budgetüberschreitung. |
+| `npx nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Alle 201 Fälle in 36 Spezifikationen gegen den abschließenden Produktionsbuild bestanden; 8:17 Minuten reine Spezifikationslaufzeit, keine Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Ein zusätzlicher Vergleich mit dem vorherigen PR-Stand bestätigt, dass an
+1.879 Fundstellen in TypeScript und Templates ausschließlich IDs ersetzt
+wurden. Alle erhaltenen deutschen Katalogwerte stimmen einschließlich
+Leerzeichen und Interpolationsparametern mit dem vorherigen Stand überein.
+Der Fingerprint des neuen Produktionsartefakts ist
+`2cf97beb872d891befc9dc066707851f7e66b2512c2f73836b1a9fd0f1b89319`.
+Die Browserprüfungen nutzen kontrollierte API-/Auth-Antworten. Remote-CI,
+Merge, Release, Deployment und fachliche Abnahme sind separate Nachweise.
 
 ---
 

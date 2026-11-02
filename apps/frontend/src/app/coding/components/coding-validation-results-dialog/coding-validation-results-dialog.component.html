@@ -29,7 +29,7 @@
               {{ 'coding-validation-results.previous-page' | translate }}
             </button>
             <span class="pagination-info">
-              {{ 'ui-text.coding-validation-results-dialog.seite-von' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
+              {{ 'ui-text.coding-validation-results-dialog.page-count' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
             </span>
             <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
               {{ 'coding-validation-results.next-page' | translate }}
@@ -95,7 +95,7 @@
             {{ 'coding-validation-results.previous-page' | translate }}
           </button>
           <span class="pagination-info">
-            {{ 'ui-text.coding-validation-results-dialog.seite-von' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
+            {{ 'ui-text.coding-validation-results-dialog.page-count' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
           </span>
           <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
             {{ 'coding-validation-results.next-page' | translate }}

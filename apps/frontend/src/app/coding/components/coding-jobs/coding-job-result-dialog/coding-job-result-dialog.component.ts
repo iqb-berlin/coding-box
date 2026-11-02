@@ -204,7 +204,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       notes: this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).pipe(
         catchError(() => {
           this.isNotesUnavailable.set(true);
-          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.notizen-konnten-nicht-geladen-werden-ergebnisse-werden-trotzdem-angezeigt'), this.uiTranslate('deferred-view.close'), { duration: 4000 });
+          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.notes-load-failed'), this.uiTranslate('deferred-view.close'), { duration: 4000 });
           return of({});
         })
       )
@@ -230,7 +230,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       },
       error: () => {
         this.dataSource.data = [];
-        this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.fehler-beim-laden-der-kodierergebnisse'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -509,24 +509,24 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   getApplyButtonTooltip(): string {
     if (this.data.codingJob.status === 'results_applied') {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.kodierergebnisse-wurden-bereits-angewendet');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.already-applied');
     }
     if (!this.isCodingJobFreshnessApplyable()) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.die-antwortdaten-haben-sich-geaendert-aktualisieren-sie-zuerst-den-kodierungsauftrag');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.source-changed');
     }
     if (this.data.codingJob.training?.id || this.data.codingJob.training_id) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.trainingsergebnisse-koennen-nicht-auf-antwortdaten-angewendet-werden');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.training-results-not-applicable');
     }
     if (this.getUnresolvedMissingCount() > 0) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.missing-kodierung-en-koennen-nicht-aus-dem-missing-profil-aufgeloest-werden', { value1: this.getUnresolvedMissingCount() });
+      return this.uiTranslate('ui-text.coding-job-result-dialog.unresolved-missings', { value1: this.getUnresolvedMissingCount() });
     }
     if (this.getCodedResultCount() === 0) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.keine-kodierten-ergebnisse-zum-anwenden-vorhanden');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.no-coded-results');
     }
     if (this.getReviewIssueCount() > 0) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.ergebnis-se-benoetigen-vorher-eine-manuelle-pruefung-und-werden-uebersprungen', { value1: this.getReviewIssueCount() });
+      return this.uiTranslate('ui-text.coding-job-result-dialog.review-results-skipped', { value1: this.getReviewIssueCount() });
     }
-    return this.uiTranslate('ui-text.coding-job-result-dialog.gepruefte-kodierergebnisse-auf-datenbank-anwenden');
+    return this.uiTranslate('ui-text.coding-job-result-dialog.apply-reviewed-results');
   }
 
   private isCodingJobFreshnessApplyable(): boolean {
@@ -537,10 +537,10 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   protected getOtherCodersTooltip(result: CodingResult): string {
     const otherCoders = result.otherCoders || [];
     if (otherCoders.length === 0) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.doppelkodierung-erkannt');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.double-coding-detected');
     }
 
-    const label = otherCoders.length === 1 ? this.uiTranslate('coding-results.tooltip-other-coder') : this.uiTranslate('ui-text.coding-job-result-dialog.andere-kodierer');
+    const label = otherCoders.length === 1 ? this.uiTranslate('coding-results.tooltip-other-coder') : this.uiTranslate('ui-text.coding-job-result-dialog.other-coders');
     return `${label}${otherCoders.join(', ')}`;
   }
 
@@ -572,18 +572,18 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           if (result.success) {
             this.hasAppliedResults = true;
             if (result.updatedResponsesCount > 0) {
-              message += this.uiTranslate('ui-text.coding-job-result-dialog.aktualisiert-antworten', { updatedResponsesCount: result.updatedResponsesCount });
+              message += this.uiTranslate('ui-text.coding-job-result-dialog.updated-count', { updatedResponsesCount: result.updatedResponsesCount });
             }
             if (result.skippedAlreadyCodedCount > 0) {
-              message += this.uiTranslate('ui-text.coding-job-result-dialog.bereits-vorhandene-kodierungen-nicht-ueberschrieben-antworten', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount });
+              message += this.uiTranslate('ui-text.coding-job-result-dialog.preserved-count', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount });
             }
             if (result.overwrittenExistingCount > 0) {
-              message += this.uiTranslate('ui-text.coding-job-result-dialog.vorhandene-kodierungen-ueberschrieben-antworten', { overwrittenExistingCount: result.overwrittenExistingCount });
+              message += this.uiTranslate('ui-text.coding-job-result-dialog.overwritten-count', { overwrittenExistingCount: result.overwrittenExistingCount });
             }
             if (result.skippedReviewCount > 0) {
-              message += this.uiTranslate('ui-text.coding-job-result-dialog.uebersprungen-manuelle-pruefung-benoetigt-antworten', { skippedReviewCount: result.skippedReviewCount });
+              message += this.uiTranslate('ui-text.coding-job-result-dialog.review-skipped-count', { skippedReviewCount: result.skippedReviewCount });
             }
-            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.ergebnisse-erfolgreich-angewendet', { message: message }), this.uiTranslate('deferred-view.close'), {
+            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.apply-success', { message: message }), this.uiTranslate('deferred-view.close'), {
               duration: 5000,
               panelClass: ['success-snackbar']
             });
@@ -593,7 +593,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
               this.dialogRef.close({ resultsApplied: true });
             }
           } else {
-            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.fehler-beim-anwenden-der-ergebnisse', { message: message }), this.uiTranslate('deferred-view.close'), {
+            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.apply-failed', { message: message }), this.uiTranslate('deferred-view.close'), {
               duration: 5000,
               panelClass: ['error-snackbar']
             });
@@ -602,7 +602,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         error: error => {
           this.isLoading.set(false);
 
-          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.fehler-beim-anwenden-der-kodierergebnisse', { value1: error.message || error }), this.uiTranslate('deferred-view.close'), { duration: 5000 });
+          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.results-apply-failed', { value1: error.message || error }), this.uiTranslate('deferred-view.close'), { duration: 5000 });
         }
       });
     });
@@ -612,17 +612,17 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     const job = this.data.codingJob;
 
     if (!job.aggregationSettingsVersion) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-aeltere-jobs-nutzen-aktuelle-workspace-einstellungen');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.legacy-aggregation-hint');
     }
 
     if (!job.aggregationEnabled || job.aggregationThreshold === null || job.aggregationThreshold === undefined) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-beim-erstellen-aus');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-disabled');
     }
 
     const flags = job.responseMatchingFlags || [];
     const matchingText = flags.length > 0 ?
       flags.map(flag => this.getResponseMatchingFlagLabel(flag)).join(', ') :
-      this.uiTranslate('ui-text.coding-job-result-dialog.exakte-uebereinstimmung');
+      this.uiTranslate('ui-text.coding-job-result-dialog.exact-match');
 
     return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
   }
@@ -630,11 +630,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private getResponseMatchingFlagLabel(flag: string): string {
     switch (flag) {
       case 'IGNORE_CASE':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.gross-kleinschreibung-ignoriert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.ignore-case');
       case 'IGNORE_WHITESPACE':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.leerzeichen-ignoriert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.ignore-whitespace');
       case 'NO_AGGREGATION':
-        return this.uiTranslate('ui-text.coding-job-result-dialog.nicht-aggregiert');
+        return this.uiTranslate('ui-text.coding-job-result-dialog.not-aggregated');
       default:
         return flag;
     }
@@ -642,7 +642,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   getCodeDisplay(result: CodingResult): string {
     if (result.unresolvedMissing) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.missing-nicht-aufloesbar');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.unresolved-missing');
     }
     if (result.code !== undefined && result.code !== null) {
       if (this.isCodingIssueOption(result)) {
@@ -653,7 +653,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }
       return result.code.toString();
     }
-    return this.uiTranslate('ui-text.coding-job-result-dialog.nicht-kodiert');
+    return this.uiTranslate('ui-text.coding-job-result-dialog.uncoded');
   }
 
   getScoreDisplay(result: CodingResult): string {
@@ -675,7 +675,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     if (this.hasCode(result)) {
       return '';
     }
-    return this.uiTranslate('ui-text.coding-job-result-dialog.nicht-kodiert');
+    return this.uiTranslate('ui-text.coding-job-result-dialog.uncoded');
   }
 
   hasCode(result: CodingResult): boolean {
@@ -794,18 +794,18 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   getReviewCodingResultTooltip(result: CodingResult): string {
     if (!this.isCodingIssueReviewEnabled() && this.isCodingIssueOption(result)) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.kodierungshinweise-koennen-erst-im-status-zur-ueberpruefung-geprueft-werden');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.review-status-required');
     }
 
-    return this.uiTranslate('ui-text.coding-job-result-dialog.kodierungs-hinweis-ueberpruefen');
+    return this.uiTranslate('ui-text.coding-job-result-dialog.review-issue');
   }
 
   protected getEditCodingSchemeTooltip(result: CodingResult): string {
     if (!this.isCodingIssueReviewEnabled() && this.isNewCodeNeeded(result)) {
-      return this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-kann-erst-im-status-zur-ueberpruefung-bearbeitet-werden');
+      return this.uiTranslate('ui-text.coding-job-result-dialog.schema-edit-status-required');
     }
 
-    return this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-bearbeiten');
+    return this.uiTranslate('ui-text.coding-job-result-dialog.edit-schema');
   }
 
   isNewCodeNeeded(result: CodingResult): boolean {
@@ -839,13 +839,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   reviewCodingResult(result: CodingResult): void {
     if (!result || !this.isCodingIssueOption(result)) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.nur-kodierungs-hinweis-faelle-koennen-ueberprueft-werden'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.issue-case-required'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
     if (!this.isCodingIssueReviewEnabled()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-job-result-dialog.kodierungshinweise-koennen-erst-im-status-zur-ueberpruefung-geprueft-werden'),
+        this.uiTranslate('ui-text.coding-job-result-dialog.review-status-required'),
         this.uiTranslate('deferred-view.close'),
         { duration: 3000 }
       );
@@ -867,7 +867,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
     const unitsData: UnitsReplay = {
       id: this.data.codingJob.id, // Use original coding job ID
-      name: this.uiTranslate('ui-text.coding-job-result-dialog.kodierungshinweis-726a2e', { name: this.data.codingJob.name, variableId: result.variableId }),
+      name: this.uiTranslate('ui-text.coding-job-result-dialog.issue-description', { name: this.data.codingJob.name, variableId: result.variableId }),
       units: [reviewUnit],
       currentUnitIndex: 0
     };
@@ -893,13 +893,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   protected editCodingScheme(result: CodingResult): void {
     if (!result || !this.isNewCodeNeeded(result)) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.nur-neuer-code-erforderlich-faelle-koennen-bearbeitet-werden'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.new-code-case-required'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
     if (!this.isCodingIssueReviewEnabled()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-kann-erst-im-status-zur-ueberpruefung-bearbeitet-werden'),
+        this.uiTranslate('ui-text.coding-job-result-dialog.schema-edit-status-required'),
         this.uiTranslate('deferred-view.close'),
         { duration: 3000 }
       );
@@ -908,14 +908,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
     const codingSchemeRef = result.unitAlias;
     if (!codingSchemeRef) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.kein-kodierungsschema-referenz-gefunden-fuer-diese-einheit'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.schema-reference-missing'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
     this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
-          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-datei-nicht-gefunden'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.schema-file-missing'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
           return;
         }
 
@@ -935,13 +935,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
         dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(dialogResult => {
           if (dialogResult === true) {
-            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-erfolgreich-aktualisiert'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.schema-update-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
             this.loadCodingResults();
           }
         });
       },
       error: () => {
-        this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.fehler-beim-laden-des-kodierungsschemas'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coding-job-result-dialog.schema-load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }

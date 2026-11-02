@@ -596,7 +596,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<JobStatus | { error: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ error: this.uiTranslate('ui-text.coding-execution.fehlende-job-id-fuer-statusabfrage') });
+      return of({ error: this.uiTranslate('ui-text.coding-execution.status-job-id-missing') });
     }
 
     return this.http
@@ -614,7 +614,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.fehlende-job-id-fuer-abbruch') });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.cancel-job-id-missing') });
     }
 
     return this.http
@@ -623,7 +623,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.failed-to-cancel-job', { jobId: jobId }) })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.cancel-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -633,7 +633,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.fehlende-job-id-fuer-loeschung') });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.delete-job-id-missing') });
     }
 
     return this.http
@@ -642,7 +642,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.failed-to-delete-job', { jobId: jobId }) })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.delete-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -962,7 +962,7 @@ export class TestPersonCodingService {
         catchError(() => of({
           totalResponses: 0,
           statusCounts: {},
-          message: this.uiTranslate('ui-text.test-person-coding.failed-to-start-coding-freshness-job'),
+          message: this.uiTranslate('ui-text.test-person-coding.start-freshness-job-failed'),
           unitCount: 0,
           personCount: 0,
           groupNames: []
@@ -976,7 +976,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string; jobId?: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.fehlende-job-id-fuer-neustart') });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.restart-job-id-missing') });
     }
 
     return this.http
@@ -985,7 +985,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.failed-to-restart-job', { jobId: jobId }) })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.restart-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -1665,7 +1665,7 @@ export class TestPersonCodingService {
         catchError(() => of({
           success: false,
           updatedCount: 0,
-          message: this.uiTranslate('ui-text.test-person-coding.fehler-beim-anwenden-der-kodierung')
+          message: this.uiTranslate('ui-text.test-person-coding.apply-coding-failed')
         })
         )
       );
@@ -1700,7 +1700,7 @@ export class TestPersonCodingService {
           aggregatedGroups: 0,
           aggregatedResponses: 0,
           uniqueCodingCases: 0,
-          message: this.uiTranslate('ui-text.test-person-coding.fehler-beim-anwenden-der-aggregation')
+          message: this.uiTranslate('ui-text.test-person-coding.apply-aggregation-failed')
         })
         )
       );

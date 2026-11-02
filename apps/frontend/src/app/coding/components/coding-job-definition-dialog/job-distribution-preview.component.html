@@ -40,12 +40,12 @@
             <div class="selection-availability-note">
               <mat-icon>info</mat-icon>
               <span>
-                {{ 'ui-text.job-distribution-preview.faelle-werden-in-neue-jobs-uebernommen' | translate: { value1: (summary().totalCases) } }}
+                {{ 'ui-text.job-distribution-preview.new-job-cases' | translate: { value1: (summary().totalCases) } }}
                 @if (summary().unavailableCases > 0) {
-                {{ 'ui-text.job-distribution-preview.ausgewaehlte-faelle-sind-bereits-verteilt-oder-durch-eine-andere-definition-reserviert' | translate: { value1: (summary().unavailableCases) } }}
+                {{ 'ui-text.job-distribution-preview.unavailable-cases' | translate: { value1: (summary().unavailableCases) } }}
                 }
                 @if (summary().limitReduction > 0) {
-                {{ 'ui-text.job-distribution-preview.verfuegbare-faelle-werden-durch-die-maximale-fallzahl-begrenzt' | translate: { value1: (summary().limitReduction) } }}
+                {{ 'ui-text.job-distribution-preview.case-limit-hint' | translate: { value1: (summary().limitReduction) } }}
                 }
               </span>
             </div>
@@ -61,19 +61,19 @@
 
               @if (variables().length > 0) {
               <div class="selection-section">
-                <h5>{{ 'ui-text.job-distribution-preview.ausgewaehlte-variablen' | translate }}</h5>
+                <h5>{{ 'ui-text.job-distribution-preview.selected-variables' | translate }}</h5>
                 <div class="chip-container">
                   @for (variable of variables().slice(0, 10); track variable.unitName +
                   variable.variableId) {
                   <span class="selection-chip">
                     {{ variable.unitName }}: {{ variable.variableId }}
                     @if (variable.includeDeriveError) {
-                    <span class="selection-chip-suffix">{{ 'ui-text.training-sample-editor.derive-error-debd8a' | translate }}</span>
+                    <span class="selection-chip-suffix">{{ 'ui-text.training-sample-editor.derive-error-label' | translate }}</span>
                     }
                   </span>
                   }
                   @if (variables().length > 10) {
-                  <span class="more-chip">{{ 'ui-text.job-bundle-selection.weitere' | translate: { value1: (variables().length - 10) } }}</span>
+                  <span class="more-chip">{{ 'ui-text.job-bundle-selection.more-variables' | translate: { value1: (variables().length - 10) } }}</span>
                   }
                 </div>
               </div>
@@ -81,15 +81,15 @@
 
               @if (bundles().length > 0) {
               <div class="selection-section">
-                <h5>{{ 'ui-text.job-distribution-preview.ausgewaehlte-variablenbuendel' | translate }}</h5>
+                <h5>{{ 'ui-text.job-distribution-preview.selected-bundles' | translate }}</h5>
                 <div class="chip-container">
                   @for (bundle of bundles().slice(0, 10); track bundle.id) {
                   <span class="selection-chip">
-                    {{ 'ui-text.job-distribution-preview.variablen' | translate: { name: (bundle.name), length: (bundle.variables.length) } }}
+                    {{ 'ui-text.job-distribution-preview.variable-count' | translate: { name: (bundle.name), length: (bundle.variables.length) } }}
                   </span>
                   }
                   @if (bundles().length > 10) {
-                  <span class="more-chip">{{ 'ui-text.job-bundle-selection.weitere' | translate: { value1: (bundles().length - 10) } }}</span>
+                  <span class="more-chip">{{ 'ui-text.job-bundle-selection.more-variables' | translate: { value1: (bundles().length - 10) } }}</span>
                   }
                 </div>
               </div>

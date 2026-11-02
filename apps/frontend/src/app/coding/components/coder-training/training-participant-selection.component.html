@@ -32,7 +32,7 @@
         @if (!hasValidReferenceMode()) {
           <div class="reference-mode-error">
             <mat-icon>error_outline</mat-icon>
-            <span>{{ 'ui-text.training-participant-selection.bitte-waehlen-sie-den-vergleichsmodus-fuer-die-ausgewaehlten-vergleichsschulungen' | translate }}</span>
+            <span>{{ 'ui-text.training-participant-selection.reference-mode-required' | translate }}</span>
           </div>
         }
       </div>
@@ -44,8 +44,8 @@
     <div class="section">
       <div class="section-header">
         <h3 class="section-subtitle">
-          {{ 'ui-text.training-participant-selection.kodierer-auswahl' | translate }}
-          <span class="selection-count">{{ 'ui-text.training-participant-selection.ausgewaehlt' | translate: { value1: (selected().size) } }}</span>
+          {{ 'ui-text.training-participant-selection.select-coders' | translate }}
+          <span class="selection-count">{{ 'ui-text.training-participant-selection.selected-count' | translate: { value1: (selected().size) } }}</span>
         </h3>
         <div class="header-actions">
           <button mat-button type="button" [disabled]="!editable()" (click)="selectAll.emit()" class="action-link">{{ 'manual-coding-export.select-all' | translate }}</button>

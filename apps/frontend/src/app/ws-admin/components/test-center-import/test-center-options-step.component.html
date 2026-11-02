@@ -8,11 +8,11 @@
         <div class="options-section">
           <h3 class="section-title">
             <mat-icon>settings</mat-icon>
-            {{ 'ui-text.test-center-options-step.import-optionen' | translate }}
+            {{ 'ui-text.test-center-options-step.title' | translate }}
           </h3>
 
           <p class="options-description">
-            {{ 'ui-text.test-center-options-step.waehlen-sie-welche-daten-aus-dem-testcenter-uebernommen-werden-sollen-sie-koennen-alle-opt' | translate }}
+            {{ 'ui-text.test-center-options-step.selection-hint' | translate }}
           </p>
 
           <div class="options-toolbar">
@@ -35,19 +35,19 @@
                 <span class="checkbox-label">{{ 'variable-analysis.total-cases' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.importiert-testergebnisse-der-teilnehmenden' | translate }}
+                {{ 'ui-text.test-center-options-step.responses-hint' | translate }}
               </div>
             </div>
             @if (form().controls.responses.value) {
             <mat-form-field appearance="outline">
-              <mat-label>{{ 'ui-text.test-center-options-step.umgang-mit-vorhandenen-antworten' | translate }}</mat-label>
+              <mat-label>{{ 'ui-text.test-center-options-step.existing-responses' | translate }}</mat-label>
               <mat-select formControlName="responseOverwriteMode">
-                <mat-option value="skip">{{ 'ui-text.test-center-options-step.vorhandene-units-ueberspringen' | translate }}</mat-option>
-                <mat-option value="merge">{{ 'ui-text.test-center-options-step.fehlende-antwortwerte-ergaenzen' | translate }}</mat-option>
-                <mat-option value="replace">{{ 'ui-text.test-center-options-step.vorhandene-antwortwerte-ersetzen' | translate }}</mat-option>
+                <mat-option value="skip">{{ 'ui-text.test-center-options-step.skip-existing-units' | translate }}</mat-option>
+                <mat-option value="merge">{{ 'ui-text.test-center-options-step.merge-missing-responses' | translate }}</mat-option>
+                <mat-option value="replace">{{ 'ui-text.test-center-options-step.replace-responses' | translate }}</mat-option>
               </mat-select>
               <mat-hint>
-                {{ 'ui-text.test-center-options-step.gilt-fuer-antworten-aus-dem-testcenter-logs-werden-separat-behandelt' | translate }}
+                {{ 'ui-text.test-center-options-step.responses-mode-hint' | translate }}
               </mat-hint>
             </mat-form-field>
             }
@@ -56,62 +56,62 @@
                 <span class="checkbox-label">{{ 'ui-text.test-center-options-step.logs' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.importiert-logdaten-zu-bearbeitungsverlaeufen' | translate }}
+                {{ 'ui-text.test-center-options-step.logs-hint' | translate }}
               </div>
             </div>
             } @if (importType() === 'testFiles'){
             <div class="checkbox-item">
               <mat-checkbox formControlName="definitions">
-                <span class="checkbox-label">{{ 'ui-text.files-validation.aufgabendefinitionen' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.files-validation.unit-definitions' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.definitionen-der-aufgaben' | translate }}<code>.voud</code>{{ 'ui-text.test-center-options-step.dateien' | translate }}
+                {{ 'ui-text.test-center-options-step.definitions-hint' | translate }}<code>.voud</code>{{ 'ui-text.test-center-options-step.files' | translate }}
               </div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="units">
-                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.aufgaben-units-xml' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.units-xml' | translate }}</span>
               </mat-checkbox>
-              <div class="checkbox-hint">{{ 'ui-text.test-center-options-step.aufgaben-im-xml-format' | translate }}</div>
+              <div class="checkbox-hint">{{ 'ui-text.test-center-options-step.units-hint' | translate }}</div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="player">
-                <span class="checkbox-label">{{ 'ui-text.files-validation.player' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.files-validation.players' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.player-und-zugehoerige-dateien' | translate }}<code>.html</code>{{ 'ui-text.test-center-options-step.dateien-ca5368' | translate }}
+                {{ 'ui-text.test-center-options-step.player-hint' | translate }}<code>.html</code>{{ 'ui-text.test-center-options-step.file-category' | translate }}
               </div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="codings">
-                <span class="checkbox-label">{{ 'ui-text.files-validation.kodierschemata' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.files-validation.coding-schemes' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.kodierinformationen' | translate }}<code>.vocs</code>{{ 'ui-text.test-center-options-step.dateien' | translate }}
+                {{ 'ui-text.test-center-options-step.codings-hint' | translate }}<code>.vocs</code>{{ 'ui-text.test-center-options-step.files' | translate }}
               </div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="booklets">
-                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.testhefte-booklets' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.booklet-xml' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.testhefte' | translate }}<code>.xml</code>{{ 'ui-text.test-center-options-step.dateien' | translate }}
+                {{ 'ui-text.test-center-options-step.booklets' | translate }}<code>.xml</code>{{ 'ui-text.test-center-options-step.files' | translate }}
               </div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="testTakers">
-                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.testteilnehmer-test-takers' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.test-center-options-step.test-takers-xml' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.testteilnehmende' | translate }}<code>.xml</code>{{ 'ui-text.test-center-options-step.dateien' | translate }}
+                {{ 'ui-text.test-center-options-step.test-takers' | translate }}<code>.xml</code>{{ 'ui-text.test-center-options-step.files' | translate }}
               </div>
             </div>
             <div class="checkbox-item">
               <mat-checkbox formControlName="metadata">
-                <span class="checkbox-label">{{ 'ui-text.booklet-info-dialog.metadaten' | translate }}</span>
+                <span class="checkbox-label">{{ 'ui-text.booklet-info-dialog.metadata' | translate }}</span>
               </mat-checkbox>
               <div class="checkbox-hint">
-                {{ 'ui-text.test-center-options-step.metadaten-zu-aufgaben' | translate }}<code>.vomd</code>{{ 'ui-text.test-center-options-step.dateien' | translate }}
+                {{ 'ui-text.test-center-options-step.metadata-hint' | translate }}<code>.vomd</code>{{ 'ui-text.test-center-options-step.files' | translate }}
               </div>
             </div>
             }
@@ -120,7 +120,7 @@
 
         <div class="workspace-section">
           <mat-form-field appearance="outline">
-            <mat-label>{{ 'ui-text.test-center-options-step.studie-auswaehlen' | translate }}</mat-label>
+            <mat-label>{{ 'ui-text.test-center-options-step.select-study' | translate }}</mat-label>
             <mat-select formControlName="workspace">
               @for (workspace of workspaces();track workspace){
               <mat-option [value]="workspace.id">{{
@@ -161,7 +161,7 @@
       } @if(filesSelectionError()){
       <div class="error-message">
         <mat-icon>error</mat-icon>
-        <span>{{ 'ui-text.test-center-options-step.bitte-mindestens-eine-import-option-auswaehlen' | translate }}</span>
+        <span>{{ 'ui-text.test-center-options-step.selection-required' | translate }}</span>
       </div>
       } @if(testGroupsLoadError()){
       <div class="error-message">

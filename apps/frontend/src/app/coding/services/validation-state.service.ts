@@ -48,7 +48,7 @@ export class ValidationStateService {
     this.validationProgressSubject.next({
       status: 'loading',
       progress: 0,
-      message: this.uiTranslate('ui-text.validation-state.excel-datei-wird-geladen-und-verarbeitet')
+      message: this.uiTranslate('ui-text.validation-state.processing-excel')
     });
   }
 

@@ -358,7 +358,7 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: this.uiTranslate('test-results-search.buttons.delete-unit'),
-        content: this.uiTranslate('ui-text.unit-search-dialog.sind-sie-sicher-dass-sie-die-unit-loeschen-moechten-alle-zugehoerigen-antworten-werden-ebe', { unitName: unit.unitName, value2: unit.unitAlias || this.uiTranslate('ui-text.unit-search-dialog.ohne-alias') }),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-unit-confirmation', { unitName: unit.unitName, value2: unit.unitAlias || this.uiTranslate('ui-text.unit-search-dialog.no-alias') }),
         confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
@@ -377,13 +377,13 @@ export class UnitSearchDialogComponent implements OnInit {
               this.unitSearchResults.set(this.unitSearchResults().filter(u => u.unitId !== unit.unitId));
               this.totalItems.update(total => total - 1);
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.unit-erfolgreich-geloescht-unit-id', { deletedUnit: response.report.deletedUnit }),
+                this.uiTranslate('ui-text.unit-search-dialog.unit-deleted', { deletedUnit: response.report.deletedUnit }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.fehler-beim-loeschen-der-unit', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ui-text.unit-search-dialog.unit-delete-failed', { value1: response.report.warnings.join(', ') }),
                 this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
@@ -426,13 +426,13 @@ export class UnitSearchDialogComponent implements OnInit {
               this.responseSearchResults.set(this.responseSearchResults().filter(r => r.responseId !== response.responseId));
               this.totalItems.update(total => total - 1);
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.antwort-erfolgreich-geloescht-antwort-id', { deletedResponse: apiResponse.report.deletedResponse }),
+                this.uiTranslate('ui-text.unit-search-dialog.response-deleted', { deletedResponse: apiResponse.report.deletedResponse }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.fehler-beim-loeschen-der-antwort', { value1: apiResponse.report.warnings.join(', ') }),
+                this.uiTranslate('ui-text.unit-search-dialog.response-delete-failed', { value1: apiResponse.report.warnings.join(', ') }),
                 this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
@@ -465,7 +465,7 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-units.title'),
-        content: this.uiTranslate('ui-text.unit-search-dialog.sind-sie-sicher-dass-sie-alle-gefilterten-aufgaben-loeschen-moechten-diese-aktion-kann-nic', { value1: this.unitSearchResults().length }),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-units-confirmation', { value1: this.unitSearchResults().length }),
         confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
@@ -487,13 +487,13 @@ export class UnitSearchDialogComponent implements OnInit {
               this.unitSearchResults.set([]);
               this.totalItems.set(0);
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.aufgaben-erfolgreich-geloescht', { deletedCount: deletedCount }),
+                this.uiTranslate('ui-text.unit-search-dialog.units-deleted', { deletedCount: deletedCount }),
                 this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.unit-search-dialog.fehler-beim-loeschen-der-aufgaben', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ui-text.unit-search-dialog.units-delete-failed', { value1: response.report.warnings.join(', ') }),
                 this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
@@ -526,7 +526,7 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-answers.title'),
-        content: this.uiTranslate('ui-text.unit-search-dialog.sind-sie-sicher-dass-sie-alle-gefilterten-antworten-loeschen-moechten-diese-aktion-kann-ni', { value1: this.responseSearchResults().length }),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-responses-confirmation', { value1: this.responseSearchResults().length }),
         confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
@@ -649,7 +649,7 @@ export class UnitSearchDialogComponent implements OnInit {
               );
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.booklet-search-dialog.fehler-beim-loeschen-des-booklets', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ui-text.booklet-search-dialog.delete-failed', { value1: response.report.warnings.join(', ') }),
                 'OK',
                 { duration: 5000 }
               );
@@ -683,7 +683,7 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-booklets.title'),
-        content: this.uiTranslate('ui-text.unit-search-dialog.sind-sie-sicher-dass-sie-alle-gefilterten-booklets-loeschen-moechten-diese-aktion-kann-nic', { value1: this.bookletSearchResults().length }),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-booklets-confirmation', { value1: this.bookletSearchResults().length }),
         confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData

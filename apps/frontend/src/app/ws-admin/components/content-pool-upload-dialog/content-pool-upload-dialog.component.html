@@ -1,4 +1,4 @@
-<h2 mat-dialog-title>{{ 'ui-text.content-pool-upload-dialog.dateien-in-content-pool-ersetzen' | translate }}</h2>
+<h2 mat-dialog-title>{{ 'ui-text.content-pool-upload-dialog.title' | translate }}</h2>
 
 <mat-dialog-content class="dialog-content">
   <p class="info-text">
@@ -7,7 +7,7 @@
 
   <div class="selected-files">
     <div class="selected-files-title">
-      {{ 'ui-text.content-pool-upload-dialog.ausgewaehlte-dateien' | translate }}
+      {{ 'ui-text.content-pool-upload-dialog.selected-files' | translate }}
       <span>{{ data.files.length }}</span>
     </div>
     <div class="selected-files-list">
@@ -36,7 +36,7 @@
 
   @if (hasLoadedAcps()) {
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>{{ 'ui-text.content-pool-import-dialog.acp-auswaehlen' | translate }}</mat-label>
+      <mat-label>{{ 'ui-text.content-pool-import-dialog.select-package' | translate }}</mat-label>
       <mat-select [(ngModel)]="selectedAcpId" [disabled]="isUploading()">
         @for (acp of acps(); track acp.id) {
           <mat-option [value]="acp.id">
@@ -47,7 +47,7 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>{{ 'ui-text.content-pool-upload-dialog.changelog-eintrag-fuer-neue-acp-version' | translate }}</mat-label>
+      <mat-label>{{ 'ui-text.content-pool-upload-dialog.changelog-placeholder' | translate }}</mat-label>
       <textarea
         matInput
         rows="3"
@@ -84,6 +84,6 @@
     (click)="uploadFiles()"
     [disabled]="isUploading() || !hasLoadedAcps() || !selectedAcpId()">
     <mat-icon>publish</mat-icon>
-    {{ isUploading() ? ('ui-text.content-pool-upload-dialog.uebertrage' | translate) : 'Dateien ersetzen' }}
+    {{ isUploading() ? ('ui-text.content-pool-upload-dialog.uploading' | translate) : 'Dateien ersetzen' }}
   </button>
 </mat-dialog-actions>

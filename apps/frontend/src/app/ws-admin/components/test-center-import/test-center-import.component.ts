@@ -93,23 +93,23 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private readonly localizedTestCenters = computed<Testcenter[]>(() => ([
     {
       id: 1,
-      label: this.uiTranslate('ui-text.test-center-import.testcenter-1')
+      label: this.uiTranslate('ui-text.test-center-import.instance-1')
     },
     {
       id: 2,
-      label: this.uiTranslate('ui-text.test-center-import.testcenter-2')
+      label: this.uiTranslate('ui-text.test-center-import.instance-2')
     },
     {
       id: 3,
-      label: this.uiTranslate('ui-text.test-center-import.testcenter-3')
+      label: this.uiTranslate('ui-text.test-center-import.instance-3')
     },
     {
       id: 4,
-      label: this.uiTranslate('ui-text.test-center-import.testcenter-4')
+      label: this.uiTranslate('ui-text.test-center-import.instance-4')
     },
     {
       id: 5,
-      label: this.uiTranslate('ui-text.test-center-import.testcenter-5')
+      label: this.uiTranslate('ui-text.test-center-import.instance-5')
     }
   ]));
 
@@ -436,7 +436,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
           this.showTestGroups.set(false);
           this.testGroupsLoadError.set(this.getErrorMessage(
             error,
-            this.uiTranslate('ui-text.test-center-import.testgruppen-konnten-nicht-abgerufen-werden-bitte-verbindung-und-testcenter-sitzung-pruefen')
+            this.uiTranslate('ui-text.test-center-import.groups-load-failed')
           ));
         }
       });
@@ -466,12 +466,12 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: <ConfirmDialogData>{
-        title: this.uiTranslate('ui-text.test-center-import.vorhandene-logs-gefunden'),
+        title: this.uiTranslate('ui-text.test-center-import.existing-logs-title'),
         content:
-          this.uiTranslate('ui-text.test-center-import.ausgewaehlte-testgruppe-n-haben-bereits-booklet-logs-in-der-datenbank', { length: groupsWithLogs.length }) +
-          this.uiTranslate('ui-text.test-center-import.moechten-sie-die-vorhandenen-logs-ueberschreiben-oder-vorhandene-logs-ueberspringen'),
-        confirmButtonLabel: this.uiTranslate('ui-text.test-center-import.ueberschreiben'),
-        alternativeButtonLabel: this.uiTranslate('ui-text.test-center-import.ohne-ueberschreiben-fortfahren'),
+          this.uiTranslate('ui-text.test-center-import.existing-logs-count', { length: groupsWithLogs.length }) +
+          this.uiTranslate('ui-text.test-center-import.overwrite-logs-question'),
+        confirmButtonLabel: this.uiTranslate('ui-text.test-center-import.overwrite'),
+        alternativeButtonLabel: this.uiTranslate('ui-text.test-center-import.skip-existing-logs'),
         alternativeButtonValue: 'skip',
         cancelButtonLabel: this.uiTranslate('cancel'),
         showCancel: true
@@ -550,16 +550,16 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected readonly loadingMessage = signal(this.uiTranslate('ui-text.test-center-import.testresultate-werden-hochgeladen'));
+  protected readonly loadingMessage = signal(this.uiTranslate('ui-text.test-center-import.uploading-results'));
 
   private readonly localizedOptionLabels = computed<Record<ImportWorkspaceOptionKey, string>>(() => ({
-    definitions: this.uiTranslate('ui-text.files-validation.aufgabendefinitionen'),
-    units: this.uiTranslate('ui-text.test-center-options-step.aufgaben-units-xml'),
-    player: this.uiTranslate('ui-text.files-validation.player'),
-    codings: this.uiTranslate('ui-text.files-validation.kodierschemata'),
-    booklets: this.uiTranslate('ui-text.files-validation.testhefte'),
-    testTakers: this.uiTranslate('ui-text.file-utils.testteilnehmer'),
-    metadata: this.uiTranslate('ui-text.booklet-info-dialog.metadaten')
+    definitions: this.uiTranslate('ui-text.files-validation.unit-definitions'),
+    units: this.uiTranslate('ui-text.test-center-options-step.units-xml'),
+    player: this.uiTranslate('ui-text.files-validation.players'),
+    codings: this.uiTranslate('ui-text.files-validation.coding-schemes'),
+    booklets: this.uiTranslate('ui-text.files-validation.booklets'),
+    testTakers: this.uiTranslate('ui-text.file-utils.test-takers'),
+    metadata: this.uiTranslate('ui-text.booklet-info-dialog.metadata')
   }));
 
   protected get optionLabels(): Record<ImportWorkspaceOptionKey, string> { return this.localizedOptionLabels(); }
@@ -575,13 +575,13 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     const importedLogs = !!formValues.importOptions.logs;
 
     if (importedLogs && importedResponses) {
-      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importiere-antworten-und-logs-fuer-testgruppen', { value1: selectedGroupNames.join(', ') }));
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-responses-and-logs', { value1: selectedGroupNames.join(', ') }));
     } else if (importedLogs) {
-      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importiere-logs-fuer-testgruppen', { value1: selectedGroupNames.join(', ') }));
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-logs', { value1: selectedGroupNames.join(', ') }));
     } else if (importedResponses) {
-      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importiere-antworten-fuer-testgruppen', { value1: selectedGroupNames.join(', ') }));
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-responses', { value1: selectedGroupNames.join(', ') }));
     } else {
-      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importiere-daten-fuer-testgruppen', { value1: selectedGroupNames.join(', ') }));
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-data', { value1: selectedGroupNames.join(', ') }));
     }
 
     if (this.data.importType === 'testResults') {
@@ -746,7 +746,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         error: error => {
           this.uploadError.set(this.getErrorMessage(
             error,
-            this.uiTranslate('ui-text.test-center-import.testcenter-import-fehlgeschlagen-bitte-verbindung-pruefen-und-erneut-versuchen')
+            this.uiTranslate('ui-text.test-center-import.import-failed')
           ));
           this.isUploadingTestFiles.set(false);
           this.isUploadingTestResults.set(false);
@@ -836,7 +836,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       if (currentResult.success === false) {
         this.failedGroupName.set(groupName);
         this.uploadError.set(currentResult.issues?.filter(issue => issue.level === 'error').map(issue => issue.message).join(' ') ||
-          this.uiTranslate('ui-text.test-center-import.import-der-testgruppe-wurde-nicht-vollstaendig-abgeschlossen', { groupName: groupName }));
+          this.uiTranslate('ui-text.test-center-import.group-incomplete', { groupName: groupName }));
         const remainingGroups = new Set(state.groups.slice(state.index));
         this.selectedRows = this.selectedRows.filter(group => remainingGroups.has(group.groupName));
         this.retrySelection = {
@@ -942,10 +942,10 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   get testGroupsLoadMessage(): string {
     if (this.testGroupsLoadProgress()?.status === 'unknown') {
-      return this.uiTranslate('ui-text.test-center-import.verbindung-zum-testcenter-wird-hergestellt');
+      return this.uiTranslate('ui-text.test-center-import.connecting');
     }
     return this.testGroupsLoadProgress()?.message ||
-      this.uiTranslate('ui-text.test-center-import.testgruppen-werden-vom-testcenter-abgerufen');
+      this.uiTranslate('ui-text.test-center-import.loading-groups');
   }
 
   protected get testGroupsLoadElapsedText(): string {

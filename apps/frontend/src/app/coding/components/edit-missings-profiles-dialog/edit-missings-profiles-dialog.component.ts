@@ -396,14 +396,14 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return [
       {
         id: 'mir',
-        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.missing-invalid-response'),
+        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.invalid-response'),
         description: '',
         code: -98,
         score: 0
       },
       {
         id: 'mci',
-        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.missing-coding-impossible'),
+        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.coding-impossible'),
         description: '',
         code: -97,
         score: null

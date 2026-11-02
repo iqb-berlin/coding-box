@@ -230,8 +230,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     const selectedPackages = this.resourcePackageSelection.selected;
     const hasGlobalPackage = selectedPackages.some(pkg => pkg.scope === 'global');
     const content = hasGlobalPackage ?
-      this.uiTranslate('ui-text.resource-packages-dialog.mindestens-ein-ausgewaehltes-ressourcenpaket-ist-global-es-wird-in-allen-workspaces-geloes') :
-      this.uiTranslate('ui-text.resource-packages-dialog.die-ausgewaehlten-ressourcenpakete-werden-aus-diesem-workspace-entfernt-fortfahren');
+      this.uiTranslate('ui-text.resource-packages-dialog.global-delete-confirmation') :
+      this.uiTranslate('ui-text.resource-packages-dialog.workspace-delete-confirmation');
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '520px',
@@ -256,7 +256,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.isLoadingResourcePackages.set(false);
             if (success) {
               this.snackBar.open(
-                this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-wurden-geloescht'),
+                this.uiTranslate('ui-text.resource-packages-dialog.delete-success'),
                 '',
                 { duration: 3000 }
               );
@@ -265,7 +265,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
               this.dialogRef.close(true);
             } else {
               this.snackBar.open(
-                this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-konnten-nicht-geloescht-werden'),
+                this.uiTranslate('ui-text.resource-packages-dialog.delete-failed'),
                 this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
@@ -274,7 +274,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           error: () => {
             this.isLoadingResourcePackages.set(false);
             this.snackBar.open(
-              this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-konnten-nicht-geloescht-werden'),
+              this.uiTranslate('ui-text.resource-packages-dialog.delete-failed'),
               this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
@@ -312,7 +312,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.finishResourcePackageOperation();
             if (!blob || blob.size === 0) {
               this.snackBar.open(
-                this.uiTranslate('ui-text.resource-packages-dialog.das-ressourcenpaket-konnte-nicht-heruntergeladen-werden'),
+                this.uiTranslate('ui-text.resource-packages-dialog.download-failed'),
                 this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
@@ -331,7 +331,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         error: () => {
           this.finishResourcePackageOperation();
           this.snackBar.open(
-            this.uiTranslate('ui-text.resource-packages-dialog.das-ressourcenpaket-konnte-nicht-heruntergeladen-werden'),
+            this.uiTranslate('ui-text.resource-packages-dialog.download-failed'),
             this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
@@ -368,13 +368,13 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
               return;
             }
             if (event instanceof HttpResponse) {
-              this.resourcePackageOperationText.set(this.uiTranslate('ui-text.resource-packages-dialog.paket-wird-geprueft-und-entpackt'));
+              this.resourcePackageOperationText.set(this.uiTranslate('ui-text.resource-packages-dialog.unpacking'));
               this.resourcePackageProgressMode.set('indeterminate');
               const id = event.body || -1;
               this.finishResourcePackageOperation();
               if (id > 0) {
                 this.snackBar.open(
-                  this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-wurde-hochgeladen'),
+                  this.uiTranslate('ui-text.resource-packages-dialog.upload-success'),
                   '',
                   { duration: 3000 }
                 );
@@ -382,7 +382,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
                 this.dialogRef.close(true);
               } else {
                 this.snackBar.open(
-                  this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-konnte-nicht-hochgeladen-werden'),
+                  this.uiTranslate('ui-text.resource-packages-dialog.upload-failed'),
                   this.translate.instant('error.error_title'),
                   { duration: 3000 }
                 );
@@ -392,7 +392,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           error: (error: unknown) => {
             this.finishResourcePackageOperation();
             this.snackBar.open(
-              this.getResourcePackageErrorMessage(error, this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-konnte-nicht-hochgeladen-werden')),
+              this.getResourcePackageErrorMessage(error, this.uiTranslate('ui-text.resource-packages-dialog.upload-failed')),
               this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
@@ -418,10 +418,10 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       width: '560px',
       data: <ConfirmDialogData>{
         title: packageExists ?
-          this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-pruefen-reparieren') :
-          this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-installieren'),
-        content: this.uiTranslate('ui-text.resource-packages-dialog.das-geogebra-math-apps-bundle-wird-geprueft-falls-kein-gueltiges-bundle-vorhanden-ist-wird'),
-        confirmButtonLabel: packageExists ? this.uiTranslate('ui-text.resource-packages-dialog.pruefen-reparieren') : 'Installieren',
+          this.uiTranslate('ui-text.resource-packages-dialog.repair-geogebra-title') :
+          this.uiTranslate('ui-text.resource-packages-dialog.install-geogebra-title'),
+        content: this.uiTranslate('ui-text.resource-packages-dialog.repair-geogebra-confirmation'),
+        confirmButtonLabel: packageExists ? this.uiTranslate('ui-text.resource-packages-dialog.repair-confirm') : 'Installieren',
         showCancel: true
       }
     });
@@ -431,7 +431,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         return;
       }
       this.startResourcePackageOperation(
-        this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-wird-heruntergeladen-und-installiert'),
+        this.uiTranslate('ui-text.resource-packages-dialog.installing-geogebra'),
         'indeterminate'
       );
       this.resourcePackageService.installGeoGebraPackage(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
@@ -440,7 +440,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             if (event instanceof HttpResponse) {
               this.finishResourcePackageOperation();
               this.snackBar.open(
-                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-ist-verfuegbar', { value1: event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : '' }),
+                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-available', { value1: event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : '' }),
                 '',
                 { duration: 3000 }
               );
@@ -453,7 +453,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.snackBar.open(
               this.getResourcePackageErrorMessage(
                 error,
-                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-konnte-nicht-installiert-werden-bitte-download-link-und-zip-format-pruefen')
+                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-install-failed')
               ),
               this.translate.instant('error.error_title'),
               { duration: 3000 }

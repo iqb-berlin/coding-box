@@ -64,7 +64,7 @@
         <div>
           <h2 class="section-title">{{ 'ws-admin.manual-coding' | translate }}</h2>
           <p class="section-description">
-            {{ 'ui-text.coding-management-manual.bereiten-sie-kodierfaelle-vor-planen-sie-jobs-und-schliessen-sie-manuelle-ergebnisse-ab' | translate }}
+            {{ 'ui-text.coding-management-manual.description' | translate }}
           </p>
         </div>
         <div class="header-actions">
@@ -171,13 +171,13 @@
       @if (shouldShowPlanningOverview()) {
         <div
           class="planning-overview-grid"
-          [attr.aria-label]="'ui-text.coding-management-manual.uebersicht-zur-manuellen-kodierungsplanung' | translate"
+          [attr.aria-label]="'ui-text.coding-management-manual.planning-overview' | translate"
         >
           <div class="overview-metric">
-            <span class="metric-label">{{ 'ui-text.coding-management-manual.offene-arbeitsfaelle' | translate }}</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.open-work-cases' | translate }}</span>
             <span class="metric-value">{{ getOpenCodingCases() }}</span>
             <span class="metric-hint"
-              >{{ 'ui-text.coding-management-manual.effektive-kodierfaelle-nach-aggregation' | translate }}</span
+              >{{ 'ui-text.coding-management-manual.effective-cases' | translate }}</span
             >
             @if (getManualCaseScopeSummaryText()) {
               <span class="metric-explainer">
@@ -186,34 +186,34 @@
             }
           </div>
           <div class="overview-metric">
-            <span class="metric-label">{{ 'ui-text.coding-management-manual.fuer-neue-jobs-verfuegbar' | translate }}</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.available-for-new-jobs' | translate }}</span>
             <span class="metric-value">{{
               getAvailableCasesForNewJobs()
             }}</span>
             <span class="metric-hint">
               @if (getUnavailableCasesForNewJobs() > 0) {
-                {{ 'ui-text.coding-management-manual.arbeitsfaelle-reserviert-oder-verteilt' | translate: { value1: (getUnavailableCasesForNewJobs()) } }}
+                {{ 'ui-text.coding-management-manual.reserved-cases' | translate: { value1: (getUnavailableCasesForNewJobs()) } }}
               } @else {
-                {{ 'ui-text.coding-management-manual.aus-aktueller-variablenauswahl' | translate }}
+                {{ 'ui-text.coding-management-manual.current-selection' | translate }}
               }
             </span>
           </div>
           <div class="overview-metric">
-            <span class="metric-label">{{ 'ui-text.coding-management-manual.variablenabdeckung' | translate }}</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.variable-coverage' | translate }}</span>
             <span class="metric-value"
               >{{ getVariableCoveragePercentage() | number: '1.0-0' }}%</span
             >
             <span class="metric-hint"
-              >{{ 'ui-text.coding-management-manual.fehlend' | translate: { value1: (variableCoverageOverviewValue?.missingVariables || 0) } }}</span
+              >{{ 'ui-text.coding-management-manual.missing-variables' | translate: { value1: (variableCoverageOverviewValue?.missingVariables || 0) } }}</span
             >
           </div>
           <div class="overview-metric">
-            <span class="metric-label">{{ 'ui-text.coding-management-manual.in-jobs-verteilt' | translate }}</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.distributed-in-jobs' | translate }}</span>
             <span class="metric-value">{{
               caseCoverageOverviewValue?.effectiveCasesInJobs || 0
             }}</span>
             <span class="metric-hint"
-              >{{ 'ui-text.coding-management-manual.arbeitsfaelle-nicht-zugewiesen' | translate: { value1: (caseCoverageOverviewValue?.effectiveUnassignedCases || 0) } }}</span
+              >{{ 'ui-text.coding-management-manual.unassigned-cases' | translate: { value1: (caseCoverageOverviewValue?.effectiveUnassignedCases || 0) } }}</span
             >
           </div>
           <div class="overview-metric">
@@ -222,7 +222,7 @@
               >{{ getAppliedResultsPercentage() | number: '1.0-0' }}%</span
             >
             <span class="metric-hint"
-              >{{ 'ui-text.coding-management-manual.arbeitsfaelle-verbleibend' | translate: { value1: (appliedResultsOverviewValue?.remainingResponses || 0) } }}</span
+              >{{ 'ui-text.coding-management-manual.remaining-cases' | translate: { value1: (appliedResultsOverviewValue?.remainingResponses || 0) } }}</span
             >
           </div>
         </div>
@@ -367,7 +367,7 @@
                   (click)="openExecutionTransferCases()"
                 >
                   <mat-icon>swap_horiz</mat-icon>
-                  {{ 'ui-text.coding-jobs.faelle-uebertragen' | translate }}
+                  {{ 'ui-text.coding-jobs.transfer-cases' | translate }}
                 </button>
               }
               <button
@@ -386,7 +386,7 @@
                 (click)="openExecutionDoubleCodedReview()"
               >
                 <mat-icon>compare</mat-icon>
-                {{ 'ui-text.coding-jobs.doppelkodierungsreview' | translate }}
+                {{ 'ui-text.coding-jobs.double-coding-review' | translate }}
               </button>
               @if (shouldShowManualRefreshButton()) {
                 <button
@@ -449,7 +449,7 @@
           >
             <div class="statistics-card">
               <h2 class="section-title section-title-with-action">
-                {{ 'ui-text.coding-management-manual.faelle-in-kodierjobs' | translate }}
+                {{ 'ui-text.coding-management-manual.cases-in-jobs' | translate }}
                 <button
                   mat-icon-button
                   (click)="showCaseCoverageInfo.set(!showCaseCoverageInfo())"
@@ -491,39 +491,39 @@
               }
               <div class="coverage-stats">
                 <div class="stat-item">
-                  <span class="stat-label">{{ 'ui-text.coding-management-manual.effektive-kodierfaelle-gesamt' | translate }}</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.total-effective-cases' | translate }}</span>
                   <span class="stat-value">{{
                     caseCoverageOverviewValue.effectiveTotalCasesToCode
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">{{ 'ui-text.coding-management-manual.arbeitsfaelle-in-jobs' | translate }}</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.work-cases-in-jobs' | translate }}</span>
                   <span class="stat-value covered">{{
                     caseCoverageOverviewValue.effectiveCasesInJobs
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">{{ 'ui-text.coding-management-manual.doppelt-kodierte-faelle' | translate }}</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.double-coded-cases' | translate }}</span>
                   <span class="stat-value">{{
                     caseCoverageOverviewValue.doubleCodedCases
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">{{ 'ui-text.coding-management-manual.einfach-kodierte-faelle' | translate }}</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.single-coded-cases' | translate }}</span>
                   <span class="stat-value">{{
                     effectiveSingleCodedCases()
                   }}</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label"
-                    >{{ 'ui-text.coding-management-manual.nicht-zugewiesene-arbeitsfaelle' | translate }}</span
+                    >{{ 'ui-text.coding-management-manual.unassigned-work-cases' | translate }}</span
                   >
                   <span class="stat-value missing">{{
                     caseCoverageOverviewValue.effectiveUnassignedCases
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">{{ 'ui-text.coding-management-manual.abdeckungsrate' | translate }}</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.coverage-rate' | translate }}</span>
                   <span class="stat-value percentage"
                     >{{
                       caseCoverageOverviewValue.coveragePercentage
@@ -635,7 +635,7 @@
                 (click)="openCoderTraining()"
               >
                 <mat-icon>add</mat-icon>
-                {{ 'ui-text.coding-management-manual.kodierschulung-erstellen' | translate }}
+                {{ 'ui-text.coding-management-manual.create-training' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -665,7 +665,7 @@
                 (click)="openTrainingDiscussion()"
               >
                 <mat-icon>forum</mat-icon>
-                {{ 'ui-text.coding-management-manual.diskussion' | translate }}
+                {{ 'ui-text.coding-management-manual.discussion' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -674,7 +674,7 @@
                 (click)="openTrainingComparison()"
               >
                 <mat-icon>compare_arrows</mat-icon>
-                {{ 'ui-text.coding-management-manual.schulungen-vergleichen' | translate }}
+                {{ 'ui-text.coding-management-manual.compare-trainings' | translate }}
               </button>
               @if (shouldShowManualRefreshButton()) {
                 <button

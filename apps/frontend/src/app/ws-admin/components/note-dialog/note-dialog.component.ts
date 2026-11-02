@@ -31,7 +31,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Notizen' }}</h1>
       <div class="header-info">
-        <span class="note-count">{{ 'ui-text.note-dialog.notizen' | translate: { length: (notes.length) } }}</span>
+        <span class="note-count">{{ 'ui-text.note-dialog.count' | translate: { length: (notes.length) } }}</span>
       </div>
     </div>
 
@@ -61,12 +61,12 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
           </div>
           <div class="add-note-form">
             <mat-form-field appearance="outline" class="note-input">
-              <mat-label>{{ 'ui-text.note-dialog.neue-notiz' | translate }}</mat-label>
-              <textarea matInput [(ngModel)]="newNoteText" [placeholder]="'ui-text.note-dialog.notiz-eingeben' | translate" rows="3"></textarea>
+              <mat-label>{{ 'ui-text.note-dialog.new-note' | translate }}</mat-label>
+              <textarea matInput [(ngModel)]="newNoteText" [placeholder]="'ui-text.note-dialog.placeholder' | translate" rows="3"></textarea>
             </mat-form-field>
             <button mat-raised-button color="primary" (click)="addNote()" class="add-note-button">
               <mat-icon>add</mat-icon>
-              {{ 'ui-text.note-dialog.hinzufuegen' | translate }}
+              {{ 'ui-text.note-dialog.add' | translate }}
             </button>
           </div>
         </div>
@@ -300,7 +300,7 @@ export class NoteDialogComponent implements OnInit {
   protected addNote(): void {
     if (!this.newNoteText.trim()) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.note-dialog.bitte-geben-sie-einen-notiz-text-ein'),
+        this.uiTranslate('ui-text.note-dialog.text-required'),
         this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
         { duration: 3000 }
       );
@@ -322,14 +322,14 @@ export class NoteDialogComponent implements OnInit {
         this.cdr.markForCheck();
 
         this.snackBar.open(
-          this.uiTranslate('ui-text.note-dialog.notiz-erfolgreich-hinzugefuegt'),
+          this.uiTranslate('ui-text.note-dialog.add-success'),
           'Erfolg',
           { duration: 3000 }
         );
       },
       error: () => {
         this.snackBar.open(
-          this.uiTranslate('ui-text.note-dialog.fehler-beim-hinzufuegen-der-notiz'),
+          this.uiTranslate('ui-text.note-dialog.add-failed'),
           this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
@@ -352,13 +352,13 @@ export class NoteDialogComponent implements OnInit {
           this.cdr.markForCheck();
 
           this.snackBar.open(
-            this.uiTranslate('ui-text.note-dialog.notiz-erfolgreich-geloescht'),
+            this.uiTranslate('ui-text.note-dialog.delete-success'),
             'Erfolg',
             { duration: 3000 }
           );
         } else {
           this.snackBar.open(
-            this.uiTranslate('ui-text.note-dialog.fehler-beim-loeschen-der-notiz'),
+            this.uiTranslate('ui-text.note-dialog.delete-failed'),
             this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
@@ -366,7 +366,7 @@ export class NoteDialogComponent implements OnInit {
       },
       error: () => {
         this.snackBar.open(
-          this.uiTranslate('ui-text.note-dialog.fehler-beim-loeschen-der-notiz'),
+          this.uiTranslate('ui-text.note-dialog.delete-failed'),
           this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );

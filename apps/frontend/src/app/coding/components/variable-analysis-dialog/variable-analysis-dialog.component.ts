@@ -105,16 +105,16 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  private readonly localizedDistributionRowsTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.eine-verteilungszeile-entspricht-einer-kombination-aus-aufgaben-id-variablen-id-und-code')));
+  private readonly localizedDistributionRowsTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.distribution-row-tooltip')));
   protected get distributionRowsTooltip(): string { return this.localizedDistributionRowsTooltip(); }
 
-  private readonly localizedOccurrenceCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.wie-oft-dieser-konkrete-code-bei-dieser-aufgabe-und-variable-vorkommt')));
+  private readonly localizedOccurrenceCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.occurrences-tooltip')));
   protected get occurrenceCountTooltip(): string { return this.localizedOccurrenceCountTooltip(); }
 
-  private readonly localizedTotalCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.alle-antworten-zu-dieser-aufgabe-und-variable-unabhaengig-vom-code')));
+  private readonly localizedTotalCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.total-responses-tooltip')));
   protected get totalCountTooltip(): string { return this.localizedTotalCountTooltip(); }
 
-  private readonly localizedRelativeOccurrenceTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.vorkommen-dieses-codes-geteilt-durch-die-antworten-gesamt-zu-dieser-aufgabe-und-variable')));
+  private readonly localizedRelativeOccurrenceTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.proportion-tooltip')));
   protected get relativeOccurrenceTooltip(): string { return this.localizedRelativeOccurrenceTooltip(); }
 
   variableAnalysisData: VariableAnalysisItemDto[] = [];
@@ -207,7 +207,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
         error: () => {
           this.isLoadingVariableAnalysis = false;
           this.changeDetectorRef.markForCheck();
-          this.snackBar.open(this.uiTranslate('ui-text.variable-analysis-dialog.fehler-beim-abrufen-der-code-score-verteilung'), this.uiTranslate('deferred-view.close'), {
+          this.snackBar.open(this.uiTranslate('ui-text.variable-analysis-dialog.load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000,
             panelClass: ['error-snackbar']
           });

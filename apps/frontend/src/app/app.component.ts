@@ -106,7 +106,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.snackBar.dismiss();
       } else {
         this.authDataFailureSnackBar = this.snackBar.open(
-          this.uiTranslate('ui-text.app.ihre-anmeldung-wurde-erkannt-aber-die-sitzungsdaten-konnten-nicht-geladen-werden-bitte-lad'),
+          this.uiTranslate('ui-text.app.session-data-load-failed'),
           this.uiTranslate('deferred-view.close'),
           {
             duration: 8000,

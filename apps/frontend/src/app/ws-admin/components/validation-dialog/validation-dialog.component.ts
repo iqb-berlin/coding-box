@@ -148,7 +148,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(xmlContent => {
       if (!xmlContent) {
         this.snackBar.open(
-          this.uiTranslate('ui-text.validation-dialog.fehler-beim-abrufen-der-unit-xml-fuer', { fileName: fileName }),
+          this.uiTranslate('ui-text.validation-dialog.unit-xml-load-failed', { fileName: fileName }),
           this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
@@ -208,15 +208,15 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     const status = this.getOverallStatus();
     switch (status) {
       case 'running':
-        return this.uiTranslate('ui-text.validation-dialog.validierungen-laufen');
+        return this.uiTranslate('ui-text.validation-dialog.running');
       case 'failed':
-        return this.uiTranslate('ui-text.validation-dialog.einige-pruefungen-sind-fehlgeschlagen');
+        return this.uiTranslate('ui-text.validation-dialog.some-failed');
       case 'success':
-        return this.uiTranslate('ui-text.validation-dialog.alle-pruefungen-bestanden');
+        return this.uiTranslate('ui-text.validation-dialog.all-passed');
       case 'partial':
-        return this.uiTranslate('ui-text.validation-dialog.einige-pruefungen-bestanden');
+        return this.uiTranslate('ui-text.validation-dialog.some-passed');
       default:
-        return this.uiTranslate('ui-text.validation-dialog.bereit-zum-pruefen');
+        return this.uiTranslate('ui-text.validation-dialog.ready');
     }
   }
 
@@ -226,18 +226,18 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   protected getOverallSubline(): string {
     const status = this.getOverallStatus();
     if (status === 'running') {
-      return this.uiTranslate('ui-text.validation-dialog.bitte-warten-sie-bis-alle-validierungen-abgeschlossen-sind');
+      return this.uiTranslate('ui-text.validation-dialog.wait-for-validation');
     }
     if (status === 'failed') {
-      return this.uiTranslate('ui-text.validation-dialog.bitte-beheben-sie-die-gefundenen-fehler');
+      return this.uiTranslate('ui-text.validation-dialog.errors-found');
     }
     if (status === 'success') {
-      return this.uiTranslate('ui-text.validation-dialog.alle-antwortdaten-sind-gueltig');
+      return this.uiTranslate('ui-text.validation-dialog.all-data-valid');
     }
     if (status === 'partial') {
-      return this.uiTranslate('ui-text.validation-dialog.es-liegen-noch-nicht-fuer-alle-pruefungen-ergebnisse-vor');
+      return this.uiTranslate('ui-text.validation-dialog.partial-results');
     }
-    return this.uiTranslate('ui-text.validation-dialog.starten-sie-die-pruefungen-um-ihre-antwortdaten-zu-validieren');
+    return this.uiTranslate('ui-text.validation-dialog.start-hint');
   }
 
   /**
@@ -246,13 +246,13 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   protected getRecommendedNextStep(): string {
     const status = this.getOverallStatus();
     if (status === 'failed') {
-      return this.uiTranslate('ui-text.validation-dialog.beheben-sie-die-fehler-und-fuehren-sie-die-pruefungen-erneut-durch');
+      return this.uiTranslate('ui-text.validation-dialog.correct-and-rerun-hint');
     }
     if (status === 'success') {
-      return this.uiTranslate('ui-text.validation-dialog.sie-koennen-den-dialog-schliessen');
+      return this.uiTranslate('ui-text.validation-dialog.close-hint');
     }
     if (status === 'partial') {
-      return this.uiTranslate('ui-text.validation-dialog.starten-sie-die-noch-offenen-pruefungen');
+      return this.uiTranslate('ui-text.validation-dialog.run-remaining-hint');
     }
     return '';
   }

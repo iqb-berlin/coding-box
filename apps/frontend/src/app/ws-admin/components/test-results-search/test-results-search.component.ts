@@ -99,7 +99,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
 
   private readonly localizedTypeOptions = computed<QuickSearchTypeOption[]>(() => ([
     { kind: 'person', label: this.uiTranslate('process-overview.details.personCount'), icon: 'person' },
-    { kind: 'booklet', label: this.uiTranslate('ui-text.files-validation.testhefte'), icon: 'menu_book' },
+    { kind: 'booklet', label: this.uiTranslate('ui-text.files-validation.booklets'), icon: 'menu_book' },
     { kind: 'unit', label: this.uiTranslate('coding.jobs.table.units'), icon: 'extension' },
     { kind: 'response', label: this.uiTranslate('variable-analysis.total-cases'), icon: 'question_answer' }
   ]));
@@ -190,7 +190,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     const responseId = item.responseId;
     if (!responseId || !this.appService.selectedWorkspaceId) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.test-results-search.fuer-diesen-treffer-ist-kein-replay-verfuegbar'),
+        this.uiTranslate('ui-text.test-results-search.replay-unavailable'),
         'Info',
         { duration: 3000 }
       );

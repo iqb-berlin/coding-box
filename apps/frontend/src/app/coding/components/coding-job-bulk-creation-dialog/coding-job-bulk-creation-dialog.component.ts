@@ -580,7 +580,7 @@ export class CodingJobBulkCreationDialogComponent {
       const uniqueCases = this.getUniqueCaseTotal();
       if (uniqueCases > this.data.maxCodingCases) {
         this.snackBar.open(
-          this.uiTranslate('ui-text.coding-job-bulk-creation-dialog.die-zahl-der-eindeutigen-kodierfaelle-ueberschreitet-das-maximum-von', { uniqueCases: uniqueCases, maxCodingCases: this.data.maxCodingCases }),
+          this.uiTranslate('ui-text.coding-job-bulk-creation-dialog.case-limit-exceeded', { uniqueCases: uniqueCases, maxCodingCases: this.data.maxCodingCases }),
           this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );

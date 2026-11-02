@@ -1,9 +1,9 @@
-<h1 mat-dialog-title>{{ 'ui-text.item-list-dialog.itemliste' | translate }}</h1>
+<h1 mat-dialog-title>{{ 'ui-text.item-list-dialog.title' | translate }}</h1>
 <div mat-dialog-content class="dialog-content">
   @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>{{ 'ui-text.item-list-dialog.lade-item-ids' | translate }}</p>
+      <p>{{ 'ui-text.item-list-dialog.loading' | translate }}</p>
     </div>
   }
 
@@ -19,14 +19,14 @@
     <div>
       @if (itemGroups().length === 0) {
         <div class="empty-state">
-          <p>{{ 'ui-text.item-list-dialog.keine-items-in-den-metadaten-dateien-gefunden' | translate }}</p>
+          <p>{{ 'ui-text.item-list-dialog.empty' | translate }}</p>
         </div>
       }
       @if (itemGroups().length > 0) {
         <div class="groups-container">
           @for (group of itemGroups(); track group) {
             <div class="file-group">
-              <h3 class="group-header pointer" (click)="openMetadata(group)" [matTooltip]="'ui-text.item-list-dialog.metadaten-anzeigen-unit' | translate"
+              <h3 class="group-header pointer" (click)="openMetadata(group)" [matTooltip]="'ui-text.item-list-dialog.unit-metadata-aria' | translate"
                 role="button"
                 tabindex="0"
                 (keydown.enter)="onActionKeydown($event)"
@@ -37,7 +37,7 @@
               <div class="items-grid">
                 @for (id of group.items; track id) {
                   <div class="item-chip pointer" (click)="openMetadata(group, id)"
-                    [matTooltip]="'ui-text.item-list-dialog.metadaten-anzeigen-item' | translate"
+                    [matTooltip]="'ui-text.item-list-dialog.item-metadata-aria' | translate"
                     role="button"
                     tabindex="0"
                     (keydown.enter)="onActionKeydown($event)"

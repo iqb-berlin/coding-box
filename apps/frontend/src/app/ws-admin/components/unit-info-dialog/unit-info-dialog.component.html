@@ -1,5 +1,5 @@
 <h2 mat-dialog-title>
-  <span>{{ 'ui-text.unit-info-dialog.aufgaben-informationen' | translate: { unitId: (data.unitId) } }}</span>
+  <span>{{ 'ui-text.unit-info-dialog.title' | translate: { unitId: (data.unitId) } }}</span>
   <button mat-icon-button (click)="close()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
     <mat-icon>close</mat-icon>
   </button>
@@ -9,7 +9,7 @@
   @if (isLoading) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>{{ 'ui-text.unit-info-dialog.aufgaben-informationen-werden-geladen' | translate }}</p>
+      <p>{{ 'ui-text.unit-info-dialog.loading' | translate }}</p>
     </div>
   }
 
@@ -24,7 +24,7 @@
     <div class="info-container">
       <mat-tab-group>
         <!-- Raw XML Tab (first) -->
-        <mat-tab [label]="'ui-text.unit-info-dialog.roh-xml' | translate">
+        <mat-tab [label]="'ui-text.unit-info-dialog.raw-xml' | translate">
           <div class="tab-content xml-tab-content">
             <div class="info-section xml-section">
               <coding-box-xml-viewer [xml]="data.unitInfo.rawXml"></coding-box-xml-viewer>
@@ -32,16 +32,16 @@
           </div>
         </mat-tab>
         <!-- Metadata Tab -->
-        <mat-tab [label]="'ui-text.booklet-info-dialog.metadaten' | translate">
+        <mat-tab [label]="'ui-text.booklet-info-dialog.metadata' | translate">
           <div class="tab-content">
             <div class="info-section">
-              <h3>{{ 'ui-text.unit-info-dialog.grundinformationen' | translate }}</h3>
+              <h3>{{ 'ui-text.unit-info-dialog.basic-info' | translate }}</h3>
               <div class="info-row">
                 <span class="info-label">{{ 'ui-text.booklet-info-dialog.id' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.metadata.id }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">{{ 'ui-text.booklet-info-dialog.bezeichnung' | translate }}</span>
+                <span class="info-label">{{ 'ui-text.booklet-info-dialog.label' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.metadata.label }}</span>
               </div>
               @if (data.unitInfo.metadata.description) {
@@ -75,7 +75,7 @@
         <mat-tab [label]="'coding-job-definitions.workflow.definition' | translate">
           <div class="tab-content">
             <div class="info-section">
-              <h3>{{ 'ui-text.unit-info-dialog.definitionsinformationen' | translate }}</h3>
+              <h3>{{ 'ui-text.unit-info-dialog.definition-info' | translate }}</h3>
               <div class="info-row">
                 <span class="info-label">{{ 'ui-text.unit-info-dialog.type' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.definition.type }}</span>
@@ -112,7 +112,7 @@
               <!-- Base Variables -->
               @if (data.unitInfo.baseVariables?.length) {
                 <div class="info-section">
-                  <h3>{{ 'ui-text.unit-info-dialog.basisvariablen' | translate }}</h3>
+                  <h3>{{ 'ui-text.unit-info-dialog.base-variables' | translate }}</h3>
                   @for (variable of data.unitInfo.baseVariables; track variable; let isLast = $last) {
                     <div class="variable-item">
                       <div class="info-row">
@@ -156,7 +156,7 @@
                       <!-- Variable Values -->
                       @if (variable.values?.length) {
                         <div class="variable-values">
-                          <h4>{{ 'ui-text.unit-info-dialog.werte' | translate }}</h4>
+                          <h4>{{ 'ui-text.unit-info-dialog.values' | translate }}</h4>
                           @for (value of variable.values; track value) {
                             <div class="value-item">
                               <div class="info-row">
@@ -225,7 +225,7 @@
                       <!-- Variable Values -->
                       @if (variable.values?.length) {
                         <div class="variable-values">
-                          <h4>{{ 'ui-text.unit-info-dialog.werte' | translate }}</h4>
+                          <h4>{{ 'ui-text.unit-info-dialog.values' | translate }}</h4>
                           @for (value of variable.values; track value) {
                             <div class="value-item">
                               <div class="info-row">
@@ -252,10 +252,10 @@
         }
         <!-- Dependencies Tab -->
         @if (data.unitInfo.dependencies?.length) {
-          <mat-tab [label]="'ui-text.unit-info-dialog.abhaengigkeiten' | translate">
+          <mat-tab [label]="'ui-text.unit-info-dialog.dependencies' | translate">
             <div class="tab-content">
               <div class="info-section">
-                <h3>{{ 'ui-text.unit-info-dialog.abhaengigkeiten' | translate }}</h3>
+                <h3>{{ 'ui-text.unit-info-dialog.dependencies' | translate }}</h3>
                 @for (dependency of data.unitInfo.dependencies; track dependency; let isLast = $last) {
                   <div class="dependency-item">
                     <div class="info-row">
@@ -281,10 +281,10 @@
         }
         <!-- Coding Scheme Tab -->
         @if (data.unitInfo.codingSchemeRef) {
-          <mat-tab [label]="'ui-text.unit-info-dialog.kodierungsschema' | translate">
+          <mat-tab [label]="'ui-text.unit-info-dialog.coding-scheme' | translate">
             <div class="tab-content">
               <div class="info-section">
-                <h3>{{ 'ui-text.unit-info-dialog.kodierungsschema-referenz' | translate }}</h3>
+                <h3>{{ 'ui-text.unit-info-dialog.coding-scheme-reference' | translate }}</h3>
                 <div class="info-row">
                   <span class="info-label">{{ 'ui-text.unit-info-dialog.schemer' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemer }}</span>

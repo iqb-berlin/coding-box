@@ -211,7 +211,7 @@ export class ExportDialogComponent implements OnInit {
             const progress = 40 + Math.floor(((rowNumber - 2) / totalRows) * 20);
             this.validationStateService.updateProgress(
               progress,
-              this.uiTranslate('ui-text.export-dialog.daten-werden-extrahiert', { value1: rowNumber - 1, totalRows: totalRows })
+              this.uiTranslate('ui-text.export-dialog.extracting-data', { value1: rowNumber - 1, totalRows: totalRows })
             );
           }
         }
@@ -228,7 +228,7 @@ export class ExportDialogComponent implements OnInit {
           const additionalErrorCount = Math.max(0, errors.length - this.maxDisplayedMappingErrors);
           this.validationStateService.setValidationError(
             additionalErrorCount > 0 ?
-              this.uiTranslate('ui-text.export-dialog.weitere-zeilen-enthalten-fehler', { displayedErrors: displayedErrors, additionalErrorCount: additionalErrorCount }) :
+              this.uiTranslate('ui-text.export-dialog.more-invalid-rows', { displayedErrors: displayedErrors, additionalErrorCount: additionalErrorCount }) :
               displayedErrors
           );
           return;

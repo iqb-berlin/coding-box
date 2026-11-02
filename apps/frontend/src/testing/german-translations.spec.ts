@@ -11,7 +11,7 @@ describe('German UI catalog', () => {
       }
     };
     inspect(de);
-    expect(translateGerman('ui-text.booklet-info-dialog.konfiguration', { length: 2 })).toBe('Konfiguration (2)');
-    expect(translateGerman('ui-text.coding-freshness-text.util.auto-coding-1')).toBe('Auto-Coding 1');
+    expect(translateGerman('ui-text.booklet-info-dialog.configuration-tab', { length: 2 })).toBe('Konfiguration (2)');
+    expect(translateGerman('ui-text.coding-freshness-text.first-autocoding')).toBe('Auto-Coding 1');
   });
 });

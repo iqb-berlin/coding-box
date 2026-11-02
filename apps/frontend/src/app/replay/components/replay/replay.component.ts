@@ -879,18 +879,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private getErrorMessages(): ErrorMessages {
     return {
-      QueryError: this.uiTranslate('ui-text.replay.kein-authorisierungs-token-angegeben'),
-      ParamsError: this.uiTranslate('ui-text.replay.ungueltige-anzahl-an-parametern-in-der-url-vorhanden'),
-      401: this.uiTranslate('ui-text.replay.authentisierungs-token-ist-ungueltig'),
-      UnitIdError: this.uiTranslate('ui-text.replay.unbekannte-unit-id'),
-      TestPersonError: this.uiTranslate('ui-text.replay.ungueltige-id-fuer-testperson'),
-      PlayerError: this.uiTranslate('ui-text.replay.ungueltiger-player-name'),
-      ResponsesError: this.uiTranslate('ui-text.replay.fehler-beim-laden-der-antworten-fuer-aufgabe-von-testperson', { value1: this.unitId(), value2: this.testPerson() }),
-      notInList: this.uiTranslate('ui-text.replay.keine-valide-seite-mit-der-id-gefunden', { value1: this.page() || '' }),
-      notCurrent: this.uiTranslate('ui-text.replay.seite-mit-der-id-kann-nicht-ausgewaehlt-werden', { value1: this.page() || '' }),
-      tokenExpired: this.uiTranslate('ui-text.replay.das-authentisierungs-token-ist-abgelaufen'),
-      tokenInvalid: this.uiTranslate('ui-text.replay.das-authentisierungs-token-ist-ungueltig'),
-      unknown: this.uiTranslate('ui-text.replay.unbekannter-fehler-fuer-aufgabe-von-testperson', { value1: this.unitId() || '', value2: this.testPerson() || '' })
+      QueryError: this.uiTranslate('ui-text.replay.token-missing'),
+      ParamsError: this.uiTranslate('ui-text.replay.invalid-url-parameters'),
+      401: this.uiTranslate('ui-text.replay.invalid-auth-token'),
+      UnitIdError: this.uiTranslate('ui-text.replay.unknown-unit'),
+      TestPersonError: this.uiTranslate('ui-text.replay.invalid-person'),
+      PlayerError: this.uiTranslate('ui-text.replay.invalid-player'),
+      ResponsesError: this.uiTranslate('ui-text.replay.responses-load-failed', { value1: this.unitId(), value2: this.testPerson() }),
+      notInList: this.uiTranslate('ui-text.replay.page-not-found', { value1: this.page() || '' }),
+      notCurrent: this.uiTranslate('ui-text.replay.page-unavailable', { value1: this.page() || '' }),
+      tokenExpired: this.uiTranslate('ui-text.replay.token-expired'),
+      tokenInvalid: this.uiTranslate('ui-text.replay.token-invalid'),
+      unknown: this.uiTranslate('ui-text.replay.unknown-unit-error', { value1: this.unitId() || '', value2: this.testPerson() || '' })
     };
   }
 
@@ -1349,7 +1349,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       }, '*');
 
       this.errorSnackBar.open(
-        this.uiTranslate('ui-text.replay.code-an-vergleichsliste-gesendet'),
+        this.uiTranslate('ui-text.replay.code-sent-to-comparison'),
         'Ok',
         { duration: 2000 }
       );

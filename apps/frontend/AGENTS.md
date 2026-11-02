@@ -36,3 +36,13 @@ These instructions apply to `apps/frontend` and supplement the root `AGENTS.md`.
 - For Angular Material dialogs and translated templates, follow existing tests that import `TranslateModule`, Material modules, and provide dialog data/mocks.
 - When changing facades or backend services, cover request URLs, request bodies, and returned observable values.
 - When touching complex coding workflows, add focused unit coverage first and use Cypress only for full user-flow risk.
+
+## Translation Maintenance
+- Keep ngx-translate and reuse an existing key when its meaning and UI context match. New keys in `ui-text` follow `ui-text.<feature-or-component>.<purpose>`, for example `ui-text.coder-list.load-failed` or `ui-text.note-dialog.text-required`.
+- Use short, stable English identifiers in kebab-case. Do not derive IDs from complete German sentences, truncate sentences, or append generated hashes. Changing visible wording alone should not require renaming an ID.
+- Keep each new namespace as nested JSON objects. Avoid dots within object property names; existing legacy namespaces remain compatible.
+- Translate complete messages with named parameters. Keep grammatical variants and different contexts separate; do not assemble new sentences from translated fragments. Backend data and imported content remain data rather than translation IDs.
+- Keep UI IDs as literals where possible. `frontend:test-quality-gates` checks literal `ui-text` references in TypeScript and external/inline Angular templates, and checks required interpolation parameters when the parameter object is statically known. Dynamic IDs and parameter objects still need focused integration tests.
+- Every additional application language file must contain the same IDs and interpolation placeholders as `de.json`. The quality gate checks all files in `src/assets/i18n`; adding English is a separate feature and is not required for German-only operation.
+- Use `GermanTranslationsTestingModule` for tests asserting actual German labels. Add language-change tests when a behavior depends on switching languages; avoid asserting translation internals in unrelated logic tests.
+- Run `NX_DAEMON=false npx nx run frontend:test-quality-gates` after catalog or key changes, alongside the normal frontend validation.

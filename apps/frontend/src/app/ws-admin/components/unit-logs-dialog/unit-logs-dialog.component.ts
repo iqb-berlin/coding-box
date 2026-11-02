@@ -17,12 +17,12 @@ import { MatButton } from '@angular/material/button';
   selector: 'coding-box-unit-logs-dialog',
   template: `
     <div class="dialog-header">
-      <h1 mat-dialog-title>{{ 'ui-text.unit-logs-dialog.unit-logs' | translate }}</h1>
+      <h1 mat-dialog-title>{{ 'ui-text.unit-logs-dialog.title' | translate }}</h1>
       <div class="header-info">
-        <span class="log-count">{{ 'ui-text.log-dialog.eintraege' | translate: { length: (data.logs.length) } }}</span>
+        <span class="log-count">{{ 'ui-text.log-dialog.entry-count' | translate: { length: (data.logs.length) } }}</span>
         @if (processingDuration) {
         <span class="processing-duration">
-          <span class="duration-label">{{ 'ui-text.log-dialog.bearbeitungsdauer' | translate }}</span>
+          <span class="duration-label">{{ 'ui-text.log-dialog.processing-duration' | translate }}</span>
           <span class="duration-value">{{ processingDuration }}</span>
         </span>
         }
@@ -37,7 +37,7 @@ import { MatButton } from '@angular/material/button';
           <div class="search-box">
             <input
               type="text"
-              [placeholder]="'ui-text.training-sample-editor.suchen' | translate"
+              [placeholder]="'ui-text.training-sample-editor.search' | translate"
               (input)="filterLogs($event)"
             />
           </div>

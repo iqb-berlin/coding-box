@@ -60,7 +60,7 @@ export class CodingExecutionService {
       return of({
         status: 'failed' as const,
         progress: 0,
-        error: this.uiTranslate('ui-text.coding-execution.fehlende-job-id-fuer-statusabfrage')
+        error: this.uiTranslate('ui-text.coding-execution.status-job-id-missing')
       });
     }
 

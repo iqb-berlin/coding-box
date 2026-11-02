@@ -3,7 +3,7 @@
 @let errorMessageValue = errorMessage();
 <div class="dialog-container">
   <div class="dialog-header">
-    <h2 class="dialog-title">{{ 'ui-text.unit-definition-player-dialog.aufgabendefinition' | translate: { unitId: (data.unitId) } }}</h2>
+    <h2 class="dialog-title">{{ 'ui-text.unit-definition-player-dialog.title' | translate: { unitId: (data.unitId) } }}</h2>
     <button mat-icon-button (click)="close()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
       <mat-icon>close</mat-icon>
     </button>
@@ -15,7 +15,7 @@
     @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p>{{ 'ui-text.unit-definition-player-dialog.aufgabendefinition-wird-geladen' | translate }}</p>
+        <p>{{ 'ui-text.unit-definition-player-dialog.loading' | translate }}</p>
       </div>
     }
 

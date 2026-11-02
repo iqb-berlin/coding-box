@@ -1,10 +1,10 @@
 <div class="dialog-container">
-  <h2 mat-dialog-title>{{ 'ui-text.booklet-search-dialog.booklet-suche' | translate }}</h2>
+  <h2 mat-dialog-title>{{ 'ui-text.booklet-search-dialog.title' | translate }}</h2>
   <div mat-dialog-content>
     <div class="search-container">
       <mat-form-field appearance="outline" class="search-field">
         <mat-label>{{ 'ui-text.booklet-search-dialog.booklet-name' | translate }}</mat-label>
-        <input matInput [(ngModel)]="bookletSearchText" (input)="onBookletSearchChange()" [placeholder]="'ui-text.booklet-search-dialog.booklet-name-eingeben' | translate">
+        <input matInput [(ngModel)]="bookletSearchText" (input)="onBookletSearchChange()" [placeholder]="'ui-text.booklet-search-dialog.name-placeholder' | translate">
         <mat-icon matSuffix>search</mat-icon>
       </mat-form-field>
     </div>
@@ -19,7 +19,7 @@
 
       @if (!isLoading() && bookletSearchResults().length === 0 && bookletSearchText) {
       <div class="no-results">
-        <p>{{ 'ui-text.booklet-search-dialog.keine-booklets-gefunden' | translate }}</p>
+        <p>{{ 'ui-text.booklet-search-dialog.empty' | translate }}</p>
       </div>
       }
 

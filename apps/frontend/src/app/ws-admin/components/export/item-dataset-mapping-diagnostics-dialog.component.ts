@@ -199,7 +199,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
   }
 
   getDownloadFileName(date = new Date()): string {
-    const kind = this.isWarning ? 'warnungen' : this.uiTranslate('ui-text.item-dataset-mapping-diagnostics-dialog.fehler');
+    const kind = this.isWarning ? 'warnungen' : this.uiTranslate('ui-text.item-dataset-mapping-diagnostics-dialog.error-count');
     const datePart = [
       date.getFullYear(),
       String(date.getMonth() + 1).padStart(2, '0'),

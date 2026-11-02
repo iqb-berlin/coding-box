@@ -238,9 +238,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       if (status.status === 'completed') {
         this.freshnessJobCompletionRefreshHandledIds.add(jobId);
         this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
-        this.snackBar.open(this.uiTranslate('ui-text.coding-management.betroffene-ergebnisse-wurden-kodiert'), this.uiTranslate('deferred-view.close'), { duration: 4000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coding-management.affected-results-coded'), this.uiTranslate('deferred-view.close'), { duration: 4000 });
       } else if (status.status === 'failed') {
-        this.snackBar.open(status.error || this.uiTranslate('ui-text.coding-management.auto-coding-fuer-betroffene-ergebnisse-fehlgeschlagen'), this.uiTranslate('deferred-view.close'), { duration: 6000 });
+        this.snackBar.open(status.error || this.uiTranslate('ui-text.coding-management.affected-autocoding-failed'), this.uiTranslate('deferred-view.close'), { duration: 6000 });
       }
       if (!pendingRefreshHandled) this.performCodingStatusOverviewRefresh(true);
     });
@@ -660,7 +660,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(result => {
         if (!result.jobId) {
           this.snackBar.open(
-            result.message || this.uiTranslate('ui-text.coding-management.keine-betroffenen-ergebnisse-fuer-auto-coding-gefunden'),
+            result.message || this.uiTranslate('ui-text.coding-management.no-affected-results'),
             this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
@@ -704,7 +704,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             this.startFreshnessJobPolling(result.jobId, workspaceId);
           });
         this.snackBar.open(
-          this.uiTranslate('ui-text.coding-management.auto-coding-fuer-betroffene-eintraege-gestartet', { unitCount: result.unitCount }),
+          this.uiTranslate('ui-text.coding-management.affected-autocoding-started', { unitCount: result.unitCount }),
           this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
@@ -1153,7 +1153,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   getFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
     if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding()) {
       const count = getCodingFreshnessAffectedTaskResultCount([item]);
-      const countLabel = `${count} ${count === 1 ? this.uiTranslate('ui-text.coding-management.aufgabenbearbeitung') : this.uiTranslate('ui-text.coding-management.aufgabenbearbeitungen')}`;
+      const countLabel = `${count} ${count === 1 ? this.uiTranslate('ui-text.coding-management.task-result-singular') : this.uiTranslate('ui-text.coding-management.task-result-plural')}`;
       return this.translateService.instant(
         'coding-management.readiness.second-autocoding-waits-chip',
         {
@@ -1310,7 +1310,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         if (this.data.length === 0) {
           this.snackBar.open(
-            this.uiTranslate('ui-text.coding-management.keine-daten-mit-den-angegebenen-filtern-gefunden'),
+            this.uiTranslate('ui-text.coding-management.no-filter-matches'),
             this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
@@ -1451,7 +1451,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-management.fehler-kein-workspace-ausgewaehlt'),
+        this.uiTranslate('ui-text.coding-management.no-workspace'),
         this.uiTranslate('deferred-view.close'),
         {
           duration: 5000,
@@ -1494,7 +1494,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
-        this.uiTranslate('ui-text.coding-management.fehler-kein-workspace-ausgewaehlt'),
+        this.uiTranslate('ui-text.coding-management.no-workspace'),
         this.uiTranslate('deferred-view.close'),
         {
           duration: 5000,

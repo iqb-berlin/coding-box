@@ -27,7 +27,7 @@
                   <span class="variable-trigger-name">{{ activeItem.label }}</span>
                   <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
                 } @else {
-                  {{ 'ui-text.code-selector.variable-waehlen' | translate }}
+                  {{ 'ui-text.code-selector.select-variable' | translate }}
                 }
               </span>
               <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -91,7 +91,7 @@
                   <span class="variable-trigger-name">{{ activeBundleVariable.label }}</span>
                   <span class="variable-trigger-progress">({{ activeBundleVariable.progress.coded }}/{{ activeBundleVariable.progress.total }})</span>
                 } @else {
-                  {{ 'ui-text.code-selector.variable-waehlen' | translate }}
+                  {{ 'ui-text.code-selector.select-variable' | translate }}
                 }
               </span>
               <mat-icon class="variable-trigger-icon">{{ isBundleVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -294,7 +294,7 @@
       </div>
 
       <div class="deselect-container">
-        <button mat-button class="deselect-button" [disabled]="isReadOnly()" (click)="deselectAll()">{{ 'ui-text.code-selector.auswahl-entfernen' | translate }}</button>
+        <button mat-button class="deselect-button" [disabled]="isReadOnly()" (click)="deselectAll()">{{ 'ui-text.code-selector.clear-selection' | translate }}</button>
       </div>
 
       @if (allowComments()) {

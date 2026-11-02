@@ -105,9 +105,9 @@ export interface MetadataDialogData {
       <div [style.display]="isLoading() ? 'none' : 'block'">
         <div class="selection-container">
           <mat-form-field appearance="outline">
-            <mat-label>{{ 'ui-text.metadata-dialog.metadaten-anzeigen-fuer' | translate }}</mat-label>
+            <mat-label>{{ 'ui-text.metadata-dialog.show-for' | translate }}</mat-label>
             <mat-select [(ngModel)]="selectedView" (selectionChange)="onViewChange()">
-              <mat-option value="unit">{{ 'ui-text.metadata-dialog.unit-aufgabe' | translate }}</mat-option>
+              <mat-option value="unit">{{ 'ui-text.metadata-dialog.unit' | translate }}</mat-option>
               @for (item of items(); track item.uuid) {
                 <mat-option [value]="item.uuid">
                   {{ 'ui-text.metadata-dialog.item' | translate: { id: (item.id) } }}
