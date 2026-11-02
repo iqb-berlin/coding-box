@@ -69,6 +69,13 @@ describe('item dataset variable positions', () => {
     expect(sequence(positions(ids.map(id => ({ id }))), ids)).toEqual(['V1', 'V2', 'V10']);
   });
 
+  it('retains page order when the layout provides no sections', () => {
+    const result = positions([{ id: 'Z' }, { id: 'A' }], [
+      { elements: [{ id: 'Z' }] }, { elements: [{ id: 'A' }] }
+    ]);
+    expect(sequence(result, ['A', 'Z'])).toEqual(['Z', 'A']);
+  });
+
   it('uses natural names for text definitions and non-numeric Unit page IDs', () => {
     const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: 'V10', alias: 'V10', page: 'last' },

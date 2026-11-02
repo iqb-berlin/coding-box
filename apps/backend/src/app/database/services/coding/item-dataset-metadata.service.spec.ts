@@ -61,6 +61,71 @@ const profile: ItemDatasetProfile = {
 const design = { units: new Map([['UNIT', { unitId: 'UNIT', order: 0, testletKey: 'T1' }]]) };
 
 describe('ItemDatasetMetadataService variable positions', () => {
+  it.each(['unit', 'testlet', 'booklet'] as const)(
+    'uses the warned fallback for conflicting layout aliases with %s scope', async notReachedScope => {
+      const columns = [column('A', 0, 'PUBLIC_A'), column('B', 1, 'SHARED'), column('D', 2)];
+      const { positions: variablePositions, warnings } = await createService([{
+        file_id: 'UNIT',
+        file_type: 'Unit',
+        data: `<Unit><Metadata><Id>UNIT</Id></Metadata>
+          <DefinitionRef>UNIT.VOUD</DefinitionRef><CodingSchemeRef>UNIT.VOCS</CodingSchemeRef>
+          <BaseVariables>
+            <Variable id="A" alias="PUBLIC_A" page="1"/>
+            <Variable id="B" alias="SHARED" page="0"/>
+          </BaseVariables>
+          <DerivedVariables><Variable id="D" alias="D"/></DerivedVariables>
+        </Unit>`
+      }, {
+        file_id: 'UNIT.VOUD', file_type: 'Resource', data: definition(['SHARED', 'PUBLIC_A'])
+      }, {
+        file_id: 'UNIT.VOCS',
+        file_type: 'Resource',
+        data: JSON.stringify({
+          variableCodings: [
+            { id: 'A', alias: 'SHARED', sourceType: 'BASE' },
+            { id: 'B', alias: 'B', sourceType: 'BASE' },
+            {
+              id: 'D', alias: 'D', sourceType: 'COPY_VALUE', deriveSources: ['SHARED'], page: '3'
+            }
+          ]
+        })
+      }]).getVariableOrder(7, columns);
+      const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
+        [columns[0].key, { status: 1, code: null, score: null }],
+        [columns[1].key, { status: 1, code: null, score: null }],
+        [columns[2].key, { status: 5, code: 1, score: 1 }]
+      ]), profile, new Map([[columns[2].key, [columns[1].key]]]), { variablePositions, notReachedScope });
+
+      expect(cells.map(cell => cell.code)).toEqual([-99, -99, 1]);
+      expect(warnings).toEqual([expect.objectContaining({
+        code: 'variable-order-fallback',
+        variableId: 'D',
+        message: expect.stringContaining('Quellvariablen fehlen oder sind mehrdeutig')
+      })]);
+      expect(variablePositions.has('UNIT\u001FSHARED')).toBe(false);
+    }
+  );
+
+  it.each(['\n', '\t'])('retains trailing NR and page order for repaired legacy JSON containing %p', async control => {
+    const layout = JSON.stringify({
+      pages: [
+        { sections: [{ elements: [{ id: 'Z', text: 'legacy text' }] }] },
+        { sections: [{ elements: [{ id: 'A' }] }] }
+      ]
+    }).replace('legacy text', `legacy${control}text`);
+    const columns = [column('Z', 0), column('A', 1)];
+    const { positions: variablePositions, warnings } = await createService([{
+      file_id: 'UNIT.VOUD', file_type: 'Resource', data: layout
+    }]).getVariableOrder(7, columns);
+    const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
+      [columns[0].key, { status: 5, code: 1, score: 1 }],
+      [columns[1].key, { status: 1, code: null, score: null }]
+    ]), profile, new Map(), { variablePositions });
+
+    expect(cells.map(cell => cell.code)).toEqual([1, -96]);
+    expect(warnings).toEqual([]);
+  });
+
   it('returns actionable warnings for an estimated order using the public response alias', async () => {
     const { positions, warnings } = await createService([]).getVariableOrder(7, [column('B1', 0, 'PUBLIC')]);
     expect(positions.get('UNIT\u001FPUBLIC')).toBe(positions.get('UNIT\u001FB1'));
