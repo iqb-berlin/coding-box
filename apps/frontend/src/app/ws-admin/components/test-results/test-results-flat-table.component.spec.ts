@@ -6,8 +6,9 @@ import {
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
+import de from '../../../../assets/i18n/de.json';
 import { FileService } from '../../../shared/services/file/file.service';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
@@ -106,12 +107,31 @@ describe('TestResultsFlatTableComponent', () => {
       ]
     }).compileComponents();
 
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', de);
+    translate.use('de');
+
     fixture = TestBed.createComponent(TestResultsFlatTableComponent);
     component = fixture.componentInstance;
   });
 
   afterEach(() => {
     fixture.destroy();
+  });
+
+  it('uses translated table labels, empty state and action descriptions', async () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('probe', {
+      'test-results-table': {
+        title: 'Responses', empty: 'No matches', 'reset-filters': 'Reset filters'
+      }
+    });
+    translate.use('probe');
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('h2').textContent).toBe('Responses');
+    expect(fixture.nativeElement.textContent).toContain('No matches');
+    expect(fixture.nativeElement.querySelector('button[aria-label="Reset filters"]')).not.toBeNull();
   });
 
   it.each(['success', 'error'])('keeps current-page note markers after a late previous-page %s', outcome => {
@@ -428,8 +448,8 @@ describe('TestResultsFlatTableComponent', () => {
     component.ngOnInit();
 
     expect(snackBar.open).toHaveBeenCalledWith(
-      'search-filter.regex-timeout',
-      'close',
+      de['search-filter']['regex-timeout'],
+      de.close,
       expect.objectContaining({ duration: 5000 })
     );
   });
@@ -450,8 +470,8 @@ describe('TestResultsFlatTableComponent', () => {
     component.ngOnInit();
 
     expect(snackBar.open).toHaveBeenCalledWith(
-      'search-filter.response-value-timeout',
-      'close',
+      de['search-filter']['response-value-timeout'],
+      de.close,
       expect.objectContaining({ duration: 5000 })
     );
   });
@@ -473,8 +493,8 @@ describe('TestResultsFlatTableComponent', () => {
     component.ngOnInit();
 
     expect(snackBar.open).toHaveBeenCalledWith(
-      'search-filter.invalid-postgres-regex',
-      'close',
+      de['search-filter']['invalid-postgres-regex'],
+      de.close,
       expect.objectContaining({ duration: 5000 })
     );
     expect(component.isRegexFilterInvalid('response')).toBe(true);

@@ -1,8 +1,8 @@
 <div class="content-container">
   <div class="data-card">
-    <h2 class="section-title">Testergebnisse (Tabelle)</h2>
+    <h2 class="section-title">{{ 'test-results-table.title' | translate }}</h2>
     <p class="section-description">
-      Alle Antworten in einer Tabelle mit Filtern und Aktionen
+      {{ 'test-results-table.description' | translate }}
     </p>
     <mat-divider></mat-divider>
 
@@ -10,7 +10,7 @@
       <div class="flat-filter-bar">
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
           [class.regex-filter-invalid]="isRegexFilterInvalid('code')">
-          <mat-label>Code</mat-label>
+          <mat-label>{{ 'test-results-table.code' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().code" (ngModelChange)="setFlatFiltersField('code', $event); onFlatFilterChanged()"
             [matAutocomplete]="codeAuto" />
           @if (isRegexFilterInvalid('code')) {
@@ -24,7 +24,7 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
           [class.regex-filter-invalid]="isRegexFilterInvalid('group')">
-          <mat-label>Gruppe</mat-label>
+          <mat-label>{{ 'test-results-table.group' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().group" (ngModelChange)="setFlatFiltersField('group', $event); onFlatFilterChanged()"
             [matAutocomplete]="groupAuto" />
           @if (isRegexFilterInvalid('group')) {
@@ -38,7 +38,7 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
           [class.regex-filter-invalid]="isRegexFilterInvalid('login')">
-          <mat-label>Login</mat-label>
+          <mat-label>{{ 'test-results-table.login' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().login" (ngModelChange)="setFlatFiltersField('login', $event); onFlatFilterChanged()"
             [matAutocomplete]="loginAuto" />
           @if (isRegexFilterInvalid('login')) {
@@ -52,7 +52,7 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field"
           [class.regex-filter-invalid]="isRegexFilterInvalid('booklet')">
-          <mat-label>Testheft</mat-label>
+          <mat-label>{{ 'test-results-table.booklet' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().booklet" (ngModelChange)="setFlatFiltersField('booklet', $event); onFlatFilterChanged()"
             [matAutocomplete]="bookletAuto" />
           @if (isRegexFilterInvalid('booklet')) {
@@ -66,7 +66,7 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field"
           [class.regex-filter-invalid]="isRegexFilterInvalid('unit')">
-          <mat-label>Aufgabe</mat-label>
+          <mat-label>{{ 'test-results-table.unit' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().unit" (ngModelChange)="setFlatFiltersField('unit', $event); onFlatFilterChanged()"
             [matAutocomplete]="unitAuto" />
           @if (isRegexFilterInvalid('unit')) {
@@ -80,7 +80,7 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field"
           [class.regex-filter-invalid]="isRegexFilterInvalid('response')">
-          <mat-label>Variable</mat-label>
+          <mat-label>{{ 'test-results-table.variable' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().response" (ngModelChange)="setFlatFiltersField('response', $event); onFlatFilterChanged()"
             [matAutocomplete]="responseAuto" />
           @if (isRegexFilterInvalid('response')) {
@@ -93,7 +93,7 @@
           }
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field">
-          <mat-label>Antwortstatus</mat-label>
+          <mat-label>{{ 'test-results-table.response-status' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().responseStatus" (ngModelChange)="setFlatFiltersField('responseStatus', $event); onFlatFilterChanged()"
             [matAutocomplete]="responseStatusAuto" />
         </mat-form-field>
@@ -103,12 +103,12 @@
           }
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-lg">
-          <mat-label>Antwortwert</mat-label>
+          <mat-label>{{ 'test-results-table.response-value' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().responseValue" (ngModelChange)="setFlatFiltersField('responseValue', $event); onFlatFilterChanged()"
             [matTooltip]="'search-filter.response-value-prefix-hint' | translate" />
         </mat-form-field>
         <mat-form-field appearance="outline" class="flat-filter-field">
-          <mat-label>Tags</mat-label>
+          <mat-label>{{ 'test-results-table.tags' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().tags" (ngModelChange)="setFlatFiltersField('tags', $event); onFlatFilterChanged()"
             [matAutocomplete]="tagsAuto" />
         </mat-form-field>
@@ -118,86 +118,86 @@
           }
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-xl">
-          <mat-label>Spezialfilter</mat-label>
+          <mat-label>{{ 'test-results-table.special-filters' | translate }}</mat-label>
           <mat-select [(ngModel)]="mediaFilters" (ngModelChange)="onMediaFiltersChanged()" multiple>
-            <mat-option value="geogebra">GeoGebra</mat-option>
-            <mat-option value="audioLow">Audio &lt; Schwellwert</mat-option>
+            <mat-option value="geogebra">{{ 'test-results-table.geogebra' | translate }}</mat-option>
+            <mat-option value="audioLow">{{ 'test-results-table.audio-low' | translate }}</mat-option>
             <mat-option value="nonEmptyResponse">
-              <span matTooltip="Filtert Antworten ohne Wert heraus ('' oder []).">
-                Nur nicht leere Antwortwerte
+              <span [matTooltip]="'test-results-table.non-empty-help' | translate">
+                {{ 'test-results-table.non-empty' | translate }}
               </span>
             </mat-option>
             <mat-option value="sessionFilter">
-              <span matTooltip="Aktiviert Session-Filterung anhand der Einstellungen (Browser/OS/Screen) im Zahnrad.">
-                Session-Filter
+              <span [matTooltip]="'test-results-table.session-help' | translate">
+                {{ 'test-results-table.session' | translate }}
               </span>
             </mat-option>
             <mat-option value="shortProcessing">
               <span
-                matTooltip="Log-basiert: CONTROLLER/RUNNING → CONTROLLER/TERMINATED in weniger als dem Schwellwert (konfigurierbar über das Zahnrad).">
-                Früh abgebrochen
+                [matTooltip]="'test-results-table.short-processing-help' | translate">
+                {{ 'test-results-table.short-processing' | translate }}
               </span>
             </mat-option>
             <mat-option value="longLoading">
               <span
-                matTooltip="Log-basiert: LOADCOMPLETE oder STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad).">
-                Lange Ladezeit
+                [matTooltip]="'test-results-table.long-loading-help' | translate">
+                {{ 'test-results-table.long-loading' | translate }}
               </span>
             </mat-option>
             <mat-option value="processingDuration">
               <span
-                matTooltip="Bearbeitungszeit (CONTROLLER/RUNNING → CONTROLLER/TERMINATED) ist mindestens der Schwellwert (konfigurierbar über das Zahnrad).">
-                Bearbeitungszeit
+                [matTooltip]="'test-results-table.processing-help' | translate">
+                {{ 'test-results-table.processing' | translate }}
               </span>
             </mat-option>
             <mat-option value="unitProgressComplete">
-              <span matTooltip="Zeigt nur Testheft-Durchläufe, bei denen alle Units besucht wurden.">
-                Vollständig bearbeitet
+              <span [matTooltip]="'test-results-table.completed-help' | translate">
+                {{ 'test-results-table.completed' | translate }}
               </span>
             </mat-option>
             <mat-option value="logAny">
-              <span matTooltip="Zeigt Testhefte mit beliebigen technischen Log-Auffälligkeiten.">
-                Log: auffällig
+              <span [matTooltip]="'test-results-table.log-anomalies-help' | translate">
+                {{ 'test-results-table.log-anomalies' | translate }}
               </span>
             </mat-option>
             <mat-option value="logCritical">
-              <span matTooltip="Kritische Log-Auffälligkeiten wie Controller-Fehler, fehlender Abschluss oder Connection Lost.">
-                Log: kritisch
+              <span [matTooltip]="'test-results-table.log-critical-help' | translate">
+                {{ 'test-results-table.log-critical' | translate }}
               </span>
             </mat-option>
             <mat-option value="logTechnical">
-              <span matTooltip="Controller-Fehler, Verbindungsabbrüche, Timestamp 0, Player hängt oder lange Ladezeiten.">
-                Log: technische Probleme
+              <span [matTooltip]="'test-results-table.log-technical-help' | translate">
+                {{ 'test-results-table.log-technical' | translate }}
               </span>
             </mat-option>
             <mat-option value="logIncomplete">
-              <span matTooltip="Fehlender Abschluss, unvollständiger Unit-/Progress-Status, Timer-Restzeit oder Logs ohne Start.">
-                Log: unvollständige Durchläufe
+              <span [matTooltip]="'test-results-table.log-incomplete-help' | translate">
+                {{ 'test-results-table.log-incomplete' | translate }}
               </span>
             </mat-option>
             <mat-option value="logConnectionLost">
-              <span matTooltip="Mindestens ein CONNECTION : LOST Eintrag im Testheft-Log.">
-                Log: Connection Lost
+              <span [matTooltip]="'test-results-table.log-connection-help' | translate">
+                {{ 'test-results-table.log-connection' | translate }}
               </span>
             </mat-option>
             <mat-option value="logTimer">
-              <span matTooltip="Timer wurde nicht bis 0 geführt oder am Ende blieb Restzeit übrig.">
-                Log: Timer auffällig
+              <span [matTooltip]="'test-results-table.log-timer-help' | translate">
+                {{ 'test-results-table.log-timer' | translate }}
               </span>
             </mat-option>
             <mat-option value="logFocus">
-              <span matTooltip="Mindestens ein langer Fokusverlust im Testheft-Log.">
-                Log: Fokusverlust
+              <span [matTooltip]="'test-results-table.log-focus-help' | translate">
+                {{ 'test-results-table.log-focus' | translate }}
               </span>
             </mat-option>
             <mat-option value="logDebug">
-              <span matTooltip="Debug-Befehl wurde während des Testlaufs ausgeführt.">
-                Log: Debug-Befehl
+              <span [matTooltip]="'test-results-table.log-debug-help' | translate">
+                {{ 'test-results-table.log-debug' | translate }}
               </span>
             </mat-option>
             <mat-option value="logReloads">
-              <span matTooltip="Mehrfacher CONTROLLER : LOADING Start im selben Testheft.">
-                Log: mehrfach gestartet
+              <span [matTooltip]="'test-results-table.log-reloads-help' | translate">
+                {{ 'test-results-table.log-reloads' | translate }}
               </span>
             </mat-option>
           </mat-select>
@@ -205,8 +205,8 @@
         <button mat-icon-button (click)="openFlatSettings()" [attr.aria-label]="'accessibility.actions.open-flat-settings' | translate">
           <mat-icon>settings</mat-icon>
         </button>
-        <button mat-icon-button type="button" (click)="clearFlatFilters()" matTooltip="Filter zurücksetzen"
-          aria-label="Filter zurücksetzen">
+        <button mat-icon-button type="button" (click)="clearFlatFilters()" [matTooltip]="'test-results-table.reset-filters' | translate"
+          [attr.aria-label]="'test-results-table.reset-filters' | translate">
           <mat-icon>clear</mat-icon>
         </button>
       </div>
@@ -214,28 +214,28 @@
       @if (isLoadingFlat()) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">Daten werden geladen...</p>
+        <p class="loading-text">{{ 'test-results-table.loading' | translate }}</p>
       </div>
       } @if (!isLoadingFlat()) {
       <div class="table-container">
         <table mat-table [dataSource]="flatData()" [trackBy]="trackByRow" class="persons-table">
           <ng-container matColumnDef="code">
-            <th mat-header-cell *matHeaderCellDef>Code</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.code' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.code }}</td>
           </ng-container>
 
           <ng-container matColumnDef="group">
-            <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.group' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.group }}</td>
           </ng-container>
 
           <ng-container matColumnDef="login">
-            <th mat-header-cell *matHeaderCellDef>Login</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.login' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.login }}</td>
           </ng-container>
 
           <ng-container matColumnDef="booklet">
-            <th mat-header-cell *matHeaderCellDef>Testheft</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.booklet' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               <button mat-button type="button" (click)="
                   $event.stopPropagation(); openBookletInfoFromFlatRow(row)
@@ -246,7 +246,7 @@
           </ng-container>
 
           <ng-container matColumnDef="unit">
-            <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.unit' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               <button mat-button type="button" (click)="$event.stopPropagation(); openUnitInfoFromFlatRow(row)">
                 {{ row.unit }}
@@ -255,17 +255,17 @@
           </ng-container>
 
           <ng-container matColumnDef="response">
-            <th mat-header-cell *matHeaderCellDef>Variable</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.variable' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.response }}</td>
           </ng-container>
 
           <ng-container matColumnDef="responseStatus">
-            <th mat-header-cell *matHeaderCellDef>Antwortstatus</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.response-status' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.responseStatus }}</td>
           </ng-container>
 
           <ng-container matColumnDef="logStatus">
-            <th mat-header-cell *matHeaderCellDef>Logstatus</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.log-status' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               <span
                 class="log-status-chip"
@@ -284,7 +284,7 @@
           </ng-container>
 
           <ng-container matColumnDef="responseValue">
-            <th mat-header-cell *matHeaderCellDef>Antwortwert</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.response-value' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               {{ row.responseValue ? (row.responseValue | slice : 0 : 200) : ''
               }}{{
@@ -307,7 +307,7 @@
           </ng-container>
 
           <ng-container matColumnDef="tags">
-            <th mat-header-cell *matHeaderCellDef>Tags</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.tags' | translate }}</th>
             <td mat-cell *matCellDef="let row">
               @for (t of row.tags; track trackByTag($index, t)) {
               <span class="unit-tag" style="margin-right: 6px">{{ t }}</span>
@@ -316,21 +316,21 @@
           </ng-container>
 
           <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.actions' | translate }}</th>
             <td mat-cell *matCellDef="let row">
-              <button mat-icon-button (click)="$event.stopPropagation(); replayFromFlatRow(row)" matTooltip="Replay" [attr.aria-label]="'ws-admin.select-unit-play' | translate">
+              <button mat-icon-button (click)="$event.stopPropagation(); replayFromFlatRow(row)" [matTooltip]="'test-results-table.replay' | translate" [attr.aria-label]="'ws-admin.select-unit-play' | translate">
                 <mat-icon>play_arrow</mat-icon>
               </button>
               <button mat-icon-button (click)="
                   $event.stopPropagation(); openBookletLogsFromFlatRow(row)
-                " matTooltip="Logs (Testheft)" aria-label="Logs des Testhefts anzeigen">
+                " [matTooltip]="'test-results-table.booklet-logs' | translate" [attr.aria-label]="'test-results-table.booklet-logs-label' | translate">
                 <mat-icon>article</mat-icon>
               </button>
               <button mat-icon-button (click)="$event.stopPropagation(); openUnitLogsFromFlatRow(row)"
-                matTooltip="Logs (Aufgabe)" aria-label="Logs der Aufgabe anzeigen">
+                [matTooltip]="'test-results-table.unit-logs' | translate" [attr.aria-label]="'test-results-table.unit-logs-label' | translate">
                 <mat-icon>fact_check</mat-icon>
               </button>
-              <button mat-icon-button (click)="$event.stopPropagation(); openNotesFromFlatRow(row)" matTooltip="Notizen"
+              <button mat-icon-button (click)="$event.stopPropagation(); openNotesFromFlatRow(row)" [matTooltip]="'test-results-table.notes' | translate"
                 style="position: relative" [attr.aria-label]="'accessibility.actions.open-notes-from-flat-row' | translate">
                 <mat-icon>note</mat-icon>
                 @if (hasNotesForRow(row)) {
@@ -354,7 +354,7 @@
                 }
               </button>
               <button mat-icon-button color="warn" (click)="$event.stopPropagation(); deleteFromFlatRow(row)"
-                matTooltip="Antwort löschen" [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
+                [matTooltip]="'test-results-table.delete-title' | translate" [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
                 <mat-icon>delete</mat-icon>
               </button>
             </td>
@@ -367,9 +367,9 @@
         @if (flatData().length === 0) {
         <div class="empty-state-container">
           <mat-icon class="empty-state-icon">search_off</mat-icon>
-          <h2 class="empty-state-title">Keine Ergebnisse gefunden</h2>
+          <h2 class="empty-state-title">{{ 'test-results-table.empty' | translate }}</h2>
           <p class="empty-state-description">
-            Bitte versuchen Sie es mit anderen Filtern.
+            {{ 'test-results-table.empty-help' | translate }}
           </p>
         </div>
         }

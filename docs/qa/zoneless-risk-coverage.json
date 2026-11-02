@@ -103,7 +103,8 @@
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-definition-recovery.spec.ts",
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-availability.spec.ts",
         "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-data.facade.spec.ts",
-        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-selection.spec.ts"
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-variable-selection.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-definition-save.facade.spec.ts"
       ]
     },
     {

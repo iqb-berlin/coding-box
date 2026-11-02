@@ -149,6 +149,28 @@ test('native buttons pass template accessibility rules', async () => {
   assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
 });
 
+test('external and inline frames require an accessible name', async () => {
+  for (const template of ['<iframe></iframe>', '<iframe title=" "></iframe>']) {
+    const source = `import { Component } from '@angular/core';
+      @Component({ selector: 'coding-box-probe', template: \`${template}\` })
+      export class ProbeComponent {}`;
+    for (const [code, filePath] of [[template, templatePath], [source, componentPath]]) {
+      const [result] = await eslint.lintText(code, { filePath });
+      assert.ok(result.messages.some(message => message.ruleId === 'no-restricted-syntax'),
+        JSON.stringify(result.messages));
+    }
+  }
+  for (const template of [
+    '<iframe title="Aufgabenplayer"></iframe>',
+    '<iframe [title]="\'replay.unit-player-title\' | translate"></iframe>',
+    '<iframe aria-label="Aufgabenplayer"></iframe>',
+    '<iframe [attr.aria-labelledby]="headingId"></iframe>'
+  ]) {
+    const [result] = await eslint.lintText(template, { filePath: templatePath });
+    assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
+  }
+});
+
 test('application components retain OnPush, signal inputs and modern outputs', async () => {
   const rules = [
     '@angular-eslint/prefer-on-push-component-change-detection',

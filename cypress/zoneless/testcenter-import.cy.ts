@@ -58,7 +58,8 @@ describe('zoneless Testcenter import with delayed responses', () => {
       }).as('upload');
 
       cy.visit('/');
-      cy.wait('@authData');
+      // A cold bootstrap on the shared runner can exceed Cypress's 5s request budget.
+      cy.wait('@authData', { requestTimeout: 30_000 });
       cy.window().then(window => { window.location.hash = '/workspace-admin/5/test-files'; });
       cy.wait('@files');
       cy.get('coding-box-test-files').contains('button', 'Testcenter Import').click();
@@ -73,6 +74,25 @@ describe('zoneless Testcenter import with delayed responses', () => {
       cy.get('coding-box-test-center-import .auth-form button[type="submit"]').click();
       cy.wait('@testcenterLogin');
       cy.get('coding-box-test-center-import .auth-section').should('not.exist');
+      cy.get<HTMLElement>('coding-box-test-center-import .import-form').then(forms => {
+        const form = forms[0];
+        if (testcenter.label === 'Testcenter 1') {
+          // Reproduce Electron holding the entrance at its invisible first frame.
+          const entrance = form.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+          entrance.pause();
+          entrance.currentTime = 0;
+          expect(form.ownerDocument.defaultView!.getComputedStyle(form).opacity).to.equal('0');
+        }
+        // Match the manual-preparation harness: finish finite entrance motion only.
+        // Keep the progress spinner and delayed network responses running normally.
+        for (let ancestor: HTMLElement | null = form; ancestor; ancestor = ancestor.parentElement) {
+          ancestor.getAnimations().forEach(animation => {
+            const endTime = animation.effect?.getComputedTiming().endTime;
+            if (typeof endTime === 'number' && Number.isFinite(endTime)) animation.finish();
+          });
+        }
+      });
+      cy.get('coding-box-test-center-import .import-form').should('be.visible');
       cy.get('coding-box-test-center-import mat-select[formControlName="workspace"] .mat-mdc-select-arrow-wrapper')
         .scrollIntoView().should('be.visible').click({ scrollBehavior: false });
       cy.get('mat-option').contains('Delayed study').click();
