@@ -6,6 +6,7 @@ import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageM
 interface VariablePosition {
   id: string;
   alias?: string;
+  aliases: Set<string>;
   page?: number;
   section?: number;
   sources: string[];
@@ -41,6 +42,7 @@ export function buildItemDatasetVariablePositions(
     variables.set(coding.id, {
       id: coding.id,
       alias: coding.alias || coding.id,
+      aliases: new Set(coding.alias ? [coding.alias] : []),
       sources: coding.sourceType === 'BASE' || coding.sourceType === 'BASE_NO_VALUE' ?
         [] : coding.deriveSources || []
     });
@@ -49,14 +51,23 @@ export function buildItemDatasetVariablePositions(
     const existing = variables.get(variable.id);
     if (existing) {
       existing.alias = variable.alias || existing.alias;
+      if (variable.alias) existing.aliases.add(variable.alias);
     } else {
-      variables.set(variable.id, { id: variable.id, alias: variable.alias, sources: [] });
+      variables.set(variable.id, {
+        id: variable.id,
+        alias: variable.alias,
+        aliases: new Set(variable.alias ? [variable.alias] : []),
+        sources: []
+      });
     }
   }
   const aliases = new Map<string, string | null>();
   for (const variable of variables.values()) {
-    const alias = variable.alias || variable.id;
-    aliases.set(alias, aliases.has(alias) ? null : variable.id);
+    // Unit and scheme aliases may differ; retain every unambiguous name for the same ID.
+    for (const alias of variable.aliases.size ? variable.aliases : [variable.id]) {
+      const existing = aliases.get(alias);
+      aliases.set(alias, existing === undefined || existing === variable.id ? variable.id : null);
+    }
   }
   const resolve = (reference: string): string | undefined => (
     variables.has(reference) ? reference : aliases.get(reference) || undefined
@@ -68,7 +79,7 @@ export function buildItemDatasetVariablePositions(
       for (const location of locations.variable_pages || []) {
         if (location.variable_page_always_visible === true) continue;
         const id = aliases.get(location.variable_ref) || resolve(location.variable_ref) || location.variable_ref;
-        const variable = variables.get(id) || { id, sources: [] };
+        const variable = variables.get(id) || { id, aliases: new Set<string>(), sources: [] };
         // Use the same scroll-page numbering as the versioned result export.
         const page = numericPosition(pages.get(location.variable_ref));
         if (variable.page === undefined && page !== undefined) {
@@ -157,9 +168,9 @@ export function buildItemDatasetVariablePositions(
   for (const [id, position] of positions) {
     result.set(ItemDatasetResponseKey.from(unitName, id).toString(), position);
   }
-  for (const variable of variables.values()) {
-    if (variable.alias && aliases.get(variable.alias) === variable.id) {
-      result.set(ItemDatasetResponseKey.from(unitName, variable.alias).toString(), positions.get(variable.id)!);
+  for (const [alias, id] of aliases) {
+    if (id) {
+      result.set(ItemDatasetResponseKey.from(unitName, alias).toString(), positions.get(id)!);
     }
   }
   return result;
