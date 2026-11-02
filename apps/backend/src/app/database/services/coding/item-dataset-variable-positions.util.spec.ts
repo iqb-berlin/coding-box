@@ -29,6 +29,35 @@ describe('item dataset variable positions', () => {
     expect(sequence(positions(ids.map(id => ({ id }))), ids)).toEqual(['V1', 'V2', 'V10']);
   });
 
+  it('uses natural names for text definitions and non-numeric Unit page IDs', () => {
+    const result = buildItemDatasetVariablePositions('UNIT', [
+      { id: 'V10', alias: 'V10', page: 'last' },
+      { id: 'V2', alias: 'V2', page: 'first' }
+    ], 'Text definition');
+    expect(sequence(result, ['V10', 'V2'])).toEqual(['V2', 'V10']);
+  });
+
+  it.each([undefined, '<task/>', JSON.stringify({
+    pages: [
+      { sections: [{ elements: [{ id: 'V1' }] }] },
+      { sections: [{ elements: [{ id: 'V2' }] }] }
+    ]
+  })])('uses Unit pages as fallback while preserving layout and VOCS priority (%s)', definition => {
+    const mapped = [
+      { id: 'B1', alias: 'V1', page: '1' },
+      { id: 'B2', alias: 'V2', page: '0' }
+    ];
+    const result = buildItemDatasetVariablePositions('UNIT', mapped, definition);
+    expect(sequence(result, ['V1', 'V2'])).toEqual(definition?.startsWith('{') ? ['V1', 'V2'] : ['V2', 'V1']);
+    const overridden = buildItemDatasetVariablePositions('UNIT', mapped, definition, JSON.stringify({
+      variableCodings: [
+        { id: 'B1', sourceType: 'BASE', page: '1' },
+        { id: 'B2', sourceType: 'BASE', page: '3' }
+      ]
+    }));
+    expect(sequence(overridden, ['V1', 'V2'])).toEqual(['V1', 'V2']);
+  });
+
   it('supports aliases and VOCS page overrides using versioned-export page numbering', () => {
     const result = positions([
       {
