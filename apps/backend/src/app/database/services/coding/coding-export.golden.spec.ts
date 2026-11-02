@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import * as path from 'path';
 import { Repository } from 'typeorm';
-import { CodingExportService } from './coding-export.service';
+import { createCodingExportService } from './coding-export-test.factory';
 import { CodingResultsExportService } from './coding-results-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -10,7 +10,6 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { CodingListService } from './coding-list.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 jest.mock('./coding-list.service', () => ({
@@ -206,24 +205,20 @@ describe('CodingExportService golden dataset: minimal-valid', () => {
       get: jest.fn((name: string) => (name === 'host' ? 'localhost:4200' : undefined))
     };
 
-    const monolithicService = new CodingExportService(
-      {} as Repository<ResponseEntity>,
+    const monolithicService = createCodingExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       createCodingJobUnitRepository(goldenCodingJobUnit),
       {} as Repository<CoderTrainingDiscussionResult>,
       {} as Repository<User>,
       codingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService
     );
-    const specializedService = new CodingResultsExportService(
-      {} as Repository<ResponseEntity>,
+    const specializedService = new CodingResultsExportService({} as Repository<ResponseEntity>,
       {} as Repository<CodingJob>,
       {} as Repository<CodingJobVariable>,
       createCodingJobUnitRepository(goldenCodingJobUnit),
       codingListService,
-      {} as WorkspaceCoreService,
       workspaceExclusionService
     );
 

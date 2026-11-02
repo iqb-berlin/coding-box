@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Kodierbox</title>
+  <desc id="desc">Social-Preview mit dem freigegebenen Kodierbox-Logo und dem Text Testergebnisse kodieren.</desc>
+  <rect width="1280" height="640" fill="#F0F3F8"/>
+  <image x="496" y="72" width="288" height="288" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiByb2xlPSJpbWciIGFyaWEtbGFiZWxsZWRieT0idGl0bGUgZGVzYyI+CiAgPHRpdGxlIGlkPSJ0aXRsZSI+S29kaWVyYm94IOKAkyBSYWhtZW4gQiBtaXQgcHLDpHppc2llcnRlbSBrYW50aWdlbSBLPC90aXRsZT4KICA8ZGVzYyBpZD0iZGVzYyI+RGVyIGdlcnVuZGV0ZSwgcmVjaHRzIG9mZmVuZSBSYWhtZW4gYXVzIFZhcmlhbnRlIEIgYmxlaWJ0IGVyaGFsdGVuLiBEYXMga2FudGlnZSBLIGhhdCBlaW4gVmVyaMOkbHRuaXMgdm9uIEJyZWl0ZSB6dSBIw7ZoZSB2b24gMSB6dSAxLDEuIFNlaW5lIHNwaWVnZWxiaWxkbGljaGVuIERpYWdvbmFsZW4gZW5kZW4gd2FhZ2VyZWNodCBhdWYgZ2xlaWNoZXIgSMO2aGUgd2llIGRlciBzZW5rcmVjaHRlIEJhbGtlbi48L2Rlc2M+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSIxMjQiIGZpbGw9IiNGRkZGRkYiLz4KICA8cGF0aCBkPSJNMjEyIDEwNlY2NFEyMTIgNDQgMTkyIDQ0SDY0UTQ0IDQ0IDQ0IDY0VjE5MlE0NCAyMTIgNjQgMjEySDE5MlEyMTIgMjEyIDIxMiAxOTJWMTUwIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMTNDNzYiIHN0cm9rZS13aWR0aD0iMTQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik03My40NTQ1NDUgNjhIMTAxLjQ1NDU0NVYxMTUuNTc1MDA4TDE0NC43MDQ1NTIgNjhIMTgyLjU0NTQ1NUwxMjggMTI4TDE4Mi41NDU0NTUgMTg4SDE0NC43MDQ1NTJMMTAxLjQ1NDU0NSAxNDAuNDI0OTkyVjE4OEg3My40NTQ1NDVaIiBmaWxsPSIjMDEzQzc2Ii8+Cjwvc3ZnPgo="/>
+  <g text-anchor="middle" font-family="Arial, Helvetica, sans-serif">
+    <text x="640" y="458" font-size="80" font-weight="700" fill="#013C76">Kodierbox</text>
+    <text x="640" y="517" font-size="30" fill="#475569">Testergebnisse kodieren</text>
+  </g>
+</svg>

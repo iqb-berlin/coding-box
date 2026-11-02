@@ -12,6 +12,7 @@ import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/var
 import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {
   VariableAnalysisResultDto,
+  VARIABLE_ANALYSIS_RESULT_VERSION,
   VariableCombo
 } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisResultPageDto } from '../../../admin/variable-analysis/dto/variable-analysis-result-page.dto';
@@ -72,14 +73,6 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Variablen-ID', key: 'variableId', width: 22 },
   { header: 'Auswertung', key: 'analysisMode', width: 20 },
   { header: 'Kodierlauf', key: 'codingVersion', width: 16 },
-  { header: 'Antwortwert/Kategorie oder Code', key: 'value', width: 36 },
-  { header: 'Score (Code)', key: 'score', width: 18 },
-  { header: 'Label', key: 'label', width: 36 },
-  { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
-  { header: 'Anzahl Antworten', key: 'count', width: 12 },
-  { header: 'Anzahl gültiger Antworten', key: 'validOccurrenceCount', width: 16 },
-  { header: 'Anteil gesamt (%)', key: 'percentageTotal', width: 18 },
-  { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
   { header: 'Antworten gesamt', key: 'totalCount', width: 18 },
   { header: 'Antworten gültig', key: 'validCount', width: 18 },
   { header: 'Fehlend/ungültig', key: 'invalidCount', width: 18 },
@@ -88,6 +81,16 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
   { header: 'Weitere Werte nicht enthalten', key: 'hiddenValueCount', width: 28 },
   { header: 'Statusverteilung der Variable', key: 'statusSummary', width: 42 },
+  { header: 'Antwortwert/Kategorie oder Code', key: 'value', width: 36 },
+  { header: 'Label', key: 'label', width: 36 },
+  { header: 'Code', key: 'code', width: 14 },
+  { header: 'Score', key: 'score', width: 12 },
+  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 },
+  { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
+  { header: 'Anzahl Antworten', key: 'count', width: 12 },
+  { header: 'Anzahl gültiger Antworten', key: 'validOccurrenceCount', width: 16 },
+  { header: 'Anteil gesamt (%)', key: 'percentageTotal', width: 18 },
+  { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
   { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
   { header: 'Code-PBC', key: 'codePbc', width: 14 },
   { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 }
@@ -164,6 +167,7 @@ export class VariableAnalysisService {
     }
 
     const jobData: VariableAnalysisJobData = {
+      resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
       workspaceId,
       unitId,
       variableId,
@@ -473,6 +477,13 @@ export class VariableAnalysisService {
       throw new BadRequestException(
         `Job with ID ${jobId} is not completed (status: ${state})`
       );
+    }
+
+    if (job.data.resultVersion !== VARIABLE_ANALYSIS_RESULT_VERSION) {
+      throw new BadRequestException({
+        code: 'VARIABLE_ANALYSIS_OUTDATED',
+        message: 'Bitte starten Sie eine neue Antwortwertanalyse. Dieses Ergebnis wurde mit einer älteren Auswertung berechnet.'
+      });
     }
 
     return job;
@@ -1055,7 +1066,9 @@ export class VariableAnalysisService {
         value: row.value,
         label: row.label,
         score: row.score,
+        code: row.code,
         schemaOrder: row.schemaOrder,
+        isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
         isSchemaSupplemental: row.isSchemaSupplemental,
         count: row.count,
@@ -1224,7 +1237,9 @@ export class VariableAnalysisService {
         value: row.value,
         label: row.label,
         score: row.score,
+        code: row.code,
         schemaOrder: row.schemaOrder,
+        isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
         isSchemaSupplemental: row.isSchemaSupplemental,
         count: row.count,
@@ -1331,6 +1346,8 @@ export class VariableAnalysisService {
           codingVersion: combo.analysisMode === 'codes' ? combo.codingVersion ?? 'v1' : '',
           score: frequency.score ?? '',
           isEmptyValue: /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(frequency.value.trim()) ? 'ja' : 'nein',
+          code: frequency.code ?? '',
+          isFromSchema: frequency.isFromSchema ? 'ja' : 'nein',
           count: frequency.count,
           validOccurrenceCount,
           percentageTotal: this.roundPercentage(percentageTotal),
@@ -1526,7 +1543,7 @@ export class VariableAnalysisService {
     includeSchemaCodes: boolean
   ): VariableFrequencyDto[] {
     if (!includeSchemaCodes) {
-      return rows.filter(row => !row.isSchemaSupplemental);
+      return rows.filter(row => !row.isSchemaSupplemental || row.count > 0);
     }
 
     return [...rows].sort((a, b) => {

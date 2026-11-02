@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { VariableAnalysisService } from './variable-analysis.service';
+import { VARIABLE_ANALYSIS_RESULT_VERSION } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
 
 const createJob = (
   overrides: Partial<{
@@ -10,6 +11,7 @@ const createJob = (
       unitId?: number;
       variableId?: string;
       cacheKey?: string;
+      resultVersion?: number;
     };
     state: string;
     progress: number;
@@ -17,11 +19,14 @@ const createJob = (
   }> = {}
 ) => ({
   id: overrides.id || 'job-1',
-  data: overrides.data || {
-    workspaceId: 1,
-    unitId: 2,
-    variableId: 'VAR',
-    cacheKey: 'variable-analysis:1:job-1'
+  data: {
+    resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
+    ...(overrides.data || {
+      workspaceId: 1,
+      unitId: 2,
+      variableId: 'VAR',
+      cacheKey: 'variable-analysis:1:job-1'
+    })
   },
   getState: jest.fn().mockResolvedValue(overrides.state || 'completed'),
   progress: overrides.progress ?? 100,
@@ -74,6 +79,81 @@ describe('VariableAnalysisService', () => {
     await expect(service.getAnalysisResults('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.getAnalysisResultsPage('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
     expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'getAnalysisResults', 'getAnalysisResultsPage', 'exportAnalysisResultsAsCsv', 'exportAnalysisResultsAsXlsx'
+  ] as const)('%s requires recalculation of results from the old evaluation', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ data: { workspaceId: 1, resultVersion: undefined } }));
+    await expect(service[method]('job-1', 1)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'VARIABLE_ANALYSIS_OUTDATED' })
+    });
+    expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each(['direct', 'chunked'])('preserves animal answer counts, scores and schema origin in %s results and exports', async storage => {
+    const result = {
+      variableCombos: [{
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        totalCount: 3,
+        validCount: 3,
+        emptyCount: 0,
+        distinctValueCount: 2
+      }],
+      frequencies: {
+        '1:VAR': [
+          {
+            variableId: 'VAR', value: 'Hai', count: 2, validOccurrenceCount: 2, percentage: 200 / 3, score: 1, code: 1, schemaOrder: 0, isFromSchema: true
+          },
+          {
+            variableId: 'VAR', value: 'Elefant', count: 1, validOccurrenceCount: 1, percentage: 100 / 3, score: 0, code: 0, schemaOrder: 1, isFromSchema: true, isSchemaSupplemental: true
+          },
+          {
+            variableId: 'VAR', value: 'Zebra', count: 0, validOccurrenceCount: 0, percentage: 0, score: 0, code: 0, schemaOrder: 1, isFromSchema: true, isSchemaOnly: true, isSchemaSupplemental: true
+          }
+        ]
+      },
+      total: 1
+    };
+    const manifest = {
+      storage: 'chunked', workspaceId: 1, total: 1, variableComboChunks: 1, frequencyChunks: 1
+    };
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockImplementation((key: string) => {
+      if (key.endsWith(':variable-combos:0')) return Promise.resolve(result.variableCombos);
+      if (key.endsWith(':frequencies:0')) return Promise.resolve(Object.entries(result.frequencies));
+      return Promise.resolve(storage === 'chunked' ? manifest : result);
+    });
+
+    const page = await service.getAnalysisResultsPage('job-1', 1);
+    expect(page.rows?.map(row => row.value)).toEqual(['Hai', 'Elefant']);
+    expect(page.rows?.find(row => row.value === 'Elefant')).toMatchObject({
+      count: 1, validOccurrenceCount: 1, score: 0, code: 0, isFromSchema: true
+    });
+    const withMissing = await service.getAnalysisResultsPage('job-1', 1, { includeSchemaCodes: true });
+    expect(withMissing.rows?.find(row => row.value === 'Zebra')).toMatchObject({
+      count: 0, score: 0, code: 0, isFromSchema: true
+    });
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    expect(csv).not.toContain('Zebra');
+    expect(csv).toContain('Elefant');
+    const [header, ...csvRows] = csv.split(/\r?\n/).map(line => line.split(';'));
+    const elephant = csvRows.find(row => row[header.indexOf('Antwortwert/Kategorie oder Code')] === 'Elefant')!;
+    expect(elephant[header.indexOf('Score')]).toBe('0');
+    expect(elephant[header.indexOf('Code')]).toBe('0');
+    expect(elephant[header.indexOf('Zuordnung aus Kodierschema')]).toBe('ja');
+    const buffer = await service.exportAnalysisResultsAsXlsx('job-1', 1, { includeSchemaCodes: true });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
+    const sheet = workbook.getWorksheet('Antwortwerte');
+    const headers = sheet!.getRow(1).values as string[];
+    const zebra = sheet!.getRows(2, 3)!.find(row => row.getCell(headers.indexOf('Antwortwert/Kategorie oder Code')).value === 'Zebra')!;
+    expect(zebra.getCell(headers.indexOf('Anzahl Antworten')).value).toBe(0);
+    expect(zebra.getCell(headers.indexOf('Score')).value).toBe(0);
+    expect(zebra.getCell(headers.indexOf('Zuordnung aus Kodierschema')).value).toBe('ja');
+    expect(zebra.getCell(headers.indexOf('Code')).value).toBe(0);
   });
 
   it.each([
@@ -909,7 +989,8 @@ describe('VariableAnalysisService', () => {
     expect(csv).toContain(
       'Punktbiseriale Korrelation;Code-PBC;Kategorie-PBC'
     );
-    expect(csv).toContain(";'=UNIT;'+VAR;Antwortwerte;;'@value;");
+    expect(csv).toContain(";'=UNIT;'+VAR;Antwortwerte;");
+    expect(csv).toContain(";'@value;");
     expect(csv).toContain(';0.42;0.5;0.25');
     expect(csv).toContain('VALUE_CHANGED: 8 (80%)');
     expect(csv).toContain('CODING_INCOMPLETE: 2 (20%)');
@@ -971,16 +1052,10 @@ describe('VariableAnalysisService', () => {
 
     expect(dataLine).toBeDefined();
     expect(dataLine).toContain('1;UNIT;MISSING;');
-    expect(dataLine?.split(';').slice(8, 16)).toEqual([
-      'ja',
-      '0',
-      '0',
-      '0',
-      '',
-      '0',
-      '0',
-      '0'
-    ]);
+    const headers = csv.split(/\r?\n/)[0].split(';');
+    const row = dataLine!.split(';');
+    const fields = ['Wert ist leer', 'Anzahl Antworten', 'Anzahl gültiger Antworten', 'Anteil gesamt (%)', 'Anteil gültig (%)', 'Antworten gesamt', 'Antworten gültig', 'Fehlend/ungültig'];
+    expect(fields.map(header => row[headers.indexOf(header)])).toEqual(['ja', '0', '0', '0', '', '0', '0', '0']);
   });
 
   it('exports direct cached results as XLSX with typed numeric columns', async () => {
@@ -1208,13 +1283,14 @@ describe('VariableAnalysisService', () => {
       analysisMode: 'codes', codingVersion: 'v2', score: 0, invalidCount: 1
     });
     const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
-    expect(csv).toContain(';Codes;v2;0;0;Incorrect;');
+    expect(csv).toContain(';Codes;v2;');
+    expect(csv).toContain(';0;Incorrect;;0;');
     const workbook = new ExcelJS.Workbook();
     const bytes = await service.exportAnalysisResultsAsXlsx('job-1', 1);
     await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const sheet = workbook.getWorksheet('Antwortwerte')!;
     const headers = sheet.getRow(1).values as string[];
-    expect(sheet.getRow(2).getCell(headers.indexOf('Score (Code)')).value).toBe(0);
+    expect(sheet.getRow(2).getCell(headers.indexOf('Score')).value).toBe(0);
     expect(sheet.getRow(2).getCell(headers.indexOf('Kodierlauf')).value).toBe('v2');
   });
   it.each(['null', 'NULL', ' null '])('preserves the literal answer %s in CSV and XLSX', async value => {

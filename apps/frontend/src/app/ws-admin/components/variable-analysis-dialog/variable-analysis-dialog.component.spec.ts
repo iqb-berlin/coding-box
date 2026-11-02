@@ -550,6 +550,43 @@ describe('VariableAnalysisDialogComponent', () => {
       });
     });
 
+    it('marks observed answers from the schema without marking zero-count placeholders', () => {
+      component.data.analysisResults = {
+        variableCombos: [{
+          unitId: 10, unitName: 'Unit 10', variableId: 'VAR1', totalCount: 2
+        }],
+        frequencies: {
+          '10:VAR1': [
+            {
+              unitId: 10, variableId: 'VAR1', value: 'Hai', count: 2, percentage: 100, score: 1, code: 0, isFromSchema: true
+            },
+            {
+              unitId: 10, variableId: 'VAR1', value: '', count: 0, percentage: 0, isSchemaOnly: true
+            }
+          ]
+        },
+        total: 1
+      };
+      component.analyzeVariables();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelectorAll('.schema-chip')).toHaveLength(1);
+      expect(fixture.nativeElement.querySelector('.mat-column-code').textContent).toContain('variable-analysis.code-column');
+      expect(fixture.nativeElement.querySelector('.schema-chip').closest('tr').querySelector('.mat-column-code').textContent.trim()).toBe('0');
+      expect(component.analysisRows().find(row => row.value === 'Hai')).toMatchObject({
+        isFromSchema: true, count: 2, score: 1, code: 0
+      });
+    });
+
+    it('asks for a new analysis and clears old results when the evaluation has changed', () => {
+      mockVariableAnalysisService.getAnalysisResultsPage.mockReturnValue(throwError(() => ({
+        error: { code: 'VARIABLE_ANALYSIS_OUTDATED' }
+      })));
+      component.viewJobResults(1);
+      expect(mockSnackBar.open).toHaveBeenLastCalledWith('variable-analysis.results-outdated', 'error', { duration: 3000 });
+      expect(component.analysisRows()).toEqual([]);
+      expect(component.canExportAnalysisResults()).toBe(false);
+    });
+
     it('reloads server-side results when sorting changes', () => {
       component.viewJobResults(1);
       mockVariableAnalysisService.getAnalysisResultsPage.mockClear();
@@ -722,12 +759,16 @@ describe('VariableAnalysisDialogComponent', () => {
     expect(fixture.nativeElement.querySelector('th.mat-column-value').textContent).toContain('variable-analysis.code-column');
     expect(fixture.nativeElement.querySelector('td.mat-column-score').textContent.trim()).toBe('0');
     expect(fixture.nativeElement.querySelector('td.mat-column-invalidCount').textContent.trim()).toBe('1');
+    const columns = Array.from(fixture.nativeElement.querySelectorAll('.analysis-table th') as NodeListOf<HTMLElement>);
+    expect(columns.findIndex(cell => cell.classList.contains('mat-column-invalidCount'))).toBeLessThan(columns.findIndex(cell => cell.classList.contains('mat-column-value')));
+    expect(fixture.nativeElement.querySelector('th.mat-column-code')).toBeNull();
     expect(fixture.nativeElement.querySelectorAll('.variable-status-entry')).toHaveLength(1);
     expect(fixture.nativeElement.querySelectorAll('.analysis-table .mat-column-statusSummary')).toHaveLength(0);
     component.data.analysisResults.variableCombos[0].analysisMode = 'values';
     component.analyzeVariables();
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.mat-column-score')).toBeNull();
+    expect(fixture.nativeElement.querySelector('td.mat-column-score').textContent.trim()).toBe('0');
+    expect(fixture.nativeElement.querySelector('th.mat-column-code')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('th.mat-column-value').textContent).toContain('variable-analysis.value-category-column');
   });
 

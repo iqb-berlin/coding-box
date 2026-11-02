@@ -8,6 +8,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { of } = require('rxjs');
 const { FilesInterceptor } = require(process.argv[1]);
 const scenario = JSON.parse(process.argv[2]);
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'multipart-regression-'));
@@ -15,7 +16,7 @@ const Interceptor = FilesInterceptor('files', 10, scenario.disk ? { dest: direct
 const interceptor = new Interceptor();
 const server = http.createServer((req, res) => {
   const context = { switchToHttp: () => ({ getRequest: () => req, getResponse: () => res }) };
-  interceptor.intercept(context, { handle: () => null }).then(() => {
+  interceptor.intercept(context, { handle: () => of(null) }).then(() => {
     res.end(JSON.stringify({
       body: req.body,
       files: req.files.map(file => ({

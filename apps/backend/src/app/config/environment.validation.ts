@@ -1,4 +1,6 @@
 import { EXPORT_WORKER_ROLE } from '../export-worker/export-worker-role';
+import { parseAuthRateLimitConfig } from '../auth/auth-rate-limit.config';
+import { parseTrustedProxies } from '../http/trusted-proxies';
 
 /** Validate effective configuration before infrastructure providers are created. */
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
@@ -53,6 +55,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
   port('REDIS_PORT', '6379');
 
   if (role !== EXPORT_WORKER_ROLE) {
+    try {
+      parseAuthRateLimitConfig(config);
+      parseTrustedProxies(config.HTTP_TRUSTED_PROXIES);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : 'Invalid HTTP authentication configuration');
+    }
     // Also required with OIDC: workspace replay tokens use HS256.
     requireString('JWT_SECRET');
     requireString('OAUTH2_CLIENT_ID');

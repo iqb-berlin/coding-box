@@ -92,7 +92,9 @@ export interface VariableAnalysisData {
         value: string;
         label?: string;
         score?: number;
+        code?: number | string;
         schemaOrder?: number;
+        isFromSchema?: boolean;
         isSchemaOnly?: boolean;
         isSchemaSupplemental?: boolean;
         count: number;
@@ -126,7 +128,9 @@ export interface VariableFrequency {
   value: string;
   label?: string;
   score?: number;
+  code?: number | string;
   schemaOrder?: number;
+  isFromSchema?: boolean;
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
@@ -224,23 +228,27 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   readonly resultCodingVersion = signal<VariableAnalysisCodingVersion>('v1');
 
   protected get displayedColumns(): string[] {
-    return this.baseDisplayedColumns.filter(column => column !== 'score' || this.resultAnalysisMode() === 'codes');
+    return this.baseDisplayedColumns.filter(column => column !== 'code' || this.resultAnalysisMode() === 'values');
   }
 
   private readonly baseDisplayedColumns: string[] = [
+    'unitId',
     'unitName',
     'variableId',
+    'totalCount',
+    'validCount',
+    'invalidCount',
+    'emptyCount',
+    'distinctValueCount',
+    'hiddenValueCount',
     'value',
     'label',
+    'code',
     'score',
     'count',
     'validOccurrenceCount',
     'percentageTotal',
     'percentageValid',
-    'totalCount',
-    'validCount',
-    'invalidCount',
-    'emptyCount',
     'metric'
   ];
 
@@ -441,7 +449,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 value: freq.value,
                 label: freq.label,
                 score: freq.score,
+                code: freq.code,
                 schemaOrder: freq.schemaOrder,
+                isFromSchema: freq.isFromSchema,
                 isSchemaOnly: freq.isSchemaOnly,
                 isSchemaSupplemental: freq.isSchemaSupplemental,
                 count: freq.count,
@@ -1228,7 +1238,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.currentPage.set(Math.max(0, results.page - 1));
           this.analyzeVariables();
         },
-        error: () => {
+        error: (error: { error?: { code?: string } }) => {
           if (requestId !== this.latestResultsRequestId) {
             this.dismissResultsLoadingSnackBar(loadingSnackBar);
             return;
@@ -1236,8 +1246,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
           this.isLoading.set(false);
+          const isOutdated = error?.error?.code === 'VARIABLE_ANALYSIS_OUTDATED';
+          if (isOutdated) {
+            this.clearCurrentAnalysisResults();
+          }
           this.snackBar.open(
-            this.translate.instant('variable-analysis.error-loading-results'),
+            this.translate.instant(isOutdated ?
+              'variable-analysis.results-outdated' :
+              'variable-analysis.error-loading-results'),
             this.translate.instant('error'),
             { duration: 3000 }
           );
@@ -1369,7 +1385,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           value: frequency.value,
           label: frequency.label,
           score: frequency.score,
+          code: frequency.code,
           schemaOrder: frequency.schemaOrder,
+          isFromSchema: frequency.isFromSchema,
           isSchemaOnly: frequency.isSchemaOnly,
           isSchemaSupplemental: frequency.isSchemaSupplemental,
           count: frequency.count,

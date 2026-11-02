@@ -922,7 +922,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const normalizedBookletId = String(row.booklet).toUpperCase();
 
     const loadingSnackBar = this.snackBar.open(
-      'Lade Testheft-Informationen...',
+      this.translateService.instant('test-results-table.loading-booklet'),
       '',
       { duration: 3000 }
     );
@@ -950,8 +950,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Laden der Testheft-Informationen',
-            'Fehler',
+            this.translateService.instant('test-results-table.booklet-error'),
+            this.translateService.instant('error'),
             { duration: 3000 }
           );
         }
@@ -969,7 +969,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         if (this.appService.selectedWorkspaceId !== workspaceId) return;
         const booklet = (booklets || []).find(b => b.name === row.booklet);
         if (!booklet) {
-          this.snackBar.open('Testheft nicht gefunden', 'Info', {
+          this.snackBar.open(this.translateService.instant('test-results-table.booklet-not-found'), this.translateService.instant('common.info'), {
             duration: 3000
           });
           return;
@@ -979,14 +979,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         const unitFileIdRaw = unit?.name || '';
         const unitFileId = String(unitFileIdRaw).trim().toUpperCase();
         if (!unitFileId) {
-          this.snackBar.open('Aufgabe nicht gefunden', 'Info', {
+          this.snackBar.open(this.translateService.instant('test-results-table.unit-not-found'), this.translateService.instant('common.info'), {
             duration: 3000
           });
           return;
         }
 
         const loadingSnackBar = this.snackBar.open(
-          'Lade Aufgaben-Informationen...',
+          this.translateService.instant('test-results-table.loading-unit'),
           '',
           { duration: 3000 }
         );
@@ -1014,8 +1014,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
               if (this.appService.selectedWorkspaceId !== workspaceId) return;
               loadingSnackBar.dismiss();
               this.snackBar.open(
-                'Fehler beim Laden der Aufgaben-Informationen',
-                'Fehler',
+                this.translateService.instant('test-results-table.unit-error'),
+                this.translateService.instant('error'),
                 { duration: 3000 }
               );
             }
@@ -1024,8 +1024,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       error: () => {
         if (this.appService.selectedWorkspaceId !== workspaceId) return;
         this.snackBar.open(
-          'Fehler beim Laden der Aufgaben-Informationen',
-          'Fehler',
+          this.translateService.instant('test-results-table.unit-error'),
+          this.translateService.instant('error'),
           { duration: 3000 }
         );
       }
@@ -1043,8 +1043,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         next: (result: BookletLogsForUnitResponse | null) => {
           if (!result || !result.logs || result.logs.length === 0) {
             this.snackBar.open(
-              'Keine Logs für dieses Testheft vorhanden',
-              'Info',
+              this.translateService.instant('test-results-table.no-booklet-logs'),
+              this.translateService.instant('common.info'),
               { duration: 3000 }
             );
             return;
@@ -1063,7 +1063,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           });
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Testheft-Logs', 'Fehler', {
+          this.snackBar.open(this.translateService.instant('test-results-table.booklet-logs-error'), this.translateService.instant('error'), {
             duration: 3000
           });
         }
@@ -1075,7 +1075,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open('Lade Notizen...', '', {
+    const loadingSnackBar = this.snackBar.open(this.translateService.instant('test-results-table.loading-notes'), '', {
       duration: 3000
     });
 
@@ -1090,13 +1090,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             data: {
               unitId: row.unitId,
               notes: (notes || []) as UnitNoteDto[],
-              title: `Notizen für Aufgabe: ${row.unit || row.unitId}`
+              title: this.translateService.instant('test-results-table.notes-title', { unit: row.unit || row.unitId })
             }
           });
         },
         error: () => {
           loadingSnackBar.dismiss();
-          this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
+          this.snackBar.open(this.translateService.instant('test-results-table.notes-error'), this.translateService.instant('error'), {
             duration: 3000
           });
         }
@@ -1114,8 +1114,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         next: logs => {
           if (!logs || logs.length === 0) {
             this.snackBar.open(
-              'Keine Logs für diese Aufgabe vorhanden',
-              'Info',
+              this.translateService.instant('test-results-table.no-unit-logs'),
+              this.translateService.instant('common.info'),
               { duration: 3000 }
             );
             return;
@@ -1125,12 +1125,12 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             width: '700px',
             data: {
               logs,
-              title: `Logs für Aufgabe: ${row.unit || row.unitId}`
+              title: this.translateService.instant('test-results-table.logs-title', { unit: row.unit || row.unitId })
             }
           });
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Aufgaben-Logs', 'Fehler', {
+          this.snackBar.open(this.translateService.instant('test-results-table.unit-logs-error'), this.translateService.instant('error'), {
             duration: 3000
           });
         }
@@ -1665,20 +1665,20 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   protected getLogAnomalySeverityLabel(row: FlatResponseRow): string {
     switch (this.getLogAnomalySeverity(row)) {
       case 'critical':
-        return 'kritisch';
+        return this.translateService.instant('test-results-table.severity-critical');
       case 'warning':
-        return 'Warnung';
+        return this.translateService.instant('test-results-table.severity-warning');
       case 'info':
-        return 'Info';
+        return this.translateService.instant('common.info');
       default:
-        return 'unauffällig';
+        return this.translateService.instant('test-results-table.severity-none');
     }
   }
 
   protected getLogAnomalyTooltip(row: FlatResponseRow): string {
     const anomalies = row.logAnomalies || [];
     if (anomalies.length === 0) {
-      return 'Keine Log-Auffälligkeiten für dieses Testheft erkannt.';
+      return this.translateService.instant('test-results-table.no-anomalies');
     }
     return anomalies
       .map(anomaly => {
@@ -1734,7 +1734,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open('Lade Replay...', '', {
+    const loadingSnackBar = this.snackBar.open(this.translateService.instant('test-results-table.loading-replay'), '', {
       duration: 3000
     });
 
@@ -1747,8 +1747,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             window.open(result.replayUrl, '_blank');
           } else {
             this.snackBar.open(
-              'Replay-URL konnte nicht erzeugt werden',
-              'Fehler',
+              this.translateService.instant('test-results-table.replay-url-error'),
+              this.translateService.instant('error'),
               { duration: 3000 }
             );
           }
@@ -1756,8 +1756,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Laden der Replay-URL',
-            'Fehler',
+            this.translateService.instant('test-results-table.replay-error'),
+            this.translateService.instant('error'),
             { duration: 3000 }
           );
         }
@@ -1768,9 +1768,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: <ConfirmDialogData>{
-        title: 'Antwort löschen',
-        content: `Möchten Sie die Antwort "${row.response}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
+        title: this.translateService.instant('test-results-table.delete-title'),
+        content: this.translateService.instant('test-results-table.delete-confirmation', { response: row.response }),
+        confirmButtonLabel: this.translateService.instant('common.delete'),
         showCancel: true
       }
     });
@@ -1783,26 +1783,24 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             next: result => {
               if (result.success) {
                 this.snackBar.open(
-                  `Antwort "${row.response}" wurde erfolgreich gelöscht.`,
-                  'Erfolg',
+                  this.translateService.instant('test-results-table.delete-success', { response: row.response }),
+                  this.translateService.instant('test-results-table.success'),
                   { duration: 3000 }
                 );
                 this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
                 this.responseDeleted.emit();
               } else {
                 this.snackBar.open(
-                  `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
-                    ', '
-                  )}`,
-                  'Fehler',
+                  this.translateService.instant('test-results-table.delete-warning', { warnings: result.report.warnings.join(', ') }),
+                  this.translateService.instant('error'),
                   { duration: 3000 }
                 );
               }
             },
             error: () => {
               this.snackBar.open(
-                'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-                'Fehler',
+                this.translateService.instant('test-results-table.delete-error'),
+                this.translateService.instant('error'),
                 { duration: 3000 }
               );
             }

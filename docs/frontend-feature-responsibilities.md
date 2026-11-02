@@ -30,6 +30,9 @@ Upload-, Cache- und Session-Recovery-Services behalten ihre Zuständigkeiten.
 | `TestResultsDeletionFacade` | Vorschau und bestätigte Lösch-/Bereinigungsjobs einschließlich Fortschritt, Ergebnis, Fehler und Cacheinvalidierung; Auswahl und Tabellenansicht bleiben in der Seite |
 | `TestResultsExportFacade` | Exportoptionen, Start, Wiederaufnahme, Status, Abbruch und Download; Polling überlappt keine Statusabrufe und endet bei terminalem Status |
 | `TestResultsOverviewComponent` | Kennzahlen und Antwortstatusverteilung mit expliziten Inputs/Outputs; vorhandene Gestaltung und Statusnavigation |
+| `ReplayAuthSessionService` | Komponentenlokale Replay-Credentials, nach Workspace/Scopes geteilte Token-Erneuerung und Abbruch veralteter Versuche; zentrale Anmeldung bleibt bei den Auth-Services |
+| `ReplayRecoveryService` | Replay-Draft-Kontext, Wiederherstellung und Bestätigung gespeicherter Änderungen sowie Entscheidungsnachrichten; Position und Playeransicht bleiben in der Komponente |
+| `ReplayPayloadFacade` | Ersetzbare vollständige Player-/Antwortabfragen und Lebensdauer abhängiger Schemaabfragen; vorhandene Sitzungs-, Kodierungs- und Asset-Cache-Services bleiben zuständig |
 
 Die Seiten verbinden die fachlichen Ereignisse mit ihrer Darstellung. In der manuellen
 Seite bleiben insbesondere Tab-/Scrollnavigation, Berechtigungsanzeige, Schulungs-Overlay

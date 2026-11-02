@@ -52,7 +52,7 @@
                 }
 
                 @if (item.isLoaded && item.replayUrl) {
-                <iframe [src]="item.replayUrl" class="replay-iframe" frameborder="0" allowfullscreen></iframe>
+                <iframe [title]="'replay.preview-frame-title' | translate: { number: i + 1 }" [src]="item.replayUrl" class="replay-iframe" frameborder="0" allowfullscreen></iframe>
                 }
             </div>
         </div>

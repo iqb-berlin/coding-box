@@ -1,9 +1,21 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
+import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
+import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
+import { TestResultsFrequenciesService } from '../database/services/test-results/test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from '../database/services/test-results/test-results-filter-options.service';
+import { TestResultsResponsesService } from '../database/services/test-results/test-results-responses.service';
+import { TestResultsReplayService } from '../database/services/test-results/test-results-replay.service';
+import { TestResultsDeletionQueryService } from '../database/services/test-results/test-results-deletion-query.service';
+import { TestResultsMutationService } from '../database/services/test-results/test-results-mutation.service';
+import { TestResultsSearchService } from '../database/services/test-results/test-results-search.service';
+import { TestResultsExportService } from '../database/services/test-results/test-results-export.service';
+import { WorkspaceDataModule } from './workspace-data.module';
 import { WorkspaceDeletionService } from '../database/services/workspace/workspace-deletion.service';
-import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
+
 import Workspace from '../database/entities/workspace.entity';
 import WorkspaceAdmin from '../database/entities/workspace-admin.entity';
 import FileUpload from '../database/entities/file_upload.entity';
@@ -34,37 +46,12 @@ import { CodingJob } from '../database/entities/coding-job.entity';
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
-import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import { DoubleCodingReviewDecision } from '../database/entities/double-coding-review-decision.entity';
 import {
-  WorkspaceCoreService,
-  WorkspaceFilesService,
-  WorkspaceXmlSchemaValidationService,
-  WorkspaceFileStorageService,
-  WorkspaceFileParsingService,
-  WorkspaceCodingService,
-  WorkspacePlayerService,
-  WorkspaceUsersService,
-  ResourcePackageService,
-  UnitInfoService,
-  UnitTagService,
-  UnitNoteService,
-  BookletInfoService,
-  WorkspaceExclusionService
+  WorkspaceCoreService, WorkspaceFilesService, WorkspaceXmlSchemaValidationService, WorkspaceFileStorageService, WorkspaceFileParsingService, WorkspaceCodingService, WorkspaceUsersService, ResourcePackageService, UnitInfoService, UnitTagService, UnitNoteService, BookletInfoService
 } from '../database/services/workspace';
 import {
-  WorkspaceTestResultsService,
-  TestcenterService,
-  UploadResultsService,
-  PersonService,
-  PersonQueryService,
-  PersonValidationService,
-  PersonDataProcessingService,
-  PersonPersistenceService,
-  ResponseManagementService,
-  VariableAnalysisService,
-  VariableAnalysisReplayService,
-  ReplayStatisticsService
+  WorkspaceTestResultsService, TestcenterService, UploadResultsService, PersonService, PersonQueryService, PersonValidationService, PersonDataProcessingService, PersonPersistenceService, VariableAnalysisService, VariableAnalysisReplayService, ReplayStatisticsService
 } from '../database/services/test-results';
 import {
   WorkspaceResponseValidationService,
@@ -78,7 +65,7 @@ import { DoubleCodingReviewDecisionService } from '../database/services/coding/d
 import { DoubleCodingReviewQueryService } from '../database/services/coding/double-coding-review-query.service';
 import { CohensKappaStatisticsService } from '../database/services/coding/cohens-kappa-statistics.service';
 import { CohensKappaExportService } from '../database/services/coding/cohens-kappa-export.service';
-import { CodingProgressService } from '../database/services/coding/coding-progress.service';
+
 import { CodingReplayService } from '../database/services/coding/coding-replay.service';
 import { CodingVersionService } from '../database/services/coding/coding-version.service';
 import { CodingJobOperationsService } from '../database/services/coding/coding-job-operations.service';
@@ -89,16 +76,16 @@ import {
   JobService,
   BullJobManagementService
 } from '../database/services/jobs';
-import { JournalService } from '../database/services/shared';
 
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 
 import { CacheClientModule } from '../cache/cache-client.module';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingModule } from '../coding/coding.module';
 
 @Module({
   imports: [
+    WorkspaceDataModule,
     TypeOrmModule.forFeature([
       Workspace,
       WorkspaceAdmin,
@@ -130,17 +117,26 @@ import { CodingModule } from '../coding/coding.module';
       CodingJobUnit,
       CodingJobVariable,
       JobDefinition,
-      CodingUnitFreshness,
       DoubleCodingReviewDecision
     ]),
     HttpModule,
     JobQueueClientModule,
     CacheClientModule,
-    forwardRef(() => CodingModule)
+    CodingModule
   ],
   providers: [
+    TestResultsAnomaliesService,
+    TestResultsCacheService,
+    TestResultsQueryService,
+    TestResultsFrequenciesService,
+    TestResultsFilterOptionsService,
+    TestResultsResponsesService,
+    TestResultsReplayService,
+    TestResultsDeletionQueryService,
+    TestResultsMutationService,
+    TestResultsSearchService,
+    TestResultsExportService,
     WorkspaceDeletionService,
-    { provide: DERIVED_VARIABLE_READER, useExisting: WorkspaceFilesService },
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceXmlSchemaValidationService,
@@ -151,7 +147,6 @@ import { CodingModule } from '../coding/coding.module';
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspaceCodingService,
-    WorkspacePlayerService,
     TestcenterService,
     UploadResultsService,
     PersonService,
@@ -163,7 +158,6 @@ import { CodingModule } from '../coding/coding.module';
     UnitTagService,
     UnitNoteService,
     ResourcePackageService,
-    JournalService,
     VariableAnalysisService,
     JobService,
     ValidationTaskService,
@@ -171,14 +165,12 @@ import { CodingModule } from '../coding/coding.module';
     VariableAnalysisReplayService,
     ExportValidationResultsService,
     BullJobManagementService,
-    ResponseManagementService,
     CodingListExportService,
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
     CohensKappaStatisticsService,
     CohensKappaExportService,
-    CodingProgressService,
     CodingReplayService,
     CodingVersionService,
     CodingJobOperationsService,
@@ -186,18 +178,16 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     ExportArtifactService,
     UnitInfoService,
-    BookletInfoService,
-    WorkspaceExclusionService
+    BookletInfoService
   ],
   exports: [
-    DERIVED_VARIABLE_READER,
-    forwardRef(() => CodingModule),
+    WorkspaceDataModule,
+    CodingModule,
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspaceCodingService,
-    WorkspacePlayerService,
     TestcenterService,
     UploadResultsService,
     ResourcePackageService,
@@ -208,7 +198,6 @@ import { CodingModule } from '../coding/coding.module';
     PersonPersistenceService,
     UnitTagService,
     UnitNoteService,
-    JournalService,
     VariableAnalysisService,
     JobService,
     ValidationTaskService,
@@ -216,14 +205,12 @@ import { CodingModule } from '../coding/coding.module';
     VariableAnalysisReplayService,
     ExportValidationResultsService,
     BullJobManagementService,
-    ResponseManagementService,
     CodingListExportService,
     CodingExportOrchestratorService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
     CohensKappaStatisticsService,
     CohensKappaExportService,
-    CodingProgressService,
     CodingReplayService,
     CodingVersionService,
     CodingJobOperationsService,
@@ -231,8 +218,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     ExportArtifactService,
     UnitInfoService,
-    BookletInfoService,
-    WorkspaceExclusionService
+    BookletInfoService
   ]
 })
 export class WorkspaceModule { }

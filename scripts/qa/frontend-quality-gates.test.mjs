@@ -149,6 +149,68 @@ test('native buttons pass template accessibility rules', async () => {
   assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
 });
 
+test('external and inline frames require an accessible name', async () => {
+  for (const template of ['<iframe></iframe>', '<iframe title=" "></iframe>']) {
+    const source = `import { Component } from '@angular/core';
+      @Component({ selector: 'coding-box-probe', template: \`${template}\` })
+      export class ProbeComponent {}`;
+    for (const [code, filePath] of [[template, templatePath], [source, componentPath]]) {
+      const [result] = await eslint.lintText(code, { filePath });
+      assert.ok(result.messages.some(message => message.ruleId === 'no-restricted-syntax'),
+        JSON.stringify(result.messages));
+    }
+  }
+  for (const template of [
+    '<iframe title="Aufgabenplayer"></iframe>',
+    '<iframe [title]="\'replay.unit-player-title\' | translate"></iframe>',
+    '<iframe aria-label="Aufgabenplayer"></iframe>',
+    '<iframe [attr.aria-labelledby]="headingId"></iframe>'
+  ]) {
+    const [result] = await eslint.lintText(template, { filePath: templatePath });
+    assert.equal(result.errorCount, 0, JSON.stringify(result.messages));
+  }
+});
+
+test('application components retain OnPush, signal inputs and modern outputs', async () => {
+  const rules = [
+    '@angular-eslint/prefer-on-push-component-change-detection',
+    '@angular-eslint/prefer-signals',
+    '@angular-eslint/prefer-output-emitter-ref'
+  ];
+  const legacy = `import { Component, Input, Output, EventEmitter } from '@angular/core';
+    @Component({ selector: 'coding-box-probe', template: '' })
+    export class ProbeComponent {
+      @Input() value = '';
+      @Output() changed = new EventEmitter<string>();
+    }`;
+  const [rejected] = await eslint.lintText(legacy, { filePath: componentPath });
+  for (const rule of rules) {
+    assert.ok(rejected.messages.some(message => message.ruleId === rule),
+      `${rule}: ${JSON.stringify(rejected.messages)}`);
+  }
+  const modern = `import {
+  ChangeDetectionStrategy, Component, input, output
+} from '@angular/core';
+
+@Component({
+  selector: 'coding-box-probe',
+  template: '',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class ProbeComponent {
+  readonly value = input('');
+  readonly changed = output<string>();
+}
+`;
+  const [accepted] = await eslint.lintText(modern, { filePath: componentPath });
+  assert.equal(accepted.errorCount, 0, JSON.stringify(accepted.messages));
+  const [testHost] = await eslint.lintText(legacy, {
+    filePath: componentPath.replace('.ts', '.spec.ts')
+  });
+  assert.ok(!testHost.messages.some(message => rules.includes(message.ruleId)),
+    JSON.stringify(testHost.messages));
+});
+
 test('Core rejects feature imports and accepts shared services', async () => {
   const filePath = 'apps/frontend/src/app/core/services/authentication.service.ts';
   for (const feature of [
@@ -259,7 +321,7 @@ test('image builds authenticate with the Dependency Proxy only when it is used',
   for (const command of logins) {
     for (const proxy of ['', 'proxy.example/containers/']) {
       const result = spawnSync('sh', ['-eu', '-c',
-        `docker() { printf '%s\\n' "$*"; }\n${command}`], {
+        `docker() { printf '%s\\n' "$*"; case " $* " in *" --password-stdin "*) cat;; esac; }\n${command}`], {
         encoding: 'utf8',
         env: {
           PATH: process.env.PATH,
@@ -272,7 +334,10 @@ test('image builds authenticate with the Dependency Proxy only when it is used',
         }
       });
       assert.equal(result.status, 0, result.stderr);
-      assert.equal(result.stdout, proxy ? 'login -u probe-user -p probe-password proxy.example\n' : '');
+      const login = command.includes('--password-stdin') ?
+        'login -u probe-user --password-stdin proxy.example\nprobe-password\n' :
+        'login -u probe-user -p probe-password proxy.example\n';
+      assert.equal(result.stdout, proxy ? login : '');
     }
   }
 });
@@ -392,6 +457,11 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync('typecheck.tested', 'checked');
       if (fs.existsSync('fail-typecheck')) process.exitCode = 1;
     `);
+    writeFileSync(join(directory, 'runtime-package.cjs'), `
+      const fs = require('node:fs');
+      fs.writeFileSync('runtime-package.tested', 'checked');
+      if (fs.existsSync('fail-runtime-package')) process.exitCode = 1;
+    `);
     for (const project of ['frontend', 'backend']) {
       const root = join(directory, 'apps', project);
       mkdirSync(root, { recursive: true });
@@ -399,9 +469,14 @@ test('the actual backend job checks its complete suite and rejects test failures
         name: project,
         targets: {
           test: { executor: 'nx:run-commands', options: { command: `node test.cjs ${project}` } },
-          ...(project === 'backend' ? { typecheck: {
-            executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
-          } } : {})
+          ...(project === 'backend' ? {
+            typecheck: {
+              executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
+            },
+            'verify-runtime-package': {
+              executor: 'nx:run-commands', cache: false, options: { command: 'node runtime-package.cjs' }
+            }
+          } : {})
         }
       }));
       writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
@@ -426,6 +501,7 @@ test('the actual backend job checks its complete suite and rejects test failures
     assert.equal(readFileSync(join(directory, 'migration.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
+    assert.equal(readFileSync(join(directory, 'runtime-package.tested'), 'utf8'), 'checked');
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
     writeFileSync(join(directory, 'fail-backend'), 'fail');
     const failed = run('sh', ['-eu', '-c', script]);
@@ -440,6 +516,14 @@ test('the actual backend job checks its complete suite and rejects test failures
     assert.ifError(failedTypes.error);
     assert.equal(failedTypes.status, 1, failedTypes.stdout + failedTypes.stderr);
     assert.match(failedTypes.stdout + failedTypes.stderr, /backend:typecheck/);
+    assert.equal(existsSync(join(directory, 'backend.tested')), false);
+    assert.equal(existsSync(join(directory, 'frontend.tested')), false);
+    rmSync(join(directory, 'fail-typecheck'));
+    writeFileSync(join(directory, 'fail-runtime-package'), 'fail');
+    const failedRuntime = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failedRuntime.error);
+    assert.equal(failedRuntime.status, 1, failedRuntime.stdout + failedRuntime.stderr);
+    assert.match(failedRuntime.stdout + failedRuntime.stderr, /backend:verify-runtime-package/);
     assert.equal(existsSync(join(directory, 'backend.tested')), false);
     assert.equal(existsSync(join(directory, 'frontend.tested')), false);
   } finally {

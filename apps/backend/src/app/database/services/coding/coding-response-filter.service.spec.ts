@@ -2,7 +2,7 @@ import { Brackets, Repository } from 'typeorm';
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingFileCacheService } from './coding-file-cache.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { STATISTICS_IGNORED_STATUSES } from '../../utils/response-status-converter';
@@ -44,10 +44,8 @@ function createService() {
     ]))
   } as unknown as jest.Mocked<WorkspaceFilesService>;
 
-  const service = new CodingResponseFilterService(
-    responseRepository,
+  const service = new CodingResponseFilterService(responseRepository,
     {} as CodingFileCacheService,
-    {} as WorkspaceCoreService,
     workspaceExclusionService,
     workspaceFilesService
   );

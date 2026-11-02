@@ -1,3 +1,4 @@
+import type { TrainingDiscussionApplyPreviewDto } from '../../api-dto/coding/training-discussion-apply.dto';
 import type { TrainingKappaStatisticsDto } from '../../api-dto/coding/training-kappa-statistics.dto';
 import type { WithinTrainingCodingComparisonPageDto } from '../../api-dto/coding/training-comparison.dto';
 
@@ -93,6 +94,44 @@ describe('Zoneless training comparison', () => {
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
 
+  it('previews and applies discussion results through the confirmation dialog without another UI interaction', () => {
+    const previewGate = createResponseGate();
+    const applyGate = createResponseGate();
+    const preview: TrainingDiscussionApplyPreviewDto = {
+      trainingId: 7, source: 'manual', totalTrainingResponses: 1, sourceResultsCount: 1, applicableResultsCount: 1,
+      missingResultsCount: 0, missingScoreCount: 0, existingFinalResultsCount: 1, productiveJobConflictCount: 0,
+      removableProductiveJobUnitCount: 0, blockingProductiveJobUnitCount: 0, approvedJobDefinitionConflictCount: 0,
+      staleTrainingJobCount: 0, affectedJobIds: [], affectedJobDefinitionIds: [], canApply: true
+    };
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/apply-discussion-results-preview', async request => {
+      expect(request.body).to.deep.equal({ source: 'manual' });
+      await previewGate.wait;
+      request.reply({ body: preview });
+    }).as('applyPreview');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/apply-discussion-results', async request => {
+      expect(request.body).to.deep.equal({ source: 'manual', existingResultStrategy: 'skip', jobConflictStrategy: 'skip' });
+      await applyGate.wait;
+      request.reply({ body: {
+        ...preview, success: true, updatedResponsesCount: 0, skippedExistingResultsCount: 1,
+        overwrittenExistingResultsCount: 0, skippedJobConflictCount: 0, skippedMissingScoreCount: 0,
+        removedJobUnitCount: 0, messageKey: 'success'
+      } });
+    }).as('applyResults');
+
+    openComparison();
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').click().should('be.disabled');
+    cy.then(() => { previewGate.release(); });
+    cy.wait('@applyPreview');
+    cy.get('coding-box-apply-training-discussion-results-dialog').contains('button', 'Anwenden').click();
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').should('be.disabled');
+    cy.then(() => { applyGate.release(); });
+    cy.wait('@applyResults');
+    cy.wait('@comparison');
+    cy.get('coding-box-apply-training-discussion-results-dialog').should('not.exist');
+    cy.get('@dialog').contains('button', 'Diskussionsergebnisse anwenden').should('be.enabled');
+    cy.contains('1 bestehende Ergebnisse übersprungen').should('be.visible');
+  });
+
   it('restores a discussion draft with its explicit score and notes, then clears only the accepted entry', () => {
     cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', request => {
       expect(request.body).to.deep.equal({ responseId: 501, code: 2, score: 4, notes: 'Recovered note' });
@@ -125,6 +164,52 @@ describe('Zoneless training comparison', () => {
       const draft = JSON.parse(win.sessionStorage.getItem('coding-box-session-recovery:training-discussion-active-state')!);
       expect(draft.data.entries.map((entry: { responseId: number }) => entry.responseId)).to.deep.equal([999]);
     });
+  });
+
+  it('saves the latest replay notes after the pending code write without replacing the explicit score', () => {
+    const codeGate = createResponseGate();
+    const notesGate = createResponseGate();
+    const writes: Array<{ responseId: number; code: number; score: number; notes: string | null }> = [];
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/coder-trainings/7/discussion-result', async request => {
+      writes.push(request.body);
+      request.alias = writes.length === 1 ? 'codeWrite' : 'notesWrite';
+      await (writes.length === 1 ? codeGate.wait : notesGate.wait);
+      request.reply({ body: {
+        success: true, code: request.body.code, score: request.body.score, notes: request.body.notes,
+        managerUserId: 2, managerName: 'Discussion manager', source: 'manual'
+      } });
+    });
+    openComparison();
+    const reference = { responseId: 501, testPerson: 'synthetic-person@P001@GROUP', unitId: 'UNIT', variableId: 'VAR' };
+    cy.window().then(win => {
+      win.postMessage({ type: 'replayCodeSelected', ...reference, code: '2', score: 4 }, win.location.origin);
+    });
+    cy.wrap(null).should(() => { expect(writes).to.have.length(1); });
+    cy.get('@dialog').find('.discussion-input input').should('have.value', '2');
+    cy.get('@dialog').find('.discussion-saving').scrollIntoView().should('be.visible');
+    cy.window().then(win => {
+      win.postMessage({ type: 'replayNotesCommitted', ...reference, notes: 'Earlier note' }, win.location.origin);
+      win.postMessage({ type: 'replayNotesCommitted', ...reference, notes: 'Latest replay note' }, win.location.origin);
+    });
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.then(() => {
+      expect(writes).to.deep.equal([{ responseId: 501, code: 2, score: 4, notes: null }]);
+      codeGate.release();
+    });
+    cy.wait('@codeWrite');
+    cy.wrap(null).should(() => { expect(writes).to.have.length(2); });
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.get('@dialog').find('.discussion-saving').scrollIntoView().should('be.visible');
+    cy.then(() => {
+      expect(writes[1]).to.deep.equal({ responseId: 501, code: 2, score: 4, notes: 'Latest replay note' });
+      notesGate.release();
+    });
+    cy.wait('@notesWrite');
+    cy.get('@dialog').find('.discussion-saving').should('not.exist');
+    cy.get('@dialog').find('.discussion-score').should('contain.text', '4');
+    cy.get('@dialog').find('.discussion-notes textarea').should('have.value', 'Latest replay note');
+    cy.get('@dialog').find('.discussion-error').should('not.exist');
+    cy.then(() => { expect(writes).to.have.length(2); });
   });
 
   it('finishes a pending reliability export after changing the comparison page', () => {

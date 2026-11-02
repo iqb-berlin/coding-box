@@ -20,7 +20,9 @@ export interface VariableFrequencyDto {
   value: string;
   label?: string;
   score?: number;
+  code?: number | string;
   schemaOrder?: number;
+  isFromSchema?: boolean;
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;

@@ -1,4 +1,4 @@
-import { Module, Type, forwardRef } from '@nestjs/common';
+import { Module, Type } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobQueueClientModule } from './job-queue-client.module';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
@@ -52,8 +52,8 @@ export function getEnabledJobQueueProcessors(
   imports: [
     JobQueueClientModule,
     TypeOrmModule.forFeature([ResponseEntity, ValidationTask]),
-    forwardRef(() => CodingModule),
-    forwardRef(() => WorkspaceModule),
+    CodingModule,
+    WorkspaceModule,
     CacheClientModule
   ],
   providers: [

@@ -73,7 +73,7 @@ test('a same-repository GitHub develop PR selects exactly one complete pipeline'
   assert.equal(pipelineSelected(githubDevelopPr), false);
   assert.equal(pipelineSelected(featurePush), true);
   const env = { ...config.variables, ...featurePush };
-  for (const name of [...gates, 'install-dependencies', 'build-app', 'test-browser',
+  for (const name of [...gates, 'install-dependencies', 'build-app', 'test-browser', 'test-backend-container',
     'audit-app', 'build-db-image', 'build-liquibase-image', 'test-db',
     'gemnasium-dependency_scanning']) {
     assert.ok(selected(name, env), `Canonical feature pipeline is missing ${name}`);
@@ -85,6 +85,35 @@ test('a same-repository GitHub develop PR selects exactly one complete pipeline'
       assert.ok(selected(needed, env), `${name} needs absent ${needed}`);
     }
   }
+});
+
+test('feature builds do not require an image published by an earlier pipeline', () => {
+  const job = resolve('build-app');
+  assert.equal(job.image, '${DOCKER_HUB_PROXY}${BASE_IMAGE}');
+  assert.ok(job.before_script.some(command => command.includes('apt-get install') && command.includes(' git')));
+});
+
+test('all live browser jobs install a Docker client and bound daemon readiness', () => {
+  for (const name of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+    const setup = resolve(name).before_script.join('\n');
+    assert.match(setup, /apt-get install[^\n]* docker-cli docker-buildx docker-compose/);
+    assert.match(setup, /docker --version/);
+    assert.match(setup, /timeout 120 sh -c 'until docker info;/);
+    assert.doesNotMatch(setup, /until docker info > \/dev\/null/);
+  }
+});
+
+test('the feature pipeline builds and probes the Linux production image without publishing it', () => {
+  const job = resolve('test-backend-container');
+  assert.equal(job.allow_failure, false);
+  const script = job.script.join('\n');
+  assert.match(script, /docker build[^\n]*--target builder/);
+  assert.match(script, /docker build[^\n]*--file apps\/backend\/Dockerfile --target prod/);
+  assert.match(script, /--platform linux\/amd64/);
+  assert.match(script, /require\('libxmljs2'\)/);
+  assert.match(script, /require\('sqlite3'\)/);
+  assert.match(script, /JWT_SECRET must be a non-empty string/);
+  assert.doesNotMatch(script, /docker push/);
 });
 
 test('feature branches keep their complete pipeline before and after a PR is closed', () => {
@@ -171,8 +200,18 @@ test('release backend test and lint failures block publication', () => {
   assert.equal(job.artifacts.when, 'always');
   assert.equal(job.artifacts.reports.junit, 'coverage/apps/backend/junit.xml');
   const project = JSON.parse(readFileSync(new URL('../../apps/backend/project.json', import.meta.url)));
-  assert.equal(project.targets.test.configurations.ci.codeCoverage, true);
-  assert.equal(project.targets.test.options.passWithNoTests, false);
+  assert.equal(project.targets.test.executor, 'nx:run-commands');
+  assert.equal(project.targets.test.configurations.ci.command,
+    'node scripts/qa/run-backend-jest.mjs --configuration=ci');
+  const launcher = readFileSync(new URL('./run-backend-jest.mjs', import.meta.url), 'utf8');
+  assert.match(launcher, /'--experimental-vm-modules'/);
+  assert.match(launcher, /'backend:test-jest'/);
+  const jest = project.targets['test-jest'];
+  assert.equal(jest.executor, '@nx/jest:jest');
+  assert.equal(jest.cache, false);
+  assert.equal(jest.configurations.ci.codeCoverage, true);
+  assert.equal(jest.configurations.ci.ci, true);
+  assert.equal(jest.options.passWithNoTests, false);
 });
 
 test('the installed frontend JUnit reporter includes suite initialization errors', async t => {

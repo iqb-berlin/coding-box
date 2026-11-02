@@ -58,7 +58,8 @@ describe('Answer-value and assigned-code analysis', () => {
     cy.wait('@rawResults');
     cy.get('coding-box-variable-analysis-dialog').as('dialog');
     cy.get('@dialog').find('.analysis-table').should('contain.text', 'Antwortwert/Kategorie').and('contain.text', 'Rohwert');
-    cy.get('@dialog').find('.analysis-table .mat-column-score').should('not.exist');
+    cy.get('@dialog').find('.analysis-table .mat-column-score').should('exist');
+    cy.get('@dialog').find('.analysis-table .mat-column-code').should('exist');
     cy.get('@dialog').find('.analysis-options mat-select').first().click();
     cy.contains('mat-option', 'Vergebene Codes').click();
     cy.get('@dialog').find('.analysis-context').should('contain.text', 'Antwortwerte und Kategorien');

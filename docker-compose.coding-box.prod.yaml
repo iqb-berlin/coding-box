@@ -28,6 +28,8 @@ services:
         condition: service_healthy
     environment:
       APP_ROLE: api
+      # API ingress passes through one proxy; the API has no public host port.
+      HTTP_TRUSTED_PROXIES: ${HTTP_TRUSTED_PROXIES:-1}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}

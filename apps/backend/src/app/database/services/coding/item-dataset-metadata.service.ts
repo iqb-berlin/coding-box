@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Inject, BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as cheerio from 'cheerio';
 import { Repository } from 'typeorm';
@@ -24,7 +24,7 @@ import {
   normalizeExclusionBookletId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
 
 const fixedHeaders = [
@@ -49,7 +49,7 @@ export class ItemDatasetMetadataService {
     private readonly unitRepository: Repository<Unit>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
-    private readonly workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly metadataResolver: PsychometricMetadataResolver
   ) {}

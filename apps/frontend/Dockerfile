@@ -21,7 +21,11 @@ FROM ${REGISTRY_PATH}nginxinc/nginx-unprivileged:stable AS prod
 ARG PROJECT
 
 USER root
-RUN chown -R nginx:root /usr/share/nginx/html
+# Apply the security fix for the Brotli decoder supplied by the runtime image.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends --only-upgrade libbrotli1 && \
+    rm -rf /var/lib/apt/lists/* && \
+    chown -R nginx:root /usr/share/nginx/html
 
 USER nginx
 

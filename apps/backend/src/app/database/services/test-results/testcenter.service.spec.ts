@@ -150,16 +150,43 @@ describe('TestCenterService', () => {
     for (const [url, , config] of httpService.put.mock.calls) {
       if (String(url).includes('iqb-testcenter')) expect(new URL(url).protocol).toBe('https:');
       expect(config.httpsAgent.options.rejectUnauthorized).toBe(true);
+      expect(config.timeout).toBe(120000);
     }
     for (const [url, config] of httpService.axiosRef.get.mock.calls) {
       if (String(url).includes('iqb-testcenter')) expect(new URL(url).protocol).toBe('https:');
       expect(config.httpsAgent.options.rejectUnauthorized).toBe(true);
+      expect(config.timeout).toBe(120000);
     }
     jest.clearAllMocks();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('ends a stalled group request at its deadline and records failed progress', async () => {
+    jest.useFakeTimers();
+    try {
+      httpService.axiosRef.get.mockImplementation((_url, config) => new Promise((_resolve, reject) => {
+        setTimeout(() => reject(new Error('Testcenter request timed out')), config.timeout);
+      }));
+      let settled = false;
+      const outcome = service.getTestgroups('123', 'tc', 'demo', '', 'token', 'timeout-run')
+        .catch(error => { settled = true; return error; });
+
+      await jest.advanceTimersByTimeAsync(119999);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(outcome).resolves.toThrow('Testcenter request timed out');
+      expect(personService.getWorkspaceGroups).not.toHaveBeenCalled();
+      expect(cacheService.set).toHaveBeenLastCalledWith(
+        'testcenter_test_groups_progress:123:timeout-run',
+        expect.objectContaining({ status: 'failed', error: 'Testcenter request timed out' }),
+        3600
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('rejects an untrusted Testcenter certificate and supports a trusted private CA', async () => {

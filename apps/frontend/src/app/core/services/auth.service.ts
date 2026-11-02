@@ -291,7 +291,13 @@ export class AuthService {
     try {
       const decoded = jwtDecode<DecodedToken>(token);
       const now = Date.now() / 1000;
-      return decoded.exp ? decoded.exp > now + minValidity : false;
+      if (typeof decoded.exp !== 'number' || !Number.isFinite(decoded.exp)) return false;
+      // A fixed margin can exceed a short-lived token's entire lifetime and
+      // refresh it before every API call. Keep at least 90% of its lifetime usable.
+      const lifetime = typeof decoded.iat === 'number' && Number.isFinite(decoded.iat) && decoded.exp > decoded.iat ?
+        decoded.exp - decoded.iat : undefined;
+      const refreshAhead = lifetime === undefined ? minValidity : Math.min(minValidity, lifetime / 10);
+      return decoded.exp > now + refreshAhead;
     } catch {
       return false;
     }

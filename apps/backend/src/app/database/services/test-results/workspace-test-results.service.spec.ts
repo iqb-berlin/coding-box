@@ -1,6 +1,11 @@
 import { Repository, DataSource } from 'typeorm';
 import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
+import { parseStoredResponseValue } from './test-results.util';
+import { responseMatchesChunkCondition } from './test-results-deletion.util';
+import { createWorkspaceTestResultsService } from './workspace-test-results-test.factory';
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { ResponseManagementService } from './response-management.service';
 import Persons from '../../entities/persons.entity';
@@ -56,6 +61,9 @@ const mockQueryBuilder = () => ({
     []
   ]),
   setParameter: jest.fn().mockReturnThis(),
+  setParameters: jest.fn().mockReturnThis(),
+  getParameters: jest.fn().mockReturnValue({ workspaceId: 1, consider: true, searchText: '%needle%' }),
+  getQuery: jest.fn().mockReturnValue('SELECT "matchingPerson"."group" FROM persons "matchingPerson"'),
   addGroupBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
   offset: jest.fn().mockReturnThis(),
@@ -219,8 +227,7 @@ describe('WorkspaceTestResultsService', () => {
       transaction: jest.fn()
     } as unknown as DataSource;
 
-    service = new WorkspaceTestResultsService(
-      personsRepository,
+    service = createWorkspaceTestResultsService(personsRepository,
       unitRepository,
       bookletRepository,
       responseRepository,
@@ -238,9 +245,109 @@ describe('WorkspaceTestResultsService', () => {
       responseManagementService,
       workspaceCoreService,
       workspaceExclusionService,
+      new WorkspaceStatsCacheService((cacheService as unknown as CacheService) as never),
       undefined,
       codingStatisticsService
     );
+  });
+
+  describe('page-independent deletion targets', () => {
+    it.each(['filteredPersons', 'filteredGroups', 'groups'] as const)(
+      'resolves all 130 targets for %s without pagination', async scope => {
+        const matching = mockQueryBuilder();
+        const target = mockQueryBuilder();
+        const ids = Array.from({ length: 130 }, (_, index) => index + 1);
+        (personsRepository.createQueryBuilder as jest.Mock)
+          .mockReturnValueOnce(scope === 'filteredGroups' ? matching : target)
+          .mockReturnValue(target);
+        target.getMany.mockResolvedValue(ids.map(id => ({ id })));
+        const result = await service.previewDeleteTestResults(1, {
+          scope, searchText: 'needle', groups: ['G1']
+        });
+        expect(target.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 1 });
+        expect(target.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+        expect(target.skip).not.toHaveBeenCalled();
+        expect(target.take).not.toHaveBeenCalled();
+        expect(target.limit).not.toHaveBeenCalled();
+        expect(result.scope).toBe(scope);
+        const countQueries = (dataSource.createQueryBuilder as jest.Mock).mock.results;
+        expect(countQueries[0].value.where).toHaveBeenCalledWith('person.id IN (:...ids)', { ids });
+        if (scope === 'filteredGroups') {
+          expect(matching.andWhere).toHaveBeenCalledWith(
+            expect.stringContaining('matchingPerson.code ILIKE :searchText'), { searchText: '%needle%' }
+          );
+          expect(target.andWhere).toHaveBeenCalledWith(expect.stringContaining('person.group IN (SELECT'));
+          expect(target.setParameters).toHaveBeenCalledWith(matching.getParameters());
+          expect(matching.skip).not.toHaveBeenCalled();
+          expect(matching.take).not.toHaveBeenCalled();
+        }
+      }
+    );
+  });
+
+  describe('complete deletion group counts', () => {
+    it.each(['array', 'text'])('retains all 40 groups from %s metadata while limiting other detail lists', async format => {
+      const ids = Array.from({ length: 80 }, (_, index) => index + 1);
+      const groups = Array.from({ length: 40 }, (_, index) => `G${index + 1}`);
+      const target = mockQueryBuilder();
+      target.getMany.mockResolvedValue(ids.map(id => ({ id })));
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(target);
+      const personsCount = mockQueryBuilder();
+      personsCount.getRawOne.mockResolvedValue({ count: '80' });
+      const metadata = mockQueryBuilder();
+      metadata.getRawOne.mockResolvedValue({
+        groups: format === 'array' ? groups : `{${groups.join(',')}}`,
+        bookletNames: groups,
+        unitNames: groups
+      });
+      (dataSource.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(personsCount)
+        .mockReturnValueOnce(mockQueryBuilder())
+        .mockReturnValueOnce(mockQueryBuilder())
+        .mockReturnValueOnce(mockQueryBuilder())
+        .mockReturnValueOnce(metadata);
+      const preview = await service.previewDeleteTestResults(1, { scope: 'filteredGroups' });
+      expect(preview.persons).toBe(80);
+      expect(preview.groups).toEqual(groups);
+      expect(preview.bookletNames).toHaveLength(30);
+      expect(preview.unitNames).toHaveLength(30);
+    });
+  });
+
+  it('retains all affected groups for response cleanup previews', async () => {
+    const rows = Array.from({ length: 40 }, (_, index) => ({
+      responseId: index + 1,
+      personId: index + 1,
+      personCode: `P${index}`,
+      personLogin: 'login',
+      personGroup: `G${index}`,
+      bookletId: index + 1,
+      bookletName: `B${index}`,
+      unitId: index + 1,
+      unitName: `U${index}`,
+      variableId: 'V1',
+      subform: null,
+      value: 'answer',
+      answeredAt: 1600000000000,
+      timestampSource: 'chunk'
+    }));
+    const privateService = service as unknown as {
+      getResponseCleanupRows: jest.Mock;
+      countResponseCleanupUnknownTimestamps: jest.Mock;
+    };
+    const read = jest.spyOn(privateService, 'getResponseCleanupRows').mockResolvedValue(rows);
+    const unknownCount = jest.spyOn(privateService, 'countResponseCleanupUnknownTimestamps').mockResolvedValue(0);
+    try {
+      const preview = await service.previewDeleteTestResultResponses(1, {
+        unitNames: rows.map(row => row.unitName), answeredBefore: 1767225600000
+      });
+      expect(preview.groups).toEqual(rows.map(row => row.personGroup));
+      expect(preview.bookletNames).toHaveLength(30);
+      expect(preview.unitNames).toHaveLength(30);
+    } finally {
+      read.mockRestore();
+      unknownCount.mockRestore();
+    }
   });
 
   describe('hasGeogebraResponses', () => {
@@ -624,7 +731,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it('matches response cleanup chunks by exact variable list before using the subform fallback', () => {
-      const privateClass = WorkspaceTestResultsService as unknown as {
+      const privateClass = { responseMatchesChunkCondition } as unknown as {
         responseMatchesChunkCondition: (
           chunkAlias: string,
           responseAlias: string
@@ -764,7 +871,8 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {
+      const filterOptions = new TestResultsFilterOptionsService(responseRepository, dataSource, workspaceExclusionService);
+      const result = await filterOptions.findFlatResponseFilterOptions(1, {
         responseValue: 'needle'
       });
 
@@ -2825,8 +2933,7 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('parseStoredResponseValue', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parse = (value: string | null, variableId?: string) => (WorkspaceTestResultsService as any).parseStoredResponseValue(value, variableId);
+    const parse = (value: string | null, variableId?: string) => parseStoredResponseValue(value, variableId);
 
     it('should normalize flat marking tokens to nested arrays', () => {
       const parsed = parse('["2-2-#f9f871","4-4-#f9f871"]', 'marking-panel_1');

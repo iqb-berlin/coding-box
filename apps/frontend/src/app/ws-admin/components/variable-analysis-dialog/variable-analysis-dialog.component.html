@@ -63,6 +63,8 @@
             <h3>{{ 'variable-analysis.info-title' | translate }}</h3>
           </div>
           <p class="info-desc">{{ 'variable-analysis.info-description' | translate }}</p>
+          <p>{{ 'variable-analysis.info-schema-values' | translate }}</p>
+          <p>{{ 'variable-analysis.info-valid-count' | translate }}</p>
           <div class="info-grid">
             <div class="info-item">
               <strong>{{ 'variable-analysis.info-feature-frequencies-title' | translate }}</strong>
@@ -111,7 +113,7 @@
             {{ 'variable-analysis.only-empty-values' | translate }}
           </mat-checkbox>
           <mat-slide-toggle [(ngModel)]="includeSchemaCodes" (change)="onSchemaCodesToggleChange()" color="primary">
-            {{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.include-schema-codes' : 'variable-analysis.include-metadata-values') | translate }}
+            {{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.include-unobserved-codes' : 'variable-analysis.include-schema-codes') | translate }}
           </mat-slide-toggle>
         </div>
 
@@ -161,6 +163,23 @@
             <table mat-table [dataSource]="analysisRows()" matSort matSortDisableClear
               [matSortActive]="sortBy()" [matSortDirection]="sortDirection()"
               (matSortChange)="onSortChange($event)" class="analysis-table">
+              <ng-container matColumnDef="unitId">
+                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.unit-id-column' | translate }}</th>
+                <td mat-cell *matCellDef="let row">{{ row.unitId }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="distinctValueCount">
+                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.distinct-values-column' | translate }}</th>
+                <td mat-cell *matCellDef="let row">{{ row.distinctValueCount }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="hiddenValueCount">
+                <th mat-header-cell *matHeaderCellDef [matTooltip]="'variable-analysis.hidden-values-help' | translate">
+                  {{ 'variable-analysis.hidden-values-column' | translate }}
+                </th>
+                <td mat-cell *matCellDef="let row">{{ row.hiddenValueCount }}</td>
+              </ng-container>
+
               <ng-container matColumnDef="unitName">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
                   {{ 'variable-analysis.unit-column' | translate }}
@@ -186,7 +205,7 @@
                     } @else {
                     <span>{{ row.value | slice:0:100 }}{{ row.value.length > 100 ? '...' : '' }}</span>
                     }
-                    @if (row.isSchemaOnly) {
+                    @if (row.isFromSchema) {
                     <span class="schema-chip">{{ 'variable-analysis.schema-only' | translate }}</span>
                     }
                   </div>
@@ -200,6 +219,11 @@
                 <td mat-cell *matCellDef="let row">
                   {{ row.label || '-' }}
                 </td>
+              </ng-container>
+
+              <ng-container matColumnDef="code">
+                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.code-column' | translate }}</th>
+                <td mat-cell *matCellDef="let row">{{ row.code ?? '-' }}</td>
               </ng-container>
 
               <ng-container matColumnDef="score">

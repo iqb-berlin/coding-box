@@ -1,6 +1,4 @@
-import {
-  Injectable, Logger, forwardRef, Inject
-} from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
@@ -17,8 +15,8 @@ import {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { VariableDetailDto } from '../../../models/unit-variable-details.dto';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {
@@ -141,9 +139,9 @@ export class CodingValidationService {
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
-    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private workspaceFilesService: WorkspaceFileMetadataReader,
     private workspaceExclusionService: WorkspaceExclusionService,
-    @Inject(forwardRef(() => CodingJobService))
+    @Inject(CodingJobService)
     private codingJobService: CodingJobService,
     private workspacePlayerService: WorkspacePlayerService
   ) { }

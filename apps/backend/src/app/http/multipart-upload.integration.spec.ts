@@ -81,7 +81,10 @@ describe('Workspace multipart uploads', () => {
     crafted.append('items[]', 'y');
     const rejected = await fetch(url, { method: 'POST', body: crafted });
     expect(rejected.status).toBe(400);
-    expect(await rejected.json()).toMatchObject({ message: 'Invalid multipart field name' });
+    // Nest 12 applies its finite array-index limit before Multer builds req.body.
+    expect(await rejected.json()).toMatchObject({
+      statusCode: 400, message: 'Field name array index too large - items[4294967294]'
+    });
     expect(filesService.uploadTestFiles).not.toHaveBeenCalled();
 
     const valid = new FormData();

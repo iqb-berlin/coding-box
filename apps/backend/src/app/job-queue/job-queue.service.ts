@@ -131,6 +131,7 @@ export interface CodingAnalysisJobData {
 }
 
 export interface VariableAnalysisJobData extends VariableAnalysisOptions {
+  resultVersion?: number;
   skipRetries?: boolean;
   workspaceId: number;
   unitId?: number;

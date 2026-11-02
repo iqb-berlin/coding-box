@@ -84,8 +84,18 @@ describe('Zoneless manual preparation workflows', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/coding/applied-results-overview', { body: null });
   }
 
-  function openManual(): void {
-    cy.visit('/');
+  function openManual(options: { reducedMotion?: boolean } = {}): void {
+    cy.visit('/', {
+      onBeforeLoad(window) {
+        if (!options.reducedMotion) return;
+        // Material reads this before opening its first dialog. Avoid depending on
+        // requestAnimationFrame delivery when verifying workspace ownership.
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion)');
+        Object.defineProperty(reducedMotion, 'matches', { value: true });
+        cy.stub(window, 'matchMedia').callThrough()
+          .withArgs('(prefers-reduced-motion)').returns(reducedMotion);
+      }
+    });
     cy.wait('@authData');
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
@@ -265,6 +275,62 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@definitionDialog').find('[formControlName="name"]').should('have.value', 'Workload draft');
   });
 
+  it('keeps a coder selected while changing capacity and saves the same preview context', () => {
+    setup();
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [{ id: 1, label: 'IQB-Standard' }] });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions?includePlannedUsage=true', { body: [] });
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/calculate-distribution', {
+      delay: 150,
+      body: {
+        distribution: {}, aggregationInfo: {}, matchingFlags: [], warnings: [], tasksPerCoder: { 11: 8 },
+        doubleCodingInfo: {
+          'UNIT_A::VAR_2': {
+            totalCases: 8, distinctCases: 8, doubleCodedCases: 0,
+            singleCodedCasesAssigned: 8, codingTasksTotal: 8, doubleCodedCasesPerCoder: {}
+          }
+        }
+      }
+    }).as('capacityPreview');
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/job-definitions', request => {
+      request.reply({ body: { ...request.body, id: 101 } });
+    }).as('saveCapacityDefinition');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
+    cy.contains('#manual-planning button', 'Aktualisieren').click();
+    cy.get('coding-box-coding-job-definitions .header-actions button[mat-raised-button]').click();
+    cy.get('coding-box-coding-job-definition-dialog').as('definitionDialog');
+    cy.get('@definitionDialog').find('[formControlName="name"]').type('Capacity workflow');
+    cy.get('@definitionDialog').find('[formControlName="durationSeconds"]').type('{selectall}30');
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Einzelne Variablen').click();
+    cy.get('@definitionDialog').contains('.variable-card', 'UNIT_A_VAR_2').click();
+    cy.get('@definitionDialog').contains('[role="tab"]', 'Kodierer').click();
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').click();
+    let seed: string;
+    cy.wait('@capacityPreview').then(({ request }) => {
+      expect(request.body.selectedCoders).to.deep.equal([{ id: 11, name: 'Coder A', username: 'Coder A', capacityPercent: 100 }]);
+      seed = request.body.distributionSeed;
+      expect(seed).to.match(/^job-definition:5:/);
+    });
+    cy.get('@definitionDialog').contains('.count-item', 'Für neue Jobs verfügbar:').find('.count-value').should('have.text', '8');
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').find('input[type="number"]').type('{selectall}150').blur();
+    cy.wait('@capacityPreview').then(({ request }) => {
+      expect(request.body.selectedCoders[0].capacityPercent).to.equal(150);
+      expect(request.body.distributionSeed).to.equal(seed);
+    });
+    cy.get('@definitionDialog').find('.coder-card.selected').should('have.length', 1);
+    cy.get('@definitionDialog').contains('.coder-card', 'Coder A').find('input[type="number"]').should('have.value', '150');
+    cy.get('@definitionDialog').contains('.count-item', 'Geschätzte Zeit:').find('.count-value').should('have.text', '4:00');
+    cy.get('@definitionDialog').contains('button', 'Definition erstellen').click();
+    cy.wait('@saveCapacityDefinition').then(({ request }) => {
+      expect(request.body.name).to.equal('Capacity workflow');
+      expect(request.body.assignedCoders).to.deep.equal([11]);
+      expect(request.body.assignedCoderConfigs).to.deep.equal([{ coderId: 11, capacityPercent: 150 }]);
+      expect(request.body.assignedVariables).to.deep.equal([{ unitName: 'UNIT_A', variableId: 'VAR_2' }]);
+      expect(request.body.distributionSeed).to.equal(seed);
+    });
+    cy.get('coding-box-coding-job-definition-dialog').should('not.exist');
+  });
+
   it('restores a definition draft after catalog loading and preserves selection across variable reloads', () => {
     setup();
     cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });
@@ -307,7 +373,14 @@ describe('Zoneless manual preparation workflows', () => {
   it('estimates a scoped manual export, offers the compact format and releases startup after failure', () => {
     setup();
     let attempts = 0;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', { delay: 300, body: [definition] }).as('exportDefinitions');
+    const definitionsGate = gate();
+    // Keep scope loading until the first click has exercised the readiness guard.
+    // A fixed delay can expire before that click on a busy CI runner.
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', request =>
+      definitionsGate.wait.then(() => { request.reply({ body: [definition] }); }))
+      .as('exportDefinitions');
+    cy.intercept('GET', '**/api/admin/workspace/5/coders', { body: { data: coders, total: 2 } })
+      .as('exportCoders');
     cy.intercept('POST', '**/api/admin/workspace/5/coding/export/estimate', request => {
       expect(request.body.exportType).to.equal('by-variable');
       expect(request.body.jobDefinitionIds).to.deep.equal([99]);
@@ -323,7 +396,10 @@ describe('Zoneless manual preparation workflows', () => {
     }).as('startManualExport');
     openManual();
     cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
+    cy.wait('@exportCoders');
     cy.get('#manual-execution').contains('button', 'Export').as('exportButton').should('be.enabled').click();
+    cy.get('coding-box-manual-coding-export-dialog').should('not.exist');
+    cy.then(() => definitionsGate.release());
     cy.wait('@exportDefinitions');
     cy.get('@exportButton').click();
     cy.get('coding-box-manual-coding-export-dialog').as('exportDialog');
@@ -732,7 +808,7 @@ describe('Zoneless manual preparation workflows', () => {
       deletions += 1;
       request.reply({ body: { success: true } });
     });
-    openManual();
+    openManual({ reducedMotion: true });
     cy.title().should('equal', 'Manuelle Kodierung | IQB-Kodierbox');
     cy.contains('.manual-coding-tabs [role="tab"]', 'Durchführung').click();
     cy.contains('#manual-execution button', 'Aktualisieren').click();

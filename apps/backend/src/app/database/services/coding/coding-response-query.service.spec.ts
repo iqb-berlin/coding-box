@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingResponseQueryService } from './coding-response-query.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import * as statusConverter from '../../utils/response-status-converter';
@@ -9,7 +10,6 @@ import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Persons from '../../entities/persons.entity';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 jest.mock('../../utils/response-status-converter', () => ({
   ...jest.requireActual('../../utils/response-status-converter'),
@@ -84,7 +84,7 @@ describe('CodingResponseQueryService', () => {
           }
         },
         {
-          provide: WorkspaceFilesService,
+          provide: WORKSPACE_FILE_METADATA_READER,
           useValue: mockWorkspaceFilesService
         }
       ]

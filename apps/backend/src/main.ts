@@ -23,6 +23,7 @@ import { requestIdMiddleware } from './app/http/request-id.middleware';
 import { createPostgresPoolSnapshotProvider } from './app/database/postgres-pool-monitor';
 import { releaseCacheStartupWarmups } from './app/cache/cache-startup-warmup.queue';
 import { RuntimeConfigService } from './app/config/runtime-config.service';
+import { parseTrustedProxies } from './app/http/trusted-proxies';
 
 async function bootstrap() {
   if (isExportWorkerProcess()) {
@@ -35,6 +36,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   configureShutdownHooks(app);
   const configService = app.get(ConfigService);
+  app.set('trust proxy', parseTrustedProxies(configService.get('HTTP_TRUSTED_PROXIES')));
   const runtimeConfig = app.get(RuntimeConfigService);
   const host = configService.get('API_HOST') || '0.0.0.0';
   const port = 3333;
@@ -98,7 +100,7 @@ async function bootstrap() {
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);
   app.enableCors({
-    exposedHeaders: [REQUEST_ID_HEADER]
+    exposedHeaders: [REQUEST_ID_HEADER, 'Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']
   });
 
   // Enable Swagger-UI

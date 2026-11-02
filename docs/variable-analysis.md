@@ -4,9 +4,12 @@ Unter **Testergebnisse → Antwortwertanalyse** wird vor dem Start eines Auftrag
 die Auswertungsgrundlage gewählt:
 
 - **Antwortwerte und Kategorien**: gespeicherte Rohwerte; Mehrfachantworten werden
-  in einzelne Antwortkategorien aufgelöst. Labels stammen aus den Wert- und
-  Positionsmetadaten der Unit. Schema-Code-IDs und Code-Scores werden hier nicht
-  an gleichlautende Rohwerte angehängt.
+  in einzelne Antwortkategorien aufgelöst. Labels stammen aus passenden Kodierregeln oder den Wert- und
+  Positionsmetadaten der Unit. Eine passende Kodierregel ergänzt Code, Score und
+  die Kennzeichnung „Schema“, auch bei beobachteten Werten aus einem Zahlenbereich.
+  Dabei wird die Regel auf den Antwortwert angewendet; eine bloße Übereinstimmung
+  zwischen Rohwert und Code-ID begründet keine Zuordnung. Nicht beobachtete,
+  ausdrücklich hinterlegte Antwortalternativen können mit Anzahl 0 ergänzt werden.
 - **Vergebene Codes**: `code_v1`, `code_v2` oder `code_v3` des ausgewählten
   Kodierlaufs. Labels und optionale Scores stammen aus den Code-Definitionen des
   Kodierschemas. Eine Mehrfachantwort liefert in dieser Auswertung einen
@@ -16,7 +19,10 @@ Jeder Auftrag speichert seine Grundlage und seinen Kodierlauf. Beim Laden eines
 vorhandenen Ergebnisses bleibt diese Zuordnung erhalten. Eine geänderte Auswahl
 gilt für den nächsten Auftrag. Nach dem Update müssen bestehende Analysen neu
 gestartet werden: Bereits gespeicherte Ergebnisse werden nicht neu berechnet.
-Alte Aufträge ohne Auswertungsgrundlage werden als Antwortwertanalysen behandelt.
+Alte Aufträge ohne Auswertungsgrundlage werden in der Auftragsliste als
+Antwortwertanalysen behandelt. Ergebnisse älterer Berechnungsversionen können
+nicht mehr geöffnet oder exportiert werden; die Oberfläche fordert eine neue
+Analyse an.
 
 ## Zählung und Gültigkeit
 
@@ -61,6 +67,32 @@ Statusverteilung einzelner Wertzeilen. CSV und XLSX kennzeichnen Grundlage und
 Kodierlauf und enthalten dieselben Bezugsgrößen. Der Dateiname wird beim Start des
 Exports festgelegt und behält diese Zuordnung auch beim Wechsel zu einem anderen
 Analyseergebnis während des Downloads.
+
+„Fehlend/ungültig“ und „Leere Rohwerte“ dürfen gleich groß sein: zum Beispiel bei
+100 Antworten mit 90 gültigen, nicht leeren Antworten und 10 leeren Antworten.
+Dann sind beide Angaben 10. Hat zusätzlich eine nicht leere Antwort einen
+ungültigen Status, bleiben 89 gültige Antworten; „Fehlend/ungültig“ beträgt dann
+11 und „Leere Rohwerte“ weiterhin 10. Die konkreten Exporte von MGV090_01 und
+MDV007 sind damit noch nicht als korrekt bestätigt; dafür müssen die verwendete
+Version und die zugehörigen Antwortdatensätze geprüft werden.
+
+## Tabellen und ausgelassene Werte
+
+Oberfläche und Export ordnen zuerst Aufgabe/Variable und die Angaben zur gesamten
+Variable an, danach den einzelnen Antwortwert bzw. Code und dessen Häufigkeiten.
+Die Statusverteilung erscheint in der Oberfläche zusätzlich einmal je Variable
+auf der aktuellen Seite. Im flachen Export werden die Angaben zur Variable je
+Wertzeile wiederholt.
+
+„Weitere Werte nicht enthalten“ zählt unterschiedliche beobachtete Werte ohne
+eigene enthaltene Zeile, nicht die Anzahl der zugehörigen Antworten. Regulär
+werden die 20 häufigsten Werte gespeichert; beobachtete Werte aus den
+hinterlegten Definitionen kommen zusätzlich hinzu. Beispiel: 25 unterschiedliche
+Werte, davon 20 enthalten, ergeben 5 weitere Werte. Suche und Leerwertfilter wählen ganze Variablen aus. Alle berücksichtigten
+Antwortdatensätze der jeweiligen Variable bleiben
+in den Nennern für die Prozentwerte enthalten; die sichtbaren Häufigkeiten müssen
+deshalb nicht 100 % ergeben. Bei Mehrfachantworten sind außerdem mehrere
+Kategorien je Antwort möglich.
 
 ## Prüfung
 

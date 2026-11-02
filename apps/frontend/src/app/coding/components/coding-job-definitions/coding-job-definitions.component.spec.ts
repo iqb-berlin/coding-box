@@ -5,7 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
@@ -97,7 +97,7 @@ describe('CodingJobDefinitionsComponent', () => {
           provide: CodingJobService,
           useValue: { jobsCreatedEvent: { emit: jest.fn() } }
         },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>() } },
         provideHttpClient()
       ],
       imports: [CodingJobDefinitionsComponent, TranslateModule.forRoot()]

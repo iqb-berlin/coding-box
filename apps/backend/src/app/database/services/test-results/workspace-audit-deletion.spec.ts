@@ -1,6 +1,6 @@
 import { JournalEntry } from '../../entities/journal-entry.entity';
 import { JournalService } from '../shared/journal.service';
-import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { TestResultsMutationService } from './test-results-mutation.service';
 
 describe('Workspace deletion audit boundaries', () => {
   function fixture(personCount = 1) {
@@ -58,12 +58,12 @@ describe('Workspace deletion audit boundaries', () => {
     const journalService = new JournalService({} as never);
     const record = jest.spyOn(journalService, 'recordEvent');
     const invalidateCaches = jest.fn().mockResolvedValue(undefined);
-    const service = Object.assign(Object.create(WorkspaceTestResultsService.prototype), {
+    const service = Object.assign(Object.create(TestResultsMutationService.prototype), {
       connection,
       journalService,
       logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
-      invalidateCachesAfterTestResultDeletion: invalidateCaches
-    }) as WorkspaceTestResultsService;
+      cache: { invalidateCachesAfterTestResultDeletion: invalidateCaches, invalidateCachesAfterPartialDeletion: invalidateCaches }
+    }) as TestResultsMutationService;
     return {
       service,
       persons,
@@ -116,10 +116,12 @@ describe('Workspace deletion audit boundaries', () => {
   it('retains the audit for committed chunks when a later bulk chunk rolls back', async () => {
     const f = fixture(251);
     Object.assign(f.service, {
-      resolveDeleteTargets: jest.fn().mockResolvedValue({ kind: 'persons', ids: Array.from({ length: 251 }, (_, i) => i + 1), preview: {} }),
-      collectDeleteDependencySnapshot: jest.fn().mockResolvedValue({
-        bookletIds: [], unitIds: [], responseIds: [], bookletInfoIds: []
-      }),
+      deletionQuery: {
+        resolveDeleteTargets: jest.fn().mockResolvedValue({ kind: 'persons', ids: Array.from({ length: 251 }, (_, i) => i + 1), preview: {} }),
+        collectDeleteDependencySnapshot: jest.fn().mockResolvedValue({
+          bookletIds: [], unitIds: [], responseIds: [], bookletInfoIds: []
+        })
+      },
       deleteKnownDeleteDependents: jest.fn()
     });
     f.failAudit(2);

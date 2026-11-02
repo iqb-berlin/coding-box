@@ -12,7 +12,10 @@ if (process.env.BACKEND_HARDENING_FIXTURE !== 'true') {
   throw new Error('Use only the disposable codebook Compose fixture; set BACKEND_HARDENING_FIXTURE=true.');
 }
 const root = fileURLToPath(new URL('../../..', import.meta.url));
-const executable = path.join(root, 'dist/apps/backend/main.js');
+const runtimeDirectory = process.env.BACKEND_HARDENING_RUNTIME_DIR ?
+  path.resolve(process.env.BACKEND_HARDENING_RUNTIME_DIR) : root;
+const executable = process.env.BACKEND_HARDENING_RUNTIME_DIR ?
+  path.join(runtimeDirectory, 'main.js') : path.join(root, 'dist/apps/backend/main.js');
 const output = path.resolve(process.env.BACKEND_HARDENING_PROOF_DIR || 'dist/backend-hardening-proof');
 const environment = {
   ...process.env, NODE_OPTIONS: '--max-old-space-size=2048', API_HOST: '127.0.0.1',
@@ -52,7 +55,7 @@ async function counts() {
 function start(role, overrides = {}) {
   let logs = '';
   const child = spawn(process.execPath, [executable], {
-    cwd: root, env: { ...environment, APP_ROLE: role, ...overrides }, stdio: ['ignore', 'pipe', 'pipe']
+    cwd: runtimeDirectory, env: { ...environment, APP_ROLE: role, ...overrides }, stdio: ['ignore', 'pipe', 'pipe']
   });
   processes.add(child);
   child.stdout.on('data', chunk => { logs += chunk; });
