@@ -37,6 +37,15 @@ describe('item dataset variable positions', () => {
     expect(sequence(result, ['V10', 'V2'])).toEqual(['V2', 'V10']);
   });
 
+  it.each([undefined, JSON.stringify({
+    variableCodings: [{ id: 'V10', sourceType: 'BASE' }, { id: 'V2', sourceType: 'BASE' }]
+  })])('uses IDs and Unit pages when neither Unit nor scheme supplies aliases (%s)', codingScheme => {
+    const result = buildItemDatasetVariablePositions('UNIT', [
+      { id: 'V10', page: '0' }, { id: 'V2', page: '1' }
+    ], undefined, codingScheme);
+    expect(sequence(result, ['V2', 'V10'])).toEqual(['V10', 'V2']);
+  });
+
   it.each([undefined, '<task/>', JSON.stringify({
     pages: [
       { sections: [{ elements: [{ id: 'V1' }] }] },

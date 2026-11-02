@@ -27,7 +27,7 @@ const numericPosition = (value: unknown): number | undefined => {
 /** Static positions for MNR classification, independent of item and response order. */
 export function buildItemDatasetVariablePositions(
   unitName: string,
-  mappedVariables: Array<{ id: string; alias: string; page?: string }>,
+  mappedVariables: Array<{ id: string; alias?: string; page?: string }>,
   definition?: string,
   codingScheme?: string
 ): Map<string, number> {
