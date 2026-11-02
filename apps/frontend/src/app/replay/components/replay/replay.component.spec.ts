@@ -187,6 +187,7 @@ describe('ReplayComponent', () => {
       page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
     };
     routeQueryParams = { auth: 'valid-token' };
+    fakeActivatedRoute.snapshot.url[0].path = '';
 
     // Spy on token validation
     jest.spyOn(tokenUtils, 'validateToken').mockReturnValue({ isValid: true });
@@ -486,6 +487,24 @@ describe('ReplayComponent', () => {
     expect(component.codingService.showScore).toBe(true);
     expect(component.codingService.allowComments).toBe(false);
     expect(component.codingService.suppressGeneralInstructions).toBe(true);
+  });
+
+  it.each(['replay', 'print-view'])('blocks payload requests without credentials in %s routes', async path => {
+    fixture.destroy();
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    appService.hasStoredAuthToken.mockReturnValue(false);
+    routeQueryParams = { workspaceId: '47' };
+    fakeActivatedRoute.snapshot.url[0].path = path;
+    replayBackendService.getReplayPayload.mockClear();
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(component.player()).toBe('');
   });
 
   it('should sync the selected workspace from replay query params', async () => {

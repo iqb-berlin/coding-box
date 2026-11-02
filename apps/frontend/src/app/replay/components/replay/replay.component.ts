@@ -510,13 +510,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const testPersonInput = this.testPersonInput();
     const unitIdInput = this.unitIdInput();
     if (restored && !this.isPrintMode()) {
-      await this.loadAuthorizedRoutePayload();
+      await this.loadRouteUnitData();
     } else if (this.isPrintMode() && params.unitId) {
       this.unitId.set(params.unitId);
-      await this.loadAuthorizedRoutePayload();
+      await this.loadRouteUnitData();
     } else if (Object.keys(params).length >= 3 && Object.keys(params).length <= 4) {
       this.setUnitParams(params);
-      await this.loadAuthorizedRoutePayload();
+      await this.loadRouteUnitData();
     } else if (testPersonInput && unitIdInput) {
       this.setTestPerson(testPersonInput);
       this.unitId.set(unitIdInput);
@@ -526,7 +526,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private async loadAuthorizedRoutePayload(): Promise<void> {
+  private async loadRouteUnitData(): Promise<void> {
     const workspaceId = this.workspaceId();
     if (!this.canLoadReplayWithCurrentAuth(workspaceId)) {
       this.storeErrorInStatistics('QueryError');
