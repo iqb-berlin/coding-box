@@ -145,6 +145,31 @@ mit dem qualifizierten Jest-Bericht überein. Die Korrektur ändert ausschließl
 den Pilotadapter, seine Regressionstests und diesen Bericht. Bestehende
 Backendquellen, Jest, Validierung, Abhängigkeiten und CI-Gates bleiben unverändert.
 
+## Workflow-Refresh nach dem 401 in Pipeline #106850
+
+Der Live-Test verwendete für direkte API-Aufrufe einen beim Login gespeicherten
+Access-Token, auch nachdem die Browser-Sitzung erneuert worden war. Beim
+fehlgeschlagenen Export-Polling war dieser Token bereits abgelaufen.
+
+Die Workflow-Spec liest jetzt vor jedem direkten API-Aufruf den aktuellen Token
+aus der Browser-Sitzung. Bei weniger als fünf Sekunden Restlaufzeit erneuert sie
+ihn über den echten Backend-Endpunkt `/api/auth/refresh` und übernimmt auch einen
+rotierten Refresh-Token. Eine zwischenzeitliche Erneuerung durch die Anwendung
+wird nicht überschrieben. Fehler beim Refresh schlagen weiterhin fehl;
+401-Antworten auf fachliche Requests werden nicht pauschal wiederholt.
+
+Ein zusätzlicher Live-Fall wartet den tatsächlichen Tokenablauf ab, führt einen
+Refresh aus und prüft anschließend die unveränderte Benutzeridentität über
+`/auth-data`. Die Provider-Tokenlaufzeit bleibt bei 30 Sekunden. Jest,
+Produktionsvalidierung und sämtliche CI-Gates sind unverändert.
+
+Die fokussierte TypeScript-Prüfung der geänderten Cypress-Spec mit ES2021 und
+Bundler-Modulauflösung besteht. Der direkte Lint-Vergleich zeigt unverändert
+19 bestehende Befunde und keine neuen Befunde. Der allgemeine Cypress-Typecheck umfasst auch
+Frontend-Specs und scheitert bereits an deren Angular-/Jest-Konfiguration.
+Der echte lokale Workflow-Lauf ist durch den nicht verfügbaren Docker-Daemon
+blockiert; der neue Live-Fall wird durch das unveränderte Remote-Gate ausgeführt.
+
 ## Artefakte und Grenzen
 
 Vitest schreibt JSON, JUnit, LCOV, Cobertura, HTML und Coverage-JSON getrennt nach
