@@ -54,6 +54,81 @@ test('TypeScript-ESLint and migrated IQB formatting rules remain active', async 
     JSON.stringify(result.messages));
 });
 
+test('production code enforces structure limits while test scaffolding stays exempt', async () => {
+  for (const filePath of [componentPath, 'apps/backend/src/app/app.controller.ts']) {
+    const config = await eslint.calculateConfigForFile(filePath);
+    assert.deepEqual(config.rules['structure/complexity'], [2, 20]);
+    assert.deepEqual(config.rules['structure/max-depth'], [2, 4]);
+    assert.equal(config.rules['structure/max-lines'][0], 2);
+    assert.equal(config.rules['structure/max-lines'][1].max, 800);
+    assert.equal(config.rules['structure/max-lines-per-function'][0], 2);
+    assert.equal(config.rules['structure/max-lines-per-function'][1].max, 100);
+    const testConfig = await eslint.calculateConfigForFile(filePath.replace('.ts', '.spec.ts'));
+    assert.equal(testConfig.rules['structure/complexity']?.[0] || 0, 0);
+    assert.equal(testConfig.rules['structure/max-lines-per-function']?.[0] || 0, 0);
+  }
+  const nx = JSON.parse(readFileSync(join(workspace, 'nx.json'), 'utf8'));
+  assert.ok(nx.namedInputs.sharedGlobals.includes('{workspaceRoot}/config/quality/**/*'));
+});
+
+test('structure gates reject complex, deeply nested and oversized production fixtures', async () => {
+  const complex = `export function choose(value: number): number {\n${
+    Array.from({ length: 21 }, (_, i) => `if (value === ${i}) return ${i};`).join('\n')
+  }\nreturn -1;\n}`;
+  const nested = 'export function nested(value: boolean): void { if (value) { if (value) { if (value) { if (value) { if (value) { return; } } } } } }';
+  const longFunction = `export function collect(): number[] {\nconst values: number[] = [];\n${
+    Array.from({ length: 101 }, (_, i) => `values.push(${i});`).join('\n')
+  }\nreturn values;\n}`;
+  const longFile = Array.from({ length: 801 }, (_, i) => `export const value${i} = ${i};`).join('\n');
+  for (const filePath of [componentPath, 'apps/backend/src/app/app.controller.ts']) {
+    for (const [source, rule] of [
+      [complex, 'structure/complexity'], [nested, 'structure/max-depth'],
+      [longFunction, 'structure/max-lines-per-function'], [longFile, 'structure/max-lines']
+    ]) {
+      const [result] = await eslint.lintText(source, { filePath });
+      assert.ok(result.messages.some(message => message.ruleId === rule && message.severity === 2),
+        `${filePath}: expected ${rule}: ${JSON.stringify(result.messages)}`);
+    }
+  }
+});
+
+test('legacy exceptions are scoped to individual functions and only file-size limits apply to files', () => {
+  const baseline = JSON.parse(readFileSync(join(workspace, 'config/quality/structure-baseline.json'), 'utf8'));
+  assert.equal(baseline.schemaVersion, 2);
+  const defaults = { complexity: 20, 'max-depth': 4, 'max-lines-per-function': 100 };
+  for (const [file, entry] of Object.entries(baseline.files)) {
+    assert.ok(existsSync(join(workspace, file)), file);
+    assert.match(file, /^apps\/(backend|frontend)\/src\/.*\.ts$/);
+    assert.doesNotMatch(file, /\.(spec|test|mock|d)\.ts$/);
+    for (const [rule, limit] of Object.entries(entry.file)) {
+      assert.equal(rule, 'max-lines');
+      assert.ok(Number.isInteger(limit) && limit > 800, file);
+    }
+    for (const [scope, limits] of Object.entries(entry.functions)) {
+      assert.ok(scope.length > 0);
+      for (const [rule, limit] of Object.entries(limits)) {
+        assert.ok(rule in defaults && Number.isInteger(limit) && limit > defaults[rule], `${file}: ${scope}: ${rule}`);
+      }
+    }
+  }
+});
+
+test('the actual legacy-file configuration rejects the formerly accepted new functions', async () => {
+  const filePath = 'apps/backend/src/app/job-queue/processors/export-job.processor.ts';
+  for (const [source, rule] of [
+    [`export function newlyAdded(value: number): number {\n${
+      Array.from({ length: 40 }, (_, i) => `if (value === ${i}) return ${i};`).join('\n')
+    }\nreturn -1;\n}`, 'structure/complexity'],
+    [`export class NewlyAdded { collect(): number[] {\nconst rows: number[] = [];\n${
+      Array.from({ length: 150 }, (_, i) => `rows.push(${i});`).join('\n')
+    }\nreturn rows;\n} }`, 'structure/max-lines-per-function']
+  ]) {
+    const [result] = await eslint.lintText(source, { filePath });
+    assert.ok(result.messages.some(message => message.ruleId === rule && message.messageId !== 'outdatedBudget'),
+      JSON.stringify(result.messages));
+  }
+});
+
 test('CommonJS import-equals stays supported while variable require calls are rejected', async () => {
   const filePath = 'apps/backend/src/app/database/services/coding/coding-list-stream.service.ts';
   const [supported] = await eslint.lintText("import fs = require('fs');\nexport { fs };\n", { filePath });

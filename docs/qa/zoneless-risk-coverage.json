@@ -135,7 +135,8 @@
         "apps/frontend/src/app/replay/components/replay/replay-payload.facade.spec.ts",
         "apps/frontend/src/app/replay/components/replay/replay-recovery.service.spec.ts",
         "apps/frontend/src/app/replay/services/replay-session-loader.service.spec.ts",
-        "cypress/zoneless/replay-lifecycle.cy.ts"
+        "cypress/zoneless/replay-lifecycle.cy.ts",
+        "apps/frontend/src/app/replay/components/replay/replay-route-session.service.spec.ts"
       ]
     },
     {

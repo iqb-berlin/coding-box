@@ -11,6 +11,7 @@ import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import * as jwtDecodeModule from 'jwt-decode';
 import { ReplayComponent } from './replay.component';
+import { ReplayRouteSessionService } from './replay-route-session.service';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -186,6 +187,7 @@ describe('ReplayComponent', () => {
       page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
     };
     routeQueryParams = { auth: 'valid-token' };
+    fakeActivatedRoute.snapshot.url[0].path = '';
 
     // Spy on token validation
     jest.spyOn(tokenUtils, 'validateToken').mockReturnValue({ isValid: true });
@@ -485,6 +487,24 @@ describe('ReplayComponent', () => {
     expect(component.codingService.showScore).toBe(true);
     expect(component.codingService.allowComments).toBe(false);
     expect(component.codingService.suppressGeneralInstructions).toBe(true);
+  });
+
+  it.each(['replay', 'print-view'])('blocks payload requests without credentials in %s routes', async path => {
+    fixture.destroy();
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    appService.hasStoredAuthToken.mockReturnValue(false);
+    routeQueryParams = { workspaceId: '47' };
+    fakeActivatedRoute.snapshot.url[0].path = path;
+    replayBackendService.getReplayPayload.mockClear();
+
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(appService.createOwnToken).not.toHaveBeenCalled();
+    expect(component.player()).toBe('');
   });
 
   it('should sync the selected workspace from replay query params', async () => {
@@ -1172,20 +1192,19 @@ describe('ReplayComponent', () => {
     const updateStatus = jest.spyOn(component.codingService, 'updateCodingJobStatus');
     const privateComponent = component as unknown as {
       unitsData: WritableSignal<typeof unitsData | null>;
-      codingProgressLoadedForJobKey: string | null;
     };
 
     component.subscribeRouter();
     await new Promise<void>(resolve => { setTimeout(resolve, 0); });
     expect(privateComponent.unitsData()).toBeNull();
-    expect(privateComponent.codingProgressLoadedForJobKey).toBeNull();
+    expect(fixture.debugElement.injector.get(ReplayRouteSessionService).hasLoadedProgress(47, 77)).toBe(false);
     expect(updateStatus).not.toHaveBeenCalled();
     expect(snackBar.open).toHaveBeenCalled();
 
     component.subscribeRouter();
     await new Promise<void>(resolve => { setTimeout(resolve, 0); });
     expect(codingJobBackendServiceMock.getCodingNotes).toHaveBeenCalledTimes(2);
-    expect(privateComponent.codingProgressLoadedForJobKey).toBe('47:77');
+    expect(fixture.debugElement.injector.get(ReplayRouteSessionService).hasLoadedProgress(47, 77)).toBe(true);
     expect(component.codingService.selectedCodes.get('saved')?.label).toBe('SAVED');
   });
 

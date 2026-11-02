@@ -47,3 +47,29 @@ publication jobs depend on it. It uses isolated PostgreSQL and Redis service
 containers. Local development can still run ordinary mocked unit tests without
 those services; explicit PostgreSQL test variables are included in their Nx
 cache inputs.
+
+
+## Response list and total against PostgreSQL
+
+`flat-response-filters.postgres.spec.ts` runs the real response service and its
+TypeORM queries against synthetic, unlogged tables in a unique schema. It checks
+response IDs and totals for NULL/blank/empty-array values, inclusive duration
+bounds, session IDs, independently matched browser/OS dimensions, pagination,
+multiple matching tags, exclusions and combinations of filters. Only the source
+of cached workspace exclusions is replaced; list and count queries execute in
+PostgreSQL. ORM metadata and raw EXISTS subqueries use the same test search path.
+The suite drops its own schema during cleanup and never synchronizes entities.
+
+The existing mandatory integration gate discovers this `.postgres.spec.ts` suite
+automatically. For a focused development run, explicitly point the test variables
+to disposable PostgreSQL, enable `POSTGRES_INTEGRATION_TESTS=true`, then run:
+
+```sh
+npx nx test backend --testPathPatterns=flat-response-filters.postgres.spec.ts --runInBand --skip-nx-cache
+```
+
+Use `.nvmrc`'s Node version. Database connection variables are `POSTGRES_HOST`,
+`POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`; the user
+needs permission to create and drop schemas in that test database. Without the
+explicit integration flag the normal unit run skips the suite, as it does the
+other PostgreSQL suites; such a skip is not evidence that this test passed.

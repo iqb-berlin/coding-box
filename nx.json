@@ -121,6 +121,7 @@
       "{workspaceRoot}/vendor/**/*",
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/eslint.config.cjs",
+      "{workspaceRoot}/config/quality/**/*",
       {
         "runtime": "node --version"
       }
