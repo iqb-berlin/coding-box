@@ -44,7 +44,7 @@ describe('item dataset MNR ordering', () => {
       ['LATER', { unitId: 'LATER', order: 1, testletKey: 'T2' }]
     ])
   };
-  const variablePositions = buildItemDatasetVariablePositions('DLB004', [], JSON.stringify({
+  const { positions: variablePositions } = buildItemDatasetVariablePositions('DLB004', [], JSON.stringify({
     pages: [
       { sections: [{ elements: [{ id: '01' }] }] },
       { sections: [{ elements: [{ id: '10' }] }] },
@@ -104,7 +104,7 @@ describe('item dataset MNR ordering', () => {
     const derived = { ...column('1', 'DERIVED', 0), isDerived: true, sourceType: 'COPY_VALUE' };
     const activity = column('2', 'V5', 1);
     for (const source of ['V1', 'V10']) {
-      const positions = buildItemDatasetVariablePositions('DLB004', [], undefined, JSON.stringify({
+      const { positions } = buildItemDatasetVariablePositions('DLB004', [], undefined, JSON.stringify({
         variableCodings: [
           { id: source, sourceType: 'BASE' },
           { id: 'V5', sourceType: 'BASE' },

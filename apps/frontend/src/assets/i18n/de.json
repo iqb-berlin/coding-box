@@ -776,7 +776,8 @@
         "column-name-collision": "Spaltenkollision",
         "unknown-selection": "Unbekannte Itemauswahl",
         "vomd-fallback-used": "Eindeutiger Fallback verwendet",
-        "vomd-fallback-ignored": "Redundanter Fallback ignoriert"
+        "vomd-fallback-ignored": "Redundanter Fallback ignoriert",
+        "variable-order-fallback": "Geschätzte Variablenreihenfolge"
       },
       "item-dataset-diagnostics-csv": {
         "severity": "Schweregrad",

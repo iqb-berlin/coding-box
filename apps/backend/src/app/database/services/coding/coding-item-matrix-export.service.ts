@@ -157,6 +157,8 @@ export class CodingItemMatrixExportService {
     workspaceId: number
   ): Promise<ItemDatasetOptionsDto> {
     const result = await this.buildColumns(workspaceId);
+    const orderWarnings = result.issues.length ? [] :
+      (await this.metadataService.getVariableOrder(workspaceId, result.columns)).warnings;
     return {
       items: result.columns.map(column => ({
         unitId: column.unitId,
@@ -169,7 +171,7 @@ export class CodingItemMatrixExportService {
         columnName: column.header
       })),
       mappingIssues: result.issues,
-      mappingWarnings: result.warnings
+      mappingWarnings: [...result.warnings, ...orderWarnings]
     };
   }
 
@@ -468,11 +470,11 @@ export class CodingItemMatrixExportService {
       bookletDesigns,
       profile,
       derivedSources,
-      variablePositions: await this.metadataService.getVariablePositions(
+      variablePositions: (await this.metadataService.getVariableOrder(
         workspaceId,
         orderedColumns,
         checkCancellation
-      )
+      )).positions
     };
   }
 
