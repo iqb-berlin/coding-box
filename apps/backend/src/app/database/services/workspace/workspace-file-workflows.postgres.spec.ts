@@ -309,6 +309,21 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.uploadTestFiles(workspace, [input('after.voud', '{}')], false)).toMatchObject({ uploaded: 1 });
   });
 
+  it('retains the existing HTML fallback overwrite after a real primary-write SQL failure', async () => {
+    const { workspace } = await fixture();
+    await files.uploadTestFiles(workspace, [input('module.html', 'existing resource')], false);
+    const html = '<html><script type="application/ld+json">{"id":"PLAYER","version":"1.0.0"}</script></html>';
+    await db.query("ALTER TABLE file_upload ADD CONSTRAINT reject_player_fixture CHECK (file_id <> 'PLAYER-1.0.0')");
+    try {
+      const result = await files.uploadTestFiles(workspace, [input('module.html', html, 'text/html')], false);
+      expect(result).toMatchObject({ uploaded: 1, failed: 0, uploadedFiles: [{ fileId: 'MODULE.HTML', fileType: 'Resource' }] });
+      const stored = await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace, file_id: 'MODULE.HTML' });
+      // Characterize the legacy fallback: it replaces its existing target despite overwrite=false.
+      expect(stored.data).toBe(html);
+      expect(await countFiles(workspace)).toBe(1);
+    } finally { await db.query('ALTER TABLE file_upload DROP CONSTRAINT reject_player_fixture'); }
+  });
+
   it('returns a freshness warning while retaining the file after a real freshness SQL failure', async () => {
     const { workspace } = await fixture();
     await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
