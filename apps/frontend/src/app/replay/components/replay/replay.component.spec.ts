@@ -11,6 +11,7 @@ import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import * as jwtDecodeModule from 'jwt-decode';
 import { ReplayComponent } from './replay.component';
+import { ReplayRouteSessionService } from './replay-route-session.service';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -1172,20 +1173,19 @@ describe('ReplayComponent', () => {
     const updateStatus = jest.spyOn(component.codingService, 'updateCodingJobStatus');
     const privateComponent = component as unknown as {
       unitsData: WritableSignal<typeof unitsData | null>;
-      codingProgressLoadedForJobKey: string | null;
     };
 
     component.subscribeRouter();
     await new Promise<void>(resolve => { setTimeout(resolve, 0); });
     expect(privateComponent.unitsData()).toBeNull();
-    expect(privateComponent.codingProgressLoadedForJobKey).toBeNull();
+    expect(fixture.debugElement.injector.get(ReplayRouteSessionService).hasLoadedProgress(47, 77)).toBe(false);
     expect(updateStatus).not.toHaveBeenCalled();
     expect(snackBar.open).toHaveBeenCalled();
 
     component.subscribeRouter();
     await new Promise<void>(resolve => { setTimeout(resolve, 0); });
     expect(codingJobBackendServiceMock.getCodingNotes).toHaveBeenCalledTimes(2);
-    expect(privateComponent.codingProgressLoadedForJobKey).toBe('47:77');
+    expect(fixture.debugElement.injector.get(ReplayRouteSessionService).hasLoadedProgress(47, 77)).toBe(true);
     expect(component.codingService.selectedCodes.get('saved')?.label).toBe('SAVED');
   });
 

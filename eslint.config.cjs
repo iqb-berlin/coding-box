@@ -3,6 +3,7 @@ const { FlatCompat } = require('@eslint/eslintrc');
 const js = require('@eslint/js');
 const importPlugin = require('eslint-plugin-import-x');
 const { eslintConfig } = require('./package.json');
+const structureConfig = require('./config/quality/eslint-structure.cjs');
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
@@ -45,5 +46,6 @@ module.exports = [
     // These checks were not enabled by the previous IQB policy. Keep the
     // backend error-handling and assignment policy outside this tooling upgrade.
     rules: { 'preserve-caught-error': 'off', 'no-useless-assignment': 'off' }
-  }
+  },
+  ...structureConfig
 ];
