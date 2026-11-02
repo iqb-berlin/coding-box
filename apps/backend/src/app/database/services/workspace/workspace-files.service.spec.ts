@@ -1,4 +1,7 @@
 import { ConsoleLogger, Logger } from '@nestjs/common';
+import {
+  createWorkspaceFilesService, xmlUploads, resourceUploads, fileCaches
+} from './workspace-files-test.factory';
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
@@ -25,12 +28,12 @@ describe('WorkspaceFilesService.handleFile', () => {
     jest.restoreAllMocks();
   });
 
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   function makeService(overrides: Partial<{
     workspaceXmlSchemaValidationService: CtorParams[5];
   }> = {}): WorkspaceFilesService {
-    return new WorkspaceFilesService({} as unknown as CtorParams[0],
+    return createWorkspaceFilesService({} as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -60,7 +63,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 
     const handleXmlSpy = jest
       .spyOn(
-        service as unknown as {
+        xmlUploads(service) as unknown as {
           handleXmlFile: (...args: unknown[]) => Promise<unknown>;
         },
         'handleXmlFile'
@@ -80,7 +83,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 
     const handleXmlSpy = jest
       .spyOn(
-        service as unknown as {
+        xmlUploads(service) as unknown as {
           handleXmlFile: (...args: unknown[]) => Promise<unknown>;
         },
         'handleXmlFile'
@@ -100,7 +103,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 
     const handleXmlSpy = jest
       .spyOn(
-        service as unknown as {
+        xmlUploads(service) as unknown as {
           handleXmlFile: (...args: unknown[]) => Promise<unknown>;
         },
         'handleXmlFile'
@@ -120,7 +123,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 
     const handleXmlSpy = jest
       .spyOn(
-        service as unknown as {
+        xmlUploads(service) as unknown as {
           handleXmlFile: (...args: unknown[]) => Promise<unknown>;
         },
         'handleXmlFile'
@@ -145,7 +148,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 
     await expect(
       (
-        service as unknown as {
+        xmlUploads(service) as unknown as {
           handleXmlFile: (...args: unknown[]) => Promise<unknown>;
         }
       ).handleXmlFile(1, badFile, true)
@@ -165,7 +168,7 @@ describe('WorkspaceFilesService.handleFile', () => {
     });
 
     const result = await (
-      service as unknown as {
+      xmlUploads(service) as unknown as {
         handleXmlFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleXmlFile(1, makeXmlFile('application/xml'), true);
@@ -182,7 +185,7 @@ describe('WorkspaceFilesService.handleFile', () => {
 });
 
 describe('WorkspaceFilesService coding scheme freshness', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const createCodingScheme = (
     options: {
@@ -267,7 +270,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   };
 
   function makeService(): WorkspaceFilesService {
-    return new WorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
+    return createWorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -340,7 +343,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     });
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(1, createVocsFile(newData), true);
@@ -362,7 +365,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     });
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(1, createVocsFile(newData), true);
@@ -384,7 +387,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     });
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(1, createVocsFile(newData), true);
@@ -426,7 +429,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     });
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(1, createVocsFile(newData), true);
@@ -495,7 +498,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     mockFileUploadRepository.findOne.mockResolvedValue(null);
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(
@@ -540,7 +543,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     mockWorkspaceFileParsingService.extractUnitInfo.mockResolvedValue({});
 
     await (
-      service as unknown as {
+      resourceUploads(service) as unknown as {
         handleOctetStreamFile: (...args: unknown[]) => Promise<unknown>;
       }
     ).handleOctetStreamFile(
@@ -587,7 +590,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     mockFileUploadRepository.find.mockResolvedValue([]);
     const invalidateSpy = jest
       .spyOn(
-        service as unknown as {
+        fileCaches(service) as unknown as {
           invalidateWorkspaceFileCaches: (workspaceId: number) => Promise<void>;
         },
         'invalidateWorkspaceFileCaches'
@@ -664,7 +667,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 });
 
 describe('WorkspaceFilesService.deleteTestFiles', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const mockQueryBuilder = {
     delete: jest.fn().mockReturnThis(),
@@ -695,7 +698,7 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   };
 
   function makeService(): WorkspaceFilesService {
-    return new WorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
+    return createWorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -793,7 +796,7 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
 });
 
 describe('WorkspaceFilesService response deletion cache invalidation', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const mockWorkspaceResponseValidationService = {
     deleteInvalidResponses: jest.fn(),
@@ -807,7 +810,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
   };
 
   function makeService(): WorkspaceFilesService {
-    return new WorkspaceFilesService({} as unknown as CtorParams[0],
+    return createWorkspaceFilesService({} as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -869,7 +872,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
 });
 
 describe('WorkspaceFilesService.findAllFileTypes', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const baseQueryBuilder = {
     select: jest.fn().mockReturnThis(),
@@ -902,7 +905,7 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
   };
 
   function makeService(): WorkspaceFilesService {
-    return new WorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
+    return createWorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -953,7 +956,7 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
 });
 
 describe('WorkspaceFilesService.findFiles', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const mockQueryBuilder = {
     where: jest.fn().mockReturnThis(),
@@ -988,7 +991,7 @@ describe('WorkspaceFilesService.findFiles', () => {
     }
   };
 
-  const mockService = () => new WorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
+  const mockService = () => createWorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
     {} as unknown as CtorParams[1],
     {} as unknown as CtorParams[2],
     {} as unknown as CtorParams[3],
@@ -1041,7 +1044,7 @@ describe('WorkspaceFilesService.findFiles', () => {
 });
 
 describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
-  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+  type CtorParams = Parameters<typeof createWorkspaceFilesService>;
 
   const mockFileUploadRepository = {
     find: jest.fn()
@@ -1051,7 +1054,7 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
   };
 
   function makeService(): WorkspaceFilesService {
-    return new WorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
+    return createWorkspaceFilesService(mockFileUploadRepository as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
