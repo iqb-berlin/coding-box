@@ -81,4 +81,24 @@ describe('item dataset variable positions', () => {
     expect(result.get('UNIT\u001Finternal')).toBe(result.get('UNIT\u001FV10'));
     expect(result.get('UNIT\u001FSOURCE2')).toBeLessThan(result.get('UNIT\u001FV10')!);
   });
+
+  it('uses mapped aliases for existing scheme IDs while retaining derivation links and page overrides', () => {
+    const mapped = [{ id: 'B1', alias: 'V1' }, { id: 'B2', alias: 'V2' }, { id: 'D', alias: 'DERIVED' }];
+    const result = buildItemDatasetVariablePositions('UNIT', mapped, JSON.stringify({
+      pages: [
+        { sections: [{ elements: [{ id: 'V2' }] }] },
+        { sections: [{ elements: [{ id: 'V1' }] }] }
+      ]
+    }), JSON.stringify({
+      variableCodings: [
+        { id: 'B1', sourceType: 'BASE', page: '1' },
+        { id: 'B2', sourceType: 'BASE', page: '2' },
+        { id: 'D', sourceType: 'COPY_VALUE', deriveSources: ['B1'] }
+      ]
+    }));
+    expect(sequence(result, ['V2', 'DERIVED', 'V1'])).toEqual(['V1', 'DERIVED', 'V2']);
+    for (const variable of mapped) {
+      expect(result.get(`UNIT\u001F${variable.id}`)).toBe(result.get(`UNIT\u001F${variable.alias}`));
+    }
+  });
 });

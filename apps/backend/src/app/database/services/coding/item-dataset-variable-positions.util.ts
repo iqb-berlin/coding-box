@@ -46,7 +46,10 @@ export function buildItemDatasetVariablePositions(
     });
   }
   for (const variable of mappedVariables) {
-    if (!variables.has(variable.id)) {
+    const existing = variables.get(variable.id);
+    if (existing) {
+      existing.alias = variable.alias || existing.alias;
+    } else {
       variables.set(variable.id, { ...variable, sources: [] });
     }
   }
