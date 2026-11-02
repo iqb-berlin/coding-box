@@ -610,10 +610,16 @@ describe('CodingItemMatrixExportService', () => {
       getRawMany: jest.fn().mockResolvedValue([])
     };
     const fileRepository = {
-      find: jest.fn().mockImplementation(async ({ where }: { where: { file_type: string } }) => (
-        where.file_type === 'Booklet' ? [{
-          file_id: 'BOOKLET', data: '<Booklet><Testlet id="T1"><Unit id="DLB004" /></Testlet></Booklet>'
-        }] : [{
+      find: jest.fn().mockImplementation(async ({ where }: { where: { file_type: string } }) => {
+        if (where.file_type === 'Booklet') {
+          return [{ file_id: 'BOOKLET', data: '<Booklet><Testlet id="T1"><Unit id="DLB004" /></Testlet></Booklet>' }];
+        }
+        if (where.file_type === 'Unit') {
+          return [{
+            file_id: 'DLB004', data: '<Unit><Metadata><Id>DLB004</Id></Metadata><DefinitionRef>DLB004.VOUD</DefinitionRef></Unit>'
+          }];
+        }
+        return [{
           file_id: 'DLB004.VOUD',
           data: JSON.stringify({
             pages: [
@@ -622,8 +628,8 @@ describe('CodingItemMatrixExportService', () => {
               { sections: [{ elements: [{ id: '11' }] }] }
             ]
           })
-        }]
-      ))
+        }];
+      })
     };
     const service = createService({
       unitRepository: { createQueryBuilder: jest.fn().mockReturnValue(unitQuery) },

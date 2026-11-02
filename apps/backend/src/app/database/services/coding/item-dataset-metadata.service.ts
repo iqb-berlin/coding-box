@@ -41,6 +41,13 @@ export interface ItemDatasetColumnResolution {
   warnings: ItemDatasetMappingWarningDto[];
 }
 
+interface UnitPositionMetadata {
+  definition?: string;
+  definitionRef?: string;
+  codingSchemeRef?: string;
+  variables: Array<{ id: string; alias: string }>;
+}
+
 @Injectable()
 export class ItemDatasetMetadataService {
   private static readonly yieldEveryItems = 50;
@@ -354,21 +361,35 @@ export class ItemDatasetMetadataService {
       unitColumns.push(column);
       units.set(column.unitName, unitColumns);
     }
-    const fileIds = [...units.keys()].flatMap(unit => [`${unit}.VOUD`, `${unit}.VOCS`]);
+    const unitMetadata = await this.getUnitPositionMetadata(workspaceId, new Set(
+      [...units.keys()].map(normalizeItemDatasetUnitId)
+    ), checkCancellation);
+    const fileIds = new Set<string>();
+    for (const unitName of units.keys()) {
+      const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
+      if (metadata?.definition === undefined) {
+        fileIds.add(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`));
+      }
+      fileIds.add(this.normalizeResourceRef(metadata?.codingSchemeRef || `${unitName}.VOCS`));
+    }
     const files = await this.fileUploadRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In(fileIds) },
+      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
       select: ['file_id', 'data']
     });
-    const byId = new Map(files.map(file => [file.file_id, file.data]));
+    const byId = new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
     const result = new Map<string, number>();
     for (const [unitName, unitColumns] of units) {
       await checkCancellation?.();
       try {
+        const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
         const positions = buildItemDatasetVariablePositions(
           unitName,
-          unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId })),
-          byId.get(`${unitName}.VOUD`),
-          byId.get(`${unitName}.VOCS`)
+          [
+            ...(metadata?.variables || []),
+            ...unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId }))
+          ],
+          metadata?.definition ?? byId.get(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`)),
+          byId.get(this.normalizeResourceRef(metadata?.codingSchemeRef || `${unitName}.VOCS`))
         );
         positions.forEach((position, key) => result.set(key, position));
       } catch (error) {
@@ -379,6 +400,47 @@ export class ItemDatasetMetadataService {
       await this.yieldToEventLoop();
     }
     return result;
+  }
+
+  private async getUnitPositionMetadata(
+    workspaceId: number,
+    unitIds: Set<string>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, UnitPositionMetadata>> {
+    const files = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' },
+      select: ['file_id', 'data']
+    });
+    const result = new Map<string, UnitPositionMetadata>();
+    for (let index = 0; index < files.length; index += 1) {
+      await checkCancellation?.();
+      if (index > 0 && index % ItemDatasetMetadataService.yieldEveryItems === 0) {
+        await this.yieldToEventLoop();
+      }
+      const file = files[index];
+      const $ = cheerio.load(file.data, { xmlMode: true });
+      const unitId = normalizeItemDatasetUnitId($('Metadata > Id').first().text() || file.file_id);
+      if (!unitIds.has(unitId)) continue;
+      const definition = $('Definition').first();
+      const variables: UnitPositionMetadata['variables'] = [];
+      $('BaseVariables Variable, DerivedVariables Variable').each((_, element) => {
+        const variable = $(element);
+        const id = String(variable.attr('id') || variable.attr('alias') || '').trim();
+        const alias = String(variable.attr('alias') || id).trim();
+        if (id) variables.push({ id, alias });
+      });
+      result.set(unitId, {
+        definition: definition.length ? definition.text() : undefined,
+        definitionRef: $('DefinitionRef').first().text().trim() || undefined,
+        codingSchemeRef: $('CodingSchemeRef').first().text().trim() || undefined,
+        variables
+      });
+    }
+    return result;
+  }
+
+  private normalizeResourceRef(reference: string): string {
+    return reference.trim().replace(/\\/g, '/').split('/').pop()!.toUpperCase();
   }
 
   private async getUnitAliases(
