@@ -32,7 +32,7 @@ export interface ApplyEmptyCodingDialogData {
       <div class="coding-info-box">
         <p><strong>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.apply-header' | translate }}</strong></p>
         <ul>
-          <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.status' | translate }}: <strong>CODING_COMPLETE</strong></li>
+          <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.status' | translate }}: <strong>{{ 'ui-text.apply-empty-coding-dialog.coding-complete' | translate }}</strong></li>
           <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.code' | translate }}: <strong>{{ data.code }}</strong></li>
           <li>{{ 'coding-management-manual.response-analysis.apply-empty-coding-dialog.score' | translate }}: <strong>{{ getScoreDisplay(data.score) }}</strong></li>
         </ul>

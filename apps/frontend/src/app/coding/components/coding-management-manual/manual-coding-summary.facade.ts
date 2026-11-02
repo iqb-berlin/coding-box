@@ -1,10 +1,13 @@
 import { computed, inject, Injectable } from '@angular/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
 /** Memoized domain summaries; the view owns navigation and user interactions. */
 @Injectable()
 export class ManualCodingSummaryFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly statistics = inject(ManualCodingStatisticsFacade);
   private readonly analysis = inject(ManualCodingAnalysisFacade);
   private readonly codingProgressOverview = this.statistics.codingProgressOverview;
@@ -108,13 +111,15 @@ export class ManualCodingSummaryFacade {
 
     const difference = statusPoolCount - effectiveCaseCount;
     const reason = difference > 0 ?
-      `${difference} Rohantworten werden durch abgeleitete Variablen, Vorverarbeitung oder Aggregation nicht separat verteilt.` :
-      'Die effektive Fallzahl kann durch Mehrfachkodierung oder manuelle Nacharbeit abweichen.';
+      this.uiTranslate('ui-text.manual-coding-summary.rohantworten-werden-durch-abgeleitete-variablen-vorverarbeitung-oder-aggregation-nicht-sep', { difference: difference }) :
+      this.uiTranslate('ui-text.manual-coding-summary.die-effektive-fallzahl-kann-durch-mehrfachkodierung-oder-manuelle-nacharbeit-abweichen');
     const openCaseHint = openCaseCount !== effectiveCaseCount ?
-      `, davon ${openCaseCount} offen` :
+      this.uiTranslate('ui-text.manual-coding-summary.davon-offen', { openCaseCount: openCaseCount }) :
       '';
 
-    return `${statusPoolCount} Rohantworten im Statuspool -> ${effectiveCaseCount} effektive Arbeitsfälle${openCaseHint}. ${reason}`;
+    return this.uiTranslate('ui-text.manual-coding-summary.rohantworten-im-statuspool-effektive-arbeitsfaelle', {
+      statusPoolCount: statusPoolCount, effectiveCaseCount: effectiveCaseCount, openCaseHint: openCaseHint, reason: reason
+    });
   });
 
   readonly isResponseAnalysisOutdated = computed<boolean>(() => {

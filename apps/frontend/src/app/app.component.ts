@@ -14,6 +14,7 @@ import { LocationStrategy } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from './shared/utils/ui-translator';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
@@ -49,6 +50,8 @@ import { SystemNotificationService } from './core/services/system-notification.s
   styleUrl: './app.component.scss'
 })
 export class AppComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected appService = inject(AppService);
   protected authService = inject(AuthService);
 
@@ -103,8 +106,8 @@ export class AppComponent implements OnInit, OnDestroy {
         this.snackBar.dismiss();
       } else {
         this.authDataFailureSnackBar = this.snackBar.open(
-          'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
-          'Schließen',
+          this.uiTranslate('ui-text.app.ihre-anmeldung-wurde-erkannt-aber-die-sitzungsdaten-konnten-nicht-geladen-werden-bitte-lad'),
+          this.uiTranslate('deferred-view.close'),
           {
             duration: 8000,
             panelClass: ['snackbar-error']

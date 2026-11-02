@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ValidationStateService } from '../../services/validation-state.service';
@@ -17,6 +18,8 @@ import { detectCodingImportFormat } from './coding-import-file';
 /** One import attempt, scoped to the manual coding view and its workspace. */
 @Injectable()
 export class ManualCodingImportFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly testPersonCodingService = inject(TestPersonCodingService);
@@ -66,7 +69,7 @@ export class ManualCodingImportFacade {
         return;
       }
 
-      const detection = await detectCodingImportFormat(file);
+      const detection = await detectCodingImportFormat(this.uiTranslate, file);
       if (!isCurrent()) return;
       const dialogRef = this.dialog.open<CodingImportFormatDialogComponent, CodingImportFormatDialogData, CodingImportFormatDialogResult | undefined>(CodingImportFormatDialogComponent, { width: '720px', maxWidth: '95vw', data: detection });
       controller.signal.addEventListener('abort', () => dialogRef.close(), { once: true });
@@ -159,7 +162,7 @@ export class ManualCodingImportFacade {
           if (!isCurrent()) return;
           this.ownsValidation = false;
           this.validationStateService.setValidationError(
-            `Import fehlgeschlagen: ${error}`
+            this.uiTranslate('ui-text.manual-coding-import.import-fehlgeschlagen', { error: error })
           );
           this.showError(
             this.translateService.instant(
@@ -204,14 +207,14 @@ export class ManualCodingImportFacade {
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['success-snackbar']
     });

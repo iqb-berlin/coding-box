@@ -1,10 +1,10 @@
 <div class="dialog-container">
   <div class="dialog-header">
     <div>
-      <h1 mat-dialog-title>Kodierergebnisse: {{data.codingJob.name}}</h1>
+      <h1 mat-dialog-title>{{ 'ui-text.coding-job-result-dialog.kodierergebnisse' | translate: { name: (data.codingJob.name) } }}</h1>
       <p class="aggregation-snapshot">{{ getAggregationSettingsText() }}</p>
     </div>
-    <button mat-icon-button type="button" aria-label="Dialog schließen" (click)="closeDialog()">
+    <button mat-icon-button type="button" [attr.aria-label]="'ui-text.coding-job-result-dialog.dialog-schliessen' | translate" (click)="closeDialog()">
       <mat-icon>close</mat-icon>
     </button>
   </div>
@@ -12,44 +12,44 @@
   <div class="filter-section">
     <div class="filter-grid">
       <mat-form-field appearance="outline">
-        <mat-label>Aufgabe filtern</mat-label>
+        <mat-label>{{ 'ui-text.coding-job-result-dialog.aufgabe-filtern' | translate }}</mat-label>
         <input matInput [(ngModel)]="unitNameFilter" (input)="onUnitNameFilterChange()">
         @if (unitNameFilter()) {
           <button matSuffix mat-icon-button type="button"
-            aria-label="Aufgabenfilter löschen" (click)="clearUnitNameFilter()">
+            [attr.aria-label]="'ui-text.coding-job-result-dialog.aufgabenfilter-loeschen' | translate" (click)="clearUnitNameFilter()">
             <mat-icon>close</mat-icon>
           </button>
         }
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Variable filtern</mat-label>
+        <mat-label>{{ 'ui-text.coding-job-result-dialog.variable-filtern' | translate }}</mat-label>
         <input matInput [(ngModel)]="variableFilter" (input)="onVariableFilterChange()">
         @if (variableFilter()) {
           <button matSuffix mat-icon-button type="button"
-            aria-label="Variablenfilter löschen" (click)="clearVariableFilter()">
+            [attr.aria-label]="'ui-text.coding-job-result-dialog.variablenfilter-loeschen' | translate" (click)="clearVariableFilter()">
             <mat-icon>close</mat-icon>
           </button>
         }
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Kodierungshinweis filtern</mat-label>
+        <mat-label>{{ 'ui-text.coding-job-result-dialog.kodierungshinweis-filtern' | translate }}</mat-label>
         <input matInput [(ngModel)]="codingIssueFilter" (input)="onCodingIssueFilterChange()">
         @if (codingIssueFilter()) {
           <button matSuffix mat-icon-button type="button"
-            aria-label="Kodierungshinweisfilter löschen" (click)="clearCodingIssueFilter()">
+            [attr.aria-label]="'ui-text.coding-job-result-dialog.kodierungshinweisfilter-loeschen' | translate" (click)="clearCodingIssueFilter()">
             <mat-icon>close</mat-icon>
           </button>
         }
       </mat-form-field>
 
       <mat-form-field appearance="outline">
-        <mat-label>Testperson filtern</mat-label>
+        <mat-label>{{ 'ui-text.coding-job-result-dialog.testperson-filtern' | translate }}</mat-label>
         <input matInput [(ngModel)]="testPersonFilter" (input)="onTestPersonFilterChange()">
         @if (testPersonFilter()) {
           <button matSuffix mat-icon-button type="button"
-            aria-label="Testpersonenfilter löschen" (click)="clearTestPersonFilter()">
+            [attr.aria-label]="'ui-text.coding-job-result-dialog.testpersonenfilter-loeschen' | translate" (click)="clearTestPersonFilter()">
             <mat-icon>close</mat-icon>
           </button>
         }
@@ -58,21 +58,21 @@
 
     @if (!isLoading()) {
       <div class="result-summary">
-        <span>{{ getFilteredResultCount() }} von {{ getTotalResultCount() }} Ergebnissen</span>
-        <span>{{ getCodedResultCount() }} kodiert</span>
+        <span>{{ 'ui-text.coding-job-result-dialog.von-ergebnissen' | translate: { value1: (getFilteredResultCount()), value2: (getTotalResultCount()) } }}</span>
+        <span>{{ 'ui-text.coding-job-result-dialog.kodiert' | translate: { value1: (getCodedResultCount()) } }}</span>
         @if (getReviewIssueCount() > 0) {
-          <span class="summary-warning">{{ getReviewIssueCount() }} mit Kodierungshinweis</span>
+          <span class="summary-warning">{{ 'ui-text.coding-job-result-dialog.mit-kodierungshinweis' | translate: { value1: (getReviewIssueCount()) } }}</span>
         }
         @if (isNotesUnavailable()) {
-          <span class="summary-warning">Notizen nicht geladen</span>
+          <span class="summary-warning">{{ 'ui-text.coding-job-result-dialog.notizen-nicht-geladen' | translate }}</span>
         }
         @if (isMissingProfileUnavailable()) {
-          <span class="summary-warning">Missing-Profil nicht vollständig auflösbar</span>
+          <span class="summary-warning">{{ 'ui-text.coding-job-result-dialog.missing-profil-nicht-vollstaendig-aufloesbar' | translate }}</span>
         }
         @if (hasActiveFilters()) {
           <button mat-button type="button" (click)="clearAllFilters()">
             <mat-icon>filter_alt_off</mat-icon>
-            Filter löschen
+            {{ 'coding-management.filters.clear' | translate }}
           </button>
         }
       </div>
@@ -82,14 +82,14 @@
   @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner></mat-spinner>
-      <p>Lade Kodierergebnisse...</p>
+      <p>{{ 'ui-text.coding-job-result-dialog.lade-kodierergebnisse' | translate }}</p>
     </div>
   } @else {
     <div class="table-container">
       @if (dataSource.data.length > 0) {
         <mat-table [dataSource]="dataSource" matSort class="coding-results-table">
           <ng-container matColumnDef="unitName">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Aufgabe</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.trainings.compare.unit' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result">{{result.unitName}}
               @if (result.unitAlias && result.unitAlias !== result.unitName) {
                 <span class="unit-alias">
@@ -100,32 +100,32 @@
           </ng-container>
 
           <ng-container matColumnDef="testPerson">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coding-job-result-dialog.testperson' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result">
               <div class="person-cell">
                 <strong>{{result.personLogin || '-'}}</strong>
                 @if (result.personCode) {
-                  <small>Code: {{result.personCode}}</small>
+                  <small>{{ 'ui-text.coding-job-result-dialog.code' | translate: { personCode: (result.personCode) } }}</small>
                 }
                 @if (result.personGroup) {
-                  <small>Gruppe: {{result.personGroup}}</small>
+                  <small>{{ 'ui-text.coding-job-result-dialog.gruppe' | translate: { personGroup: (result.personGroup) } }}</small>
                 }
-                <small>Booklet: {{result.bookletName || '-'}}</small>
+                <small>{{ 'ui-text.coding-job-result-dialog.booklet' | translate: { value1: (result.bookletName || '-') } }}</small>
               </div>
             </mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="variableId">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Variable</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'export-toast.item-matrix-diagnostics.variable' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result">{{result.variableId}}</mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="code">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ws-admin.export-options.matrix-value-code' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               @if (isCodingIssueOption(result) && result.givenCode !== undefined && result.givenCode !== null) {
                 <span class="given-code">{{result.givenCode}}</span>
-                <span class="uncertainty-indicator">(unsicher)</span>
+                <span class="uncertainty-indicator">{{ 'ui-text.coding-job-result-dialog.unsicher' | translate }}</span>
               } @else {
                 {{getCodeDisplay(result)}}
               }
@@ -133,11 +133,11 @@
           </ng-container>
 
           <ng-container matColumnDef="score">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ws-admin.export-options.matrix-value-score' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               @if (isCodingIssueOption(result) && result.givenScore !== undefined && result.givenScore !== null) {
                 <span class="given-code">{{result.givenScore}}</span>
-                <span class="uncertainty-indicator">(unsicher)</span>
+                <span class="uncertainty-indicator">{{ 'ui-text.coding-job-result-dialog.unsicher' | translate }}</span>
               } @else {
                 {{getScoreDisplay(result)}}
               }
@@ -145,7 +145,7 @@
           </ng-container>
 
           <ng-container matColumnDef="codingIssueOption">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Kodierungshinweis</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coding-job-result-dialog.kodierungshinweis' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               {{result.codingIssueOptionLabel || '-'}}
             </mat-cell>
@@ -169,14 +169,14 @@
           </ng-container>
 
           <ng-container matColumnDef="notes">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Notizen</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.trainings.compare.notes' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result">
               {{result.notes || '-'}}
             </mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="actions">
-            <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+            <mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</mat-header-cell>
             <mat-cell *matCellDef="let result">
               @if (isCodingIssueOption(result)) {
                 <span class="action-button-wrapper"
@@ -205,10 +205,10 @@
 
         @if (dataSource.filteredData.length === 0) {
           <div class="no-data-message">
-            <p>Keine Treffer für die aktuellen Filter.</p>
+            <p>{{ 'ui-text.coding-job-result-dialog.keine-treffer-fuer-die-aktuellen-filter' | translate }}</p>
             <button mat-button type="button" (click)="clearAllFilters()">
               <mat-icon>filter_alt_off</mat-icon>
-              Filter löschen
+              {{ 'coding-management.filters.clear' | translate }}
             </button>
           </div>
         }
@@ -217,25 +217,25 @@
           [pageSize]="pageSize"
           [pageSizeOptions]="pageSizeOptions"
           showFirstLastButtons
-          aria-label="Kodierergebnisse paginieren">
+          [attr.aria-label]="'ui-text.coding-job-result-dialog.kodierergebnisse-paginieren' | translate">
         </mat-paginator>
       } @else {
         <div class="no-data-message">
-          <p>Keine Kodierergebnisse verfügbar.</p>
-          <p>Entweder wurden noch keine Variablen für diesen Job kodiert oder es gibt keine zu kodierenden Einheiten.</p>
+          <p>{{ 'ui-text.coding-job-result-dialog.keine-kodierergebnisse-verfuegbar' | translate }}</p>
+          <p>{{ 'ui-text.coding-job-result-dialog.entweder-wurden-noch-keine-variablen-fuer-diesen-job-kodiert-oder-es-gibt-keine-zu-kodiere' | translate }}</p>
         </div>
       }
     </div>
   }
 
   <div class="dialog-actions">
-    <button mat-raised-button color="primary" type="button" (click)="closeDialog()">Schließen</button>
+    <button mat-raised-button color="primary" type="button" (click)="closeDialog()">{{ 'deferred-view.close' | translate }}</button>
     @if (data.canApplyResults !== false) {
       <button mat-raised-button color="accent"
         [disabled]="!canApplyCodingResults()"
         (click)="applyCodingResults()" [matTooltip]="getApplyButtonTooltip()">
         <mat-icon>input</mat-icon>
-        Ergebnisse anwenden
+        {{ 'ui-text.coding-job-result-dialog.ergebnisse-anwenden' | translate }}
       </button>
     }
   </div>

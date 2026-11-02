@@ -1,12 +1,12 @@
-<h2 mat-dialog-title>Kodierfälle übertragen</h2>
+<h2 mat-dialog-title>{{ 'ui-text.transfer-coding-cases-dialog.kodierfaelle-uebertragen' | translate }}</h2>
 
 <mat-dialog-content class="fx-column-start-stretch fx-gap-16 dialog-content">
   <p class="description">
-    Überträgt alle Kodierfälle von einem Kodierer auf einen anderen innerhalb des aktuellen Arbeitsbereichs.
+    {{ 'ui-text.transfer-coding-cases-dialog.uebertraegt-alle-kodierfaelle-von-einem-kodierer-auf-einen-anderen-innerhalb-des-aktuellen' | translate }}
   </p>
 
   <mat-form-field appearance="outline">
-    <mat-label>Von Kodierer</mat-label>
+    <mat-label>{{ 'ui-text.transfer-coding-cases-dialog.von-kodierer' | translate }}</mat-label>
     <mat-select [(value)]="sourceCoderId">
       @for (coder of coders; track coder.id) {
         <mat-option [value]="coder.id">
@@ -17,7 +17,7 @@
   </mat-form-field>
 
   <mat-form-field appearance="outline">
-    <mat-label>Zu Kodierer</mat-label>
+    <mat-label>{{ 'ui-text.transfer-coding-cases-dialog.zu-kodierer' | translate }}</mat-label>
     <mat-select [(value)]="targetCoderId">
       @for (coder of coders; track coder.id) {
         <mat-option [value]="coder.id">
@@ -29,8 +29,8 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button mat-dialog-close>Abbrechen</button>
+  <button mat-button mat-dialog-close>{{ 'cancel' | translate }}</button>
   <button mat-raised-button color="primary" [disabled]="submitDisabled" (click)="submit()">
-    Übertragen
+    {{ 'ui-text.transfer-coding-cases-dialog.uebertragen' | translate }}
   </button>
 </mat-dialog-actions>

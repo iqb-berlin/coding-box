@@ -52,6 +52,8 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { codingJobVariableSummary, codingJobIssueSummary } from './coding-job-summary';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
@@ -160,6 +162,8 @@ type CodingJobScope = 'all' | 'training' | 'productive';
   ]
 })
 export class CodingJobsComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -404,7 +408,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.isLoading.set(false);
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('coding.my-coding-jobs.error-loading-jobs'), this.uiTranslate('deferred-view.close'), {
             duration: 3000
           });
           this.hasLoadedJobs.set(true);
@@ -453,41 +457,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }));
   }
 
-  getCodingIssueTooltip(job: CodingJob): string {
-    const summary = job.issueSummary;
-    if (!summary || summary.total === 0) {
-      if (summary?.open) {
-        const key =
-          summary.open === 1 ?
-            'coding.jobs.issue-tooltip.open-no-review-issues-singular' :
-            'coding.jobs.issue-tooltip.open-no-review-issues-plural';
-        return this.translateService.instant(key, { count: summary.open });
-      }
-      return this.translateService.instant(
-        'coding.jobs.issue-tooltip.no-review-issues'
-      );
-    }
-
-    const parts: string[] = [];
-    if (summary.codeAssignmentUncertain > 0) {
-      parts.push(
-        this.translateService.instant(
-          'coding.jobs.issue-tooltip.code-assignment-uncertain',
-          { count: summary.codeAssignmentUncertain }
-        )
-      );
-    }
-    if (summary.newCodeNeeded > 0) {
-      parts.push(
-        this.translateService.instant(
-          'coding.jobs.issue-tooltip.new-code-needed',
-          { count: summary.newCodeNeeded }
-        )
-      );
-    }
-
-    return parts.join(', ');
-  }
+  getCodingIssueTooltip(job: CodingJob): string { return codingJobIssueSummary(job, this.translateService.instant.bind(this.translateService)); }
 
   applyFilter(): void {
     this.reloadFirstPage();
@@ -566,7 +536,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     ) {
       return this.formatAssignedVariables(cachedDetails.variables);
     }
-    return 'Keine Variablen';
+    return this.uiTranslate('coding.my-coding-jobs.no-variables');
   }
 
   getVariableBundles(job: CodingJob): string {
@@ -574,7 +544,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       const count = job.assignedVariableBundles.length;
       const maxToShow = 2;
       const bundleNames = job.assignedVariableBundles.map(
-        b => b.name || 'unbekannt'
+        b => b.name || this.uiTranslate('ws-admin.unknown')
       );
 
       if (bundleNames.length <= maxToShow) {
@@ -585,18 +555,18 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return `${count} (${preview}, +${count - maxToShow} weitere)`;
     }
 
-    return 'Keine Variablen-Bündel';
+    return this.uiTranslate('coding.my-coding-jobs.no-variable-bundles');
   }
 
   private formatAssignedVariables(assignedVariables: Variable[]): string {
     if (!assignedVariables || assignedVariables.length === 0) {
-      return 'Keine Variablen';
+      return this.uiTranslate('coding.my-coding-jobs.no-variables');
     }
 
     const maxToShow = 3;
     const variableNames = assignedVariables.map(v => {
-      const unitName = v.unitName || 'unbekannt';
-      const variableId = v.variableId || 'unbekannt';
+      const unitName = v.unitName || this.uiTranslate('ws-admin.unknown');
+      const variableId = v.variableId || this.uiTranslate('ws-admin.unknown');
       return `${unitName}_${variableId}`;
     });
 
@@ -607,52 +577,18 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return `${variableNames.slice(0, maxToShow).join(', ')} +${variableNames.length - maxToShow} weitere`;
   }
 
-  protected getFullVariables(job: CodingJob): string {
-    if (job.assignedVariables && job.assignedVariables.length > 0) {
-      const variableNames = job.assignedVariables.map(v => {
-        const unitName = v.unitName || 'unbekannt';
-        const variableId = v.variableId || 'unbekannt';
-        return `${unitName}_${variableId}`;
-      });
-      return `Variablen (${job.assignedVariables.length}): ${variableNames.join(', ')}`;
-    }
-    if (job.variables && job.variables.length > 0) {
-      return job.variables
-        .map(v => {
-          const unitName = v.unitName || 'unbekannt';
-          const variableId = v.variableId || 'unbekannt';
-          return `${unitName}_${variableId}`;
-        })
-        .join(', ');
-    }
-    const cachedDetails = this.jobDetailsCache.get(job.id);
-    if (
-      cachedDetails &&
-      cachedDetails.variables &&
-      cachedDetails.variables.length > 0
-    ) {
-      return cachedDetails.variables
-        .map(v => {
-          const unitName = v.unitName || 'unbekannt';
-          const variableId = v.variableId || 'unbekannt';
-          return `${unitName}_${variableId}`;
-        })
-        .join(', ');
-    }
-
-    return 'Keine Variablen zugewiesen';
-  }
+  protected getFullVariables(job: CodingJob): string { return codingJobVariableSummary(job, this.jobDetailsCache.get(job.id), this.uiTranslate); }
 
   protected getFullVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const bundleNames = job.assignedVariableBundles.map(
-        b => b.name || 'unbekannt'
+        b => b.name || this.uiTranslate('ws-admin.unknown')
       );
-      return `Variablen-Bündel (${job.assignedVariableBundles.length}): ${bundleNames.join(', ')}`;
+      return this.uiTranslate('ui-text.coding-jobs.variablen-buendel', { length: job.assignedVariableBundles.length, value2: bundleNames.join(', ') });
     }
 
     if (job.variableBundles && job.variableBundles.length > 0) {
-      return job.variableBundles.map(b => b.name || 'unbekannt').join(', ');
+      return job.variableBundles.map(b => b.name || this.uiTranslate('ws-admin.unknown')).join(', ');
     }
 
     const cachedDetails = this.jobDetailsCache.get(job.id);
@@ -662,18 +598,18 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       cachedDetails.variableBundles.length > 0
     ) {
       return cachedDetails.variableBundles
-        .map(b => b.name || 'unbekannt')
+        .map(b => b.name || this.uiTranslate('ws-admin.unknown'))
         .join(', ');
     }
 
-    return 'Keine Variablen-Bündel zugewiesen';
+    return this.uiTranslate('ui-text.coding-jobs.keine-variablen-buendel-zugewiesen');
   }
 
   createCodingJob(): void {
     if (!this.permissions.canCreate) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -693,8 +629,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Laden der kodierpflichtigen Variablen',
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.fehler-beim-laden-der-kodierpflichtigen-variablen'),
+            this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
           this.openCreateCodingJobDialog([]);
@@ -728,8 +664,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         const currentData = this.dataSource.data;
         this.dataSource.data = [...currentData, newCodingJob];
         this.snackBar.open(
-          `Kodierjob "${newCodingJob.name}" wurde erstellt`,
-          'Schließen',
+          this.uiTranslate('ui-text.coding-jobs.kodierjob-wurde-erstellt', { name: newCodingJob.name }),
+          this.uiTranslate('deferred-view.close'),
           { duration: 3000 }
         );
         this.loadCodingJobs();
@@ -746,8 +682,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!this.permissions.canEdit(job)) return;
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        'Keine Berechtigung zum Verwalten von Kodierjobs.',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
       return;
@@ -756,15 +692,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich löschen?`;
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-den-kodierjob-wirklich-loeschen', { name: job.name });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Löschen bestätigen',
+        title: this.uiTranslate('coding.trainings.delete.confirm.title'),
         message: confirmMessage,
-        confirmButtonText: 'Löschen',
-        cancelButtonText: 'Abbrechen'
+        confirmButtonText: this.uiTranslate('delete'),
+        cancelButtonText: this.uiTranslate('cancel')
       }
     });
 
@@ -776,24 +712,24 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             next: response => {
               if (response.success) {
                 this.snackBar.open(
-                  `Kodierjob "${job.name}" wurde erfolgreich gelöscht`,
-                  'Schließen',
+                  this.uiTranslate('ui-text.coding-jobs.kodierjob-wurde-erfolgreich-geloescht', { name: job.name }),
+                  this.uiTranslate('deferred-view.close'),
                   { duration: 3000 }
                 );
                 this.reloadCurrentOrPreviousPageAfterDelete(1);
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
-                  `Fehler beim Löschen von Kodierjob "${job.name}"`,
-                  'Schließen',
+                  this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-von-kodierjob', { name: job.name }),
+                  this.uiTranslate('deferred-view.close'),
                   { duration: 3000 }
                 );
               }
             },
             error: () => {
               this.snackBar.open(
-                `Fehler beim Löschen von Kodierjob "${job.name}"`,
-                'Schließen',
+                this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-von-kodierjob', { name: job.name }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             }
@@ -804,7 +740,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   getProgress(job: CodingJob): string {
     if (!job) {
-      return 'Keine Daten';
+      return this.uiTranslate('ui-text.coding-jobs.keine-daten');
     }
 
     const totalUnits = job.totalUnits ?? 0;
@@ -813,11 +749,13 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const progress = job.progress ?? 0;
 
     if (totalUnits === 0) {
-      return 'Keine Aufgaben';
+      return this.uiTranslate('coding.my-coding-jobs.no-tasks');
     }
 
     if (openUnits > 0) {
-      return `${progress}% (${codedUnits}/${totalUnits}, ${openUnits} offen)`;
+      return this.uiTranslate('ui-text.coding-jobs.offen', {
+        progress: progress, codedUnits: codedUnits, totalUnits: totalUnits, openUnits: openUnits
+      });
     }
 
     return `${progress}% (${codedUnits}/${totalUnits})`;
@@ -866,7 +804,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   protected getStartCodingJobLabel(): string {
-    return 'Kodierjob starten';
+    return this.uiTranslate('coding.my-coding-jobs.start-coding');
   }
 
   protected getStartCodingJobIcon(): string {
@@ -874,7 +812,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   getReviewCodingJobLabel(): string {
-    return 'Review öffnen';
+    return this.uiTranslate('coding.my-coding-jobs.open-review');
   }
 
   canApplyCodingResults(job: CodingJob): boolean {
@@ -913,15 +851,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       case 'review':
         return `${this.getReviewCodingJobLabel()}: ${jobName}`;
       case 'results':
-        return `Ergebnisse anzeigen: ${jobName}`;
+        return this.uiTranslate('ui-text.coding-jobs.ergebnisse-anzeigen', { jobName: jobName });
       case 'restart':
-        return `Offene Fälle ansehen: ${jobName}`;
+        return this.uiTranslate('ui-text.coding-jobs.offene-faelle-ansehen-91e22f', { jobName: jobName });
       case 'apply':
-        return `Ergebnisse anwenden: ${jobName}`;
+        return this.uiTranslate('ui-text.coding-jobs.ergebnisse-anwenden', { jobName: jobName });
       case 'notAssigned':
-        return `Kodierjob nicht zugewiesen: ${jobName}`;
+        return this.uiTranslate('ui-text.coding-jobs.kodierjob-nicht-zugewiesen', { jobName: jobName });
       case 'delete':
-        return `Kodierjob löschen: ${jobName}`;
+        return this.uiTranslate('ui-text.coding-jobs.kodierjob-loeschen-1ab107', { jobName: jobName });
       case 'more':
         return `Weitere Aktionen: ${jobName}`;
       default:
@@ -934,7 +872,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -942,15 +880,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     if (!this.canStartCodingJob(selectedJob)) {
       this.snackBar.open(
-        'Dieser Kodierjob ist Ihnen nicht als Kodierer zugewiesen.',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.dieser-kodierjob-ist-ihnen-nicht-als-kodierer-zugewiesen'),
+        this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
       return;
     }
 
     const loadingSnack = this.snackBar.open(
-      `Starte Kodierjob "${selectedJob.name}"...`,
+      this.uiTranslate('coding.my-coding-jobs.starting-job', { name: selectedJob.name }),
       '',
       { duration: 3000 }
     );
@@ -961,7 +899,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         next: startResult => {
           loadingSnack.dismiss();
           if (!startResult || startResult.total === 0) {
-            this.snackBar.open('Keine passenden Antworten gefunden', 'Info', {
+            this.snackBar.open(this.uiTranslate('coding.my-coding-jobs.no-matching-responses'), 'Info', {
               duration: 3000
             });
             return;
@@ -969,8 +907,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           if (!startResult.firstReplayUrl) {
             this.snackBar.open(
-              'Fehler beim Generieren der Replay-URL',
-              'Fehler',
+              this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
             return;
@@ -987,8 +925,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           window.open(replayUrl, '_blank');
           this.snackBar.open(
-            `Kodierjob "${selectedJob.name}" gestartet`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.kodierjob-gestartet', { name: selectedJob.name }),
+            this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
         },
@@ -996,9 +934,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           loadingSnack.dismiss();
           const message =
             error?.status === 403 ?
-              'Dieser Kodierjob ist Ihnen nicht als Kodierer zugewiesen.' :
-              'Fehler beim Starten des Kodierjobs';
-          this.snackBar.open(message, 'Fehler', { duration: 3000 });
+              this.uiTranslate('ui-text.coding-jobs.dieser-kodierjob-ist-ihnen-nicht-als-kodierer-zugewiesen') :
+              this.uiTranslate('coding.my-coding-jobs.error-starting-job');
+          this.snackBar.open(message, this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         }
       });
   }
@@ -1008,14 +946,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
     }
 
     const loadingSnack = this.snackBar.open(
-      `Öffne Review für Kodierjob "${selectedJob.name}"...`,
+      this.uiTranslate('ui-text.coding-jobs.oeffne-review-fuer-kodierjob', { name: selectedJob.name }),
       '',
       { duration: 3000 }
     );
@@ -1026,7 +964,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         next: reviewResult => {
           loadingSnack.dismiss();
           if (!reviewResult || reviewResult.total === 0) {
-            this.snackBar.open('Keine passenden Antworten gefunden', 'Info', {
+            this.snackBar.open(this.uiTranslate('coding.my-coding-jobs.no-matching-responses'), 'Info', {
               duration: 3000
             });
             return;
@@ -1034,8 +972,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           if (!reviewResult.firstReplayUrl) {
             this.snackBar.open(
-              'Fehler beim Generieren der Replay-URL',
-              'Fehler',
+              this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
             return;
@@ -1052,8 +990,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
           window.open(replayUrl, '_blank');
           this.snackBar.open(
-            `Review für Kodierjob "${selectedJob.name}" geöffnet`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.review-fuer-kodierjob-geoeffnet', { name: selectedJob.name }),
+            this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
         },
@@ -1061,9 +999,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           loadingSnack.dismiss();
           const message =
             error?.status === 403 ?
-              'Sie haben keinen Zugriff auf diesen Kodierjob.' :
-              'Fehler beim Öffnen des Reviews';
-          this.snackBar.open(message, 'Fehler', { duration: 3000 });
+              this.uiTranslate('ui-text.coding-jobs.sie-haben-keinen-zugriff-auf-diesen-kodierjob') :
+              this.uiTranslate('ui-text.coding-jobs.fehler-beim-oeffnen-des-reviews');
+          this.snackBar.open(message, this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
         }
       });
   }
@@ -1094,17 +1032,17 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       case 'active':
         return 'Aktiv';
       case 'completed':
-        return 'Abgeschlossen';
+        return this.uiTranslate('status-completed');
       case 'results_applied':
-        return 'Ergebnisse angewendet';
+        return this.uiTranslate('coding.my-coding-jobs.filter-results-applied');
       case 'pending':
-        return 'Ausstehend';
+        return this.uiTranslate('status-pending');
       case 'paused':
         return 'Pausiert';
       case 'open':
-        return 'Offen';
+        return this.uiTranslate('coding.my-coding-jobs.filter-open');
       case 'review':
-        return 'Zur Überprüfung';
+        return this.uiTranslate('coding.my-coding-jobs.filter-review');
       default:
         return status;
     }
@@ -1124,24 +1062,24 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
-      return 'Keine';
+      return this.uiTranslate('coding.trainings.compare.none');
     }
 
-    return `${job.assignedCoders.length} Kodierer`;
+    return this.uiTranslate('ui-text.coding-jobs.kodierer', { length: job.assignedCoders.length });
   }
 
   protected getFullCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
       const full = this.coderNamesByJobId.get(job.id)!;
-      return full === 'Keine' ? 'Keine Kodierer zugewiesen' : full;
+      return full === 'Keine' ? this.uiTranslate('ui-text.coding-jobs.keine-kodierer-zugewiesen') : full;
     }
 
     if (!job.assignedCoders || job.assignedCoders.length === 0) {
-      return 'Keine Kodierer zugewiesen';
+      return this.uiTranslate('ui-text.coding-jobs.keine-kodierer-zugewiesen');
     }
 
     // Fallback
-    return `${job.assignedCoders.length} Kodierer`;
+    return this.uiTranslate('ui-text.coding-jobs.kodierer', { length: job.assignedCoders.length });
   }
 
   protected getDisplayName(job: CodingJob): string {
@@ -1163,7 +1101,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     jobs.forEach(job => {
       const ids = job.assignedCoders || [];
       if (ids.length === 0) {
-        this.coderNamesByJobId.set(job.id, 'Keine');
+        this.coderNamesByJobId.set(job.id, this.uiTranslate('coding.trainings.compare.none'));
         return;
       }
       const names = ids
@@ -1172,7 +1110,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         .map(c => c.displayName || c.name || `Coder ${c.id}`);
 
       if (names.length === 0) {
-        this.coderNamesByJobId.set(job.id, `${ids.length} Kodierer`);
+        this.coderNamesByJobId.set(job.id, this.uiTranslate('ui-text.coding-jobs.kodierer', { length: ids.length }));
       } else {
         this.coderNamesByJobId.set(job.id, names.join(', '));
       }
@@ -1213,7 +1151,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   restartCodingJob(job: CodingJob): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1223,15 +1161,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich neu starten? Alle Einheiten werden für eine Aktualisierung geöffnet und die Kodierungsvorschau wird geöffnet.`;
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-den-kodierjob-wirklich-neu-starten-alle-einheiten-werden-fuer-eine-aktualisie', { name: job.name });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: 'Neustart bestätigen',
+        title: this.uiTranslate('ui-text.coding-jobs.neustart-bestaetigen'),
         message: confirmMessage,
-        confirmButtonText: 'Neustart',
-        cancelButtonText: 'Abbrechen'
+        confirmButtonText: this.uiTranslate('ui-text.coding-jobs.neustart'),
+        cancelButtonText: this.uiTranslate('cancel')
       }
     });
 
@@ -1242,7 +1180,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           .subscribe({
             next: restartedJob => {
               const loadingSnack = this.snackBar.open(
-                `Neustart von Kodierjob "${restartedJob.name}" mit offenen Einheiten...`,
+                this.uiTranslate('ui-text.coding-jobs.neustart-von-kodierjob-mit-offenen-einheiten', { name: restartedJob.name }),
                 '',
                 { duration: 3000 }
               );
@@ -1254,7 +1192,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                     loadingSnack.dismiss();
                     if (!restartResult || restartResult.total === 0) {
                       this.snackBar.open(
-                        'Keine offenen Einheiten gefunden',
+                        this.uiTranslate('ui-text.coding-jobs.keine-offenen-einheiten-gefunden'),
                         'Info',
                         { duration: 3000 }
                       );
@@ -1263,8 +1201,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
                     if (!restartResult.firstReplayUrl) {
                       this.snackBar.open(
-                        'Fehler beim Generieren der Replay-URL',
-                        'Fehler',
+                        this.uiTranslate('ui-text.coding-jobs.fehler-beim-generieren-der-replay-url'),
+                        this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                         { duration: 3000 }
                       );
                       return;
@@ -1282,16 +1220,16 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
                     window.open(replayUrl, '_blank');
                     this.snackBar.open(
-                      `${restartResult.total} offene Einheiten für Replay vorbereitet`,
-                      'Schließen',
+                      this.uiTranslate('ui-text.coding-jobs.offene-einheiten-fuer-replay-vorbereitet', { total: restartResult.total }),
+                      this.uiTranslate('deferred-view.close'),
                       { duration: 3000 }
                     );
                   },
                   error: () => {
                     loadingSnack.dismiss();
                     this.snackBar.open(
-                      `Fehler beim Starten des neu gestarteten Kodierjobs "${restartedJob.name}"`,
-                      'Fehler',
+                      this.uiTranslate('ui-text.coding-jobs.fehler-beim-starten-des-neu-gestarteten-kodierjobs', { name: restartedJob.name }),
+                      this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                       { duration: 3000 }
                     );
                   }
@@ -1299,8 +1237,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.snackBar.open(
-                `Fehler beim Neustart des Kodierjobs "${job.name}"`,
-                'Schließen',
+                this.uiTranslate('ui-text.coding-jobs.fehler-beim-neustart-des-kodierjobs', { name: job.name }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             }
@@ -1312,7 +1250,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   viewCodingResults(job: CodingJob): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1389,15 +1327,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   openTransferCodingCasesDialog(): void {
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        'Keine Berechtigung zum Verwalten von Kodierjobs.',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
       return;
     }
 
     if (!this.allCoders()?.length) {
-      this.snackBar.open('Keine Kodierer verfügbar', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('coding-job-definition-dialog.empty-states.no-coders'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1405,7 +1343,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1432,8 +1370,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           .subscribe({
             next: transferResult => {
               this.snackBar.open(
-                `Übertragung erfolgreich: ${transferResult.transferredCases} Fälle in ${transferResult.affectedJobs} Job(s) angepasst`,
-                'Schließen',
+                this.uiTranslate('ui-text.coding-jobs.uebertragung-erfolgreich-faelle-in-job-s-angepasst', { transferredCases: transferResult.transferredCases, affectedJobs: transferResult.affectedJobs }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 4000 }
               );
               this.loadCodingJobs();
@@ -1442,8 +1380,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             error: error => {
               const apiMessage = error?.error?.message;
               this.snackBar.open(
-                apiMessage || 'Fehler beim Übertragen der Kodierfälle',
-                'Schließen',
+                apiMessage || this.uiTranslate('ui-text.coding-jobs.fehler-beim-uebertragen-der-kodierfaelle'),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 5000 }
               );
             }
@@ -1469,8 +1407,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!this.canDeleteSelectedJobs()) return;
     if (!this.canManageCodingJobs()) {
       this.snackBar.open(
-        'Keine Berechtigung zum Verwalten von Kodierjobs.',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.keine-berechtigung-zum-verwalten-von-kodierjobs'),
+        this.uiTranslate('deferred-view.close'),
         { duration: 4000 }
       );
       return;
@@ -1480,7 +1418,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!workspaceId) return;
     const selectedJobs = [...this.selection.selected];
     if (selectedJobs.length === 0) {
-      this.snackBar.open('Keine Kodierjobs ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-jobs.keine-kodierjobs-ausgewaehlt'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1489,15 +1427,15 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const jobNamesHTML = selectedJobs
       .map(job => `"${job.name}"`)
       .join('<br>');
-    const confirmMessage = `Möchten Sie wirklich ${selectedJobs.length} Kodierjob(s) löschen?<br><br>${jobNamesHTML}`;
+    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.moechten-sie-wirklich-kodierjob-s-loeschen-br-br', { length: selectedJobs.length, jobNamesHTML: jobNamesHTML });
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: 'Massenlöschung bestätigen',
+        title: this.uiTranslate('ui-text.coding-jobs.massenloeschung-bestaetigen'),
         message: confirmMessage,
-        confirmButtonText: 'Alle löschen',
-        cancelButtonText: 'Abbrechen'
+        confirmButtonText: this.uiTranslate('export-toast.clear-all'),
+        cancelButtonText: this.uiTranslate('cancel')
       }
     });
 
@@ -1512,14 +1450,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     if (!jobs.every(job => this.permissions.canEdit(job))) return;
     const generation = this.workspaceGeneration;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
     }
 
     const loadingSnack = this.snackBar.open(
-      `Lösche ${jobs.length} Kodierjob(s)...`,
+      this.uiTranslate('ui-text.coding-jobs.loesche-kodierjob-s', { length: jobs.length }),
       '',
       { duration: 3000 }
     );
@@ -1549,20 +1487,20 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
     if (failureCount === 0) {
       this.snackBar.open(
-        `${successCount} Kodierjob(s) erfolgreich gelöscht`,
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.kodierjob-s-erfolgreich-geloescht', { successCount: successCount }),
+        this.uiTranslate('deferred-view.close'),
         { duration: 3000 }
       );
     } else if (successCount === 0) {
       this.snackBar.open(
-        `Fehler beim Löschen aller ${failureCount} Kodierjob(s)`,
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.fehler-beim-loeschen-aller-kodierjob-s', { failureCount: failureCount }),
+        this.uiTranslate('deferred-view.close'),
         { duration: 5000 }
       );
     } else {
       this.snackBar.open(
-        `${successCount} Kodierjob(s) erfolgreich gelöscht, ${failureCount} fehlgeschlagen: ${failedJobs.join(', ')}`,
-        'Schließen',
+        this.uiTranslate('ui-text.coding-jobs.kodierjob-s-erfolgreich-geloescht-fehlgeschlagen', { successCount: successCount, failureCount: failureCount, value3: failedJobs.join(', ') }),
+        this.uiTranslate('deferred-view.close'),
         { duration: 5000 }
       );
     }
@@ -1576,7 +1514,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   applyCodingResults(job: CodingJob): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
@@ -1599,7 +1537,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         }
 
         const loadingSnack = this.snackBar.open(
-          `Wende Ergebnisse für Kodierjob "${job.name}" an...`,
+          this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-kodierjob-an', { name: job.name }),
           '',
           { duration: 3000 }
         );
@@ -1614,7 +1552,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
               if (result.success) {
                 this.snackBar.open(
                   this.formatApplyCodingResultsMessage(result),
-                  'Schließen',
+                  this.uiTranslate('deferred-view.close'),
                   { duration: 6000 }
                 );
                 this.loadCodingJobs(); // Refresh the list to show updated status
@@ -1622,8 +1560,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
                 this.jobsChanged.emit();
               } else {
                 this.snackBar.open(
-                  `Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`,
-                  'Schließen',
+                  this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: this.translateService.instant(result.messageKey, result.messageParams || {}) }),
+                  this.uiTranslate('deferred-view.close'),
                   { duration: 5000 }
                 );
               }
@@ -1631,8 +1569,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             error: error => {
               loadingSnack.dismiss();
               this.snackBar.open(
-                `Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`,
-                'Schließen',
+                this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: error.message || this.uiTranslate('error.unknown') }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 5000 }
               );
             }
@@ -1644,24 +1582,24 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     result: ApplyCodingResultsResponse
   ): string {
     const parts = [
-      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
+      this.uiTranslate('ui-text.coding-jobs.ergebnisse-erfolgreich-angewendet-antworten-aktualisiert', { updatedResponsesCount: result.updatedResponsesCount })
     ];
 
     if (result.skippedAlreadyCodedCount > 0) {
       parts.push(
-        `Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.bereits-vorhandene-kodierungen-nicht-ueberschrieben-antworten', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
       );
     }
 
     if (result.overwrittenExistingCount > 0) {
       parts.push(
-        `Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-ueberschrieben-antworten', { overwrittenExistingCount: result.overwrittenExistingCount })
       );
     }
 
     if (result.skippedReviewCount > 0) {
       parts.push(
-        `Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.uebersprungen-manuelle-pruefung-benoetigt-antworten', { skippedReviewCount: result.skippedReviewCount })
       );
     }
 
@@ -1670,7 +1608,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   protected getAggregationSettingsText(job: CodingJob): string {
     if (!job.aggregationSettingsVersion) {
-      return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
+      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-aeltere-jobs-nutzen-aktuelle-workspace-einstellungen');
     }
 
     if (
@@ -1678,7 +1616,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       job.aggregationThreshold === null ||
       job.aggregationThreshold === undefined
     ) {
-      return 'Aggregation beim Erstellen: aus';
+      return this.uiTranslate('ui-text.coding-job-result-dialog.aggregation-beim-erstellen-aus');
     }
 
     const flags = job.responseMatchingFlags || [];
@@ -1687,7 +1625,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         flags
           .map(flag => this.getResponseMatchingFlagLabel(flag))
           .join(', ') :
-        'exakte Übereinstimmung';
+        this.uiTranslate('ui-text.coding-job-result-dialog.exakte-uebereinstimmung');
 
     return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
   }
@@ -1695,11 +1633,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private getResponseMatchingFlagLabel(flag: string): string {
     switch (flag) {
       case 'IGNORE_CASE':
-        return 'Groß-/Kleinschreibung ignoriert';
+        return this.uiTranslate('ui-text.coding-job-result-dialog.gross-kleinschreibung-ignoriert');
       case 'IGNORE_WHITESPACE':
-        return 'Leerzeichen ignoriert';
+        return this.uiTranslate('ui-text.coding-job-result-dialog.leerzeichen-ignoriert');
       case 'NO_AGGREGATION':
-        return 'nicht aggregiert';
+        return this.uiTranslate('ui-text.coding-job-result-dialog.nicht-aggregiert');
       default:
         return flag;
     }
@@ -1715,25 +1653,25 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   bulkApplyCodingResults(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
     }
 
     const confirmMessage = [
-      'Möchten Sie die Ergebnisse für alle geeigneten Kodierjobs anwenden?',
-      'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
-      'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
+      this.uiTranslate('ui-text.coding-jobs.moechten-sie-die-ergebnisse-fuer-alle-geeigneten-kodierjobs-anwenden'),
+      this.uiTranslate('ui-text.coding-jobs.bei-jobs-mit-offenen-kodierungshinweisen-werden-gueltige-antworten-angewendet'),
+      this.uiTranslate('ui-text.coding-jobs.offene-hinweise-bleiben-zur-manuellen-pruefung-bestehen')
     ].join(' ');
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: 'Massenanwendung bestätigen',
+        title: this.uiTranslate('ui-text.coding-jobs.massenanwendung-bestaetigen'),
         message: confirmMessage,
-        confirmButtonText: 'Anwenden',
-        cancelButtonText: 'Abbrechen'
+        confirmButtonText: this.uiTranslate('coding.trainings.compare.apply-dialog.apply'),
+        cancelButtonText: this.uiTranslate('cancel')
       }
     });
 
@@ -1746,14 +1684,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   private performBulkApply(workspaceId: number): void {
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
         duration: 3000
       });
       return;
     }
 
     const loadingSnack = this.snackBar.open(
-      'Wende Ergebnisse für alle geeigneten Kodierjobs an...',
+      this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-alle-geeigneten-kodierjobs-an'),
       '',
       { duration: 3000 }
     );
@@ -1771,19 +1709,21 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           const processedCount = result.jobsProcessed;
           const alreadyCodedInfo =
             result.totalSkippedAlreadyCoded > 0 ?
-              `, ${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten` :
+              this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-beibehalten', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded }) :
               '';
           const failedInfo =
             failedCount > 0 ?
-              `, ${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet` :
+              this.uiTranslate('ui-text.coding-jobs.jobs-mit-konflikten-fehlern-nicht-angewendet', { failedCount: failedCount }) :
               '';
           const reviewInfo =
             result.totalSkippedReview > 0 ?
-              `, ${result.totalSkippedReview} Ergebnisse zur manuellen Prüfung offen` :
+              this.uiTranslate('ui-text.coding-jobs.ergebnisse-zur-manuellen-pruefung-offen', { totalSkippedReview: result.totalSkippedReview }) :
               '';
           this.snackBar.open(
-            `Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${reviewInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}${failedInfo}`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.massenanwendung-abgeschlossen-jobs-verarbeitet-antworten-aktualisiert', {
+              processedCount: processedCount, totalUpdatedResponses: result.totalUpdatedResponses, alreadyCodedInfo: alreadyCodedInfo, reviewInfo: reviewInfo, value5: skippedCount > 0 ? this.uiTranslate('ui-text.coding-jobs.jobs-uebersprungen', { skippedCount: skippedCount }) : '', failedInfo: failedInfo
+            }),
+            this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
           this.loadCodingJobs(); // Refresh the list
@@ -1791,8 +1731,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.jobsChanged.emit();
         } else {
           this.snackBar.open(
-            `Fehler bei der Massenanwendung: ${result.message}`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung', { message: result.message }),
+            this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
         }
@@ -1800,8 +1740,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       error: error => {
         loadingSnack.dismiss();
         this.snackBar.open(
-          `Fehler bei der Massenanwendung: ${error.message || 'Unbekannter Fehler'}`,
-          'Schließen',
+          this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung-473110', { value1: error.message || this.uiTranslate('error.unknown') }),
+          this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
       }

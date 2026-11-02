@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection, SimpleChange, WritableSignal } from '@angular/core';
+import { provideZonelessChangeDetection, SimpleChange } from '@angular/core';
 import { delay } from 'rxjs/operators';
 import {
   ComponentFixture, TestBed
@@ -15,6 +15,7 @@ import { CodingStatisticsService } from '../../../coding/services/coding-statist
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { AppService } from '../../../core/services/app.service';
 import {
+  FlatResponseFilterOptionsResponse,
   FlatResponseFrequenciesResponse,
   FlatTestResultResponsesResponse,
   TestResultService
@@ -108,7 +109,7 @@ describe('TestResultsFlatTableComponent', () => {
     }).compileComponents();
 
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('de', de);
+    translate.setTranslation('de', de, true);
     translate.use('de');
 
     fixture = TestBed.createComponent(TestResultsFlatTableComponent);
@@ -273,20 +274,21 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should display response-value frequencies as proportions', () => {
-    const frequencyState = component as unknown as {
-      frequenciesByComboKey: WritableSignal<Map<string, {
-        total: number;
-        values: Array<{ value: string; count: number; p: number }>;
-      }>>;
-    };
-    frequencyState.frequenciesByComboKey.set(new Map([['Unit%20A:variable-1', {
-      total: 10,
-      values: [{
-        value: 'answer-a',
-        count: 2,
-        p: 0.2
-      }]
-    }]]));
+    testResultService.getFlatResponseFrequencies.mockReturnValue(of({
+      'Unit%20A:variable-1': {
+        total: 10,
+        values: [{
+          value: 'answer-a',
+          count: 2,
+          p: 0.2
+        }]
+      }
+    }));
+    testResultService.getFlatResponses.mockReturnValue(of({
+      data: [{ unit: 'Unit A', response: 'variable-1', responseValue: 'answer-a' }],
+      total: 1
+    }));
+    component.ngOnInit();
 
     const summary = component.getFrequencySummary({
       unit: 'Unit A',
@@ -427,7 +429,8 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should disable autocomplete suggestions in regex mode', () => {
     fixture.componentRef.setInput('enableRegexSearch', true);
-    component.flatFilterOptions.update(value => ({ ...value, codes: ['P-01'] }));
+    testResultService.getFlatResponseFilterOptions.mockReturnValue(of({ ...emptyFilterOptions, codes: ['P-01'] }));
+    component.ngOnInit();
     component.flatFilters.update(value => ({ ...value, code: '^P-' }));
 
     expect(component.filteredCodes()).toEqual([]);
@@ -656,5 +659,57 @@ describe('TestResultsFlatTableComponent', () => {
     if (stage !== 'unit-person') expect(loading.dismiss).toHaveBeenCalled();
     expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
     if (stage === 'unit-person') expect(files.getUnitInfo).not.toHaveBeenCalled();
+  });
+  it('keeps the most recent filter options when an older refresh arrives late', () => {
+    const oldOptions = new Subject<FlatResponseFilterOptionsResponse>();
+    const newOptions = new Subject<FlatResponseFilterOptionsResponse>();
+    testResultService.getFlatResponseFilterOptions
+      .mockReturnValueOnce(oldOptions)
+      .mockReturnValueOnce(newOptions);
+    component.ngOnInit();
+    (component as unknown as { fetchFlatResponseFilterOptions(): void }).fetchFlatResponseFilterOptions();
+    expect(oldOptions.observed).toBe(false);
+    newOptions.next({ ...emptyFilterOptions, codes: ['NEW'] });
+    expect(component.flatFilterOptions().codes).toEqual(['NEW']);
+    oldOptions.next({ ...emptyFilterOptions, codes: ['OLD'] });
+    expect(component.flatFilterOptions().codes).toEqual(['NEW']);
+  });
+
+  it.each(['workspace', 'return-to-workspace', 'destroy'])('discards settings options after %s', end => {
+    const options = new Subject<FlatResponseFilterOptionsResponse>();
+    testResultService.getFlatResponseFilterOptions.mockReturnValueOnce(options);
+    const dialog = TestBed.inject(MatDialog);
+    jest.mocked(dialog.open).mockReturnValue({ afterClosed: () => of(undefined), close: jest.fn() } as never);
+    (component as unknown as { openFlatSettings(): void }).openFlatSettings();
+    const app = TestBed.inject(AppService);
+    if (end === 'destroy') fixture.destroy();
+    else {
+      app.selectedWorkspaceId = 2;
+      (app.selectedWorkspaceId$ as Subject<number>).next(2);
+      if (end === 'return-to-workspace') {
+        app.selectedWorkspaceId = 1;
+        (app.selectedWorkspaceId$ as Subject<number>).next(1);
+      }
+    }
+    expect(options.observed).toBe(false);
+    options.next({ ...emptyFilterOptions, sessionBrowsers: ['WORKSPACE-1'] });
+    expect(dialog.open).not.toHaveBeenCalled();
+  });
+
+  it.each(['workspace', 'destroy'])('closes its settings dialog and ignores its result after %s', end => {
+    const closed = new Subject<{ audioLowThreshold: number }>();
+    const close = jest.fn();
+    jest.mocked(TestBed.inject(MatDialog).open).mockReturnValue({ afterClosed: () => closed, close } as never);
+    (component as unknown as { openFlatSettings(): void }).openFlatSettings();
+    if (end === 'destroy') fixture.destroy();
+    else {
+      const app = TestBed.inject(AppService);
+      app.selectedWorkspaceId = 2;
+      (app.selectedWorkspaceId$ as Subject<number>).next(2);
+    }
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(closed.observed).toBe(false);
+    closed.next({ audioLowThreshold: 0.1 });
+    expect(component.audioLowThreshold()).toBe(0.9);
   });
 });

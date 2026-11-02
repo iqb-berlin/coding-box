@@ -1,3 +1,4 @@
+import { translateGerman } from '../../../testing/german-translations';
 import {
   getCodingFreshnessAttentionTitle,
   getCodingFreshnessAutoCodingButtonLabel,
@@ -11,7 +12,7 @@ import {
 
 describe('coding freshness text utils', () => {
   it('explains a single auto-coding refresh with tasks and response values', () => {
-    expect(getCodingFreshnessSummaryText([
+    expect(getCodingFreshnessSummaryText(translateGerman, [
       {
         version: 'v1',
         state: 'PENDING',
@@ -25,7 +26,7 @@ describe('coding freshness text utils', () => {
   });
 
   it('does not double count the same imported responses across two auto-coding runs', () => {
-    expect(getCodingFreshnessSummaryText([
+    expect(getCodingFreshnessSummaryText(translateGerman, [
       {
         version: 'v1',
         state: 'PENDING',
@@ -45,7 +46,7 @@ describe('coding freshness text utils', () => {
   });
 
   it('uses a generic text when multiple coding states are affected', () => {
-    expect(getCodingFreshnessSummaryText([
+    expect(getCodingFreshnessSummaryText(translateGerman, [
       {
         version: 'v1',
         state: 'PENDING',
@@ -65,7 +66,7 @@ describe('coding freshness text utils', () => {
   });
 
   it('keeps the auto-coding action specific when one auto-coding version has multiple affected states', () => {
-    expect(getCodingFreshnessSummaryText([
+    expect(getCodingFreshnessSummaryText(translateGerman, [
       {
         version: 'v1',
         state: 'PENDING',
@@ -85,7 +86,7 @@ describe('coding freshness text utils', () => {
   });
 
   it('returns a neutral text when no coding freshness warnings remain', () => {
-    expect(getCodingFreshnessSummaryText([])).toBe(
+    expect(getCodingFreshnessSummaryText(translateGerman, [])).toBe(
       'Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.'
     );
   });
@@ -98,10 +99,10 @@ describe('coding freshness text utils', () => {
       affectedResponseCount: 4
     };
 
-    expect(getCodingFreshnessChipLabel(item)).toBe(
+    expect(getCodingFreshnessChipLabel(translateGerman, item)).toBe(
       'Auto-Coding 1: 1 Aufgabenbearbeitung starten'
     );
-    expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
+    expect(getCodingFreshnessAutoCodingButtonLabel(translateGerman, [item], 'v1')).toBe(
       'Auto-Coding 1 für 1 Aufgabenbearbeitung starten'
     );
   });
@@ -114,17 +115,17 @@ describe('coding freshness text utils', () => {
       affectedResponseCount: 4
     };
 
-    expect(getCodingFreshnessSummaryText([item])).toBe(
+    expect(getCodingFreshnessSummaryText(translateGerman, [item])).toBe(
       '2 Aufgabenbearbeitungen benötigen eine Aktualisierung von Auto-Coding 1. ' +
       'Dabei werden 4 Antwortwerte berücksichtigt.'
     );
-    expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
+    expect(getCodingFreshnessAutoCodingButtonLabel(translateGerman, [item], 'v1')).toBe(
       'Auto-Coding 1 für 2 Aufgabenbearbeitungen aktualisieren'
     );
   });
 
   it('summarizes the attention title by affected coding area', () => {
-    expect(getCodingFreshnessAttentionTitle([
+    expect(getCodingFreshnessAttentionTitle(translateGerman, [
       {
         version: 'v1',
         state: 'PENDING',
@@ -133,7 +134,7 @@ describe('coding freshness text utils', () => {
       }
     ])).toBe('Auto-Coding starten');
 
-    expect(getCodingFreshnessAttentionTitle([
+    expect(getCodingFreshnessAttentionTitle(translateGerman, [
       {
         version: 'v2',
         state: 'MANUAL_REVIEW_REQUIRED',
@@ -198,13 +199,13 @@ describe('coding freshness text utils', () => {
 
     expect(isCodingFreshnessOpenWarning(item)).toBe(false);
     expect(getCodingFreshnessAutoCodingWarnings([item])).toEqual([]);
-    expect(getCodingFreshnessSummaryText([item])).toBe(
+    expect(getCodingFreshnessSummaryText(translateGerman, [item])).toBe(
       'Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.'
     );
   });
 
   it('gives direct guidance for manual review only', () => {
-    expect(getCodingFreshnessManualReviewGuidanceText([
+    expect(getCodingFreshnessManualReviewGuidanceText(translateGerman, [
       {
         version: 'v2',
         state: 'MANUAL_REVIEW_REQUIRED',
@@ -218,7 +219,7 @@ describe('coding freshness text utils', () => {
   });
 
   it('keeps the workflow order when auto-coding and manual review are both open', () => {
-    expect(getCodingFreshnessManualReviewGuidanceText([
+    expect(getCodingFreshnessManualReviewGuidanceText(translateGerman, [
       {
         version: 'v1',
         state: 'STALE',

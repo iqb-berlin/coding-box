@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { VariableTypeValidationService } from '../../../../services/validation';
 import { VariableTypesValidationPanelComponent } from './variable-types-validation-panel.component';
 
@@ -39,6 +40,7 @@ describe('VariableTypesValidationPanelComponent', () => {
     };
     snackBar = { open: jest.fn() };
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: VariableTypeValidationService, useValue: service },
         { provide: MatSnackBar, useValue: snackBar }

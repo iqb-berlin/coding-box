@@ -9,9 +9,9 @@
       }
 
       <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Name filtern</mat-label>
+        <mat-label>{{ 'coding.my-coding-jobs.filter-job-name' | translate }}</mat-label>
         <mat-select [(value)]="selectedTrainingName" (selectionChange)="onTrainingNameFilterChange()">
-          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option [value]="null">{{ 'coding.my-coding-jobs.filter-all-job-names' | translate }}</mat-option>
           @for (option of trainingNameFilterOptions(); track option) {
             <mat-option [value]="option.label">
               {{ getTrainingNameFilterLabel(option) }}
@@ -50,8 +50,8 @@
                   @if (isDuplicateTrainingLabel(training)) {
                     <span
                       class="duplicate-label-badge"
-                      matTooltip="Diese Bezeichnung wird von mehreren Schulungen verwendet. ID und Erstellzeit unterscheiden die Einträge.">
-                      doppelt
+                      [matTooltip]="'ui-text.coder-trainings-list.diese-bezeichnung-wird-von-mehreren-schulungen-verwendet-id-und-erstellzeit-unterscheiden' | translate">
+                      {{ 'ui-text.coder-trainings-list.doppelt' | translate }}
                     </span>
                   }
                 </span>
@@ -69,7 +69,7 @@
           </td>
         </ng-container>
         <ng-container matColumnDef="selectionStrategy">
-          <th mat-header-cell *matHeaderCellDef>Fallauswahl</th>
+          <th mat-header-cell *matHeaderCellDef>{{ 'ui-text.coder-trainings-list.fallauswahl' | translate }}</th>
           <td mat-cell *matCellDef="let training">
             <div class="strategy-cell">
               <span
@@ -101,7 +101,7 @@
                 (click)="showTrainingJobs(training)"
                 [attr.aria-label]="getTrainingActionAriaLabel('details', training)">
                 <mat-icon>visibility</mat-icon>
-                <span>Details</span>
+                <span>{{ 'process-overview.columns.details' | translate }}</span>
               </button>
               <button
                 mat-stroked-button

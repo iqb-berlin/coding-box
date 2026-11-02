@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -7,6 +8,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import {
   LogAnomalyDetailRow,
   LogAnomalySummary
@@ -26,7 +28,7 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-log-anomaly-details-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -35,21 +37,21 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>troubleshoot</mat-icon>
-      Log-Auffälligkeiten
+      {{ 'ui-text.test-results-log-anomaly-details-dialog.log-auffaelligkeiten' | translate }}
     </h2>
 
     <div mat-dialog-content class="anomaly-dialog-content">
       <p class="summary">
-        {{ data.affectedBooklets }} auffällige Testhefte erkannt.
+        {{ 'ui-text.test-results-log-anomaly-details-dialog.auffaellige-testhefte-erkannt' | translate: { affectedBooklets: (data.affectedBooklets) } }}
         @if (data.truncated) {
-          <span>Es werden die ersten {{ data.rows.length }} angezeigt.</span>
+          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.es-werden-die-ersten-angezeigt' | translate: { length: (data.rows.length) } }}</span>
         }
       </p>
 
       @if (data.rows.length === 0) {
         <div class="empty-state">
           <mat-icon>check_circle</mat-icon>
-          <span>Keine auffälligen Testhefte gefunden.</span>
+          <span>{{ 'ui-text.test-results-log-anomaly-details-dialog.keine-auffaelligen-testhefte-gefunden' | translate }}</span>
         </div>
       }
 
@@ -72,7 +74,7 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
               </span>
             </div>
 
-            <div class="booklet">{{ row.booklet || 'Unbekanntes Testheft' }}</div>
+            <div class="booklet">{{ row.booklet || ('ui-text.test-results-log-anomaly-details-dialog.unknown-booklet' | translate) }}</div>
 
             <div class="anomaly-chips">
               @for (anomaly of row.anomalies; track anomaly.code) {
@@ -96,14 +98,14 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-button type="button" (click)="close()">Schließen</button>
+      <button mat-button type="button" (click)="close()">{{ 'deferred-view.close' | translate }}</button>
       <button
         mat-raised-button
         color="primary"
         type="button"
         [mat-dialog-close]="{ showTable: true }"
       >
-        In Tabelle anzeigen
+        {{ 'ui-text.test-results.in-tabelle-anzeigen' | translate }}
       </button>
     </div>
   `,
@@ -214,6 +216,8 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   `]
 })
 export class TestResultsLogAnomalyDetailsDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<TestResultsLogAnomalyDetailsDialogComponent, TestResultsLogAnomalyDetailsDialogResult | undefined>>(MatDialogRef);
   protected data = inject<TestResultsLogAnomalyDetailsDialogData>(MAT_DIALOG_DATA);
 
@@ -226,7 +230,7 @@ export class TestResultsLogAnomalyDetailsDialogComponent {
       case 'critical':
         return 'kritisch';
       case 'warning':
-        return 'Warnung';
+        return this.uiTranslate('warning');
       case 'info':
         return 'Info';
       default:

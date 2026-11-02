@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { VariableBundleDialogComponent, VariableBundleGroupDialogData } from './variable-bundle-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -43,7 +44,7 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
     variables = new Subject<Variable[]>();
     close = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [VariableBundleDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, VariableBundleDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close } },

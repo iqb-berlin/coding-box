@@ -5,6 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { of, throwError, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { TestFilesComponent } from './test-files.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -56,7 +57,7 @@ describe('TestFilesComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [TestFilesComponent, HttpClientModule, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestFilesComponent, HttpClientModule, TranslateModule.forRoot()],
       providers: [
         {
           provide: ActivatedRoute,
@@ -356,7 +357,7 @@ describe('TestFilesComponent', () => {
         await jest.advanceTimersByTimeAsync(0);
 
         expect(component.isUploading()).toBe(false);
-        expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', 'error', { duration: 3000 });
+        expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', translateGerman('error.error_title'), { duration: 3000 });
       } finally {
         jest.useRealTimers();
       }

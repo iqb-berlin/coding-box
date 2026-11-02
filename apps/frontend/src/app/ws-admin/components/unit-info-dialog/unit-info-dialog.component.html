@@ -1,5 +1,5 @@
 <h2 mat-dialog-title>
-  <span>Aufgaben-Informationen: {{ data.unitId }}</span>
+  <span>{{ 'ui-text.unit-info-dialog.aufgaben-informationen' | translate: { unitId: (data.unitId) } }}</span>
   <button mat-icon-button (click)="close()" class="close-button" [attr.aria-label]="'deferred-view.close' | translate">
     <mat-icon>close</mat-icon>
   </button>
@@ -9,7 +9,7 @@
   @if (isLoading) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>Aufgaben-Informationen werden geladen...</p>
+      <p>{{ 'ui-text.unit-info-dialog.aufgaben-informationen-werden-geladen' | translate }}</p>
     </div>
   }
 
@@ -24,7 +24,7 @@
     <div class="info-container">
       <mat-tab-group>
         <!-- Raw XML Tab (first) -->
-        <mat-tab label="Roh-XML">
+        <mat-tab [label]="'ui-text.unit-info-dialog.roh-xml' | translate">
           <div class="tab-content xml-tab-content">
             <div class="info-section xml-section">
               <coding-box-xml-viewer [xml]="data.unitInfo.rawXml"></coding-box-xml-viewer>
@@ -32,39 +32,39 @@
           </div>
         </mat-tab>
         <!-- Metadata Tab -->
-        <mat-tab label="Metadaten">
+        <mat-tab [label]="'ui-text.booklet-info-dialog.metadaten' | translate">
           <div class="tab-content">
             <div class="info-section">
-              <h3>Grundinformationen</h3>
+              <h3>{{ 'ui-text.unit-info-dialog.grundinformationen' | translate }}</h3>
               <div class="info-row">
-                <span class="info-label">ID:</span>
+                <span class="info-label">{{ 'ui-text.booklet-info-dialog.id' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.metadata.id }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">Bezeichnung:</span>
+                <span class="info-label">{{ 'ui-text.booklet-info-dialog.bezeichnung' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.metadata.label }}</span>
               </div>
               @if (data.unitInfo.metadata.description) {
                 <div class="info-row">
-                  <span class="info-label">Description:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.description' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.metadata.description }}</span>
                 </div>
               }
               @if (data.unitInfo.metadata.transcript) {
                 <div class="info-row">
-                  <span class="info-label">Transcript:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.transcript' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.metadata.transcript }}</span>
                 </div>
               }
               @if (data.unitInfo.metadata.reference) {
                 <div class="info-row">
-                  <span class="info-label">Reference:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.reference' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.metadata.reference }}</span>
                 </div>
               }
               @if (data.unitInfo.metadata.lastChange) {
                 <div class="info-row">
-                  <span class="info-label">Last Change:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.last-change' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.metadata.lastChange | date:'medium' }}</span>
                 </div>
               }
@@ -72,33 +72,33 @@
           </div>
         </mat-tab>
         <!-- Definition Tab -->
-        <mat-tab label="Definition">
+        <mat-tab [label]="'coding-job-definitions.workflow.definition' | translate">
           <div class="tab-content">
             <div class="info-section">
-              <h3>Definitionsinformationen</h3>
+              <h3>{{ 'ui-text.unit-info-dialog.definitionsinformationen' | translate }}</h3>
               <div class="info-row">
-                <span class="info-label">Type:</span>
+                <span class="info-label">{{ 'ui-text.unit-info-dialog.type' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.definition.type }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">Player:</span>
+                <span class="info-label">{{ 'ui-text.unit-info-dialog.player' | translate }}</span>
                 <span class="info-value">{{ data.unitInfo.definition.player }}</span>
               </div>
               @if (data.unitInfo.definition.editor) {
                 <div class="info-row">
-                  <span class="info-label">Editor:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.editor' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.definition.editor }}</span>
                 </div>
               }
               @if (data.unitInfo.definition.lastChange) {
                 <div class="info-row">
-                  <span class="info-label">Last Change:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.last-change' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.definition.lastChange | date:'medium' }}</span>
                 </div>
               }
               @if (data.unitInfo.definition.content) {
                 <div class="info-row content-row">
-                  <span class="info-label">Content:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.content' | translate }}</span>
                   <pre class="info-value content-value">{{ data.unitInfo.definition.content }}</pre>
                 </div>
               }
@@ -107,64 +107,64 @@
         </mat-tab>
         <!-- Variables Tab -->
         @if (data.unitInfo.baseVariables?.length || data.unitInfo.derivedVariables?.length) {
-          <mat-tab label="Variablen">
+          <mat-tab [label]="'coding.my-coding-jobs.job-variables' | translate">
             <div class="tab-content">
               <!-- Base Variables -->
               @if (data.unitInfo.baseVariables?.length) {
                 <div class="info-section">
-                  <h3>Basisvariablen</h3>
+                  <h3>{{ 'ui-text.unit-info-dialog.basisvariablen' | translate }}</h3>
                   @for (variable of data.unitInfo.baseVariables; track variable; let isLast = $last) {
                     <div class="variable-item">
                       <div class="info-row">
-                        <span class="info-label">ID:</span>
+                        <span class="info-label">{{ 'ui-text.booklet-info-dialog.id' | translate }}</span>
                         <span class="info-value">{{ variable.id }}</span>
                       </div>
                       @if (variable.alias) {
                         <div class="info-row">
-                          <span class="info-label">Alias:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.alias' | translate }}</span>
                           <span class="info-value">{{ variable.alias }}</span>
                         </div>
                       }
                       <div class="info-row">
-                        <span class="info-label">Type:</span>
+                        <span class="info-label">{{ 'ui-text.unit-info-dialog.type' | translate }}</span>
                         <span class="info-value">{{ variable.type }}</span>
                       </div>
                       @if (variable.format) {
                         <div class="info-row">
-                          <span class="info-label">Format:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.format' | translate }}</span>
                           <span class="info-value">{{ variable.format }}</span>
                         </div>
                       }
                       @if (variable.multiple !== undefined) {
                         <div class="info-row">
-                          <span class="info-label">Multiple:</span>
-                          <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.multiple' | translate }}</span>
+                          <span class="info-value">{{ variable.multiple ? ('process-overview.values.yes' | translate) : ('process-overview.values.no' | translate) }}</span>
                         </div>
                       }
                       @if (variable.nullable !== undefined) {
                         <div class="info-row">
-                          <span class="info-label">Nullable:</span>
-                          <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.nullable' | translate }}</span>
+                          <span class="info-value">{{ variable.nullable ? ('process-overview.values.yes' | translate) : ('process-overview.values.no' | translate) }}</span>
                         </div>
                       }
                       @if (variable.page) {
                         <div class="info-row">
-                          <span class="info-label">Page:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.page' | translate }}</span>
                           <span class="info-value">{{ variable.page }}</span>
                         </div>
                       }
                       <!-- Variable Values -->
                       @if (variable.values?.length) {
                         <div class="variable-values">
-                          <h4>Werte</h4>
+                          <h4>{{ 'ui-text.unit-info-dialog.werte' | translate }}</h4>
                           @for (value of variable.values; track value) {
                             <div class="value-item">
                               <div class="info-row">
-                                <span class="info-label">Label:</span>
+                                <span class="info-label">{{ 'ui-text.unit-info-dialog.label' | translate }}</span>
                                 <span class="info-value">{{ value.label }}</span>
                               </div>
                               <div class="info-row">
-                                <span class="info-label">Value:</span>
+                                <span class="info-label">{{ 'ui-text.test-results.value' | translate }}</span>
                                 <span class="info-value">{{ value.value }}</span>
                               </div>
                             </div>
@@ -181,59 +181,59 @@
               <!-- Derived Variables -->
               @if (data.unitInfo.derivedVariables?.length) {
                 <div class="info-section">
-                  <h3>Abgeleitete Variablen</h3>
+                  <h3>{{ 'coding.has-derived-vars' | translate }}</h3>
                   @for (variable of data.unitInfo.derivedVariables; track variable; let isLast = $last) {
                     <div class="variable-item">
                       <div class="info-row">
-                        <span class="info-label">ID:</span>
+                        <span class="info-label">{{ 'ui-text.booklet-info-dialog.id' | translate }}</span>
                         <span class="info-value">{{ variable.id }}</span>
                       </div>
                       @if (variable.alias) {
                         <div class="info-row">
-                          <span class="info-label">Alias:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.alias' | translate }}</span>
                           <span class="info-value">{{ variable.alias }}</span>
                         </div>
                       }
                       <div class="info-row">
-                        <span class="info-label">Type:</span>
+                        <span class="info-label">{{ 'ui-text.unit-info-dialog.type' | translate }}</span>
                         <span class="info-value">{{ variable.type }}</span>
                       </div>
                       @if (variable.format) {
                         <div class="info-row">
-                          <span class="info-label">Format:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.format' | translate }}</span>
                           <span class="info-value">{{ variable.format }}</span>
                         </div>
                       }
                       @if (variable.multiple !== undefined) {
                         <div class="info-row">
-                          <span class="info-label">Multiple:</span>
-                          <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.multiple' | translate }}</span>
+                          <span class="info-value">{{ variable.multiple ? ('process-overview.values.yes' | translate) : ('process-overview.values.no' | translate) }}</span>
                         </div>
                       }
                       @if (variable.nullable !== undefined) {
                         <div class="info-row">
-                          <span class="info-label">Nullable:</span>
-                          <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.nullable' | translate }}</span>
+                          <span class="info-value">{{ variable.nullable ? ('process-overview.values.yes' | translate) : ('process-overview.values.no' | translate) }}</span>
                         </div>
                       }
                       @if (variable.page) {
                         <div class="info-row">
-                          <span class="info-label">Page:</span>
+                          <span class="info-label">{{ 'ui-text.unit-info-dialog.page' | translate }}</span>
                           <span class="info-value">{{ variable.page }}</span>
                         </div>
                       }
                       <!-- Variable Values -->
                       @if (variable.values?.length) {
                         <div class="variable-values">
-                          <h4>Werte</h4>
+                          <h4>{{ 'ui-text.unit-info-dialog.werte' | translate }}</h4>
                           @for (value of variable.values; track value) {
                             <div class="value-item">
                               <div class="info-row">
-                                <span class="info-label">Label:</span>
+                                <span class="info-label">{{ 'ui-text.unit-info-dialog.label' | translate }}</span>
                                 <span class="info-value">{{ value.label }}</span>
                               </div>
                               <div class="info-row">
-                                <span class="info-label">Value:</span>
+                                <span class="info-label">{{ 'ui-text.test-results.value' | translate }}</span>
                                 <span class="info-value">{{ value.value }}</span>
                               </div>
                             </div>
@@ -252,22 +252,22 @@
         }
         <!-- Dependencies Tab -->
         @if (data.unitInfo.dependencies?.length) {
-          <mat-tab label="Abhängigkeiten">
+          <mat-tab [label]="'ui-text.unit-info-dialog.abhaengigkeiten' | translate">
             <div class="tab-content">
               <div class="info-section">
-                <h3>Abhängigkeiten</h3>
+                <h3>{{ 'ui-text.unit-info-dialog.abhaengigkeiten' | translate }}</h3>
                 @for (dependency of data.unitInfo.dependencies; track dependency; let isLast = $last) {
                   <div class="dependency-item">
                     <div class="info-row">
-                      <span class="info-label">Type:</span>
+                      <span class="info-label">{{ 'ui-text.unit-info-dialog.type' | translate }}</span>
                       <span class="info-value">{{ dependency.type }}</span>
                     </div>
                     <div class="info-row">
-                      <span class="info-label">For:</span>
+                      <span class="info-label">{{ 'ui-text.unit-info-dialog.for' | translate }}</span>
                       <span class="info-value">{{ dependency.for }}</span>
                     </div>
                     <div class="info-row">
-                      <span class="info-label">Content:</span>
+                      <span class="info-label">{{ 'ui-text.unit-info-dialog.content' | translate }}</span>
                       <span class="info-value">{{ dependency.content }}</span>
                     </div>
                     @if (!isLast) {
@@ -281,28 +281,28 @@
         }
         <!-- Coding Scheme Tab -->
         @if (data.unitInfo.codingSchemeRef) {
-          <mat-tab label="Kodierungsschema">
+          <mat-tab [label]="'ui-text.unit-info-dialog.kodierungsschema' | translate">
             <div class="tab-content">
               <div class="info-section">
-                <h3>Kodierungsschema-Referenz</h3>
+                <h3>{{ 'ui-text.unit-info-dialog.kodierungsschema-referenz' | translate }}</h3>
                 <div class="info-row">
-                  <span class="info-label">Schemer:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.schemer' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemer }}</span>
                 </div>
                 @if (data.unitInfo.codingSchemeRef.schemeType) {
                   <div class="info-row">
-                    <span class="info-label">Scheme Type:</span>
+                    <span class="info-label">{{ 'ui-text.unit-info-dialog.scheme-type' | translate }}</span>
                     <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemeType }}</span>
                   </div>
                 }
                 @if (data.unitInfo.codingSchemeRef.lastChange) {
                   <div class="info-row">
-                    <span class="info-label">Last Change:</span>
+                    <span class="info-label">{{ 'ui-text.unit-info-dialog.last-change' | translate }}</span>
                     <span class="info-value">{{ data.unitInfo.codingSchemeRef.lastChange | date:'medium' }}</span>
                   </div>
                 }
                 <div class="info-row">
-                  <span class="info-label">Content:</span>
+                  <span class="info-label">{{ 'ui-text.unit-info-dialog.content' | translate }}</span>
                   <span class="info-value">{{ data.unitInfo.codingSchemeRef.content }}</span>
                 </div>
               </div>
@@ -315,5 +315,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Schließen</button>
+  <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </mat-dialog-actions>

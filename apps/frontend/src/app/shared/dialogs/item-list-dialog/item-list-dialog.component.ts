@@ -15,6 +15,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { injectUiTranslator } from '../../utils/ui-translator';
 import { activateOnKeyboard } from '../../utils/keyboard-activation.util';
 import { MetadataDialogComponent, MetadataDialogData } from '../metadata-dialog/metadata-dialog.component';
 import { AppService } from '../../../core/services/app.service';
@@ -40,6 +41,8 @@ import { takeUntilWorkspaceChanged } from '../../utils/workspace-request.operato
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected readonly onActionKeydown = activateOnKeyboard;
 
   private itemsRequest?: Subscription;
@@ -91,7 +94,7 @@ export class ItemListDialogComponent implements OnInit {
     this.itemsRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.error.set('Kein Workspace ausgewählt.');
+      this.error.set(this.uiTranslate('ui-text.item-list-dialog.kein-workspace-ausgewaehlt'));
       this.isLoading.set(false);
       return;
     }
@@ -119,7 +122,7 @@ export class ItemListDialogComponent implements OnInit {
     const requestId = this.metadataRequestId;
     const isCurrent = (): boolean => !this.destroyRef.destroyed && requestId === this.metadataRequestId &&
       workspaceId === this.appService.selectedWorkspaceId;
-    const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.lade-metadaten'), '', { duration: 3000 });
     this.metadataLoadingSnackBar = loadingSnackBar;
 
     try {
@@ -149,7 +152,7 @@ export class ItemListDialogComponent implements OnInit {
       const unitProfile = vomdData.profiles?.[0];
       if (!unitProfile) {
         loadingSnackBar.dismiss();
-        this.snackBar.open('Keine Metadaten-Profile in der Datei gefunden', 'Schließen', { duration: 5000 });
+        this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.keine-metadaten-profile-in-der-datei-gefunden'), this.uiTranslate('deferred-view.close'), { duration: 5000 });
         return;
       }
 
@@ -195,7 +198,7 @@ export class ItemListDialogComponent implements OnInit {
         } as unknown as MetadataDialogData
       });
     } catch (error) {
-      if (isCurrent()) this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+      if (isCurrent()) this.snackBar.open(this.uiTranslate('ui-text.item-list-dialog.fehler-beim-oeffnen-der-metadaten-datei'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
     } finally {
       loadingSnackBar.dismiss();
     }

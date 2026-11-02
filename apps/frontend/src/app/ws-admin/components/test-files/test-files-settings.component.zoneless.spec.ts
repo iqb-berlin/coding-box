@@ -7,6 +7,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestFilesComponent } from './test-files.component';
 import { AppService } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
@@ -25,7 +26,7 @@ describe('File view settings with real services without Zone', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [TestFilesComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestFilesComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         provideHttpClient(),

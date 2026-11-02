@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { VariableAnalysisJobsDialogComponent, VariableAnalysisJobsDialogData } from './variable-analysis-jobs-dialog.component';
 import { VariableAnalysisService, JobCancelResult } from '../../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
@@ -66,7 +67,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [VariableAnalysisJobsDialogComponent],
+      imports: [GermanTranslationsTestingModule, VariableAnalysisJobsDialogComponent],
       providers: [
         { provide: MatDialogRef, useValue: dialogRefMock },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },

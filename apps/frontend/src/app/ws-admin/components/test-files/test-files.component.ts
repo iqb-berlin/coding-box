@@ -31,7 +31,6 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import {
-  of,
   Subject,
   Subscription,
   timer
@@ -41,9 +40,7 @@ import {
   filter,
   finalize,
   switchMap,
-  take,
-  takeUntil,
-  tap
+  takeUntil
 } from 'rxjs/operators';
 import {
   MatPaginator,
@@ -51,6 +48,8 @@ import {
   PageEvent
 } from '@angular/material/paginator';
 import { MetadataResolver } from '@iqb/metadata-resolver';
+import { FileValidationProgressFacade, ValidationProgressStep } from './file-validation-progress.facade';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -105,19 +104,12 @@ import {
   ContentPoolUploadDialogResult
 } from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
 
-const VALIDATION_TASK_POLL_INTERVAL_MS = 300;
-
-type ValidationProgressStep = {
-  threshold: number;
-  label: string;
-};
-
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],
-  providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }],
+  providers: [FileValidationProgressFacade, { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }],
   imports: [
     TranslateModule,
     DatePipe,
@@ -153,6 +145,10 @@ type ValidationProgressStep = {
   ]
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
+  private readonly validationState = inject(FileValidationProgressFacade);
+
   appService = inject(AppService);
   fileService = inject(FileService);
   private fileBackendService = inject(FileBackendService);
@@ -185,41 +181,26 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   readonly downloadProgressLoadedBytes = signal(0);
   readonly downloadProgressTotalBytes = signal(0);
   readonly downloadProgressStatus = signal<'preparing' | 'downloading'>('preparing');
-  protected readonly validationProgress = signal(0);
-  protected readonly validationProgressMessage = signal('');
-  protected readonly validationProgressSteps: ValidationProgressStep[] = [
-    { threshold: 0, label: 'Änderungen prüfen' },
-    { threshold: 3, label: 'Vorbereiten' },
-    { threshold: 8, label: 'Ausschlüsse laden' },
-    { threshold: 12, label: 'Booklets analysieren' },
-    { threshold: 22, label: 'Aufgabenreferenzen' },
-    { threshold: 30, label: 'Ressourcen laden' },
-    { threshold: 38, label: 'XML-Schemata' },
-    { threshold: 48, label: 'Kodierschemata' },
-    { threshold: 55, label: 'TestTakers verarbeiten' },
-    { threshold: 84, label: 'Unbenutzte Dateien' },
-    { threshold: 88, label: 'Doppelte TestTaker' },
-    { threshold: 90, label: 'Personenstatus' },
-    { threshold: 92, label: 'GeoGebra-Aufgaben' },
-    { threshold: 94, label: 'GeoGebra-Paket' },
-    { threshold: 98, label: 'Ergebnis vorbereiten' },
-    { threshold: 100, label: 'Abgeschlossen' }
-  ];
+  protected readonly validationProgress = this.validationState.progress;
+  protected readonly validationProgressMessage = this.validationState.message;
+  protected get validationProgressSteps(): ValidationProgressStep[] { return this.validationState.steps(); }
 
   protected readonly selectedFileType = signal<string>('');
   protected readonly selectedFileSize = signal<string>('');
   readonly enableRegexSearch = signal(false);
   protected readonly fileTypes = signal<string[]>([]);
-  protected fileSizeRanges: { value: string; display: string }[] = [
-    { value: '', display: 'Alle Größen' },
-    { value: '0-10KB', display: '< 10KB' },
-    { value: '10KB-100KB', display: '10KB - 100KB' },
-    { value: '100KB-1MB', display: '100KB - 1MB' },
-    { value: '1MB-10MB', display: '1MB - 10MB' },
-    { value: '10MB+', display: '> 10MB' }
-  ];
+  private readonly localizedFileSizeRanges = computed<{ value: string; display: string }[]>(() => ([
+    { value: '', display: this.uiTranslate('ui-text.test-files.alle-groessen') },
+    { value: '0-10KB', display: this.uiTranslate('ui-text.test-files.10kb') },
+    { value: '10KB-100KB', display: this.uiTranslate('ui-text.test-files.10kb-100kb') },
+    { value: '100KB-1MB', display: this.uiTranslate('ui-text.test-files.100kb-1mb') },
+    { value: '1MB-10MB', display: this.uiTranslate('ui-text.test-files.1mb-10mb') },
+    { value: '10MB+', display: this.uiTranslate('ui-text.test-files.10mb') }
+  ]));
 
-  protected getFileTypeLabel = getFileTypeLabel;
+  protected get fileSizeRanges(): { value: string; display: string }[] { return this.localizedFileSizeRanges(); }
+
+  protected getFileTypeLabel = getFileTypeLabel.bind(undefined, this.uiTranslate);
 
   readonly resourcePackagesModified = signal(false);
   readonly contentPoolSettings = signal<ContentPoolSettings>({
@@ -287,11 +268,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   get busyText(): string {
     if (this.isDeleting()) {
-      return 'Datei(en) werden gelöscht...';
+      return this.uiTranslate('ui-text.test-files.datei-en-werden-geloescht');
     }
     if (this.isDownloadingAllFiles()) {
       if (this.downloadProgressStatus() === 'preparing') {
-        return 'ZIP-Datei wird vorbereitet...';
+        return this.uiTranslate('ui-text.test-files.zip-datei-wird-vorbereitet');
       }
 
       const totalText = this.downloadProgressTotalBytes() > 0 ?
@@ -301,13 +282,13 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
     if (this.isValidating()) {
       return this.validationProgressMessage() ||
-        'Validierung wird durchgeführt...';
+        this.uiTranslate('export-dialog.validation.validation-running');
     }
     if (this.isUploading()) {
-      return 'Datei(en) werden hochgeladen...';
+      return this.uiTranslate('ui-text.test-files.datei-en-werden-hochgeladen');
     }
     if (this.isLoading()) {
-      return 'Dateiliste wird geladen...';
+      return this.uiTranslate('ui-text.test-files.dateiliste-wird-geladen');
     }
     return '';
   }
@@ -360,8 +341,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Laden der Dateiliste.',
-            this.translate.instant('error'),
+            this.uiTranslate('ui-text.test-files.fehler-beim-laden-der-dateiliste'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -448,7 +429,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   protected openContentPoolUploadDialogForSelectedFiles(): void {
     if (!this.contentPoolSettings().enabled) {
       this.snackBar.open(
-        'Die Content-Pool-Integration ist aktuell deaktiviert.',
+        this.uiTranslate('ui-text.test-files.die-content-pool-integration-ist-aktuell-deaktiviert'),
         'OK',
         { duration: 3000 }
       );
@@ -457,7 +438,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     if (!this.contentPoolSettings().baseUrl) {
       this.snackBar.open(
-        'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        this.uiTranslate('ui-text.test-files.in-den-systemeinstellungen-ist-keine-content-pool-url-hinterlegt'),
         'OK',
         { duration: 4000 }
       );
@@ -466,7 +447,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     if (!this.contentPoolSettings().hasApplicationToken) {
       this.snackBar.open(
-        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
+        this.uiTranslate('ui-text.test-files.in-den-systemeinstellungen-ist-kein-content-pool-application-token-hinterlegt'),
         'OK',
         { duration: 4000 }
       );
@@ -474,7 +455,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
 
     if (this.tableCheckboxSelection.selected.length === 0) {
-      this.snackBar.open('Bitte mindestens eine Datei auswählen.', 'OK', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-files.bitte-mindestens-eine-datei-auswaehlen'), 'OK', {
         duration: 3000
       });
       return;
@@ -507,7 +488,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   protected openContentPoolImportDialog(): void {
     if (!this.contentPoolSettings().enabled) {
       this.snackBar.open(
-        'Die Content-Pool-Integration ist aktuell deaktiviert.',
+        this.uiTranslate('ui-text.test-files.die-content-pool-integration-ist-aktuell-deaktiviert'),
         'OK',
         { duration: 3000 }
       );
@@ -516,7 +497,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     if (!this.contentPoolSettings().baseUrl) {
       this.snackBar.open(
-        'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        this.uiTranslate('ui-text.test-files.in-den-systemeinstellungen-ist-keine-content-pool-url-hinterlegt'),
         'OK',
         { duration: 4000 }
       );
@@ -525,7 +506,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     if (!this.contentPoolSettings().hasApplicationToken) {
       this.snackBar.open(
-        'In den Systemeinstellungen ist kein Content-Pool Application-Token hinterlegt.',
+        this.uiTranslate('ui-text.test-files.in-den-systemeinstellungen-ist-kein-content-pool-application-token-hinterlegt'),
         'OK',
         { duration: 4000 }
       );
@@ -636,8 +617,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.snackBar.open(
-                'Fehler beim Überschreiben der Dateien aus dem Content Pool.',
-                this.translate.instant('error'),
+                this.uiTranslate('ui-text.test-files.fehler-beim-ueberschreiben-der-dateien-aus-dem-content-pool'),
+                this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
             }
@@ -664,14 +645,16 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       `, Version ${result.versionNumber}` :
       '';
     const skippedInfo = result.skipped > 0 ?
-      `, übersprungen: ${result.skipped}` :
+      this.uiTranslate('ui-text.test-files.uebersprungen', { skipped: result.skipped }) :
       '';
     const failedInfo = result.failed > 0 ?
       `, fehlgeschlagen: ${result.failed}` :
       '';
 
     this.snackBar.open(
-      `Content-Pool-Upload abgeschlossen: ${result.replaced} ersetzt${skippedInfo}${failedInfo}${versionInfo}`,
+      this.uiTranslate('ui-text.test-files.content-pool-upload-abgeschlossen-ersetzt', {
+        replaced: result.replaced, skippedInfo: skippedInfo, failedInfo: failedInfo, versionInfo: versionInfo
+      }),
       'OK',
       { duration: 6000 }
     );
@@ -679,10 +662,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (result.skippedFiles.length > 0 || result.failedFiles.length > 0) {
       const details = [
         ...result.skippedFiles.map(file => (
-          `Übersprungen: ${file.filename} (${file.reason || 'kein Treffer'})`
+          this.uiTranslate('ui-text.test-files.uebersprungen-65f2ab', { filename: file.filename, value2: file.reason || this.uiTranslate('ui-text.test-files.kein-treffer') })
         )),
         ...result.failedFiles.map(file => (
-          `Fehlgeschlagen: ${file.filename} (${file.reason || 'Fehler'})`
+          `Fehlgeschlagen: ${file.filename} (${file.reason || this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error')})`
         ))
       ].join('\n');
 
@@ -690,7 +673,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         width: '760px',
         maxWidth: '95vw',
         data: {
-          title: 'Content-Pool-Upload Ergebnis',
+          title: this.uiTranslate('ui-text.test-files.content-pool-upload-ergebnis'),
           content: details
         }
       });
@@ -706,7 +689,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         deduplicateTestFilesUploadFailedFiles(result.failedFiles).length :
         result.failed;
     this.snackBar.open(
-      `Upload abgeschlossen: ${result.uploaded} erfolgreich, ${failedCount} fehlgeschlagen${conflictInfo}`,
+      this.uiTranslate('ui-text.test-files.upload-abgeschlossen-erfolgreich-fehlgeschlagen', { uploaded: result.uploaded, failedCount: failedCount, conflictInfo: conflictInfo }),
       'OK',
       { duration: 5000 }
     );
@@ -798,8 +781,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             },
             error: () => {
               this.snackBar.open(
-                'Fehler beim Überschreiben der Dateien.',
-                this.translate.instant('error'),
+                this.uiTranslate('ui-text.test-files.fehler-beim-ueberschreiben-der-dateien'),
+                this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
             }
@@ -841,8 +824,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           },
           error: () => {
             this.snackBar.open(
-              'Fehler beim Hochladen der Dateien.',
-              this.translate.instant('error'),
+              this.uiTranslate('ui-text.test-files.fehler-beim-hochladen-der-dateien'),
+              this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
           }
@@ -939,7 +922,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         error: () => {
           this.snackBar.open(
             this.translate.instant('ws-admin.files-not-deleted'),
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -986,7 +969,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         return;
       }
       if (!result.fileTypes || result.fileTypes.length === 0) {
-        this.snackBar.open('Keine Dateitypen ausgewählt.', 'OK', {
+        this.snackBar.open(this.uiTranslate('ui-text.test-files.keine-dateitypen-ausgewaehlt'), 'OK', {
           duration: 3000
         });
         return;
@@ -1017,7 +1000,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             if (event instanceof HttpResponse) {
               const blob = event.body;
               if (!blob) {
-                throw new Error('Leere ZIP-Antwort erhalten.');
+                throw new Error(this.uiTranslate('ui-text.test-files.leere-zip-antwort-erhalten'));
               }
 
               const url = window.URL.createObjectURL(blob);
@@ -1034,7 +1017,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.isDownloadingAllFiles.set(false);
 
               this.snackBar.open(
-                'ZIP-Datei wurde erfolgreich heruntergeladen.',
+                this.uiTranslate('ui-text.test-files.zip-datei-wurde-erfolgreich-heruntergeladen'),
                 'OK',
                 { duration: 3000 }
               );
@@ -1043,7 +1026,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           error: () => {
             this.isDownloadingAllFiles.set(false);
             this.snackBar.open(
-              'Fehler beim Herunterladen der ZIP-Datei.',
+              this.uiTranslate('ui-text.test-files.fehler-beim-herunterladen-der-zip-datei'),
               'OK',
               { duration: 3000 }
             );
@@ -1110,8 +1093,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   protected validateFiles(): void {
     if (this.isValidating()) return;
     this.isValidating.set(true);
-    this.validationProgress.set(0);
-    this.validationProgressMessage.set('Testdateien werden auf Änderungen geprüft...');
+    this.validationState.start(this.uiTranslate('ui-text.files-validation.testdateien-werden-auf-aenderungen-geprueft'));
 
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -1123,10 +1105,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         filter(() => this.appService.selectedWorkspaceId === workspaceId),
         switchMap(task => {
           if (task.status === 'failed') {
-            throw new Error(task.error || 'Validierung fehlgeschlagen');
+            throw new Error(task.error || this.uiTranslate('ui-text.files-validation.validierung-fehlgeschlagen'));
           }
-          this.validationProgress.set(100);
-          this.validationProgressMessage.set(task.progress_message || 'Validierungsergebnis wird geladen...');
+          this.validationState.finish(task.progress_message);
 
           return this.validationService.getValidationResults(
             workspaceId,
@@ -1150,7 +1131,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           if (this.appService.selectedWorkspaceId !== workspaceId) return;
           this.snackBar.open(
             this.translate.instant('ws-admin.validation-failed'),
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -1160,31 +1141,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private waitForValidationTask(
     workspaceId: number,
     task: ValidationTaskDto
-  ) {
-    this.updateValidationProgress(task);
-    if (task.status === 'completed' || task.status === 'failed') {
-      return of(task);
-    }
+  ) { return this.validationState.watch(workspaceId, task); }
 
-    return timer(0, VALIDATION_TASK_POLL_INTERVAL_MS).pipe(
-      switchMap(() => this.validationService.getValidationTask(workspaceId, task.id)),
-      tap(nextTask => this.updateValidationProgress(nextTask)),
-      filter(nextTask => nextTask.status !== 'pending' && nextTask.status !== 'processing'),
-      take(1)
-    );
-  }
-
-  private updateValidationProgress(task: ValidationTaskDto): void {
-    const progress = task.progress ?? 0;
-    this.validationProgress.set(Math.max(this.validationProgress(), progress));
-    if (task.progress_message) {
-      this.validationProgressMessage.set(`${this.validationProgress()}% - ${task.progress_message}`);
-      return;
-    }
-    this.validationProgressMessage.set(this.validationProgress() >= 100 ?
-      'Validierungsergebnis wird geladen...' :
-      `Validierung wird durchgeführt (${this.validationProgress()}%)...`);
-  }
+  private updateValidationProgress(task: ValidationTaskDto): void { this.validationState.accept(task); }
 
   private handleDeleteResponse(
     success: boolean,
@@ -1194,7 +1153,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       success ?
         this.translate.instant('ws-admin.files-deleted') :
         this.translate.instant('ws-admin.files-not-deleted'),
-      success ? '' : this.translate.instant('error'),
+      success ? '' : this.translate.instant('error.error_title'),
       { duration: 1000 }
     );
     if (requestHandled) {
@@ -1214,7 +1173,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     if (res === false) {
       this.snackBar.open(
         this.translate.instant('ws-admin.validation-failed'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
     } else if (typeof res !== 'boolean') {
@@ -1222,10 +1181,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         const confirmRef = this.dialog.open(ConfirmDialogComponent, {
           width: '400px',
           data: {
-            title: 'Keine Testtaker gefunden',
+            title: this.uiTranslate('ui-text.test-files.keine-testtaker-gefunden'),
             content:
-              'Es wurden keine Testtaker-Dateien gefunden. Möchten Sie eine automatisch generierte Testtaker-Datei erstellen?',
-            confirmButtonLabel: 'Ja',
+              this.uiTranslate('ui-text.test-files.es-wurden-keine-testtaker-dateien-gefunden-moechten-sie-eine-automatisch-generierte-testta'),
+            confirmButtonLabel: this.uiTranslate('process-overview.values.yes'),
             showCancel: true
           }
         });
@@ -1254,7 +1213,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
                   if (success) {
                     this.snackBar.open(
-                      'Testtaker-Datei wurde erfolgreich erstellt.',
+                      this.uiTranslate('ui-text.test-files.testtaker-datei-wurde-erfolgreich-erstellt'),
                       'OK',
                       { duration: 3000 }
                     );
@@ -1265,8 +1224,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                     ).subscribe(() => this.validateFiles());
                   } else {
                     this.snackBar.open(
-                      'Fehler beim Erstellen der Testtaker-Datei.',
-                      this.translate.instant('error'),
+                      this.uiTranslate('ui-text.test-files.fehler-beim-erstellen-der-testtaker-datei'),
+                      this.translate.instant('error.error_title'),
                       { duration: 3000 }
                     );
                   }
@@ -1276,14 +1235,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                   this.isLoading.set(false);
 
                   this.snackBar.open(
-                    'Fehler beim Erstellen der Testtaker-Datei.',
-                    this.translate.instant('error'),
+                    this.uiTranslate('ui-text.test-files.fehler-beim-erstellen-der-testtaker-datei'),
+                    this.translate.instant('error.error_title'),
                     { duration: 3000 }
                   );
                 }
               });
           } else {
-            this.snackBar.open('Keine Testtaker-Dateien vorhanden.', 'OK', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-files.keine-testtaker-dateien-vorhanden'), 'OK', {
               duration: 3000
             });
 
@@ -1455,7 +1414,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
       const unitProfile = vomdData.profiles?.[0];
       if (!unitProfile) {
-        this.snackBar.open('Keine Metadaten in der Datei gefunden', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.test-files.keine-metadaten-in-der-datei-gefunden'), this.uiTranslate('deferred-view.close'), {
           duration: 5000
         });
         return;
@@ -1509,7 +1468,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Error parsing vomd file:', error);
-      this.snackBar.open('Fehler beim Parsen der Metadaten-Datei', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-files.fehler-beim-parsen-der-metadaten-datei'), this.uiTranslate('deferred-view.close'), {
         duration: 5000
       });
     }
@@ -1537,11 +1496,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       })
     ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.snackBar.open('Metadaten erfolgreich gespeichert.', 'OK', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.test-files.metadaten-erfolgreich-gespeichert'), 'OK', { duration: 3000 });
         this.loadTestFiles();
       },
       error: () => {
-        this.snackBar.open('Fehler beim Speichern der Metadaten.', 'Fehler', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.test-files.fehler-beim-speichern-der-metadaten'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 3000 });
       }
     });
   }

@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestResultsDeletePreviewDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 export interface TestResultsDeletePreviewDialogData {
@@ -31,6 +32,8 @@ interface DeleteMetric {
   styleUrls: ['./test-results-delete-preview-dialog.component.scss']
 })
 export class TestResultsDeletePreviewDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<TestResultsDeletePreviewDialogComponent>>(MatDialogRef);
   data = inject<TestResultsDeletePreviewDialogData>(MAT_DIALOG_DATA);
 
@@ -50,50 +53,50 @@ export class TestResultsDeletePreviewDialogComponent {
 
   get dialogTitle(): string {
     if (this.isLogDelete) {
-      return 'Logs unwiderruflich entfernen';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.logs-unwiderruflich-entfernen');
     }
 
     if (this.isResponseCleanup) {
-      return 'Antworten unwiderruflich löschen';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.antworten-unwiderruflich-loeschen');
     }
 
-    return 'Testergebnisse unwiderruflich löschen';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.testergebnisse-unwiderruflich-loeschen');
   }
 
   protected get warningText(): string {
     if (this.isLogDelete) {
-      return 'Diese Aktion entfernt nur Logs und Sitzungsdaten dauerhaft. Testergebnisse, Antworten, Testhefte und Aufgaben bleiben erhalten.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.diese-aktion-entfernt-nur-logs-und-sitzungsdaten-dauerhaft-testergebnisse-antworten-testhe');
     }
 
     if (this.isResponseCleanup) {
-      return 'Diese Aktion entfernt nur die ausgewählten Antwortwerte dauerhaft. Testpersonen, Testhefte, Aufgaben und Logs bleiben erhalten.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.diese-aktion-entfernt-nur-die-ausgewaehlten-antwortwerte-dauerhaft-testpersonen-testhefte');
     }
 
-    return 'Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist danach nicht möglich.';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.diese-aktion-entfernt-die-daten-dauerhaft-eine-wiederherstellung-ist-danach-nicht-moeglich');
   }
 
   protected get metricAriaLabel(): string {
     if (this.isLogDelete) {
-      return 'Betroffene Logs';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.betroffene-logs');
     }
 
     if (this.isResponseCleanup) {
-      return 'Betroffene Antworten';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.betroffene-antworten');
     }
 
-    return 'Betroffene Testergebnisse';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.betroffene-testergebnisse');
   }
 
   protected get countNote(): string {
     if (this.isLogDelete) {
-      return 'Gezählt werden vorhandene Log- und Sitzungsdatensätze. Ergebnisdaten und Antworten werden nicht gelöscht.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.gezaehlt-werden-vorhandene-log-und-sitzungsdatensaetze-ergebnisdaten-und-antworten-werden');
     }
 
     if (this.isResponseCleanup) {
-      return 'Gezählt werden Antworten mit passendem Chunk-Zeitstempel. Antworten ohne auswertbaren Zeitstempel werden nicht gelöscht.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.gezaehlt-werden-antworten-mit-passendem-chunk-zeitstempel-antworten-ohne-auswertbaren-zeit');
     }
 
-    return 'Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben und Antworten werden eindeutig gezählt.';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.die-zaehlweise-entspricht-der-arbeitsbereich-uebersicht-testhefte-aufgaben-und-antworten-w');
   }
 
   get hasCodingImpact(): boolean {
@@ -110,11 +113,10 @@ export class TestResultsDeletePreviewDialogComponent {
 
   get codingImpactText(): string {
     if (this.isResponseCleanup) {
-      return 'Mit diesen Antworten werden auch vorhandene Antwort-Kodierungen entfernt. Die betroffenen Aufgabenbearbeitungen werden danach als veraltet markiert.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.mit-diesen-antworten-werden-auch-vorhandene-antwort-kodierungen-entfernt-die-betroffenen-a');
     }
 
-    return 'Mit diesen Testergebnissen werden auch vorhandene Kodierergebnisse entfernt. ' +
-      'Danach erscheinen diese gelöschten Fälle nicht als veralteter Kodierstand.';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.mit-diesen-testergebnissen-werden-auch-vorhandene-kodierergebnisse-entfernt', { value1: this.uiTranslate('ui-text.test-results-delete-preview-dialog.danach-erscheinen-diese-geloeschten-faelle-nicht-als-veralteter-kodierstand') });
   }
 
   get codingImpactMetrics(): DeleteMetric[] {
@@ -127,22 +129,22 @@ export class TestResultsDeletePreviewDialogComponent {
 
     return [
       {
-        label: 'Aufgabenbearbeitungen',
+        label: this.uiTranslate('ui-text.coding-management.aufgabenbearbeitungen'),
         value: impact.affectedUnits || 0,
-        hint: 'mit Kodierung'
+        hint: this.uiTranslate('ui-text.test-results-delete-preview-dialog.mit-kodierung')
       },
       {
-        label: 'Auto-Coding 1',
+        label: this.uiTranslate('ui-text.coding-freshness-text.util.auto-coding-1'),
         value: impact.autoCodingV1 || 0,
         hint: 'Antwort-Kodierungen'
       },
       {
-        label: 'Manuelle Kodierung',
+        label: this.uiTranslate('ws-admin.manual-coding'),
         value: impact.manualCodingV2 || 0,
         hint: 'Antwort-Kodierungen'
       },
       {
-        label: 'Auto-Coding 2',
+        label: this.uiTranslate('ui-text.coding-freshness-text.util.auto-coding-2'),
         value: impact.autoCodingV3 || 0,
         hint: 'Antwort-Kodierungen'
       }
@@ -151,14 +153,14 @@ export class TestResultsDeletePreviewDialogComponent {
 
   protected get acknowledgementLabel(): string {
     if (this.isLogDelete) {
-      return 'Ich verstehe, dass diese Logs endgültig entfernt werden.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.ich-verstehe-dass-diese-logs-endgueltig-entfernt-werden');
     }
 
     if (this.isResponseCleanup) {
-      return 'Ich verstehe, dass diese Antworten endgültig gelöscht werden.';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.ich-verstehe-dass-diese-antworten-endgueltig-geloescht-werden');
     }
 
-    return 'Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.ich-verstehe-dass-diese-testergebnisse-endgueltig-geloescht-werden');
   }
 
   protected get confirmButtonIcon(): string {
@@ -169,14 +171,14 @@ export class TestResultsDeletePreviewDialogComponent {
 
   get confirmButtonLabel(): string {
     if (this.isLogDelete) {
-      return 'Logs entfernen';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.logs-entfernen');
     }
 
     if (this.isResponseCleanup) {
-      return 'Antworten löschen';
+      return this.uiTranslate('ui-text.test-results-delete-preview-dialog.antworten-loeschen');
     }
 
-    return 'Löschung starten';
+    return this.uiTranslate('ui-text.test-results-delete-preview-dialog.loeschung-starten');
   }
 
   get metrics(): DeleteMetric[] {
@@ -187,15 +189,15 @@ export class TestResultsDeletePreviewDialogComponent {
           value: this.preview.bookletLogs || 0
         },
         {
-          label: 'Aufgaben-Logs',
+          label: this.uiTranslate('ui-text.test-results-delete-preview-dialog.aufgaben-logs'),
           value: this.preview.unitLogs || 0
         },
         {
-          label: 'Sitzungen',
+          label: this.uiTranslate('ui-text.test-results-delete-preview-dialog.sitzungen'),
           value: this.preview.sessions || 0
         },
         {
-          label: 'Testpersonen',
+          label: this.uiTranslate('ws-admin.test-persons'),
           value: this.preview.persons,
           hint: 'betroffen'
         }
@@ -205,22 +207,22 @@ export class TestResultsDeletePreviewDialogComponent {
     if (this.isResponseCleanup) {
       return [
         {
-          label: 'Antworten',
+          label: this.uiTranslate('variable-analysis.total-cases'),
           value: this.preview.responses,
-          hint: 'mit Chunk-Zeitstempel'
+          hint: this.uiTranslate('ui-text.test-results-delete-preview-dialog.mit-chunk-zeitstempel')
         },
         {
-          label: 'Aufgaben',
+          label: this.uiTranslate('coding.jobs.table.units'),
           value: this.preview.units,
           hint: 'betroffen'
         },
         {
-          label: 'Testhefte',
+          label: this.uiTranslate('ui-text.files-validation.testhefte'),
           value: this.preview.booklets,
           hint: 'betroffen'
         },
         {
-          label: 'Testpersonen',
+          label: this.uiTranslate('ws-admin.test-persons'),
           value: this.preview.persons,
           hint: 'betroffen'
         }
@@ -228,19 +230,19 @@ export class TestResultsDeletePreviewDialogComponent {
     }
 
     return [
-      { label: 'Testpersonen', value: this.preview.persons },
+      { label: this.uiTranslate('ws-admin.test-persons'), value: this.preview.persons },
       {
-        label: 'Testhefte',
+        label: this.uiTranslate('ui-text.files-validation.testhefte'),
         value: this.preview.booklets,
         hint: 'einzigartig'
       },
       {
-        label: 'Aufgaben',
+        label: this.uiTranslate('coding.jobs.table.units'),
         value: this.preview.units,
         hint: 'einzigartig'
       },
       {
-        label: 'Antworten',
+        label: this.uiTranslate('variable-analysis.total-cases'),
         value: this.preview.responses,
         hint: 'einzigartig'
       }
@@ -332,12 +334,12 @@ export class TestResultsDeletePreviewDialogComponent {
     const variableIds = this.preview.responseCleanup?.variableIds || [];
     return variableIds.length > 0 ?
       variableIds.join(', ') :
-      'Alle Variablen der ausgewählten Aufgaben';
+      this.uiTranslate('ui-text.test-results-delete-preview-dialog.alle-variablen-der-ausgewaehlten-aufgaben');
   }
 
   get responseCleanupSubformText(): string {
     const subforms = this.preview.responseCleanup?.subforms || [];
-    return subforms.length > 0 ? subforms.join(', ') : 'Alle Subforms';
+    return subforms.length > 0 ? subforms.join(', ') : this.uiTranslate('ui-text.test-results-delete-preview-dialog.alle-subforms');
   }
 
   get responseCleanupUnknownTimestampResponses(): number {

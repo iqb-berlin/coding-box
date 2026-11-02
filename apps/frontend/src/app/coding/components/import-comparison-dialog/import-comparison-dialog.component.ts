@@ -20,6 +20,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import {
   Subscription, interval, switchMap, takeWhile
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
@@ -79,27 +80,27 @@ export interface ImportComparisonData {
   ],
   template: `
     <div class="import-comparison-dialog">
-      <h2 mat-dialog-title>Import-Vergleichstabelle</h2>
+      <h2 mat-dialog-title>{{ 'coding-management-manual.titles.comparison-table' | translate }}</h2>
 
       <mat-dialog-content class="dialog-content">
         <div class="summary-info">
           <p>{{data.message}}</p>
-          <p>Betroffene Zeilen: {{data.affectedRows.length}}</p>
-          <p>Verarbeitete Zeilen: {{data.processedRows}}</p>
-          <p>Zu aktualisierende Zeilen: {{data.updatedRows}}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.betroffene-zeilen' | translate: { length: (data.affectedRows.length) } }}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.verarbeitete-zeilen' | translate: { processedRows: (data.processedRows) } }}</p>
+          <p>{{ 'ui-text.import-comparison-dialog.zu-aktualisierende-zeilen' | translate: { updatedRows: (data.updatedRows) } }}</p>
           <div class="matched-indicator">
             <mat-icon class="matched-icon">{{data.isPreview ? 'preview' : 'check_circle'}}</mat-icon>
-            <span>{{data.updatedRows}} Zeilen werden {{data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert'}}</span>
+            <span>{{ 'ui-text.import-comparison-dialog.zeilen-werden' | translate: { updatedRows: (data.updatedRows), value2: (data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert') } }}</span>
           </div>
           @if (data.isPreview) {
             <div class="preview-notice">
               <mat-icon class="warning-icon">info</mat-icon>
-              <span>Dies ist eine Vorschau. Die Änderungen wurden noch nicht angewendet.</span>
+              <span>{{ 'ui-text.import-comparison-dialog.dies-ist-eine-vorschau-die-aenderungen-wurden-noch-nicht-angewendet' | translate }}</span>
             </div>
           }
           @if (applyProgress() >= 0) {
             <div class="apply-progress">
-              <p>Import läuft... {{applyProgress()}}%</p>
+              <p>{{ 'ui-text.import-comparison-dialog.import-laeuft' | translate: { value1: (applyProgress()) } }}</p>
               <mat-progress-bar mode="determinate" [value]="applyProgress()"></mat-progress-bar>
             </div>
           }
@@ -108,7 +109,7 @@ export interface ImportComparisonData {
         @if (data.affectedRows.length > 0) {
           <div class="table-container">
             <mat-form-field appearance="outline" class="page-size-field">
-              <mat-label>Einträge pro Seite</mat-label>
+              <mat-label>{{ 'ui-text.import-comparison-dialog.eintraege-pro-seite' | translate }}</mat-label>
               <mat-select [(value)]="pageSize" (selectionChange)="onPageSizeChange()">
                 <mat-option value="50">50</mat-option>
                 <mat-option value="100">100</mat-option>
@@ -119,37 +120,37 @@ export interface ImportComparisonData {
             <table mat-table [dataSource]="dataSource" class="comparison-table">
               <!-- Unit Alias Column -->
               <ng-container matColumnDef="unitAlias">
-                <th mat-header-cell *matHeaderCellDef>Unit-Alias</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.unit-alias' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.unitAlias}}</td>
               </ng-container>
               <!-- Variable ID Column -->
               <ng-container matColumnDef="variableId">
-                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management.filters.variable-id' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.variableId}}</td>
               </ng-container>
               <!-- Person Login Column -->
               <ng-container matColumnDef="personLogin">
-                <th mat-header-cell *matHeaderCellDef>Person-Login</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management.columns.person-login' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.personLogin || '-'}}</td>
               </ng-container>
               <!-- Person Code Column -->
               <ng-container matColumnDef="personCode">
-                <th mat-header-cell *matHeaderCellDef>Person-Code</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management.columns.person-code' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.personCode || '-'}}</td>
               </ng-container>
               <!-- Person Group Column -->
               <ng-container matColumnDef="personGroup">
-                <th mat-header-cell *matHeaderCellDef>Person-Gruppe</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management.columns.person-group' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.personGroup || '-'}}</td>
               </ng-container>
               <!-- Booklet Name Column -->
               <ng-container matColumnDef="bookletName">
-                <th mat-header-cell *matHeaderCellDef>Booklet-Name</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.booklet-name' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.bookletName || '-'}}</td>
               </ng-container>
               <!-- Import Action Column -->
               <ng-container matColumnDef="importAction">
-                <th mat-header-cell *matHeaderCellDef>Import</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'ui-text.test-results.import' | translate }}</th>
                 <td mat-cell *matCellDef="let row">
                   <span class="action-chip"
                     [class.action-update]="row.importAction === 'update' || !row.importAction"
@@ -166,22 +167,22 @@ export interface ImportComparisonData {
               </ng-container>
               <!-- Original Status Column -->
               <ng-container matColumnDef="originalStatus">
-                <th mat-header-cell *matHeaderCellDef>Original Status</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.original-status' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.originalCodedStatus}}</td>
               </ng-container>
               <!-- Original Code Column -->
               <ng-container matColumnDef="originalCode">
-                <th mat-header-cell *matHeaderCellDef>Original Code</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.original-code' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.originalCode ?? '-'}}</td>
               </ng-container>
               <!-- Original Score Column -->
               <ng-container matColumnDef="originalScore">
-                <th mat-header-cell *matHeaderCellDef>Original Score</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.original-score' | translate }}</th>
                 <td mat-cell *matCellDef="let row">{{row.originalScore ?? '-'}}</td>
               </ng-container>
               <!-- Updated Status Column -->
               <ng-container matColumnDef="updatedStatus">
-                <th mat-header-cell *matHeaderCellDef>Aktualisierter Status</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.updated-status' | translate }}</th>
                 <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCodedStatus !== row.originalCodedStatus"
                   [class.matched-row]="row.importAction !== 'skip'">
@@ -190,7 +191,7 @@ export interface ImportComparisonData {
               </ng-container>
               <!-- Updated Code Column -->
               <ng-container matColumnDef="updatedCode">
-                <th mat-header-cell *matHeaderCellDef>Aktualisierter Code</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.updated-code' | translate }}</th>
                 <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCode !== row.originalCode"
                   [class.matched-row]="row.importAction !== 'skip'">
@@ -199,7 +200,7 @@ export interface ImportComparisonData {
               </ng-container>
               <!-- Updated Score Column -->
               <ng-container matColumnDef="updatedScore">
-                <th mat-header-cell *matHeaderCellDef>Aktualisierter Score</th>
+                <th mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.table.headers.updated-score' | translate }}</th>
                 <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedScore !== row.originalScore"
                   [class.matched-row]="row.importAction !== 'skip'">
@@ -224,7 +225,7 @@ export interface ImportComparisonData {
 
         @if (data.errors.length > 0) {
           <div class="error-section">
-            <h3>Fehler und Warnungen</h3>
+            <h3>{{ 'coding-management-manual.import.errors-and-warnings' | translate }}</h3>
             <mat-list>
               @for (error of data.errors; track error) {
                 <mat-list-item>
@@ -240,32 +241,32 @@ export interface ImportComparisonData {
       <mat-dialog-actions align="end">
         <button mat-button (click)="downloadComparisonTable()"
           [disabled]="isLoading() || !data.affectedRows.length"
-          matTooltip="Als Excel herunterladen">
+          [matTooltip]="'coding-management-manual.buttons.download-excel' | translate">
           <mat-icon>download</mat-icon>
-          Herunterladen
+          {{ 'download' | translate }}
         </button>
 
         <!-- Preview mode buttons -->
         @if (data.isPreview) {
-          <button mat-button (click)="closeDialog()" matTooltip="Vorschau abbrechen">
+          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.import-comparison-dialog.vorschau-abbrechen' | translate">
             <mat-icon>cancel</mat-icon>
-            Abbrechen
+            {{ 'cancel' | translate }}
           </button>
           @if (canApplyImport) {
           <button mat-raised-button color="primary" (click)="applyImport()"
             [disabled]="isLoading() || data.updatedRows === 0"
-            matTooltip="Änderungen anwenden">
+            [matTooltip]="'ui-text.import-comparison-dialog.aenderungen-anwenden' | translate">
             <mat-icon>check_circle</mat-icon>
-            Änderungen anwenden
+            {{ 'ui-text.import-comparison-dialog.aenderungen-anwenden' | translate }}
           </button>
           }
         }
 
         <!-- Normal mode button -->
         @if (!data.isPreview) {
-          <button mat-button (click)="closeDialog()" matTooltip="Dialog schließen">
+          <button mat-button (click)="closeDialog()" [matTooltip]="'ui-text.coding-job-result-dialog.dialog-schliessen' | translate">
             <mat-icon>close</mat-icon>
-            Schließen
+            {{ 'deferred-view.close' | translate }}
           </button>
         }
       </mat-dialog-actions>
@@ -467,6 +468,8 @@ export interface ImportComparisonData {
   `]
 })
 export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<ImportComparisonDialogComponent>>(MatDialogRef);
   protected data = inject<ImportComparisonData>(MAT_DIALOG_DATA);
   private translateService = inject(TranslateService);
@@ -524,18 +527,18 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
 
   protected getActionLabel(row: ImportComparisonRow): string {
     if (row.importAction === 'skip') {
-      return row.hasConflict ? 'Konflikt übersprungen' : 'Übersprungen';
+      return row.hasConflict ? this.uiTranslate('ui-text.import-comparison-dialog.konflikt-uebersprungen') : this.uiTranslate('ui-text.import-comparison-dialog.uebersprungen');
     }
 
     if (row.importAction === 'unchanged') {
-      return 'Unverändert';
+      return this.uiTranslate('ui-text.import-comparison-dialog.unveraendert');
     }
 
     if (!row.hasExistingCoding) {
-      return 'Wird importiert';
+      return this.uiTranslate('ui-text.import-comparison-dialog.wird-importiert');
     }
 
-    return this.data.existingCodingMode === 'overwrite' ? 'Wird überschrieben' : 'Wird ergänzt';
+    return this.data.existingCodingMode === 'overwrite' ? this.uiTranslate('ui-text.import-comparison-dialog.wird-ueberschrieben') : this.uiTranslate('ui-text.import-comparison-dialog.wird-ergaenzt');
   }
 
   private updateDataSource(): void {
@@ -554,17 +557,17 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
       const { default: ExcelJS } = await import('exceljs');
       if (this.destroyRef.destroyed) return;
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Import Vergleich');
+      const worksheet = workbook.addWorksheet(this.uiTranslate('ui-text.import-comparison-dialog.import-vergleich'));
 
       const headers = [
         'Unit Alias',
-        'Variable ID',
+        this.uiTranslate('variable-analysis.variable-id-column'),
         'Person Login',
         'Person Code',
         'Person Group',
         'Booklet Name',
-        'Import Aktion',
-        'Import Hinweis',
+        this.uiTranslate('ui-text.import-comparison-dialog.import-aktion'),
+        this.uiTranslate('ui-text.import-comparison-dialog.import-hinweis'),
         'Original Status',
         'Original Code',
         'Original Score',
@@ -669,13 +672,13 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.applyProgress.set(-1);
         if (error.status === 409) {
           this.snackBar.open(
-            'Ein Import läuft bereits für diesen Workspace.',
+            this.uiTranslate('ui-text.import-comparison-dialog.ein-import-laeuft-bereits-fuer-diesen-workspace'),
             '',
             { duration: 5000 }
           );
         } else {
           this.snackBar.open(
-            `Import fehlgeschlagen: ${error.error?.message || error.message || 'Unbekannter Fehler'}`,
+            this.uiTranslate('ui-text.import-comparison-dialog.import-fehlgeschlagen', { value1: error.error?.message || error.message || this.uiTranslate('error.unknown') }),
             '',
             { duration: 5000 }
           );
@@ -698,7 +701,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
           this.isLoading.set(false);
           this.applyProgress.set(-1);
           this.snackBar.open(
-            `Import fehlgeschlagen: ${status.error || 'Unbekannter Fehler'}`,
+            this.uiTranslate('ui-text.import-comparison-dialog.import-fehlgeschlagen', { value1: status.error || this.uiTranslate('error.unknown') }),
             '',
             { duration: 5000 }
           );
@@ -708,7 +711,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
         this.applyProgress.set(-1);
         this.snackBar.open(
-          'Fehler beim Abfragen des Import-Status.',
+          this.uiTranslate('ui-text.import-comparison-dialog.fehler-beim-abfragen-des-import-status'),
           '',
           { duration: 5000 }
         );
@@ -729,7 +732,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         this.applyProgress.set(-1);
         this.notifyImportApplied(workspaceId);
         this.snackBar.open(
-          'Import abgeschlossen, aber Ergebnis konnte nicht geladen werden.',
+          this.uiTranslate('ui-text.import-comparison-dialog.import-abgeschlossen-aber-ergebnis-konnte-nicht-geladen-werden'),
           '',
           { duration: 5000 }
         );

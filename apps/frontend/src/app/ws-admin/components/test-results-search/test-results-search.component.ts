@@ -1,4 +1,6 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
+  computed,
   ChangeDetectorRef, Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -19,6 +21,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   Subject, Subscription, debounceTime, distinctUntilChanged
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import {
   TestResultService,
   QuickSearchResult,
@@ -56,7 +59,7 @@ interface QuickSearchTypeOption {
   templateUrl: './test-results-search.component.html',
   styleUrls: ['./test-results-search.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,
@@ -68,6 +71,8 @@ interface QuickSearchTypeOption {
   ]
 })
 export class TestResultsSearchComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>>(MatDialogRef);
   protected data = inject<{
     title: string;
@@ -92,12 +97,14 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     'response'
   ]);
 
-  protected readonly typeOptions: QuickSearchTypeOption[] = [
-    { kind: 'person', label: 'Personen', icon: 'person' },
-    { kind: 'booklet', label: 'Testhefte', icon: 'menu_book' },
-    { kind: 'unit', label: 'Aufgaben', icon: 'extension' },
-    { kind: 'response', label: 'Antworten', icon: 'question_answer' }
-  ];
+  private readonly localizedTypeOptions = computed<QuickSearchTypeOption[]>(() => ([
+    { kind: 'person', label: this.uiTranslate('process-overview.details.personCount'), icon: 'person' },
+    { kind: 'booklet', label: this.uiTranslate('ui-text.files-validation.testhefte'), icon: 'menu_book' },
+    { kind: 'unit', label: this.uiTranslate('coding.jobs.table.units'), icon: 'extension' },
+    { kind: 'response', label: this.uiTranslate('variable-analysis.total-cases'), icon: 'question_answer' }
+  ]));
+
+  protected get typeOptions(): QuickSearchTypeOption[] { return this.localizedTypeOptions(); }
 
   protected readonly MIN_SEARCH_LENGTH = 2;
   readonly SEARCH_DEBOUNCE_TIME = 350;
@@ -183,7 +190,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     const responseId = item.responseId;
     if (!responseId || !this.appService.selectedWorkspaceId) {
       this.snackBar.open(
-        'Für diesen Treffer ist kein Replay verfügbar.',
+        this.uiTranslate('ui-text.test-results-search.fuer-diesen-treffer-ist-kein-replay-verfuegbar'),
         'Info',
         { duration: 3000 }
       );
@@ -198,16 +205,16 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
             window.open(result.replayUrl, '_blank');
           } else {
             this.snackBar.open(
-              'Replay-URL konnte nicht erzeugt werden',
-              'Fehler',
+              this.uiTranslate('test-results-table.replay-url-error'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
           }
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Laden der Replay-URL',
-            'Fehler',
+            this.uiTranslate('test-results-table.replay-error'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }

@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, AfterViewInit, OnChanges, SimpleChanges, input, output, ChangeDetectionStrategy
 } from '@angular/core';
@@ -22,7 +23,7 @@ export interface ValidationTableColumn {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-data-table',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatTableModule,
     MatPaginatorModule,
     MatCheckboxModule,
@@ -86,7 +87,7 @@ export interface ValidationTableColumn {
         [pageIndex]="currentPage() - 1"
         [disabled]="loading()"
         (page)="onPageChange($event)"
-        aria-label="Seite auswählen"
+        [attr.aria-label]="'journal.select-page' | translate"
       >
       </mat-paginator>
     </div>

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { CodingExecutionService } from './coding-execution.service';
 import { SERVER_URL } from '../../injection-tokens';
 
@@ -11,6 +12,7 @@ describe('CodingExecutionService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         CodingExecutionService,
         provideHttpClient(withInterceptorsFromDi()),

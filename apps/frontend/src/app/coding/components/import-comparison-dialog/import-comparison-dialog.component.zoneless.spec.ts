@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import {
   ImportComparisonData, ImportComparisonDialogComponent
 } from './import-comparison-dialog.component';
@@ -53,7 +54,7 @@ describe('External coding import delayed responses without Zone.js', () => {
       notifyTestResultsChanged: jest.fn()
     };
     await TestBed.configureTestingModule({
-      imports: [ImportComparisonDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, ImportComparisonDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: dialogRef },

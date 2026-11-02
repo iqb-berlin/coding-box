@@ -7,6 +7,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   BehaviorSubject, Observable, Subject, of, throwError
 } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../testing/german-translations';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
@@ -93,7 +94,7 @@ describe('HomeComponent', () => {
     mockAuthService.isLoggedIn.mockReturnValue(true);
 
     await TestBed.configureTestingModule({
-      imports: [HomeComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, HomeComponent, TranslateModule.forRoot()],
       providers: [
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
         { provide: AuthService, useValue: mockAuthService },
@@ -162,14 +163,14 @@ describe('HomeComponent', () => {
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     createComponent();
 
-    expect(fixture.nativeElement.textContent).toContain('home.loading-user-workspaces');
+    expect(fixture.nativeElement.textContent).toContain(translateGerman('home.loading-user-workspaces'));
 
     authDataSubject.next({ ...defaultAuthData, userId: 1 });
     authStatusSubject.next('ready');
     await fixture.whenStable();
 
-    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
-    expect(fixture.nativeElement.textContent).not.toContain('home.loading-user-workspaces');
+    expect(fixture.nativeElement.textContent).toContain(translateGerman('home.no-user-workspaces'));
+    expect(fixture.nativeElement.textContent).not.toContain(translateGerman('home.loading-user-workspaces'));
   });
 
   it('should require reauthentication for expired-session query params when Keycloak is logged out', () => {

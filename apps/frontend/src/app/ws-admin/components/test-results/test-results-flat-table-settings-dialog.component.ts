@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -45,7 +46,7 @@ export type TestResultsFlatTableSettingsDialogResult = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-flat-table-settings-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

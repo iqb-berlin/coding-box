@@ -7,7 +7,7 @@
   >
     <div class="statistics-card">
       <h2 class="section-title section-title-with-action">
-        Kodierungsfortschritt
+        {{ 'ui-text.manual-coding-execution-view.kodierungsfortschritt' | translate }}
         <button
           mat-icon-button
           (click)="showProgressInfo.set(!showProgressInfo())"
@@ -60,10 +60,10 @@
           (click)="showTotalDetails.set(!showTotalDetails())"
           [attr.aria-expanded]="showTotalDetails()"
           aria-controls="total-details"
-          matTooltip="Klicken, um die Zusammensetzung anzuzeigen"
+          [matTooltip]="'ui-text.manual-coding-execution-view.klicken-um-die-zusammensetzung-anzuzeigen' | translate"
         >
           <span class="stat-label"
-            >Effektive Kodierfälle gesamt:
+            >{{ 'ui-text.coding-management-manual.effektive-kodierfaelle-gesamt' | translate }}
             <mat-icon class="stat-label-inline-icon">{{
               showTotalDetails() ? 'expand_less' : 'expand_more'
             }}</mat-icon></span
@@ -73,20 +73,20 @@
           }}</span>
         </button>
         <div class="stat-item">
-          <span class="stat-label">Abgeschlossene Fälle:</span>
+          <span class="stat-label">{{ 'ui-text.manual-coding-execution-view.abgeschlossene-faelle' | translate }}</span>
           <span class="stat-value covered">{{
             codingProgressOverviewValue.completedCases
           }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Offene Arbeitsfälle:</span>
+          <span class="stat-label">{{ 'ui-text.manual-coding-execution-view.offene-arbeitsfaelle' | translate }}</span>
           <span class="stat-value missing">{{
             codingProgressOverviewValue.totalCasesToCode -
               codingProgressOverviewValue.completedCases
           }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Fertigstellungsrate:</span>
+          <span class="stat-label">{{ 'ui-text.manual-coding-execution-view.fertigstellungsrate' | translate }}</span>
           <span class="stat-value percentage"
             >{{
               codingProgressOverviewValue.completionPercentage
@@ -97,13 +97,13 @@
       </div>
       @if (showTotalDetails()) {
         <div id="total-details" class="total-details-container">
-          <h4 class="details-title">Zusammensetzung nach Variablen</h4>
+          <h4 class="details-title">{{ 'ui-text.manual-coding-execution-view.zusammensetzung-nach-variablen' | translate }}</h4>
           <table class="details-table">
             <thead>
               <tr>
-                <th>Unit</th>
-                <th>Variable</th>
-                <th class="numeric-cell">Anzahl Fälle</th>
+                <th>{{ 'export-toast.item-matrix-diagnostics.unit' | translate }}</th>
+                <th>{{ 'export-toast.item-matrix-diagnostics.variable' | translate }}</th>
+                <th class="numeric-cell">{{ 'ui-text.manual-coding-execution-view.anzahl-faelle' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -119,7 +119,7 @@
               @if (codingIncompleteVariables().length === 0) {
                 <tr>
                   <td colspan="3" class="empty-details-cell">
-                    Keine offenen Variablen gefunden.
+                    {{ 'ui-text.manual-coding-execution-view.keine-offenen-variablen-gefunden' | translate }}
                   </td>
                 </tr>
               }

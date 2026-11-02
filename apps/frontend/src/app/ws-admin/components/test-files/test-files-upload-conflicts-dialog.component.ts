@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,7 +19,7 @@ export type TestFilesUploadConflictsDialogResult = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files-upload-conflicts-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

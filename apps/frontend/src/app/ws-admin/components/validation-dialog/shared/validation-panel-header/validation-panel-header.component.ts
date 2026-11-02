@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { injectUiTranslator } from '../../../../../shared/utils/ui-translator';
 
 export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
 
@@ -100,6 +101,8 @@ export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
   `]
 })
 export class ValidationPanelHeaderComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly title = input('');
   readonly status = input<ValidationStatus>('not-run');
   readonly badgeText = input<string>();
@@ -127,13 +130,13 @@ export class ValidationPanelHeaderComponent {
     const errorCount = this.errorCount();
     switch (this.status()) {
       case 'running':
-        return 'Läuft…';
+        return this.uiTranslate('ui-text.validation-panel-header.laeuft');
       case 'failed':
-        return errorCount !== undefined ? `${errorCount} Fehler` : 'Fehler';
+        return errorCount !== undefined ? this.uiTranslate('ui-text.validation-panel-header.fehler', { errorCount: errorCount }) : this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error');
       case 'success':
         return 'OK';
       default:
-        return 'Nicht ausgeführt';
+        return this.uiTranslate('ui-text.validation-panel-header.nicht-ausgefuehrt');
     }
   }
 }

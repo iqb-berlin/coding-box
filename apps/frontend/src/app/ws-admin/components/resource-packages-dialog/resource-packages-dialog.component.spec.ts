@@ -7,6 +7,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { ResourcePackagesDialogComponent, ResourcePackagesDialogData } from './resource-packages-dialog.component';
 import { ResourcePackageService } from '../../../shared/services/response/resource-package.service';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
@@ -48,7 +49,7 @@ describe('ResourcePackagesDialogComponent', () => {
     URL.createObjectURL = jest.fn().mockReturnValue('blob:resource');
     URL.revokeObjectURL = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [ResourcePackagesDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, ResourcePackagesDialogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: dialogRef },
@@ -107,13 +108,13 @@ describe('ResourcePackagesDialogComponent', () => {
     data.workspaceId = workspaceId;
     await create();
     expect(resourcePackageService.getResourcePackages).not.toHaveBeenCalled();
-    expect(snackBar.open).toHaveBeenCalledWith('Workspace ID is required', 'error', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith('Workspace ID is required', translateGerman('error.error_title'), { duration: 3000 });
   });
 
   it('shows loading errors and permits a retry', async () => {
     resourcePackageService.getResourcePackages.mockReturnValueOnce(throwError(() => new Error('Unauthorized')));
     await create();
-    expect(snackBar.open).toHaveBeenCalledWith('Error loading resource packages', 'error', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith('Error loading resource packages', translateGerman('error.error_title'), { duration: 3000 });
     fixture.componentInstance.loadResourcePackages();
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain('Example');
@@ -165,7 +166,7 @@ describe('ResourcePackagesDialogComponent', () => {
     if (result === 'empty') events.next(new HttpResponse({ body: new Blob([]) }));
     else events.error(new Error('Network error'));
     await fixture.whenStable();
-    expect(snackBar.open).toHaveBeenCalledWith('Das Ressourcenpaket konnte nicht heruntergeladen werden.', 'error', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith('Das Ressourcenpaket konnte nicht heruntergeladen werden.', translateGerman('error.error_title'), { duration: 3000 });
     expect(URL.createObjectURL).not.toHaveBeenCalled();
     expect(button('Ressourcenpaket hochladen').disabled).toBe(false);
   });
@@ -223,7 +224,7 @@ describe('ResourcePackagesDialogComponent', () => {
     button('Ressourcenpaket(e) löschen').click();
     await fixture.whenStable();
     expect(dialogRef.close).not.toHaveBeenCalled();
-    expect(snackBar.open).toHaveBeenCalledWith('Ressourcenpakete konnten nicht gelöscht werden.', 'error', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith('Ressourcenpakete konnten nicht gelöscht werden.', translateGerman('error.error_title'), { duration: 3000 });
     expect(button('Ressourcenpaket(e) löschen').disabled).toBe(false);
   });
 

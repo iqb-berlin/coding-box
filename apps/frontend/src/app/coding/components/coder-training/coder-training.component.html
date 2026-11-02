@@ -11,12 +11,12 @@
     <!-- Training Label Section -->
     <div class="section">
       <div class="section-header">
-        <h3 class="section-subtitle">Schulungs-Bezeichnung</h3>
+        <h3 class="section-subtitle">{{ 'ui-text.coder-training.schulungs-bezeichnung' | translate }}</h3>
       </div>
       <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Bezeichnung der Schulung</mat-label>
-        <input matInput formControlName="trainingLabel" placeholder="z.B. Schulung 2024 - Mathematik">
-        <mat-hint>Diese Bezeichnung wird den Kodierern als Projekttitel angezeigt.</mat-hint>
+        <mat-label>{{ 'ui-text.coder-training.bezeichnung-der-schulung' | translate }}</mat-label>
+        <input matInput formControlName="trainingLabel" [placeholder]="'ui-text.coder-training.z-b-schulung-2024-mathematik' | translate">
+        <mat-hint>{{ 'ui-text.coder-training.diese-bezeichnung-wird-den-kodierern-als-projekttitel-angezeigt' | translate }}</mat-hint>
       </mat-form-field>
       @if (hasDuplicateTrainingLabel()) {
         <div class="duplicate-label-warning">
@@ -111,45 +111,45 @@
   <!-- Training Summary -->
   <div class="training-summary">
     <div class="summary-card">
-      <h4>Schulungs-Übersicht</h4>
+      <h4>{{ 'ui-text.coder-training.schulungs-uebersicht' | translate }}</h4>
       <ul>
-        <li>Ausgewählte Kodierer: <strong>{{selectedCoders().size}}</strong></li>
+        <li>{{ 'ui-text.coder-training.ausgewaehlte-kodierer' | translate }} <strong>{{selectedCoders().size}}</strong></li>
         <li>
-          Manuell ausgewählte Variablen: <strong>{{getManualVariablesCount()}}</strong>
+          {{ 'ui-text.coder-training.manuell-ausgewaehlte-variablen' | translate }} <strong>{{getManualVariablesCount()}}</strong>
         </li>
         <li>
-          Variablen aus Variablenbündeln: <strong>{{getBundleVariablesCount()}}</strong>
+          {{ 'ui-text.coder-training.variablen-aus-variablenbuendeln' | translate }} <strong>{{getBundleVariablesCount()}}</strong>
         </li>
         <li>
-          Gesamtvariablen: <strong>{{getSelectedVariablesCount()}}</strong>
+          {{ 'ui-text.coder-training.gesamtvariablen' | translate }} <strong>{{getSelectedVariablesCount()}}</strong>
         </li>
         <li>
-          Ausgewählte Variablenbündel: <strong>{{getSelectedBundleCount()}}</strong>
+          {{ 'ui-text.coder-training.ausgewaehlte-variablenbuendel' | translate }} <strong>{{getSelectedBundleCount()}}</strong>
         </li>
         <li>
-          Gesamtfälle: <strong>{{getTotalSamples()}}</strong>
+          {{ 'ui-text.coder-training.gesamtfaelle' | translate }} <strong>{{getTotalSamples()}}</strong>
         </li>
         <li>
-          Abgeleitete Variablen:
+          {{ 'ui-text.coder-training.abgeleitete-variablen' | translate }}
           <strong>{{getSelectedDerivedVariablesCount()}}</strong>
         </li>
         <li>
-          DERIVE_ERROR einbezogen:
+          {{ 'ui-text.coder-training.derive-error-einbezogen' | translate }}
           <strong>{{getSelectedDeriveErrorOptInCount()}}</strong>
         </li>
         <li>
-          Fallauswahl:
+          {{ 'ui-text.coder-training.fallauswahl' | translate }}
           <strong>{{getCaseSelectionModeLabel(trainingForm.get('caseSelectionMode')?.value)}}</strong>
         </li>
         <li>
-          Reihenfolge:
+          {{ 'ui-text.coder-training.reihenfolge' | translate }}
           <strong>{{getCaseOrderingModeLabel(trainingForm.get('caseOrderingMode')?.value)}}</strong>
         </li>
       </ul>
       @if (hasBundleOrderingOverrides()) {
         <div class="summary-note">
           <mat-icon>swap_vert</mat-icon>
-          <span>Abweichende Bündel-Reihenfolge: {{getBundleOrderingDetails()}}</span>
+          <span>{{ 'ui-text.coder-training.abweichende-buendel-reihenfolge' | translate: { value1: (getBundleOrderingDetails()) } }}</span>
         </div>
       }
       @if (!canStartTraining()) {
@@ -184,7 +184,7 @@
 
     <button mat-button (click)="onClose()" [disabled]="isLoading()" class="cancel-button">
       <mat-icon>cancel</mat-icon>
-      Abbrechen
+      {{ 'cancel' | translate }}
     </button>
   </div>
 </div>

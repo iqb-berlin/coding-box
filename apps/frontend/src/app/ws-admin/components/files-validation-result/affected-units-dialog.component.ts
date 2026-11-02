@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,7 +18,7 @@ export type AffectedUnitsDialogResult = {
   templateUrl: './affected-units-dialog.component.html',
   styleUrls: ['./affected-units-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

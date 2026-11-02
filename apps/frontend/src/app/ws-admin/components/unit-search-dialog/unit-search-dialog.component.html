@@ -3,17 +3,17 @@
   <div mat-dialog-content>
     <!-- Search Mode Toggle -->
     <div class="search-mode-toggle">
-      <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">Aufgaben suchen</button>
-      <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">Antworten suchen</button>
-      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">Booklets suchen</button>
+      <button mat-button [class.active]="searchMode === 'unit'" (click)="setSearchMode('unit')">{{ 'test-results-search.search-units' | translate }}</button>
+      <button mat-button [class.active]="searchMode === 'response'" (click)="setSearchMode('response')">{{ 'test-results-search.search-responses' | translate }}</button>
+      <button mat-button [class.active]="searchMode === 'booklet'" (click)="setSearchMode('booklet')">{{ 'ui-text.unit-search-dialog.booklets-suchen' | translate }}</button>
     </div>
 
     <!-- Unit Search -->
     @if (searchMode === 'unit') {
       <div class="search-container">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Aufgabe suchen</mat-label>
-          <input matInput [(ngModel)]="searchText" (ngModelChange)="onUnitSearchChange()" placeholder="Geben Sie den Namen der Aufgabe ein...">
+          <mat-label>{{ 'test-results-search.search-field.unit-name' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchText" (ngModelChange)="onUnitSearchChange()" [placeholder]="'test-results-search.search-field.unit-name-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -23,44 +23,44 @@
     @if (searchMode === 'response') {
       <div class="search-container response-search">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Antwort-Wert</mat-label>
-          <input matInput [(ngModel)]="searchValue" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Antwort-Wert...">
+          <mat-label>{{ 'test-results-search.search-field.response-value' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchValue" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.response-value-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Variablen-ID</mat-label>
-          <input matInput [(ngModel)]="searchVariableId" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Variablen-ID...">
+          <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchVariableId" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.variable-id-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Aufgabe</mat-label>
-          <input matInput [(ngModel)]="searchUnitName" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Aufgabe...">
+          <mat-label>{{ 'coding.trainings.compare.unit' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchUnitName" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.task-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Status</mat-label>
-          <input matInput [(ngModel)]="searchStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Status...">
+          <mat-label>{{ 'process-overview.filters.status' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchStatus" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.status-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Kodier Status</mat-label>
-          <input matInput [(ngModel)]="searchCodedStatus" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Kodier Status...">
+          <mat-label>{{ 'test-results-search.search-field.coding-status' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchCodedStatus" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.coding-status-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Gruppe</mat-label>
-          <input matInput [(ngModel)]="searchGroup" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Gruppe...">
+          <mat-label>{{ 'test-results-search.search-field.group' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchGroup" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.group-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Code</mat-label>
-          <input matInput [(ngModel)]="searchCode" (ngModelChange)="onResponseSearchChange()" placeholder="Suche nach Code...">
+          <mat-label>{{ 'ws-admin.export-options.matrix-value-code' | translate }}</mat-label>
+          <input matInput [(ngModel)]="searchCode" (ngModelChange)="onResponseSearchChange()" [placeholder]="'test-results-search.search-field.code-placeholder' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -70,8 +70,8 @@
     @if (searchMode === 'booklet') {
       <div class="search-container">
         <mat-form-field appearance="outline" class="search-field">
-          <mat-label>Booklet suchen</mat-label>
-          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" placeholder="Geben Sie den Namen des Booklets ein...">
+          <mat-label>{{ 'ui-text.unit-search-dialog.booklet-suchen' | translate }}</mat-label>
+          <input matInput [(ngModel)]="bookletSearchText" (ngModelChange)="onBookletSearchChange()" [placeholder]="'ui-text.unit-search-dialog.geben-sie-den-namen-des-booklets-ein' | translate">
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
       </div>
@@ -81,12 +81,12 @@
       @if (isLoading()) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
-          <p>Suche läuft...</p>
+          <p>{{ 'test-results-search.loading' | translate }}</p>
         </div>
       } @else if (searchMode === 'unit' && unitSearchResults().length === 0 && searchText.trim().length > 2) {
         <div class="no-results">
           <mat-icon>search_off</mat-icon>
-          <p>Keine Ergebnisse gefunden für "{{ searchText }}"</p>
+          <p>{{ 'test-results-search.no-results.units' | translate: { searchText: (searchText) } }}</p>
         </div>
       } @else if (searchMode === 'response' && responseSearchResults().length === 0 &&
                  (searchValue.trim() !== '' || searchVariableId.trim() !== '' || searchUnitName.trim() !== '' ||
@@ -94,17 +94,17 @@
                   searchCode.trim() !== '')) {
         <div class="no-results">
           <mat-icon>search_off</mat-icon>
-          <p>Keine Ergebnisse gefunden für die angegebenen Suchkriterien</p>
+          <p>{{ 'test-results-search.no-results.responses' | translate }}</p>
         </div>
       } @else if (searchMode === 'booklet' && bookletSearchResults().length === 0 && bookletSearchText.trim().length > 2) {
         <div class="no-results">
           <mat-icon>search_off</mat-icon>
-          <p>Keine Ergebnisse gefunden für "{{ bookletSearchText }}"</p>
+          <p>{{ 'test-results-search.no-results.booklets' | translate: { bookletSearchText: (bookletSearchText) } }}</p>
         </div>
       } @else if (searchMode === 'unit' && searchText.trim().length <= 2) {
         <div class="search-hint">
           <mat-icon>info</mat-icon>
-          <p>Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten</p>
+          <p>{{ 'test-results-search.search-hint.units' | translate }}</p>
         </div>
       } @else if (searchMode === 'response' &&
                  searchValue.trim() === '' &&
@@ -116,12 +116,12 @@
                  searchCode.trim() === '') {
         <div class="search-hint">
           <mat-icon>info</mat-icon>
-          <p>Geben Sie Zeichen in eines der Suchfelder ein, um die Suche zu starten</p>
+          <p>{{ 'test-results-search.search-hint.responses' | translate }}</p>
         </div>
       } @else if (searchMode === 'booklet' && bookletSearchText.trim().length <= 2) {
         <div class="search-hint">
           <mat-icon>info</mat-icon>
-          <p>Geben Sie mindestens 3 Zeichen ein, um die Suche zu starten</p>
+          <p>{{ 'test-results-search.search-hint.units' | translate }}</p>
         </div>
       } @else {
         <!-- Unit Search Results -->
@@ -131,50 +131,50 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllUnits()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ unitSearchResults().length }} gefilterten Aufgaben löschen
+                {{ 'ui-text.unit-search-dialog.alle-gefilterten-aufgaben-loeschen' | translate: { value1: (unitSearchResults().length) } }}
               </button>
             </div>
           }
           <table mat-table [dataSource]="unitSearchResults()" class="results-table">
             <!-- Unit Name Column -->
             <ng-container matColumnDef="unitName">
-              <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.unit' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.unitName }}</td>
             </ng-container>
 
             <!-- Unit Alias Column -->
             <ng-container matColumnDef="unitAlias">
-              <th mat-header-cell *matHeaderCellDef>Alias</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.alias' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.unitAlias || '-' }}</td>
             </ng-container>
 
             <!-- Booklet Name Column -->
             <ng-container matColumnDef="bookletName">
-              <th mat-header-cell *matHeaderCellDef>Booklet</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'export-toast.item-matrix-diagnostics.booklet' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.bookletName }}</td>
             </ng-container>
 
             <!-- Person Login Column -->
             <ng-container matColumnDef="personLogin">
-              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.login' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.personLogin }}</td>
             </ng-container>
 
             <!-- Person Code Column -->
             <ng-container matColumnDef="personCode">
-              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'ws-admin.export-options.matrix-value-code' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.personCode }}</td>
             </ng-container>
 
             <!-- Person Group Column -->
             <ng-container matColumnDef="personGroup">
-              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.search-field.group' | translate }}</th>
               <td mat-cell *matCellDef="let unit">{{ unit.personGroup }}</td>
             </ng-container>
 
             <!-- Tags Column -->
             <ng-container matColumnDef="tags">
-              <th mat-header-cell *matHeaderCellDef>Tags</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.tags' | translate }}</th>
               <td mat-cell *matCellDef="let unit">
                 <div class="tags-container">
                   @for (tag of unit.tags; track tag) {
@@ -183,7 +183,7 @@
                     </span>
                   }
                   @if (unit.tags.length === 0) {
-                    <span class="no-tags">Keine Tags</span>
+                    <span class="no-tags">{{ 'test-results-search.no-data.no-tags' | translate }}</span>
                   }
                 </div>
               </td>
@@ -191,7 +191,7 @@
 
             <!-- Response Value Column -->
             <ng-container matColumnDef="responseValue">
-              <th mat-header-cell *matHeaderCellDef>Antwort</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.answer' | translate }}</th>
               <td mat-cell *matCellDef="let unit">
                 @if (unit.responses && unit.responses.length > 0) {
                   <div class="response-value">
@@ -202,23 +202,23 @@
                       </div>
                     }
                     @if (unit.responses.length > 1) {
-                      <span class="more-responses">+{{ unit.responses.length - 1 }} weitere</span>
+                      <span class="more-responses">{{ 'ui-text.job-bundle-selection.weitere' | translate: { value1: (unit.responses.length - 1) } }}</span>
                     }
                   </div>
                 } @else {
-                  <span class="no-response">Keine Antwort verfügbar</span>
+                  <span class="no-response">{{ 'test-results-search.no-data.no-answer' | translate }}</span>
                 }
               </td>
             </ng-container>
 
             <!-- Actions Column -->
             <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</th>
               <td mat-cell *matCellDef="let unit">
-                <button mat-icon-button color="primary" (click)="replayUnit(unit)" matTooltip="Replay Unit" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
+                <button mat-icon-button color="primary" (click)="replayUnit(unit)" [matTooltip]="'test-results-search.buttons.replay-unit' | translate" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteUnit(unit)" matTooltip="Unit löschen" [attr.aria-label]="'test-results-search.buttons.delete-unit' | translate">
+                <button mat-icon-button color="warn" (click)="deleteUnit(unit)" [matTooltip]="'test-results-search.buttons.delete-unit' | translate" [attr.aria-label]="'test-results-search.buttons.delete-unit' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -236,20 +236,20 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllResponses()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ responseSearchResults().length }} gefilterten Antworten löschen
+                {{ 'ui-text.unit-search-dialog.alle-gefilterten-antworten-loeschen' | translate: { value1: (responseSearchResults().length) } }}
               </button>
             </div>
           }
           <table mat-table [dataSource]="responseSearchResults()" class="results-table">
             <!-- Variable ID Column -->
             <ng-container matColumnDef="variableId">
-              <th mat-header-cell *matHeaderCellDef>Variable ID</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.variable-id-column' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.variableId }}</td>
             </ng-container>
 
             <!-- Value Column -->
             <ng-container matColumnDef="value">
-              <th mat-header-cell *matHeaderCellDef>Wert</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.value' | translate }}</th>
               <td mat-cell *matCellDef="let response">
                 <span class="response-text">{{ response.value | slice:0:50 }}{{ response.value.length > 50 ? '...' : '' }}</span>
               </td>
@@ -257,60 +257,60 @@
 
             <!-- Status Column -->
             <ng-container matColumnDef="status">
-              <th mat-header-cell *matHeaderCellDef>Status</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.filters.status' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.status }}</td>
             </ng-container>
 
             <!-- Coded Status Column -->
             <ng-container matColumnDef="codedStatus">
-              <th mat-header-cell *matHeaderCellDef>Kodier Status</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.search-field.coding-status' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.codedStatus }}</td>
             </ng-container>
 
             <!-- Unit Name Column -->
             <ng-container matColumnDef="unitName">
-              <th mat-header-cell *matHeaderCellDef>Aufgabe</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.unit' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.unitName }}</td>
             </ng-container>
 
             <!-- Unit Alias Column -->
             <ng-container matColumnDef="unitAlias">
-              <th mat-header-cell *matHeaderCellDef>Alias</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.alias' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.unitAlias || '-' }}</td>
             </ng-container>
 
             <!-- Booklet Name Column -->
             <ng-container matColumnDef="bookletName">
-              <th mat-header-cell *matHeaderCellDef>Booklet</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'export-toast.item-matrix-diagnostics.booklet' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.bookletName }}</td>
             </ng-container>
 
             <!-- Person Login Column -->
             <ng-container matColumnDef="personLogin">
-              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.login' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.personLogin }}</td>
             </ng-container>
 
             <!-- Person Code Column -->
             <ng-container matColumnDef="personCode">
-              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'ws-admin.export-options.matrix-value-code' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.personCode }}</td>
             </ng-container>
 
             <!-- Person Group Column -->
             <ng-container matColumnDef="personGroup">
-              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.search-field.group' | translate }}</th>
               <td mat-cell *matCellDef="let response">{{ response.personGroup }}</td>
             </ng-container>
 
             <!-- Actions Column -->
             <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</th>
               <td mat-cell *matCellDef="let response">
-                <button mat-icon-button color="primary" (click)="replayUnit(response)" matTooltip="Replay Unit" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
+                <button mat-icon-button color="primary" (click)="replayUnit(response)" [matTooltip]="'test-results-search.buttons.replay-unit' | translate" [attr.aria-label]="'test-results-search.buttons.replay-unit' | translate">
                   <mat-icon>play_arrow</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteResponse(response)" matTooltip="Antwort löschen" [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
+                <button mat-icon-button color="warn" (click)="deleteResponse(response)" [matTooltip]="'test-results-search.buttons.delete-answer' | translate" [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -328,49 +328,49 @@
             <div class="delete-all-container">
               <button mat-stroked-button (click)="deleteAllBooklets()">
                 <mat-icon>delete_sweep</mat-icon>
-                Alle {{ bookletSearchResults().length }} gefilterten Booklets löschen
+                {{ 'ui-text.unit-search-dialog.alle-gefilterten-booklets-loeschen' | translate: { value1: (bookletSearchResults().length) } }}
               </button>
             </div>
           }
           <table mat-table [dataSource]="bookletSearchResults()" class="results-table">
             <!-- Booklet Name Column -->
             <ng-container matColumnDef="bookletName">
-              <th mat-header-cell *matHeaderCellDef>Booklet Name</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'ui-text.booklet-search-dialog.booklet-name' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">{{ booklet.bookletName }}</td>
             </ng-container>
 
             <!-- Person Code Column -->
             <ng-container matColumnDef="personCode">
-              <th mat-header-cell *matHeaderCellDef>Code</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'ws-admin.export-options.matrix-value-code' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">{{ booklet.personCode }}</td>
             </ng-container>
 
             <!-- Person Login Column -->
             <ng-container matColumnDef="personLogin">
-              <th mat-header-cell *matHeaderCellDef>Login</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.table-headers.login' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">{{ booklet.personLogin }}</td>
             </ng-container>
 
             <!-- Person Group Column -->
             <ng-container matColumnDef="personGroup">
-              <th mat-header-cell *matHeaderCellDef>Gruppe</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'test-results-search.search-field.group' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">{{ booklet.personGroup }}</td>
             </ng-container>
 
             <!-- Unit Count Column -->
             <ng-container matColumnDef="unitCount">
-              <th mat-header-cell *matHeaderCellDef>Units</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.details.unitCount' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">{{ booklet.units.length }}</td>
             </ng-container>
 
             <!-- Actions Column -->
             <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+              <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</th>
               <td mat-cell *matCellDef="let booklet">
-                <button mat-icon-button color="primary" (click)="viewBookletInfo(booklet)" matTooltip="Booklet Info anzeigen" [attr.aria-label]="'test-results-search.booklet-info' | translate">
+                <button mat-icon-button color="primary" (click)="viewBookletInfo(booklet)" [matTooltip]="'test-results-search.booklet-info' | translate" [attr.aria-label]="'test-results-search.booklet-info' | translate">
                   <mat-icon>info</mat-icon>
                 </button>
-                <button mat-icon-button color="warn" (click)="deleteBooklet(booklet)" matTooltip="Booklet löschen" [attr.aria-label]="'test-results-search.confirm-dialogs.delete-booklet.title' | translate">
+                <button mat-icon-button color="warn" (click)="deleteBooklet(booklet)" [matTooltip]="'test-results-search.confirm-dialogs.delete-booklet.title' | translate" [attr.aria-label]="'test-results-search.confirm-dialogs.delete-booklet.title' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
               </td>
@@ -388,12 +388,12 @@
           [pageIndex]="pageIndex"
           [pageSizeOptions]="pageSizeOptions"
           (page)="onPageChange($event)"
-          aria-label="Seite wählen">
+          [attr.aria-label]="'test-results-search.paginator' | translate">
         </mat-paginator>
       }
     </div>
   </div>
   <div mat-dialog-actions align="end">
-    <button mat-button (click)="close()">Schließen</button>
+    <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
   </div>
 </div>

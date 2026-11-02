@@ -1,5 +1,7 @@
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { Subscription, finalize, Subject } from 'rxjs';
 import {
+  computed,
   ChangeDetectorRef, Component, inject, OnInit, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -20,8 +22,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
 import { debounceTime, takeUntil } from 'rxjs/operators';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -41,24 +43,23 @@ export interface VariableAnalysisDialogData {
 
 function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
   const paginatorIntl = new MatPaginatorIntl();
-
-  paginatorIntl.itemsPerPageLabel = 'Zeilen pro Seite:';
-  paginatorIntl.nextPageLabel = 'Nächste Seite';
-  paginatorIntl.previousPageLabel = 'Vorherige Seite';
-  paginatorIntl.firstPageLabel = 'Erste Seite';
-  paginatorIntl.lastPageLabel = 'Letzte Seite';
-
-  paginatorIntl.getRangeLabel = (page: number, pageSize: number, length: number): string => {
-    if (length === 0 || pageSize === 0) {
-      return '0 - 0 von 0 Verteilungszeilen';
-    }
-
-    const startIndex = page * pageSize + 1;
-    const endIndex = Math.min((page + 1) * pageSize, length);
-
-    return `${startIndex} - ${endIndex} von ${length} Verteilungszeilen`;
+  const translate = injectUiTranslator();
+  const service = inject(TranslateService);
+  const updateLabels = () => {
+    paginatorIntl.itemsPerPageLabel = translate('variable-analysis.distribution-rows-per-page');
+    paginatorIntl.nextPageLabel = translate('paginator.nextPageLabel');
+    paginatorIntl.previousPageLabel = translate('paginator.previousPageLabel');
+    paginatorIntl.firstPageLabel = translate('paginator.firstPageLabel');
+    paginatorIntl.lastPageLabel = translate('paginator.lastPageLabel');
+    paginatorIntl.changes.next();
   };
-
+  service.onLangChange.pipe(takeUntilDestroyed()).subscribe(updateLabels);
+  updateLabels();
+  paginatorIntl.getRangeLabel = (page, pageSize, length) => translate('variable-analysis.distribution-row-range', {
+    startIndex: length === 0 || pageSize === 0 ? 0 : page * pageSize + 1,
+    endIndex: length === 0 || pageSize === 0 ? 0 : Math.min((page + 1) * pageSize, length),
+    length: length === 0 || pageSize === 0 ? 0 : length
+  });
   return paginatorIntl;
 }
 
@@ -89,6 +90,8 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<VariableAnalysisDialogComponent>>(MatDialogRef);
   data = inject<VariableAnalysisDialogData>(MAT_DIALOG_DATA);
   private statisticsService = inject(CodingStatisticsService);
@@ -102,17 +105,17 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  protected readonly distributionRowsTooltip =
-    'Eine Verteilungszeile entspricht einer Kombination aus Aufgaben-ID, Variablen-ID und Code.';
+  private readonly localizedDistributionRowsTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.eine-verteilungszeile-entspricht-einer-kombination-aus-aufgaben-id-variablen-id-und-code')));
+  protected get distributionRowsTooltip(): string { return this.localizedDistributionRowsTooltip(); }
 
-  protected readonly occurrenceCountTooltip =
-    'Wie oft dieser konkrete Code bei dieser Aufgabe und Variable vorkommt.';
+  private readonly localizedOccurrenceCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.wie-oft-dieser-konkrete-code-bei-dieser-aufgabe-und-variable-vorkommt')));
+  protected get occurrenceCountTooltip(): string { return this.localizedOccurrenceCountTooltip(); }
 
-  protected readonly totalCountTooltip =
-    'Alle Antworten zu dieser Aufgabe und Variable, unabhängig vom Code.';
+  private readonly localizedTotalCountTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.alle-antworten-zu-dieser-aufgabe-und-variable-unabhaengig-vom-code')));
+  protected get totalCountTooltip(): string { return this.localizedTotalCountTooltip(); }
 
-  protected readonly relativeOccurrenceTooltip =
-    'Vorkommen dieses Codes geteilt durch die Antworten gesamt zu dieser Aufgabe und Variable.';
+  private readonly localizedRelativeOccurrenceTooltip = computed<string>(() => (this.uiTranslate('ui-text.variable-analysis-dialog.vorkommen-dieses-codes-geteilt-durch-die-antworten-gesamt-zu-dieser-aufgabe-und-variable')));
+  protected get relativeOccurrenceTooltip(): string { return this.localizedRelativeOccurrenceTooltip(); }
 
   variableAnalysisData: VariableAnalysisItemDto[] = [];
   protected variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
@@ -204,7 +207,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
         error: () => {
           this.isLoadingVariableAnalysis = false;
           this.changeDetectorRef.markForCheck();
-          this.snackBar.open('Fehler beim Abrufen der Code-/Score-Verteilung', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.variable-analysis-dialog.fehler-beim-abrufen-der-code-score-verteilung'), this.uiTranslate('deferred-view.close'), {
             duration: 5000,
             panelClass: ['error-snackbar']
           });

@@ -1,8 +1,8 @@
-<h2 mat-dialog-title>ACP aus Content Pool importieren</h2>
+<h2 mat-dialog-title>{{ 'ui-text.content-pool-import-dialog.acp-aus-content-pool-importieren' | translate }}</h2>
 
 <mat-dialog-content class="dialog-content">
   <p class="info-text">
-    Content-Pool: <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
+    {{ 'ui-text.content-pool-import-dialog.content-pool' | translate }} <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
   </p>
 
   <div class="load-acps-actions">
@@ -21,7 +21,7 @@
 
   @if (hasLoadedAcps()) {
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>ACP auswählen</mat-label>
+      <mat-label>{{ 'ui-text.content-pool-import-dialog.acp-auswaehlen' | translate }}</mat-label>
       <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting()">
         @for (acp of acps(); track acp.id) {
           <mat-option [value]="acp.id">
@@ -53,7 +53,7 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="cancel()" [disabled]="isImporting()">Abbrechen</button>
+  <button mat-button (click)="cancel()" [disabled]="isImporting()">{{ 'cancel' | translate }}</button>
   <button
     mat-raised-button
     color="primary"

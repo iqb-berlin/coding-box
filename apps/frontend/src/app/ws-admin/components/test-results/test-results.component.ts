@@ -54,7 +54,11 @@ import {
   Subject, Subscription
 } from 'rxjs';
 import {
-  Booklet, BookletLog, TestResultPerson as P, Response, Unit, UnitResult
+  calculateBookletProcessingTime, isBookletComplete, hasGeogebraResponse, responseStatusColor, hasShortBookletProcessingTime
+} from './booklet-result-status';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
+import {
+  Booklet, TestResultPerson as P, Response, Unit
 } from './test-results.models';
 import { TestResultsDetailsFacade } from './test-results-details.facade';
 import { TestResultsDeletionFacade } from './test-results-deletion.facade';
@@ -178,6 +182,8 @@ import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-reque
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly statistics = inject(TestResultsStatisticsFacade);
   private readonly summary = inject(TestResultsSummaryFacade);
   private readonly details = inject(TestResultsDetailsFacade);
@@ -355,7 +361,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
         );
         if (myBatch) {
-          this.imports.updateUploadProgress(true, `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`);
+          this.imports.updateUploadProgress(true, this.uiTranslate('ui-text.test-results.verarbeite-dateien', { progress: myBatch.progress, completedCount: myBatch.completedCount, totalJobs: myBatch.totalJobs }));
           this.isLoading.set(true);
         } else {
           this.imports.updateUploadProgress(false);
@@ -543,19 +549,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   replayBooklet(booklet: Booklet) {
     if (!booklet || !booklet.name) {
-      this.snackBar.open('Ungültiges Testheft', 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.ungueltiges-testheft'), 'Info', { duration: 3000 });
       return;
     }
 
     const testPerson = this.buildReplayTestPerson(booklet.name);
     if (!testPerson) {
-      this.snackBar.open('Keine gültige Testperson ausgewählt', 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-gueltige-testperson-ausgewaehlt'), 'Info', {
         duration: 3000
       });
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open('Lade Testheft...', '', {
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.lade-testheft'), '', {
       duration: 3000
     });
 
@@ -574,7 +580,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             !bookletReplay.units ||
             bookletReplay.units.length === 0
           ) {
-            this.snackBar.open('Keine Units im Testheft vorhanden', 'Info', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-units-im-testheft-vorhanden'), 'Info', {
               duration: 3000
             });
             return;
@@ -604,7 +610,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             bookletReplay.skippedUnits > 0
           ) {
             this.snackBar.open(
-              `${bookletReplay.skippedUnits} nicht replaybare Booklet-Units wurden übersprungen.`,
+              this.uiTranslate('ui-text.test-results.nicht-replaybare-booklet-units-wurden-uebersprungen', { skippedUnits: bookletReplay.skippedUnits }),
               'Info',
               { duration: 5000 }
             );
@@ -612,7 +618,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           loadingSnackBar.dismiss();
-          this.snackBar.open('Fehler beim Laden des Testhefts', 'Fehler', {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results.fehler-beim-laden-des-testhefts'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 3000
           });
         }
@@ -644,7 +650,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       !this.appService.selectedWorkspaceId
     ) {
       this.snackBar.open(
-        'Keine gültige Unit oder Testperson ausgewählt',
+        this.uiTranslate('ui-text.test-results.keine-gueltige-unit-oder-testperson-ausgewaehlt'),
         'Info',
         { duration: 3000 }
       );
@@ -652,7 +658,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     if (!this.responses() || this.responses().length === 0) {
-      this.snackBar.open('Keine Antworten für diese Unit vorhanden', 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-antworten-fuer-diese-unit-vorhanden'), 'Info', {
         duration: 3000
       });
       return;
@@ -668,16 +674,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             window.open(result.replayUrl, '_blank');
           } else {
             this.snackBar.open(
-              'Replay-URL konnte nicht erzeugt werden',
-              'Fehler',
+              this.uiTranslate('test-results-table.replay-url-error'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
           }
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Laden der Replay-URL',
-            'Fehler',
+            this.uiTranslate('test-results-table.replay-error'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }
@@ -694,7 +700,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected openBookletLogsDialog(booklet: Booklet) {
     if (!booklet.logs || booklet.logs.length === 0) {
-      this.snackBar.open('Keine Logs für dieses Testheft vorhanden', 'Info', {
+      this.snackBar.open(this.uiTranslate('test-results-table.no-booklet-logs'), 'Info', {
         duration: 3000
       });
       return;
@@ -714,7 +720,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !this.logs() || this.logs().length === 0) {
-      this.snackBar.open('Keine Logs für diese Unit vorhanden', 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-logs-fuer-diese-unit-vorhanden'), 'Info', {
         duration: 3000
       });
       return;
@@ -724,9 +730,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '700px',
       data: {
         logs: this.logs(),
-        title: `Logs für Unit: ${
-          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
-        }`
+        title: this.uiTranslate('ui-text.test-results.logs-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
   }
@@ -735,7 +739,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
-      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -744,9 +748,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: selectedUnitSnapshot.id as number,
         tags: this.unitTags(),
-        title: `Tags für Unit: ${
-          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
-        }`
+        title: this.uiTranslate('ui-text.test-results.tags-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
 
@@ -766,7 +768,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const selectedUnitSnapshot = this.selectedUnit();
 
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.id) {
-      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -775,9 +777,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: selectedUnitSnapshot.id as number,
         notes: this.unitNotes(),
-        title: `Notizen für Unit: ${
-          selectedUnitSnapshot.alias || 'Unbenannte Einheit'
-        }`
+        title: this.uiTranslate('ui-text.test-results.notizen-fuer-unit', { value1: selectedUnitSnapshot.alias || this.uiTranslate('test-results-page.deletion.unnamed-unit') })
       }
     });
 
@@ -809,102 +809,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   protected setSelectedBooklet(booklet: Booklet) { return this.details.setSelectedBooklet(booklet); }
 
-  calculateBookletProcessingTime(booklet: Booklet): number | null {
-    if (
-      !booklet.logs ||
-      !Array.isArray(booklet.logs) ||
-      booklet.logs.length === 0
-    ) {
-      return null;
-    }
+  calculateBookletProcessingTime(booklet: Booklet): number | null { return calculateBookletProcessingTime(booklet); }
 
-    const pollingLog = booklet.logs.find(
-      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING'
-    );
-    const terminatedLog = booklet.logs.find(
-      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED'
-    );
-    if (pollingLog && terminatedLog) {
-      const pollingTime = Number(pollingLog.ts);
-      const terminatedTime = Number(terminatedLog.ts);
+  protected isBookletComplete(booklet: Booklet): boolean { return isBookletComplete(booklet); }
 
-      if (!Number.isNaN(pollingTime) && !Number.isNaN(terminatedTime)) {
-        return terminatedTime - pollingTime;
-      }
-    }
+  protected hasShortProcessingTime(booklet: Booklet): boolean { return hasShortBookletProcessingTime(booklet, this.SHORT_PROCESSING_TIME_THRESHOLD_MS); }
 
-    return null;
-  }
+  protected hasGeogebraResponse(unit: Unit): boolean { return hasGeogebraResponse(unit); }
 
-  protected isBookletComplete(booklet: Booklet): boolean {
-    if (
-      !booklet.logs ||
-      !Array.isArray(booklet.logs) ||
-      booklet.logs.length === 0
-    ) {
-      return true;
-    }
-
-    if (
-      !booklet.units ||
-      !Array.isArray(booklet.units) ||
-      booklet.units.length === 0
-    ) {
-      return false;
-    }
-    const unitIdLogs = booklet.logs.filter(
-      (log: BookletLog) => log.key === 'CURRENT_UNIT_ID'
-    );
-    const unitAliases = booklet.units
-      .map((unit: Unit) => unit.alias)
-      .filter((alias: string | null) => alias !== null) as string[];
-
-    const allUnitsVisited = unitAliases.every((alias: string) => unitIdLogs.some((log: BookletLog) => log.parameter === alias)
-    );
-
-    return allUnitsVisited && unitAliases.length > 0;
-  }
-
-  protected hasShortProcessingTime(booklet: Booklet): boolean {
-    if (
-      !booklet.logs ||
-      !Array.isArray(booklet.logs) ||
-      booklet.logs.length === 0
-    ) {
-      return false;
-    }
-
-    const processingTime = this.calculateBookletProcessingTime(booklet);
-    return (
-      processingTime === null ||
-      processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS
-    );
-  }
-
-  protected hasGeogebraResponse(unit: Unit): boolean {
-    if (!unit || !unit.results || !Array.isArray(unit.results)) {
-      return false;
-    }
-
-    return unit.results.some(
-      (response: UnitResult) => response.value && response.value.startsWith('UEsD')
-    );
-  }
-
-  protected getColor(status: string): string {
-    switch (status) {
-      case 'VALUE_CHANGED':
-        return 'green';
-      case 'NOT_REACHED':
-        return 'blue';
-      case 'CODING_INCOMPLETE':
-        return 'red';
-      case 'CODING_COMPLETE':
-        return 'violet';
-      default:
-        return 'lightgrey';
-    }
-  }
+  protected getColor(status: string): string { return responseStatusColor(status); }
 
   getCurrentSearchText(): string {
     return this.personSearchText();
@@ -1016,7 +929,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     const loadingSnackBar = this.snackBar.open(
-      'Lade Log-Auffälligkeiten...',
+      this.uiTranslate('ui-text.test-results.lade-log-auffaelligkeiten'),
       '',
       { duration: undefined }
     );
@@ -1027,7 +940,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           loadingSnackBar.dismiss();
           if (!details.data.length) {
             this.snackBar.open(
-              'Keine Log-Auffälligkeiten gefunden.',
+              this.uiTranslate('ui-text.test-results.keine-log-auffaelligkeiten-gefunden'),
               'OK',
               { duration: 4000 }
             );
@@ -1062,7 +975,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Log-Auffälligkeiten konnten nicht geladen werden.',
+            this.uiTranslate('ui-text.test-results.log-auffaelligkeiten-konnten-nicht-geladen-werden'),
             'OK',
             { duration: 4000 }
           );
@@ -1286,7 +1199,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     if (groups.length === 0) {
-      this.snackBar.open('Keine Testgruppe ausgewählt.', 'Info', {
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-testgruppe-ausgewaehlt'), 'Info', {
         duration: 3000
       });
       return;
@@ -1333,7 +1246,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
-        title: 'Testergebnisse schnell finden'
+        title: this.uiTranslate('ui-text.test-results.testergebnisse-schnell-finden')
       }
     });
 
@@ -1400,7 +1313,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   protected openVariableAnalysisDialog(): void {
-    const loadingSnackBar = this.snackBar.open('Lade Analyse-Aufträge...', '', {
+    const loadingSnackBar = this.snackBar.open(this.uiTranslate('ui-text.test-results.lade-analyse-auftraege'), '', {
       duration: 3000
     });
 
@@ -1419,7 +1332,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             maxWidth: '96vw',
             data: {
               unitId: this.selectedUnit()?.id,
-              title: 'Antwortwertanalyse',
+              title: this.uiTranslate('ui-text.test-results.antwortwertanalyse'),
               workspaceId: this.appService.selectedWorkspaceId,
               jobs: variableAnalysisJobs
             }
@@ -1428,8 +1341,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Laden der Analyse-Aufträge',
-            'Fehler',
+            this.uiTranslate('variable-analysis.error-loading-jobs'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }
@@ -1439,7 +1352,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   openBookletInfo(bookletName: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const loadingSnackBar = this.snackBar.open(
-      'Lade Booklet-Informationen...',
+      this.uiTranslate('test-results-search.snackbars.loading-booklet-info'),
       '',
       { duration: 3000 }
     );
@@ -1467,8 +1380,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Laden der Booklet-Informationen',
-            'Fehler',
+            this.uiTranslate('test-results-search.snackbars.booklet-info-error'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }
@@ -1480,7 +1393,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!selectedUnitSnapshot || !selectedUnitSnapshot.name) {
-      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
       return;
     }
 
@@ -1488,12 +1401,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .trim()
       .toUpperCase();
     if (!unitFileId) {
-      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.test-results.keine-unit-ausgewaehlt'), 'Info', { duration: 3000 });
       return;
     }
 
     const loadingSnackBar = this.snackBar.open(
-      'Lade Unit-Informationen...',
+      this.uiTranslate('ui-text.test-results.lade-unit-informationen'),
       '',
       { duration: 3000 }
     );
@@ -1521,8 +1434,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
-            'Fehler beim Laden der Unit-Informationen',
-            'Fehler',
+            this.uiTranslate('ui-text.test-results.fehler-beim-laden-der-unit-informationen'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }

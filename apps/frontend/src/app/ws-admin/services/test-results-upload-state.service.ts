@@ -8,6 +8,7 @@ import {
 import {
   filter, finalize, shareReplay, startWith, switchMap, take, takeWhile, tap, map, catchError
 } from 'rxjs/operators';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
 import {
   TestResultsLogAnomalyDetailsDialogComponent,
@@ -84,6 +85,8 @@ type UploadCodingContext = {
   providedIn: 'root'
 })
 export class TestResultsUploadStateService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
@@ -124,15 +127,15 @@ export class TestResultsUploadStateService {
     beforeOverview: TestResultsOverviewResponse
   ): Observable<TestResultsUploadJobDto[]> {
     return defer(() => {
-      const title = resultType === 'logs' ? 'Upload-Ergebnis (Logs)' : 'Upload-Ergebnis (Antworten)';
+      const title = resultType === 'logs' ? this.uiTranslate('ui-text.test-results-upload-state.upload-ergebnis-logs') : this.uiTranslate('ui-text.test-results-upload-state.upload-ergebnis-antworten');
       const icon = resultType === 'logs' ? 'article' : 'upload_file';
       const uploadState = (percent: number): TestResultsImportProgressState => ({
         title,
         icon,
         phase: 'uploading',
-        phaseLabel: 'Datei wird hochgeladen',
+        phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.datei-wird-hochgeladen'),
         message: resultType === 'logs' ?
-          'Die Log-Datei wird in Teilen übertragen.' : 'Die Antwortdatei wird in Teilen übertragen.',
+          this.uiTranslate('ui-text.test-results-upload-state.die-log-datei-wird-in-teilen-uebertragen') : this.uiTranslate('ui-text.test-results-upload-state.die-antwortdatei-wird-in-teilen-uebertragen'),
         percent,
         mode: 'determinate'
       });
@@ -172,7 +175,7 @@ export class TestResultsUploadStateService {
     }).pipe(
       tap({
         error: error => this.snackBar.open(
-          `Fehler beim Upload-Start: ${error.message}`, 'Fehler', { duration: 5000 }
+          this.uiTranslate('ui-text.test-results-upload-state.fehler-beim-upload-start', { message: error.message }), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 5000 }
         )
       }),
       takeUntilDestroyed(this.destroyRef),
@@ -193,8 +196,8 @@ export class TestResultsUploadStateService {
       this.progressHandles.set(this.getBatchKey(batch), progressHandle);
       this.updateProgressDialog(batch, {
         phase: 'processing',
-        phaseLabel: 'Verarbeitung läuft',
-        message: 'Die Datei wurde angenommen. Der Server verarbeitet die Upload-Jobs.',
+        phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.verarbeitung-laeuft'),
+        message: this.uiTranslate('ui-text.test-results-upload-state.die-datei-wurde-angenommen-der-server-verarbeitet-die-upload-jobs'),
         percent: batch.progress,
         completed: batch.completedCount,
         total: batch.totalJobs,
@@ -247,7 +250,7 @@ export class TestResultsUploadStateService {
               ) {
                 this.pollingErrorNotifications.add(errorKey);
                 this.snackBar.open(
-                  'Upload läuft möglicherweise weiter, aber der Status konnte gerade nicht gelesen werden.',
+                  this.uiTranslate('ui-text.test-results-upload-state.upload-laeuft-moeglicherweise-weiter-aber-der-status-konnte-gerade-nicht-gelesen-werden'),
                   'OK',
                   { duration: 6000 }
                 );
@@ -299,8 +302,8 @@ export class TestResultsUploadStateService {
           this.batches$.next(currentBatches);
           this.updateProgressDialog(batch, {
             phase: 'processing',
-            phaseLabel: 'Verarbeitung läuft',
-            message: 'Der Server verarbeitet die Upload-Jobs.',
+            phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.verarbeitung-laeuft'),
+            message: this.uiTranslate('ui-text.test-results-upload-state.der-server-verarbeitet-die-upload-jobs'),
             percent: res.avgProgress,
             completed: res.completedCount,
             total: res.totalJobs,
@@ -323,8 +326,8 @@ export class TestResultsUploadStateService {
   ) {
     this.updateProgressDialog(batch, {
       phase: 'refreshingOverview',
-      phaseLabel: 'Übersicht wird aktualisiert',
-      message: 'Die Jobs sind abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+      phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.uebersicht-wird-aktualisiert'),
+      message: this.uiTranslate('ui-text.test-results-upload-state.die-jobs-sind-abgeschlossen-lade-die-aktualisierten-ergebniszahlen'),
       percent: 100,
       completed: batch.totalJobs,
       total: batch.totalJobs,
@@ -356,7 +359,7 @@ export class TestResultsUploadStateService {
           issues.push({
             level: 'error',
             category: 'other',
-            message: `Upload-Job ${jobStatus.id || ''} ist fehlgeschlagen.`
+            message: this.uiTranslate('ui-text.test-results-upload-state.upload-job-ist-fehlgeschlagen', { value1: jobStatus.id || '' })
           });
         }
       });
@@ -365,7 +368,7 @@ export class TestResultsUploadStateService {
           level: 'warning',
           category: 'other',
           message:
-            'Mindestens ein Upload-Job wurde als abgeschlossen gemeldet, aber die Ergebniszahlen waren noch nicht vollständig abrufbar. Die Anzeige verwendet deshalb die geladene Arbeitsbereichsübersicht.'
+            this.uiTranslate('ui-text.test-results-upload-state.mindestens-ein-upload-job-wurde-als-abgeschlossen-gemeldet-aber-die-ergebniszahlen-waren-n')
         });
       }
 
@@ -409,7 +412,7 @@ export class TestResultsUploadStateService {
             level: 'warning',
             category: 'other',
             message:
-              'Die aktualisierte Arbeitsbereichsübersicht konnte noch nicht geladen werden. Die Zahlen stammen aus dem Upload-Job oder werden nach Aktualisierung sichtbar.'
+              this.uiTranslate('ui-text.test-results-upload-state.die-aktualisierte-arbeitsbereichsuebersicht-konnte-noch-nicht-geladen-werden-die-zahlen-st')
           });
         }
 
@@ -441,7 +444,7 @@ export class TestResultsUploadStateService {
           importedResponses: importedResponses || batch.resultType === 'responses',
           overviewPending,
           overviewMessage: overviewPending ?
-            'Der Upload-Job ist abgeschlossen, aber die aggregierte Arbeitsbereichsübersicht konnte noch nicht zuverlässig gelesen werden. Bitte die Ansicht gleich noch einmal aktualisieren.' :
+            this.uiTranslate('ui-text.test-results-upload-state.der-upload-job-ist-abgeschlossen-aber-die-aggregierte-arbeitsbereichsuebersicht-konnte-noc') :
             undefined
         };
 
@@ -450,8 +453,8 @@ export class TestResultsUploadStateService {
         } else {
           this.snackBar.open(
             overviewPending ?
-              'Upload abgeschlossen; die Übersicht wird noch aktualisiert.' :
-              `Upload abgeschlossen: Δ Testpersonen ${delta.testPersons}, Δ Responses ${delta.uniqueResponses}`,
+              this.uiTranslate('ui-text.test-results-upload-state.upload-abgeschlossen-die-uebersicht-wird-noch-aktualisiert') :
+              this.uiTranslate('ui-text.test-results-upload-state.upload-abgeschlossen-testpersonen-responses', { testPersons: delta.testPersons, uniqueResponses: delta.uniqueResponses }),
             'OK',
             { duration: 5000 }
           );
@@ -563,8 +566,8 @@ export class TestResultsUploadStateService {
         const affectedBooklets = Number(summary?.affectedBooklets || 0);
         const snackBarRef = this.snackBar.open(
           affectedBooklets > 0 ?
-            `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
-            'Logs importiert. Keine auffälligen Testhefte erkannt.',
+            this.uiTranslate('ui-text.test-results-upload-state.logs-importiert-auffaellige-testhefte-erkannt', { affectedBooklets: affectedBooklets }) :
+            this.uiTranslate('ui-text.test-results-upload-state.logs-importiert-keine-auffaelligen-testhefte-erkannt'),
           affectedBooklets > 0 ? 'anzeigen' : 'OK',
           { duration: affectedBooklets > 0 ? 8000 : 5000 }
         );
@@ -577,7 +580,7 @@ export class TestResultsUploadStateService {
       },
       error: () => {
         this.snackBar.open(
-          'Logs importiert. Die Log-Qualität konnte nicht geprüft werden.',
+          this.uiTranslate('ui-text.test-results-upload-state.logs-importiert-die-log-qualitaet-konnte-nicht-geprueft-werden'),
           'OK',
           { duration: 6000 }
         );
@@ -590,7 +593,7 @@ export class TestResultsUploadStateService {
     affectedBooklets: number
   ): void {
     const loadingSnackBar = this.snackBar.open(
-      'Lade Log-Auffälligkeiten...',
+      this.uiTranslate('ui-text.test-results.lade-log-auffaelligkeiten'),
       '',
       { duration: undefined }
     );
@@ -600,7 +603,7 @@ export class TestResultsUploadStateService {
         loadingSnackBar.dismiss();
         if (!details.data.length) {
           this.snackBar.open(
-            'Keine Log-Auffälligkeiten gefunden.',
+            this.uiTranslate('ui-text.test-results.keine-log-auffaelligkeiten-gefunden'),
             'OK',
             { duration: 4000 }
           );
@@ -638,7 +641,7 @@ export class TestResultsUploadStateService {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Log-Auffälligkeiten konnten nicht geladen werden.',
+          this.uiTranslate('ui-text.test-results.log-auffaelligkeiten-konnten-nicht-geladen-werden'),
           'OK',
           { duration: 4000 }
         );
@@ -692,9 +695,9 @@ export class TestResultsUploadStateService {
         attempts += 1;
         this.updateProgressDialog(batch, {
           phase: 'refreshingOverview',
-          phaseLabel: 'Ergebnis wird gelesen',
+          phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.ergebnis-wird-gelesen'),
           message:
-            'Die Jobs sind abgeschlossen. Warte auf die vollständigen Ergebnisdaten.',
+            this.uiTranslate('ui-text.test-results-upload-state.die-jobs-sind-abgeschlossen-warte-auf-die-vollstaendigen-ergebnisdaten'),
           percent: 100,
           completed: batch.totalJobs,
           total: batch.totalJobs,
@@ -758,7 +761,7 @@ export class TestResultsUploadStateService {
   }
 
   private getProgressTitle(resultType: 'logs' | 'responses'): string {
-    return resultType === 'logs' ? 'Upload-Ergebnis (Logs)' : 'Upload-Ergebnis (Antworten)';
+    return resultType === 'logs' ? this.uiTranslate('ui-text.test-results-upload-state.upload-ergebnis-logs') : this.uiTranslate('ui-text.test-results-upload-state.upload-ergebnis-antworten');
   }
 
   private getProgressIcon(resultType: 'logs' | 'responses'): string {

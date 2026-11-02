@@ -1,3 +1,4 @@
+import { UiTranslator } from '../../shared/utils/ui-translator';
 /**
  * Utility functions for file operations in the ws-admin module
  */
@@ -43,20 +44,20 @@ export function extractUnitName(fileName: string): string {
  * @param fileType The file type to localize
  * @returns German label if known, otherwise the original value
  */
-export function getFileTypeLabel(fileType: string): string {
+export function getFileTypeLabel(translate: UiTranslator, fileType: string): string {
   const normalized = (fileType || '').trim();
   const resourceSubtypeMatch = normalized.match(/^Resource\s*\(\s*(\.[^)]+?)\s*\)$/i);
   if (resourceSubtypeMatch) {
-    return `Ressource (${resourceSubtypeMatch[1].trim().toLowerCase()})`;
+    return translate('ui-text.file-utils.ressource', { value1: resourceSubtypeMatch[1].trim().toLowerCase() });
   }
   const mapping: Record<string, string> = {
-    Resource: 'Ressource',
-    Unit: 'Aufgaben',
-    Booklet: 'Testhefte',
-    TestTakers: 'Testteilnehmer',
-    Testtakers: 'Testteilnehmer',
-    Schemer: 'Schemer',
-    SysCheck: 'Systemcheck'
+    Resource: translate('ui-text.file-utils.ressource-23ef58'),
+    Unit: translate('coding.jobs.table.units'),
+    Booklet: translate('ui-text.files-validation.testhefte'),
+    TestTakers: translate('ui-text.file-utils.testteilnehmer'),
+    Testtakers: translate('ui-text.file-utils.testteilnehmer'),
+    Schemer: translate('ui-text.files-validation.schemer'),
+    SysCheck: translate('ui-text.file-utils.systemcheck')
   };
   return mapping[normalized] ?? normalized;
 }

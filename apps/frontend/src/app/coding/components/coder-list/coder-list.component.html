@@ -2,15 +2,15 @@
   <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
     <button type="button" mat-raised-button color="primary" (click)="createCoder()">
       <mat-icon>add</mat-icon>
-      Kodierer erstellen
+      {{ 'ui-text.coder-list.kodierer-erstellen' | translate }}
     </button>
     <button type="button" mat-raised-button color="primary" (click)="startEditCoder(selection.selected[0])" [disabled]="selection.selected.length !== 1">
       <mat-icon>edit</mat-icon>
-      Kodierer bearbeiten
+      {{ 'ui-text.coder-list.kodierer-bearbeiten' | translate }}
     </button>
     <button type="button" mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCoders()">
       <mat-icon>delete</mat-icon>
-      Kodierer löschen
+      {{ 'ui-text.coder-list.kodierer-loeschen' | translate }}
     </button>
   </div>
 
@@ -20,7 +20,7 @@
   }
   @if (!isLoading()) {
     <coding-box-search-filter
-      [title]="'Kodierer filtern'"
+      [title]="('manual-coding-export.coder-filter' | translate)"
       (valueChange)="applyFilter($event)">
     </coding-box-search-filter>
 
@@ -45,28 +45,28 @@
       </ng-container>
 
       <ng-container matColumnDef="name">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'user.full-name' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.name}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="displayName">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Anzeigename</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coder-list.anzeigename' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.displayName || '-'}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="email">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>E-Mail</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'home.email' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.email || '-'}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="assignedJobs">
-        <mat-header-cell *matHeaderCellDef>Zugewiesene Jobs</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coder-list.zugewiesene-jobs' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{getAssignedJobsText(element)}}
         </mat-cell>
@@ -75,7 +75,7 @@
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
-        <p>Keine Kodierer vorhanden. Erstellen Sie einen neuen Kodierer mit dem Button oben.</p>
+        <p>{{ 'ui-text.coder-list.keine-kodierer-vorhanden-erstellen-sie-einen-neuen-kodierer-mit-dem-button-oben' | translate }}</p>
       </div>
     }
   }

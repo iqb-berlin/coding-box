@@ -5,6 +5,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { TestPersonCodingComponent } from './test-person-coding.component';
 import {
   JobInfo, JobStatus, TestPersonCodingService, WorkspaceGroupCodingStats
@@ -43,7 +44,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
       notifyAutoCodingCompleted: jest.fn()
     };
     await TestBed.configureTestingModule({
-      imports: [TestPersonCodingComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestPersonCodingComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: TestPersonCodingService, useValue: service },
@@ -89,7 +90,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
     groups.complete();
     await fixture.whenStable();
     expect(element().querySelector('.jobs-card mat-spinner')).toBeNull();
-    expect(element().querySelector('.jobs-card .no-data')?.textContent).toContain('test-person-coding.jobs.no-jobs');
+    expect(element().querySelector('.jobs-card .no-data')?.textContent).toContain(translateGerman('test-person-coding.jobs.no-jobs'));
     jobs = new Subject();
     (element().querySelector('.jobs-actions button') as HTMLButtonElement).click();
     await fixture.whenStable();
@@ -117,7 +118,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
     await fixture.whenStable();
     expect(element().querySelector('.job-status-card')).toBeNull();
     expect(service.notifyAutoCodingCompleted).toHaveBeenCalledWith('submitted-job');
-    expect(snackBar.open).toHaveBeenCalledWith('test-person-coding.job-completed', 'close', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith(translateGerman('test-person-coding.job-completed'), translateGerman('close'), { duration: 3000 });
   });
 
   it('re-enables submission after a delayed error', async () => {
@@ -127,7 +128,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
     await fixture.whenStable();
     const codeAll = element().querySelector('.button-container button:last-child') as HTMLButtonElement;
     expect(codeAll.disabled).toBe(false);
-    expect(snackBar.open).toHaveBeenCalledWith('test-person-coding.job-error', 'close', { duration: 5000 });
+    expect(snackBar.open).toHaveBeenCalledWith(translateGerman('test-person-coding.job-error', { error: 'coding timeout' }), translateGerman('close'), { duration: 5000 });
   });
 
   it('ignores an old job response after switching to another job', async () => {
@@ -283,7 +284,7 @@ describe('Test person coding terminal feedback without Zone.js', () => {
       notifyAutoCodingCompleted: jest.fn()
     };
     await TestBed.configureTestingModule({
-      imports: [TestPersonCodingComponent, MatSnackBarModule, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestPersonCodingComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: TestPersonCodingService, useValue: service },
@@ -303,7 +304,7 @@ describe('Test person coding terminal feedback without Zone.js', () => {
         'job-paused': 'Kodierung pausiert'
       },
       close: 'Schließen'
-    });
+    }, true);
     translate.use('de');
     openSnackBar = jest.spyOn(TestBed.inject(MatSnackBar), 'open');
     overlay = TestBed.inject(OverlayContainer).getContainerElement();

@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, OnDestroy, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
@@ -11,6 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
@@ -48,7 +50,7 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   selector: 'coding-box-validation-dialog',
   templateUrl: './validation-dialog.component.html',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -92,6 +94,8 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   `]
 })
 export class ValidationDialogComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   data = inject<{
     autoStart?: boolean;
   }>(MAT_DIALOG_DATA);
@@ -144,8 +148,8 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(xmlContent => {
       if (!xmlContent) {
         this.snackBar.open(
-          `Fehler beim Abrufen der Unit-XML für ${fileName}`,
-          'Schließen',
+          this.uiTranslate('ui-text.validation-dialog.fehler-beim-abrufen-der-unit-xml-fuer', { fileName: fileName }),
+          this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
         return;
@@ -155,7 +159,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
         maxWidth: '1000px',
         height: '80vh',
         data: {
-          title: `Unit XML: ${fileName}`,
+          title: this.uiTranslate('ui-text.validation-dialog.unit-xml', { fileName: fileName }),
           content: xmlContent,
           isXml: true
         }
@@ -204,15 +208,15 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     const status = this.getOverallStatus();
     switch (status) {
       case 'running':
-        return 'Validierungen laufen...';
+        return this.uiTranslate('ui-text.validation-dialog.validierungen-laufen');
       case 'failed':
-        return 'Einige Prüfungen sind fehlgeschlagen';
+        return this.uiTranslate('ui-text.validation-dialog.einige-pruefungen-sind-fehlgeschlagen');
       case 'success':
-        return 'Alle Prüfungen bestanden';
+        return this.uiTranslate('ui-text.validation-dialog.alle-pruefungen-bestanden');
       case 'partial':
-        return 'Einige Prüfungen bestanden';
+        return this.uiTranslate('ui-text.validation-dialog.einige-pruefungen-bestanden');
       default:
-        return 'Bereit zum Prüfen';
+        return this.uiTranslate('ui-text.validation-dialog.bereit-zum-pruefen');
     }
   }
 
@@ -222,18 +226,18 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   protected getOverallSubline(): string {
     const status = this.getOverallStatus();
     if (status === 'running') {
-      return 'Bitte warten Sie, bis alle Validierungen abgeschlossen sind.';
+      return this.uiTranslate('ui-text.validation-dialog.bitte-warten-sie-bis-alle-validierungen-abgeschlossen-sind');
     }
     if (status === 'failed') {
-      return 'Bitte beheben Sie die gefundenen Fehler.';
+      return this.uiTranslate('ui-text.validation-dialog.bitte-beheben-sie-die-gefundenen-fehler');
     }
     if (status === 'success') {
-      return 'Alle Antwortdaten sind gültig.';
+      return this.uiTranslate('ui-text.validation-dialog.alle-antwortdaten-sind-gueltig');
     }
     if (status === 'partial') {
-      return 'Es liegen noch nicht für alle Prüfungen Ergebnisse vor.';
+      return this.uiTranslate('ui-text.validation-dialog.es-liegen-noch-nicht-fuer-alle-pruefungen-ergebnisse-vor');
     }
-    return 'Starten Sie die Prüfungen, um Ihre Antwortdaten zu validieren.';
+    return this.uiTranslate('ui-text.validation-dialog.starten-sie-die-pruefungen-um-ihre-antwortdaten-zu-validieren');
   }
 
   /**
@@ -242,13 +246,13 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   protected getRecommendedNextStep(): string {
     const status = this.getOverallStatus();
     if (status === 'failed') {
-      return 'Beheben Sie die Fehler und führen Sie die Prüfungen erneut durch.';
+      return this.uiTranslate('ui-text.validation-dialog.beheben-sie-die-fehler-und-fuehren-sie-die-pruefungen-erneut-durch');
     }
     if (status === 'success') {
-      return 'Sie können den Dialog schließen.';
+      return this.uiTranslate('ui-text.validation-dialog.sie-koennen-den-dialog-schliessen');
     }
     if (status === 'partial') {
-      return 'Starten Sie die noch offenen Prüfungen.';
+      return this.uiTranslate('ui-text.validation-dialog.starten-sie-die-noch-offenen-pruefungen');
     }
     return '';
   }

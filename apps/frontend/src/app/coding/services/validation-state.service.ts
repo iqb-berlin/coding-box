@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 
 export interface ValidationProgress {
@@ -13,6 +14,8 @@ export interface ValidationProgress {
   providedIn: 'root'
 })
 export class ValidationStateService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private validationResultsSubject = new BehaviorSubject<ValidateCodingCompletenessResponseDto | null>(null);
   private validationProgressSubject = new BehaviorSubject<ValidationProgress>({
     status: 'idle',
@@ -45,7 +48,7 @@ export class ValidationStateService {
     this.validationProgressSubject.next({
       status: 'loading',
       progress: 0,
-      message: 'Excel-Datei wird geladen und verarbeitet...'
+      message: this.uiTranslate('ui-text.validation-state.excel-datei-wird-geladen-und-verarbeitet')
     });
   }
 
@@ -68,7 +71,7 @@ export class ValidationStateService {
     this.validationProgressSubject.next({
       status: 'completed',
       progress: 100,
-      message: `Validierung abgeschlossen. ${results.missing} von ${results.total} Kombinationen fehlen.`
+      message: this.uiTranslate('coding-management-manual.success.validation-completed', { missing: results.missing, total: results.total })
     });
   }
 
@@ -79,7 +82,7 @@ export class ValidationStateService {
     this.validationProgressSubject.next({
       status: 'error',
       progress: 0,
-      message: 'Fehler bei der Validierung',
+      message: this.uiTranslate('coding-management-manual.errors.validation-failed'),
       error
     });
   }

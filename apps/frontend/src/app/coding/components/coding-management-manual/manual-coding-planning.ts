@@ -1,3 +1,4 @@
+import { UiTranslator } from '../../../shared/utils/ui-translator';
 import type { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
 
 export type PlanningStatusState =
@@ -54,7 +55,7 @@ export interface ManualCodingPlanningState {
 
 /** Pure planning decisions and their presentation, independent of requests and Angular. */
 export class ManualCodingPlanning {
-  constructor(private readonly state: ManualCodingPlanningState) {}
+  constructor(private readonly state: ManualCodingPlanningState, private readonly translate: UiTranslator) {}
 
   getPlanningStatusClass(): string {
     switch (this.getPlanningStatusState()) {
@@ -189,37 +190,37 @@ export class ManualCodingPlanning {
   getPlanningStatusTitle(): string {
     switch (this.getPlanningStatusState()) {
       case 'not-checked':
-        return 'Kodierstand nicht geprüft';
+        return this.translate('ui-text.manual-coding-planning.kodierstand-nicht-geprueft');
       case 'loading':
-        return 'Status wird aktualisiert';
+        return this.translate('ui-text.manual-coding-planning.status-wird-aktualisiert');
       case 'planning-data-required':
-        return 'Planungsdaten aktualisieren';
+        return this.translate('coding-management-manual.buttons.refresh-planning-aria');
       case 'warning':
         return this.state.hasVariableCoverageConflicts ?
-          'Konflikte prüfen' :
-          'Reguläre Codes für manuelle Kodierung prüfen';
+          this.translate('ui-text.manual-coding-planning.konflikte-pruefen') :
+          this.translate('ui-text.manual-coding-planning.regulaere-codes-fuer-manuelle-kodierung-pruefen');
       case 'preparation-required':
-        return 'Vorbereitung aktualisieren';
+        return this.translate('ui-text.manual-coding-planning.vorbereitung-aktualisieren');
       case 'planning-incomplete':
-        return 'Planung noch unvollständig';
+        return this.translate('ui-text.manual-coding-planning.planung-noch-unvollstaendig');
       case 'training-ready':
-        return 'Schulungskodierjobs aktiv';
+        return this.translate('ui-text.manual-coding-planning.schulungskodierjobs-aktiv');
       case 'execution-ready':
-        return 'Bereit für die Durchführung';
+        return this.translate('ui-text.manual-coding-planning.bereit-fuer-die-durchfuehrung');
       case 'double-coding-review-ready':
-        return 'Doppelkodierungsreview offen';
+        return this.translate('ui-text.manual-coding-planning.doppelkodierungsreview-offen');
       case 'stale-source-review':
-        return 'Veraltete Kodierjobs prüfen';
+        return this.translate('ui-text.manual-coding-planning.veraltete-kodierjobs-pruefen');
       case 'completion-ready':
         return this.state.canShowManualCompletionTab ?
-          'Bereit für den Abschluss' :
-          'Kodierfälle abgeschlossen';
+          this.translate('ui-text.manual-coding-planning.bereit-fuer-den-abschluss') :
+          this.translate('ui-text.manual-coding-planning.kodierfaelle-abgeschlossen');
       case 'progress-unavailable':
-        return 'Kodierfortschritt nicht verfügbar';
+        return this.translate('ui-text.manual-coding-planning.kodierfortschritt-nicht-verfuegbar');
       case 'complete':
-        return 'Manuelle Kodierung abgeschlossen';
+        return this.translate('ui-text.manual-coding-planning.manuelle-kodierung-abgeschlossen');
       default:
-        return 'Bereit für die Planung';
+        return this.translate('ui-text.manual-coding-planning.bereit-fuer-die-planung');
     }
   }
 
@@ -227,65 +228,65 @@ export class ManualCodingPlanning {
     const planningStatusState = this.getPlanningStatusState();
 
     if (planningStatusState === 'not-checked') {
-      return 'Öffnen oder aktualisieren Sie die Planung, um den aktuellen Kodierstand zu prüfen.';
+      return this.translate('ui-text.manual-coding-planning.oeffnen-oder-aktualisieren-sie-die-planung-um-den-aktuellen-kodierstand-zu-pruef');
     }
 
     if (planningStatusState === 'loading') {
-      return 'Die Planungs- und Kodierfortschritte werden geladen.';
+      return this.translate('ui-text.manual-coding-planning.die-planungs-und-kodierfortschritte-werden-geladen');
     }
 
     if (planningStatusState === 'planning-data-required') {
-      return 'Abdeckung, Kodierfortschritt und Freshness-Hinweise werden erst auf Anforderung geladen.';
+      return this.translate('ui-text.manual-coding-planning.abdeckung-kodierfortschritt-und-freshness-hinweise-werden-erst-auf-anforderung-g');
     }
 
     if (planningStatusState === 'progress-unavailable') {
-      return 'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.';
+      return this.translate('ui-text.manual-coding-planning.die-planung-ist-vollstaendig-der-aktuelle-kodierfortschritt-konnte-aber-nicht-er');
     }
 
     if (planningStatusState === 'preparation-required') {
       if (this.state.isResponseAnalysisOutdated) {
-        return 'Die Antwortanalyse oder Aggregationsgrundlage ist nicht mehr aktuell. Aktualisieren Sie zuerst die Vorbereitung.';
+        return this.translate('ui-text.manual-coding-planning.die-antwortanalyse-oder-aggregationsgrundlage-ist-nicht-mehr-aktuell-aktualisier');
       }
-      return 'In der Vorbereitung gibt es offene Punkte, die vor der weiteren manuellen Kodierung geklärt werden sollten.';
+      return this.translate('ui-text.manual-coding-planning.in-der-vorbereitung-gibt-es-offene-punkte-die-vor-der-weiteren-manuellen-kodieru');
     }
 
     if (this.state.hasVariableCoverageConflicts) {
-      return `${this.state.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
+      return this.translate('ui-text.manual-coding-planning.value1-variablenkonflikte-muessen-vor-der-verlaesslichen-jobplanung-geklaert-wer', { value1: this.state.variableCoverageOverview?.conflictedVariables || 0 });
     }
 
     if (this.state.hasManualCodeAvailabilityWarnings) {
-      return `${this.state.manualCodeAvailabilityWarningCount} Variablen haben keine regulären Codes mit manueller Instruktion. Kodierer können dort nur Sonderoptionen wie "Code-Vergabe unsicher" oder "Neuer Code nötig" auswählen.`;
+      return this.translate('ui-text.manual-coding-planning.value1-variablen-haben-keine-regulaeren-codes-mit-manueller-instruktion-kodierer', { value1: this.state.manualCodeAvailabilityWarningCount });
     }
 
     if ((this.state.variableCoverageOverview?.missingVariables || 0) > 0) {
-      return `${this.state.variableCoverageOverview?.missingVariables || 0} Variablen sind noch keiner Jobdefinition zugeordnet.`;
+      return this.translate('ui-text.manual-coding-planning.value1-variablen-sind-noch-keiner-jobdefinition-zugeordnet', { value1: this.state.variableCoverageOverview?.missingVariables || 0 });
     }
 
     if ((this.state.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
-      return `${this.state.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs verteilt.`;
+      return this.translate('ui-text.manual-coding-planning.value1-faelle-sind-noch-nicht-in-kodierjobs-verteilt', { value1: this.state.caseCoverageOverview?.effectiveUnassignedCases || 0 });
     }
 
     if (this.state.isCompletionComplete) {
-      return 'Alle manuellen Kodierungen sind abgeschlossen und final übernommen.';
+      return this.translate('ui-text.manual-coding-planning.alle-manuellen-kodierungen-sind-abgeschlossen-und-final-uebernommen');
     }
 
     if (this.state.isPlanningReady &&
         this.state.hasActiveTrainingCodingJobs) {
-      return `${this.state.manualFreshnessJobSummary?.activeTrainingJobs || 0} aktive Schulungskodierjob(s) sollten vor der produktiven Durchführung geprüft werden.`;
+      return this.translate('ui-text.manual-coding-planning.value1-aktive-schulungskodierjob-s-sollten-vor-der-produktiven-durchfuehrung-gep', { value1: this.state.manualFreshnessJobSummary?.activeTrainingJobs || 0 });
     }
 
     if (this.state.isPlanningReady &&
         !!this.state.codingProgressOverview &&
         this.state.hasExecutionOpenWorkForFreshness) {
-      return 'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.';
+      return this.translate('ui-text.manual-coding-planning.die-planung-ist-vollstaendig-bearbeiten-sie-nun-die-offenen-kodierfaelle-im-absc');
     }
 
     if (this.state.isPlanningReady && this.state.hasOpenDoubleCodingReviewConflicts) {
-      return `${this.state.openDoubleCodingConflictCount} offene Doppelkodierungs-Konflikt(e) müssen im Review aufgelöst werden.`;
+      return this.translate('ui-text.manual-coding-planning.value1-offene-doppelkodierungs-konflikt-e-muessen-im-review-aufgeloest-werden', { value1: this.state.openDoubleCodingConflictCount });
     }
 
     if (this.state.isPlanningReady && this.state.hasStaleSourceManualJobs) {
-      return `${this.state.manualFreshnessJobSummary?.staleSourceJobs || 0} Kodierjob(s) enthalten veraltete Quellfälle. Prüfen Sie diese Jobs in der Durchführung, bevor Ergebnisse angewendet oder weitergeführt werden.`;
+      return this.translate('ui-text.manual-coding-planning.value1-kodierjob-s-enthalten-veraltete-quellfaelle-pruefen-sie-diese-jobs-in-der', { value1: this.state.manualFreshnessJobSummary?.staleSourceJobs || 0 });
     }
 
     if (this.state.isPlanningReady &&
@@ -293,47 +294,47 @@ export class ManualCodingPlanning {
         !!this.state.appliedResultsOverview &&
         this.state.hasCompletionReadyWorkForFreshness) {
       return this.state.canShowManualCompletionTab ?
-        'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.' :
-        'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.';
+        this.translate('ui-text.manual-coding-planning.alle-kodierfaelle-sind-abgeschlossen-uebernehmen-sie-nun-die-kodierergebnisse-in') :
+        this.translate('ui-text.manual-coding-planning.alle-kodierfaelle-sind-abgeschlossen-die-uebernahme-der-ergebnisse-in-den-datenb');
     }
 
-    return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
+    return this.translate('ui-text.manual-coding-planning.pruefen-sie-die-antwortanalyse-und-erstellen-sie-danach-passende-kodierjob-defin');
   }
 
   getPlanningNextStepTitle(): string {
     switch (this.getPlanningStatusState()) {
       case 'not-checked':
-        return 'Kodierstand prüfen';
+        return this.translate('coding.schemer.check-coding-status');
       case 'loading':
-        return 'Planungsstand wird geladen';
+        return this.translate('ui-text.manual-coding-planning.planungsstand-wird-geladen');
       case 'planning-data-required':
-        return 'Planungsstand laden';
+        return this.translate('ui-text.manual-coding-planning.planungsstand-laden');
       case 'warning':
         return this.state.hasVariableCoverageConflicts ?
-          'Konflikte zuerst klären' :
-          'Reguläre Codes ergänzen';
+          this.translate('ui-text.manual-coding-planning.konflikte-zuerst-klaeren') :
+          this.translate('ui-text.manual-coding-planning.regulaere-codes-ergaenzen');
       case 'preparation-required':
-        return 'Vorbereitung aktualisieren';
+        return this.translate('ui-text.manual-coding-planning.vorbereitung-aktualisieren');
       case 'planning-incomplete':
-        return 'Kodierfälle in Jobs verteilen';
+        return this.translate('ui-text.manual-coding-planning.kodierfaelle-in-jobs-verteilen');
       case 'training-ready':
-        return 'Schulung prüfen';
+        return this.translate('ui-text.manual-coding-planning.schulung-pruefen');
       case 'execution-ready':
-        return 'Kodierjobs bearbeiten lassen';
+        return this.translate('ui-text.manual-coding-planning.kodierjobs-bearbeiten-lassen');
       case 'double-coding-review-ready':
-        return 'Doppelkodierungen auflösen';
+        return this.translate('ui-text.manual-coding-planning.doppelkodierungen-aufloesen');
       case 'stale-source-review':
-        return 'Veraltete Jobs prüfen';
+        return this.translate('ui-text.manual-coding-planning.veraltete-jobs-pruefen');
       case 'completion-ready':
         return this.state.canShowManualCompletionTab ?
-          'Ergebnisse übernehmen' :
-          'Kodierjobs prüfen';
+          this.translate('ui-text.manual-coding-planning.ergebnisse-uebernehmen') :
+          this.translate('ui-text.manual-coding-planning.kodierjobs-pruefen');
       case 'complete':
-        return 'Workflow abgeschlossen';
+        return this.translate('ui-text.manual-coding-planning.workflow-abgeschlossen');
       case 'progress-unavailable':
-        return 'Kodierfortschritt prüfen';
+        return this.translate('ui-text.manual-coding-planning.kodierfortschritt-pruefen');
       default:
-        return 'Jobdefinition erstellen';
+        return this.translate('ui-text.manual-coding-planning.jobdefinition-erstellen');
     }
   }
 
@@ -343,77 +344,77 @@ export class ManualCodingPlanning {
 
     switch (this.getPlanningStatusState()) {
       case 'not-checked':
-        return 'Öffnen Sie die Planung, um den Kodierstand zu laden.';
+        return this.translate('ui-text.manual-coding-planning.oeffnen-sie-die-planung-um-den-kodierstand-zu-laden');
       case 'loading':
-        return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
+        return this.translate('ui-text.manual-coding-planning.warten-sie-kurz-bis-die-planungsdaten-aktualisiert-sind');
       case 'planning-data-required':
-        return 'Laden Sie die Planungsdaten, um Variablen- und Fallabdeckung, Kodierfortschritt, offene Variablen und Freshness-Hinweise zu prüfen.';
+        return this.translate('ui-text.manual-coding-planning.laden-sie-die-planungsdaten-um-variablen-und-fallabdeckung-kodierfortschritt-off');
       case 'warning':
         if (this.state.hasVariableCoverageConflicts) {
-          return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
+          return this.translate('ui-text.manual-coding-planning.pruefen-sie-variablen-die-von-mehreren-definitionen-mit-ueberlappenden-faellen-v');
         }
-        return 'Ergänzen Sie bei mindestens einem regulären Code eine manuelle Instruktion oder nehmen Sie die betroffenen Variablen aus der manuellen Auswahl.';
+        return this.translate('ui-text.manual-coding-planning.ergaenzen-sie-bei-mindestens-einem-regulaeren-code-eine-manuelle-instruktion-ode');
       case 'preparation-required':
         return this.state.isResponseAnalysisOutdated ?
-          'Aktualisieren Sie Antwortanalyse und Aggregationsgrundlage, bevor die manuelle Zielnavigation fortgesetzt wird.' :
-          'Klären Sie offene Vorbereitungsbefunde wie leere Antworten oder Duplikate ohne aktive Aggregation.';
+          this.translate('ui-text.manual-coding-planning.aktualisieren-sie-antwortanalyse-und-aggregationsgrundlage-bevor-die-manuelle-zi') :
+          this.translate('ui-text.manual-coding-planning.klaeren-sie-offene-vorbereitungsbefunde-wie-leere-antworten-oder-duplikate-ohne-');
       case 'planning-incomplete':
         if ((this.state.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
           const unavailableHint = unavailableCases > 0 ?
-            ` ${unavailableCases} Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert.` :
+            this.translate('ui-text.manual-coding-planning.value1-faelle-sind-bereits-in-jobs-verteilt-oder-durch-andere-definitionen-reser', { value1: unavailableCases }) :
             '';
-          return `${this.state.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs. Für neue Jobdefinitionen sind aktuell ${availableCases} Fälle verfügbar.${unavailableHint} Danach Definition freigeben und Jobs erstellen.`;
+          return this.translate('ui-text.manual-coding-planning.value1-faelle-sind-noch-nicht-in-kodierjobs-fuer-neue-jobdefinitionen-sind-aktue', { value1: this.state.caseCoverageOverview?.effectiveUnassignedCases || 0, value2: availableCases, value3: unavailableHint });
         }
-        return 'Ordnen Sie die fehlenden Variablen einer Jobdefinition zu. Danach Definition freigeben und Jobs erstellen.';
+        return this.translate('ui-text.manual-coding-planning.ordnen-sie-die-fehlenden-variablen-einer-jobdefinition-zu-danach-definition-frei');
       case 'training-ready':
-        return 'Es gibt aktive Schulungskodierjobs. Prüfen Sie den Schulungsstand, bevor produktive Kodierjobs im Fokus stehen.';
+        return this.translate('ui-text.manual-coding-planning.es-gibt-aktive-schulungskodierjobs-pruefen-sie-den-schulungsstand-bevor-produkti');
       case 'execution-ready':
-        return 'Die Fälle sind verteilt. Kodierer können nun ihre zugewiesenen Kodierjobs bearbeiten.';
+        return this.translate('ui-text.manual-coding-planning.die-faelle-sind-verteilt-kodierer-koennen-nun-ihre-zugewiesenen-kodierjobs-bearb');
       case 'double-coding-review-ready':
-        return 'Es gibt abgeschlossene produktive Kodierjobs mit offenen Doppelkodierungs-Konflikten. Öffnen Sie den Review und lösen Sie die Abweichungen auf.';
+        return this.translate('ui-text.manual-coding-planning.es-gibt-abgeschlossene-produktive-kodierjobs-mit-offenen-doppelkodierungs-konfli');
       case 'stale-source-review':
-        return 'Veraltete Quellfälle werden nicht angewendet. Prüfen Sie die betroffenen Jobs in der Durchführung und aktualisieren Sie sie fachlich passend.';
+        return this.translate('ui-text.manual-coding-planning.veraltete-quellfaelle-werden-nicht-angewendet-pruefen-sie-die-betroffenen-jobs-i');
       case 'completion-ready':
         return this.state.canShowManualCompletionTab ?
-          'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.' :
-          'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.';
+          this.translate('ui-text.manual-coding-planning.alle-kodierfaelle-sind-bearbeitet-uebernehmen-sie-jetzt-die-abgeschlossenen-erge') :
+          this.translate('ui-text.manual-coding-planning.alle-kodierfaelle-sind-bearbeitet-sie-koennen-die-abgeschlossenen-kodierjobs-in-');
       case 'complete':
-        return 'Alle manuellen Kodierungen wurden abgeschlossen und übernommen.';
+        return this.translate('ui-text.manual-coding-planning.alle-manuellen-kodierungen-wurden-abgeschlossen-und-uebernommen');
       case 'progress-unavailable':
-        return 'Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs, bevor Sie fortfahren.';
+        return this.translate('ui-text.manual-coding-planning.aktualisieren-sie-die-ansicht-oder-pruefen-sie-die-kodierjobs-bevor-sie-fortfahr');
       default:
-        return 'Wählen Sie Variablen oder Bündel sowie Kodierer aus. Eine Definition verteilt noch keine Fälle; erst "Jobs erstellen" legt die Kodierjobs an.';
+        return this.translate('ui-text.manual-coding-planning.waehlen-sie-variablen-oder-buendel-sowie-kodierer-aus-eine-definition-verteilt-n');
     }
   }
 
   getPlanningNextStepActionLabel(): string {
     switch (this.getPlanningStatusState()) {
       case 'not-checked':
-        return 'Zur Planung';
+        return this.translate('ui-text.manual-coding-planning.zur-planung');
       case 'warning':
         return this.state.hasVariableCoverageConflicts ?
-          'Zu den Jobdefinitionen' :
-          'Betroffene Variablen ansehen';
+          this.translate('ui-text.manual-coding-planning.zu-den-jobdefinitionen') :
+          this.translate('ui-text.manual-coding-planning.betroffene-variablen-ansehen');
       case 'preparation-required':
-        return 'Zur Vorbereitung';
+        return this.translate('ui-text.manual-coding-planning.zur-vorbereitung');
       case 'training-ready':
-        return 'Zur Schulung';
+        return this.translate('ui-text.manual-coding-planning.zur-schulung');
       case 'execution-ready':
-        return 'Zu den Kodierjobs';
+        return this.translate('ui-text.manual-coding-completion-view.zu-den-kodierjobs');
       case 'double-coding-review-ready':
-        return 'Doppelkodierungsreview öffnen';
+        return this.translate('ui-text.manual-coding-planning.doppelkodierungsreview-oeffnen');
       case 'stale-source-review':
-        return 'Veraltete Jobs prüfen';
+        return this.translate('ui-text.manual-coding-planning.veraltete-jobs-pruefen');
       case 'completion-ready':
-        return this.state.canShowManualCompletionTab ? 'Zum Abschluss' : 'Zu den Kodierjobs';
+        return this.state.canShowManualCompletionTab ? this.translate('ui-text.manual-coding-planning.zum-abschluss') : this.translate('ui-text.manual-coding-completion-view.zu-den-kodierjobs');
       case 'complete':
-        return this.state.canShowManualCompletionTab ? 'Abschluss ansehen' : 'Zu den Kodierjobs';
+        return this.state.canShowManualCompletionTab ? this.translate('ui-text.manual-coding-planning.abschluss-ansehen') : this.translate('ui-text.manual-coding-completion-view.zu-den-kodierjobs');
       case 'loading':
       case 'planning-data-required':
       case 'progress-unavailable':
-        return 'Aktualisieren';
+        return this.translate('process-overview.refresh');
       default:
-        return 'Zu den Jobdefinitionen';
+        return this.translate('ui-text.manual-coding-planning.zu-den-jobdefinitionen');
     }
   }
 

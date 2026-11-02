@@ -3,6 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
 import { DestroyRef } from '@angular/core';
+import { GermanTranslationsTestingModule } from '../../../../../testing/german-translations';
 import { CodingManagementUiService } from './coding-management-ui.service';
 import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
@@ -40,6 +41,7 @@ describe('CodingManagementUiService', () => {
     } as unknown as jest.Mocked<Partial<MatSnackBar>>;
 
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         CodingManagementUiService,
         { provide: AppService, useValue: mockAppService },

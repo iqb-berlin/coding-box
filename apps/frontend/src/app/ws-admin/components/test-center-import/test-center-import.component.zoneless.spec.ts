@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { TestCenterImportComponent } from './test-center-import.component';
 import { WorkspaceAdmin } from '../../../shared/models/test-center-authentication.model';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -65,7 +66,7 @@ describe('Testcenter delayed responses without Zone.js', () => {
       getImportWorkspaceFilesProgress: jest.fn(() => uploadProgress)
     };
     await TestBed.configureTestingModule({
-      imports: [TestCenterImportComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestCenterImportComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
@@ -112,7 +113,7 @@ describe('Testcenter delayed responses without Zone.js', () => {
     if (kind === 'network error') login.error(new Error('offline'));
     else login.next({});
     await fixture.whenStable();
-    expect(element().querySelector('.auth-section .error-message')?.textContent).toContain('login-error');
+    expect(element().querySelector('.auth-section .error-message')?.textContent).toContain(translateGerman('login-error'));
     login = new Subject();
     await authenticate();
     expect(element().querySelector('.auth-section')).toBeNull();

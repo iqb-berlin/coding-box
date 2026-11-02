@@ -6,6 +6,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -157,7 +158,7 @@ describe('CodingJobsComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [TranslateModule.forRoot(), CodingJobsComponent],
+      imports: [GermanTranslationsTestingModule, TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
         {
           provide: CodingPermissionsService,
@@ -232,7 +233,7 @@ describe('CodingJobsComponent', () => {
           }
         }
       }
-    });
+    }, true);
     translateService.use('de');
     fixture.detectChanges();
   });

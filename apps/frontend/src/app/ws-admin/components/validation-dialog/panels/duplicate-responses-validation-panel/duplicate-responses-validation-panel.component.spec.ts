@@ -2,6 +2,7 @@ import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationPanelComponent } from './duplicate-responses-validation-panel.component';
 import { DuplicateResponsesValidationService } from '../../../../services/validation';
@@ -15,6 +16,7 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
       open: jest.fn()
     };
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } },
         { provide: DuplicateResponsesValidationService, useValue: validationService },

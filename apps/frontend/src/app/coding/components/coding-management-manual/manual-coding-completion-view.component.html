@@ -156,7 +156,7 @@
                 (click)="executionRequested.emit()"
               >
                 <mat-icon>assignment</mat-icon>
-                Zu den Kodierjobs
+                {{ 'ui-text.manual-coding-completion-view.zu-den-kodierjobs' | translate }}
               </button>
             }
             @if (canShowCompletedJobApplyActions()) {
@@ -177,7 +177,7 @@
                 @if (isApplyingCodingResults()) {
                   <mat-spinner diameter="18"></mat-spinner>
                 }
-                Alle Ergebnisse anwenden
+                {{ 'ui-text.coding-jobs.alle-ergebnisse-anwenden' | translate }}
               </button>
             }
           </div>
@@ -191,7 +191,7 @@
                   <span>{{ getCodingJobResultSummary(job) }}</span>
                   @if (job.hasIssues) {
                     <span class="completed-job-review-note">
-                      Offene Hinweise bleiben zur manuellen Prüfung bestehen.
+                      {{ 'ui-text.manual-coding-completion-view.offene-hinweise-bleiben-zur-manuellen-pruefung-bestehen' | translate }}
                     </span>
                   }
                 </div>
@@ -211,7 +211,7 @@
                     @if (isApplyingJobResults(job.id)) {
                       <mat-spinner diameter="18"></mat-spinner>
                     }
-                    Ergebnisse anwenden
+                    {{ 'ui-text.coding-job-result-dialog.ergebnisse-anwenden' | translate }}
                   </button>
                 }
                 @if (!canApplyCompletedJobResults()) {
@@ -236,8 +236,7 @@
                 <div class="completed-job-copy">
                   <strong>{{ job.name }}</strong>
                   <span
-                    >Review erforderlich: unsichere Code-Vergabe oder neuer Code
-                    nötig.</span
+                    >{{ 'ui-text.manual-coding-completion-view.review-erforderlich-unsichere-code-vergabe-oder-neuer-code-noetig' | translate }}</span
                   >
                 </div>
                 <button
@@ -247,7 +246,7 @@
                   (click)="executionRequested.emit()"
                 >
                   <mat-icon>visibility</mat-icon>
-                  Zu den Kodierjobs
+                  {{ 'ui-text.manual-coding-completion-view.zu-den-kodierjobs' | translate }}
                 </button>
               </div>
             }

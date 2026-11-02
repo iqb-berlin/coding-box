@@ -1,5 +1,5 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
 import { BehaviorSubject, of } from 'rxjs';
 import { ExportComponent } from '../../apps/frontend/src/app/ws-admin/components/export/export.component';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
@@ -14,7 +14,7 @@ describe('Itemdatensatz-Export', () => {
     const profiles = [{ id: 4, label: 'IQB-Standard' }];
 
     cy.mount(ExportComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         {
           provide: AppService,

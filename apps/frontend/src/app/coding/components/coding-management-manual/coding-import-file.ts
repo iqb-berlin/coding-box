@@ -1,25 +1,26 @@
+import { UiTranslator } from '../../../shared/utils/ui-translator';
 import type { CodingImportDetectedFormat, CodingImportFormatDialogData } from './coding-import-format-dialog.component';
 
-export async function detectCodingImportFormat(file: File): Promise<CodingImportFormatDialogData> {
+export async function detectCodingImportFormat(translate: UiTranslator, file: File): Promise<CodingImportFormatDialogData> {
   let headers: string[];
   const fileName = file.name;
 
   try {
     headers = await readImportHeaders(file);
   } catch {
-    return buildFormatDialogData(
+    return buildFormatDialogData(translate,
       fileName,
       'unknown',
       [],
       [
-        'Die Datei konnte nicht gelesen werden. Bitte prüfen Sie, ob die Datei beschädigt ist oder von einem anderen Programm gesperrt wird.',
-        'Unterstützt werden CSV-Dateien sowie Excel-Dateien im Format .xlsx oder .xls.'
+        translate('ui-text.coding-import-file.die-datei-konnte-nicht-gelesen-werden-bitte-pruefen-sie-ob-die-datei-beschaedigt-ist'),
+        translate('ui-text.coding-import-file.unterstuetzt-werden-csv-dateien-sowie-excel-dateien-im-format-xlsx-oder-xls')
       ]
     );
   }
 
   const detectedFormat = detectFormatFromHeaders(headers);
-  return buildFormatDialogData(fileName, detectedFormat, headers);
+  return buildFormatDialogData(translate, fileName, detectedFormat, headers);
 }
 
 export async function readImportHeaders(file: File): Promise<string[]> {
@@ -95,7 +96,7 @@ export function detectFormatFromHeaders(headers: string[]): CodingImportDetected
   return 'unknown';
 }
 
-export function buildFormatDialogData(
+export function buildFormatDialogData(translate: UiTranslator,
   fileName: string,
   detectedFormat: CodingImportDetectedFormat,
   headers: string[],
@@ -103,19 +104,19 @@ export function buildFormatDialogData(
 ): CodingImportFormatDialogData {
   const availableVersions = getAvailableCodingVersions(headers);
   const sharedDescription =
-    'Für Testfälle, die außerhalb der Kodierbox bereits mit Code und Score kodiert wurden.';
+    translate('ui-text.coding-import-file.fuer-testfaelle-die-ausserhalb-der-kodierbox-bereits-mit-code-und-score-kodiert-wurde');
 
   if (detectedFormat === 'external-coding') {
     return {
       fileName,
       detectedFormat,
-      title: 'Kodierungen aus Datei importieren',
+      title: translate('coding-management-manual.import.tooltip'),
       description: sharedDescription,
       canImport: true,
       headers,
       helpItems: [
-        'Erwartet werden unit_key oder unit_alias, variable_id und mindestens eine Spalte code, score oder status.',
-        'Optionale Zuordnungsspalten wie person_code, person_login, person_group und booklet_name machen den Import eindeutiger.'
+        translate('ui-text.coding-import-file.erwartet-werden-unit-key-oder-unit-alias-variable-id-und-mindestens-eine-spalte-code'),
+        translate('ui-text.coding-import-file.optionale-zuordnungsspalten-wie-person-code-person-login-person-group-und-booklet-nam')
       ]
     };
   }
@@ -125,18 +126,18 @@ export function buildFormatDialogData(
     return {
       fileName,
       detectedFormat,
-      title: 'Kodierungen aus Datei importieren',
+      title: translate('coding-management-manual.import.tooltip'),
       description: sharedDescription,
       canImport: hasCodingValues,
       headers,
       helpItems: hasCodingValues ?
         [
-          'Die Datei sieht nach einer Kodierliste aus dem Coding Management aus.',
-          'Die ergänzten Spalten code, score und status werden als manuelle Kodierung importiert.'
+          translate('ui-text.coding-import-file.die-datei-sieht-nach-einer-kodierliste-aus-dem-coding-management-aus'),
+          translate('ui-text.coding-import-file.die-ergaenzten-spalten-code-score-und-status-werden-als-manuelle-kodierung-importiert')
         ] :
         [
-          'Die Datei sieht nach einer Kodierliste aus, enthält aber noch keine Kodierungsspalten.',
-          'Bitte ergänzen Sie mindestens code und score, optional auch status, und wählen Sie die Datei erneut aus.'
+          translate('ui-text.coding-import-file.die-datei-sieht-nach-einer-kodierliste-aus-enthaelt-aber-noch-keine-kodierungsspalten'),
+          translate('ui-text.coding-import-file.bitte-ergaenzen-sie-mindestens-code-und-score-optional-auch-status-und-waehlen-sie-di')
         ]
     };
   }
@@ -145,15 +146,15 @@ export function buildFormatDialogData(
     return {
       fileName,
       detectedFormat,
-      title: 'Kodierungen aus Datei importieren',
-      description: 'Die Datei sieht nach einem Kodierergebnis-Export aus dem Coding Management aus.',
+      title: translate('coding-management-manual.import.tooltip'),
+      description: translate('ui-text.coding-import-file.die-datei-sieht-nach-einem-kodierergebnis-export-aus-dem-coding-management-aus'),
       canImport: availableVersions.length > 0,
       headers,
       availableVersions,
       selectedVersion: availableVersions.includes('v2') ? 'v2' : availableVersions[0],
       helpItems: [
-        'Wählen Sie aus, welche Version aus der Datei übernommen werden soll.',
-        'Die ausgewählten Werte werden als manuelle Kodierung (v2) importiert.'
+        translate('ui-text.coding-import-file.waehlen-sie-aus-welche-version-aus-der-datei-uebernommen-werden-soll'),
+        translate('ui-text.coding-import-file.die-ausgewaehlten-werte-werden-als-manuelle-kodierung-v2-importiert')
       ]
     };
   }
@@ -162,13 +163,13 @@ export function buildFormatDialogData(
     return {
       fileName,
       detectedFormat,
-      title: 'Testergebnisse-Export erkannt',
-      description: 'Diese Datei enthält vollständige Testergebnisse mit Antworten und Zuständen, nicht nur Code-/Score-Kodierungen.',
+      title: translate('ui-text.coding-import-file.testergebnisse-export-erkannt'),
+      description: translate('ui-text.coding-import-file.diese-datei-enthaelt-vollstaendige-testergebnisse-mit-antworten-und-zustaenden-nicht'),
       canImport: false,
       headers,
       helpItems: [
-        'Bitte wechseln Sie zu Testergebnisse > Import > Antworten hochladen.',
-        'Für den Kodierungsimport wird eine flache Datei mit unit_key oder unit_alias, variable_id, code und score benötigt.'
+        translate('ui-text.coding-import-file.bitte-wechseln-sie-zu-testergebnisse-import-antworten-hochladen'),
+        translate('ui-text.coding-import-file.fuer-den-kodierungsimport-wird-eine-flache-datei-mit-unit-key-oder-unit-alias-variabl')
       ]
     };
   }
@@ -177,13 +178,13 @@ export function buildFormatDialogData(
     return {
       fileName,
       detectedFormat,
-      title: 'Testlogs-Export erkannt',
-      description: 'Diese Datei enthält Testlogs und kann nicht als Code-/Score-Kodierung übernommen werden.',
+      title: translate('ui-text.coding-import-file.testlogs-export-erkannt'),
+      description: translate('ui-text.coding-import-file.diese-datei-enthaelt-testlogs-und-kann-nicht-als-code-score-kodierung-uebernommen-wer'),
       canImport: false,
       headers,
       helpItems: [
-        'Bitte wechseln Sie zu Testergebnisse > Import > Logs hochladen.',
-        'Für den Kodierungsimport wird eine flache Datei mit unit_key oder unit_alias, variable_id, code und score benötigt.'
+        translate('ui-text.coding-import-file.bitte-wechseln-sie-zu-testergebnisse-import-logs-hochladen'),
+        translate('ui-text.coding-import-file.fuer-den-kodierungsimport-wird-eine-flache-datei-mit-unit-key-oder-unit-alias-variabl')
       ]
     };
   }
@@ -191,15 +192,15 @@ export function buildFormatDialogData(
   return {
     fileName,
     detectedFormat,
-    title: 'Datei konnte nicht erkannt werden',
-    description: 'Die Datei passt zu keinem unterstützten Kodierungsimport.',
+    title: translate('ui-text.coding-import-file.datei-konnte-nicht-erkannt-werden'),
+    description: translate('ui-text.coding-import-file.die-datei-passt-zu-keinem-unterstuetzten-kodierungsimport'),
     canImport: false,
     headers,
     helpItems: fallbackHelpItems || [
-      'Prüfen Sie, ob die erste Zeile Spaltenüberschriften enthält.',
-      'Für Kodierungen aus anderer Quelle werden unit_key oder unit_alias, variable_id, code und score erwartet.',
-      'Kodierergebnis-Exporte müssen Spalten wie status_v2, code_v2 und score_v2 enthalten.',
-      'Testergebnisse- und Log-Exporte bitte über den Bereich Testergebnisse importieren.'
+      translate('ui-text.coding-import-file.pruefen-sie-ob-die-erste-zeile-spaltenueberschriften-enthaelt'),
+      translate('ui-text.coding-import-file.fuer-kodierungen-aus-anderer-quelle-werden-unit-key-oder-unit-alias-variable-id-code'),
+      translate('ui-text.coding-import-file.kodierergebnis-exporte-muessen-spalten-wie-status-v2-code-v2-und-score-v2-enthalten'),
+      translate('ui-text.coding-import-file.testergebnisse-und-log-exporte-bitte-ueber-den-bereich-testergebnisse-importieren')
     ]
   };
 }

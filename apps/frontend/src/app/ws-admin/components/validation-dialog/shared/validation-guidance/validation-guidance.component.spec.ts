@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { ValidationGuidanceComponent } from './validation-guidance.component';
 
 describe('ValidationGuidanceComponent', () => {
@@ -8,7 +9,7 @@ describe('ValidationGuidanceComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         MatIconModule,
         ValidationGuidanceComponent
       ]

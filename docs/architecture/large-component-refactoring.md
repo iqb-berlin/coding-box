@@ -1,5 +1,121 @@
 # Große Angular-Komponenten: Bestand und nächste Schnitte
 
+## Folgeumbau vom 02.11.2026
+
+Basis ist der live abgerufene Stand `origin/develop` bei
+`a7bf3c6df80aaf69b1604bb06dee45c3ce73b62a`. Alle 17 großen Komponenten
+sind in diesen Schritt einbezogen. Die folgende Tabelle beschreibt die neuen
+Verantwortungsgrenzen; die historischen Prüfungen weiter unten beziehen sich
+weiterhin auf ihre dort genannten Commits.
+
+| Komponente | Neue lokale Verantwortung | Am UI-Besitzer verbleibt |
+| --- | --- | --- |
+| `TestResultsFlatTable` | Daten-Fassade für Seiten, Filteroptionen, Notizen und Häufigkeiten; Einstellungs-Fassade; Aktions-Fassade für Dialoge, Replay und Löschen | Filtereingaben, Debounce, Tabellenbindung und Ereignisse |
+| `CodeSelector` | `ReplayUnitIndex`: Navigation nach Definition, Alias, Bündel, Response und Fall | Codeauswahl, Tastatur/Fokus und Navigationsemission |
+| `CoderTraining` | `training-variable-groups`: Gruppierung und Überschneidungen derselben typisierten Controls | Formularlebensdauer, Auswahl, Speicherung |
+| `CodingJobDefinitionDialog` | `job-variable-filter`: Text-/Verfügbarkeitsfilter mit der bestehenden Fallpolitik | Auswahl, Workload-Vorschau, Formular und Persistenz |
+| `CodingJobDefinitions` | `job-definition-workflow`: unterscheidbare unbekannte/leere Jobanzahlen und Ablaufbeschreibung | Rechte, Definitionsaktionen, Laden und Dialoge |
+| `CodingJobResultDialog` | `coding-job-result-table`: kombinierte Filter und Sortierung von Nullwerten und fehlenden Werten | Datenabruf, Material-Tabelle und Aktionen |
+| `CodingJobs` | `coding-job-summary`: Variablenprojektion und Review-Hinweise einschließlich Cache-Fallback | Joblebenszyklus, Rechte und Aktionen |
+| `CodingManagement` | `coding-response-row`: typisierte Response-zu-Tabellenprojektion | Suche, Paging, Statistik und Coding-Abläufe |
+| `CodingManagementManual` | `manual-completion-readiness`: Vorrang von Übernahme, Bereitschaft, Review und offener Durchführung | vorhandene Ablauf-Fassaden und Ansichtsbindung |
+| `CodingResultsComparison` | `training-comparison-warnings`: Kohorten-/Paarwarnungen ohne UI-Zugriff | Auswahl, Diskussion, Tabellen-/Export-Fassaden |
+| `DoubleCodedReview` | `double-coding-code-options`: gültige Schema-/Allgemeincodes und Fallbacks | Entscheidung, Replay, Persistenz und Dialoge |
+| `Replay` | `replay-keyboard-policy`: Navigation/Codeeingabe unter Fokus-, Auth-, Speicherfehler- und Leserechtsbedingungen | DOM-Fokus, Player, Codeauswahl und Ereignisse |
+| `FilesValidation` | `testlet-exclusion-policy`: unveränderliche normalisierte Ausschlussänderung und Änderungsanzahl | Speicherung, Rollback, Rechte und Rückmeldung |
+| `TestCenterImport` | `test-center-import-results`: Gruppendeltas gegenüber Workspace-Gesamtzahlen und Fehlerdetails | Anmeldung, Importsteuerung, Wiederaufnahme und Polling |
+| `TestFiles` | `FileValidationProgressFacade`: Fortschritt, lokalisierte Schritte, ersetzbares kontextgebundenes Polling | Upload, Dateiliste, Validierungsstart und Ergebnisdialog |
+| `TestResults` | `booklet-result-status`: Bearbeitungszeit, besuchte Aufgaben, Kurzzeit- und Antwortstatus | Personen-/Detailtabelle und bestehende Import-/Export-Fassaden |
+| `VariableAnalysisDialog` (Workspace-Administration) | `variable-analysis-projection`: Fallzahlen, Status und Schema-/Beobachtungszeilen | Filter, Paging, Ergebnisabruf und Export |
+
+Die reine Fach-/Projektionslogik erhält explizite Werte und bei Bedarf eine
+Übersetzungsfunktion. Sie greift nicht auf Elternkomponenten oder globale
+Ansichtszustände zu. Die Fassade der Ergebnistabelle und die
+Validierungsfortschritts-Fassade sind komponentenlokale Provider. Nur lesbare
+Signals und Observable-Ereignisse bilden ihre öffentliche Schnittstelle.
+Die Zeilenzahl ist weiterhin eine Suchhilfe; dieser Schritt behauptet keine
+vollständige Zerlegung sämtlicher UI-Orchestrierung oder eine Grenze von
+1.000 Zeilen für jede Komponente.
+
+### Behobene Lebensdauerfehler
+
+- Ein neuer Filteroptionenabruf beendet seinen Vorgänger. Eine verspätete alte
+  Antwort kann die Optionen eines neueren Abrufs nicht mehr überschreiben.
+- Der erste Workspace-Wechsel beendet die Vorbereitung und das Ergebnisabonnement
+  des Einstellungsdialogs und schließt den Dialog. Auch A → B → A reaktiviert
+  keine alte Antwort oder Speicherentscheidung.
+- Seiten-, Häufigkeits-, Notiz- und Zeilenaktionsanfragen sowie der kleine
+  Personen-Cache sind an den ursprünglichen Workspace gebunden. Dialoge werden
+  beim Kontextende geschlossen.
+- Die Dateivalidierung verwendet `exhaustMap`: Eine langsame Statusanfrage wird
+  nicht durch jeden 300-ms-Takt abgebrochen. Neue Validierung, Workspace-Wechsel
+  und Zerstörung beenden das Polling; niedrigere Fortschrittswerte setzen die
+  Anzeige nicht zurück.
+
+### UI-Texte und Versionsrahmen
+
+Verbliebene statische Beschriftungen, Tooltips, ARIA-Texte und Meldungen liegen
+im deutschen Übersetzungskatalog. Dynamische Texte verwenden Parameter.
+`injectUiTranslator` löst den Dienst erst beim ersten Textabruf auf, gibt
+Übersetzungsereignisse an berechnete Labels weiter und beendet seine Listener
+mit dem Besitzer. Fachliche Protokollwerte (etwa `Vollständig` im
+Filtervertrag), importierte Inhalte und technische IDs bleiben Daten.
+Die Browser- und Komponententests verwenden den wirklichen deutschen Katalog.
+
+Angular bleibt auf der kompatiblen 21er-Linie des geprüften Develop-Stands.
+Dieser Umbau ist kein Angular-22- oder Toolchain-Upgrade. Backend, DTOs und
+Datenbankschema werden nicht geändert.
+
+### Review-Nachlauf: HTTP-Fehlertexte
+
+Der Review hat eine Regression der Übersetzungsumstellung reproduziert:
+Ein lokalisierter Standardhinweis und ein individueller Servertext derselben
+HTTP-Anfrage wurden als ein gemeinsamer Übersetzungsschlüssel behandelt.
+Außerdem konnte ein Servertext wie `error` mit einer Kataloggruppe kollidieren.
+
+`AppHttpError` speichert Meldungsteile deshalb ausdrücklich als
+Übersetzungsschlüssel oder als Servertext. Die Gruppierung kopiert diese Teile
+mit dem Fehlerzustand; Fehleranzeige und Journal übersetzen nur die dafür
+vorgesehenen Teile. Die sichtbaren Meldungen, Diagnoseinformationen und die
+Anzahl betroffener Anfragen bleiben erhalten.
+Drei native Integrationstests reproduzierten die Fehler zuerst und bestehen
+nach der Korrektur: beide Reihenfolgen von Standard-/Servermeldung sowie
+Servertext mit dem Namen einer Kataloggruppe einschließlich Detailanzeige.
+Ein weiterer Journal-Test prüft die unveränderte Wiedergabe dieses Servertexts.
+
+### Aktuelle technische Prüfung
+
+Lokal im isolierten Worktree auf `harden-frontend-workflows` mit Node 24.22.1
+geprüft. Alle Nx-Aufrufe verwenden die lokale Installation sowie
+`NX_DAEMON=false NX_NO_CLOUD=true`; Validierungen liefen nacheinander.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `nx lint frontend` | Bestanden, keine Warnungen. Die abschließende Klammerung der Logo-Übersetzung zusätzlich mit `--lintFilePatterns=apps/frontend/src/app/app.component.html` geprüft. |
+| `nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | Alle 3.790 Tests in 349 Suiten bestanden. Coverage: 83,73 % Statements/Zeilen, 81,80 % Branches, 81,41 % Functions; alle 60-%-Grenzen bestanden. |
+| `nx run frontend:test-quality-gates` | Alle 56 Prüfungen bestanden. |
+| `nx run frontend:zoneless-inventory-test` | Beide Generierungs-/Konsistenzprüfungen bestanden. |
+| `nx run frontend:zoneless-inventory --args=--update`, danach `nx run frontend:zoneless-approval` | Neu erzeugtes Inventar mit 10.759 Einträgen, 177 Komponenten und Referenzen für 59 korrigierte Befunde geprüft. Risikobezogene Prüfung, keine vollständige Freigabe aller Inventarszenarien. |
+| `nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,60 kB, keine Budgetüberschreitung. |
+| `nx run frontend:component-test --browser=electron --skipNxCache` | Vor dem HTTP-Meldungsnachlauf alle elf Spezifikationen ausgeführt: 36 Fälle bestanden; der Eingabetest der flachen Ergebnistabelle brauchte einen regulären Klick auf das Material-Label vor dem Tippen. Der gezielte Nachlauf mit `--spec=cypress/component/test-results-flat-table.component.cy.ts` bestand anschließend ebenfalls. Insgesamt 37 Fälle nachgeprüft; keine Test-Retries. |
+| `nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Vor dem HTTP-Meldungsnachlauf alle 201 Fälle in 36 Spezifikationen bestanden, 8:32 Minuten reine Spezifikationslaufzeit; keine übersprungenen Fälle oder Test-Retries. Frisch gebautes Produktionsartefakt, einschließlich des übersetzten Logo-Alternativtexts. |
+| Abschließende Browserregression nach HTTP-Meldungsnachlauf | Alle 35 Fälle aus `app.cy.ts`, `file-list.cy.ts`, `oidc-callback.cy.ts` und `zoneless-dialogs.cy.ts` gegen den neuen Produktionsbuild bestanden; keine Test-Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Der Produktionsartefakt-Fingerprint aus
+`node scripts/qa/hash-frontend-artifact.mjs` ist
+`9ce333092672cb491216c0764fc7d249e580e863fd0d9ac62aa6b5ce5f65a73f`.
+Browser-Komponententests und E2E verwenden kontrollierte API-/Auth-Antworten.
+Reale Backend-Persistenz, externe Testcenter, Live-Keycloak und Produktionslast
+sind damit nicht nachgewiesen. Der erste E2E-Start scheiterte vor der
+Testausführung an einem lokalen Nx-Schreibfehler bei fast vollem Datenträger;
+nach Entfernung ausschließlich des neu erzeugten Angular-Caches dieses
+Worktrees startete der Lauf.
+Entfernte CI, Merge, Release, Deployment und fachliche Abnahme stehen separat aus.
+
+---
+
+
 Ausgangspunkt: `develop` nach PR #1089, Commit
 `cdc9f9b6dea0f80c00768157e025f2747aaa017c` (22.10.2026).
 Gezählt werden physische Zeilen einschließlich Kommentaren und Leerzeilen in

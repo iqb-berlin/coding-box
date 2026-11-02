@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
@@ -8,6 +9,8 @@ import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-err
   providedIn: 'root'
 })
 export class CodingExecutionService {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
@@ -57,7 +60,7 @@ export class CodingExecutionService {
       return of({
         status: 'failed' as const,
         progress: 0,
-        error: 'Fehlende Job-ID für Statusabfrage'
+        error: this.uiTranslate('ui-text.coding-execution.fehlende-job-id-fuer-statusabfrage')
       });
     }
 

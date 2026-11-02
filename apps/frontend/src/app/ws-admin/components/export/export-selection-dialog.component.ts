@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { CommonModule } from '@angular/common';
 import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -7,6 +8,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatIconModule } from '@angular/material/icon';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
 import { CoderTraining } from '../../../coding/models/coder-training.model';
 import { Coder } from '../../../coding/models/coder.model';
@@ -27,7 +29,7 @@ export interface ExportSelectionDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-selection-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     CommonModule,
     FormsModule,
     MatDialogModule,
@@ -38,11 +40,11 @@ export interface ExportSelectionDialogResult {
     MatIconModule
   ],
   template: `
-    <h2 mat-dialog-title>Filter auswählen</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.export-selection-dialog.filter-auswaehlen' | translate }}</h2>
 
     <mat-dialog-content class="dialog-content">
       <mat-tab-group>
-        <mat-tab label="Jobdefinitionen">
+        <mat-tab [label]="'process-overview.details.jobDefinitionCount' | translate">
           <div class="section">
             <div class="list">
               @for (def of data.jobDefinitions; track def.id) {
@@ -63,17 +65,17 @@ export interface ExportSelectionDialogResult {
 
                 <div class="details">
                   <div class="details-row">
-                    <div class="details-title">Kodierer</div>
+                    <div class="details-title">{{ 'ws-admin.export-options.coders' | translate }}</div>
                     <div class="details-value">{{ getDefinitionCoders(def) || '-' }}</div>
                   </div>
 
                   <div class="details-row">
-                    <div class="details-title">Variablen</div>
+                    <div class="details-title">{{ 'coding.my-coding-jobs.job-variables' | translate }}</div>
                     <div class="details-value prewrap">{{ getDefinitionVariables(def) || '-' }}</div>
                   </div>
 
                   <div class="details-row">
-                    <div class="details-title">Variablenbündel</div>
+                    <div class="details-title">{{ 'coding-management-manual.titles.variable-bundles' | translate }}</div>
                     <div class="details-value prewrap">{{ getDefinitionBundles(def) || '-' }}</div>
                   </div>
                 </div>
@@ -81,13 +83,13 @@ export interface ExportSelectionDialogResult {
               }
 
               @if (!data.jobDefinitions?.length) {
-                <div class="empty">Keine Jobdefinitionen vorhanden.</div>
+                <div class="empty">{{ 'ui-text.export-selection-dialog.keine-jobdefinitionen-vorhanden' | translate }}</div>
               }
             </div>
           </div>
         </mat-tab>
 
-        <mat-tab label="Coder-Trainings">
+        <mat-tab [label]="'ui-text.export-selection-dialog.coder-trainings' | translate">
           <div class="section">
             <div class="list">
               @for (training of data.coderTrainings; track training.id) {
@@ -100,7 +102,7 @@ export interface ExportSelectionDialogResult {
               </div>
               }
               @if (!data.coderTrainings?.length) {
-                <div class="empty">Keine Coder-Trainings vorhanden.</div>
+                <div class="empty">{{ 'ui-text.export-selection-dialog.keine-coder-trainings-vorhanden' | translate }}</div>
               }
             </div>
           </div>
@@ -109,10 +111,10 @@ export interface ExportSelectionDialogResult {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="clear()">Zurücksetzen</button>
-      <button mat-button (click)="cancel()">Abbrechen</button>
+      <button mat-button (click)="clear()">{{ 'ui-text.export-selection-dialog.zuruecksetzen' | translate }}</button>
+      <button mat-button (click)="cancel()">{{ 'cancel' | translate }}</button>
       <button mat-raised-button color="primary" (click)="apply()">
-        Übernehmen
+        {{ 'ui-text.export-selection-dialog.uebernehmen' | translate }}
       </button>
     </mat-dialog-actions>
   `,
@@ -178,6 +180,8 @@ export interface ExportSelectionDialogResult {
   `]
 })
 export class ExportSelectionDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<ExportSelectionDialogComponent>>(MatDialogRef);
   protected data = inject<ExportSelectionDialogData>(MAT_DIALOG_DATA);
 
@@ -229,7 +233,7 @@ export class ExportSelectionDialogComponent {
     const varsCount = def.assignedVariables?.length ?? 0;
     const bundlesCount = def.assignedVariableBundles?.length ?? 0;
     const codersCount = def.assignedCoders?.length ?? 0;
-    return `${varsCount} Variablen, ${bundlesCount} Bündel, ${codersCount} Kodierer`;
+    return this.uiTranslate('ui-text.export-selection-dialog.variablen-buendel-kodierer', { varsCount: varsCount, bundlesCount: bundlesCount, codersCount: codersCount });
   }
 
   protected getDefinitionVariables(def: JobDefinition): string {

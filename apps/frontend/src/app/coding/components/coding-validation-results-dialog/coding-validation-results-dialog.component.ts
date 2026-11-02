@@ -16,6 +16,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import {
@@ -40,6 +41,8 @@ import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-reque
   ]
 })
 export class CodingValidationResultsDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   private pageRequest?: Subscription;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -155,7 +158,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
       error: () => {
         this.isLoading = false;
         this.changeDetectorRef.markForCheck();
-        this.snackBar.open('Fehler beim Laden der Validierungsergebnisse', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.fehler-beim-laden-der-validierungsergebnisse'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
@@ -167,7 +170,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     const workspaceId = this.workspaceId;
 
     if (!workspaceId || !this.validationCacheKey) {
-      this.snackBar.open('Keine Daten zum Herunterladen verfügbar', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.keine-daten-zum-herunterladen-verfuegbar'), this.uiTranslate('deferred-view.close'), {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
@@ -192,7 +195,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
 
-        this.snackBar.open('Excel-Datei wurde erfolgreich heruntergeladen.', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-validation-results-dialog.excel-datei-wurde-erfolgreich-heruntergeladen'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['success-snackbar']
         });
@@ -200,20 +203,20 @@ export class CodingValidationResultsDialogComponent implements OnInit {
         this.changeDetectorRef.markForCheck();
       },
       error: error => {
-        let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
+        let errorMessage = this.uiTranslate('coding-management-manual.errors.download-failed');
         if (error.status === 404) {
-          errorMessage = 'Validierungsdaten nicht gefunden. Bitte führen Sie zuerst eine neue Validierung durch.';
+          errorMessage = this.uiTranslate('coding-management-manual.errors.cache-not-found');
         } else if (error.status === 400) {
-          errorMessage = 'Ungültiger Cache-Schlüssel. Bitte führen Sie eine neue Validierung durch.';
+          errorMessage = this.uiTranslate('coding-management-manual.errors.invalid-cache');
         } else if (error.status === 500) {
-          errorMessage = 'Server-Fehler beim Generieren der Excel-Datei. Bitte versuchen Sie es später erneut.';
+          errorMessage = this.uiTranslate('coding-management-manual.errors.server-error');
         } else if (error.status === 0) {
-          errorMessage = 'Netzwerk-Fehler. Bitte überprüfen Sie Ihre Internetverbindung.';
+          errorMessage = this.uiTranslate('coding-management-manual.errors.network-error');
         } else if (error.message && error.message.includes('cache')) {
-          errorMessage = 'Die Validierungsdaten sind nicht mehr verfügbar. Bitte führen Sie eine neue Validierung durch.';
+          errorMessage = this.uiTranslate('ui-text.coding-validation-results-dialog.die-validierungsdaten-sind-nicht-mehr-verfuegbar-bitte-fuehren-sie-eine-neue-validierung-d');
         }
 
-        this.snackBar.open(errorMessage, 'Schließen', {
+        this.snackBar.open(errorMessage, this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });

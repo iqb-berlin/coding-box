@@ -54,7 +54,7 @@
   @if (jobDefinitions().length > 0) {
     <div
       class="definition-summary"
-      aria-label="Status der Jobdefinitionen">
+      [attr.aria-label]="'ui-text.coding-job-definitions.status-der-jobdefinitionen' | translate">
       <div class="summary-item">
         <span>{{ 'coding-job-definitions.summary.total' | translate }}</span>
         <strong>{{ jobDefinitions().length }}</strong>
@@ -215,7 +215,7 @@
             @if (selectionMode()) {
               <div class="action-buttons">
                 <button mat-button color="primary" type="button" (click)="selectDefinition(definition)">
-                  <mat-icon>download</mat-icon> Importieren
+                  <mat-icon>download</mat-icon> {{ 'ui-text.coding-job-definitions.importieren' | translate }}
                 </button>
               </div>
             }
@@ -251,7 +251,7 @@
           <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.variables' | translate }}</th>
           <td mat-cell *matCellDef="let definition" class="variables-cell">
             @if (getVariableItems(definition).length > 0) {
-              <div class="variables-count">{{ getVariableItems(definition).length }} Variablen</div>
+              <div class="variables-count">{{ 'ui-text.coding-job-definitions.variablen' | translate: { value1: (getVariableItems(definition).length) } }}</div>
               <div class="variable-chip-list" [class.expanded]="isVariableListExpanded(definition)">
                 @for (variableName of getVisibleVariableItems(definition); track variableName) {
                   <span class="variable-chip">
@@ -267,7 +267,7 @@
                   class="toggle-variables-button"
                   (click)="toggleVariableList(definition, $event)">
                   {{ isVariableListExpanded(definition)
-                  ? 'Weniger anzeigen'
+                  ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings' | translate)
                   : '+' + getHiddenVariableCount(definition) + ' weitere anzeigen' }}
                 </button>
               }

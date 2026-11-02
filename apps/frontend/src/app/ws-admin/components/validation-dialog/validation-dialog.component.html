@@ -1,4 +1,4 @@
-<h1 mat-dialog-title>Antwortdaten prüfen</h1>
+<h1 mat-dialog-title>{{ 'ui-text.validation-dialog.antwortdaten-pruefen' | translate }}</h1>
 
 <!-- Overall status banner -->
 <coding-box-validation-result-banner
@@ -13,7 +13,7 @@
   <button mat-button color="primary"
     (click)="startAllValidations()"
     [disabled]="isAnyValidationRunning()">
-    Alle Prüfungen starten
+    {{ 'ui-text.validation-dialog.alle-pruefungen-starten' | translate }}
   </button>
 </div>
 
@@ -21,7 +21,7 @@
 @if (isAnyValidationRunning()) {
   <div class="info-banner">
     <mat-icon>info</mat-icon>
-    <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
+    <span>{{ 'ui-text.validation-dialog.validierungen-laufen-im-hintergrund-weiter-auch-wenn-sie-diesen-dialog-schliessen' | translate }}</span>
   </div>
 }
 
@@ -65,5 +65,5 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Schließen</button>
+  <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </mat-dialog-actions>

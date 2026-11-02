@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { finalize, Subject } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -17,6 +18,8 @@ import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade'
 /** Result application owns its confirmations, requests and feedback for this view. */
 @Injectable()
 export class ManualCodingCompletionFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly codingJobBackendService = inject(CodingJobBackendService);
@@ -37,22 +40,22 @@ export class ManualCodingCompletionFacade {
   isApplyingJobResults(jobId: number): boolean { return this.applyingJobIds().has(jobId); }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), { duration: 5000, panelClass: ['error-snackbar'] });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', { duration: 5000, panelClass: ['success-snackbar'] });
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), { duration: 5000, panelClass: ['success-snackbar'] });
   }
 
   applyCompletedJobResults(job: CodingJob, canApply: () => boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('Kein Workspace ausgewählt');
+      this.showError(this.uiTranslate('error.noWorkspaceSelected'));
       return;
     }
 
     if (!canApply()) {
-      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-berechtigung-zum-anwenden-von-job-ergebnissen'));
       return;
     }
 
@@ -73,7 +76,7 @@ export class ManualCodingCompletionFacade {
 
       this.applyingJobIds.update(ids => new Set(ids).add(job.id));
       const loadingSnack = this.snackBar.open(
-        `Wende Ergebnisse für Kodierjob "${job.name}" an...`,
+        this.uiTranslate('ui-text.coding-jobs.wende-ergebnisse-fuer-kodierjob-an', { name: job.name }),
         '',
         { duration: 3000 }
       );
@@ -99,15 +102,17 @@ export class ManualCodingCompletionFacade {
             }
 
             this.showError(
-              `Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(
-                result.messageKey,
-                result.messageParams || {}
-              )}`
+              this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', {
+                value1: this.translateService.instant(
+                  result.messageKey,
+                  result.messageParams || {}
+                )
+              })
             );
           },
           error: error => {
             this.showError(
-              `Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`
+              this.uiTranslate('ui-text.coding-jobs.fehler-beim-anwenden-der-ergebnisse', { value1: error.message || this.uiTranslate('error.unknown') })
             );
           }
         });
@@ -117,31 +122,31 @@ export class ManualCodingCompletionFacade {
   applyAllCompletedJobResults(canApply: () => boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('Kein Workspace ausgewählt');
+      this.showError(this.uiTranslate('error.noWorkspaceSelected'));
       return;
     }
 
     if (!canApply()) {
-      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-berechtigung-zum-anwenden-von-job-ergebnissen'));
       return;
     }
 
     if (!this.hasCompletedJobsReadyForApply()) {
-      this.showError('Keine abgeschlossenen Kodierjobs zum Anwenden gefunden.');
+      this.showError(this.uiTranslate('ui-text.manual-coding-completion.keine-abgeschlossenen-kodierjobs-zum-anwenden-gefunden'));
       return;
     }
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '500px',
       data: {
-        title: 'Alle abgeschlossenen Ergebnisse anwenden',
+        title: this.uiTranslate('ui-text.manual-coding-completion.alle-abgeschlossenen-ergebnisse-anwenden'),
         message: [
-          `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) anwenden?`,
-          'Bei Jobs mit offenen Kodierungshinweisen werden gültige Antworten angewendet;',
-          'offene Hinweise bleiben zur manuellen Prüfung bestehen.'
+          this.uiTranslate('ui-text.manual-coding-completion.moechten-sie-die-ergebnisse-fuer-abgeschlossene-kodierjob-s-anwenden', { value1: this.completedJobsReadyForApply().length }),
+          this.uiTranslate('ui-text.coding-jobs.bei-jobs-mit-offenen-kodierungshinweisen-werden-gueltige-antworten-angewendet'),
+          this.uiTranslate('ui-text.coding-jobs.offene-hinweise-bleiben-zur-manuellen-pruefung-bestehen')
         ].join(' '),
-        confirmButtonText: 'Anwenden',
-        cancelButtonText: 'Abbrechen'
+        confirmButtonText: this.uiTranslate('coding.trainings.compare.apply-dialog.apply'),
+        cancelButtonText: this.uiTranslate('cancel')
       }
     });
 
@@ -155,7 +160,7 @@ export class ManualCodingCompletionFacade {
   private performBulkApplyCompletedJobResults(workspaceId: number): void {
     this.isApplyingBulk.set(true);
     const loadingSnack = this.snackBar.open(
-      'Wende Ergebnisse für alle abgeschlossenen Kodierjobs an...',
+      this.uiTranslate('ui-text.manual-coding-completion.wende-ergebnisse-fuer-alle-abgeschlossenen-kodierjobs-an'),
       '',
       { duration: 3000 }
     );
@@ -178,11 +183,11 @@ export class ManualCodingCompletionFacade {
             return;
           }
 
-          this.showError(`Fehler bei der Massenanwendung: ${result.message}`);
+          this.showError(this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung', { message: result.message }));
         },
         error: error => {
           this.showError(
-            `Fehler bei der Massenanwendung: ${error.message || 'Unbekannter Fehler'}`
+            this.uiTranslate('ui-text.coding-jobs.fehler-bei-der-massenanwendung-473110', { value1: error.message || this.uiTranslate('error.unknown') })
           );
         }
       });
@@ -192,24 +197,24 @@ export class ManualCodingCompletionFacade {
     result: ApplyCodingResultsResponse
   ): string {
     const parts = [
-      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
+      this.uiTranslate('ui-text.coding-jobs.ergebnisse-erfolgreich-angewendet-antworten-aktualisiert', { updatedResponsesCount: result.updatedResponsesCount })
     ];
 
     if (result.skippedAlreadyCodedCount > 0) {
       parts.push(
-        `Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.bereits-vorhandene-kodierungen-nicht-ueberschrieben-antworten', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
       );
     }
 
     if (result.overwrittenExistingCount > 0) {
       parts.push(
-        `Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.vorhandene-kodierungen-ueberschrieben-antworten', { overwrittenExistingCount: result.overwrittenExistingCount })
       );
     }
 
     if (result.skippedReviewCount > 0) {
       parts.push(
-        `Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`
+        this.uiTranslate('ui-text.coding-jobs.uebersprungen-manuelle-pruefung-benoetigt-antworten', { skippedReviewCount: result.skippedReviewCount })
       );
     }
 
@@ -224,34 +229,34 @@ export class ManualCodingCompletionFacade {
       item => item.result && !item.result.success
     ).length;
     const parts = [
-      `Massenanwendung abgeschlossen: ${result.jobsProcessed} Jobs verarbeitet`,
-      `${result.totalUpdatedResponses} Antworten aktualisiert`
+      this.uiTranslate('ui-text.manual-coding-completion.massenanwendung-abgeschlossen-jobs-verarbeitet', { jobsProcessed: result.jobsProcessed }),
+      this.uiTranslate('ui-text.manual-coding-completion.antworten-aktualisiert', { totalUpdatedResponses: result.totalUpdatedResponses })
     ];
 
     if (result.totalSkippedAlreadyCoded > 0) {
       parts.push(
-        `${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten`
+        this.uiTranslate('ui-text.manual-coding-completion.vorhandene-kodierungen-beibehalten', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded })
       );
     }
 
     if (result.totalOverwrittenExisting > 0) {
       parts.push(
-        `${result.totalOverwrittenExisting} vorhandene Kodierungen überschrieben`
+        this.uiTranslate('ui-text.manual-coding-completion.vorhandene-kodierungen-ueberschrieben', { totalOverwrittenExisting: result.totalOverwrittenExisting })
       );
     }
 
     if (result.totalSkippedReview > 0) {
       parts.push(
-        `${result.totalSkippedReview} Ergebnisse zur manuellen Prüfung übersprungen`
+        this.uiTranslate('ui-text.manual-coding-completion.ergebnisse-zur-manuellen-pruefung-uebersprungen', { totalSkippedReview: result.totalSkippedReview })
       );
     }
 
     if (skippedCount > 0) {
-      parts.push(`${skippedCount} Jobs übersprungen`);
+      parts.push(this.uiTranslate('ui-text.manual-coding-completion.jobs-uebersprungen', { skippedCount: skippedCount }));
     }
 
     if (failedCount > 0) {
-      parts.push(`${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet`);
+      parts.push(this.uiTranslate('ui-text.manual-coding-completion.jobs-mit-konflikten-fehlern-nicht-angewendet', { failedCount: failedCount }));
     }
 
     return parts.join(', ');

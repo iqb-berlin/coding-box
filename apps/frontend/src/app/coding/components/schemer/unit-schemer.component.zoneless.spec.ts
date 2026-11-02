@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { StandaloneUnitSchemerComponent } from './unit-schemer.component';
 import { PostMessageEvent, PostMessageService } from '../../../core/services/post-message.service';
 import { SchemerMessage } from '../../../core/services/post-message-types';
@@ -27,7 +28,7 @@ describe('Embedded Schemer feedback without Zone.js', () => {
       return originalSetTimeout(handler, timeout, ...args);
     });
     await TestBed.configureTestingModule({
-      imports: [StandaloneUnitSchemerComponent],
+      imports: [GermanTranslationsTestingModule, StandaloneUnitSchemerComponent],
       providers: [
         provideZonelessChangeDetection(),
         {

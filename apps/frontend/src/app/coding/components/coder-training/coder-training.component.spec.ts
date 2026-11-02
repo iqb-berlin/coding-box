@@ -10,6 +10,7 @@ import { FormGroup } from '@angular/forms';
 import {
   finalize, of, Subject, throwError
 } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
 import { TrainingSampleEditorComponent, TrainingSampleView } from './training-sample-editor.component';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
@@ -120,7 +121,7 @@ describe('CoderTrainingComponent', () => {
     }));
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         CoderTrainingComponent,
         TranslateModule.forRoot()
       ],

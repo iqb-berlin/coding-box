@@ -25,6 +25,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { finalize, forkJoin } from 'rxjs';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { activateOnKeyboard } from '../../shared/utils/keyboard-activation.util';
 import { FileService } from '../../shared/services/file/file.service';
 import {
@@ -90,6 +91,8 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<CodingVariablesDialogComponent>>(MatDialogRef);
   data = inject<CodingVariablesDialogData>(MAT_DIALOG_DATA);
   private fileService = inject(FileService);
@@ -272,7 +275,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         this.isLoading.set(false);
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodiervariablen', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-variables-dialog.fehler-beim-laden-der-kodiervariablen'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
@@ -298,13 +301,13 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         variable.replayAnchor.set(saved.replayAnchor);
         variable.savedReplayAnchor.set(saved.replayAnchor);
         variable.isSavingReplayAnchor.set(false);
-        this.snackBar.open('Replay-Anchor gespeichert', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-variables-dialog.replay-anchor-gespeichert'), this.uiTranslate('deferred-view.close'), {
           duration: 2500
         });
       },
       error: () => {
         variable.isSavingReplayAnchor.set(false);
-        this.snackBar.open('Replay-Anchor konnte nicht gespeichert werden', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-variables-dialog.replay-anchor-konnte-nicht-gespeichert-werden'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
@@ -323,13 +326,13 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         variable.replayAnchor.set('');
         variable.savedReplayAnchor.set('');
         variable.isSavingReplayAnchor.set(false);
-        this.snackBar.open('Replay-Anchor zurückgesetzt', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-variables-dialog.replay-anchor-zurueckgesetzt'), this.uiTranslate('deferred-view.close'), {
           duration: 2500
         });
       },
       error: () => {
         variable.isSavingReplayAnchor.set(false);
-        this.snackBar.open('Replay-Anchor konnte nicht zurückgesetzt werden', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.coding-variables-dialog.replay-anchor-konnte-nicht-zurueckgesetzt-werden'), this.uiTranslate('deferred-view.close'), {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
@@ -414,7 +417,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
 
   openUnitInfo(unitId: string): void {
     const loadingSnackBar = this.snackBar.open(
-      'Aufgaben-Informationen werden geladen...',
+      this.uiTranslate('ui-text.unit-info-dialog.aufgaben-informationen-werden-geladen'),
       '',
       { duration: 0 }
     );
@@ -432,8 +435,8 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden der Aufgaben-Informationen',
-          'Schließen',
+          this.uiTranslate('test-results-table.unit-error'),
+          this.uiTranslate('deferred-view.close'),
           { duration: 3000 }
         );
       }
@@ -442,7 +445,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
 
   openCodingScheme(codingSchemeRef: string): void {
     const loadingSnackBar = this.snackBar.open(
-      'Kodierungsschema wird geladen...',
+      this.uiTranslate('ui-text.coding-variables-dialog.kodierungsschema-wird-geladen'),
       '',
       { duration: 0 }
     );
@@ -453,8 +456,8 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       next: (schemeFile: FileDownloadDto | null) => {
         if (!schemeFile) {
           this.snackBar.open(
-            'Kodierungsschema-Datei nicht gefunden',
-            'Schließen',
+            this.uiTranslate('ui-text.coding-job-result-dialog.kodierungsschema-datei-nicht-gefunden'),
+            this.uiTranslate('deferred-view.close'),
             { duration: 3000 }
           );
           return;
@@ -478,8 +481,8 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden des Kodierungsschemas',
-          'Schließen',
+          this.uiTranslate('ui-text.coding-job-result-dialog.fehler-beim-laden-des-kodierungsschemas'),
+          this.uiTranslate('deferred-view.close'),
           { duration: 3000 }
         );
       }

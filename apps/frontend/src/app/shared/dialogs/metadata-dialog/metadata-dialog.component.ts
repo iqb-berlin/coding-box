@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
@@ -64,7 +65,7 @@ export interface MetadataDialogData {
   selector: 'coding-box-metadata-dialog',
   standalone: true,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
-  imports: [
+  imports: [TranslateModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,
@@ -88,7 +89,7 @@ export interface MetadataDialogData {
           [(ngModel)]="isEditing"
           (change)="onEditModeChange()"
           color="primary">
-          {{ isEditing() ? 'Bearbeiten aktiv' : 'Bearbeiten' }}
+          {{ isEditing() ? 'Bearbeiten aktiv' : ('common.edit' | translate) }}
         </mat-slide-toggle>
         }
       </div>
@@ -104,12 +105,12 @@ export interface MetadataDialogData {
       <div [style.display]="isLoading() ? 'none' : 'block'">
         <div class="selection-container">
           <mat-form-field appearance="outline">
-            <mat-label>Metadaten anzeigen für</mat-label>
+            <mat-label>{{ 'ui-text.metadata-dialog.metadaten-anzeigen-fuer' | translate }}</mat-label>
             <mat-select [(ngModel)]="selectedView" (selectionChange)="onViewChange()">
-              <mat-option value="unit">Unit (Aufgabe)</mat-option>
+              <mat-option value="unit">{{ 'ui-text.metadata-dialog.unit-aufgabe' | translate }}</mat-option>
               @for (item of items(); track item.uuid) {
                 <mat-option [value]="item.uuid">
-                  Item {{ item.id }}
+                  {{ 'ui-text.metadata-dialog.item' | translate: { id: (item.id) } }}
                 </mat-option>
               }
             </mat-select>
@@ -119,7 +120,7 @@ export interface MetadataDialogData {
         @if (selectedView() !== 'unit') {
           <div class="item-info">
             <mat-form-field appearance="outline">
-              <mat-label>Item-ID</mat-label>
+              <mat-label>{{ 'ui-text.metadata-dialog.item-id' | translate }}</mat-label>
               <input matInput #itemIdInput
                      [value]="getSelectedItem()!.id"
                      [readonly]="!canEdit || !isEditing()"
@@ -127,7 +128,7 @@ export interface MetadataDialogData {
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>Variablen-ID</mat-label>
+              <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
               <input matInput #itemVariableInput
                      [value]="getSelectedItem()!.variableId"
                      [readonly]="!canEdit || !isEditing()"
@@ -135,7 +136,7 @@ export interface MetadataDialogData {
             </mat-form-field>
 
             <mat-form-field appearance="outline">
-              <mat-label>Beschreibung</mat-label>
+              <mat-label>{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-label>
               <textarea matInput #itemDescriptionInput
                         [value]="getSelectedItem()!.description"
                         [readonly]="!canEdit || !isEditing()"
@@ -161,12 +162,12 @@ export interface MetadataDialogData {
 
     <mat-dialog-actions align="end">
       <button mat-button (click)="close(false)">
-        {{ isEditing() && hasChanges() ? 'Abbrechen' : 'Schließen' }}
+        {{ isEditing() && hasChanges() ? ('cancel' | translate) : ('deferred-view.close' | translate) }}
       </button>
 
       @if (canEdit && isEditing() && hasChanges()) {
         <button mat-raised-button color="primary" (click)="close(true)">
-          Speichern
+          {{ 'save' | translate }}
         </button>
       }
     </mat-dialog-actions>

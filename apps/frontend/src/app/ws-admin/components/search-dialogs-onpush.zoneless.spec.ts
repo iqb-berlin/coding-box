@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { AppService } from '../../core/services/app.service';
 import { FileService } from '../../shared/services/file/file.service';
 import { ResponseService } from '../../shared/services/response/response.service';
@@ -44,7 +45,7 @@ async function setup<T>(component: Type<T>, initialSearch?: string) {
   const deletion = new Subject<{ success: boolean; report: { deletedUnit: number; warnings: string[] } }>();
   const dialog = { open: jest.fn(() => ({ afterClosed: () => confirmation })) };
   await TestBed.configureTestingModule({
-    imports: [component, TranslateModule.forRoot()],
+    imports: [GermanTranslationsTestingModule, component, TranslateModule.forRoot()],
     providers: [
       provideZonelessChangeDetection(),
       { provide: MAT_DIALOG_DATA, useValue: { title: 'Search', initialSearch } },
@@ -67,7 +68,7 @@ async function setup<T>(component: Type<T>, initialSearch?: string) {
   TestBed.overrideProvider(MatDialog, { useValue: dialog });
   await TestBed.compileComponents();
   const translate = TestBed.inject(TranslateService);
-  translate.setTranslation('de', { paginator: { getRangeLabel: '{{startIndex}}–{{endIndex}} von {{length}}' } });
+  translate.setTranslation('de', { paginator: { getRangeLabel: '{{startIndex}}–{{endIndex}} von {{length}}' } }, true);
   translate.use('de');
   const fixture = TestBed.createComponent(component);
   await fixture.whenStable();

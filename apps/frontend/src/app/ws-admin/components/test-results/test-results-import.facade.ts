@@ -7,6 +7,7 @@ import { TranslateService } from '@ngx-translate/core';
 import {
   BehaviorSubject, ReplaySubject, Subject, Subscription, firstValueFrom, takeUntil, timeout, timer as rxjsTimer
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../../shared/services/test-result/test-result.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -24,6 +25,8 @@ import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
 /** Import attempt orchestration; chunked uploads retain their existing workspace service. */
 @Injectable()
 export class TestResultsImportFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly testResultService = inject(TestResultService);
@@ -37,7 +40,7 @@ export class TestResultsImportFacade {
   private readonly isUploadingResultsState = signal<boolean>(false);
   readonly isUploadingResults = this.isUploadingResultsState.asReadonly();
 
-  private readonly uploadingMessageState = signal('Ergebnisse werden hochgeladen...');
+  private readonly uploadingMessageState = signal(this.uiTranslate('ui-text.test-results-import.ergebnisse-werden-hochgeladen'));
   readonly uploadingMessage = this.uploadingMessageState.asReadonly();
   private readonly overview = this.statistics.overview;
   private readonly manualAppliedResultsOverview = this.statistics.manualAppliedResultsOverview;
@@ -151,8 +154,8 @@ export class TestResultsImportFacade {
             title: 'Testcenter-Import',
             icon: 'upload_file',
             phase: 'refreshingOverview',
-            phaseLabel: 'Übersicht wird aktualisiert',
-            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.uebersicht-wird-aktualisiert'),
+            message: this.uiTranslate('ui-text.test-results-import.der-import-ist-abgeschlossen-lade-die-aktualisierten-ergebniszahlen'),
             mode: 'indeterminate'
           });
 
@@ -201,8 +204,8 @@ export class TestResultsImportFacade {
             title: 'Testcenter-Import',
             icon: 'upload_file',
             phase: 'refreshingOverview',
-            phaseLabel: 'Übersicht wird aktualisiert',
-            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.uebersicht-wird-aktualisiert'),
+            message: this.uiTranslate('ui-text.test-results-import.der-import-ist-abgeschlossen-lade-die-aktualisierten-ergebniszahlen'),
             mode: 'indeterminate'
           });
           const progressDialogRef = this.dialog.open(
@@ -234,8 +237,8 @@ export class TestResultsImportFacade {
               title: 'Testcenter-Import',
               icon: 'upload_file',
               phase: 'completed',
-              phaseLabel: 'Ergebnis bereit',
-              message: 'Die Ergebnisübersicht wurde geladen.',
+              phaseLabel: this.uiTranslate('ui-text.test-results-import.ergebnis-bereit'),
+              message: this.uiTranslate('ui-text.test-results-import.die-ergebnisuebersicht-wurde-geladen'),
               percent: 100,
               mode: 'determinate'
             });
@@ -412,7 +415,7 @@ export class TestResultsImportFacade {
               this.loadingChanged$.next(true);
               this.isUploadingResultsState.set(true);
               this.uploadingMessageState.set(resultType === 'responses' ?
-                'Importiere Antworten... (0%)' : 'Importiere Logs... (0%)');
+                this.uiTranslate('ui-text.test-results-import.importiere-antworten-0') : this.uiTranslate('ui-text.test-results-import.importiere-logs-0'));
               this.uploadStateService.startChunkedUpload(
                 workspaceId,
                 inputElement.files![0],

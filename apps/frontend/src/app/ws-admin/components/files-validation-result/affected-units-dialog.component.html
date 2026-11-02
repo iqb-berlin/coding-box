@@ -2,8 +2,8 @@
 
 <div mat-dialog-content>
   <mat-form-field appearance="outline" style="width: 100%;">
-    <mat-label>Suche</mat-label>
-    <input matInput [(ngModel)]="filterText" placeholder="Unit-ID filtern..." />
+    <mat-label>{{ 'coding.trainings.compare.search-label' | translate }}</mat-label>
+    <input matInput [(ngModel)]="filterText" [placeholder]="'ui-text.affected-units-dialog.unit-id-filtern' | translate" />
     <mat-icon matSuffix>search</mat-icon>
   </mat-form-field>
 
@@ -15,5 +15,5 @@
 </div>
 
 <div mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="close()">Schließen</button>
+  <button mat-button type="button" (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </div>

@@ -1,6 +1,6 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { DoubleCodedReviewComponent } from '../../apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component';
@@ -25,7 +25,7 @@ describe('DoubleCodedReviewComponent replay access', () => {
     });
 
     cy.mount(DoubleCodedReviewComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         {
           provide: AppService,

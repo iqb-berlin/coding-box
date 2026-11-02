@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -22,7 +23,7 @@ export interface ApplyCodingResultsDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-apply-coding-results-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,
@@ -32,19 +33,18 @@ export interface ApplyCodingResultsDialogResult {
   template: `
     <h2 mat-dialog-title>
       <mat-icon>fact_check</mat-icon>
-      Kodierergebnisse anwenden
+      {{ 'ui-text.apply-coding-results-dialog.kodierergebnisse-anwenden' | translate }}
     </h2>
 
     <mat-dialog-content>
       <p>
-        Die Ergebnisse des Kodierjobs "{{ data.jobName }}" werden auf die Antwortdaten übertragen.
+        {{ 'ui-text.apply-coding-results-dialog.die-ergebnisse-des-kodierjobs-werden-auf-die-antwortdaten-uebertragen' | translate: { jobName: (data.jobName) } }}
       </p>
 
       <div class="info-box">
         <mat-icon>info</mat-icon>
         <span>
-          Bestehende v2-Kodierungen bleiben standardmäßig erhalten. Aggregierte Ergebnisse werden nur
-          auf passende Antworten derselben Aggregationsgruppe angewendet.
+          {{ 'ui-text.apply-coding-results-dialog.bestehende-v2-kodierungen-bleiben-standardmaessig-erhalten-aggregierte-ergebnisse-werden-n' | translate }}
         </span>
       </div>
 
@@ -52,15 +52,15 @@ export interface ApplyCodingResultsDialogResult {
         <div class="summary-grid">
           <div>
             <strong>{{ data.totalResults ?? '-' }}</strong>
-            <span>Ergebnisse</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.ergebnisse' | translate }}</span>
           </div>
           <div>
             <strong>{{ data.codedResults ?? '-' }}</strong>
-            <span>kodiert</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.kodiert' | translate }}</span>
           </div>
           <div>
             <strong>{{ data.reviewIssues ?? (data.hasReviewIssues ? 'vorhanden' : 0) }}</strong>
-            <span>mit Prüfung</span>
+            <span>{{ 'ui-text.apply-coding-results-dialog.mit-pruefung' | translate }}</span>
           </div>
         </div>
       }
@@ -69,30 +69,29 @@ export interface ApplyCodingResultsDialogResult {
         <div class="warning-box">
           <mat-icon>rule</mat-icon>
           <span>
-            Ergebnisse mit Kodierungshinweis werden beim Anwenden übersprungen, bis sie manuell geprüft wurden.
+            {{ 'ui-text.apply-coding-results-dialog.ergebnisse-mit-kodierungshinweis-werden-beim-anwenden-uebersprungen-bis-sie-manuell-geprue' | translate }}
           </span>
         </div>
       }
 
       <mat-checkbox [(ngModel)]="overwriteExisting" color="warn">
-        Bestehende v2-Kodierungen überschreiben
+        {{ 'ui-text.apply-coding-results-dialog.bestehende-v2-kodierungen-ueberschreiben' | translate }}
       </mat-checkbox>
 
       @if (overwriteExisting) {
         <div class="warning-box">
           <mat-icon>warning</mat-icon>
           <span>
-            Vorhandene v2-Kodierungen für direkte Ergebnisse und passende Aggregationsgruppen werden ersetzt.
-            Diese Option sollte nur für bewusst neu zu berechnende Ergebnisse genutzt werden.
+            {{ 'ui-text.apply-coding-results-dialog.vorhandene-v2-kodierungen-fuer-direkte-ergebnisse-und-passende-aggregationsgruppen-werden' | translate }}
           </span>
         </div>
       }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button (click)="onCancel()">Abbrechen</button>
+      <button mat-button (click)="onCancel()">{{ 'cancel' | translate }}</button>
       <button mat-raised-button color="primary" (click)="onConfirm()">
-        Anwenden
+        {{ 'coding.trainings.compare.apply-dialog.apply' | translate }}
       </button>
     </mat-dialog-actions>
     `,

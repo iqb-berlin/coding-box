@@ -3,8 +3,9 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { AppService } from '../../../core/services/app.service';
-import { SERVER_ERROR_MESSAGE } from '../../../core/interceptors/app-http-error.class';
+import { SERVER_ERROR_MESSAGE_KEY } from '../../../core/interceptors/app-http-error.class';
 import { JournalService } from '../../../core/services/journal.service';
 import { JournalComponent } from './journal.component';
 
@@ -30,7 +31,7 @@ describe('JournalComponent', () => {
     appService = { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>() };
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         JournalComponent,
         TranslateModule.forRoot()
       ],
@@ -56,14 +57,14 @@ describe('JournalComponent', () => {
     fixture.detectChanges();
 
     expect(component.loadError()).toBe(true);
-    expect(component.loadErrorMessage()).toBe(SERVER_ERROR_MESSAGE);
+    expect(component.loadErrorMessage()).toBe(translateGerman(SERVER_ERROR_MESSAGE_KEY));
     expect(component.loadErrorRequestId()).toBe('journal-request-1');
     expect(component.journalEntries()).toEqual([]);
     expect(component.totalEntries()).toBe(0);
-    expect(fixture.nativeElement.textContent).toContain('journal.load-error-title');
-    expect(fixture.nativeElement.textContent).toContain(SERVER_ERROR_MESSAGE);
+    expect(fixture.nativeElement.textContent).toContain(translateGerman('journal.load-error-title'));
+    expect(fixture.nativeElement.textContent).toContain(translateGerman(SERVER_ERROR_MESSAGE_KEY));
     expect(fixture.nativeElement.textContent).toContain('journal-request-1');
-    expect(fixture.nativeElement.textContent).not.toContain('journal.no-entries');
+    expect(fixture.nativeElement.textContent).not.toContain(translateGerman('journal.no-entries'));
     expect(journalService.getJournalEntries).toHaveBeenCalledWith(
       5,
       1,
@@ -71,6 +72,15 @@ describe('JournalComponent', () => {
       {},
       { suppressGlobalError: true }
     );
+  });
+
+  it('renders a server error message literally when it matches a catalog namespace', () => {
+    journalService.getJournalEntries.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 400, error: { message: 'error' }
+    })));
+    fixture.detectChanges();
+    expect(component.loadErrorMessage()).toBe('error');
+    expect(fixture.nativeElement.querySelector('.load-error-text p').textContent).toBe('error');
   });
 
   it('should clear the inline load error after retry succeeds', () => {
@@ -114,7 +124,7 @@ describe('JournalComponent', () => {
     fixture.detectChanges();
 
     expect(component.loadError()).toBe(true);
-    expect(component.loadErrorMessage()).toBe('Die angeforderten Daten wurden nicht gefunden.');
+    expect(component.loadErrorMessage()).toBe(translateGerman('ui-text.http-errors.die-angeforderten-daten-wurden-nicht-gefunden'));
     expect(fixture.nativeElement.textContent).toContain('Die angeforderten Daten wurden nicht gefunden.');
   });
 });

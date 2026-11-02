@@ -10,6 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CoderTraining } from '../../models/coder-training.model';
 import { TrainingDiscussionApplySource } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { getTrainingOptionTitle, getTrainingOptionMeta } from '../../utils/coder-training-display';
@@ -22,6 +23,8 @@ import { getTrainingOptionTitle, getTrainingOptionMeta } from '../../utils/coder
   styleUrls: ['./training-comparison-selection.component.scss']
 })
 export class TrainingComparisonSelectionComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly translate = inject(TranslateService);
   readonly mode = input.required<'between-trainings' | 'within-training'>();
   readonly trainings = input.required<readonly CoderTraining[]>();
@@ -43,7 +46,7 @@ export class TrainingComparisonSelectionComponent {
   readonly applyRequested = output<TrainingDiscussionApplySource>();
   protected readonly getTrainingOptionTitle = getTrainingOptionTitle;
   protected getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
+    return getTrainingOptionMeta(this.uiTranslate, training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
   }
 
   protected selectedTraining(): CoderTraining | undefined {

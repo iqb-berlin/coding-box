@@ -9,6 +9,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EMPTY, Observable, of, Subject, throwError
 } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingRefreshWorkflowFacade } from './manual-coding-refresh-workflow.facade';
 import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
@@ -163,7 +164,7 @@ describe('CodingManagementManualComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting()
       ],
-      imports: [CodingManagementManualComponent, TranslateModule.forRoot()]
+      imports: [GermanTranslationsTestingModule, CodingManagementManualComponent, TranslateModule.forRoot()]
     }).compileComponents();
 
     const translateService = TestBed.inject(TranslateService);
@@ -212,7 +213,7 @@ describe('CodingManagementManualComponent', () => {
           'show-fewer-manual-code-warnings': 'Weniger anzeigen'
         }
       }
-    });
+    }, true);
     translateService.use('de');
 
     fixture = TestBed.createComponent(CodingManagementManualComponent);

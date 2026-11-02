@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, viewChild, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -9,6 +10,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
 import { MatListModule, MatSelectionList } from '@angular/material/list';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { getFileTypeLabel } from '../../utils/file-utils';
 
 export type TestFilesZipExportOptions = {
@@ -24,20 +26,20 @@ export type TestFilesZipExportOptionsDialogData = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files-zip-export-options-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatListModule,
     FormsModule
   ],
   template: `
-    <h1 mat-dialog-title>Export-Optionen</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.export-optionen' | translate }}</h1>
     <div mat-dialog-content>
-      <p>Wählen Sie aus, welche Dateitypen im ZIP enthalten sein sollen.</p>
+      <p>{{ 'ui-text.test-files-zip-export-options-dialog.waehlen-sie-aus-welche-dateitypen-im-zip-enthalten-sein-sollen' | translate }}</p>
 
       <div class="selection-actions">
-        <button mat-button (click)="selectAll()">Alle auswählen</button>
-        <button mat-button (click)="deselectAll()">Alle abwählen</button>
+        <button mat-button (click)="selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+        <button mat-button (click)="deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>
       </div>
 
       <div class="list-container">
@@ -53,9 +55,9 @@ export type TestFilesZipExportOptionsDialogData = {
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-button (click)="cancel()">Abbrechen</button>
+      <button mat-button (click)="cancel()">{{ 'cancel' | translate }}</button>
       <button mat-raised-button color="primary" (click)="download()">
-        Download
+        {{ 'ui-text.test-files-zip-export-options-dialog.download' | translate }}
       </button>
     </div>
   `,
@@ -78,6 +80,8 @@ export type TestFilesZipExportOptionsDialogData = {
   ]
 })
 export class TestFilesZipExportOptionsDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<TestFilesZipExportOptionsDialogComponent>>(MatDialogRef);
   protected dialogData = inject<TestFilesZipExportOptionsDialogData>(MAT_DIALOG_DATA);
 
@@ -87,7 +91,7 @@ export class TestFilesZipExportOptionsDialogComponent {
     fileTypes: []
   };
 
-  protected getFileTypeLabel = getFileTypeLabel;
+  protected getFileTypeLabel = getFileTypeLabel.bind(undefined, this.uiTranslate);
 
   constructor() {
     const dialogData = this.dialogData;

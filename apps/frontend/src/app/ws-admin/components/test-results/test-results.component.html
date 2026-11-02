@@ -13,7 +13,7 @@
         class="action-button"
       >
         <mat-icon>upload</mat-icon>
-        <span>Import</span>
+        <span>{{ 'ui-text.test-results.import' | translate }}</span>
       </button>
 
       <button
@@ -30,7 +30,7 @@
           style="display: inline-block; margin-right: 8px"
         ></mat-spinner>
         }
-        <span>Export</span>
+        <span>{{ 'workspace.export' | translate }}</span>
       </button>
 
       <button
@@ -43,8 +43,8 @@
         <mat-icon class="rotating-icon">sync</mat-icon>
         } @if (!isAnyValidationRunning()) {
         <mat-icon>rule</mat-icon>
-        } <span>Validieren</span> @if (isAnyValidationRunning()) {
-        <span class="validation-status-text">Läuft...</span>
+        } <span>{{ 'workspace.validate' | translate }}</span> @if (isAnyValidationRunning()) {
+        <span class="validation-status-text">{{ 'ui-text.test-results.laeuft' | translate }}</span>
         }
       </button>
 
@@ -55,7 +55,7 @@
         class="action-button"
       >
         <mat-icon>search</mat-icon>
-        <span>Schnellsuche</span>
+        <span>{{ 'ui-text.test-results.schnellsuche' | translate }}</span>
       </button>
 
       <button
@@ -65,7 +65,7 @@
         class="action-button"
       >
         <mat-icon>analytics</mat-icon>
-        <span>Antwortwertanalyse</span>
+        <span>{{ 'ui-text.test-results.antwortwertanalyse' | translate }}</span>
       </button>
 
       <button
@@ -76,7 +76,7 @@
         class="action-button maintenance-action"
       >
         <mat-icon>cleaning_services</mat-icon>
-        <span>Antworten bereinigen</span>
+        <span>{{ 'access-matrix.feature.clean-responses' | translate }}</span>
       </button>
 
       <button
@@ -87,9 +87,9 @@
       >
         <mat-icon>table_chart</mat-icon>
         @if (!isTableView()) {
-        <span>Tabellenansicht</span>
+        <span>{{ 'ui-text.test-results.tabellenansicht' | translate }}</span>
         } @else {
-        <span>Ergebnisbrowser</span>
+        <span>{{ 'ui-text.test-results.ergebnisbrowser' | translate }}</span>
         }
       </button>
     </div>
@@ -125,9 +125,9 @@
   <div class="log-quality-card">
     <div class="log-quality-header">
       <div>
-        <h2 class="section-title">Log-Qualität</h2>
+        <h2 class="section-title">{{ 'ui-text.test-results.log-qualitaet' | translate }}</h2>
         <p class="section-description">
-          Technische Auffälligkeiten in Booklet- und Aufgaben-Logs
+          {{ 'ui-text.test-results.technische-auffaelligkeiten-in-booklet-und-aufgaben-logs' | translate }}
         </p>
       </div>
       @if (logAnomalySummaryValue; as summary) {
@@ -137,7 +137,7 @@
         [class.warning]="summary.criticalBooklets === 0 && summary.warningBooklets > 0"
         [class.clean]="summary.affectedBooklets === 0"
       >
-        {{ summary.affectedBooklets === 0 ? 'unauffällig' : summary.criticalBooklets > 0 ? 'kritisch' : 'auffällig' }}
+        {{ summary.affectedBooklets === 0 ? ('test-results-table.severity-none' | translate) : summary.criticalBooklets > 0 ? ('test-results-table.severity-critical' | translate) : ('ui-text.test-results.auffaellig' | translate) }}
       </span>
       }
     </div>
@@ -146,21 +146,21 @@
     @if (isLoadingLogAnomalySummary()) {
     <div class="loading-container compact">
       <mat-spinner class="mat-spinner" diameter="32"></mat-spinner>
-      <p class="loading-text">Log-Qualität wird geladen...</p>
+      <p class="loading-text">{{ 'ui-text.test-results.log-qualitaet-wird-geladen' | translate }}</p>
     </div>
     }
 
     @if (!isLoadingLogAnomalySummary() && logAnomalySummaryLoadFailed()) {
     <div class="log-quality-note warning">
       <mat-icon>warning</mat-icon>
-      <span>Die Log-Qualität konnte nicht geladen werden.</span>
+      <span>{{ 'ui-text.test-results.die-log-qualitaet-konnte-nicht-geladen-werden' | translate }}</span>
       <button
         mat-stroked-button
         type="button"
         (click)="loadLogAnomalySummaryOnDemand()"
       >
         <mat-icon>refresh</mat-icon>
-        Erneut laden
+        {{ 'home.retry-auth-data' | translate }}
       </button>
     </div>
     }
@@ -168,14 +168,14 @@
     @if (!isLoadingLogAnomalySummary() && !logAnomalySummaryLoadFailed() && !logAnomalySummaryRequested()) {
     <div class="log-quality-note neutral">
       <mat-icon>troubleshoot</mat-icon>
-      <span>Die Log-Qualität wird bei Bedarf berechnet.</span>
+      <span>{{ 'ui-text.test-results.die-log-qualitaet-wird-bei-bedarf-berechnet' | translate }}</span>
       <button
         mat-stroked-button
         type="button"
         (click)="loadLogAnomalySummaryOnDemand()"
       >
         <mat-icon>refresh</mat-icon>
-        Log-Qualität laden
+        {{ 'ui-text.test-results.log-qualitaet-laden' | translate }}
       </button>
     </div>
     }
@@ -183,24 +183,24 @@
     @if (!isLoadingLogAnomalySummary() && !logAnomalySummaryLoadFailed() && logAnomalySummaryValue; as summary) {
     <div class="log-quality-grid">
       <div class="log-quality-metric">
-        <div class="label">Booklets geprüft</div>
+        <div class="label">{{ 'ui-text.test-results.booklets-geprueft' | translate }}</div>
         <div class="value">{{ summary.totalBooklets }}</div>
       </div>
       <div class="log-quality-metric affected">
-        <div class="label">Auffällig</div>
+        <div class="label">{{ 'ui-text.test-results.auffaellig-1390de' | translate }}</div>
         <div class="value">{{ summary.affectedBooklets }}</div>
         <div class="hint">{{ logAnomalyAffectedPercent() }}%</div>
       </div>
       <div class="log-quality-metric critical">
-        <div class="label">Kritisch</div>
+        <div class="label">{{ 'system-notifications.severities.critical' | translate }}</div>
         <div class="value">{{ summary.criticalBooklets }}</div>
       </div>
       <div class="log-quality-metric warning">
-        <div class="label">Warnung</div>
+        <div class="label">{{ 'warning' | translate }}</div>
         <div class="value">{{ summary.warningBooklets }}</div>
       </div>
       <div class="log-quality-metric">
-        <div class="label">Ereignisse</div>
+        <div class="label">{{ 'ui-text.test-results.ereignisse' | translate }}</div>
         <div class="value">{{ summary.totalAnomalyEvents }}</div>
       </div>
     </div>
@@ -208,7 +208,7 @@
     @if (summary.affectedBooklets === 0) {
     <div class="log-quality-note clean">
       <mat-icon>check_circle</mat-icon>
-      <span>In den vorhandenen Logs wurden keine technischen Auffälligkeiten erkannt.</span>
+      <span>{{ 'ui-text.test-results.in-den-vorhandenen-logs-wurden-keine-technischen-auffaelligkeiten-erkannt' | translate }}</span>
     </div>
     }
 
@@ -229,7 +229,7 @@
           (click)="openLogAnomalyDetailsDialog()"
         >
           <mat-icon>troubleshoot</mat-icon>
-          Details anzeigen
+          {{ 'ws-admin.export-options.item-dataset-diagnostics-show-details' | translate }}
         </button>
         <button
           mat-stroked-button
@@ -237,7 +237,7 @@
           (click)="showLogAnomaliesInTable()"
         >
           <mat-icon>table_chart</mat-icon>
-          In Tabelle anzeigen
+          {{ 'ui-text.test-results.in-tabelle-anzeigen' | translate }}
         </button>
       </div>
     </div>
@@ -330,9 +330,9 @@
     <div class="data-card">
       <div class="section-header">
         <div class="section-info">
-          <h2 class="section-title">Testpersonen</h2>
+          <h2 class="section-title">{{ 'ws-admin.test-persons' | translate }}</h2>
           <p class="section-description">
-            Wählen Sie eine Testperson aus. Danach können Sie Testhefte, Aufgaben und Antworten durchsuchen.
+            {{ 'ui-text.test-results.waehlen-sie-eine-testperson-aus-danach-koennen-sie-testhefte-aufgaben-und-antworten-durchs' | translate }}
           </p>
         </div>
         <div class="section-actions">
@@ -385,7 +385,7 @@
       } @if (isLoading() && !isSearching() && !isDeletingTestPersons()) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">Daten werden geladen...</p>
+        <p class="loading-text">{{ 'test-results-table.loading' | translate }}</p>
       </div>
       } @if (!isLoading() || isSearching()) {
       <div class="table-section">
@@ -395,14 +395,14 @@
             matInput
             [value]="personSearchText()"
             (input)="applyFilter($event)"
-            placeholder="Suchen..."
+            [placeholder]="'ui-text.training-sample-editor.suchen' | translate"
             class="search-input"
           />
           <button
             mat-icon-button
             (click)="clearSearch()"
             class="clear-button"
-            aria-label="Clear search"
+            [attr.aria-label]="'ui-text.test-results.clear-search' | translate"
           >
             <mat-icon>clear</mat-icon>
           </button>
@@ -411,7 +411,7 @@
           @if (isSearching()) {
           <div class="search-loading-indicator">
             <mat-spinner diameter="20"></mat-spinner>
-            <span>Suche läuft...</span>
+            <span>{{ 'test-results-search.loading' | translate }}</span>
           </div>
           }
           <mat-table [dataSource]="dataSource" matSort class="persons-table">
@@ -437,7 +437,7 @@
             </ng-container>
             <ng-container matColumnDef="code">
               <mat-header-cell *matHeaderCellDef mat-sort-header="code">
-                Code
+                {{ 'ws-admin.export-options.matrix-value-code' | translate }}
               </mat-header-cell>
               <mat-cell *matCellDef="let element">
                 {{ element.code }}
@@ -453,7 +453,7 @@
             </ng-container>
             <ng-container matColumnDef="login">
               <mat-header-cell *matHeaderCellDef mat-sort-header="login"
-                >Login</mat-header-cell
+                >{{ 'test-results-search.table-headers.login' | translate }}</mat-header-cell
               >
               <mat-cell *matCellDef="let element">
                 {{ element.login }}
@@ -461,7 +461,7 @@
             </ng-container>
             <ng-container matColumnDef="uploaded_at">
               <mat-header-cell *matHeaderCellDef mat-sort-header="uploaded_at"
-                >Hinzugefügt am</mat-header-cell
+                >{{ 'file-upload.created_at' | translate }}</mat-header-cell
               >
               <mat-cell *matCellDef="let element">
                 {{ element.uploaded_at | date : 'dd.MM.yyyy HH:mm' }}
@@ -481,15 +481,14 @@
           @if (dataSource && dataSource.data.length === 0 && !isLoading() && !testResultsLoadFailed()) {
           <div class="empty-state-container">
             <mat-icon class="empty-state-icon">search_off</mat-icon>
-            <h2 class="empty-state-title">Keine Ergebnisse gefunden</h2>
+            <h2 class="empty-state-title">{{ 'test-results-table.empty' | translate }}</h2>
             <p class="empty-state-description">
-              Bitte versuchen Sie es mit einem anderen Suchbegriff oder setzen
-              Sie den Filter zurück.
+              {{ 'ui-text.test-results.bitte-versuchen-sie-es-mit-einem-anderen-suchbegriff-oder-setzen-sie-den-filter-zurueck' | translate }}
             </p>
             <div class="empty-state-actions">
               <button type="button" mat-raised-button color="primary" (click)="clearSearch()">
                 <mat-icon>clear</mat-icon>
-                Filter zurücksetzen
+                {{ 'coding.trainings.compare.reset-filters' | translate }}
               </button>
             </div>
           </div>
@@ -511,9 +510,9 @@
 
     <div class="results-section">
       <div class="booklets-card">
-        <h2 class="section-title">Testhefte</h2>
+        <h2 class="section-title">{{ 'ui-text.files-validation.testhefte' | translate }}</h2>
         <p class="section-description">
-          Wählen Sie ein Testheft aus, um dessen Aufgaben anzuzeigen
+          {{ 'ui-text.test-results.waehlen-sie-ein-testheft-aus-um-dessen-aufgaben-anzuzeigen' | translate }}
         </p>
         <mat-divider></mat-divider>
 
@@ -531,16 +530,15 @@
           "
         >
           <mat-icon class="empty-state-icon">info</mat-icon>
-          <h2 class="empty-state-title">Keine Testperson ausgewählt</h2>
+          <h2 class="empty-state-title">{{ 'ui-text.test-results.keine-testperson-ausgewaehlt' | translate }}</h2>
           <p class="empty-state-description">
-            Bitte wählen Sie links eine Testperson aus, um Testhefte und
-            Sitzungen anzeigen zu können.
+            {{ 'ui-text.test-results.bitte-waehlen-sie-links-eine-testperson-aus-um-testhefte-und-sitzungen-anzeigen-zu-koennen' | translate }}
           </p>
         </div>
         } @else { @if (isLoadingBooklets()) {
         <div class="loading-container">
           <mat-spinner class="mat-spinner"></mat-spinner>
-          <p class="loading-text">Testhefte werden geladen...</p>
+          <p class="loading-text">{{ 'ui-text.test-results.testhefte-werden-geladen' | translate }}</p>
         </div>
         }
 
@@ -570,7 +568,7 @@
                 class="action-button"
               >
                 <mat-icon>play_arrow</mat-icon>
-                Replay
+                {{ 'ws-admin.select-unit-play' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -579,7 +577,7 @@
                 class="action-button"
               >
                 <mat-icon>list</mat-icon>
-                Logs
+                {{ 'ui-text.test-center-options-step.logs' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -588,7 +586,7 @@
                 class="action-button"
               >
                 <mat-icon>info</mat-icon>
-                Info
+                {{ 'common.info' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -598,7 +596,7 @@
                 class="action-button"
               >
                 <mat-icon>delete_sweep</mat-icon>
-                Alle gleichen löschen
+                {{ 'ui-text.test-results.alle-gleichen-loeschen' | translate }}
               </button>
             </div>
             @if (hasShortProcessingTime(booklet) || !isBookletComplete(booklet))
@@ -622,7 +620,7 @@
             </div>
             }
             <mat-divider class="section-divider"></mat-divider>
-            <h3 class="units-title">Aufgaben</h3>
+            <h3 class="units-title">{{ 'coding.jobs.table.units' | translate }}</h3>
             <mat-list class="unit-list">
               @for (unit of booklet.units; track unit.id) {
               <mat-list-item
@@ -635,7 +633,7 @@
                     unit?.alias || 'Unbenannte Einheit'
                   }}</span>
                   @if (hasGeogebraResponse(unit)) {
-                  <span class="geogebra-tag">Geogebra</span>
+                  <span class="geogebra-tag">{{ 'ui-text.test-results.geogebra' | translate }}</span>
                   }
                 </div>
                 @if (unit.id) {
@@ -651,7 +649,7 @@
                   color="warn"
                   (click)="$event.stopPropagation(); deleteUnit(unit, booklet)"
                   class="delete-unit-button"
-                  matTooltip="Unit löschen"
+                  [matTooltip]="'test-results-search.buttons.delete-unit' | translate"
                  [attr.aria-label]="'test-results-search.buttons.delete-unit' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
@@ -661,7 +659,7 @@
                   [disabled]="isDeleteJobRunning()"
                   (click)="$event.stopPropagation(); deleteUnitsByName(unit)"
                   class="delete-unit-button bulk-delete-unit-button"
-                  matTooltip="Alle Aufgaben dieses Namens löschen"
+                  [matTooltip]="'accessibility.actions.delete-units-by-name' | translate"
                  [attr.aria-label]="'accessibility.actions.delete-units-by-name' | translate">
                   <mat-icon>delete_sweep</mat-icon>
                 </button>
@@ -676,10 +674,9 @@
       </div>
 
       <div class="responses-card">
-        <h2 class="section-title">Aufgaben</h2>
+        <h2 class="section-title">{{ 'coding.jobs.table.units' | translate }}</h2>
         <p class="section-description">
-          Wählen Sie links ein Testheft und eine Aufgabe aus, um Antworten
-          anzuzeigen
+          {{ 'ui-text.test-results.waehlen-sie-links-ein-testheft-und-eine-aufgabe-aus-um-antworten-anzuzeigen' | translate }}
         </p>
         <mat-divider></mat-divider>
 
@@ -696,10 +693,9 @@
           "
         >
           <mat-icon class="empty-state-icon">info</mat-icon>
-          <h2 class="empty-state-title">Keine Testperson ausgewählt</h2>
+          <h2 class="empty-state-title">{{ 'ui-text.test-results.keine-testperson-ausgewaehlt' | translate }}</h2>
           <p class="empty-state-description">
-            Bitte wählen Sie links eine Testperson aus, um Aufgaben/Units
-            anzeigen zu können.
+            {{ 'ui-text.test-results.bitte-waehlen-sie-links-eine-testperson-aus-um-aufgaben-units-anzeigen-zu-koennen' | translate }}
           </p>
         </div>
         } @else if (!selectedBooklet()) {
@@ -715,10 +711,9 @@
           "
         >
           <mat-icon class="empty-state-icon">info</mat-icon>
-          <h2 class="empty-state-title">Kein Testheft ausgewählt</h2>
+          <h2 class="empty-state-title">{{ 'ui-text.test-results.kein-testheft-ausgewaehlt' | translate }}</h2>
           <p class="empty-state-description">
-            Bitte wählen Sie zuerst ein Testheft aus, um Aufgaben/Units anzeigen
-            zu können.
+            {{ 'ui-text.test-results.bitte-waehlen-sie-zuerst-ein-testheft-aus-um-aufgaben-units-anzeigen-zu-koennen' | translate }}
           </p>
         </div>
         } @else if (!selectedUnitValue) {
@@ -734,9 +729,9 @@
           "
         >
           <mat-icon class="empty-state-icon">assignment</mat-icon>
-          <h2 class="empty-state-title">Keine Aufgabe ausgewählt</h2>
+          <h2 class="empty-state-title">{{ 'ui-text.test-results.keine-aufgabe-ausgewaehlt' | translate }}</h2>
           <p class="empty-state-description">
-            Bitte wählen Sie eine Aufgabe aus dem ausgewählten Testheft aus.
+            {{ 'ui-text.test-results.bitte-waehlen-sie-eine-aufgabe-aus-dem-ausgewaehlten-testheft-aus' | translate }}
           </p>
         </div>
         } @else { @if (responses().length > 0) {
@@ -748,7 +743,7 @@
             class="action-button"
           >
             <mat-icon>play_arrow</mat-icon>
-            Replay
+            {{ 'ws-admin.select-unit-play' | translate }}
           </button>
           <button
             mat-stroked-button
@@ -757,7 +752,7 @@
             class="action-button"
           >
             <mat-icon>list</mat-icon>
-            Logs
+            {{ 'ui-text.test-center-options-step.logs' | translate }}
           </button>
           <button
             mat-stroked-button
@@ -766,7 +761,7 @@
             class="action-button"
           >
             <mat-icon>info</mat-icon>
-            Info
+            {{ 'common.info' | translate }}
           </button>
           <button
             mat-stroked-button
@@ -776,7 +771,7 @@
             class="action-button"
           >
             <mat-icon>delete_sweep</mat-icon>
-            Alle gleichen Aufgaben löschen
+            {{ 'ui-text.test-results.alle-gleichen-aufgaben-loeschen' | translate }}
           </button>
           <button
             mat-stroked-button
@@ -785,7 +780,7 @@
             class="action-button"
           >
             <mat-icon>label</mat-icon>
-            Tags
+            {{ 'test-results-search.table-headers.tags' | translate }}
           </button>
           <div style="position: relative; display: inline-block">
             <button
@@ -795,7 +790,7 @@
               class="action-button"
             >
               <mat-icon>note</mat-icon>
-              Notizen
+              {{ 'coding.trainings.compare.notes' | translate }}
             </button>
             @if (selectedUnitValue && selectedUnitValue.id &&
             hasUnitNotes(selectedUnitValue.id)) {
@@ -842,7 +837,7 @@
                   color="warn"
                   (click)="$event.stopPropagation(); deleteResponse(response)"
                   class="delete-response-button"
-                  matTooltip="Antwort löschen"
+                  [matTooltip]="'test-results-search.buttons.delete-answer' | translate"
                  [attr.aria-label]="'test-results-search.buttons.delete-answer' | translate">
                   <mat-icon>delete</mat-icon>
                 </button>
@@ -862,22 +857,22 @@
             <div class="response-details">
               @if (response.code && response.codedstatus) {
               <div class="detail-row">
-                <span class="detail-label">Code:</span>
+                <span class="detail-label">{{ 'coding.trainings.compare.code-label' | translate }}</span>
                 <span class="detail-value">{{ response.code }}</span>
               </div>
               } @if (response.score && response.codedstatus) {
               <div class="detail-row">
-                <span class="detail-label">Score:</span>
+                <span class="detail-label">{{ 'ui-text.test-results.score' | translate }}</span>
                 <span class="detail-value">{{ response.score }}</span>
               </div>
               } @if (response.codedstatus) {
               <div class="detail-row">
-                <span class="detail-label">Kodier Status:</span>
+                <span class="detail-label">{{ 'ui-text.test-results.kodier-status' | translate }}</span>
                 <span class="detail-value">{{ response.codedstatus }}</span>
               </div>
               }
               <div class="detail-row">
-                <span class="detail-label">Value:</span>
+                <span class="detail-label">{{ 'ui-text.test-results.value' | translate }}</span>
                 <span class="detail-value"
                   >{{ response.value ? (response.value | slice : 0 : 1000) : ''
                   }}{{
@@ -903,9 +898,9 @@
           "
         >
           <mat-icon class="empty-state-icon">assignment</mat-icon>
-          <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+          <h2 class="empty-state-title">{{ 'ui-text.test-results.keine-testergebnisse-vorhanden' | translate }}</h2>
           <p class="empty-state-description">
-            Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.
+            {{ 'ui-text.test-results.laden-sie-antworten-oder-logs-hoch-um-testergebnisse-anzuzeigen' | translate }}
           </p>
         </div>
         } }
@@ -915,9 +910,9 @@
   } @else if (!isLoading() && !testResultsLoadFailed()) {
   <div class="empty-state-container">
     <mat-icon class="empty-state-icon">assignment</mat-icon>
-    <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
+    <h2 class="empty-state-title">{{ 'ui-text.test-results.keine-testergebnisse-vorhanden' | translate }}</h2>
     <p class="empty-state-description">
-      Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.
+      {{ 'ui-text.test-results.laden-sie-antworten-oder-logs-hoch-um-testergebnisse-anzuzeigen' | translate }}
     </p>
   </div>
   } } }

@@ -3,7 +3,7 @@
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
-      title="Variablen-Prüfung"
+      [title]="'ui-text.variables-validation-panel.variablen-pruefung' | translate"
       [status]="status"
       [errorCount]="errorCount()"
     >
@@ -23,7 +23,7 @@
       (click)="onValidate()"
       [disabled]="isRunning() || disabled()"
     >
-      Variablen prüfen
+      {{ 'ui-text.variables-validation-panel.variablen-pruefen' | translate }}
     </button>
   </div>
 
@@ -36,7 +36,7 @@
         [value]="activeTaskValue?.progress"
       ></mat-spinner>
       <p class="loading-text">
-        Variablen werden geprüft...
+        {{ 'ui-text.variables-validation-panel.variablen-werden-geprueft' | translate }}
         @if (activeTaskValue?.progress) {
           ({{ activeTaskValue?.progress }}%)
         }
@@ -47,7 +47,7 @@
   @if (errorMessageValue) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Fehler bei der Validierung: {{ errorMessageValue }}</span>
+      <span>{{ 'ui-text.duplicate-responses-validation-panel.fehler-bei-der-validierung' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
     </div>
   }
 
@@ -55,8 +55,7 @@
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
       <span
-        >Prüfung fehlgeschlagen: {{ totalInvalid() }} ungültige Variablen
-        gefunden.</span
+        >{{ 'ui-text.variables-validation-panel.pruefung-fehlgeschlagen-ungueltige-variablen-gefunden' | translate: { value1: (totalInvalid()) } }}</span
       >
     </div>
     @if (
@@ -64,12 +63,11 @@
     ) {
       <div class="validation-summary">
         @if (summary().unitFileNotFound > 0) {
-          <span>{{ summary().unitFileNotFound }} ohne passende Unit.xml</span>
+          <span>{{ 'ui-text.variables-validation-panel.ohne-passende-unit-xml' | translate: { value1: (summary().unitFileNotFound) } }}</span>
         }
         @if (summary().variableNotDefinedInUnit > 0) {
           <span
-            >{{ summary().variableNotDefinedInUnit }} nicht in Unit.xml
-            definiert</span
+            >{{ 'ui-text.variables-validation-panel.nicht-in-unit-xml-definiert' | translate: { value1: (summary().variableNotDefinedInUnit) } }}</span
           >
         }
       </div>
@@ -78,7 +76,7 @@
     @if (invalidVariables().length > 0) {
       <div class="actions-container">
         <button mat-button (click)="toggleExpansion()">
-          {{ expandedPanel() ? 'Details ausblenden' : 'Details anzeigen' }}
+          {{ expandedPanel() ? ('error.hide_details' | translate) : ('ws-admin.export-options.item-dataset-diagnostics-show-details' | translate) }}
         </button>
         <button
           mat-button
@@ -86,13 +84,13 @@
           [disabled]="isExporting() || isLoadingPage()"
         >
           @if (isExporting()) {
-            <mat-spinner diameter="20"></mat-spinner> Export...
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.export' | translate }}
           } @else {
-            CSV exportieren
+            {{ 'ui-text.duplicate-responses-validation-panel.csv-exportieren' | translate }}
           }
         </button>
-        <button mat-button (click)="selectAll()">Alle auswählen</button>
-        <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
+        <button mat-button (click)="selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+        <button mat-button (click)="deselectAll()">{{ 'ws-admin.export-options.item-dataset-clear-all' | translate }}</button>
         <button
           mat-button
           color="warn"
@@ -100,9 +98,9 @@
           [disabled]="isDeletingResponses() || selectedResponses().size === 0"
         >
           @if (isDeletingResponses()) {
-            <mat-spinner diameter="20"></mat-spinner> Löschen...
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.loeschen' | translate }}
           } @else {
-            Ausgewählte löschen ({{ selectedResponses().size }})
+            {{ 'ui-text.response-status-validation-panel.ausgewaehlte-loeschen' | translate: { value1: (selectedResponses().size) } }}
           }
         </button>
         <button
@@ -112,9 +110,9 @@
           [disabled]="isDeletingResponses() || invalidVariables().length === 0"
         >
           @if (isDeletingResponses()) {
-            <mat-spinner diameter="20"></mat-spinner> Löschen...
+            <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.response-status-validation-panel.loeschen' | translate }}
           } @else {
-            Alle löschen ({{ totalInvalid() }})
+            {{ 'ui-text.response-status-validation-panel.alle-loeschen' | translate: { value1: (totalInvalid()) } }}
           }
         </button>
       </div>
@@ -141,7 +139,7 @@
   ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
-      <span>Prüfung bestanden: Keine ungültigen Variablen gefunden.</span>
+      <span>{{ 'ui-text.variables-validation-panel.pruefung-bestanden-keine-ungueltigen-variablen-gefunden' | translate }}</span>
     </div>
   }
 </mat-expansion-panel>

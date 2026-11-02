@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, Subject } from 'rxjs';
 import { finalize, shareReplay, tap } from 'rxjs/operators';
+import { injectUiTranslator } from '../../utils/ui-translator';
 import { SERVER_URL } from '../../../injection-tokens';
 import { WorkspaceSettings } from '../../models/workspace-settings.model';
 import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
@@ -41,6 +42,8 @@ const AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY = 'auth-session-idle-timeout
   providedIn: 'root'
 })
 export class WorkspaceSettingsService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private http = inject(HttpClient);
   private rawServerUrl = inject(SERVER_URL);
 
@@ -287,19 +290,19 @@ export class WorkspaceSettingsService {
         key: 'evaluation-mode',
         value: JSON.stringify({ enabled }),
         description:
-          'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+          this.uiTranslate('ui-text.workspace-settings.controls-whether-expensive-automatic-coding-refreshes-are-disabled-for-evaluation-sessions')
       },
       {
         key: 'auto-fetch-coding-statistics',
         value: JSON.stringify({ enabled: autoFetchEnabled }),
         description:
-          'Controls whether coding statistics are automatically fetched in the coding management component'
+          this.uiTranslate('ui-text.workspace-settings.controls-whether-coding-statistics-are-automatically-fetched-in-the-coding-management-comp')
       },
       {
         key: 'auto-refresh-manual-coding-jobs',
         value: JSON.stringify({ enabled: autoRefreshEnabled }),
         description:
-          'Controls whether coding status and manual coding views refresh automatically'
+          this.uiTranslate('ui-text.workspace-settings.controls-whether-coding-status-and-manual-coding-views-refresh-automatically')
       }
     ]);
   }

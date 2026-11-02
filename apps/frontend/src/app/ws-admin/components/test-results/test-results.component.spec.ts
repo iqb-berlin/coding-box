@@ -13,6 +13,7 @@ import {
 } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
 import { environment } from '../../../../environments/environment';
 import { TestResultsComponent } from './test-results.component';
@@ -158,7 +159,7 @@ describe('TestResultsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       deferBlockBehavior: DeferBlockBehavior.Playthrough,
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         MatCheckboxModule,
         MatTooltipModule,
         MatIconModule,
@@ -374,7 +375,7 @@ describe('TestResultsComponent', () => {
       'search-filter': {
         'test-results-load-error': 'Testergebnisse konnten nicht geladen werden.'
       }
-    });
+    }, true);
     translateService.use('de');
 
     fixture = TestBed.createComponent(TestResultsComponent);

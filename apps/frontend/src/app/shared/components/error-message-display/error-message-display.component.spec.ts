@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection, signal, WritableSignal } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, Subject } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -12,6 +12,7 @@ import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 
 describe('ErrorMessageDisplayComponent', () => {
   let fixture: ComponentFixture<ErrorMessageDisplayComponent>;
@@ -309,7 +310,7 @@ describe('ErrorMessageDisplayComponent zoneless session warning', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ErrorMessageDisplayComponent, TranslateModule.forRoot()],
+      imports: [ErrorMessageDisplayComponent, GermanTranslationsTestingModule],
       providers: [
         provideZonelessChangeDetection(),
         provideHttpClient(),
@@ -353,5 +354,30 @@ describe('ErrorMessageDisplayComponent zoneless session warning', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.session-expiry-warning')).toBeNull();
     expect(fixture.nativeElement.querySelector('.re-authentication')).not.toBeNull();
+  });
+
+  it.each([false, true])('renders grouped fallback and server messages separately with fallback first=%s', async fallbackFirst => {
+    const fallback = new AppHttpError(new HttpErrorResponse({ status: 400, error: { message: 'Internal server error' } }));
+    const server = new AppHttpError(new HttpErrorResponse({ status: 400, error: { message: 'Der Zeitraum ist ungültig.' } }));
+    for (const error of fallbackFirst ? [fallback, server] : [server, fallback]) {
+      Object.assign(error, { method: 'GET', urlWithParams: '/api/workspace/5/journal' });
+      appService.addErrorMessage(error);
+    }
+    await fixture.whenStable();
+    const message = fixture.nativeElement.querySelector('.other-error p').textContent;
+    expect(message).toContain('Die Anfrage konnte nicht verarbeitet werden. Bitte prüfen Sie die Eingaben.');
+    expect(message).toContain('Der Zeitraum ist ungültig.');
+    expect(message).not.toContain('ui-text.');
+    expect(appService.errorMessages).toHaveLength(1);
+    expect(appService.errorMessages[0].requestCount).toBe(2);
+  });
+
+  it('preserves a server message matching a translation namespace when opening details', async () => {
+    appService.addErrorMessage(new AppHttpError(new HttpErrorResponse({ status: 400, error: { message: 'error' } })));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.other-error p').textContent).toBe('error');
+    fixture.componentInstance.toggleErrorDetails(appService.errorMessages[0].id);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.error-details').textContent).toContain('400');
   });
 });

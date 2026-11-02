@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
@@ -16,7 +17,7 @@ export type SessionDistributionsDialogData = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-session-distributions-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -24,11 +25,11 @@ export type SessionDistributionsDialogData = {
     MatTooltipModule
   ],
   template: `
-    <h2 mat-dialog-title>Sitzungen: Browser / OS / Screen</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.session-distributions-dialog.sitzungen-browser-os-screen' | translate }}</h2>
     <mat-dialog-content>
       <div class="dist-grid">
         <div class="dist-card">
-          <div class="dist-title">Browser</div>
+          <div class="dist-title">{{ 'ui-text.test-results-flat-table-settings-dialog.browser' | translate }}</div>
           @if (browserItems.length > 0) {
             @for (it of browserItems; track it) {
               <div
@@ -51,12 +52,12 @@ export type SessionDistributionsDialogData = {
                 </div>
               }
             } @else {
-              <div class="dist-empty">Keine Sitzungsdaten</div>
+              <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
             }
           </div>
 
           <div class="dist-card">
-            <div class="dist-title">OS</div>
+            <div class="dist-title">{{ 'ui-text.test-results-flat-table-settings-dialog.os' | translate }}</div>
             @if (osItems.length > 0) {
               @for (it of osItems; track it) {
                 <div
@@ -79,12 +80,12 @@ export type SessionDistributionsDialogData = {
                   </div>
                 }
               } @else {
-                <div class="dist-empty">Keine Sitzungsdaten</div>
+                <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
               }
             </div>
 
             <div class="dist-card">
-              <div class="dist-title">Screen</div>
+              <div class="dist-title">{{ 'ui-text.test-results-flat-table-settings-dialog.screen' | translate }}</div>
               @if (screenItems.length > 0) {
                 @for (it of screenItems; track it) {
                   <div
@@ -107,7 +108,7 @@ export type SessionDistributionsDialogData = {
                     </div>
                   }
                 } @else {
-                  <div class="dist-empty">Keine Sitzungsdaten</div>
+                  <div class="dist-empty">{{ 'ui-text.session-distributions-dialog.keine-sitzungsdaten' | translate }}</div>
                 }
               </div>
             </div>
@@ -117,7 +118,7 @@ export type SessionDistributionsDialogData = {
           <mat-divider></mat-divider>
 
           <mat-dialog-actions align="end">
-            <button mat-button type="button" mat-dialog-close>Schließen</button>
+            <button mat-button type="button" mat-dialog-close>{{ 'deferred-view.close' | translate }}</button>
           </mat-dialog-actions>
     `,
   styles: [

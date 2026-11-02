@@ -25,6 +25,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatMenuModule } from '@angular/material/menu';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
@@ -68,6 +69,8 @@ import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-reque
   ]
 })
 export class VariableBundleManagerComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly permissions = inject(CodingPermissionsService);
   private loadRequest?: Subscription;
   private preparationRequest?: Subscription;
@@ -136,7 +139,7 @@ export class VariableBundleManagerComponent implements OnInit {
       },
       error: () => {
         this.isLoading.set(false);
-        this.snackBar.open('Fehler beim Laden der Variablenbündel', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-variablenbuendel'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -160,7 +163,7 @@ export class VariableBundleManagerComponent implements OnInit {
     this.preparationRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -179,17 +182,17 @@ export class VariableBundleManagerComponent implements OnInit {
             this.variableBundleGroupService.createBundle(result).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef)).subscribe({
               next: newBundleGroup => {
                 this.loadVariableBundleGroups();
-                this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-erstellt', { name: newBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               },
               error: () => {
-                this.snackBar.open('Fehler beim Erstellen des Variablenbündels', 'Schließen', { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-erstellen-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               }
             });
           }
         });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der manuell zu kodierenden Variablen', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-manuell-zu-kodierenden-variablen'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -198,7 +201,7 @@ export class VariableBundleManagerComponent implements OnInit {
     this.preparationRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -220,18 +223,18 @@ export class VariableBundleManagerComponent implements OnInit {
               next: updatedBundleGroup => {
                 if (updatedBundleGroup) {
                   this.loadVariableBundleGroups();
-                  this.snackBar.open(`Variablenbündel "${updatedBundleGroup.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
+                  this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-aktualisiert', { name: updatedBundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
                 }
               },
               error: () => {
-                this.snackBar.open('Fehler beim Aktualisieren des Variablenbündels', 'Schließen', { duration: 3000 });
+                this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-aktualisieren-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
               }
             });
           }
         });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der manuell zu kodierenden Variablen', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-laden-der-manuell-zu-kodierenden-variablen'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -242,9 +245,9 @@ export class VariableBundleManagerComponent implements OnInit {
     if (!workspaceId) return;
     const dialogRef = this.ownDialog(this.dialog.open(ConfirmDialogComponent, {
       data: {
-        title: 'Variablenbündel löschen',
-        content: `Sind Sie sicher, dass Sie das Variablenbündel "${bundleGroup.name}" löschen möchten?`,
-        confirmButtonLabel: 'Löschen',
+        title: this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-loeschen'),
+        content: this.uiTranslate('ui-text.variable-bundle-manager.sind-sie-sicher-dass-sie-das-variablenbuendel-loeschen-moechten', { name: bundleGroup.name }),
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
     }));
@@ -255,11 +258,11 @@ export class VariableBundleManagerComponent implements OnInit {
           next: success => {
             if (success) {
               this.loadVariableBundleGroups();
-              this.snackBar.open(`Variablenbündel "${bundleGroup.name}" wurde gelöscht`, 'Schließen', { duration: 3000 });
+              this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-wurde-geloescht', { name: bundleGroup.name }), this.uiTranslate('deferred-view.close'), { duration: 3000 });
             }
           },
           error: () => {
-            this.snackBar.open('Fehler beim Löschen des Variablenbündels', 'Schließen', { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.variable-bundle-manager.fehler-beim-loeschen-des-variablenbuendels'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
           }
         });
       }
@@ -273,9 +276,9 @@ export class VariableBundleManagerComponent implements OnInit {
   getVariableBundleActionAriaLabel(action: 'edit' | 'delete' | 'more', bundleGroup: VariableBundle): string {
     switch (action) {
       case 'edit':
-        return `Variablenbündel bearbeiten: ${bundleGroup.name}`;
+        return this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-bearbeiten', { name: bundleGroup.name });
       case 'delete':
-        return `Variablenbündel löschen: ${bundleGroup.name}`;
+        return this.uiTranslate('ui-text.variable-bundle-manager.variablenbuendel-loeschen-bd59bd', { name: bundleGroup.name });
       case 'more':
         return `Weitere Aktionen: ${bundleGroup.name}`;
       default:

@@ -18,6 +18,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   Subject, finalize, firstValueFrom, takeUntil
 } from 'rxjs';
+import {
+  createdDefinitionJobCount, blockingDefinitionJobCount, definitionWorkflowLabel, JobDefinition
+} from './job-definition-workflow';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import {
   CodingJobBackendService,
@@ -25,7 +28,7 @@ import {
 } from '../../services/coding-job-backend.service';
 import type { JobDefinitionDistributionPreviewResponse } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
-import { Variable, VariableBundle } from '../../models/coding-job.model';
+import { Variable } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
@@ -46,34 +49,6 @@ import {
 } from './job-definition-distribution-summary-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
-
-interface JobDefinition {
-  creatorUserId?: number | null;
-  id?: number;
-  name?: string;
-  description?: string | null;
-  status?: 'draft' | 'pending_review' | 'approved';
-  assignedVariables?: Variable[];
-  assignedVariableBundles?: VariableBundle[];
-  assignedCoders?: number[];
-  assignedCoderConfigs?: { coderId: number; capacityPercent: number }[];
-  distributionSnapshots?: JobDefinitionDistributionSnapshot[];
-  missingsProfileId?: number | null;
-  distributionSeed?: string;
-  plannedVariableUsage?: Record<string, number>;
-  durationSeconds?: number;
-  maxCodingCases?: number | null;
-  doubleCodingAbsolute?: number;
-  doubleCodingPercentage?: number;
-  caseOrderingMode?: 'continuous' | 'alternating';
-  showScore?: boolean;
-  allowComments?: boolean;
-  suppressGeneralInstructions?: boolean;
-  createdJobsCount?: number;
-  blockingCreatedJobsCount?: number;
-  created_at?: Date;
-  updated_at?: Date;
-}
 
 interface Coder {
   id: number;
@@ -346,42 +321,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.getStatusHint(definition.status);
   }
 
-  protected getDefinitionWorkflowLabel(definition: JobDefinition): string {
-    const createdJobsCount = this.getCreatedJobsCount(definition);
-    const label = this.getDefinitionDisplayLabel(definition);
-
-    if (!definition.id) {
-      return this.translateService.instant(
-        'coding-job-definitions.workflow.definition'
-      );
-    }
-
-    if (createdJobsCount === undefined) {
-      return this.translateService.instant(
-        'coding-job-definitions.workflow.jobs-count-unavailable',
-        { label }
-      );
-    }
-
-    if (createdJobsCount === 0) {
-      return this.translateService.instant(
-        'coding-job-definitions.workflow.no-jobs',
-        { label }
-      );
-    }
-
-    if (createdJobsCount === 1) {
-      return this.translateService.instant(
-        'coding-job-definitions.workflow.one-job',
-        { label }
-      );
-    }
-
-    return this.translateService.instant(
-      'coding-job-definitions.workflow.many-jobs',
-      { label, count: createdJobsCount }
-    );
-  }
+  protected getDefinitionWorkflowLabel(definition: JobDefinition): string { return definitionWorkflowLabel(definition, this.translateService.instant.bind(this.translateService)); }
 
   protected getActionAriaLabel(action: string, definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
@@ -407,25 +347,9 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return getJobDefinitionDisplayLabel(definition);
   }
 
-  getCreatedJobsCount(definition: JobDefinition): number | undefined {
-    const count = definition.createdJobsCount;
+  getCreatedJobsCount(definition: JobDefinition): number | undefined { return createdDefinitionJobCount(definition); }
 
-    if (typeof count !== 'number' || !Number.isFinite(count)) {
-      return undefined;
-    }
-
-    return Math.max(0, count);
-  }
-
-  getBlockingCreatedJobsCount(definition: JobDefinition): number | undefined {
-    const count = definition.blockingCreatedJobsCount;
-
-    if (typeof count !== 'number' || !Number.isFinite(count)) {
-      return undefined;
-    }
-
-    return Math.max(0, count);
-  }
+  getBlockingCreatedJobsCount(definition: JobDefinition): number | undefined { return blockingDefinitionJobCount(definition); }
 
   canCreateCodingJobs(definition: JobDefinition): boolean {
     if (!this.permissions.canEdit(definition)) return false;

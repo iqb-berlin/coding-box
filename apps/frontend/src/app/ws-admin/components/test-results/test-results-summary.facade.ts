@@ -1,8 +1,9 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CodingFreshnessState, CodingFreshnessSummaryItemDto, CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import {
-  CODING_FRESHNESS_TASK_RESULT_HELP,
+  CODING_FRESHNESS_TASK_RESULT_HELP_KEY,
   formatCodingFreshnessTaskResultCount,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
@@ -27,6 +28,8 @@ import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
 /** Read-only, memoized summaries shared by the overview and its navigation actions. */
 @Injectable()
 export class TestResultsSummaryFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly statistics = inject(TestResultsStatisticsFacade);
   private readonly translateService = inject(TranslateService);
   private readonly overview = this.statistics.overview;
@@ -63,21 +66,21 @@ export class TestResultsSummaryFacade {
 
   getLogAnomalyCodeLabel(code: string): string {
     const labels: Record<string, string> = {
-      controller_error: 'Controller-Fehler',
-      missing_termination: 'Kein Abschluss',
-      connection_lost: 'Verbindung verloren',
-      timestamp_zero: 'Timestamp 0',
-      player_stuck_loading: 'Player hängt',
-      repeated_start: 'Mehrfach gestartet',
-      long_loading: 'Lange Ladezeit',
-      timer_left_on_exit: 'Restzeit am Ende',
-      timer_never_finished: 'Timer nicht beendet',
-      focus_lost_long: 'Langer Fokusverlust',
-      unit_progress_incomplete: 'Units fehlen',
-      progress_incomplete: 'Progress unvollständig',
-      debug_command: 'Debug-Befehl',
-      session_span_long: 'Lange Zeitspanne',
-      orphan_logs: 'Logs ohne Start'
+      controller_error: this.uiTranslate('ui-text.test-results-summary.controller-fehler'),
+      missing_termination: this.uiTranslate('ui-text.test-results-summary.kein-abschluss'),
+      connection_lost: this.uiTranslate('ui-text.test-results-summary.verbindung-verloren'),
+      timestamp_zero: this.uiTranslate('ui-text.test-results-summary.timestamp-0'),
+      player_stuck_loading: this.uiTranslate('ui-text.test-results-summary.player-haengt'),
+      repeated_start: this.uiTranslate('ui-text.test-results-summary.mehrfach-gestartet'),
+      long_loading: this.uiTranslate('test-results-table.long-loading'),
+      timer_left_on_exit: this.uiTranslate('ui-text.test-results-summary.restzeit-am-ende'),
+      timer_never_finished: this.uiTranslate('ui-text.test-results-summary.timer-nicht-beendet'),
+      focus_lost_long: this.uiTranslate('ui-text.test-results-summary.langer-fokusverlust'),
+      unit_progress_incomplete: this.uiTranslate('ui-text.test-results-summary.units-fehlen'),
+      progress_incomplete: this.uiTranslate('ui-text.test-results-summary.progress-unvollstaendig'),
+      debug_command: this.uiTranslate('ui-text.test-results-summary.debug-befehl'),
+      session_span_long: this.uiTranslate('ui-text.test-results-summary.lange-zeitspanne'),
+      orphan_logs: this.uiTranslate('ui-text.test-results-summary.logs-ohne-start')
     };
     return labels[code] || code;
   }
@@ -143,25 +146,25 @@ export class TestResultsSummaryFacade {
       return this.getSecondAutocodingWaitingSummaryText();
     }
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
+    return getCodingFreshnessSummaryText(this.uiTranslate, this.codingFreshnessWarnings());
   }
 
   get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
-        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+        { taskResultHelp: this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY) }
       );
     }
 
-    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(this.uiTranslate,
       this.codingFreshnessWarnings()
     );
     if (guidanceText) {
-      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+      return `${guidanceText} ${this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY)}`;
     }
 
-    return CODING_FRESHNESS_TASK_RESULT_HELP;
+    return this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY);
   }
 
   get codingFreshnessBannerTitle(): string {
@@ -169,17 +172,17 @@ export class TestResultsSummaryFacade {
       return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
     }
 
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings());
+    return getCodingFreshnessAttentionTitle(this.uiTranslate, this.codingFreshnessWarnings());
   }
 
   readonly codingFreshnessActionLabel = computed<string>(() => {
     if (this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) {
-      return 'Manuelle Kodierung öffnen';
+      return this.uiTranslate('coding-management.readiness.open-manual-review');
     }
 
     return this.autoCodingFreshnessWarnings().length > 0 ?
-      'Auto-Coding öffnen' :
-      'Kodierung öffnen';
+      this.uiTranslate('ui-text.test-results-summary.auto-coding-oeffnen') :
+      this.uiTranslate('ui-text.test-results-summary.kodierung-oeffnen');
   });
 
   readonly codingFreshnessActionIcon = computed<string>(() => ((this.shouldShowSecondAutocodingWaitingState() || this.hasOnlyManualCodingFreshnessWarnings()) ?
@@ -187,11 +190,11 @@ export class TestResultsSummaryFacade {
     'rule'));
 
   getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
-    return getCodingFreshnessVersionLabel(version);
+    return getCodingFreshnessVersionLabel(this.uiTranslate, version);
   }
 
   getCodingFreshnessStateLabel(state: CodingFreshnessState): string {
-    return getCodingFreshnessStateLabel(state);
+    return getCodingFreshnessStateLabel(this.uiTranslate, state);
   }
 
   getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
@@ -199,13 +202,13 @@ export class TestResultsSummaryFacade {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
         {
-          version: getCodingFreshnessVersionLabel(item.version),
-          count: formatCodingFreshnessTaskResultCount(item.unitCount)
+          version: getCodingFreshnessVersionLabel(this.uiTranslate, item.version),
+          count: formatCodingFreshnessTaskResultCount(this.uiTranslate, item.unitCount)
         }
       );
     }
 
-    return getCodingFreshnessChipLabel(item);
+    return getCodingFreshnessChipLabel(this.uiTranslate, item);
   }
 
   readonly secondAutocodingFreshnessWarnings = computed<CodingFreshnessSummaryItemDto[]>(() => getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings()));
@@ -299,7 +302,7 @@ export class TestResultsSummaryFacade {
       return status;
     }
 
-    const descriptionPart = info.description ? `: ${info.description}` : '';
+    const descriptionPart = info.descriptionKey ? `: ${this.translateService.instant(info.descriptionKey)}` : '';
     return `${status}${descriptionPart}`;
   }
 }

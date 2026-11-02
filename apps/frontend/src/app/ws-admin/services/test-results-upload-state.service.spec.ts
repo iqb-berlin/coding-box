@@ -3,6 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultsUploadStateService, PendingUploadBatch } from './test-results-upload-state.service';
@@ -99,6 +100,7 @@ describe('TestResultsUploadStateService', () => {
     };
 
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         TestResultsUploadStateService,
         { provide: FileService, useValue: fileServiceMock },

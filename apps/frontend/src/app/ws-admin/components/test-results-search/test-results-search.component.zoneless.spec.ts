@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestResultsSearchComponent } from './test-results-search.component';
 import { QuickSearchResult, TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { AppService } from '../../../core/services/app.service';
@@ -17,7 +18,7 @@ describe('TestResultsSearchComponent zoneless responses', () => {
     response = new Subject<QuickSearchResult>();
     quickSearch = jest.fn().mockImplementation(() => response);
     await TestBed.configureTestingModule({
-      imports: [TestResultsSearchComponent],
+      imports: [GermanTranslationsTestingModule, TestResultsSearchComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { title: 'Schnellsuche' } },

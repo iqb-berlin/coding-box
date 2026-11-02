@@ -1,40 +1,40 @@
-<h2 mat-dialog-title>GitHub Releases</h2>
+<h2 mat-dialog-title>{{ 'ui-text.github-releases-dialog.github-releases' | translate }}</h2>
 <mat-dialog-content>
   <div class="type-selector">
     <button mat-stroked-button [color]="selectedType() === 'aspect-player' ? 'primary' : ''" (click)="setType('aspect-player')">
-      Aspect Player
+      {{ 'ui-text.github-releases-dialog.aspect-player' | translate }}
     </button>
     <button mat-stroked-button [color]="selectedType() === 'schemer' ? 'primary' : ''" (click)="setType('schemer')">
-      Schemer
+      {{ 'ui-text.files-validation.schemer' | translate }}
     </button>
   </div>
 
   @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>Lade Daten...</p>
+      <p>{{ 'ui-text.github-releases-dialog.lade-daten' | translate }}</p>
     </div>
   }
 
   @if (!isLoading() && releases().length > 0) {
     <table mat-table [dataSource]="releases()">
       <ng-container matColumnDef="name">
-        <th mat-header-cell *matHeaderCellDef> Name </th>
+        <th mat-header-cell *matHeaderCellDef> {{ 'user.full-name' | translate }} </th>
         <td mat-cell *matCellDef="let element"> {{element.name}} </td>
       </ng-container>
       <ng-container matColumnDef="version">
-        <th mat-header-cell *matHeaderCellDef> Version </th>
+        <th mat-header-cell *matHeaderCellDef> {{ 'process-overview.details.version' | translate }} </th>
         <td mat-cell *matCellDef="let element"> {{element.version}} </td>
       </ng-container>
       <ng-container matColumnDef="published_at">
-        <th mat-header-cell *matHeaderCellDef> Veröffentlicht am </th>
+        <th mat-header-cell *matHeaderCellDef> {{ 'ui-text.github-releases-dialog.veroeffentlicht-am' | translate }} </th>
         <td mat-cell *matCellDef="let element"> {{element.published_at | date:'mediumDate'}} </td>
       </ng-container>
       <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef> Aktionen </th>
+        <th mat-header-cell *matHeaderCellDef> {{ 'process-overview.columns.actions' | translate }} </th>
         <td mat-cell *matCellDef="let element">
           <button mat-flat-button color="primary" (click)="install(element)">
-            Installieren
+            {{ 'ui-text.github-releases-dialog.installieren' | translate }}
           </button>
         </td>
       </ng-container>
@@ -45,10 +45,10 @@
 
   @if (!isLoading() && releases().length === 0) {
     <div class="empty-state">
-      Keine Releases gefunden.
+      {{ 'ui-text.github-releases-dialog.keine-releases-gefunden' | translate }}
     </div>
   }
 </mat-dialog-content>
 <mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Schließen</button>
+  <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </mat-dialog-actions>

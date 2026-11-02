@@ -4,6 +4,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   EMPTY, Observable, Subject, of, throwError
 } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { CodingManagementService } from './coding-management.service';
 import {
   CodingJobStatus
@@ -88,6 +89,7 @@ describe('CodingManagementService', () => {
     } as unknown as jest.Mocked<MatSnackBar>;
 
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         CodingManagementService,
         { provide: CodingExecutionService, useValue: executionServiceMock },
@@ -611,7 +613,7 @@ describe('CodingManagementService', () => {
 
       expect(snackBarMock.open).toHaveBeenCalledWith(
         'coding-management.download-dialog.download-cancelled',
-        'Schließen',
+        'deferred-view.close',
         { duration: 3000 }
       );
       expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import { signal, SimpleChange } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { CodingScheme } from '../../../models/coding-interfaces';
 import { CodeSelectorComponent } from './code-selector.component';
 
@@ -148,7 +149,7 @@ describe('CodeSelectorComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
+      imports: [GermanTranslationsTestingModule, FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
     })
       .compileComponents();
 
@@ -554,7 +555,7 @@ describe('CodeSelectorComponent', () => {
       'code-selector': {
         'review-coders-tooltip': 'Von folgenden Kodierern vergeben: {{coders}}'
       }
-    });
+    }, true);
     translateService.setDefaultLang('de');
     translateService.use('de');
 
@@ -648,7 +649,7 @@ describe('CodeSelectorComponent', () => {
     });
     expect(fixture.nativeElement.querySelector('.legacy-code-row')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('.legacy-code-note').textContent).toContain(
-      'code-selector.legacy-code-missing-note'
+      translateGerman('code-selector.legacy-code-missing-note')
     );
     expect(component.hasNextUnit()).toBe(true);
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
@@ -860,7 +861,7 @@ describe('CodeSelectorComponent', () => {
     expect(emitSpy).not.toHaveBeenCalled();
     expect(component.newCodeCommentValidationError()).toBe(true);
     expect(fixture.nativeElement.querySelector('.notes-validation-error').textContent).toContain(
-      'code-selector.new-code-comment-required'
+      translateGerman('code-selector.new-code-comment-required')
     );
     expect(focusSpy).toHaveBeenCalled();
 
@@ -1271,7 +1272,7 @@ describe('CodeSelectorComponent', () => {
     expect(component.navigationItems.map(item => item.label)).toEqual(['Bundle A', 'UNIT_2 / VAR3']);
     expect(panelItems).toHaveLength(2);
     expect(panelItems[0].textContent).toContain('Bundle A');
-    expect(panelItems[0].textContent).toContain('code-selector.variable-bundle');
+    expect(panelItems[0].textContent).toContain(translateGerman('code-selector.variable-bundle'));
     expect(panelItems[1].textContent).toContain('UNIT_2 / VAR3');
   });
 
@@ -1511,7 +1512,7 @@ describe('CodeSelectorComponent', () => {
     fixture.componentRef.setInput('coderNotes', 'unrelated view state');
     expect(component.navigationItems).toBe(first);
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('de', { 'code-selector': { 'variable-bundle': 'Variablenbündel' } });
+    translate.setTranslation('de', { 'code-selector': { 'variable-bundle': 'Variablenbündel' } }, true);
     translate.use('de');
     expect(component.navigationItems[0].label).toBe('Variablenbündel 9');
     fixture.componentRef.setInput('unitsData', {
@@ -1563,7 +1564,7 @@ describe('CodeSelectorComponent', () => {
     expect(initial[0].progress).toEqual({ coded: 0, total: 1, percentage: 0 });
     expect(component.bundleVariableNavigationItems).toBe(initial);
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('de', { 'code-selector': { 'bundle-open-tooltip': 'Offene Variable' } });
+    translate.setTranslation('de', { 'code-selector': { 'bundle-open-tooltip': 'Offene Variable' } }, true);
     translate.use('de');
     expect(component.bundleVariableNavigationItems[0].tooltip).toBe('Offene Variable');
     coded.set(true);

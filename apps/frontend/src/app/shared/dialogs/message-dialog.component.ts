@@ -6,6 +6,7 @@ import {
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { injectUiTranslator } from '../utils/ui-translator';
 
 export enum MessageType {
   error,
@@ -39,16 +40,18 @@ export enum MessageType {
   imports: [MatDialogTitle, MatIcon, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class MessageDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected messageData = inject<MessageDialogData>(MAT_DIALOG_DATA);
   ngOnInit(): void {
     if ((typeof this.messageData.title === 'undefined') || (this.messageData.title.length === 0)) {
       switch (this.messageData.type) {
         case MessageType.error: {
-          this.messageData.title = 'Achtung: Fehler';
+          this.messageData.title = this.uiTranslate('ui-text.message-dialog.achtung-fehler');
           break;
         }
         case MessageType.warning: {
-          this.messageData.title = 'Achtung: Warnung';
+          this.messageData.title = this.uiTranslate('ui-text.message-dialog.achtung-warnung');
           break;
         }
         default: {
@@ -59,7 +62,7 @@ export class MessageDialogComponent implements OnInit {
     }
     if ((typeof this.messageData.closeButtonLabel === 'undefined') ||
       (this.messageData.closeButtonLabel.length === 0)) {
-      this.messageData.closeButtonLabel = 'Schließen';
+      this.messageData.closeButtonLabel = this.uiTranslate('deferred-view.close');
     }
   }
 }

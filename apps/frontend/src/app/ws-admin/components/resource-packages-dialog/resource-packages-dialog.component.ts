@@ -28,6 +28,7 @@ import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { HttpErrorResponse, HttpEventType, HttpResponse } from '@angular/common/http';
 import { MatTooltip } from '@angular/material/tooltip';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { ResourcePackageService } from '../../../shared/services/response/resource-package.service';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
@@ -71,6 +72,8 @@ export interface ResourcePackagesDialogData {
   ]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
 
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
@@ -131,7 +134,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
       return;
@@ -149,7 +152,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           this.isLoadingResourcePackages.set(false);
           this.snackBar.open(
             this.translate.instant('Error loading resource packages'),
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -218,7 +221,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
       return;
@@ -227,15 +230,15 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     const selectedPackages = this.resourcePackageSelection.selected;
     const hasGlobalPackage = selectedPackages.some(pkg => pkg.scope === 'global');
     const content = hasGlobalPackage ?
-      'Mindestens ein ausgewähltes Ressourcenpaket ist global. Es wird in allen Workspaces gelöscht und Aufgaben, die dieses Paket verwenden, können anschließend nicht mehr funktionieren. Fortfahren?' :
-      'Die ausgewählten Ressourcenpakete werden aus diesem Workspace entfernt. Fortfahren?';
+      this.uiTranslate('ui-text.resource-packages-dialog.mindestens-ein-ausgewaehltes-ressourcenpaket-ist-global-es-wird-in-allen-workspaces-geloes') :
+      this.uiTranslate('ui-text.resource-packages-dialog.die-ausgewaehlten-ressourcenpakete-werden-aus-diesem-workspace-entfernt-fortfahren');
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '520px',
       data: <ConfirmDialogData>{
-        title: 'Ressourcenpakete löschen',
+        title: this.uiTranslate('access-matrix.feature.delete-resource-packages'),
         content,
-        confirmButtonLabel: 'Löschen',
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       }
     });
@@ -253,7 +256,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.isLoadingResourcePackages.set(false);
             if (success) {
               this.snackBar.open(
-                'Ressourcenpakete wurden gelöscht.',
+                this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-wurden-geloescht'),
                 '',
                 { duration: 3000 }
               );
@@ -262,8 +265,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
               this.dialogRef.close(true);
             } else {
               this.snackBar.open(
-                'Ressourcenpakete konnten nicht gelöscht werden.',
-                this.translate.instant('error'),
+                this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-konnten-nicht-geloescht-werden'),
+                this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
             }
@@ -271,8 +274,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           error: () => {
             this.isLoadingResourcePackages.set(false);
             this.snackBar.open(
-              'Ressourcenpakete konnten nicht gelöscht werden.',
-              this.translate.instant('error'),
+              this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpakete-konnten-nicht-geloescht-werden'),
+              this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
           }
@@ -289,7 +292,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
       return;
@@ -309,8 +312,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.finishResourcePackageOperation();
             if (!blob || blob.size === 0) {
               this.snackBar.open(
-                'Das Ressourcenpaket konnte nicht heruntergeladen werden.',
-                this.translate.instant('error'),
+                this.uiTranslate('ui-text.resource-packages-dialog.das-ressourcenpaket-konnte-nicht-heruntergeladen-werden'),
+                this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
               return;
@@ -328,8 +331,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         error: () => {
           this.finishResourcePackageOperation();
           this.snackBar.open(
-            'Das Ressourcenpaket konnte nicht heruntergeladen werden.',
-            this.translate.instant('error'),
+            this.uiTranslate('ui-text.resource-packages-dialog.das-ressourcenpaket-konnte-nicht-heruntergeladen-werden'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -345,7 +348,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
       return;
@@ -365,13 +368,13 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
               return;
             }
             if (event instanceof HttpResponse) {
-              this.resourcePackageOperationText.set('Paket wird geprüft und entpackt...');
+              this.resourcePackageOperationText.set(this.uiTranslate('ui-text.resource-packages-dialog.paket-wird-geprueft-und-entpackt'));
               this.resourcePackageProgressMode.set('indeterminate');
               const id = event.body || -1;
               this.finishResourcePackageOperation();
               if (id > 0) {
                 this.snackBar.open(
-                  'Ressourcenpaket wurde hochgeladen.',
+                  this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-wurde-hochgeladen'),
                   '',
                   { duration: 3000 }
                 );
@@ -379,8 +382,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
                 this.dialogRef.close(true);
               } else {
                 this.snackBar.open(
-                  'Ressourcenpaket konnte nicht hochgeladen werden.',
-                  this.translate.instant('error'),
+                  this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-konnte-nicht-hochgeladen-werden'),
+                  this.translate.instant('error.error_title'),
                   { duration: 3000 }
                 );
               }
@@ -389,8 +392,8 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           error: (error: unknown) => {
             this.finishResourcePackageOperation();
             this.snackBar.open(
-              this.getResourcePackageErrorMessage(error, 'Ressourcenpaket konnte nicht hochgeladen werden.'),
-              this.translate.instant('error'),
+              this.getResourcePackageErrorMessage(error, this.uiTranslate('ui-text.resource-packages-dialog.ressourcenpaket-konnte-nicht-hochgeladen-werden')),
+              this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
           }
@@ -404,7 +407,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     if (workspaceId === null) {
       this.snackBar.open(
         this.translate.instant('Workspace ID is required'),
-        this.translate.instant('error'),
+        this.translate.instant('error.error_title'),
         { duration: 3000 }
       );
       return;
@@ -415,10 +418,10 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       width: '560px',
       data: <ConfirmDialogData>{
         title: packageExists ?
-          'GeoGebra Math Apps Bundle prüfen/reparieren' :
-          'GeoGebra Math Apps Bundle installieren',
-        content: 'Das GeoGebra Math Apps Bundle wird geprüft. Falls kein gültiges Bundle vorhanden ist, wird es von download.geogebra.org geladen, als globales Ressourcenpaket installiert und steht danach in allen Workspaces zur Verfügung. Bitte beachten Sie die GeoGebra-Lizenzbedingungen.',
-        confirmButtonLabel: packageExists ? 'Prüfen/reparieren' : 'Installieren',
+          this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-pruefen-reparieren') :
+          this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-installieren'),
+        content: this.uiTranslate('ui-text.resource-packages-dialog.das-geogebra-math-apps-bundle-wird-geprueft-falls-kein-gueltiges-bundle-vorhanden-ist-wird'),
+        confirmButtonLabel: packageExists ? this.uiTranslate('ui-text.resource-packages-dialog.pruefen-reparieren') : 'Installieren',
         showCancel: true
       }
     });
@@ -428,7 +431,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
         return;
       }
       this.startResourcePackageOperation(
-        'GeoGebra Math Apps Bundle wird heruntergeladen und installiert...',
+        this.uiTranslate('ui-text.resource-packages-dialog.geogebra-math-apps-bundle-wird-heruntergeladen-und-installiert'),
         'indeterminate'
       );
       this.resourcePackageService.installGeoGebraPackage(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
@@ -437,7 +440,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             if (event instanceof HttpResponse) {
               this.finishResourcePackageOperation();
               this.snackBar.open(
-                `GeoGebra ist verfügbar${event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : ''}.`,
+                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-ist-verfuegbar', { value1: event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : '' }),
                 '',
                 { duration: 3000 }
               );
@@ -450,9 +453,9 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             this.snackBar.open(
               this.getResourcePackageErrorMessage(
                 error,
-                'GeoGebra konnte nicht installiert werden. Bitte Download-Link und ZIP-Format prüfen.'
+                this.uiTranslate('ui-text.resource-packages-dialog.geogebra-konnte-nicht-installiert-werden-bitte-download-link-und-zip-format-pruefen')
               ),
-              this.translate.instant('error'),
+              this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
           }

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { WorkspaceSettingsService } from './workspace-settings.service';
 import { SERVER_URL } from '../../../injection-tokens';
 
@@ -12,6 +13,7 @@ describe('WorkspaceSettingsService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         WorkspaceSettingsService,
         provideHttpClient(withInterceptorsFromDi()),

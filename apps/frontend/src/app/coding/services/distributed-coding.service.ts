@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
@@ -65,6 +66,8 @@ export interface JobDefinitionDistributionPreviewResponse extends DistributionCa
   providedIn: 'root'
 })
 export class DistributedCodingService {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
@@ -80,10 +83,10 @@ export class DistributedCodingService {
 
     if (httpError.error && typeof httpError.error === 'object' && 'message' in httpError.error) {
       const message = httpError.error.message;
-      return Array.isArray(message) ? message.join(', ') : message || 'Unbekannter Fehler';
+      return Array.isArray(message) ? message.join(', ') : message || this.uiTranslate('error.unknown');
     }
 
-    return httpError.message || 'Unbekannter Fehler';
+    return httpError.message || this.uiTranslate('error.unknown');
   }
 
   createDistributedCodingJobs(

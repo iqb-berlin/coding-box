@@ -179,7 +179,7 @@
 
         <mat-paginator [pageSizeOptions]="[5, 10, 20]"
           showFirstLastButtons
-          aria-label="Seite der Prozesse auswählen">
+          [attr.aria-label]="'ui-text.process-overview.seite-der-prozesse-auswaehlen' | translate">
         </mat-paginator>
 
         @if (processes.filteredData.length === 0 && !isLoading()) {

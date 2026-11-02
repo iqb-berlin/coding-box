@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import { MissingsProfileService } from '../../services/missings-profile.service';
@@ -12,6 +13,7 @@ import { AppService } from '../../../core/services/app.service';
 describe('EditMissingsProfilesDialogComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }]
     });
   });
@@ -48,7 +50,7 @@ describe('EditMissingsProfilesDialogComponent', () => {
         { provide: MissingsProfileService, useValue: missingsProfileService },
         { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
         { provide: MatSnackBar, useValue: snackBar },
-        { provide: TranslateService, useValue: { instant: jest.fn(key => key) } }
+        { provide: TranslateService, useValue: { instant: jest.fn(translateGerman) } }
       ]
     });
     return TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent());
@@ -273,7 +275,7 @@ describe('EditMissingsProfilesDialogComponent', () => {
     expect(missingsProfileService.updateMissingsProfile).toHaveBeenCalledWith(1, 'Existing', selectedProfile);
     expect(component.saving()).toBe(false);
     expect(component.editMode()).toBe(true);
-    expect(snackBar.open).toHaveBeenCalledWith('workspace.error-updating-missings-profile', 'close', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith(translateGerman('workspace.error-updating-missings-profile'), translateGerman('close'), { duration: 3000 });
   });
 
   it('treats a null create response as a failed save', () => {
@@ -294,7 +296,7 @@ describe('EditMissingsProfilesDialogComponent', () => {
     expect(missingsProfileService.createMissingsProfile).toHaveBeenCalledWith(1, selectedProfile);
     expect(component.saving()).toBe(false);
     expect(component.editMode()).toBe(true);
-    expect(snackBar.open).toHaveBeenCalledWith('workspace.error-creating-missings-profile', 'close', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith(translateGerman('workspace.error-creating-missings-profile'), translateGerman('close'), { duration: 3000 });
   });
 
   it('creates instead of updating when a new profile reuses an existing label', () => {
@@ -318,6 +320,6 @@ describe('EditMissingsProfilesDialogComponent', () => {
     expect(missingsProfileService.updateMissingsProfile).not.toHaveBeenCalled();
     expect(component.saving()).toBe(false);
     expect(component.editMode()).toBe(true);
-    expect(snackBar.open).toHaveBeenCalledWith('workspace.error-creating-missings-profile', 'close', { duration: 3000 });
+    expect(snackBar.open).toHaveBeenCalledWith(translateGerman('workspace.error-creating-missings-profile'), translateGerman('close'), { duration: 3000 });
   });
 });

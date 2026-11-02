@@ -6,14 +6,16 @@ export interface AppHttpErrorRequest {
   requestId?: string;
 }
 
-export const BACKEND_CONNECTIVITY_ERROR_MESSAGE =
-  'Der Server antwortet gerade nicht. Einige Daten konnten nicht geladen werden. Bitte versuchen Sie es in einem Moment erneut.';
+export type AppHttpErrorUserMessage = { readonly key: string } | { readonly text: string };
 
-export const GENERIC_HTTP_ERROR_MESSAGE =
-  'Die Anfrage konnte nicht ausgeführt werden. Bitte versuchen Sie es erneut.';
+export const BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY =
+  'ui-text.http-errors.der-server-antwortet-gerade-nicht-einige-daten-konnten-nicht-geladen-werden-bitt';
 
-export const SERVER_ERROR_MESSAGE =
-  'Auf dem Server ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.';
+export const GENERIC_HTTP_ERROR_MESSAGE_KEY =
+  'ui-text.http-errors.die-anfrage-konnte-nicht-ausgefuehrt-werden-bitte-versuchen-sie-es-erneut';
+
+export const SERVER_ERROR_MESSAGE_KEY =
+  'journal.load-error-message';
 
 export function isBackendConnectivityStatus(status: number): boolean {
   return [0, 502, 503, 504].includes(status);
@@ -23,6 +25,7 @@ export class AppHttpError {
   status: number;
   message: string;
   userMessage: string;
+  userMessageParts: AppHttpErrorUserMessage[] = [];
   technicalMessage = '';
   requestId = '';
   occurredAt = new Date().toISOString();
@@ -39,14 +42,17 @@ export class AppHttpError {
     this.isBackendConnectivityError = isBackendConnectivityStatus(this.status);
 
     if (this.isBackendConnectivityError) {
-      this.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
+      this.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY;
       this.userMessage = this.message;
+      this.userMessageParts = [{ key: BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY }];
       this.technicalMessage = this.extractErrorMessage(errorObj);
       return;
     }
 
     this.technicalMessage = this.extractErrorMessage(errorObj);
-    this.userMessage = this.extractUserMessage(errorObj, this.technicalMessage);
+    const userMessage = this.extractUserMessage(errorObj, this.technicalMessage);
+    this.userMessageParts = [userMessage];
+    this.userMessage = 'key' in userMessage ? userMessage.key : userMessage.text;
     this.message = this.userMessage;
   }
 
@@ -85,45 +91,45 @@ export class AppHttpError {
     return '';
   }
 
-  private extractUserMessage(errorObj: HttpErrorResponse, technicalMessage: string): string {
+  private extractUserMessage(errorObj: HttpErrorResponse, technicalMessage: string): AppHttpErrorUserMessage {
     if (errorObj.error instanceof ErrorEvent) {
-      return GENERIC_HTTP_ERROR_MESSAGE;
+      return { key: GENERIC_HTTP_ERROR_MESSAGE_KEY };
     }
 
     if (errorObj.status >= 500) {
-      return SERVER_ERROR_MESSAGE;
+      return { key: SERVER_ERROR_MESSAGE_KEY };
     }
 
     switch (errorObj.status) {
       case 400:
         return this.toUserSafeClientErrorMessage(
           technicalMessage,
-          'Die Anfrage konnte nicht verarbeitet werden. Bitte prüfen Sie die Eingaben.'
+          'ui-text.http-errors.die-anfrage-konnte-nicht-verarbeitet-werden-bitte-pruefen-sie-die-eingaben'
         );
       case 401:
-        return 'Ihre Sitzung ist abgelaufen oder Sie sind nicht angemeldet. Bitte melden Sie sich erneut an.';
+        return { key: 'ui-text.http-errors.ihre-sitzung-ist-abgelaufen-oder-sie-sind-nicht-angemeldet-bitte-melden-sie-sich' };
       case 403:
-        return 'Sie haben keine Berechtigung für diese Aktion.';
+        return { key: 'ui-text.http-errors.sie-haben-keine-berechtigung-fuer-diese-aktion' };
       case 404:
-        return 'Die angeforderten Daten wurden nicht gefunden.';
+        return { key: 'ui-text.http-errors.die-angeforderten-daten-wurden-nicht-gefunden' };
       case 409:
         return this.toUserSafeClientErrorMessage(
           technicalMessage,
-          'Die Aktion konnte wegen eines Konflikts nicht abgeschlossen werden.'
+          'ui-text.http-errors.die-aktion-konnte-wegen-eines-konflikts-nicht-abgeschlossen-werden'
         );
       default:
-        return this.toUserSafeClientErrorMessage(technicalMessage, GENERIC_HTTP_ERROR_MESSAGE);
+        return this.toUserSafeClientErrorMessage(technicalMessage, GENERIC_HTTP_ERROR_MESSAGE_KEY);
     }
   }
 
-  private toUserSafeClientErrorMessage(message: string, fallback: string): string {
+  private toUserSafeClientErrorMessage(message: string, fallback: string): AppHttpErrorUserMessage {
     const normalizedMessage = message.trim();
 
     if (!normalizedMessage || this.isTechnicalMessage(normalizedMessage)) {
-      return fallback;
+      return { key: fallback };
     }
 
-    return normalizedMessage;
+    return { text: normalizedMessage };
   }
 
   private isTechnicalMessage(message: string): boolean {
@@ -137,4 +143,10 @@ export class AppHttpError {
       lowerCaseMessage.includes('exception') ||
       lowerCaseMessage.includes('stack trace');
   }
+}
+
+/** Translate only application messages; preserve server text and each grouped part. */
+export function formatAppHttpErrorMessage(error: AppHttpError, translate: (key: string) => string): string {
+  const parts = error.userMessageParts?.length ? error.userMessageParts : [{ text: error.userMessage || error.message || '' }];
+  return parts.map(part => ('key' in part ? translate(part.key) : part.text)).join('; ');
 }

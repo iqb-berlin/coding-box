@@ -12,6 +12,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import * as xml2js from 'xml2js';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FileService } from '../../../shared/services/file/file.service';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit-player.component';
@@ -32,6 +33,8 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<UnitDefinitionPlayerDialogComponent>>(MatDialogRef);
   protected data = inject<{
     workspaceId: number;
@@ -52,7 +55,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     if (this.data.workspaceId && this.data.unitId) {
       this.loadUnitData();
     } else {
-      this.errorMessage.set('Ungültige Parameter für die Aufgabendefinition.');
+      this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.ungueltige-parameter-fuer-die-aufgabendefinition'));
       this.isLoading.set(false);
     }
   }
@@ -68,7 +71,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     this.fileService.getUnit(workspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
-          this.errorMessage.set(`Aufgabe ${unitId} wurde nicht gefunden.`);
+          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.aufgabe-wurde-nicht-gefunden', { unitId: unitId }));
           this.isLoading.set(false);
           return;
         }
@@ -89,7 +92,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         }
 
         if (!playerRef) {
-          this.errorMessage.set('Kein Player in der Aufgabendefinition gefunden.');
+          this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.kein-player-in-der-aufgabendefinition-gefunden'));
           this.isLoading.set(false);
           return;
         }
@@ -101,7 +104,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           player: this.fileService.getPlayer(workspaceId, normalizedPlayerId)
         }).pipe(
           catchError(() => {
-            this.errorMessage.set('Fehler beim Laden der Aufgabendefinition.');
+            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.fehler-beim-laden-der-aufgabendefinition'));
             this.isLoading.set(false);
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
@@ -114,7 +117,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           const playerFile = result.player[0];
 
           if (!defFile || !playerFile) {
-            this.errorMessage.set('Aufgabendefinition oder Player konnten nicht geladen werden.');
+            this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.aufgabendefinition-oder-player-konnten-nicht-geladen-werden'));
             this.isLoading.set(false);
             return;
           }
@@ -125,7 +128,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         });
       },
       error: () => {
-        this.errorMessage.set('Fehler beim Laden der Aufgabendaten.');
+        this.errorMessage.set(this.uiTranslate('ui-text.unit-definition-player-dialog.fehler-beim-laden-der-aufgabendaten'));
         this.isLoading.set(false);
       }
     });

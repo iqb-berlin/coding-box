@@ -7,6 +7,7 @@ import {
 } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import {
@@ -92,6 +93,8 @@ function isDownloadCancelledError(error: unknown): error is DownloadCancelledErr
   providedIn: 'root'
 })
 export class CodingManagementService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private executionService = inject(CodingExecutionService);
   private statisticsService = inject(CodingStatisticsService);
   private versionService = inject(CodingVersionService);
@@ -279,7 +282,7 @@ export class CodingManagementService {
           activeFetch
         );
       } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
-        this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
+        this.snackBar.open(`Statistik-Job ${status.status}`, this.uiTranslate('deferred-view.close'), { duration: 5000, panelClass: ['error-snackbar'] });
       }
     });
     activeFetch.subscription.add(pollingSubscription);
@@ -371,7 +374,7 @@ export class CodingManagementService {
     return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit, sortBy, sortDirection)
       .pipe(
         catchError(() => {
-          this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
+          this.snackBar.open(this.uiTranslate('coding-management.descriptions.error-responses-status', { status: status }), this.uiTranslate('deferred-view.close'), {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
@@ -418,7 +421,7 @@ export class CodingManagementService {
     return this.responseService.searchResponses(workspaceId, backendParams, page, limit)
       .pipe(
         catchError(() => {
-          this.showErrorSnackbar('Fehler beim Filtern der Kodierdaten', false);
+          this.showErrorSnackbar(this.uiTranslate('ui-text.coding-management.fehler-beim-filtern-der-kodierdaten'), false);
           return of({ data: [], total: 0 });
         })
       );
@@ -508,8 +511,8 @@ export class CodingManagementService {
             cascadeText = ` (+ ${status.result.cascadeResetVersions.join(', ')})`;
           }
           this.snackBar.open(
-            `${status.result.affectedResponseCount} Antworten zurückgesetzt${cascadeText}`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-management.antworten-zurueckgesetzt', { affectedResponseCount: status.result.affectedResponseCount, cascadeText: cascadeText }),
+            this.uiTranslate('deferred-view.close'),
             { duration: 5000, panelClass: ['success-snackbar'] }
           );
         }
@@ -657,7 +660,7 @@ export class CodingManagementService {
     this.codingListDownloadProgress$.next(0);
 
     try {
-      this.showInfoSnackbar(this.translateService.instant('coding-management.descriptions.job-started', { defaultValue: 'Export-Job gestartet...' }));
+      this.showInfoSnackbar(this.translateService.instant('coding-management.descriptions.job-started', { defaultValue: this.uiTranslate('coding-management.descriptions.job-started') }));
 
       const jobStartResult = await lastValueFrom(this.exportService.startExportJob(
         workspaceId,
@@ -881,7 +884,7 @@ export class CodingManagementService {
   }
 
   private showSuccessSnackbar(msg: string): void {
-    this.snackBar.open(msg, 'Schließen', { duration: 5000, panelClass: ['success-snackbar'] });
+    this.snackBar.open(msg, this.uiTranslate('deferred-view.close'), { duration: 5000, panelClass: ['success-snackbar'] });
   }
 
   private showErrorSnackbar(msgKey: string, translate = true): void {
@@ -890,7 +893,7 @@ export class CodingManagementService {
   }
 
   private showInfoSnackbar(msg: string): void {
-    this.snackBar.open(msg, 'Schließen', { duration: 3000 });
+    this.snackBar.open(msg, this.uiTranslate('deferred-view.close'), { duration: 3000 });
   }
 
   private getDownloadFailureMessage(error: unknown): string {
