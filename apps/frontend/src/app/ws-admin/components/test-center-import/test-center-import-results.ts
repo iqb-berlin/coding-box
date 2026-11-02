@@ -1,13 +1,17 @@
 import { Result } from '../../../shared/services/file/import.service';
 
+function addImportCounts(base: number | undefined, current: number | undefined): number {
+  return (base || 0) + (current || 0);
+}
+
 export function mergeTestCenterImportResults(base: Result | null, current: Result): Result {
   if (!base) return { ...current };
   return {
     ...current,
     success: (base.success ?? false) && (current.success ?? false),
-    testFiles: (base.testFiles || 0) + (current.testFiles || 0),
-    responses: (base.responses || 0) + (current.responses || 0),
-    logs: (base.logs || 0) + (current.logs || 0),
+    testFiles: addImportCounts(base.testFiles, current.testFiles),
+    responses: addImportCounts(base.responses, current.responses),
+    logs: addImportCounts(base.logs, current.logs),
     // These are workspace totals, not per-group deltas.
     booklets: current.booklets || base.booklets || 0,
     units: current.units || base.units || 0,

@@ -1867,6 +1867,60 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it.each([
+      [{ hasValue: 'yes' }, 'BTRIM(COALESCE(response.value', undefined],
+      [{ processingDurationMin: '01:15' }, '>= :processingDurationMinMs', { processingDurationMinMs: 75000, processingDurationMaxMs: Number.MAX_SAFE_INTEGER }],
+      [{ processingDurationMax: '02:30' }, '<= :processingDurationMaxMs', { processingDurationMinMs: 0, processingDurationMaxMs: 150000 }],
+      [{ sessionIds: '5, invalid, -1, 8' }, 's.id IN (:...sessionIds)', { sessionIds: [5, 8] }]
+    ])('applies %j to both result rows and their total', async (filter, condition, parameters) => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      countQb.getRawOne.mockResolvedValue({ cnt: '3' });
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb).mockReturnValueOnce(countQb);
+
+      const [, total] = await service.findFlatResponses(1, { page: 1, limit: 10, ...filter });
+
+      expect(total).toBe(3);
+      for (const qb of [dataQb, countQb]) {
+        const matches = qb.andWhere.mock.calls.filter(([sql]) => String(sql).includes(String(condition)));
+        expect(matches).toHaveLength(1);
+        if (parameters !== undefined) expect(matches[0][1]).toEqual(parameters);
+      }
+    });
+
+    it('uses the same predicates for combined response, duration and session filters', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb).mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 2,
+        limit: 15,
+        responseStatus: 'VALUE_CHANGED',
+        geogebra: '1',
+        audioLow: 'yes',
+        hasValue: 'true',
+        shortProcessing: 'true',
+        processingDurations: 'Kurz,Lang',
+        processingDurationMin: '00:05',
+        processingDurationMax: '10:00',
+        longLoading: 'true',
+        unitProgress: 'vollständig,unvollständig',
+        sessionBrowsers: 'Firefox',
+        sessionOs: 'Linux',
+        sessionScreens: '1920x1080',
+        sessionIds: '5,8'
+      });
+
+      expect(countQb.andWhere.mock.calls).toEqual(dataQb.andWhere.mock.calls);
+      expect(dataQb.offset).toHaveBeenCalledWith(15);
+      expect(dataQb.limit).toHaveBeenCalledWith(15);
+      expect(countQb.offset).not.toHaveBeenCalled();
+      expect(countQb.limit).not.toHaveBeenCalled();
+    });
+
     it('should filter tags in the count query without multiplying rows', async () => {
       const dataQb = mockQueryBuilder();
       const countQb = mockQueryBuilder();

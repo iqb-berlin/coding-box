@@ -147,7 +147,8 @@
         "cypress/zoneless/replay-lifecycle.cy.ts",
         "apps/frontend/src/app/coding/components/code-selector/replay-unit-index.spec.ts",
         "apps/frontend/src/app/coding/components/double-coded-review/double-coding-code-options.spec.ts",
-        "apps/frontend/src/app/replay/components/replay/replay-keyboard-policy.spec.ts"
+        "apps/frontend/src/app/replay/components/replay/replay-keyboard-policy.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay-route-session.service.spec.ts"
       ]
     },
     {

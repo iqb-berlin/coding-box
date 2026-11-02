@@ -1,5 +1,78 @@
 # Große Angular-Komponenten: Bestand und nächste Schnitte
 
+## Konflikt- und Review-Nachlauf zu PR #1149 (02.11.2026)
+
+Geprüft wurde der PR-Stand `eebf7d1055f5050856c0fc6d685e644ee29ffda0`
+gegen den aktuellen `develop`-Stand
+`52b510ab26666178fb9d46e161a1fa3f000bc1bb` (einschließlich PR #1150).
+Der Review umfasste die 17 ausgelagerten Verantwortungsbereiche,
+Workspace-/Request-Lebensdauern, Replay-Tastatur und Authentisierung,
+HTTP-Fehlergruppierung, Übersetzungen und deren Verbraucher sowie die
+Test- und Qualitätskonfiguration. Ein zusätzlicher Vergleich expandiert
+literale Übersetzungsaufrufe mit dem jeweiligen deutschen Katalog, um
+Verhaltensänderungen von Textauslagerungen unterscheiden zu können.
+
+### Korrekturen aus Integration und Review
+
+- **Mergekonflikte:** Die neue Replay-Routen-/Session-Struktur aus #1150
+  bleibt erhalten; der gemeinsame Token-Prüfpfad verwendet die übersetzte
+  Schließen-Aktion. Die Qualitätskonfiguration führt sowohl Struktur- als
+  auch Katalogprüfungen aus. Beide Risikoreferenzlisten wurden vereinigt,
+  das Detailinventar aus dem integrierten Quellstand neu erzeugt.
+- **Strukturprüfungen:** Der erste integrierte Lint-Lauf meldete 41 Fehler.
+  Veraltete Bestandsgrenzen wurden abgesenkt oder entfernt. Der ausgelagerte
+  Ergebnisfilter und die Importzählung erfüllen durch kleine fachlich
+  zusammenhängende Hilfsfunktionen die Komplexitätsgrenze 20. Vier bereits
+  freigestellte Import-Callbacks behalten exakt ihre bisherigen Messwerte
+  und Grenzen; nur die durch Übersetzungsausdrücke veränderten
+  Quelltextkennungen wurden zugeordnet. Es wurden keine Grenzwerte erhöht.
+- **[P2] Konfigurierte Logo-Beschreibungen wurden übersetzt:** Die neue
+  Übersetzung des gespeicherten Alternativtexts konnte einen Wert wie
+  `error` in eine ganze Kataloggruppe und `home.home-page` in `Startseite`
+  umwandeln. Das betraf Header, Tooltip und das Einstellungsfeld; beim
+  erneuten Speichern konnte der ursprüngliche Text verloren gehen.
+  Zwei native Tests reproduzierten beide Fälle zunächst mit Fehler.
+  Konfigurierte Texte bleiben jetzt unverändert; nur das eingebaute
+  Standardlogo erhält eine lokalisierte UI-Beschreibung. Der DTO-Wert des
+  Standardlogos bleibt Klartext. Die Regression wird zusätzlich im Browser
+  für Alternativtext und Tooltip geprüft.
+
+Reviewurteil nach den Korrekturen: **APPROVE**, hohe Sicherheit für den
+geprüften Umfang. Keine weiteren belastbaren P0-/P1-/P2-Befunde offen.
+Die nachfolgenden Grenzen der technischen Prüfung bleiben bestehen.
+
+### Lokale technische Prüfung
+
+Node 24.22.1, lokale Nx-Installation mit `NX_DAEMON=false NX_NO_CLOUD=true`.
+Frontend- und Backend-Validierungen wurden nicht gleichzeitig ausgeführt.
+Der resultierende Diff gegen `develop` enthält keine Backend-, DTO-,
+Datenbank- oder Paketversionsänderungen.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache --cache=false --coverageReporters=text-summary --coverageReporters=json-summary` | 350 Suiten, 3.800 Tests bestanden; 83,39 % Statements/Zeilen, 81,90 % Branches, 80,88 % Functions. Dieser Gesamtlauf startete vor dem Logo-Nachlauf; dessen abschließenden Stand sichert der folgende gezielte Lauf ab. |
+| `npx nx test frontend --testPathPatterns='sys-admin-settings.component.spec\|app.component.spec\|coding-management.service.spec\|coding-job-result-table.spec\|test-center-import-results.spec' --maxWorkers=2 --skipNxCache --cache=false` | 5 Suiten, 61 Tests bestanden, einschließlich beider zuvor fehlgeschlagenen Logo-Regressionen. |
+| `npx nx run frontend:test-quality-gates` | Alle 78 Prüfungen bestanden, einschließlich Struktur- und Katalogprüfungen. |
+| `npx nx run frontend:zoneless-inventory --args=--update` und `npx nx run frontend:zoneless-approval` | Inventar mit 10.770 Einträgen; 6 Risikobereiche, 7 Mechanismen und Referenzen für 59 korrigierte Befunde geprüft. Keine vollständige Freigabe aller Inventarszenarien. |
+| `npx nx run frontend:zoneless-inventory-test` | Beide Prüfungen bestanden. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,26 kB. |
+| `npx nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Gesamtlauf: 202 von 204 Fällen in 37 Spezifikationen bestanden. Zwei neue Logo-Fälle prüften wegen einer unvollständigen Startfixture das Standardlogo; der abschließende Nachlauf prüft das sichtbare Speichern und erneute Öffnen der Systemeinstellungen. Gezielter Nachlauf mit `--spec=cypress/zoneless/app.cy.ts`: alle 3 Fälle bestanden. Damit sind alle 204 Fälle abgedeckt; kein weiterer Produktcode musste geändert werden. Keine automatischen Retries oder übersprungenen Fälle. |
+| `npx nx run frontend:component-test --browser=electron --skipNxCache` | Alle 37 Fälle in 11 Spezifikationen bestanden, keine Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Fingerprint beim Start des E2E-Gesamtlaufs:
+`eb35bfeea82182a2a5a40879d67da98ab2744a463df3aa076fc40730ae7e06e0`.
+Nach den Komponententests wurde der unveränderte Quellstand erneut für
+Produktion gebaut; abschließender Fingerprint:
+`b8ea8697b2121e0368373c46dd29c1b4f1270913df6f7b60acd2acccc1702acf`.
+Der abschließende Logo-Browser-Smoke-Test bestand mit allen 3 Fällen
+gegen dieses Artefakt; sein Fingerprint blieb nach dem Lauf unverändert.
+Browserprüfungen verwenden kontrollierte API-/Auth-Antworten. Live-Backend,
+Keycloak, Produktionslast, Release, Deployment und fachliche Abnahme sind
+separate Nachweise. Der PR wird mit diesem Nachlauf nicht gemergt; das
+zugehörige Ticket bleibt offen. Remote-CI muss am neuen PR-Head geprüft werden.
+
 ## Folgeumbau vom 02.11.2026
 
 Basis ist der live abgerufene Stand `origin/develop` bei

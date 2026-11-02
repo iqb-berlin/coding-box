@@ -25,10 +25,7 @@ import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
-import {
-  getSecondAutocodingFreshnessWarnings,
-  ManualCodingCompletionOverview
-} from '../../shared/utils/coding-freshness-text.util';
+import { getSecondAutocodingFreshnessWarnings, ManualCodingCompletionOverview } from '../../shared/utils/coding-freshness-text.util';
 
 export interface PendingUploadBatch {
   workspaceId: number;

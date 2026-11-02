@@ -34,9 +34,7 @@ import {
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
-import {
-  ResponseMatchingFlag
-} from '../../shared/services/workspace/workspace-settings.service';
+import { ResponseMatchingFlag } from '../../shared/services/workspace/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 

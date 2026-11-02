@@ -226,3 +226,58 @@ export type LogAnomalySessionRow = {
   ts: number | null;
   loadcompletems: number | null;
 };
+
+export interface FlatResponseOptions {
+  page: number;
+  limit: number;
+  code?: string;
+  group?: string;
+  login?: string;
+  booklet?: string;
+  unit?: string;
+  response?: string;
+  responseStatus?: string;
+  responseValue?: string;
+  tags?: string;
+  geogebra?: string;
+  audioLow?: string;
+  hasValue?: string;
+  audioLowThreshold?: number | string;
+  shortProcessing?: string;
+  shortProcessingThresholdMs?: number | string;
+  longLoading?: string;
+  longLoadingThresholdMs?: number | string;
+  processingDurations?: string;
+  processingDurationThresholdMs?: number | string;
+  processingDurationMin?: string;
+  processingDurationMax?: string;
+  unitProgress?: string;
+  sessionBrowsers?: string;
+  sessionOs?: string;
+  sessionScreens?: string;
+  sessionIds?: string;
+  logAnomalies?: string;
+  includeLogAnomalies?: string;
+  focusLostThresholdMs?: number | string;
+  sessionSpanThresholdMs?: number | string;
+  repeatedStartThreshold?: number | string;
+  regexSearch?: boolean;
+}
+
+export type FlatResponseRow = {
+  bookletId: number;
+  responseId: number;
+  unitId: number;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  booklet: string;
+  unit: string;
+  response: string;
+  responseStatus: string;
+  responseValue: string;
+  tags: string[];
+  logAnomalies: LogAnomalySummary[];
+};
+export type FlatResponseResult = [FlatResponseRow[], number];

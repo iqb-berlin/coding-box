@@ -57,6 +57,11 @@
         ]
       }
     },
+    "prune-structure-baseline": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/quality/prune-structure-baseline.cjs backend" }
+    },
     "test": {
       "executor": "nx:run-commands",
       "outputs": [

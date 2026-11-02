@@ -23,6 +23,11 @@ export interface CodingResult {
   unresolvedMissing?: boolean;
 }
 
+function matchesUnitFilter(data: CodingResult, filter: string): boolean {
+  return !filter || data.unitName.toLowerCase().includes(filter) ||
+    !!data.unitAlias?.toLowerCase().includes(filter);
+}
+
 export function createCodingResultFilter(): (data: CodingResult, filter: string) => boolean {
   return (data: CodingResult, filter: string): boolean => {
     let filters: {
@@ -40,8 +45,7 @@ export function createCodingResultFilter(): (data: CodingResult, filter: string)
 
     // Check unit name filter (includes unitName and unitAlias)
     const unitFilter = filters.unitName?.toLowerCase() || '';
-    if (unitFilter && !data.unitName.toLowerCase().includes(unitFilter) &&
-        !(data.unitAlias && data.unitAlias.toLowerCase().includes(unitFilter))) {
+    if (!matchesUnitFilter(data, unitFilter)) {
       return false;
     }
 

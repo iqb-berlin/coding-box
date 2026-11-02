@@ -15,7 +15,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { injectUiTranslator } from './shared/utils/ui-translator';
-import { AppService } from './core/services/app.service';
+import { AppService, standardLogo } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthRefreshUnavailableError } from './core/interceptors/auth-refresh-unavailable.error';
 import { AuthSessionState } from './core/services/auth-session-state.service';
@@ -54,6 +54,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   protected appService = inject(AppService);
   protected authService = inject(AuthService);
+  protected readonly logoAltText = computed(() => (this.appService.appLogo === standardLogo ?
+    this.uiTranslate('home.home-page') : this.appService.appLogo.alt));
 
   protected url = inject(LocationStrategy);
   private router = inject(Router);
