@@ -213,4 +213,42 @@ describe('ItemDatasetMetadataService variable positions', () => {
     ]), profile, new Map([[derived.key, [source.key]]]), { variablePositions });
     expect(cells.map(cell => cell.code)).toEqual(hiddenSource ? [1, -96] : [1, 1, -96]);
   });
+
+  it.each([undefined, '', '   '])('retains the scheme alias for a hidden source with Unit alias %p', async unitAlias => {
+    const aliasAttribute = unitAlias === undefined ? '' : ` alias="${unitAlias}"`;
+    const columns = [column('V1', 0), { ...column('D2', 1), isDerived: true }, column('V2', 2)];
+    const variablePositions = await createService([{
+      file_id: 'UNIT',
+      file_type: 'Unit',
+      data: `<Unit><Metadata><Id>UNIT</Id><Label>Hidden source alias</Label></Metadata>
+        <DefinitionRef player="player">UNIT.VOUD</DefinitionRef>
+        <CodingSchemeRef schemer="schemer">UNIT.VOCS</CodingSchemeRef>
+        <BaseVariables><Variable id="V1" alias="V1" type="string"/><Variable id="V2" alias="V2" type="string"/></BaseVariables>
+        <DerivedVariables><Variable id="D1"${aliasAttribute} type="string"/><Variable id="D2" alias="D2" type="string"/></DerivedVariables>
+      </Unit>`
+    }, {
+      file_id: 'UNIT.VOUD', file_type: 'Resource', data: definition(['V1', 'V2'])
+    }, {
+      file_id: 'UNIT.VOCS',
+      file_type: 'Resource',
+      data: JSON.stringify({
+        variableCodings: [
+          { id: 'V1', sourceType: 'BASE' }, { id: 'V2', sourceType: 'BASE' },
+          {
+            id: 'D1', alias: 'HIDDEN', sourceType: 'COPY_VALUE', deriveSources: ['V1']
+          },
+          { id: 'D2', sourceType: 'COPY_VALUE', deriveSources: ['D1'] }
+        ]
+      })
+    }]).getVariablePositions(7, columns);
+    const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
+      ['UNIT\u001FV1', { status: 5, code: 1, score: 1 }],
+      ['UNIT\u001FHIDDEN', { status: 5, code: 1, score: 1 }],
+      ['UNIT\u001FD2', { status: 5, code: 1, score: 1 }],
+      ['UNIT\u001FV2', { status: 1, code: null, score: null }]
+    ]), profile, new Map([
+      ['UNIT\u001FD2', ['UNIT\u001FHIDDEN']], ['UNIT\u001FHIDDEN', ['UNIT\u001FV1']]
+    ]), { variablePositions });
+    expect(cells.map(cell => cell.code)).toEqual([1, 1, -96]);
+  });
 });

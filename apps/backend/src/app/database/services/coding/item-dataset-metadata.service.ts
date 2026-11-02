@@ -45,7 +45,7 @@ interface UnitPositionMetadata {
   definition?: string;
   definitionRef?: string;
   codingSchemeRef?: string;
-  variables: Array<{ id: string; alias: string; page?: string }>;
+  variables: Array<{ id: string; alias?: string; page?: string }>;
 }
 
 @Injectable()
@@ -431,7 +431,7 @@ export class ItemDatasetMetadataService {
       $('BaseVariables Variable, DerivedVariables Variable').each((_, element) => {
         const variable = $(element);
         const id = String(variable.attr('id') || variable.attr('alias') || '').trim();
-        const alias = String(variable.attr('alias') || id).trim();
+        const alias = variable.attr('alias')?.trim() || undefined;
         if (id) variables.push({ id, alias, page: variable.attr('page') });
       });
       result.set(unitId, {
