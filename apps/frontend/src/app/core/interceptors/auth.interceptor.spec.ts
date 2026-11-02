@@ -9,7 +9,9 @@ import {
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateLoader, TranslateModule, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
+import de from '../../../assets/i18n/de.json';
 import { authInterceptor } from './auth.interceptor';
 import { AuthRequestCancelledError } from './auth-request-cancelled.error';
 import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
@@ -50,6 +52,7 @@ describe('authInterceptor', () => {
     };
 
     TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot()],
       providers: [
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
@@ -61,12 +64,26 @@ describe('authInterceptor', () => {
       ]
     });
 
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', de);
+    translate.use('de');
+
     http = TestBed.inject(HttpClient);
     httpMock = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
     httpMock.verify();
+  });
+
+  it('uses the active language for permission feedback and its action label', async () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('probe', { 'error-forbidden': 'Permission denied', common: { close: 'Dismiss' } });
+    translate.use('probe');
+    http.get('/api/workspaces').subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/workspaces').flush({}, { status: 403, statusText: 'Forbidden' });
+    expect(snackBar.open).toHaveBeenCalledWith('Permission denied', 'Dismiss', expect.objectContaining({ duration: 5000 }));
   });
 
   it('should attach a fresh Keycloak access token to requests without explicit authorization', async () => {
@@ -367,5 +384,34 @@ describe('authInterceptor', () => {
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.addErrorMessage).not.toHaveBeenCalled();
     expect(snackBar.open).not.toHaveBeenCalled();
+  });
+});
+
+describe('authInterceptor during translation initialization', () => {
+  it('loads the default language through HttpClient without a cyclic dependency', () => {
+    TestBed.configureTestingModule({
+      imports: [TranslateModule.forRoot({
+        defaultLanguage: 'de',
+        loader: {
+          provide: TranslateLoader,
+          useFactory: (http: HttpClient) => ({ getTranslation: () => http.get('assets/i18n/de.json') }),
+          deps: [HttpClient]
+        }
+      })],
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        { provide: AppService, useValue: {} },
+        { provide: AuthService, useValue: { getSessionGeneration: () => 0 } },
+        { provide: SERVER_URL, useValue: 'api/' },
+        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: Router, useValue: { url: '/home' } }
+      ]
+    });
+    const translate = TestBed.inject(TranslateService);
+    const requests = TestBed.inject(HttpTestingController);
+    requests.expectOne('assets/i18n/de.json').flush({ common: { close: 'Schließen' } });
+    expect(translate.instant('common.close')).toBe('Schließen');
+    requests.verify();
   });
 });

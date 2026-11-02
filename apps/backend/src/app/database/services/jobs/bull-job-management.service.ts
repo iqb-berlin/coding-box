@@ -1,7 +1,6 @@
-import {
-  Inject, Injectable, Logger, forwardRef
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { mapJobStateToStatus, extractJobResult } from './bull-job-result.util';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
@@ -9,7 +8,7 @@ import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
 import { CodingStatistics } from '../shared';
 
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
-// eslint-disable-next-line import/no-cycle
+
 import { CodingReadinessService } from '../coding/coding-readiness.service';
 
 @Injectable()
@@ -18,9 +17,9 @@ export class BullJobManagementService {
 
   constructor(
     private jobQueueService: JobQueueService,
-    @Inject(forwardRef(() => CodingFreshnessService))
+    @Inject(CodingFreshnessService)
     private codingFreshnessService: CodingFreshnessService,
-    @Inject(forwardRef(() => CodingReadinessService))
+    @Inject(CodingReadinessService)
     private codingReadinessService: CodingReadinessService
   ) {}
 
@@ -140,33 +139,11 @@ export class BullJobManagementService {
   }
 
   mapJobStateToStatus(state: string): 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused' {
-    switch (state) {
-      case 'active':
-        return 'processing';
-      case 'completed':
-        return 'completed';
-      case 'failed':
-        return 'failed';
-      case 'delayed':
-      case 'waiting':
-        return 'pending';
-      case 'paused':
-        return 'paused';
-      default:
-        return 'pending';
-    }
+    return mapJobStateToStatus(state);
   }
 
   extractJobResult<T>(bullJob: Job<T>, state: string): { result?: CodingStatistics; error?: string } {
-    let result: CodingStatistics | undefined;
-    let error: string | undefined;
-
-    if (state === 'completed' && bullJob.returnvalue) {
-      result = bullJob.returnvalue as CodingStatistics;
-    } else if (state === 'failed' && bullJob.failedReason) {
-      error = bullJob.failedReason;
-    }
-    return { result, error };
+    return extractJobResult(bullJob, state);
   }
 
   async getBullJobs(workspaceId: number): Promise<{

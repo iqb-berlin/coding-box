@@ -1,13 +1,15 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Setting } from '../../entities/setting.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
@@ -52,8 +54,8 @@ export class CodingListQueryService {
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly fileCacheService: CodingFileCacheService,
-    private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly workspaceCoreService: WorkspaceCoreService,
+    @Inject(WORKSPACE_FILE_METADATA_READER)
+    private readonly workspaceFilesService: WorkspaceFileMetadataReader,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     @Optional() private readonly replayAnchorService?: CodingReplayAnchorService,
     @Optional()

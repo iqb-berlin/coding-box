@@ -5,6 +5,7 @@ export interface SchemaValueDefinition {
   value: string;
   label?: string;
   score?: number;
+  code?: number | string;
   order: number;
   isFromSchema?: boolean;
 }
@@ -51,6 +52,7 @@ export function resolveSchemaValue(
     value: value ?? '',
     label: coding.codes[order].label || String(coding.codes[order].id),
     score: result.score,
+    code: coding.codes[order].id,
     order,
     isFromSchema: true
   };

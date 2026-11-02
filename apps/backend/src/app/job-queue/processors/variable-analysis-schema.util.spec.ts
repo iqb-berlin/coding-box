@@ -24,7 +24,7 @@ const animals: VariableDetailDto = {
 describe('variable analysis schema values', () => {
   it('keeps raw spelling and uses processing rules without equating values with code ids', () => {
     expect(resolveSchemaValue('  hAI  ', animals)).toMatchObject({
-      value: '  hAI  ', label: 'Fisch', score: 1, isFromSchema: true
+      value: '  hAI  ', label: 'Fisch', score: 1, code: 7, isFromSchema: true
     });
     expect(resolveSchemaValue('7', animals)).toBeUndefined();
     expect(getExplicitSchemaValues(animals).map(row => row.value)).toEqual(['Hai', 'Hay']);
@@ -45,7 +45,7 @@ describe('variable analysis schema values', () => {
   });
 
   it('annotates observed regex matches without enumerating the regex as an answer', () => {
-    expect(resolveSchemaValue('Zebra', animals)).toMatchObject({ score: 0, isFromSchema: true });
+    expect(resolveSchemaValue('Zebra', animals)).toMatchObject({ score: 0, code: 9, isFromSchema: true });
     expect(getExplicitSchemaValues(animals).map(row => row.value)).not.toContain('^Z.*');
   });
 
@@ -178,7 +178,7 @@ describe('variable analysis schema values', () => {
       }
     };
     expect(resolveSchemaValue('Sonderfall', variable)).toMatchObject({
-      label: 'Sonderfall', score: 0, order: 1, isFromSchema: true
+      label: 'Sonderfall', score: 0, code: id, order: 1, isFromSchema: true
     });
   });
 

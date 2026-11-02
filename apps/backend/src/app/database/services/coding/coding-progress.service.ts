@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository,
@@ -11,7 +13,7 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { Setting } from '../../entities/setting.entity';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
@@ -205,7 +207,7 @@ export class CodingProgressService {
     private variableBundleRepository: Repository<VariableBundle>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
-    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private workspaceFilesService: WorkspaceFileMetadataReader,
     private workspaceExclusionService: WorkspaceExclusionService,
     private cacheService: CacheService,
     private codingAggregationPeerService: CodingAggregationPeerService,

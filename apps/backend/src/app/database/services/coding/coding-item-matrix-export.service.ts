@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, BadRequestException, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
@@ -26,7 +28,7 @@ import {
   normalizeExclusionBookletId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   IqbStandardMissingId,
   MissingsProfilesService,
@@ -144,7 +146,7 @@ export class CodingItemMatrixExportService {
     private readonly responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Booklet)
     private readonly bookletRepository: Repository<Booklet>,
-    private readonly workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly missingsProfilesService: MissingsProfilesService,
     private readonly metadataService: ItemDatasetMetadataService

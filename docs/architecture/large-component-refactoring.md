@@ -262,3 +262,232 @@ weiterhin eigenständige Folgearbeiten. Jeder weitere Schnitt soll separat
 reviewbar bleiben und Verhaltenstests für seinen Auswahl-, Speicher- und
 Lebensdauervertrag mitbringen. Die verbleibende Zeilenzahl ist kein
 Abnahmekriterium.
+
+
+## Paket 3: Replay-Sitzung, Wiederherstellung und Player-Abfragen
+
+Stand 28.10.2026, Basis `b551329189357095f5eca7a4ccb54a1cce4f8a07`
+auf `angular21-toolchain-type-safety` (PR #1128). Der erste Folge-PR richtet
+sich bis zur Übernahme dieser Basis gegen denselben Branch.
+
+| Lokaler Besitzer | Fachliche Verantwortung |
+| --- | --- |
+| `ReplayAuthSessionService` | Replay-Token prüfen/erneuern, Refreshs nach Workspace und normalisierten Scopes teilen, ungültige Versuche abbrechen und erneuerte Tokens aus der URL entfernen. |
+| `ReplayRecoveryService` | Unvollständige Kodierungen erfassen, Draft-Kontext prüfen, gespeicherte Änderungen bestätigen und Entscheidungsnachrichten an den Opener senden. Ein alter Abschluss löscht keinen neueren Draft. |
+| `ReplayPayloadFacade` | Vollständige Player-Daten und reine Antwortwechsel mit einer gemeinsamen ersetzbaren Anfrage verwalten; abhängige Schema-Ladevorgänge an dieselbe Lebensdauer binden. |
+| Vorhandene `ReplaySessionLoaderService` / `ReplayCodingService` | Replay-Sitzungsendpunkt samt 404/405-Rückfall, Kodierungszustand und Speichervorgänge weiterverwenden. Der Sitzungsloader meldet ersetzte Anfragen jetzt ab. |
+| `ReplayComponent` | Route, Modus, sichtbare Auswahl, Navigation, Player-Darstellung, Tastatur, Dialoge und Statistiken miteinander verbinden. |
+
+Alle drei neuen Besitzer werden pro Replay-Komponente bereitgestellt. Sie
+injizieren keine Elternkomponente. Recovery erhält einen typisierten Snapshot
+und meldet die wiederherzustellende Position über einen schmalen Callback.
+Routerparameter, Draft-Schlüssel, Opener-Nachrichten und Verona-Protokoll sind
+unverändert. Direkte Seitennavigation, Antwortwechsel innerhalb derselben Unit
+und vollständiger Payloadwechsel bleiben getrennte Strategien.
+
+Ein Workspace-Wechsel verwirft offene Versuche sofort, auch bei A → B → A.
+Die zentrale Reauthentifizierung behält weiterhin den vorhandenen Recovery-
+Service und den bisherigen Speicherablauf. Beim Ansichtsende enden lokale
+Token-, Sitzungs- und Payload-Anfragen. Der bestehende globale Asset-Cache
+behält seine eigene Lebensdauer. Ein gescheiterter Recovery-Speicherversuch
+lässt den Draft verfügbar; ein älterer Versuch überschreibt keinen neueren.
+
+Die neuen Service- und Komponententests verwenden die native Zoneless-
+Konfiguration. Verzögerte Player-Eingaben und Workspace-Wechsel werden mit
+`whenStable()` ohne nachträgliches `detectChanges()` geprüft. Die Browser-Spec
+`cypress/zoneless/replay-lifecycle.cy.ts` nutzt synthetische API-Antworten und
+einen kleinen Verona-Protokollplayer. Sie ergänzt die vorhandenen realen
+Keycloak-/Aspect-Suites, ersetzt deren Systemnachweis aber nicht.
+
+### Erneute Bestandsaufnahme
+
+Gezählt wurde erneut am Basiscommit: 17 Komponenten mit mehr als 1.000
+physischen TypeScript-Zeilen. Die Tabelle zeigt den Ausgangsstand dieses Pakets,
+nicht die historischen Zahlen der älteren Abschnitte. Alle Methodenlisten
+wurden erneut gegen die aktuellen Quelldateien geprüft.
+
+| Komponente | Basiszeilen | Nächste fachliche Grenze |
+| --- | ---: | --- |
+| Replay | 2215 | Obiges Paket; anschließend gegebenenfalls reine Routeninterpretation und die verbleibenden Ansichtsaktionen separat beurteilen. |
+| Ergebnisvergleich | 2105 | Diskussionsübernahme mit Vorschau/Fehlern; vorhandene Daten-, Recovery- und Reliabilitätsfassaden erhalten. |
+| Testergebnisse | 2026 | Auswahl und kontextgebundene Tags-/Notizen-/Booklet-Details; vorhandene Import-/Export-/Statistikbesitzer nutzen. |
+| Jobdefinitionsdialog | 2016 | Definitionsänderung mit Verwendungs-/Refresh-Vorschau und Review-Einreichung; bestehende Form-/Variablen-/Persistence-Module nutzen. |
+| Dateivalidierung | 1915 | Reine Ableitung von Zusammenfassung, fehlenden Referenzen und Beziehungen aus dem Validierungsergebnis; danach getrennt von Ausschluss-/Löschaktionen prüfen. |
+| Kodierverwaltung | 1842 | Freshness-/Readiness-Abfragen und Hintergrundjob-Polling; Filter und Download als eigene Abläufe. |
+| Flache Testergebnistabelle | 1825 | Filteroptionen/Häufigkeiten mit Anfrageersetzung; vorhandene Tabelle und seitenübergreifende Auswahl erhalten. |
+| Manuelle Kodierverwaltung | 1810 | Manuelle Exportkonfiguration mit Größenschätzung und Ergebnisübernahme; vorhandene Workflow-/Statistik-/Importbesitzer nutzen. |
+| Kodierjobs | 1810 | Einzel-/Sammelübernahme und Löschaktionen samt Rechten/Bestätigung; Listenabfragen und Auswahl getrennt halten. |
+| Kodiertraining | 1705 | Referenz-/Definitionsimport gegenüber Trainingsanlage; bestehendes FormArray und Recovery erhalten. |
+| Testdateien | 1550 | Content-Pool-Übertragung gegenüber Dateiaktionen; vorhandene Uploadverfolgung und Berechtigungen nutzen. |
+| Variablenanalyse | 1488 | Analyseauftrag/Polling/Abbruch gegenüber paginierten Resultaten und reiner Transformation. |
+| Doppelkodierungsprüfung | 1401 | Entscheidungen und Kommentare gegenüber Filtern/Paging; vorhandene Review-Fassade und Replay-Entscheidungen erhalten. |
+| Jobdefinitionen | 1218 | Freigabe/Review und Distributionsexport gegenüber Listenpflege und Anlage. |
+| Codeauswahl | 1131 | Navigations-/Indexbildung gegenüber Code-/Notizeditor; Kommentarpflicht und Tastenkürzel erhalten. |
+| Testcenter-Import | 1083 | Import-/Fortschrittslebensdauer gegenüber den bereits geschnittenen Ansichten; unklaren Serverstatus erhalten. |
+| Jobergebnisdialog | 1037 | Aktualisierungs-/Filterabfragen gegenüber Schema-/Replay-Aktionen mit demselben Auftragskontext. |
+
+Die Grenze dient weiterhin nur der Suche. Ein sinnvoller Schnitt bekommt einen
+kleinen fachlichen Vertrag und gezielte Regressionen; die verbleibende
+Komponentengröße entscheidet nicht über die Abnahme.
+
+### Lokale Prüfung von Paket 3
+
+Am endgültigen Stand, Node 22.23.1, über die lokalen Nx-Ziele:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Frontend-Lint | Bestanden, keine Warnungen. |
+| Vollständige native Zoneless-Suite | 320 Suites, 3.521 Tests bestanden; 35 zusätzliche Regressionen gegenüber der Basis. |
+| Frontend-Produktionsbuild | Bestanden, initial 1,23 MB. Normale Projektoptionen, keine zusätzlichen Node-Symlink-Flags. |
+| Backend-Produktionsbuild | Anschließend separat bestanden. Backend und DTOs wurden nicht geändert. |
+| `frontend:test-quality-gates` | Alle 51 Tests bestanden. |
+| `frontend:zoneless-inventory-test` / `frontend:zoneless-approval` | Beide Inventartests und Risikoreferenzen bestanden; 411 Quelldateien, 9.363 Einträge. Keine vollständige Einzelabnahme des gesamten Inventars. |
+| Browser: `replay-lifecycle.cy.ts`, `oidc-replay-callback.cy.ts` | 4/4 in Chrome gegen den frischen Produktionsbuild bestanden, ohne Retries oder übersprungene Fälle. |
+| `git diff --check` | Bestanden. |
+
+Das eigene Review fand und korrigierte eine zusätzliche Promise-Grenze zwischen
+Fassade und Komponente. Zwei Regressionen reproduzierten zunächst die Annahme
+veralteter Ergebnisse; unmittelbar vor deren Übernahme wird die aktuelle
+Anfrage nun erneut geprüft. Weitere Tests prüfen Abbruch zwischen 404 und
+Legacy-Rückfall sowie verspätete beziehungsweise entprellte Opener-Nachrichten
+nach Workspace-Wechseln. Das abschließende Eigenreview hat keine offenen
+Befunde. Remote-CI und fachliche Abnahme bleiben separat am PR zu prüfen.
+
+## Statusabfragen und Hintergrundjobs der Kodierverwaltung (01.11.2026)
+
+Basis ist `origin/develop` bei `d28ab3485`. Dieses Paket ist unabhängig von
+PR #1144. `CodingManagementComponent` sinkt von 1.842 auf 1.655 physische Zeilen.
+Die fachlichen Grenzen sind wichtiger als diese Zählung:
+
+- `CodingStatusDataFacade` besitzt Freshness, betroffene Gruppen, Readiness und
+  die Übernahmeübersicht manueller Ergebnisse samt Lade-/Fehlerzuständen und
+  daraus abgeleiteten Warnungen. Der leichte Erstaufruf und die Wiederverwendung
+  eines vollständigen Cache-Snapshots bleiben erhalten. Ersetzte Abfragen sowie
+  Antworten nach Arbeitsbereichswechsel A → B → A oder Zerstörung werden
+  verworfen. Eine ausstehende Cache-Abfrage überschreibt keinen erzwungenen
+  Readiness-Check; alte Gruppenabfragen überleben keine neuere Freshness-Abfrage.
+- `CodingFreshnessPollingFacade` besitzt den lokalen Auftragskontext,
+  Fortschritt und die Abfragelebensdauer. Während der Auftragsdialog offen ist,
+  bleibt dessen Polling zuständig. Nach dessen Schließen fragt die Fassade im
+  bisherigen Zwei-Sekunden-Takt ab. Langsame Antworten überlappen sich nicht
+  mehr. Zusammenhängende Abfragefehler erzeugen nur eine Meldung; nach Erholung
+  ist erneutes Fehlerfeedback möglich. Beim Verlassen des Arbeitsbereichs oder
+  der Ansicht geht der laufende Auftrag an die vorhandene persistente
+  Guard-Verfolgung über. Alte Antworten und Timer enden dabei.
+
+Die Komponente behält Dialogaktionen, Rechte, Snackbar-Texte und die bestehende
+Koordination entprellter beziehungsweise aufgeschobener Aktualisierungen von
+Statistik, Tabelle und Status. Die Fassaden sind komponentenlokale Provider;
+es entsteht kein zweiter globaler Daten- oder Job-Store. Ihre Tests prüfen die
+Abfrage- und Lebensdauerverträge ohne das große Komponententemplate. Bestehende
+Komponententests sichern Abschluss-/Refresh-Reihenfolge und Dialogübernahme;
+zusätzliche Fälle verwerfen verspätete Startantworten nach Kontextende.
+
+Zwei zusätzliche HTTP-Vertragstests verwenden den echten `TestPersonCodingService`
+mit dem Angular-Testbackend. Sie reproduzierten zunächst einen verlorenen
+Readiness-Cache nach Anfrageersetzung: Das vorzeitig angeforderte Observable war
+noch die geteilte alte Anfrage. Die Fassade erstellt den Nachfolger jetzt erst
+nach deren Abonnementende. Beide Fälle (Cache-Abfrage und reguläre Readiness)
+bestehen danach und verlangen bei der nächsten Abfrage keinen weiteren
+HTTP-Request. Auch die übrigen 152 fokussierten Fälle bestehen.
+
+### Validierung der Status-/Polling-Aufteilung
+
+Lokal unter Node 24.22.1, jeweils nacheinander über die lokale Nx-Installation
+mit `NX_DAEMON=false`:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --fix --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --cache=false --skipNxCache` | 329 Suites, 3.727 Tests bestanden; 83,15 % Zeilen und 81,14 % Branches. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/async-coding-dialogs.cy.ts,cypress/zoneless/test-person-coding-feedback.cy.ts --skipNxCache` | 10/10 Fälle gegen den frischen Produktionsbuild bestanden, ohne Retries oder übersprungene Fälle. |
+| `npx nx run frontend:zoneless-inventory --args=--update --skipNxCache` und `npx nx run frontend:zoneless-approval --skipNxCache` | Inventar regeneriert und Risikoreferenzen geprüft; 423 Quelldateien, 9.385 Einträge. |
+| `npx nx run frontend:zoneless-inventory-test --skipNxCache` | Beide Inventar-/Risikomatrix-Regressionen bestanden. |
+| `git diff --check` | Bestanden. |
+
+Die Browserfälle verwenden synthetische API-Fixtures. Remote-CI am endgültigen
+PR-Head, Deployment und fachliche Abnahme bleiben eigenständige Nachweise. Die
+Inventarprüfung ist eine risikobezogene Referenzprüfung und keine vollständige
+Einzelabnahme aller Inventarszenarien.
+
+## Speicherabläufe, Übersetzungen und Frame-Namen (01.11.2026)
+
+Basis ist `origin/develop` bei `a4de123ca949e2a3215ad11f15f1e720dd2e9675`.
+Der Jobdefinitionsdialog delegiert Einzeljob-Speicherung, Definitionsanlage,
+Review-Einreichung, Änderungen mit Refresh-Vorschau und Bulk-Erstellung an
+`JobDefinitionSaveFacade`. Formularaufbau, Auswahl und Payload-Ableitung bleiben
+in ihren bisherigen Besitzern. Die bestehende Persistence-Schicht übernimmt
+weiterhin die Job-Speicherung mit anschließender Kodiererzuweisung und deren
+Teilfehlerrückgabe.
+
+Die Fassade gehört zur Lebensdauer des Dialogs und stellt ihren Speicherzustand
+als schreibgeschütztes Signal bereit. Ausstehende Requests enden bei Zerstörung
+oder Arbeitsbereichswechsel; asynchrone Fortsetzungen prüfen zusätzlich den
+aktuellen Kontext einschließlich A → B → A. Eigene Bestätigungsdialoge werden
+bei Kontextabbruch geschlossen. Recovery-Daten werden nach erfolgreichem
+Definitionsabschluss entfernt und bleiben bei Fehler oder Abbruch erhalten.
+
+Die flache Testergebnistabelle verwendet für Beschriftungen, Hilfetexte,
+Dialogtitel und Rückmeldungen die deutsche Übersetzungsdatei. Platzhalter wie
+Antwortname, Aufgabennummer und Backend-Warnungen werden als Parameter
+übergeben. Der Auth-Interceptor nutzt dieselbe Übersetzungslösung für
+Berechtigungs- und Verfügbarkeitsmeldungen. Er löst den Übersetzungsdienst erst
+im Fehlerfall auf, damit dessen eigener HTTP-Ladevorgang beim Initialisieren
+der Standardsprache keine zyklische Abhängigkeit erzeugt.
+
+Aufgabenplayer und Review-Vorschau haben übersetzte Frame-Titel; mehrere
+Review-Vorschauen erhalten unterscheidbare Nummern. Eine Template-Lintregel
+verlangt für Frames eine zugängliche Bezeichnung. Ihre Regressionen prüfen
+externe und Inline-Templates mit fehlenden, leeren, statischen und gebundenen
+Bezeichnungen. Der Player-Test prüft den Titel auch nach einem Sprachwechsel.
+
+### Validierung dieses Pakets
+
+Alle lokalen Prüfungen laufen nacheinander unter Node 24.22.1 über die lokale
+Nx-Installation. Der neue Fassadentest prüft insbesondere doppelte Saves,
+Teilfehlerrückgaben bei Kodiererzuweisung, Fehler mit Retry, direkte gegenüber
+strukturellen Definitionsänderungen, Bestätigung/Abbruch, Kontextwechsel und
+Zerstörung sowie die Parameter der Bulk-Erstellung. Bestehende Komponententests
+prüfen die Integration und Payloads weiterhin.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx run frontend:test-quality-gates` | 56 Prüfungen bestanden. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | 328 Suites, 3.714 Tests bestanden; 83,15 % Zeilen und 81,08 % Branches. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/manual-preparation.cy.ts,cypress/zoneless/test-results-view.cy.ts,cypress/zoneless/replay-lifecycle.cy.ts,cypress/zoneless/app.cy.ts --skipNxCache` | 33/33 Fälle in vier Suites bestanden. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/info-dialogs.cy.ts --skipNxCache` | 4/4 Fälle bestanden; insgesamt 37 Browserfälle ohne Retries oder übersprungene Fälle. |
+| `npx nx run frontend:zoneless-approval --skipNxCache` | Bestanden; 422 Quelldateien und 9.450 Einträge. |
+
+Die erste Remote-Pipeline #106791 zeigte eine fehlende Übersetzungsinitialisierung
+im isolierten Komponenten-Browsertest der flachen Ergebnistabelle. Der Test lädt
+nun die echte deutsche Übersetzungsdatei und aktiviert `de`, wie die übrigen
+übersetzten Komponentenfälle. Die Prüfung des sichtbaren Labels „Antwortstatus“
+und des daraus entstehenden Filterrequests bleibt erhalten.
+Der anschließende vollständige lokale Lauf von `frontend:component-test`
+unter Chrome bestand 37/37 Fälle in elf Specs ohne Retries oder übersprungene
+Fälle. Ein vorheriger lokaler Gesamtlauf war nach dem erfolgreichen Tabellenfall
+mit `ENOSPC` beim Schreiben von Screenshots abgebrochen.
+
+Die Folgepipeline [#106836](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106836)
+bestand 17 von 18 Jobs einschließlich der Komponenten-Browsertests. Im
+E2E-Teil von `test-browser` bestanden 198 von 201 Fällen; drei Testcenter-Fälle
+scheiterten am 5-Sekunden-Budget für den Auth-Start beziehungsweise an einer
+in Electron bei `opacity: 0` stehenden Einblendanimation des Importformulars.
+Der Test wartet nun bis zu 30 Sekunden auf den Auth-Request und beendet nur
+endliche Animationen am Formular und seinen Vorfahren, entsprechend dem
+vorhandenen Harness der manuellen Vorbereitung. Der erste Importfall hält
+eine Einblendanimation ausdrücklich bei `opacity: 0` an und prüft damit diese
+Absicherung. Netzwerkverzögerungen, Fortschrittsanzeige, Fehler und erneuter
+Upload werden weiterhin ohne Retries geprüft. Der gezielte lokale Lauf mit
+Node 24.22.1 und Electron bestand 12/12 Fälle ohne Retries oder übersprungene
+Fälle gegen das vorhandene Produktionsartefakt (`frontend:e2e --configuration=ci
+--browser=electron --spec=cypress/zoneless/testcenter-import.cy.ts --skip-nx-cache`).
+Ein neuer Remote-Lauf steht aus.
+
+Remote-CI, Deployment und fachliche Abnahme sind separate Nachweise. Die
+Browserprüfungen dieses Pakets verwenden synthetische API-Fixtures; sie belegen
+keine reale Backend-Persistenz oder Verbindung zu Keycloak beziehungsweise
+Testcenter. Bereits dokumentierte fachliche Abnahmen bleiben erhalten.

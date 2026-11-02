@@ -18,6 +18,7 @@ import {
 import { Express } from 'express';
 import 'multer';
 import { ResourcePackageService } from '../../database/services/workspace';
+import { RESOURCE_PACKAGE_LIMITS } from '../../database/services/workspace/resource-package-limits';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
@@ -133,8 +134,8 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Param('name') name: string
   ): Promise<StreamableFile> {
-    const file = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
-    return new StreamableFile(file);
+    const { stream, size } = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
+    return new StreamableFile(stream, { length: size });
   }
 
   @Post(':workspace_id/resource-packages')
@@ -148,7 +149,13 @@ export class ResourcePackageController {
     required: true
   })
   @ApiFile('resourcePackage', true, {
-    fileFilter: fileMimetypeFilter('application/zip')
+    fileFilter: fileMimetypeFilter('application/zip'),
+    limits: {
+      fileSize: RESOURCE_PACKAGE_LIMITS.maxArchiveBytes,
+      files: 1,
+      fields: 0,
+      parts: 1
+    }
   })
   @ApiCreatedResponse({
     description: 'Sends back the id of the new resource package in database',

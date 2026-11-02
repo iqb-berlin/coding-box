@@ -62,7 +62,7 @@ describe('Domain errors at the HTTP boundary', () => {
   it.each(['results', 'results/page', 'results/export/csv', 'results/export/xlsx'])(
     'returns 400 for expired analysis results through %s', async endpoint => {
       jobQueueService.getVariableAnalysisJob.mockResolvedValueOnce({
-        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12', resultVersion: 2 },
+        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12', resultVersion: 3 },
         getState: async () => 'completed'
       } as never);
       const res = await fetch(`${url}/api/admin/workspace/47/variable-analysis/jobs/12/${endpoint}`);

@@ -8,7 +8,7 @@ import { CodingJobService } from './coding-job.service';
 import { CodingJobMutationService } from './coding-job-mutation.service';
 import { CodingJobProgressService } from './coding-job-progress.service';
 import { VariableBundleService } from './variable-bundle.service';
-import { CoderTrainingService } from './coder-training.service';
+import { CoderTrainingMutationService } from './coder-training-mutation.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({ WorkspaceFilesService: class {} }));
 
@@ -114,10 +114,10 @@ describe('Ownership at mutation boundaries', () => {
 
   it('does not partially delete an owned training with a foreign child job', async () => {
     const { repo } = context(2, 8);
-    const service = Object.assign(Object.create(CoderTrainingService.prototype), {
+    const service = Object.assign(Object.create(CoderTrainingMutationService.prototype), {
       coderTrainingRepository: repo,
       logger: { log: jest.fn(), error: jest.fn() }
-    }) as CoderTrainingService;
+    }) as CoderTrainingMutationService;
     await expect(service.deleteCoderTraining(5, 10, 7)).rejects.toBeInstanceOf(ForbiddenException);
     expect(repo.delete).not.toHaveBeenCalled();
   });

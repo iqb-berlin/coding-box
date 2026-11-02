@@ -1,7 +1,5 @@
 import { Processor } from '@nestjs/bullmq';
-import {
-  Inject, Injectable, Logger, forwardRef
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import * as fs from 'fs';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
@@ -17,7 +15,7 @@ export class ExternalCodingImportProcessor extends WorkspaceWorkerHost {
   private readonly logger = new Logger(ExternalCodingImportProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => ExternalCodingImportService))
+    @Inject(ExternalCodingImportService)
     private readonly externalCodingImportService: ExternalCodingImportService,
     private readonly cacheService: CacheService
   ) {

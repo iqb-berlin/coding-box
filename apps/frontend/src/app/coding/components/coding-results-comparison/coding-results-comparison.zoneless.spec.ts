@@ -8,6 +8,7 @@ import {
 } from 'rxjs';
 import applicationTranslations from '../../../../assets/i18n/de.json';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
+import { TrainingDiscussionEditorFacade } from './training-discussion-editor.facade';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
@@ -281,6 +282,23 @@ describe('Coding comparison without Zone', () => {
     expect(fixture.nativeElement.querySelector('.discussion-saving')).toBeNull();
     expect(fixture.nativeElement.querySelector('.discussion-error')?.textContent)
       .toContain('Diskussionsergebnis konnte nicht gespeichert werden.');
+  });
+
+  it('keeps discussion drafts independent between dialog instances', () => {
+    const secondFixture = TestBed.createComponent(CodingResultsComparisonComponent);
+    try {
+      const firstEditor = fixture.debugElement.injector.get(TrainingDiscussionEditorFacade);
+      const secondEditor = secondFixture.debugElement.injector.get(TrainingDiscussionEditorFacade);
+      firstEditor.patchDraft(1, { codeValue: '1', score: 2, notes: 'first draft' });
+      secondEditor.patchDraft(1, { codeValue: '3', score: null, notes: 'second draft' });
+      expect(fixture.componentInstance.discussionCodeByResponseId()[1]).toBe('1');
+      expect(secondFixture.componentInstance.discussionCodeByResponseId()[1]).toBe('3');
+      fixture.destroy();
+      secondEditor.patchDraft(1, { notes: 'still editable' });
+      expect(secondFixture.componentInstance.discussionNotesByResponseId()[1]).toBe('still editable');
+    } finally {
+      secondFixture.destroy();
+    }
   });
 
   it('keeps the discussion input and focus while page projections change during typing', async () => {

@@ -714,6 +714,31 @@ describe('UsersService', () => {
     });
   });
 
+  it.each(['createOidcProviderUser', 'syncKeycloakUser'] as const)('logs only event and internal user ID during %s', async method => {
+    const profile = {
+      username: 'private-login',
+      identity: 'private-subject',
+      issuer: 'https://private-issuer.example',
+      email: 'private@example.org',
+      firstName: 'Private',
+      lastName: 'Person',
+      isAdmin: false
+    };
+    const logger = (service as unknown as { logger: { log: jest.Mock } }).logger;
+    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      ...profile, id: 77, firstName: 'Old'
+    });
+
+    await service[method](profile);
+    await service[method](profile);
+
+    const provider = method === 'createOidcProviderUser' ? 'oidc' : 'keycloak';
+    expect(logger.log.mock.calls).toEqual([
+      [{ event: `user.${provider}.created`, userId: 77 }],
+      [{ event: `user.${provider}.updated`, userId: 77 }]
+    ]);
+  });
+
   it.each([
     [' Ada ', ' Lovelace ', 'Ada Lovelace'],
     ['Ada', null, 'Ada'],

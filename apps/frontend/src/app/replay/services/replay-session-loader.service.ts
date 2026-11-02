@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { DestroyRef, Injectable, inject } from '@angular/core';
+import { firstValueFrom, ReplaySubject, takeUntil } from 'rxjs';
 import {
   CodingJobBackendService,
   CodingJobUnitDto
@@ -31,6 +31,7 @@ export interface ReplaySessionLoadRequest {
 
 interface ReplaySessionLoadRequestEntry {
   authToken?: string;
+  cancel: ReplaySubject<void>;
   loadRequest: Promise<ReplaySessionLoadResult>;
 }
 
@@ -58,6 +59,15 @@ export class ReplaySessionLoaderService {
   private codingJobBackendService = inject(CodingJobBackendService);
   private readonly requests = new Map<string, ReplaySessionLoadRequestEntry>();
 
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.clear());
+  }
+
+  private cancel(entry: ReplaySessionLoadRequestEntry): void {
+    entry.cancel.next();
+    entry.cancel.complete();
+  }
+
   getRequestKey(request: ReplaySessionLoadRequest): string {
     return `${request.workspaceId}:${request.codingJobId}:${request.onlyOpen}`;
   }
@@ -67,9 +77,10 @@ export class ReplaySessionLoaderService {
   retainOnly(request: ReplaySessionLoadRequest | null): string | null;
   retainOnly(request: ReplaySessionLoadRequest | null): string | null {
     const requestKey = request ? this.getRequestKey(request) : null;
-    this.requests.forEach((_request, key) => {
+    this.requests.forEach((entry, key) => {
       if (key !== requestKey) {
         this.requests.delete(key);
+        this.cancel(entry);
       }
     });
     return requestKey;
@@ -83,9 +94,12 @@ export class ReplaySessionLoaderService {
       return pendingRequestEntry.loadRequest;
     }
 
-    const loadRequest = this.loadSession(request);
+    if (pendingRequestEntry) this.cancel(pendingRequestEntry);
+    const cancel = new ReplaySubject<void>(1);
+    const loadRequest = this.loadSession(request, cancel);
     this.requests.set(requestKey, {
       authToken: request.authToken,
+      cancel,
       loadRequest
     });
     return loadRequest;
@@ -96,19 +110,29 @@ export class ReplaySessionLoaderService {
     loadRequest: Promise<ReplaySessionLoadResult>
   ): void {
     const requestKey = this.getRequestKey(request);
-    if (this.requests.get(requestKey)?.loadRequest === loadRequest) {
+    const entry = this.requests.get(requestKey);
+    if (entry?.loadRequest === loadRequest) {
       this.requests.delete(requestKey);
+      entry.cancel.complete();
     }
   }
 
   clear(): void {
+    this.requests.forEach(entry => this.cancel(entry));
     this.requests.clear();
   }
 
   private async loadSession(
-    request: ReplaySessionLoadRequest
+    request: ReplaySessionLoadRequest,
+    cancel: ReplaySubject<void>
   ): Promise<ReplaySessionLoadResult> {
     const requestStartedAt = performance.now();
+    const cancelledResult = (): ReplaySessionLoadResult => ({
+      unitsData: null,
+      session: null,
+      source: 'legacy',
+      timings: { requestStartedAt, responseReceivedAt: performance.now(), serverTimings: null }
+    });
 
     try {
       const session = await firstValueFrom(
@@ -118,9 +142,11 @@ export class ReplaySessionLoaderService {
           request.authToken,
           request.onlyOpen,
           request.replayAttemptId
-        )
+        ).pipe(takeUntil(cancel)),
+        { defaultValue: null }
       );
       const responseReceivedAt = performance.now();
+      if (!session) return cancelledResult();
 
       return {
         unitsData: this.createUnitsData(request.codingJobId, session.units),
@@ -133,6 +159,7 @@ export class ReplaySessionLoaderService {
         }
       };
     } catch (error) {
+      if (cancel.isStopped) return cancelledResult();
       const responseReceivedAt = performance.now();
       const httpError = error as HttpErrorResponse;
       if (httpError.status !== 404 && httpError.status !== 405) {
@@ -151,7 +178,8 @@ export class ReplaySessionLoaderService {
             request.authToken,
             request.onlyOpen,
             request.replayAttemptId
-          )
+          ).pipe(takeUntil(cancel)),
+          { defaultValue: [] }
         );
 
         return {

@@ -114,3 +114,10 @@ describe('JSON request contracts', () => {
     }
   });
 });
+
+describe('group deletion request contract', () => {
+  it('accepts a filter without page parameters', () => {
+    const request = { scope: 'filteredGroups', searchText: 'G1' };
+    expect(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsDeleteRequestDto).transform(request)).toEqual(request);
+  });
+});

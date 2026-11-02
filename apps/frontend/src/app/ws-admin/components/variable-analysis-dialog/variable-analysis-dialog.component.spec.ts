@@ -558,7 +558,7 @@ describe('VariableAnalysisDialogComponent', () => {
         frequencies: {
           '10:VAR1': [
             {
-              unitId: 10, variableId: 'VAR1', value: 'Hai', count: 2, percentage: 100, score: 1, isFromSchema: true
+              unitId: 10, variableId: 'VAR1', value: 'Hai', count: 2, percentage: 100, score: 1, code: 0, isFromSchema: true
             },
             {
               unitId: 10, variableId: 'VAR1', value: '', count: 0, percentage: 0, isSchemaOnly: true
@@ -570,7 +570,11 @@ describe('VariableAnalysisDialogComponent', () => {
       component.analyzeVariables();
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelectorAll('.schema-chip')).toHaveLength(1);
-      expect(component.analysisRows().find(row => row.value === 'Hai')).toMatchObject({ isFromSchema: true, count: 2, score: 1 });
+      expect(fixture.nativeElement.querySelector('.mat-column-code').textContent).toContain('variable-analysis.code-column');
+      expect(fixture.nativeElement.querySelector('.schema-chip').closest('tr').querySelector('.mat-column-code').textContent.trim()).toBe('0');
+      expect(component.analysisRows().find(row => row.value === 'Hai')).toMatchObject({
+        isFromSchema: true, count: 2, score: 1, code: 0
+      });
     });
 
     it('asks for a new analysis and clears old results when the evaluation has changed', () => {

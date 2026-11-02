@@ -1,10 +1,5 @@
 import {
-  BadRequestException,
-  ConflictException,
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger
+  BadRequestException, ConflictException, Inject, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
@@ -22,8 +17,8 @@ import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/wo
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+
+import { WorkspaceStatsCacheService } from './workspace-stats-cache.service';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey,
@@ -49,8 +44,8 @@ export class WorkspaceCoreService {
     private workspaceRepository: Repository<Workspace>,
     private connection: Connection,
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(WorkspaceStatsCacheService)
+    private readonly workspaceStatsCacheService: WorkspaceStatsCacheService,
     private readonly workspaceDeletionService: WorkspaceDeletionService
   ) { }
 
@@ -156,7 +151,7 @@ export class WorkspaceCoreService {
       }
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
       if (settings) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
+        await this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
       }
     }
@@ -220,7 +215,7 @@ export class WorkspaceCoreService {
       workspace.settings = settings;
     }, ['ignoredUnits'], actorUserId);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
-    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
   }
 
@@ -234,7 +229,7 @@ export class WorkspaceCoreService {
       workspace.settings = { ...(workspace.settings || {}), ...newSettings };
     }, Object.keys(newSettings), actorUserId);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
-    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
   }
 

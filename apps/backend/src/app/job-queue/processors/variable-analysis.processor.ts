@@ -521,6 +521,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           value: this.formatValuePreview(row.value || '', this.parseCount(row.valueLength), row.valueHash),
           label: definition?.label,
           score: definition?.score,
+          code: definition?.code,
           schemaOrder: definition?.order,
           isFromSchema: definition?.isFromSchema,
           count,
@@ -1354,6 +1355,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           ...schemaValue,
           label: definition?.label ?? schemaValue.label,
           score: definition?.score,
+          code: definition?.code,
           order: definition?.order ?? schemaValue.order,
           isFromSchema: definition?.isFromSchema
         };
@@ -1373,6 +1375,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           existingRow.label = existingRow.label ?? schemaCode.label;
           if (valuePreview !== '') {
             existingRow.score = existingRow.score ?? schemaCode.score;
+            existingRow.code = existingRow.code ?? schemaCode.code;
             existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
           }
           existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
@@ -1388,6 +1391,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           value: valuePreview,
           label: schemaCode.label,
           score: schemaCode.score,
+          code: schemaCode.code,
           schemaOrder: schemaCode.order,
           isFromSchema: schemaCode.isFromSchema,
           isSchemaOnly: count === 0,

@@ -86,7 +86,17 @@ interface AppServiceAuthDataMock {
 }
 
 class AppServiceMock {
-  selectedWorkspaceId = 42;
+  private selectedWorkspace = 42;
+  private readonly workspaceChanges = new Subject<number>();
+  readonly selectedWorkspaceId$ = this.workspaceChanges.asObservable();
+
+  get selectedWorkspaceId(): number { return this.selectedWorkspace; }
+  set selectedWorkspaceId(value: number) {
+    if (value === this.selectedWorkspace) return;
+    this.selectedWorkspace = value;
+    this.workspaceChanges.next(value);
+  }
+
   authData: AppServiceAuthDataMock = {
     userId: 1,
     workspaces: [
@@ -236,6 +246,108 @@ describe('ReplayComponent', () => {
     jest.restoreAllMocks();
     sessionStorage.clear();
     window.history.pushState({}, '', '/');
+  });
+
+  it('renders a delayed replacement payload without manual change detection', async () => {
+    const reply = new Subject<unknown>();
+    replayBackendService.getReplayPayload.mockReturnValue(reply);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('UNIT-DELAYED');
+    const pending = (component as unknown as { loadAndApplyUnitData: (workspace: number) => Promise<boolean> })
+      .loadAndApplyUnitData(42);
+    reply.next({
+      unitDef: [{ data: '<Unit />' }], player: [{ data: 'new player' }], response: { responses: [] }, vocs: []
+    });
+    expect(await pending).toBe(true);
+    await fixture.whenStable();
+    const player = fixture.debugElement.query(By.directive(UnitPlayerComponent)).componentInstance as UnitPlayerComponent;
+    expect(player.unitDef()).toBe('<Unit />');
+    expect(player.unitPlayer()).toBe('new player');
+  });
+
+  it('cancels the first workspace A request even when returning to A', async () => {
+    const app = TestBed.inject(AppService) as unknown as AppServiceMock;
+    app.selectedWorkspaceId = 47;
+    const reply = new Subject<unknown>();
+    replayBackendService.getReplayPayload.mockReturnValue(reply);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('OLD');
+    const pending = (component as unknown as { loadAndApplyUnitData: (workspace: number) => Promise<boolean> })
+      .loadAndApplyUnitData(47);
+    app.selectedWorkspaceId = 48;
+    app.selectedWorkspaceId = 47;
+    expect(reply.observed).toBe(false);
+    reply.next({
+      unitDef: [{ data: 'stale' }], player: [{ data: 'stale' }], response: { responses: [] }, vocs: []
+    });
+    expect(await pending).toBe(false);
+    await fixture.whenStable();
+    expect(component.player()).toBe('');
+    expect(fixture.debugElement.query(By.directive(UnitPlayerComponent))).toBeNull();
+  });
+
+  it('settles a pending player request when the view is destroyed', async () => {
+    const reply = new Subject<unknown>();
+    replayBackendService.getReplayPayload.mockReturnValue(reply);
+    const pending = (component as unknown as { loadAndApplyUnitData: (workspace: number) => Promise<boolean> })
+      .loadAndApplyUnitData(42);
+    fixture.destroy();
+    expect(reply.observed).toBe(false);
+    expect(await pending).toBe(false);
+  });
+
+  it.each(['loadAndApplyUnitData', 'loadAndApplyReplayResponse'] as const)(
+    'rechecks ownership after the final promise boundary in %s', async method => {
+      const firstReply = new Subject<unknown>();
+      const latestReply = new Subject<unknown>();
+      const backend = method === 'loadAndApplyUnitData' ?
+        replayBackendService.getReplayPayload : replayBackendService.getReplayResponse;
+      backend.mockReturnValueOnce(firstReply).mockReturnValueOnce(latestReply);
+      const owner = component as unknown as Record<typeof method, (workspace: number) => Promise<boolean>>;
+      const first = owner[method](42);
+      const payload = {
+        unitDef: [{ data: 'latest' }], player: [{ data: 'latest' }], response: { responses: [] }, vocs: []
+      };
+      firstReply.next({ ...payload, response: { responses: [{ id: 'stale', content: 'obsolete' }] } });
+      await Promise.resolve();
+      const latest = owner[method](42);
+      expect(await first).toBe(false);
+      latestReply.next(payload);
+      expect(await latest).toBe(true);
+      expect(component.responses()?.responses).toEqual([]);
+    }
+  );
+
+  it('does not notify the opener about an obsolete code save after workspace A → B → A', async () => {
+    const app = TestBed.inject(AppService) as unknown as AppServiceMock;
+    app.selectedWorkspaceId = 47;
+    component.originResponseId.set(99);
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', { value: { postMessage }, configurable: true });
+    let complete!: (code: { id: number; code: string; label: string }) => void;
+    jest.spyOn(component.codingService, 'handleCodeSelected').mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    const pending = component.onCodeSelected({ variableId: 'VAR1', code: { id: 1, label: 'Code' } });
+    app.selectedWorkspaceId = 48;
+    app.selectedWorkspaceId = 47;
+    complete({ id: 1, code: '1', label: 'Code' });
+    await pending;
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('drops debounced opener notifications when the workspace changes', () => {
+    jest.useFakeTimers();
+    const app = TestBed.inject(AppService) as unknown as AppServiceMock;
+    app.selectedWorkspaceId = 47;
+    component.originResponseId.set(99);
+    component.codingService.currentVariableId = 'VAR1';
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', { value: { postMessage }, configurable: true });
+    jest.spyOn(component.codingService, 'saveNotes').mockResolvedValue();
+    component.onNotesChanged('obsolete');
+    app.selectedWorkspaceId = 48;
+    app.selectedWorkspaceId = 47;
+    jest.advanceTimersByTime(750);
+    expect(postMessage).not.toHaveBeenCalled();
   });
 
   it('should create', () => {
@@ -1731,7 +1843,6 @@ describe('ReplayComponent', () => {
     const privateComponent = component as unknown as {
       authToken: string;
       routerRunId: number;
-      replayTokenRefreshRequests: Map<string, unknown>;
       refreshExpiredReplayAuthToken: (
         workspaceId: number,
         routerRunId: number,
@@ -1770,9 +1881,8 @@ describe('ReplayComponent', () => {
     await Promise.resolve();
 
     expect(appService.createOwnToken).toHaveBeenCalledTimes(2);
-    expect([...privateComponent.replayTokenRefreshRequests.keys()]).toEqual([
-      '47:coding-job:operate,replay-statistics:write,replay:read'
-    ]);
+    expect(firstReplayTokenSubject.observed).toBe(false);
+    expect(codingTokenSubject.observed).toBe(true);
 
     firstReplayTokenSubject.error(new Error('temporary refresh failure'));
     await firstRefresh;
@@ -1799,7 +1909,8 @@ describe('ReplayComponent', () => {
     await codingRefresh;
 
     expect(privateComponent.authToken).toBe('fresh-replay-token');
-    expect(privateComponent.replayTokenRefreshRequests.size).toBe(0);
+    expect(codingTokenSubject.observed).toBe(false);
+    expect(retryReplayTokenSubject.observed).toBe(false);
   });
 
   it('should not apply an abandoned reauthentication token after a newer scoped refresh', async () => {

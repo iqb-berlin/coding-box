@@ -90,6 +90,7 @@ export interface VariableAnalysisData {
         value: string;
         label?: string;
         score?: number;
+        code?: number | string;
         schemaOrder?: number;
         isFromSchema?: boolean;
         isSchemaOnly?: boolean;
@@ -125,6 +126,7 @@ export interface VariableFrequency {
   value: string;
   label?: string;
   score?: number;
+  code?: number | string;
   schemaOrder?: number;
   isFromSchema?: boolean;
   isSchemaOnly?: boolean;
@@ -222,6 +224,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'variableId',
     'value',
     'label',
+    'code',
     'score',
     'count',
     'validOccurrenceCount',
@@ -426,6 +429,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 value: freq.value,
                 label: freq.label,
                 score: freq.score,
+                code: freq.code,
                 schemaOrder: freq.schemaOrder,
                 isFromSchema: freq.isFromSchema,
                 isSchemaOnly: freq.isSchemaOnly,
@@ -1350,6 +1354,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           value: frequency.value,
           label: frequency.label,
           score: frequency.score,
+          code: frequency.code,
           schemaOrder: frequency.schemaOrder,
           isFromSchema: frequency.isFromSchema,
           isSchemaOnly: frequency.isSchemaOnly,

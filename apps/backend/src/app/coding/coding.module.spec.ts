@@ -8,6 +8,30 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   Connection, DataSource, EntityManager, getMetadataArgsStorage
 } from 'typeorm';
+import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
+import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
+import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
+import { TestResultsFrequenciesService } from '../database/services/test-results/test-results-frequencies.service';
+import { TestResultsFilterOptionsService } from '../database/services/test-results/test-results-filter-options.service';
+import { TestResultsResponsesService } from '../database/services/test-results/test-results-responses.service';
+import { TestResultsReplayService } from '../database/services/test-results/test-results-replay.service';
+import { TestResultsDeletionQueryService } from '../database/services/test-results/test-results-deletion-query.service';
+import { TestResultsMutationService } from '../database/services/test-results/test-results-mutation.service';
+import { TestResultsSearchService } from '../database/services/test-results/test-results-search.service';
+import { TestResultsExportService } from '../database/services/test-results/test-results-export.service';
+import { WorkspaceTestResultsService } from '../database/services/test-results/workspace-test-results.service';
+import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
+import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
+import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
+import { CoderTrainingMutationService } from '../database/services/coding/coder-training-mutation.service';
+import { CoderTrainingComparisonService } from '../database/services/coding/coder-training-comparison.service';
+import { CoderTrainingComparisonQueryService } from '../database/services/coding/coder-training-comparison-query.service';
+import { CoderTrainingKappaService } from '../database/services/coding/coder-training-kappa.service';
+import { CoderTrainingDiscussionService } from '../database/services/coding/coder-training-discussion.service';
+import { CoderTrainingQueryService } from '../database/services/coding/coder-training-query.service';
+import { CoderTrainingFreshnessService } from '../database/services/coding/coder-training-freshness.service';
+import { CoderTrainingService } from '../database/services/coding/coder-training.service';
+import { AUTH_RATE_LIMIT_REDIS } from '../auth/auth-rate-limit.storage';
 // Load the application first so this test uses the production module evaluation order.
 import '../config/startup-environment.test.factory';
 import { AppModule } from '../app.module';
@@ -22,6 +46,9 @@ import { CodingAggregationPeerService } from '../database/services/coding/coding
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
 import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
 import { CodingFreshnessService } from '../database/services/coding/coding-freshness.service';
+import { CodingFreshnessQueryService } from '../database/services/coding/coding-freshness-query.service';
+import { CodingJobFreshnessService } from '../database/services/coding/coding-job-freshness.service';
+import { CodingFreshnessModule } from './coding-freshness.module';
 import { CodingItemMatrixExportService } from '../database/services/coding/coding-item-matrix-export.service';
 import { CodingJobMutationService } from '../database/services/coding/coding-job-mutation.service';
 import { CodingJobResponsesService } from '../database/services/coding/coding-job-responses.service';
@@ -35,6 +62,14 @@ import { CodingJobReplayService } from '../database/services/coding/coding-job-r
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobService } from '../database/services/coding/coding-job.service';
 import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
+import { WorkspaceFileMetadataService } from '../database/services/workspace/workspace-file-metadata.service';
+import { WORKSPACE_FILE_METADATA_READER } from '../database/services/workspace/workspace-file-metadata-reader.token';
+import { WorkspaceDataModule } from '../workspace/workspace-data.module';
+import { WorkspaceStatsCacheService } from '../database/services/workspace/workspace-stats-cache.service';
+import { WorkspaceExclusionService } from '../database/services/workspace/workspace-exclusion.service';
+import { WorkspacePlayerService } from '../database/services/workspace/workspace-player.service';
+import { ResponseManagementService } from '../database/services/test-results/response-management.service';
+import { JournalService } from '../database/services/shared/journal.service';
 import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CodingModule } from './coding.module';
@@ -43,12 +78,32 @@ import { CodingJobCoder } from '../database/entities/coding-job-coder.entity';
 import { JournalEntry } from '../database/entities/journal-entry.entity';
 import { UsersService } from '../database/services/users/users.service';
 
+import { CodingExportService } from '../database/services/coding/coding-export.service';
+import { CodingExportQueryService } from '../database/services/coding/coding-export-query.service';
+import { CodingExportFormattingService } from '../database/services/coding/coding-export-formatting.service';
+import { CodingExportReplayService } from '../database/services/coding/coding-export-replay.service';
+import { CodingExportDownloadService } from '../database/services/coding/coding-export-download.service';
+import { CodingAggregatedExportService } from '../database/services/coding/coding-aggregated-export.service';
+import { CodingAggregatedRowsExportService } from '../database/services/coding/coding-aggregated-rows-export.service';
+import { CodingAggregatedColumnsExportService } from '../database/services/coding/coding-aggregated-columns-export.service';
+import { CodingCoderExportService } from '../database/services/coding/coding-coder-export.service';
+import { CodingVariableExportService } from '../database/services/coding/coding-variable-export.service';
+import { CodingCompactExportService } from '../database/services/coding/coding-compact-export.service';
+import { CodingDetailedExportService } from '../database/services/coding/coding-detailed-export.service';
+import { CodingTimingReportExportService } from '../database/services/coding/coding-timing-report-export.service';
+
 const sharedCodingProviders = [
+  CodingExportService,
   CodingJobService,
   CodingValidationService,
   CodingAnalysisService,
   CodingFreshnessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  WorkspaceFileMetadataService,
+  WorkspaceStatsCacheService,
+  WorkspaceExclusionService,
+  WorkspacePlayerService,
+  ResponseManagementService
 ];
 
 @Module({
@@ -69,7 +124,9 @@ async function createApplication(): Promise<TestingModule> {
   const builder = Test.createTestingModule({
     imports: [AppModule, WorkspaceConsumerModule, CodingConsumerModule]
   })
-    .overrideProvider(DataSource).useValue({})
+    .overrideProvider(AUTH_RATE_LIMIT_REDIS).useValue({ disconnect: jest.fn() })
+    .overrideProvider(DataSource)
+    .useValue({})
     .overrideProvider(Connection)
     .useValue({})
     .overrideProvider(getRedisConnectionToken())
@@ -106,6 +163,16 @@ describe('CodingModule', () => {
 
     const module = await createApplication();
     try {
+      const freshness = module.select(CodingFreshnessModule);
+      const freshnessFacade = freshness.get(CodingFreshnessService, { strict: true });
+      const freshnessQueries = freshness.get(CodingFreshnessQueryService, { strict: true });
+      const jobFreshness = freshness.get(CodingJobFreshnessService, { strict: true });
+      expect(Reflect.get(freshnessFacade, 'queries')).toBe(freshnessQueries);
+      expect(Reflect.get(freshnessFacade, 'jobs')).toBe(jobFreshness);
+      expect(Reflect.get(freshnessQueries, 'workspaceExclusionService')).toBe(module.get(WorkspaceExclusionService));
+      expect(Reflect.get(jobFreshness, 'connection')).toBe(module.get(DataSource));
+      expect(Reflect.getMetadata(MODULE_METADATA.EXPORTS, CodingFreshnessModule)).toEqual([CodingFreshnessService]);
+      expect(() => module.select(CodingModule).get(CodingFreshnessQueryService, { strict: true })).toThrow();
       const settings = module.select(WorkspaceSettingsModule).get(WorkspaceSettingsService, { strict: true });
       expect((module.get(WorkspaceSettingsController) as unknown as { settings: WorkspaceSettingsService }).settings).toBe(settings);
       expect((module.get(WorkspaceFilesController) as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
@@ -113,6 +180,20 @@ describe('CodingModule', () => {
       for (const controller of [module.get(WorkspaceCodingAnalysisController), module.get(WorkspaceTestResultsResponseController)]) {
         expect((controller as unknown as { workspaceSettings: WorkspaceSettingsService }).workspaceSettings).toBe(settings);
       }
+      const exportFacade = module.get(CodingExportService);
+      for (const [field, provider] of [
+        ['downloads', CodingExportDownloadService], ['aggregated', CodingAggregatedExportService],
+        ['byCoder', CodingCoderExportService], ['byVariable', CodingVariableExportService],
+        ['compact', CodingCompactExportService], ['detailed', CodingDetailedExportService],
+        ['times', CodingTimingReportExportService]
+      ] as const) expect(Reflect.get(exportFacade, field)).toBe(module.get(provider));
+      for (const provider of [CodingAggregatedExportService, CodingAggregatedRowsExportService, CodingCoderExportService,
+        CodingVariableExportService, CodingCompactExportService, CodingDetailedExportService]) {
+        expect(Reflect.get(module.get(provider), 'replay')).toBe(module.get(CodingExportReplayService));
+        expect(Reflect.get(module.get(provider), 'formatting')).toBe(module.get(CodingExportFormattingService));
+        expect(Reflect.get(module.get(provider), 'query')).toBe(module.get(CodingExportQueryService));
+      }
+      expect(Reflect.get(module.get(CodingAggregatedColumnsExportService), 'query')).toBe(module.get(CodingExportQueryService));
       const facade = module.get(CodingJobService);
       const featureProviders = [
         CodingJobMutationService, CodingJobResponsesService, CodingJobAccessService,
@@ -120,8 +201,43 @@ describe('CodingModule', () => {
         CodingJobProgressService, CodingJobSchemeService, CodingJobReplayService,
         CodingJobAggregationService
       ];
+      const useCaseProviders = [
+        TestResultsAnomaliesService, TestResultsCacheService, TestResultsQueryService,
+        TestResultsFrequenciesService, TestResultsFilterOptionsService, TestResultsResponsesService, TestResultsReplayService, TestResultsDeletionQueryService,
+        TestResultsMutationService, TestResultsSearchService, TestResultsExportService,
+        CoderTrainingDisplayService, CoderTrainingSamplingService, CoderTrainingSelectionService, CoderTrainingMutationService,
+        CoderTrainingComparisonService, CoderTrainingComparisonQueryService, CoderTrainingKappaService,
+        CoderTrainingDiscussionService, CoderTrainingQueryService, CoderTrainingFreshnessService
+      ];
+      useCaseProviders.forEach(provider => expect(module.get(provider)).toBeInstanceOf(provider));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'anomalies')).toBe(module.get(TestResultsAnomaliesService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'cache')).toBe(module.get(TestResultsCacheService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'query')).toBe(module.get(TestResultsQueryService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'mutation')).toBe(module.get(TestResultsMutationService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'responses')).toBe(module.get(TestResultsResponsesService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'frequencies')).toBe(module.get(TestResultsFrequenciesService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'filterOptions')).toBe(module.get(TestResultsFilterOptionsService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'replay')).toBe(module.get(TestResultsReplayService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'search')).toBe(module.get(TestResultsSearchService));
+      expect(Reflect.get(module.get(WorkspaceTestResultsService), 'exporter')).toBe(module.get(TestResultsExportService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'selection')).toBe(module.get(CoderTrainingSelectionService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'discussion')).toBe(module.get(CoderTrainingDiscussionService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'mutation')).toBe(module.get(CoderTrainingMutationService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'query')).toBe(module.get(CoderTrainingQueryService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'comparison')).toBe(module.get(CoderTrainingComparisonService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'freshness')).toBe(module.get(CoderTrainingFreshnessService));
+      expect(Reflect.get(module.get(CoderTrainingService), 'kappa')).toBe(module.get(CoderTrainingKappaService));
+      expect(Reflect.get(module.get(CoderTrainingSelectionService), 'workspaceFilesService')).toBe(module.get(WORKSPACE_FILE_METADATA_READER));
+      for (const provider of [CoderTrainingSelectionService, CoderTrainingMutationService]) {
+        expect(Reflect.get(module.get(provider), 'sampling')).toBe(module.get(CoderTrainingSamplingService));
+      }
       featureProviders.forEach(provider => expect(module.get(provider)).toBeInstanceOf(provider));
-      expect(module.get(DERIVED_VARIABLE_READER)).toBe(module.get(WorkspaceFilesService));
+      const metadata = module.select(WorkspaceDataModule).get(WorkspaceFileMetadataService, { strict: true });
+      expect(module.get(DERIVED_VARIABLE_READER)).toBe(metadata);
+      expect(module.get(WORKSPACE_FILE_METADATA_READER)).toBe(metadata);
+      expect(Reflect.get(module.get(WorkspaceFilesService), 'fileMetadata')).toBe(metadata);
+      expect(Reflect.get(module.get(ResponseManagementService), 'journalService'))
+        .toBe(module.select(WorkspaceDataModule).get(JournalService, { strict: true }));
       const query = module.get(CodingJobQueryService);
       const getJob = jest.spyOn(query, 'getCodingJobByIdForWorkspace').mockResolvedValue({ id: 42 } as never);
       await expect(facade.getCodingJobByIdForWorkspace(42, 7)).resolves.toEqual({ id: 42 });

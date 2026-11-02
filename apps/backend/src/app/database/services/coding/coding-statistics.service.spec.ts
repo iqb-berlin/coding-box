@@ -3,11 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { BullJobManagementService } from '../jobs/bull-job-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
@@ -17,7 +17,6 @@ describe('CodingStatisticsService', () => {
   let mockResponseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let mockCacheService: jest.Mocked<CacheService>;
   let mockJobQueueService: jest.Mocked<JobQueueService>;
-  let mockBullJobManagementService: jest.Mocked<BullJobManagementService>;
   let mockWorkspaceCoreService: jest.Mocked<WorkspaceCoreService>;
   let mockWorkspaceExclusionService: jest.Mocked<WorkspaceExclusionService>;
   let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
@@ -59,11 +58,6 @@ describe('CodingStatisticsService', () => {
       return job?.data?.workspaceId === workspaceId ? job as never : null;
     });
 
-    mockBullJobManagementService = {
-      mapJobStateToStatus: jest.fn(),
-      extractJobResult: jest.fn()
-    } as unknown as jest.Mocked<BullJobManagementService>;
-
     mockWorkspaceCoreService = {
       getIgnoredUnits: jest.fn()
     } as unknown as jest.Mocked<WorkspaceCoreService>;
@@ -92,12 +86,8 @@ describe('CodingStatisticsService', () => {
         },
         { provide: CacheService, useValue: mockCacheService },
         { provide: JobQueueService, useValue: mockJobQueueService },
-        {
-          provide: BullJobManagementService,
-          useValue: mockBullJobManagementService
-        },
         { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
-        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: WORKSPACE_FILE_METADATA_READER, useValue: mockWorkspaceFilesService },
         {
           provide: WorkspaceExclusionService,
           useValue: mockWorkspaceExclusionService
@@ -582,6 +572,7 @@ describe('CodingStatisticsService', () => {
         updateProgress: jest.fn().mockReturnValue(100)
       };
       const mockStatisticsJob: Partial<Job> = {
+        returnvalue: { totalResponses: 12, statusCounts: { 5: 12 } },
         data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
         progress: 100,
@@ -595,17 +586,11 @@ describe('CodingStatisticsService', () => {
       mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(
         mockStatisticsJob as Job
       );
-      mockBullJobManagementService.mapJobStateToStatus.mockReturnValue('completed');
-      mockBullJobManagementService.extractJobResult.mockReturnValue({
-        result: mockStatistics
-      });
 
       const result = await service.getCodingStatisticsJobStatus('job-123', 1);
 
       expect(mockJobQueueService.getTestPersonCodingJob).not.toHaveBeenCalled();
       expect(mockJobQueueService.getCodingStatisticsJob).toHaveBeenCalledWith('job-123');
-      expect(mockBullJobManagementService.extractJobResult)
-        .toHaveBeenCalledWith(mockStatisticsJob, 'completed');
       expect(result?.result).toEqual(mockStatistics);
     });
 
@@ -648,6 +633,7 @@ describe('CodingStatisticsService', () => {
       const readForeignProgress = jest.fn(() => 40);
       Object.defineProperty(foreignJob, 'progress', { get: readForeignProgress });
       const ownJob = {
+        returnvalue: { totalResponses: 12, statusCounts: {} },
         data: { workspaceId: 1 },
         getState: jest.fn().mockResolvedValue('completed'),
         progress: 100,
@@ -655,10 +641,6 @@ describe('CodingStatisticsService', () => {
       };
       mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(foreignJob as never);
       mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(ownJob as never);
-      mockBullJobManagementService.mapJobStateToStatus.mockReturnValue('completed');
-      mockBullJobManagementService.extractJobResult.mockReturnValue({
-        result: { totalResponses: 12, statusCounts: {} }
-      });
 
       await expect(service.getJobStatus('17', 1)).resolves.toMatchObject({
         status: 'completed', result: { totalResponses: 12 }

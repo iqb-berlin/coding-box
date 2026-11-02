@@ -43,7 +43,7 @@ describe('WorkspaceTestResultsAnalysisController', () => {
       undefined,
       undefined,
       '^VAR$',
-      'true'
+      true
     );
 
     expect(workspaceTestResultsService.findFlatResponses).toHaveBeenCalledWith(
@@ -68,7 +68,7 @@ describe('WorkspaceTestResultsAnalysisController', () => {
       undefined,
       undefined,
       '^VAR$',
-      'true'
+      true
     );
 
     expect(workspaceTestResultsService.findFlatResponses).toHaveBeenCalledWith(
@@ -106,7 +106,7 @@ describe('WorkspaceTestResultsAnalysisController', () => {
       undefined,
       undefined,
       '^VAR$',
-      'false'
+      false
     );
 
     expect(settingRepository.findOne).not.toHaveBeenCalled();

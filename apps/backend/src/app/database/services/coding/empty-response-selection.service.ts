@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   getManualCodingScopeKey,
   splitManualCodingScopeKey
@@ -36,7 +36,7 @@ export class EmptyResponseSelectionService {
   constructor(
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
-    private readonly workspaceFilesService: WorkspaceFilesService
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader
   ) { }
 
   async createContext(

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Kodierbox – Rahmen B mit präzisiertem kantigem K</title>
+  <desc id="desc">Der gerundete, rechts offene Rahmen aus Variante B bleibt erhalten. Das kantige K hat ein Verhältnis von Breite zu Höhe von 1 zu 1,1. Seine spiegelbildlichen Diagonalen enden waagerecht auf gleicher Höhe wie der senkrechte Balken.</desc>
+  <circle cx="128" cy="128" r="124" fill="#FFFFFF"/>
+  <path d="M212 106V64Q212 44 192 44H64Q44 44 44 64V192Q44 212 64 212H192Q212 212 212 192V150" fill="none" stroke="#013C76" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M73.454545 68H101.454545V115.575008L144.704552 68H182.545455L128 128L182.545455 188H144.704552L101.454545 140.424992V188H73.454545Z" fill="#013C76"/>
+</svg>

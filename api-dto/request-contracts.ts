@@ -157,7 +157,7 @@ export const requestBodySchemas = {
     changelog: string
   }, ['acpId', 'fileIds']),
   TestResultsDeleteRequestDto: object({
-    scope: values('persons', 'filteredPersons', 'groups', 'booklets', 'units'),
+    scope: values('persons', 'filteredPersons', 'filteredGroups', 'groups', 'booklets', 'units'),
     personIds: array(number),
     searchText: string,
     groups: array(string),

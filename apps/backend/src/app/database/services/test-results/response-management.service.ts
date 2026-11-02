@@ -1,13 +1,14 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import {
-  forwardRef, Inject, Injectable, Logger, Optional
+  Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { getErrorMessage } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceTestResultsService } from './workspace-test-results.service';
+
+import { WorkspaceStatsCacheService } from '../workspace/workspace-stats-cache.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
@@ -34,8 +35,9 @@ export class ResponseManagementService {
   constructor(
     private readonly connection: DataSource,
     private readonly journalService: JournalService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(WorkspaceStatsCacheService)
+    private readonly workspaceStatsCacheService: WorkspaceStatsCacheService,
+    private readonly codingStatisticsService: CodingStatisticsService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -60,7 +62,7 @@ export class ResponseManagementService {
       await queryRunner.commitTransaction();
       await queryRunner.release();
       if (workspaceId) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        await this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId);
       }
     };
 
@@ -785,8 +787,8 @@ export class ResponseManagementService {
             'RESULT_DELETED'
           );
           await Promise.all([
-            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
-            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId),
+            this.codingStatisticsService.invalidateCache(workspaceId)
           ]);
         }
         return result;
@@ -874,8 +876,8 @@ export class ResponseManagementService {
             'RESULT_DELETED'
           );
           await Promise.all([
-            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
-            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId),
+            this.codingStatisticsService.invalidateCache(workspaceId)
           ]);
         }
         return result;

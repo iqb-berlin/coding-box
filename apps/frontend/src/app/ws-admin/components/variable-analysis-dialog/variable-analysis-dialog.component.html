@@ -171,6 +171,11 @@
                 </td>
               </ng-container>
 
+              <ng-container matColumnDef="code">
+                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.code-column' | translate }}</th>
+                <td mat-cell *matCellDef="let row">{{ row.code ?? '-' }}</td>
+              </ng-container>
+
               <ng-container matColumnDef="score">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
                   {{ 'variable-analysis.score-column' | translate }}

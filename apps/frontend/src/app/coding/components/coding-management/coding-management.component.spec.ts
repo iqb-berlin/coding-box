@@ -15,6 +15,7 @@ import {
 import { PageEvent } from '@angular/material/paginator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingManagementComponent } from './coding-management.component';
+import { CodingFreshnessPollingFacade } from './services/coding-freshness-polling.facade';
 import { CodingManagementService } from '../../services/coding-management.service';
 import { CodingManagementUiService } from './services/coding-management-ui.service';
 import { AppService } from '../../../core/services/app.service';
@@ -31,6 +32,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { CodingFreshnessJobResultDto } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -96,6 +98,7 @@ describe('CodingManagementComponent', () => {
 
     mockAppService = {
       selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new Subject<number>(),
       loggedUser: { sub: 'test-user' }
     };
 
@@ -637,7 +640,7 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
       component.refreshCodingStatusOverview();
-      component.activeFreshnessJobId.set('freshness-job-1');
+      fixture.debugElement.injector.get(CodingFreshnessPollingFacade).track('freshness-job-1', 1, null);
       autoCodingCompletedSubject.next({ jobId: 'freshness-job-1' });
 
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
@@ -667,7 +670,7 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
       component.refreshCodingStatusOverview();
-      component.activeFreshnessJobId.set('freshness-job-1');
+      fixture.debugElement.injector.get(CodingFreshnessPollingFacade).track('freshness-job-1', 1, null);
       mockCodingBackgroundJobsService.setJobRunning?.(
         1,
         'freshness-coding',
@@ -1115,6 +1118,31 @@ describe('CodingManagementComponent', () => {
       expect(fixture.nativeElement.querySelector('.coding-freshness-actions')).toBeNull();
     });
 
+    it.each(['workspace-return', 'destroy'])('ignores a delayed freshness start after %s', end => {
+      const pending = new Subject<CodingFreshnessJobResultDto>();
+      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockReturnValueOnce(pending);
+      (mockDialog.open as jest.Mock).mockClear();
+      (mockSnackBar.open as jest.Mock).mockClear();
+      (mockCodingBackgroundJobsService.setJobRunning as jest.Mock).mockClear();
+      component.startFreshnessCoding('v1');
+
+      if (end === 'destroy') fixture.destroy();
+      else {
+        mockAppService.selectedWorkspaceId = 2;
+        (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
+        mockAppService.selectedWorkspaceId = 1;
+        (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
+      }
+      pending.next({
+        jobId: 'late-job', totalResponses: 42, statusCounts: {}, unitCount: 7, personCount: 3, groupNames: ['TG1']
+      });
+
+      expect(pending.observed).toBe(false);
+      expect(mockDialog.open).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+      expect(mockCodingBackgroundJobsService.setJobRunning).not.toHaveBeenCalled();
+    });
+
     it('should open the test person coding dialog with the started freshness job', () => {
       jest.useFakeTimers();
       try {
@@ -1170,14 +1198,12 @@ describe('CodingManagementComponent', () => {
 
         component.startFreshnessCoding('v1');
 
-        expect((component as unknown as { freshnessJobPollingInterval: number | null })
-          .freshnessJobPollingInterval).toBeNull();
+        expect(fixture.debugElement.injector.get(CodingFreshnessPollingFacade).isPolling()).toBe(false);
 
         afterClosed$.next();
         afterClosed$.complete();
 
-        expect((component as unknown as { freshnessJobPollingInterval: number | null })
-          .freshnessJobPollingInterval).not.toBeNull();
+        expect(fixture.debugElement.injector.get(CodingFreshnessPollingFacade).isPolling()).toBe(true);
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();
@@ -1230,8 +1256,7 @@ describe('CodingManagementComponent', () => {
         });
         afterClosed$.complete();
 
-        expect((component as unknown as { freshnessJobPollingInterval: number | null })
-          .freshnessJobPollingInterval).toBeNull();
+        expect(fixture.debugElement.injector.get(CodingFreshnessPollingFacade).isPolling()).toBe(false);
         expect(component.activeFreshnessJobId()).toBeNull();
       } finally {
         component.ngOnDestroy();
@@ -1421,8 +1446,7 @@ describe('CodingManagementComponent', () => {
         });
         afterClosed$.complete();
 
-        expect((component as unknown as { freshnessJobPollingInterval: number | null })
-          .freshnessJobPollingInterval).not.toBeNull();
+        expect(fixture.debugElement.injector.get(CodingFreshnessPollingFacade).isPolling()).toBe(true);
       } finally {
         component.ngOnDestroy();
         jest.useRealTimers();
@@ -1430,8 +1454,7 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should keep active freshness tracking when a different auto-coding job completes', () => {
-      component.activeFreshnessJobId.set('freshness-job-1');
-      component.activeFreshnessJobProgress.set(42);
+      fixture.debugElement.injector.get(CodingFreshnessPollingFacade).track('freshness-job-1', 1, 42);
 
       autoCodingCompletedSubject.next({ jobId: 'other-job' });
 

@@ -120,7 +120,10 @@
       "{workspaceRoot}/package-lock.json",
       "{workspaceRoot}/vendor/**/*",
       "{workspaceRoot}/tsconfig.base.json",
-      "{workspaceRoot}/eslint.config.cjs"
+      "{workspaceRoot}/eslint.config.cjs",
+      {
+        "runtime": "node --version"
+      }
     ],
     "sharedApiDto": [
       "{workspaceRoot}/api-dto/**/*"

@@ -2,9 +2,9 @@ describe('Antwortwerte aus dem Kodierschema', () => {
   it('shows observed schema answers and toggles missing alternatives without changing their counts', () => {
     cy.viewport(1400, 900);
     const frequencies = [
-      { unitId: 1, variableId: 'ANIMALS', value: 'Hai', score: 1, count: 2, percentage: 200 / 3, isFromSchema: true },
-      { unitId: 1, variableId: 'ANIMALS', value: 'Elefant', score: 0, count: 1, percentage: 100 / 3, isFromSchema: true },
-      { unitId: 1, variableId: 'ANIMALS', value: 'Zebra', score: 0, count: 0, percentage: 0, isFromSchema: true, isSchemaOnly: true }
+      { unitId: 1, variableId: 'ANIMALS', value: 'Hai', score: 1, code: 1, count: 2, percentage: 200 / 3, isFromSchema: true },
+      { unitId: 1, variableId: 'ANIMALS', value: 'Elefant', score: 0, code: 0, count: 1, percentage: 100 / 3, isFromSchema: true },
+      { unitId: 1, variableId: 'ANIMALS', value: 'Zebra', score: 0, code: 0, count: 0, percentage: 0, isFromSchema: true, isSchemaOnly: true }
     ];
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -34,6 +34,7 @@ describe('Antwortwerte aus dem Kodierschema', () => {
 
     cy.contains('tr', 'Hai').as('shark');
     cy.get('@shark').find('.schema-chip').should('contain.text', 'Schema');
+    cy.get('@shark').find('.mat-column-code').should('contain.text', '1');
     cy.get('@shark').find('.mat-column-score').should('contain.text', '1');
     cy.get('@shark').find('.mat-column-count').should('contain.text', '2');
     cy.contains('tr', 'Elefant').find('.mat-column-score').should('contain.text', '0');
@@ -41,6 +42,7 @@ describe('Antwortwerte aus dem Kodierschema', () => {
     cy.contains('mat-slide-toggle', 'Nicht beobachtete Antwortwerte aus dem Kodierschema anzeigen').click();
     cy.wait('@answers').its('request.query.includeSchemaCodes').should('equal', 'true');
     cy.contains('tr', 'Zebra').as('zebra');
+    cy.get('@zebra').find('.mat-column-code').should('contain.text', '0');
     cy.get('@zebra').find('.mat-column-count').should('contain.text', '0');
     cy.get('@zebra').find('.schema-chip').should('contain.text', 'Schema');
     cy.contains('button', 'Erklärung anzeigen').click();

@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
+import { createCoderTrainingService } from './coder-training-test.factory';
+import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CoderTrainingService, TrainingResponseIdsMap } from './coder-training.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -17,7 +19,6 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
@@ -140,7 +141,7 @@ describe('CoderTrainingService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        CoderTrainingService,
+        { provide: CoderTrainingService, useFactory: createCoderTrainingService, inject: [getRepositoryToken(CodingJob), getRepositoryToken(CodingJobCoder), getRepositoryToken(CodingJobVariable), getRepositoryToken(CodingJobUnit), getRepositoryToken(CoderTraining), getRepositoryToken(CoderTrainingVariable), getRepositoryToken(CoderTrainingBundle), getRepositoryToken(CoderTrainingCoder), getRepositoryToken(CoderTrainingDiscussionResult), getRepositoryToken(CodingJobVariableBundle), getRepositoryToken(User), getRepositoryToken(ResponseEntity), getRepositoryToken(VariableBundle), getRepositoryToken(ChunkEntity), CodingJobService, WORKSPACE_FILE_METADATA_READER, MissingsProfilesService, WorkspaceExclusionService, CodingStatisticsService] },
         { provide: getRepositoryToken(CodingJob), useValue: mockRepository },
         { provide: getRepositoryToken(CodingJobCoder), useValue: mockRepository },
         { provide: getRepositoryToken(CodingJobVariable), useValue: mockRepository },
@@ -156,7 +157,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
         { provide: getRepositoryToken(ChunkEntity), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
-        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: WORKSPACE_FILE_METADATA_READER, useValue: mockWorkspaceFilesService },
         { provide: MissingsProfilesService, useValue: missingsProfilesService },
         { provide: CodingStatisticsService, useValue: codingStatisticsService },
         {

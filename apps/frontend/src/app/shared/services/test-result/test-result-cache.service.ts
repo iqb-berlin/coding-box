@@ -46,7 +46,7 @@ export class TestResultCacheService {
   /**
    * Get test results with caching
    * @param workspaceId The workspace ID
-   * @param page Page number
+   * @param page Zero-based table page index; the API uses one-based pages
    * @param limit Items per page
    * @param searchText Optional search text
    * @returns Observable with test results
@@ -55,7 +55,7 @@ export class TestResultCacheService {
     const cacheKey = this.generateCacheKey(workspaceId, page, limit, searchText);
 
     const params: { [key: string]: string } = {
-      page: page.toString(),
+      page: (page + 1).toString(),
       limit: limit.toString()
     };
 

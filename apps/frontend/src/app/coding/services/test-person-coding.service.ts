@@ -1,4 +1,4 @@
-import { Injectable, Injector, inject } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   HttpClient,
   HttpErrorResponse,
@@ -13,21 +13,12 @@ import {
   map,
   of,
   shareReplay,
-  switchMap,
   tap,
   throwError
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { AuthService } from '../../core/services/auth.service';
-import {
-  AppService,
-  WorkspaceTokenPolicy
-} from '../../core/services/app.service';
-import {
-  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
-  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-} from '../../core/services/auth-session.config';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
@@ -43,11 +34,19 @@ import {
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import {
-  ResponseMatchingFlag,
-  WorkspaceSettingsService
+  ResponseMatchingFlag
 } from '../../shared/services/workspace/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
+
+import { CodingReliabilityService } from './coding-reliability.service';
+import {
+  CohensKappaStatisticsResponse, CohensKappaScope, CohensKappaCalculationLevel, WorkspaceCohensKappaSummary
+} from './coding-reliability.models';
+
+export type {
+  CohensKappaCoderPair, CohensKappaVariableSummary, CohensKappaStatisticsResponse, CohensKappaCalculationLevel, CohensKappaScope
+} from './coding-reliability.models';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -70,54 +69,6 @@ export interface CodingStatistics {
 export interface CodingStatisticsWithJob extends CodingStatistics {
   jobId?: string;
   message?: string;
-}
-
-export interface CohensKappaCoderPair {
-  coder1Id: number;
-  coder1Name: string;
-  coder2Id: number;
-  coder2Name: string;
-  kappa: number | null;
-  agreement: number;
-  totalItems: number;
-  validPairs: number;
-  interpretation: string;
-}
-
-export interface CohensKappaVariableSummary {
-  unitName: string;
-  variableId: string;
-  meanKappa: number | null;
-  meanAgreement: number | null;
-  caseCount: number;
-  doubleCodedCount: number;
-  doubleCodedRate: number | null;
-  validPairCount: number;
-  coderPairCount: number;
-  coderPairs: CohensKappaCoderPair[];
-}
-
-export interface CohensKappaStatisticsResponse {
-  variables: CohensKappaVariableSummary[];
-  workspaceSummary: {
-    totalCodedResponses: number;
-    totalDoubleCodedResponses: number;
-    totalCoderPairs: number;
-    averageKappa: number | null;
-    meanAgreement: number | null;
-    variablesIncluded: number;
-    codersIncluded: number;
-    weightingMethod: 'weighted' | 'unweighted';
-    calculationLevel?: CohensKappaCalculationLevel;
-  };
-}
-
-export type CohensKappaCalculationLevel = 'code' | 'score';
-
-export interface CohensKappaScope {
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
 }
 
 export interface AggregationSettingsResponse {
@@ -259,8 +210,7 @@ export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private authService = inject(AuthService);
-  private injector = inject(Injector);
-  private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private readonly reliability = inject(CodingReliabilityService);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -1762,42 +1712,7 @@ export class TestPersonCodingService {
     scope?: CohensKappaScope,
     calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<CohensKappaStatisticsResponse> {
-    let params = new HttpParams();
-
-    params = params.set('weightedMean', weightedMean.toString());
-    params = params.set('excludeTrainings', excludeTrainings.toString());
-    params = params.set('level', calculationLevel);
-
-    if (unitName) {
-      params = params.set('unitName', unitName);
-    }
-    if (variableId) {
-      params = params.set('variableId', variableId);
-    }
-    params = this.appendCohensKappaScopeParams(params, scope);
-
-    return this.http
-      .get<CohensKappaStatisticsResponse>(
-        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
-        { headers: this.authHeader, params }
-      )
-      .pipe(
-        catchError(() => of({
-          variables: [],
-          workspaceSummary: {
-            totalCodedResponses: 0,
-            totalDoubleCodedResponses: 0,
-            totalCoderPairs: 0,
-            averageKappa: null,
-            meanAgreement: null,
-            variablesIncluded: 0,
-            codersIncluded: 0,
-            weightingMethod: 'weighted' as 'weighted' | 'unweighted',
-            calculationLevel
-          }
-        })
-        )
-      );
+    return this.reliability.getCohensKappaStatistics(workspaceId, weightedMean, excludeTrainings, unitName, variableId, scope, calculationLevel);
   }
 
   exportCohensKappaSummaryAsCsv(
@@ -1809,24 +1724,7 @@ export class TestPersonCodingService {
     scope?: CohensKappaScope,
     calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
-    const params = this.buildCohensKappaExportParams(
-      weightedMean,
-      excludeTrainings,
-      unitName,
-      variableId,
-      scope,
-      calculationLevel
-    );
-
-    return this.http.get(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/summary/csv`,
-      {
-        headers: this.authHeader,
-        params,
-        responseType: 'blob',
-        context: suppressGlobalHttpErrorContext()
-      }
-    );
+    return this.reliability.exportCohensKappaSummaryAsCsv(workspaceId, weightedMean, excludeTrainings, unitName, variableId, scope, calculationLevel);
   }
 
   exportCohensKappaStatisticsAsXlsx(
@@ -1838,27 +1736,7 @@ export class TestPersonCodingService {
     scope?: CohensKappaScope,
     calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
-    const params = this.buildCohensKappaExportParams(
-      weightedMean,
-      excludeTrainings,
-      unitName,
-      variableId,
-      scope,
-      calculationLevel
-    );
-
-    return this.getReplayExportAuthToken(workspaceId).pipe(
-      switchMap(authToken => this.http.get(
-        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/xlsx`,
-        {
-          headers: this.authHeader,
-          params: params.set('authToken', authToken),
-          responseType: 'blob',
-          context: suppressGlobalHttpErrorContext()
-        }
-      )
-      )
-    );
+    return this.reliability.exportCohensKappaStatisticsAsXlsx(workspaceId, weightedMean, excludeTrainings, unitName, variableId, scope, calculationLevel);
   }
 
   exportCohensKappaStatisticsAsCsv(
@@ -1870,113 +1748,7 @@ export class TestPersonCodingService {
     scope?: CohensKappaScope,
     calculationLevel: CohensKappaCalculationLevel = 'code'
   ): Observable<Blob> {
-    const params = this.buildCohensKappaExportParams(
-      weightedMean,
-      excludeTrainings,
-      unitName,
-      variableId,
-      scope,
-      calculationLevel
-    );
-
-    return this.http.get(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/csv`,
-      {
-        headers: this.authHeader,
-        params,
-        responseType: 'blob',
-        context: suppressGlobalHttpErrorContext()
-      }
-    );
-  }
-
-  private buildCohensKappaExportParams(
-    weightedMean: boolean,
-    excludeTrainings: boolean,
-    unitName?: string,
-    variableId?: string,
-    scope?: CohensKappaScope,
-    calculationLevel: CohensKappaCalculationLevel = 'code'
-  ): HttpParams {
-    let params = new HttpParams()
-      .set('weightedMean', weightedMean.toString())
-      .set('excludeTrainings', excludeTrainings.toString())
-      .set('level', calculationLevel);
-
-    if (unitName) {
-      params = params.set('unitName', unitName);
-    }
-    if (variableId) {
-      params = params.set('variableId', variableId);
-    }
-
-    return this.appendCohensKappaScopeParams(params, scope);
-  }
-
-  private appendCohensKappaScopeParams(
-    params: HttpParams,
-    scope?: CohensKappaScope
-  ): HttpParams {
-    let scopedParams = params;
-
-    if (scope?.jobDefinitionIds?.length) {
-      scopedParams = scopedParams.set(
-        'jobDefinitionIds',
-        scope.jobDefinitionIds.join(',')
-      );
-    }
-    if (scope?.coderTrainingIds?.length) {
-      scopedParams = scopedParams.set(
-        'coderTrainingIds',
-        scope.coderTrainingIds.join(',')
-      );
-    }
-    if (scope?.coderIds?.length) {
-      scopedParams = scopedParams.set('coderIds', scope.coderIds.join(','));
-    }
-
-    return scopedParams;
-  }
-
-  private getReplayExportAuthToken(workspaceId: number): Observable<string> {
-    return this.workspaceSettingsService
-      .getReplayUrlExportMode(workspaceId)
-      .pipe(
-        switchMap(mode => (mode === 'auth' ? this.createExternalReplayToken(workspaceId) : of(''))
-        )
-      );
-  }
-
-  private createExternalReplayToken(workspaceId: number): Observable<string> {
-    const appService = this.injector.get(AppService);
-    return appService.getWorkspaceTokenPolicy().pipe(
-      map(policy => this.getExternalReplayTokenMaxDurationDays(policy)),
-      switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
-        workspaceId,
-        maxDurationDays
-      )
-      ),
-      switchMap(durationDays => appService.createOwnToken(
-        workspaceId,
-        durationDays,
-        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-      )
-      )
-    );
-  }
-
-  private getExternalReplayTokenMaxDurationDays(
-    policy: WorkspaceTokenPolicy
-  ): number {
-    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES.map(
-      scope => policy.scopes[scope]?.maxDurationDays
-    ).filter(
-      (duration): duration is number => Number.isInteger(duration) && duration >= 1
-    );
-
-    return maxDurations.length ?
-      Math.min(...maxDurations) :
-      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+    return this.reliability.exportCohensKappaStatisticsAsCsv(workspaceId, weightedMean, excludeTrainings, unitName, variableId, scope, calculationLevel);
   }
 
   getWorkspaceCohensKappaSummary(
@@ -1984,71 +1756,7 @@ export class TestPersonCodingService {
     weightedMean: boolean = true,
     excludeTrainings: boolean = true,
     scope?: CohensKappaScope
-  ): Observable<{
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-      weightingMethod: 'weighted' | 'unweighted';
-    };
-  }> {
-    const params = this.appendCohensKappaScopeParams(
-      new HttpParams()
-        .set('weightedMean', weightedMean.toString())
-        .set('excludeTrainings', excludeTrainings.toString()),
-      scope
-    );
-    return this.http
-      .get<{
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalSharedResponses: number;
-        validPairs: number;
-        interpretation: string;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-      };
-    }>(
-        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
-        { headers: this.authHeader, params }
-      )
-      .pipe(
-        catchError(() => of({
-          coderPairs: [],
-          workspaceSummary: {
-            totalDoubleCodedResponses: 0,
-            totalCoderPairs: 0,
-            averageKappa: null,
-            variablesIncluded: 0,
-            codersIncluded: 0,
-            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
-          }
-        })
-        )
-      );
+  ): Observable<WorkspaceCohensKappaSummary> {
+    return this.reliability.getWorkspaceCohensKappaSummary(workspaceId, weightedMean, excludeTrainings, scope);
   }
 }

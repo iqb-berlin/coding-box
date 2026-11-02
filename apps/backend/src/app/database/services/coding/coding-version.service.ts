@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, forwardRef, Inject, Optional
+  Injectable, Logger, Inject, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
@@ -26,7 +26,7 @@ export class CodingVersionService {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @Inject(forwardRef(() => CodingStatisticsService))
+    @Inject(CodingStatisticsService)
     private codingStatisticsService: CodingStatisticsService,
     private codingAnalysisService: CodingAnalysisService,
     private codingValidationService: CodingValidationService,

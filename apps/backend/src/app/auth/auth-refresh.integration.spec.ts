@@ -1,3 +1,4 @@
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
@@ -35,7 +36,7 @@ describe('Auth refresh HTTP contract', () => {
           useValue: { get: (key: string) => ({ OIDC_TOKEN_ENDPOINT: 'https://issuer.test/token', OAUTH2_CLIENT_ID: 'coding-box' })[key] }
         }
       ]
-    }).compile();
+    }).overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true }).compile();
     app = module.createNestApplication();
     app.use(requestIdMiddleware);
     app.useGlobalFilters(new GlobalHttpExceptionFilter());

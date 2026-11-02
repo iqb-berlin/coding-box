@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Inject, BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import {
@@ -7,7 +7,7 @@ import {
   PsychometricDomainSelection
 } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import FileUpload from '../../entities/file_upload.entity';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { MissingsProfilesService } from './missings-profiles.service';
 import {
   getPsychometricLogicalKey,
@@ -41,7 +41,7 @@ export class PsychometricMetadataResolver {
   constructor(
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
-    private readonly workspaceFilesService: WorkspaceFilesService,
+    @Inject(WORKSPACE_FILE_METADATA_READER) private readonly workspaceFilesService: WorkspaceFileMetadataReader,
     private readonly missingsProfilesService: MissingsProfilesService
   ) {}
 

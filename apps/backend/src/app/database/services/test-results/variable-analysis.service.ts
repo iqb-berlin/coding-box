@@ -89,7 +89,8 @@ const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Code-PBC', key: 'codePbc', width: 14 },
   { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 },
   { header: 'Score', key: 'score', width: 12 },
-  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 }
+  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 },
+  { header: 'Code', key: 'code', width: 14 }
 ] as const;
 
 type VariableAnalysisExportColumnKey =
@@ -1043,6 +1044,7 @@ export class VariableAnalysisService {
         value: row.value,
         label: row.label,
         score: row.score,
+        code: row.code,
         schemaOrder: row.schemaOrder,
         isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
@@ -1213,6 +1215,7 @@ export class VariableAnalysisService {
         value: row.value,
         label: row.label,
         score: row.score,
+        code: row.code,
         schemaOrder: row.schemaOrder,
         isFromSchema: row.isFromSchema,
         isSchemaOnly: row.isSchemaOnly,
@@ -1318,6 +1321,7 @@ export class VariableAnalysisService {
           value: frequency.value,
           label: frequency.label || '',
           score: frequency.score ?? '',
+          code: frequency.code ?? '',
           isFromSchema: frequency.isFromSchema ? 'ja' : 'nein',
           isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
           count: frequency.count,

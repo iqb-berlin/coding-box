@@ -19,7 +19,7 @@ const createJob = (
 ) => ({
   id: overrides.id || 'job-1',
   data: {
-    resultVersion: 2,
+    resultVersion: 3,
     ...(overrides.data || {
       workspaceId: 1,
       unitId: 2,
@@ -104,13 +104,13 @@ describe('VariableAnalysisService', () => {
       frequencies: {
         '1:VAR': [
           {
-            variableId: 'VAR', value: 'Hai', count: 2, validOccurrenceCount: 2, percentage: 200 / 3, score: 1, schemaOrder: 0, isFromSchema: true
+            variableId: 'VAR', value: 'Hai', count: 2, validOccurrenceCount: 2, percentage: 200 / 3, score: 1, code: 1, schemaOrder: 0, isFromSchema: true
           },
           {
-            variableId: 'VAR', value: 'Elefant', count: 1, validOccurrenceCount: 1, percentage: 100 / 3, score: 0, schemaOrder: 1, isFromSchema: true, isSchemaSupplemental: true
+            variableId: 'VAR', value: 'Elefant', count: 1, validOccurrenceCount: 1, percentage: 100 / 3, score: 0, code: 0, schemaOrder: 1, isFromSchema: true, isSchemaSupplemental: true
           },
           {
-            variableId: 'VAR', value: 'Zebra', count: 0, validOccurrenceCount: 0, percentage: 0, score: 0, schemaOrder: 1, isFromSchema: true, isSchemaOnly: true, isSchemaSupplemental: true
+            variableId: 'VAR', value: 'Zebra', count: 0, validOccurrenceCount: 0, percentage: 0, score: 0, code: 0, schemaOrder: 1, isFromSchema: true, isSchemaOnly: true, isSchemaSupplemental: true
           }
         ]
       },
@@ -129,15 +129,17 @@ describe('VariableAnalysisService', () => {
     const page = await service.getAnalysisResultsPage('job-1', 1);
     expect(page.rows?.map(row => row.value)).toEqual(['Hai', 'Elefant']);
     expect(page.rows?.find(row => row.value === 'Elefant')).toMatchObject({
-      count: 1, validOccurrenceCount: 1, score: 0, isFromSchema: true
+      count: 1, validOccurrenceCount: 1, score: 0, code: 0, isFromSchema: true
     });
     const withMissing = await service.getAnalysisResultsPage('job-1', 1, { includeSchemaCodes: true });
-    expect(withMissing.rows?.find(row => row.value === 'Zebra')).toMatchObject({ count: 0, score: 0, isFromSchema: true });
+    expect(withMissing.rows?.find(row => row.value === 'Zebra')).toMatchObject({
+      count: 0, score: 0, code: 0, isFromSchema: true
+    });
     const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
     expect(csv).not.toContain('Zebra');
     expect(csv).toContain('Elefant');
-    expect(csv).toContain('Score;Zuordnung aus Kodierschema');
-    expect(csv.split(/\r?\n/).find(line => line.includes('Elefant'))).toMatch(/;0;ja$/);
+    expect(csv).toContain('Score;Zuordnung aus Kodierschema;Code');
+    expect(csv.split(/\r?\n/).find(line => line.includes('Elefant'))).toMatch(/;0;ja;0$/);
     const buffer = await service.exportAnalysisResultsAsXlsx('job-1', 1, { includeSchemaCodes: true });
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
@@ -146,6 +148,7 @@ describe('VariableAnalysisService', () => {
     expect(zebra?.getCell(7).value).toBe(0);
     expect(zebra?.getCell(22).value).toBe(0);
     expect(zebra?.getCell(23).value).toBe('ja');
+    expect(zebra?.getCell(24).value).toBe(0);
   });
 
   it.each([

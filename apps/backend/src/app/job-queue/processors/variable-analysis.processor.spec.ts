@@ -322,10 +322,10 @@ describe('VariableAnalysisProcessor', () => {
     );
     expect(entries[0][1]).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        value: '5', label: 'Im Bereich', count: 1, score: 1, isFromSchema: true, isSchemaSupplemental: true
+        value: '5', label: 'Im Bereich', count: 1, score: 1, code: 7, isFromSchema: true, isSchemaSupplemental: true
       }),
       expect.objectContaining({
-        value: '6', label: 'Im Bereich', count: 0, score: 1, isFromSchema: true, isSchemaOnly: true
+        value: '6', label: 'Im Bereich', count: 0, score: 1, code: 7, isFromSchema: true, isSchemaOnly: true
       })
     ]));
   });
@@ -496,7 +496,7 @@ describe('VariableAnalysisProcessor', () => {
     const rows = entries[0][1];
     expect(rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        value: 'Hai', count: 2, validOccurrenceCount: 2, score: 1, isFromSchema: true
+        value: 'Hai', count: 2, validOccurrenceCount: 2, score: 1, code: 1, isFromSchema: true
       }),
       expect.objectContaining({
         value: 'Hay', count: 1, score: 1, isFromSchema: true

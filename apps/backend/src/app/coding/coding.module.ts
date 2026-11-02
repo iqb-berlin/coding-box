@@ -1,5 +1,29 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CodingFreshnessModule } from './coding-freshness.module';
+import { CodingExportQueryService } from '../database/services/coding/coding-export-query.service';
+import { CodingExportFormattingService } from '../database/services/coding/coding-export-formatting.service';
+import { CodingExportReplayService } from '../database/services/coding/coding-export-replay.service';
+import { CodingExportDownloadService } from '../database/services/coding/coding-export-download.service';
+import { CodingAggregatedExportService } from '../database/services/coding/coding-aggregated-export.service';
+import { CodingAggregatedRowsExportService } from '../database/services/coding/coding-aggregated-rows-export.service';
+import { CodingAggregatedColumnsExportService } from '../database/services/coding/coding-aggregated-columns-export.service';
+import { CodingCoderExportService } from '../database/services/coding/coding-coder-export.service';
+import { CodingVariableExportService } from '../database/services/coding/coding-variable-export.service';
+import { CodingCompactExportService } from '../database/services/coding/coding-compact-export.service';
+import { CodingDetailedExportService } from '../database/services/coding/coding-detailed-export.service';
+import { CodingTimingReportExportService } from '../database/services/coding/coding-timing-report-export.service';
+import { CoderTrainingDisplayService } from '../database/services/coding/coder-training-display.service';
+import { CoderTrainingSamplingService } from '../database/services/coding/coder-training-sampling.service';
+import { CoderTrainingSelectionService } from '../database/services/coding/coder-training-selection.service';
+import { CoderTrainingMutationService } from '../database/services/coding/coder-training-mutation.service';
+import { CoderTrainingComparisonService } from '../database/services/coding/coder-training-comparison.service';
+import { CoderTrainingComparisonQueryService } from '../database/services/coding/coder-training-comparison-query.service';
+import { CoderTrainingKappaService } from '../database/services/coding/coder-training-kappa.service';
+import { CoderTrainingDiscussionService } from '../database/services/coding/coder-training-discussion.service';
+import { CoderTrainingQueryService } from '../database/services/coding/coder-training-query.service';
+import { CoderTrainingFreshnessService } from '../database/services/coding/coder-training-freshness.service';
+import { CodingProgressService } from '../database/services/coding/coding-progress.service';
 import { CodingJobAccessService } from '../database/services/coding/coding-job-access.service';
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobDistributionService } from '../database/services/coding/coding-job-distribution.service';
@@ -31,7 +55,6 @@ import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 import { ChunkEntity } from '../database/entities/chunk.entity';
-import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import { CodingAggregationPeerService } from '../database/services/coding/coding-aggregation-peer.service';
 
 import { CodingJobService } from '../database/services/coding/coding-job.service';
@@ -53,7 +76,6 @@ import { MissingsProfilesService } from '../database/services/coding/missings-pr
 import { ExternalCodingImportService } from '../database/services/coding/external-coding-import.service';
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
 import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
-import { CodingFreshnessService } from '../database/services/coding/coding-freshness.service';
 import { AutoCodingRunGuardService } from '../database/services/coding/auto-coding-run-guard.service';
 import { CodingReadinessService } from '../database/services/coding/coding-readiness.service';
 import { CodingItemMatrixExportService } from '../database/services/coding/coding-item-matrix-export.service';
@@ -70,8 +92,9 @@ import { JobDefinitionService } from '../database/services/jobs';
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 
 import { CacheClientModule } from '../cache/cache-client.module';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceModule } from '../workspace/workspace.module';
+
+import { WorkspaceDataModule } from '../workspace/workspace-data.module';
+import { ResponseManagementService } from '../database/services/test-results/response-management.service';
 import { UserModule } from '../user/user.module';
 
 @Module({
@@ -97,15 +120,39 @@ import { UserModule } from '../user/user.module';
       Persons,
       Unit,
       Booklet,
-      ChunkEntity,
-      CodingUnitFreshness
+      ChunkEntity
     ]),
     JobQueueClientModule,
     CacheClientModule,
-    forwardRef(() => WorkspaceModule),
+    WorkspaceDataModule,
+    CodingFreshnessModule,
     UserModule
   ],
   providers: [
+    CodingExportQueryService,
+    CodingExportFormattingService,
+    CodingExportReplayService,
+    CodingExportDownloadService,
+    CodingAggregatedExportService,
+    CodingAggregatedRowsExportService,
+    CodingAggregatedColumnsExportService,
+    CodingCoderExportService,
+    CodingVariableExportService,
+    CodingCompactExportService,
+    CodingDetailedExportService,
+    CodingTimingReportExportService,
+    CoderTrainingDisplayService,
+    CoderTrainingSamplingService,
+    CoderTrainingSelectionService,
+    CoderTrainingMutationService,
+    CoderTrainingComparisonService,
+    CoderTrainingComparisonQueryService,
+    CoderTrainingKappaService,
+    CoderTrainingDiscussionService,
+    CoderTrainingQueryService,
+    CoderTrainingFreshnessService,
+    CodingProgressService,
+    ResponseManagementService,
     CodingJobAccessService,
     CodingJobAggregationService,
     CodingJobDistributionService,
@@ -137,7 +184,6 @@ import { UserModule } from '../user/user.module';
     CodingReplayAnchorService,
     CodingValidationService,
     CodingAnalysisService,
-    CodingFreshnessService,
     AutoCodingRunGuardService,
     CodingReadinessService,
     ItemDatasetMetadataService,
@@ -157,6 +203,10 @@ import { UserModule } from '../user/user.module';
     }
   ],
   exports: [
+    CodingFreshnessModule,
+    CodingProgressService,
+    WorkspaceDataModule,
+    ResponseManagementService,
     CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
@@ -178,7 +228,6 @@ import { UserModule } from '../user/user.module';
     CodingReplayAnchorService,
     CodingValidationService,
     CodingAnalysisService,
-    CodingFreshnessService,
     AutoCodingRunGuardService,
     CodingReadinessService,
     ItemDatasetMetadataService,

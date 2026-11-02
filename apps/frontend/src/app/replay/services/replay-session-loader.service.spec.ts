@@ -74,6 +74,38 @@ describe('ReplaySessionLoaderService', () => {
     service = TestBed.inject(ReplaySessionLoaderService);
   });
 
+  it.each(['clear', 'destroy'])('unsubscribes a pending session request on %s without legacy fallback', async action => {
+    const reply = new Subject<ReplayCodingSessionDto>();
+    codingJobBackendService.getReplayCodingSession.mockReturnValue(reply);
+    const pending = service.load(request);
+    if (action === 'clear') service.clear();
+    else TestBed.resetTestingModule();
+    expect(reply.observed).toBe(false);
+    reply.next(session);
+    expect((await pending).unitsData).toBeNull();
+    expect(codingJobBackendService.getCodingJobUnits).not.toHaveBeenCalled();
+  });
+
+  it('cancels an obsolete legacy fallback before loading another workspace', async () => {
+    codingJobBackendService.getReplayCodingSession.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+    const legacy = new Subject<never[]>();
+    codingJobBackendService.getCodingJobUnits.mockReturnValue(legacy);
+    const first = service.load(request);
+    await Promise.resolve();
+    expect(legacy.observed).toBe(true);
+    service.clear();
+    expect(legacy.observed).toBe(false);
+    expect((await first).unitsData).toBeNull();
+  });
+
+  it('does not start the legacy request when destroyed between a 404 and its fallback', async () => {
+    codingJobBackendService.getReplayCodingSession.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+    const pending = service.load(request);
+    TestBed.resetTestingModule();
+    expect((await pending).unitsData).toBeNull();
+    expect(codingJobBackendService.getCodingJobUnits).not.toHaveBeenCalled();
+  });
+
   it('loads and maps a replay session', async () => {
     const result = await service.load(request);
 

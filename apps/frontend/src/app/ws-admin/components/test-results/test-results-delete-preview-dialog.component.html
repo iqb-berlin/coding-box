@@ -92,7 +92,7 @@
   <section class="detail-section">
     @if (preview.groups.length > 0) {
     <div class="detail-block">
-      <div class="detail-label">Testgruppen</div>
+      <div class="detail-label">{{ 'test-results-page.deletion.groups' | translate }} ({{ preview.groups.length }})</div>
       <div class="chip-row">
         @for (group of visibleGroups; track group) {
         <span class="chip">{{ group }}</span>

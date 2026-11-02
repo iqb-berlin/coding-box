@@ -1,13 +1,14 @@
 import { provideHttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
 import { BackendService } from '../../apps/frontend/src/app/core/services/backend.service';
 import { TestResultService } from '../../apps/frontend/src/app/shared/services/test-result/test-result.service';
 import { TestResultsFlatTableComponent } from '../../apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component';
+import translations from '../../apps/frontend/src/assets/i18n/de.json';
 
 class AppServiceMock {
   selectedWorkspaceId = 9;
@@ -79,6 +80,11 @@ describe('TestResultsFlatTableComponent', () => {
           }
         }
       ]
+    }).then(({ fixture }) => {
+      const translate = fixture.debugElement.injector.get(TranslateService);
+      translate.setTranslation('de', translations);
+      translate.use('de');
+      fixture.autoDetectChanges();
     });
 
     cy.wait('@flatResponses', { timeout: 20000 });
