@@ -9,7 +9,9 @@ export interface VariableFrequency {
   value: string;
   label?: string;
   score?: number;
+  code?: number | string;
   schemaOrder?: number;
+  isFromSchema?: boolean;
   isSchemaOnly?: boolean;
   isSchemaSupplemental?: boolean;
   count: number;
@@ -188,7 +190,9 @@ export function createVariableAnalysisRows(
         value: frequency.value,
         label: frequency.label,
         score: frequency.score,
+        code: frequency.code,
         schemaOrder: frequency.schemaOrder,
+        isFromSchema: frequency.isFromSchema,
         isSchemaOnly: frequency.isSchemaOnly,
         isSchemaSupplemental: frequency.isSchemaSupplemental,
         count: frequency.count,

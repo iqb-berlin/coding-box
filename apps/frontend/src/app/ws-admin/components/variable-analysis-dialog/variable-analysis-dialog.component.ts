@@ -95,7 +95,9 @@ export interface VariableAnalysisData {
         value: string;
         label?: string;
         score?: number;
+        code?: number | string;
         schemaOrder?: number;
+        isFromSchema?: boolean;
         isSchemaOnly?: boolean;
         isSchemaSupplemental?: boolean;
         count: number;
@@ -171,6 +173,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'variableId',
     'value',
     'label',
+    'code',
     'score',
     'count',
     'validOccurrenceCount',
@@ -375,7 +378,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 value: freq.value,
                 label: freq.label,
                 score: freq.score,
+                code: freq.code,
                 schemaOrder: freq.schemaOrder,
+                isFromSchema: freq.isFromSchema,
                 isSchemaOnly: freq.isSchemaOnly,
                 isSchemaSupplemental: freq.isSchemaSupplemental,
                 count: freq.count,
@@ -1086,7 +1091,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.currentPage.set(Math.max(0, results.page - 1));
           this.analyzeVariables();
         },
-        error: () => {
+        error: (error: { error?: { code?: string } }) => {
           if (requestId !== this.latestResultsRequestId) {
             this.dismissResultsLoadingSnackBar(loadingSnackBar);
             return;
@@ -1094,8 +1099,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
           this.isLoading.set(false);
+          const isOutdated = error?.error?.code === 'VARIABLE_ANALYSIS_OUTDATED';
+          if (isOutdated) {
+            this.clearCurrentAnalysisResults();
+          }
           this.snackBar.open(
-            this.translate.instant('variable-analysis.error-loading-results'),
+            this.translate.instant(isOutdated ?
+              'variable-analysis.results-outdated' :
+              'variable-analysis.error-loading-results'),
             this.translate.instant('error.error_title'),
             { duration: 3000 }
           );

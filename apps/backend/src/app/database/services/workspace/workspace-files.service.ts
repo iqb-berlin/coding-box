@@ -3003,9 +3003,10 @@ ${bookletRefs}
   }
 
   async getUnitVariableDetails(
-    workspaceId: number
+    workspaceId: number,
+    options: { includeCodingRules?: boolean } = {}
   ): Promise<UnitVariableDetailsDto[]> {
-    return this.fileMetadata.getUnitVariableDetails(workspaceId);
+    return this.fileMetadata.getUnitVariableDetails(workspaceId, options);
   }
 
   /**
