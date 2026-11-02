@@ -190,7 +190,7 @@ export class VariableAnalysisController {
     name: 'includeSchemaCodes',
     type: Boolean,
     required: false,
-    description: 'Include coding scheme codes that are not part of the default top values'
+    description: 'Include explicitly defined answer values that were not observed'
   })
   @ApiOkResponse({
     description:
@@ -273,7 +273,7 @@ export class VariableAnalysisController {
     name: 'includeSchemaCodes',
     type: Boolean,
     required: false,
-    description: 'Include coding scheme codes that are not part of the default top values'
+    description: 'Include explicitly defined answer values that were not observed'
   })
   @ApiQuery({
     name: 'sortBy',
@@ -371,7 +371,7 @@ export class VariableAnalysisController {
     name: 'includeSchemaCodes',
     type: Boolean,
     required: false,
-    description: 'Include coding scheme codes that are not part of the default top values'
+    description: 'Include explicitly defined answer values that were not observed'
   })
   @ApiOkResponse({
     description: 'Variable analysis results exported as CSV.',
@@ -464,7 +464,7 @@ export class VariableAnalysisController {
     name: 'includeSchemaCodes',
     type: Boolean,
     required: false,
-    description: 'Include coding scheme codes that are not part of the default top values'
+    description: 'Include explicitly defined answer values that were not observed'
   })
   @ApiOkResponse({
     description: 'Variable analysis results exported as XLSX.',

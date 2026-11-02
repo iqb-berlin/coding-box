@@ -1,3 +1,4 @@
+import type { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Like, Repository } from 'typeorm';
@@ -981,7 +982,8 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
   }
 
   async getUnitVariableDetails(
-    workspaceId: number
+    workspaceId: number,
+    options: { includeCodingRules?: boolean } = {}
   ): Promise<UnitVariableDetailsDto[]> {
     this.logger.log(
       `Getting detailed unit variable information for workspace ${workspaceId}`
@@ -1000,6 +1002,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
         }
       });
 
+      const codingRulesByUnit = new Map<string, Map<string, VariableCodingData>>();
       const codingSchemeMap = new Map<string, string>();
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
       const codingSchemeAliasToIdMap = new Map<string, Map<string, string>>();
@@ -1044,25 +1047,15 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
           codingSchemeMap.set(unitId, scheme.file_id);
 
           const parsedScheme = JSON.parse(scheme.data) as {
-            variableCodings?: {
-              id: string;
-              alias?: string;
-              sourceType?: string;
-              type?: UnitVariableType;
-              processing?: string[];
-              codes?: Array<{
-                id: number | string;
-                label?: string;
-                score?: number;
-                manualInstruction?: string;
-                type?: string;
-              }>;
-            }[];
+            variableCodings?: (VariableCodingData & { type?: UnitVariableType })[];
           };
           if (
             parsedScheme.variableCodings &&
             Array.isArray(parsedScheme.variableCodings)
           ) {
+            if (options.includeCodingRules) {
+              codingRulesByUnit.set(unitId, new Map(parsedScheme.variableCodings.map(coding => [coding.id, coding])));
+            }
             const variableSourceTypes = new Map<string, string>();
             const variableAliasToId = new Map<string, string>();
             const variableIdToAlias = new Map<string, string>();
@@ -1242,6 +1235,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
                     sourceType,
                     processing,
                     codes: variableCodes,
+                    ...(options.includeCodingRules ? { coding: codingRulesByUnit.get(unitName)?.get(variableId) } : {}),
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
                     valuePositionLabels:
@@ -1319,6 +1313,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
                     sourceType,
                     processing,
                     codes: variableCodes,
+                    ...(options.includeCodingRules ? { coding: codingRulesByUnit.get(unitName)?.get(variableId) } : {}),
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
                     valuePositionLabels:
@@ -1376,6 +1371,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
                   sourceType,
                   processing,
                   codes: variableCodes,
+                  ...(options.includeCodingRules ? { coding: codingRulesByUnit.get(unitName)?.get(schemeId) } : {}),
                   isDerived: true,
                   hasManualInstruction,
                   hasClosedCoding,
