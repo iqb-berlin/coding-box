@@ -8,13 +8,53 @@ const positions = (
   [],
   pages ? JSON.stringify({ pages }) : undefined,
   JSON.stringify({ variableCodings: variables })
-);
+).positions;
 
 const sequence = (result: Map<string, number>, ids: string[]) => [...ids].sort(
   (left, right) => result.get(`UNIT\u001F${left}`)! - result.get(`UNIT\u001F${right}`)!
 );
 
 describe('item dataset variable positions', () => {
+  it('reports unknown pages and invalid derivation links instead of silently guessing', () => {
+    const { diagnostics } = buildItemDatasetVariablePositions('UNIT', [], undefined, JSON.stringify({
+      variableCodings: [
+        { id: 'BASE', sourceType: 'BASE' },
+        { id: 'MISSING', sourceType: 'COPY_VALUE', deriveSources: ['ABSENT'] },
+        { id: 'CYCLE', sourceType: 'COPY_VALUE', deriveSources: ['CYCLE'] },
+        { id: 'CHILD', sourceType: 'COPY_VALUE', deriveSources: ['CYCLE'] }
+      ]
+    }));
+    expect(diagnostics).toHaveLength(4);
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      { variableId: 'BASE', reason: 'missing-page' },
+      { variableId: 'MISSING', reason: 'unresolved-source' },
+      { variableId: 'CYCLE', reason: 'cyclic-source' },
+      { variableId: 'CHILD', reason: 'cyclic-source' }
+    ]));
+  });
+
+  it('has no fallback diagnostics for pages and derivations with valid sources', () => {
+    const { diagnostics } = buildItemDatasetVariablePositions('UNIT', [{ id: 'BASE', page: '0' }], undefined, JSON.stringify({
+      variableCodings: [
+        { id: 'BASE', sourceType: 'BASE' },
+        { id: 'DERIVED', sourceType: 'COPY_VALUE', deriveSources: ['BASE'] }
+      ]
+    }));
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('limits diagnostics to exported variables and hidden sources that contribute to them', () => {
+    const { diagnostics } = buildItemDatasetVariablePositions('UNIT', [], undefined, JSON.stringify({
+      variableCodings: [
+        { id: 'STIMULUS', sourceType: 'BASE_NO_VALUE' },
+        { id: 'UNUSED', sourceType: 'BASE' },
+        { id: 'SOURCE', sourceType: 'BASE' },
+        { id: 'DERIVED', sourceType: 'COPY_VALUE', deriveSources: ['SOURCE'] }
+      ]
+    }), ['DERIVED']);
+    expect(diagnostics).toEqual([{ variableId: 'SOURCE', reason: 'missing-page' }]);
+  });
+
   it('orders by numeric page, section and natural variable name independently of scheme order', () => {
     const ids = ['V10', 'V2', 'V1', 'V3', 'NO_PAGE'];
     const result = positions(ids.map(id => ({ id, sourceType: 'BASE' })), [
@@ -30,7 +70,7 @@ describe('item dataset variable positions', () => {
   });
 
   it('uses natural names for text definitions and non-numeric Unit page IDs', () => {
-    const result = buildItemDatasetVariablePositions('UNIT', [
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: 'V10', alias: 'V10', page: 'last' },
       { id: 'V2', alias: 'V2', page: 'first' }
     ], 'Text definition');
@@ -40,7 +80,7 @@ describe('item dataset variable positions', () => {
   it.each([undefined, JSON.stringify({
     variableCodings: [{ id: 'V10', sourceType: 'BASE' }, { id: 'V2', sourceType: 'BASE' }]
   })])('uses IDs and Unit pages when neither Unit nor scheme supplies aliases (%s)', codingScheme => {
-    const result = buildItemDatasetVariablePositions('UNIT', [
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: 'V10', page: '0' }, { id: 'V2', page: '1' }
     ], undefined, codingScheme);
     expect(sequence(result, ['V2', 'V10'])).toEqual(['V10', 'V2']);
@@ -56,9 +96,9 @@ describe('item dataset variable positions', () => {
       { id: 'B1', alias: 'V1', page: '1' },
       { id: 'B2', alias: 'V2', page: '0' }
     ];
-    const result = buildItemDatasetVariablePositions('UNIT', mapped, definition);
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', mapped, definition);
     expect(sequence(result, ['V1', 'V2'])).toEqual(definition?.startsWith('{') ? ['V1', 'V2'] : ['V2', 'V1']);
-    const overridden = buildItemDatasetVariablePositions('UNIT', mapped, definition, JSON.stringify({
+    const { positions: overridden } = buildItemDatasetVariablePositions('UNIT', mapped, definition, JSON.stringify({
       variableCodings: [
         { id: 'B1', sourceType: 'BASE', page: '1' },
         { id: 'B2', sourceType: 'BASE', page: '3' }
@@ -113,7 +153,7 @@ describe('item dataset variable positions', () => {
   });
 
   it('registers mapped variables without schemes and retains layout-only sources', () => {
-    const result = buildItemDatasetVariablePositions('UNIT', [{ id: 'internal', alias: 'V10' }], JSON.stringify({
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [{ id: 'internal', alias: 'V10' }], JSON.stringify({
       pages: [{ sections: [{ elements: [{ id: 'V10' }, { id: 'SOURCE2' }] }] }]
     }));
     expect(result.get('UNIT\u001Finternal')).toBe(result.get('UNIT\u001FV10'));
@@ -122,7 +162,7 @@ describe('item dataset variable positions', () => {
 
   it('uses mapped aliases for existing scheme IDs while retaining derivation links and page overrides', () => {
     const mapped = [{ id: 'B1', alias: 'V1' }, { id: 'B2', alias: 'V2' }, { id: 'D', alias: 'DERIVED' }];
-    const result = buildItemDatasetVariablePositions('UNIT', mapped, JSON.stringify({
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', mapped, JSON.stringify({
       pages: [
         { sections: [{ elements: [{ id: 'V2' }] }] },
         { sections: [{ elements: [{ id: 'V1' }] }] }
@@ -141,7 +181,7 @@ describe('item dataset variable positions', () => {
   });
 
   it('retains scheme and mapped aliases for layout, source links and response positions', () => {
-    const result = buildItemDatasetVariablePositions('UNIT', [
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: 'A', alias: 'UNIT_ALIAS' },
       { id: 'A', alias: 'EXPORT_ALIAS' }
     ], JSON.stringify({
@@ -164,7 +204,7 @@ describe('item dataset variable positions', () => {
   });
 
   it('rejects aliases shared by different IDs across Unit and scheme declarations', () => {
-    const result = buildItemDatasetVariablePositions('UNIT', [
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: 'A', alias: 'UNIT_A' }, { id: 'B', alias: 'SHARED' }
     ], undefined, JSON.stringify({
       variableCodings: [
@@ -186,7 +226,7 @@ describe('item dataset variable positions', () => {
   });
 
   it.each([false, true])('preserves ID precedence for sources and alias precedence for layout (%s)', schemeAliases => {
-    const result = buildItemDatasetVariablePositions('UNIT', [
+    const { positions: result } = buildItemDatasetVariablePositions('UNIT', [
       { id: '04', alias: '02' }, { id: '07', alias: '04' }
     ], JSON.stringify({
       pages: [

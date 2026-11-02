@@ -1,4 +1,6 @@
-import { Inject, BadRequestException, Injectable } from '@nestjs/common';
+import {
+  Inject, BadRequestException, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as cheerio from 'cheerio';
 import { In, Repository } from 'typeorm';
@@ -48,9 +50,16 @@ interface UnitPositionMetadata {
   variables: Array<{ id: string; alias?: string; page?: string }>;
 }
 
+const variableOrderFallbackMessages = {
+  'missing-page': 'Keine Seitenposition verfügbar; die Reihenfolge wird anhand der Variablennamen geschätzt.',
+  'unresolved-source': 'Quellvariablen fehlen oder sind mehrdeutig; die eigene Seitenposition oder der Variablenname bestimmt die Reihenfolge.',
+  'cyclic-source': 'Die Ableitung enthält einen Zirkelbezug oder hängt davon ab; die eigene Seitenposition oder der Variablenname bestimmt die Reihenfolge.'
+};
+
 @Injectable()
 export class ItemDatasetMetadataService {
   private static readonly yieldEveryItems = 50;
+  private readonly logger = new Logger(ItemDatasetMetadataService.name);
 
   constructor(
     @InjectRepository(Unit)
@@ -350,11 +359,12 @@ export class ItemDatasetMetadataService {
     return result;
   }
 
-  async getVariablePositions(
+  async getVariableOrder(
     workspaceId: number,
     columns: ItemDatasetColumn[],
     checkCancellation?: () => Promise<void>
-  ): Promise<Map<string, number>> {
+  ): Promise<{ positions: Map<string, number>; warnings: ItemDatasetMappingWarningDto[] }> {
+    if (!columns.length) return { positions: new Map(), warnings: [] };
     const units = new Map<string, ItemDatasetColumn[]>();
     for (const column of columns) {
       const unitColumns = units.get(column.unitName) || [];
@@ -380,6 +390,7 @@ export class ItemDatasetMetadataService {
     });
     const byId = new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
     const result = new Map<string, number>();
+    const warnings: ItemDatasetMappingWarningDto[] = [];
     for (const [unitName, unitColumns] of units) {
       await checkCancellation?.();
       try {
@@ -387,16 +398,30 @@ export class ItemDatasetMetadataService {
         const codingScheme = this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)
           .map(fileId => byId.get(fileId))
           .find(data => data !== undefined);
-        const positions = buildItemDatasetVariablePositions(
+        const { positions, diagnostics } = buildItemDatasetVariablePositions(
           unitName,
           [
             ...(metadata?.variables || []),
             ...unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId }))
           ],
           metadata?.definition ?? byId.get(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`)),
-          codingScheme
+          codingScheme,
+          unitColumns.map(column => column.sourceVariableId)
         );
         positions.forEach((position, key) => result.set(key, position));
+        for (const diagnostic of diagnostics) {
+          const column = unitColumns.find(entry => entry.sourceVariableId === diagnostic.variableId);
+          warnings.push({
+            code: 'variable-order-fallback',
+            unitId: normalizeItemDatasetUnitId(unitName),
+            variableId: column?.variableId || diagnostic.variableId,
+            message: `${unitName}/${column?.variableId || diagnostic.variableId}: ${variableOrderFallbackMessages[diagnostic.reason]}`,
+            suggestedAction: 'Seitenangaben und Quellvariablen in den Aufgaben- und Kodierschemadaten prüfen. Die MNR-Zuordnung kann von der tatsächlichen Testreihenfolge abweichen.'
+          });
+        }
+        if (diagnostics.length) {
+          this.logger.warn(`${unitName}: Variablenreihenfolge für ${diagnostics.length} Variable(n) geschätzt; Details in den Item-Metadatenwarnungen.`);
+        }
       } catch (error) {
         throw new BadRequestException(
           `Variablenreihenfolge für '${unitName}' konnte nicht gelesen werden: ${(error as Error).message}`
@@ -404,7 +429,7 @@ export class ItemDatasetMetadataService {
       }
       await this.yieldToEventLoop();
     }
-    return result;
+    return { positions: result, warnings: this.uniqueWarnings(warnings) };
   }
 
   private async getUnitPositionMetadata(

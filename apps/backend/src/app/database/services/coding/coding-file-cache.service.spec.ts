@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
 
 describe('CodingFileCacheService', () => {
   function createRepository(files: Record<string, Partial<FileUpload>>) {
@@ -257,5 +258,40 @@ describe('CodingFileCacheService', () => {
 
     expect(first).toBe(second);
     expect(repository.findOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps result-export pages and item order aligned for aliases, page zero and overrides', async () => {
+    const layout = JSON.stringify({
+      pages: [
+        { alwaysVisible: true, sections: [{ elements: [{ id: 'STIMULUS' }] }] },
+        { sections: [{ elements: [{ id: 'B1', alias: 'V1' }] }] },
+        { sections: [{ elements: [{ id: 'B2', alias: 'V2' }] }] },
+        { sections: [{ elements: [{ id: 'B3', alias: 'V3' }] }] }
+      ]
+    });
+    const scheme = JSON.stringify({
+      variableCodings: [
+        {
+          id: 'B1', alias: 'V1', sourceType: 'BASE', page: '4'
+        },
+        {
+          id: 'B2', alias: 'V2', sourceType: 'BASE', page: '0'
+        },
+        {
+          id: 'B3', alias: 'V3', sourceType: 'BASE', page: '-1'
+        }
+      ]
+    });
+    const cache = new CodingFileCacheService(createRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', layout),
+      'UNIT.VOCS': createFile('UNIT.VOCS', scheme)
+    }));
+    const pages = await cache.loadVoudData('UNIT', 1);
+    const { positions } = buildItemDatasetVariablePositions('UNIT', [], layout, scheme);
+
+    expect(['V1', 'V2', 'V3'].map(id => pages.get(id))).toEqual(['3', '0', '2']);
+    expect(pages.has('STIMULUS')).toBe(false);
+    expect(positions.get('UNIT\u001FV2')).toBeLessThan(positions.get('UNIT\u001FV1')!);
+    expect(positions.get('UNIT\u001FV3')).toBeLessThan(positions.get('UNIT\u001FV1')!);
   });
 });

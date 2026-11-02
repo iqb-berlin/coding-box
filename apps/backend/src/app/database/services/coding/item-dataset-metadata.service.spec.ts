@@ -61,6 +61,18 @@ const profile: ItemDatasetProfile = {
 const design = { units: new Map([['UNIT', { unitId: 'UNIT', order: 0, testletKey: 'T1' }]]) };
 
 describe('ItemDatasetMetadataService variable positions', () => {
+  it('returns actionable warnings for an estimated order using the public response alias', async () => {
+    const { positions, warnings } = await createService([]).getVariableOrder(7, [column('B1', 0, 'PUBLIC')]);
+    expect(positions.get('UNIT\u001FPUBLIC')).toBe(positions.get('UNIT\u001FB1'));
+    expect(warnings).toEqual([expect.objectContaining({
+      code: 'variable-order-fallback',
+      unitId: 'UNIT',
+      variableId: 'PUBLIC',
+      message: expect.stringContaining('anhand der Variablennamen geschätzt'),
+      suggestedAction: expect.stringContaining('MNR-Zuordnung')
+    })]);
+  });
+
   it.each(['conventional resource', 'referenced resource', 'inline definition'])(
     'keeps trailing NR with %s even when natural names have a different order', async format => {
       const layout = definition(['Z', 'A']);
@@ -80,7 +92,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
         file_id: 'SHARED-LAYOUT.VOUD', file_type: 'Resource', data: layout
       }];
       const columns = [column('Z', 0), column('A', 1)];
-      const variablePositions = await createService(files).getVariablePositions(7, columns);
+      const { positions: variablePositions } = await createService(files).getVariableOrder(7, columns);
       const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
         [columns[0].key, { status: 5, code: 1, score: 1 }],
         [columns[1].key, { status: 1, code: null, score: null }]
@@ -90,15 +102,15 @@ describe('ItemDatasetMetadataService variable positions', () => {
   );
 
   it('keeps conventional resource lookup when Unit XML metadata is unavailable', async () => {
-    const positions = await createService([{
+    const { positions } = await createService([{
       file_id: 'UNIT.VOUD', file_type: 'Resource', data: definition(['Z', 'A'])
-    }]).getVariablePositions(7, [column('Z', 0), column('A', 1)]);
+    }]).getVariableOrder(7, [column('Z', 0), column('A', 1)]);
     expect(positions.get('UNIT\u001FZ')).toBeLessThan(positions.get('UNIT\u001FA')!);
   });
 
   it.each(['shared-scheme.vocs', 'shared-scheme.xml', 'shared-scheme'])(
     'uses the referenced coding scheme %s for page overrides and Unit aliases', async reference => {
-      const positions = await createService([{
+      const { positions } = await createService([{
         file_id: 'UNIT',
         file_type: 'Unit',
         data: `<Unit><Metadata><Id>UNIT</Id></Metadata>
@@ -115,7 +127,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
             { id: 'B2', sourceType: 'BASE', page: '1' }
           ]
         })
-      }]).getVariablePositions(7, [column('B1', 0, 'V1'), column('B2', 1, 'V2')]);
+      }]).getVariableOrder(7, [column('B1', 0, 'V1'), column('B2', 1, 'V2')]);
       expect(positions.get('UNIT\u001FV2')).toBeLessThan(positions.get('UNIT\u001FV1')!);
     }
   );
@@ -126,7 +138,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
       `<Definition player="text-player"><![CDATA[${layout}]]></Definition>` :
       '<DefinitionRef player="text-player">shared-layout.xml</DefinitionRef>';
     const columns = [column('Z', 0), column('A', 1)];
-    const variablePositions = await createService([{
+    const { positions: variablePositions } = await createService([{
       file_id: 'UNIT',
       file_type: 'Unit',
       data: `<Unit><Metadata><Id>UNIT</Id><Label>XML layout</Label></Metadata>${unitDefinition}
@@ -137,7 +149,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
       </Unit>`
     }, {
       file_id: 'SHARED-LAYOUT.XML', file_type: 'Resource', data: layout
-    }]).getVariablePositions(7, columns);
+    }]).getVariableOrder(7, columns);
     const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
       [columns[0].key, { status: 5, code: 1, score: 1 }],
       [columns[1].key, { status: 1, code: null, score: null }]
@@ -148,7 +160,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
   it.each(['UNIT', 'schemes/unit', 'schemes/unit.vocs'])(
     'retains the derivation boundary for coding scheme reference %s', async reference => {
       const columns = [column('V1', 0), column('D', 1), column('V10', 2)];
-      const variablePositions = await createService([{
+      const { positions: variablePositions } = await createService([{
         file_id: 'UNIT',
         file_type: 'Unit',
         data: `<Unit><Metadata><Id>UNIT</Id><Label>Derived item</Label></Metadata>
@@ -168,7 +180,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
             { id: 'D', sourceType: 'COPY_VALUE', deriveSources: ['V1'] }
           ]
         })
-      }]).getVariablePositions(7, columns);
+      }]).getVariableOrder(7, columns);
       const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
         [columns[0].key, { status: 5, code: 1, score: 1 }],
         [columns[1].key, { status: 5, code: 1, score: 1 }],
@@ -204,7 +216,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
     const derived = column('D', 1);
     const later = column('B2', 2, 'V2');
     const columns = hiddenSource ? [derived, later] : [source, derived, later];
-    const variablePositions = await createService(files).getVariablePositions(7, columns);
+    const { positions: variablePositions } = await createService(files).getVariableOrder(7, columns);
     expect(variablePositions.get(source.key)).toBe(variablePositions.get('UNIT\u001FB1'));
     const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
       [source.key, { status: 5, code: 1, score: 1 }],
@@ -217,7 +229,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
   it.each([undefined, '', '   '])('retains the scheme alias for a hidden source with Unit alias %p', async unitAlias => {
     const aliasAttribute = unitAlias === undefined ? '' : ` alias="${unitAlias}"`;
     const columns = [column('V1', 0), { ...column('D2', 1), isDerived: true }, column('V2', 2)];
-    const variablePositions = await createService([{
+    const { positions: variablePositions } = await createService([{
       file_id: 'UNIT',
       file_type: 'Unit',
       data: `<Unit><Metadata><Id>UNIT</Id><Label>Hidden source alias</Label></Metadata>
@@ -240,7 +252,7 @@ describe('ItemDatasetMetadataService variable positions', () => {
           { id: 'D2', sourceType: 'COPY_VALUE', deriveSources: ['D1'] }
         ]
       })
-    }]).getVariablePositions(7, columns);
+    }]).getVariableOrder(7, columns);
     const cells = new ItemDatasetCellResolver().resolve(columns, design, new Map([
       ['UNIT\u001FV1', { status: 5, code: 1, score: 1 }],
       ['UNIT\u001FHIDDEN', { status: 5, code: 1, score: 1 }],

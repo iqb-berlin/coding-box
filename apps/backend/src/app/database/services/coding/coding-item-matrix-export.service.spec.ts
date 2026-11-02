@@ -2146,14 +2146,19 @@ describe('CodingItemMatrixExportService', () => {
     const options = await service.getItemDatasetOptions(7);
 
     expect(options.mappingIssues).toEqual([]);
-    expect(options.mappingWarnings).toEqual([
+    expect(options.mappingWarnings).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: 'vomd-fallback-used',
         unitId: 'UNIT1',
         itemId: 'ITEM1',
         sourceFile: 'UNIT1.vomd'
       })
-    ]);
+    ]));
+    expect(options.mappingWarnings).toContainEqual(expect.objectContaining({
+      code: 'variable-order-fallback',
+      unitId: 'UNIT1',
+      variableId: 'VAR1'
+    }));
     expect(options.items).toHaveLength(1);
   });
 

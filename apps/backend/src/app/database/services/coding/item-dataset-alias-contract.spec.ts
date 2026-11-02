@@ -105,7 +105,7 @@ describe('item dataset aliases across workspace metadata and variable positions'
     ]);
     const design = { units: new Map([['UNIT', { unitId: 'UNIT', order: 0, testletKey: 'T1' }]]) };
     const resolver = new ItemDatasetCellResolver();
-    const variablePositions = await metadata.getVariablePositions(7, columns);
+    const { positions: variablePositions } = await metadata.getVariableOrder(7, columns);
     expect(variablePositions.get('UNIT\u001FHIDDEN')).toBe(variablePositions.get(`UNIT\u001F${unitAlias}`));
     expect(resolver.resolve(columns, design, values, profile, sources, { variablePositions }).map(cell => cell.code))
       .toEqual([1, 1, -96]);
