@@ -27,7 +27,7 @@ const numericPosition = (value: unknown): number | undefined => {
 /** Static positions for MNR classification, independent of item and response order. */
 export function buildItemDatasetVariablePositions(
   unitName: string,
-  mappedVariables: Array<{ id: string; alias: string }>,
+  mappedVariables: Array<{ id: string; alias: string; page?: string }>,
   definition?: string,
   codingScheme?: string
 ): Map<string, number> {
@@ -50,7 +50,7 @@ export function buildItemDatasetVariablePositions(
     if (existing) {
       existing.alias = variable.alias || existing.alias;
     } else {
-      variables.set(variable.id, { ...variable, sources: [] });
+      variables.set(variable.id, { id: variable.id, alias: variable.alias, sources: [] });
     }
   }
   const aliases = new Map<string, string | null>();
@@ -62,19 +62,31 @@ export function buildItemDatasetVariablePositions(
     variables.has(reference) ? reference : aliases.get(reference) || undefined
   );
   if (definition) {
-    const pages = resolveVariablePageMap(definition);
-    const [locations] = extractVariableLocation([{ definition }]);
-    for (const location of locations.variable_pages || []) {
-      if (location.variable_page_always_visible === true) continue;
-      const id = aliases.get(location.variable_ref) || resolve(location.variable_ref) || location.variable_ref;
-      const variable = variables.get(id) || { id, sources: [] };
-      // Use the same scroll-page numbering as the versioned result export.
-      const page = numericPosition(pages.get(location.variable_ref));
-      if (variable.page === undefined && page !== undefined) {
-        variable.page = page;
-        variable.section = numericPosition(location.variable_path.sections);
+    try {
+      const pages = resolveVariablePageMap(definition);
+      const [locations] = extractVariableLocation([{ definition }]);
+      for (const location of locations.variable_pages || []) {
+        if (location.variable_page_always_visible === true) continue;
+        const id = aliases.get(location.variable_ref) || resolve(location.variable_ref) || location.variable_ref;
+        const variable = variables.get(id) || { id, sources: [] };
+        // Use the same scroll-page numbering as the versioned result export.
+        const page = numericPosition(pages.get(location.variable_ref));
+        if (variable.page === undefined && page !== undefined) {
+          variable.page = page;
+          variable.section = numericPosition(location.variable_path.sections);
+        }
+        variables.set(id, variable);
       }
-      variables.set(id, variable);
+    } catch (error) {
+      // Definitions are player-specific; text/XML has no Aspect JSON layout.
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+  }
+  for (const mapped of mappedVariables) {
+    const page = numericPosition(mapped.page);
+    const variable = variables.get(mapped.id);
+    if (variable && variable.page === undefined && page !== undefined && page >= 0 && Number.isInteger(page)) {
+      variable.page = page;
     }
   }
   for (const coding of codings) {

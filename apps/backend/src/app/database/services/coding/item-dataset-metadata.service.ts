@@ -45,7 +45,7 @@ interface UnitPositionMetadata {
   definition?: string;
   definitionRef?: string;
   codingSchemeRef?: string;
-  variables: Array<{ id: string; alias: string }>;
+  variables: Array<{ id: string; alias: string; page?: string }>;
 }
 
 @Injectable()
@@ -370,7 +370,9 @@ export class ItemDatasetMetadataService {
       if (metadata?.definition === undefined) {
         fileIds.add(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`));
       }
-      fileIds.add(this.normalizeResourceRef(metadata?.codingSchemeRef || `${unitName}.VOCS`));
+      for (const fileId of this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)) {
+        fileIds.add(fileId);
+      }
     }
     const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
@@ -382,6 +384,9 @@ export class ItemDatasetMetadataService {
       await checkCancellation?.();
       try {
         const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
+        const codingScheme = this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)
+          .map(fileId => byId.get(fileId))
+          .find(data => data !== undefined);
         const positions = buildItemDatasetVariablePositions(
           unitName,
           [
@@ -389,7 +394,7 @@ export class ItemDatasetMetadataService {
             ...unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId }))
           ],
           metadata?.definition ?? byId.get(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`)),
-          byId.get(this.normalizeResourceRef(metadata?.codingSchemeRef || `${unitName}.VOCS`))
+          codingScheme
         );
         positions.forEach((position, key) => result.set(key, position));
       } catch (error) {
@@ -427,7 +432,7 @@ export class ItemDatasetMetadataService {
         const variable = $(element);
         const id = String(variable.attr('id') || variable.attr('alias') || '').trim();
         const alias = String(variable.attr('alias') || id).trim();
-        if (id) variables.push({ id, alias });
+        if (id) variables.push({ id, alias, page: variable.attr('page') });
       });
       result.set(unitId, {
         definition: definition.length ? definition.text() : undefined,
@@ -441,6 +446,11 @@ export class ItemDatasetMetadataService {
 
   private normalizeResourceRef(reference: string): string {
     return reference.trim().replace(/\\/g, '/').split('/').pop()!.toUpperCase();
+  }
+
+  private getCodingSchemeResourceIds(reference: string): string[] {
+    const fileId = this.normalizeResourceRef(reference);
+    return fileId.endsWith('.VOCS') ? [fileId] : [fileId, `${fileId}.VOCS`];
   }
 
   private async getUnitAliases(
