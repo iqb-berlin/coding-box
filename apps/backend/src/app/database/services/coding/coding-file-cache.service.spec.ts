@@ -260,6 +260,26 @@ describe('CodingFileCacheService', () => {
     expect(repository.findOne).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps result-export pages and item sections aligned for repaired legacy JSON', async () => {
+    const layout = JSON.stringify({
+      pages: [{
+        sections: [
+          { elements: [{ id: 'Z', text: 'legacy text' }] },
+          { elements: [{ id: 'A' }] }
+        ]
+      }]
+    }).replace('legacy text', 'legacy\ntext');
+    const cache = new CodingFileCacheService(createRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', layout)
+    }));
+    const pages = await cache.loadVoudData('UNIT', 1);
+    const { positions, diagnostics } = buildItemDatasetVariablePositions('UNIT', [], layout);
+
+    expect([...pages]).toEqual([['Z', '0'], ['A', '0']]);
+    expect(positions.get('UNIT\u001FZ')).toBeLessThan(positions.get('UNIT\u001FA')!);
+    expect(diagnostics).toEqual([]);
+  });
+
   it('keeps result-export pages and item order aligned for aliases, page zero and overrides', async () => {
     const layout = JSON.stringify({
       pages: [

@@ -1,7 +1,8 @@
 import type { VariableCodingData } from '@iqbspecs/coding-scheme/coding-scheme.interface';
 import { ItemDatasetResponseKey } from '../../../../../../../api-dto/coding/item-dataset-key';
-import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
-import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
+import { extractVariableLocationsFromDefinition } from '../../../utils/voud/extractVariableLocation';
+import { resolveVariablePageMapFromDefinition } from '../../../utils/voud/resolveVariablePageMap';
+import { parseUnitDefinition } from '../../../utils/voud/parse-unit-definition.util';
 import {
   codingSchemePageIndex, parseCodingSchemeVariables, parseVariablePage
 } from '../../../utils/voud/coding-scheme-metadata.util';
@@ -75,12 +76,16 @@ function assignPages(
 ): void {
   if (definition) {
     try {
-      const pages = resolveVariablePageMap(definition);
-      const [locations] = extractVariableLocation([{ definition }]);
-      for (const location of locations.variable_pages || []) {
+      const parsedDefinition = parseUnitDefinition(definition);
+      const pages = resolveVariablePageMapFromDefinition(parsedDefinition);
+      const locations = extractVariableLocationsFromDefinition(parsedDefinition);
+      for (const location of locations) {
         if (location.variable_page_always_visible === true) continue;
         // Layouts use public aliases; derivation sources below use internal IDs first.
-        const id = aliases.get(location.variable_ref) || location.variable_ref;
+        const aliasId = aliases.get(location.variable_ref);
+        // Ambiguous aliases must not become synthetic IDs that validate source links.
+        if (aliasId === null) continue;
+        const id = aliasId ?? location.variable_ref;
         const variable = variables.get(id) || { id, aliases: new Set<string>(), sources: [] };
         const page = parseVariablePage(pages.get(location.variable_ref));
         if (variable.page === undefined && page !== undefined) {
