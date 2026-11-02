@@ -352,3 +352,84 @@ Anfrage nun erneut geprüft. Weitere Tests prüfen Abbruch zwischen 404 und
 Legacy-Rückfall sowie verspätete beziehungsweise entprellte Opener-Nachrichten
 nach Workspace-Wechseln. Das abschließende Eigenreview hat keine offenen
 Befunde. Remote-CI und fachliche Abnahme bleiben separat am PR zu prüfen.
+
+## Speicherabläufe, Übersetzungen und Frame-Namen (01.11.2026)
+
+Basis ist `origin/develop` bei `a4de123ca949e2a3215ad11f15f1e720dd2e9675`.
+Der Jobdefinitionsdialog delegiert Einzeljob-Speicherung, Definitionsanlage,
+Review-Einreichung, Änderungen mit Refresh-Vorschau und Bulk-Erstellung an
+`JobDefinitionSaveFacade`. Formularaufbau, Auswahl und Payload-Ableitung bleiben
+in ihren bisherigen Besitzern. Die bestehende Persistence-Schicht übernimmt
+weiterhin die Job-Speicherung mit anschließender Kodiererzuweisung und deren
+Teilfehlerrückgabe.
+
+Die Fassade gehört zur Lebensdauer des Dialogs und stellt ihren Speicherzustand
+als schreibgeschütztes Signal bereit. Ausstehende Requests enden bei Zerstörung
+oder Arbeitsbereichswechsel; asynchrone Fortsetzungen prüfen zusätzlich den
+aktuellen Kontext einschließlich A → B → A. Eigene Bestätigungsdialoge werden
+bei Kontextabbruch geschlossen. Recovery-Daten werden nach erfolgreichem
+Definitionsabschluss entfernt und bleiben bei Fehler oder Abbruch erhalten.
+
+Die flache Testergebnistabelle verwendet für Beschriftungen, Hilfetexte,
+Dialogtitel und Rückmeldungen die deutsche Übersetzungsdatei. Platzhalter wie
+Antwortname, Aufgabennummer und Backend-Warnungen werden als Parameter
+übergeben. Der Auth-Interceptor nutzt dieselbe Übersetzungslösung für
+Berechtigungs- und Verfügbarkeitsmeldungen. Er löst den Übersetzungsdienst erst
+im Fehlerfall auf, damit dessen eigener HTTP-Ladevorgang beim Initialisieren
+der Standardsprache keine zyklische Abhängigkeit erzeugt.
+
+Aufgabenplayer und Review-Vorschau haben übersetzte Frame-Titel; mehrere
+Review-Vorschauen erhalten unterscheidbare Nummern. Eine Template-Lintregel
+verlangt für Frames eine zugängliche Bezeichnung. Ihre Regressionen prüfen
+externe und Inline-Templates mit fehlenden, leeren, statischen und gebundenen
+Bezeichnungen. Der Player-Test prüft den Titel auch nach einem Sprachwechsel.
+
+### Validierung dieses Pakets
+
+Alle lokalen Prüfungen laufen nacheinander unter Node 24.22.1 über die lokale
+Nx-Installation. Der neue Fassadentest prüft insbesondere doppelte Saves,
+Teilfehlerrückgaben bei Kodiererzuweisung, Fehler mit Retry, direkte gegenüber
+strukturellen Definitionsänderungen, Bestätigung/Abbruch, Kontextwechsel und
+Zerstörung sowie die Parameter der Bulk-Erstellung. Bestehende Komponententests
+prüfen die Integration und Payloads weiterhin.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx run frontend:test-quality-gates` | 56 Prüfungen bestanden. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | 328 Suites, 3.714 Tests bestanden; 83,15 % Zeilen und 81,08 % Branches. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/manual-preparation.cy.ts,cypress/zoneless/test-results-view.cy.ts,cypress/zoneless/replay-lifecycle.cy.ts,cypress/zoneless/app.cy.ts --skipNxCache` | 33/33 Fälle in vier Suites bestanden. |
+| `npx nx e2e frontend --configuration=ci --port=cypress-auto --browser=chrome --spec=cypress/zoneless/info-dialogs.cy.ts --skipNxCache` | 4/4 Fälle bestanden; insgesamt 37 Browserfälle ohne Retries oder übersprungene Fälle. |
+| `npx nx run frontend:zoneless-approval --skipNxCache` | Bestanden; 422 Quelldateien und 9.450 Einträge. |
+
+Die erste Remote-Pipeline #106791 zeigte eine fehlende Übersetzungsinitialisierung
+im isolierten Komponenten-Browsertest der flachen Ergebnistabelle. Der Test lädt
+nun die echte deutsche Übersetzungsdatei und aktiviert `de`, wie die übrigen
+übersetzten Komponentenfälle. Die Prüfung des sichtbaren Labels „Antwortstatus“
+und des daraus entstehenden Filterrequests bleibt erhalten.
+Der anschließende vollständige lokale Lauf von `frontend:component-test`
+unter Chrome bestand 37/37 Fälle in elf Specs ohne Retries oder übersprungene
+Fälle. Ein vorheriger lokaler Gesamtlauf war nach dem erfolgreichen Tabellenfall
+mit `ENOSPC` beim Schreiben von Screenshots abgebrochen.
+
+Die Folgepipeline [#106836](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/106836)
+bestand 17 von 18 Jobs einschließlich der Komponenten-Browsertests. Im
+E2E-Teil von `test-browser` bestanden 198 von 201 Fällen; drei Testcenter-Fälle
+scheiterten am 5-Sekunden-Budget für den Auth-Start beziehungsweise an einer
+in Electron bei `opacity: 0` stehenden Einblendanimation des Importformulars.
+Der Test wartet nun bis zu 30 Sekunden auf den Auth-Request und beendet nur
+endliche Animationen am Formular und seinen Vorfahren, entsprechend dem
+vorhandenen Harness der manuellen Vorbereitung. Der erste Importfall hält
+eine Einblendanimation ausdrücklich bei `opacity: 0` an und prüft damit diese
+Absicherung. Netzwerkverzögerungen, Fortschrittsanzeige, Fehler und erneuter
+Upload werden weiterhin ohne Retries geprüft. Der gezielte lokale Lauf mit
+Node 24.22.1 und Electron bestand 12/12 Fälle ohne Retries oder übersprungene
+Fälle gegen das vorhandene Produktionsartefakt (`frontend:e2e --configuration=ci
+--browser=electron --spec=cypress/zoneless/testcenter-import.cy.ts --skip-nx-cache`).
+Ein neuer Remote-Lauf steht aus.
+
+Remote-CI, Deployment und fachliche Abnahme sind separate Nachweise. Die
+Browserprüfungen dieses Pakets verwenden synthetische API-Fixtures; sie belegen
+keine reale Backend-Persistenz oder Verbindung zu Keycloak beziehungsweise
+Testcenter. Bereits dokumentierte fachliche Abnahmen bleiben erhalten.

@@ -76,7 +76,9 @@ describe('Replay responsibilities without Zone.js', () => {
   });
 
   function frame() {
-    return cy.get<HTMLIFrameElement>('coding-box-unit-player iframe').its('0.contentDocument.body').should('not.be.empty');
+    return cy.get<HTMLIFrameElement>('coding-box-unit-player iframe')
+      .should('have.attr', 'title', 'Aufgabenplayer')
+      .its('0.contentDocument.body').should('not.be.empty');
   }
 
   function visitBooklet(): void {
