@@ -139,4 +139,68 @@ describe('item dataset variable positions', () => {
       expect(result.get(`UNIT\u001F${variable.id}`)).toBe(result.get(`UNIT\u001F${variable.alias}`));
     }
   });
+
+  it('retains scheme and mapped aliases for layout, source links and response positions', () => {
+    const result = buildItemDatasetVariablePositions('UNIT', [
+      { id: 'A', alias: 'UNIT_ALIAS' },
+      { id: 'A', alias: 'EXPORT_ALIAS' }
+    ], JSON.stringify({
+      pages: [
+        { sections: [{ elements: [{ id: 'SCHEME_ALIAS' }] }] },
+        { sections: [{ elements: [{ id: 'B' }] }] }
+      ]
+    }), JSON.stringify({
+      variableCodings: [
+        { id: 'A', alias: 'SCHEME_ALIAS', sourceType: 'BASE' },
+        { id: 'B', sourceType: 'BASE' },
+        { id: 'D1', sourceType: 'COPY_VALUE', deriveSources: ['SCHEME_ALIAS'] },
+        { id: 'D2', sourceType: 'COPY_VALUE', deriveSources: ['UNIT_ALIAS'] }
+      ]
+    }));
+    for (const alias of ['SCHEME_ALIAS', 'UNIT_ALIAS', 'EXPORT_ALIAS']) {
+      expect(result.get(`UNIT\u001F${alias}`)).toBe(result.get('UNIT\u001FA'));
+    }
+    expect(sequence(result, ['B', 'D2', 'A', 'D1'])).toEqual(['A', 'D1', 'D2', 'B']);
+  });
+
+  it('rejects aliases shared by different IDs across Unit and scheme declarations', () => {
+    const result = buildItemDatasetVariablePositions('UNIT', [
+      { id: 'A', alias: 'UNIT_A' }, { id: 'B', alias: 'SHARED' }
+    ], undefined, JSON.stringify({
+      variableCodings: [
+        {
+          id: 'A', alias: 'SHARED', sourceType: 'BASE', page: '2'
+        },
+        {
+          id: 'B', alias: 'SCHEME_B', sourceType: 'BASE', page: '3'
+        },
+        {
+          id: 'D', sourceType: 'COPY_VALUE', deriveSources: ['SHARED'], page: '1'
+        }
+      ]
+    }));
+    expect(result.has('UNIT\u001FSHARED')).toBe(false);
+    expect(sequence(result, ['B', 'A', 'D'])).toEqual(['D', 'A', 'B']);
+    expect(result.get('UNIT\u001FUNIT_A')).toBe(result.get('UNIT\u001FA'));
+    expect(result.get('UNIT\u001FSCHEME_B')).toBe(result.get('UNIT\u001FB'));
+  });
+
+  it.each([false, true])('preserves ID precedence for sources and alias precedence for layout (%s)', schemeAliases => {
+    const result = buildItemDatasetVariablePositions('UNIT', [
+      { id: '04', alias: '02' }, { id: '07', alias: '04' }
+    ], JSON.stringify({
+      pages: [
+        { sections: [{ elements: [{ id: '02' }] }] },
+        { sections: [{ elements: [{ id: '04' }] }] }
+      ]
+    }), JSON.stringify({
+      variableCodings: [
+        { id: '04', alias: schemeAliases ? '02' : undefined, sourceType: 'BASE' },
+        { id: '07', alias: schemeAliases ? '04' : undefined, sourceType: 'BASE' },
+        { id: 'D', sourceType: 'COPY_VALUE', deriveSources: ['04'] }
+      ]
+    }));
+    expect(sequence(result, ['04', 'D', '02'])).toEqual(['02', 'D', '04']);
+    expect(result.get('UNIT\u001F04')).toBe(result.get('UNIT\u001F07'));
+  });
 });
